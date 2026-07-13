@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SAM3.1 two-image browser tracker</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: #101315; color: #eef2f3; }
+    body { margin: 0; padding: 18px 5vw 40px; }
+    h1 { margin: 0 0 14px; font-size: 20px; letter-spacing: 0; }
+    pre { box-sizing: border-box; min-height: 320px; margin: 0; padding: 16px; overflow: auto; border-left: 3px solid #e1a84f; background: #171c1f; white-space: pre-wrap; }
+    body[data-status="passed"] pre { border-left-color: #4ee19a; }
+    body[data-status="failed"] pre { border-left-color: #ff5b63; }
+  </style>
+</head>
+<body data-status="loading">
+  <h1>SAM3.1 two raw images → full ViT → temporal tracker</h1>
+  <pre id="status">Authenticating exact Meta packets…</pre>
+  <script type="module" src="./sam31-two-image-tracker-parity.js"></script>
+</body>
+</html>

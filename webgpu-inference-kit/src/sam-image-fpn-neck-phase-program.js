@@ -18,9 +18,12 @@ import {
   createWebGpuRouteBackpressureProfile,
   createWebGpuRouteSchedulerProfile,
 } from './scheduler-backpressure.js';
+import { createSam3PositionEmbeddingSine } from './sam-detr-image-ingress.js';
 
 export const SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID = 'sam3.image-fpn-neck.phase-program.webgpu-local.v0';
 export const SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID = 'sam3.1.propagation-neck.phase-program.webgpu-local.v0';
+export const SAM31_INTERACTIVE_NECK_PHASE_PROGRAM_ROUTE_ID = 'sam3.1.interactive-neck.phase-program.webgpu-local.v0';
+export const SAM31_IMAGE_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID = 'sam3.1.image-propagation-neck.phase-program.webgpu-local.v0';
 
 const SAM3_MODEL_ID = 'facebook/sam3';
 const DEFAULT_KERNEL_PROFILE = 'sam3-image-fpn-neck-phase-program-v0';
@@ -55,6 +58,34 @@ const SAM31_OUTPUT_ROLES = [
   { key: 'propagationFeature1', role: 'sam31-propagation-feature-1', required: true },
   { key: 'propagationFeature2', role: 'sam31-propagation-feature-2', required: true },
 ];
+const SAM31_IMAGE_NECK_REQUIRED_STAGES = [...SAM31_REQUIRED_STAGES.slice(0, -1), 'fpn-neck-position-2', SAM31_REQUIRED_STAGES.at(-1)];
+
+function sam31TrackingNeckDescriptor(branch, includePosition = true) {
+  if (!['interactive', 'propagation'].includes(branch)) throw new Error(`unsupported SAM3.1 tracking neck branch: ${branch}`);
+  const imagePropagation = branch === 'propagation' && includePosition;
+  const routeId = branch === 'interactive'
+    ? SAM31_INTERACTIVE_NECK_PHASE_PROGRAM_ROUTE_ID
+    : imagePropagation
+      ? SAM31_IMAGE_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID
+      : SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID;
+  const outputRoles = [0, 1, 2].map(level => ({ key: `${branch}Feature${level}`, role: `sam31-${branch}-feature-${level}`, required: true }));
+  if (includePosition) outputRoles.push({ key: `${branch}Position2`, role: `sam31-${branch}-position-2`, required: true });
+  return {
+    branch,
+    includePosition,
+    routeId,
+    inputRoles: ['source-image', 'sam31-vit-backbone-hidden-states', `sam31-${branch}-neck-weights`],
+    outputRoles,
+    requiredStages: includePosition ? SAM31_IMAGE_NECK_REQUIRED_STAGES : SAM31_REQUIRED_STAGES,
+  };
+}
+
+function sam31TrackingNeckDescriptorForRoute(route) {
+  if (route.routeId === SAM31_INTERACTIVE_NECK_PHASE_PROGRAM_ROUTE_ID) return sam31TrackingNeckDescriptor('interactive', true);
+  if (route.routeId === SAM31_IMAGE_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID) return sam31TrackingNeckDescriptor('propagation', true);
+  if (route.routeId === SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID) return sam31TrackingNeckDescriptor('propagation', false);
+  throw new Error(`unsupported SAM3.1 tracking neck route: ${route.routeId}`);
+}
 
 const TRANSPOSE_CONV2D_WGSL = `
 struct FpnConvDims {
@@ -231,6 +262,30 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= arrayLength(&output_values)) { return; }
   output_values[index] = gelu_exact_approx(input_values[index]);
+}
+`;
+
+const SAM31_NECK_POSITION_ENCODING_WGSL = `
+struct PositionDims { batch: u32, height: u32, width: u32, channels: u32, total_output: u32, temperature: f32, scale: f32 };
+@group(0) @binding(0) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(1) var<uniform> dims: PositionDims;
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= dims.total_output) { return; }
+  let channel = index % dims.channels;
+  let x = (index / dims.channels) % dims.width;
+  let y = (index / (dims.channels * dims.width)) % dims.height;
+  let num_pos_feats = dims.channels / 2u;
+  var axis_channel = channel;
+  var axis_position = (f32(y) + 1.0) / (f32(dims.height) + 0.000001) * dims.scale;
+  if (channel >= num_pos_feats) {
+    axis_channel = channel - num_pos_feats;
+    axis_position = (f32(x) + 1.0) / (f32(dims.width) + 0.000001) * dims.scale;
+  }
+  let exponent = 2.0 * floor(f32(axis_channel / 2u)) / f32(num_pos_feats);
+  let value = axis_position / pow(dims.temperature, exponent);
+  output_values[index] = select(cos(value), sin(value), (axis_channel % 2u) == 0u);
 }
 `;
 
@@ -538,6 +593,20 @@ export function createSam31PropagationNeckPhaseProgramCpuOracle(input) {
   return { ...result, features: result.fpnNeckFeatures };
 }
 
+export function createSam31TrackingNeckPhaseProgramCpuOracle(input) {
+  const branch = input.branch || 'propagation';
+  sam31TrackingNeckDescriptor(branch, true);
+  const result = createImageFpnNeckCpuOracle(input, 3);
+  const level2 = result.shape.levels[2];
+  const position2 = createSam3PositionEmbeddingSine({
+    batch: result.shape.batch,
+    height: level2.height,
+    width: level2.width,
+    channels: result.shape.fpnHiddenSize,
+  });
+  return { ...result, branch, features: result.fpnNeckFeatures, position2 };
+}
+
 async function sha256Hex(buffer) {
   if (!globalThis.crypto?.subtle?.digest) throw new Error('crypto.subtle.digest is required to hash SAM image FPN-neck outputs');
   const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
@@ -617,6 +686,36 @@ export function createSam31PropagationNeckPhaseProgramRouteDefinition(input = {}
   });
 }
 
+function createSam31ImageTrackingNeckPhaseProgramRouteDefinition(input, descriptor) {
+  const routeMetadata = createRouteKernelProfileMetadata(input, {
+    defaultProfile: `sam31-${descriptor.branch}-neck-phase-program-v0`,
+    requiredStages: descriptor.requiredStages,
+    timingSource: 'queue-submit-wait',
+  });
+  return defineWebGpuRoute({
+    routeId: descriptor.routeId,
+    backendKind: 'webgpu-local',
+    model: { id: 'facebook/sam3.1', revision: input.model?.revision || `sam31-browser-${descriptor.branch}-neck`, dtype: input.model?.dtype || 'fp32' },
+    kernel: routeMetadata.kernel,
+    inputs: descriptor.inputRoles.map(role => ({ role, required: true, artifactRequired: true, hashRequired: true })),
+    outputs: descriptor.outputRoles.map(output => ({ role: output.role, required: true, artifactRequired: true, hashRequired: true })),
+    requiredFeatures: input.requiredFeatures || [],
+    requiredStages: routeMetadata.requiredStages,
+    timingSource: routeMetadata.timingSource,
+    scheduler: input.scheduler || createDefaultScheduler(descriptor.requiredStages, `SAM3.1 ${descriptor.branch} neck yields between transpose-conv, GELU, projection-conv, position encoding, and readback boundaries.`),
+    backpressure: input.backpressure || createDefaultBackpressure(),
+    worker: input.worker || { exportName: descriptor.branch === 'interactive' ? 'runSam31InteractiveNeckPhaseProgramRoute' : 'runSam31ImagePropagationNeckPhaseProgramRoute', upstreamBoundary: `browser-sam31-vit-backbone-to-${descriptor.branch}-fpn-features-and-position` },
+  });
+}
+
+export function createSam31InteractiveNeckPhaseProgramRouteDefinition(input = {}) {
+  return createSam31ImageTrackingNeckPhaseProgramRouteDefinition(input, sam31TrackingNeckDescriptor('interactive', true));
+}
+
+export function createSam31ImagePropagationNeckPhaseProgramRouteDefinition(input = {}) {
+  return createSam31ImageTrackingNeckPhaseProgramRouteDefinition(input, sam31TrackingNeckDescriptor('propagation', true));
+}
+
 export function createSam31PropagationNeckPhaseProgramRouteReceipt(input) {
   return createWebGpuRouteReceiptFromArtifacts({
     requestedRouteId: SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
@@ -632,6 +731,25 @@ export function createSam31PropagationNeckPhaseProgramRouteReceipt(input) {
       createRouteReceiptInputArtifact('sam31-propagation-neck-weights', input.weights),
     ],
     outputs: createRouteReceiptArtifacts({ artifacts: input.outputs, roles: SAM31_OUTPUT_ROLES }),
+    profile: input.profile,
+  });
+}
+
+function createSam31ImageTrackingNeckPhaseProgramRouteReceipt(input, descriptor) {
+  return createWebGpuRouteReceiptFromArtifacts({
+    requestedRouteId: descriptor.routeId,
+    effectiveRouteId: input.effectiveRouteId || descriptor.routeId,
+    status: input.status || 'real',
+    fallbackReason: null,
+    backend: input.backend,
+    model: { id: 'facebook/sam3.1', revision: input.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+    kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
+    inputs: [
+      createRouteReceiptInputArtifact('source-image', input.sourceImage),
+      createRouteReceiptInputArtifact('sam31-vit-backbone-hidden-states', input.backboneHiddenStates),
+      createRouteReceiptInputArtifact(`sam31-${descriptor.branch}-neck-weights`, input.weights),
+    ],
+    outputs: createRouteReceiptArtifacts({ artifacts: input.outputs, roles: descriptor.outputRoles }),
     profile: input.profile,
   });
 }
@@ -892,18 +1010,21 @@ function sam31ScaleStageName(level, scaleIndex) {
   throw new Error(`unsupported SAM3.1 propagation scale stage level=${level} index=${scaleIndex}`);
 }
 
-export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
+async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
-  const route = input.route || createSam31PropagationNeckPhaseProgramRouteDefinition({ kernel: input.kernel });
+  const route = input.route || defaultRoute;
+  const descriptor = sam31TrackingNeckDescriptorForRoute(route);
   const sourceImage = roleArtifact(input.request.inputs, 'source-image');
   const backboneHiddenStatesArtifact = roleArtifact(input.request.inputs, 'sam31-vit-backbone-hidden-states');
-  const weightsArtifact = roleArtifact(input.request.inputs, 'sam31-propagation-neck-weights');
+  const weightsArtifact = roleArtifact(input.request.inputs, `sam31-${descriptor.branch}-neck-weights`);
   const { shape, backboneHiddenStates, weights } = validateImageFpnNeckInputs(input.tensors || {}, 3);
   assertSam31PropagationArchitecture(weights);
-  const oracleShapes = createSam31PropagationNeckPhaseProgramCpuOracle({ backboneHiddenStates, weights, shape }).levels;
+  const oracle = descriptor.includePosition
+    ? createSam31TrackingNeckPhaseProgramCpuOracle({ branch: descriptor.branch, backboneHiddenStates, weights, shape })
+    : createSam31PropagationNeckPhaseProgramCpuOracle({ backboneHiddenStates, weights, shape });
   const runtime = await createWebGpuInferenceRuntime({
-    routeId: SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
-    runtimeLabel: input.runtimeLabel || 'sam31-propagation-neck-phase-program',
+    routeId: descriptor.routeId,
+    runtimeLabel: input.runtimeLabel || `sam31-${descriptor.branch}-neck-phase-program`,
     device: input.device,
     queue: input.queue,
     adapter: input.adapter,
@@ -911,7 +1032,7 @@ export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
     browser: input.browser,
     backendIdentity: input.backendIdentity,
     kernel: input.kernel || route.kernel,
-    requiredStages: SAM31_REQUIRED_STAGES,
+    requiredStages: descriptor.requiredStages,
     timingSource: 'queue-submit-wait',
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
@@ -935,9 +1056,9 @@ export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
     const tensor = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
     const convWeightShape = spec => [spec.outChannels, spec.kernelSize, spec.kernelSize, spec.inChannels];
     tensors = {
-      backbone: tensor('sam31.propagation-neck.vit-backbone-hidden-states', [shape.batch, shape.backboneHeight, shape.backboneWidth, shape.backboneChannels]),
+      backbone: tensor(`sam31.${descriptor.branch}-neck.vit-backbone-hidden-states`, [shape.batch, shape.backboneHeight, shape.backboneWidth, shape.backboneChannels]),
       convDims: stage.createUniformBuffer({
-        label: 'sam31.propagation-neck.conv-dims',
+        label: `sam31.${descriptor.branch}-neck.conv-dims`,
         schema: [
           { name: 'batch', type: 'u32' }, { name: 'input_height', type: 'u32' }, { name: 'input_width', type: 'u32' },
           { name: 'input_channels', type: 'u32' }, { name: 'output_height', type: 'u32' }, { name: 'output_width', type: 'u32' },
@@ -947,32 +1068,47 @@ export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
         values: convDimsValues(shape, backboneShape, weights.levels[0].scaleLayers[0], scaleShapes[0][0]),
       }),
     };
+    if (descriptor.includePosition) {
+      const level2 = shape.levels[2];
+      const total = shape.batch * level2.height * level2.width * shape.fpnHiddenSize;
+      tensors.position2 = tensor(`sam31.${descriptor.branch}-neck.position-2`, [shape.batch, level2.height, level2.width, shape.fpnHiddenSize]);
+      tensors.positionDims = stage.createUniformBuffer({
+        label: `sam31.${descriptor.branch}-neck.position-dims`,
+        schema: [
+          { name: 'batch', type: 'u32' }, { name: 'height', type: 'u32' }, { name: 'width', type: 'u32' },
+          { name: 'channels', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: 'temperature', type: 'f32' }, { name: 'scale', type: 'f32' },
+        ],
+        values: { batch: shape.batch, height: level2.height, width: level2.width, channels: shape.fpnHiddenSize, total_output: total, temperature: 10000, scale: Math.PI * 2 },
+      });
+    }
     for (const level of weights.levels) {
       for (const [scaleIndex, scaleLayer] of level.scaleLayers.entries()) {
         const outShape = scaleShapes[level.level][scaleIndex];
-        tensors[`level${level.level}Scale${scaleIndex}`] = tensor(`sam31.propagation-neck.level${level.level}.scale${scaleIndex}`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
-        if (scaleLayer.activation === 'gelu') tensors[`level${level.level}Scale${scaleIndex}Gelu`] = tensor(`sam31.propagation-neck.level${level.level}.scale${scaleIndex}.gelu`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
-        tensors[`level${level.level}Scale${scaleIndex}Weight`] = tensor(`sam31.propagation-neck.level${level.level}.scale${scaleIndex}.weight`, convWeightShape(scaleLayer), readonlyUsage);
-        tensors[`level${level.level}Scale${scaleIndex}Bias`] = tensor(`sam31.propagation-neck.level${level.level}.scale${scaleIndex}.bias`, [scaleLayer.outChannels], readonlyUsage);
+        tensors[`level${level.level}Scale${scaleIndex}`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
+        if (scaleLayer.activation === 'gelu') tensors[`level${level.level}Scale${scaleIndex}Gelu`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}.gelu`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
+        tensors[`level${level.level}Scale${scaleIndex}Weight`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}.weight`, convWeightShape(scaleLayer), readonlyUsage);
+        tensors[`level${level.level}Scale${scaleIndex}Bias`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}.bias`, [scaleLayer.outChannels], readonlyUsage);
         stage.uploadTensor(tensors[`level${level.level}Scale${scaleIndex}Weight`], scaleLayer.weight);
         stage.uploadTensor(tensors[`level${level.level}Scale${scaleIndex}Bias`], scaleLayer.bias);
       }
       const levelShape = shape.levels[level.level];
-      tensors[`level${level.level}Proj1`] = tensor(`sam31.propagation-neck.level${level.level}.proj1`, [shape.batch, levelShape.height, levelShape.width, shape.fpnHiddenSize]);
-      tensors[`level${level.level}Feature`] = tensor(`sam31.propagation-neck.level${level.level}.feature`, [shape.batch, levelShape.height, levelShape.width, shape.fpnHiddenSize]);
+      tensors[`level${level.level}Proj1`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.proj1`, [shape.batch, levelShape.height, levelShape.width, shape.fpnHiddenSize]);
+      tensors[`level${level.level}Feature`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.feature`, [shape.batch, levelShape.height, levelShape.width, shape.fpnHiddenSize]);
       for (const [name, spec] of [['Proj1', level.proj1], ['Proj2', level.proj2]]) {
-        tensors[`level${level.level}${name}Weight`] = tensor(`sam31.propagation-neck.level${level.level}.${name.toLowerCase()}.weight`, convWeightShape(spec), readonlyUsage);
-        tensors[`level${level.level}${name}Bias`] = tensor(`sam31.propagation-neck.level${level.level}.${name.toLowerCase()}.bias`, [spec.outChannels], readonlyUsage);
+        tensors[`level${level.level}${name}Weight`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.${name.toLowerCase()}.weight`, convWeightShape(spec), readonlyUsage);
+        tensors[`level${level.level}${name}Bias`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.${name.toLowerCase()}.bias`, [spec.outChannels], readonlyUsage);
         stage.uploadTensor(tensors[`level${level.level}${name}Weight`], spec.weight);
         stage.uploadTensor(tensors[`level${level.level}${name}Bias`], spec.bias);
       }
     }
     stage.uploadTensor(tensors.backbone, backboneHiddenStates);
-    await stage.yieldToBrowser({ reason: 'after-sam31-propagation-neck-upload' });
+    await stage.yieldToBrowser({ reason: `after-sam31-${descriptor.branch}-neck-upload` });
   }, {
     shape,
-    propagationLevels: [0, 1, 2],
-    referenceBoundary: 'Meta Sam3TriViTDetNeck propagation_neck scale_layers -> proj1 -> proj2',
+    branch: descriptor.branch,
+    levels: [0, 1, 2],
+    positionLevel: descriptor.includePosition ? 2 : null,
+    referenceBoundary: `Meta Sam3TriViTDetNeck ${descriptor.branch}_convs scale_layers -> proj1 -> proj2 -> PositionEmbeddingSine`,
   });
 
   const bindTensor = (name, access = 'read-only-storage') => ({ name, resource: `tensor:${name}`, visibility: WEBGPU_SHADER_STAGE.compute, access });
@@ -981,12 +1117,13 @@ export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
     transposeConv2d: { code: TRANSPOSE_CONV2D_WGSL, bindings: [bindTensor('input'), bindTensor('weight'), bindTensor('bias'), bindTensor('output', 'storage'), bindUniform('convDims')] },
     conv2d: { code: CONV2D_WGSL, bindings: [bindTensor('input'), bindTensor('weight'), bindTensor('bias'), bindTensor('output', 'storage'), bindUniform('convDims')] },
     gelu: { code: GELU_WGSL, bindings: [bindTensor('input'), bindTensor('output', 'storage')] },
+    positionEncoding: { code: SAM31_NECK_POSITION_ENCODING_WGSL, bindings: [bindTensor('output', 'storage'), bindUniform('positionDims')] },
   };
-  const metadata = { routeId: SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', propagationLevels: [0, 1, 2], referenceModel: 'facebook/sam3.1' };
+  const metadata = { routeId: descriptor.routeId, layout: 'B,H,W,C', branch: descriptor.branch, levels: [0, 1, 2], referenceModel: 'facebook/sam3.1' };
   const runConv = async ({ name, kernel, inputTensor, outputTensor, weightTensor, biasTensor, inShape, outShape, spec }) => {
     tensors.convDims.update(convDimsValues(shape, inShape, spec, outShape));
     const program = runtime.defineProgram({
-      name: `sam31.propagation-neck.${name}`,
+      name: `sam31.${descriptor.branch}-neck.${name}`,
       tensors: { input: tensors[inputTensor], output: tensors[outputTensor], weight: tensors[weightTensor], bias: tensors[biasTensor] },
       uniforms: { convDims: tensors.convDims },
       kernels,
@@ -997,7 +1134,7 @@ export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
   };
   const runGelu = async ({ name, inputTensor, outputTensor, total }) => {
     const program = runtime.defineProgram({
-      name: `sam31.propagation-neck.${name}`,
+      name: `sam31.${descriptor.branch}-neck.${name}`,
       tensors: { input: tensors[inputTensor], output: tensors[outputTensor] },
       uniforms: {},
       kernels,
@@ -1013,17 +1150,7 @@ export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
     for (const [scaleIndex, scaleLayer] of level.scaleLayers.entries()) {
       const outputTensor = `level${level.level}Scale${scaleIndex}`;
       const outShape = scaleShapes[level.level][scaleIndex];
-      await runConv({
-        name: sam31ScaleStageName(level.level, scaleIndex),
-        kernel: 'transposeConv2d',
-        inputTensor: currentTensor,
-        outputTensor,
-        weightTensor: `level${level.level}Scale${scaleIndex}Weight`,
-        biasTensor: `level${level.level}Scale${scaleIndex}Bias`,
-        inShape: currentShape,
-        outShape,
-        spec: scaleLayer,
-      });
+      await runConv({ name: sam31ScaleStageName(level.level, scaleIndex), kernel: 'transposeConv2d', inputTensor: currentTensor, outputTensor, weightTensor: `level${level.level}Scale${scaleIndex}Weight`, biasTensor: `level${level.level}Scale${scaleIndex}Bias`, inShape: currentShape, outShape, spec: scaleLayer });
       currentTensor = outputTensor;
       currentShape = outShape;
       if (scaleLayer.activation === 'gelu') {
@@ -1036,19 +1163,39 @@ export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
     await runConv({ name: `fpn-neck-proj1-${level.level}`, kernel: 'conv2d', inputTensor: currentTensor, outputTensor: `level${level.level}Proj1`, weightTensor: `level${level.level}Proj1Weight`, biasTensor: `level${level.level}Proj1Bias`, inShape: currentShape, outShape: levelShape, spec: level.proj1 });
     await runConv({ name: `fpn-neck-proj2-${level.level}`, kernel: 'conv2d', inputTensor: `level${level.level}Proj1`, outputTensor: `level${level.level}Feature`, weightTensor: `level${level.level}Proj2Weight`, biasTensor: `level${level.level}Proj2Bias`, inShape: levelShape, outShape: levelShape, spec: level.proj2 });
   }
+  if (descriptor.includePosition) {
+    const level2 = shape.levels[2];
+    const total = shape.batch * level2.height * level2.width * shape.fpnHiddenSize;
+    const program = runtime.defineProgram({
+      name: `sam31.${descriptor.branch}-neck.position-2`,
+      tensors: { output: tensors.position2 },
+      uniforms: { positionDims: tensors.positionDims },
+      kernels,
+      phases: [{ name: 'fpn-neck-position-2', kernel: 'positionEncoding', dispatch: [workgroups(total)], yieldAfter: true }],
+      metadata,
+    });
+    await runtime.runProgram(program);
+  }
 
-  const readback = await runtime.runStage('readback-fpn-neck-features', async stage => ({
-    propagationFeature0: await stage.readTensor(tensors.level0Feature),
-    propagationFeature1: await stage.readTensor(tensors.level1Feature),
-    propagationFeature2: await stage.readTensor(tensors.level2Feature),
-  }), { outputs: oracleShapes, outputRoles: SAM31_OUTPUT_ROLES.map(output => output.role) });
+  const readback = await runtime.runStage('readback-fpn-neck-features', async stage => {
+    const values = {};
+    for (let level = 0; level < 3; level += 1) values[`${descriptor.branch}Feature${level}`] = await stage.readTensor(tensors[`level${level}Feature`]);
+    if (descriptor.includePosition) values[`${descriptor.branch}Position2`] = await stage.readTensor(tensors.position2);
+    return values;
+  }, { outputs: oracle.levels, outputRoles: descriptor.outputRoles.map(output => output.role) });
   const outputShape = level => [shape.batch, shape.levels[level].height, shape.levels[level].width, shape.fpnHiddenSize];
-  const outputs = {
-    propagationFeature0: { artifactId: roleArtifact(input.request.outputs, 'sam31-propagation-feature-0').artifactId, sha256: await sha256Hex(readback.propagationFeature0), shape: outputShape(0) },
-    propagationFeature1: { artifactId: roleArtifact(input.request.outputs, 'sam31-propagation-feature-1').artifactId, sha256: await sha256Hex(readback.propagationFeature1), shape: outputShape(1) },
-    propagationFeature2: { artifactId: roleArtifact(input.request.outputs, 'sam31-propagation-feature-2').artifactId, sha256: await sha256Hex(readback.propagationFeature2), shape: outputShape(2) },
-  };
-  const receipt = createSam31PropagationNeckPhaseProgramRouteReceipt({
+  const outputs = {};
+  for (let level = 0; level < 3; level += 1) {
+    const key = `${descriptor.branch}Feature${level}`;
+    const role = `sam31-${descriptor.branch}-feature-${level}`;
+    outputs[key] = { artifactId: roleArtifact(input.request.outputs, role).artifactId, sha256: await sha256Hex(readback[key]), shape: outputShape(level) };
+  }
+  if (descriptor.includePosition) {
+    const key = `${descriptor.branch}Position2`;
+    const role = `sam31-${descriptor.branch}-position-2`;
+    outputs[key] = { artifactId: roleArtifact(input.request.outputs, role).artifactId, sha256: await sha256Hex(readback[key]), shape: outputShape(2) };
+  }
+  const receiptInput = {
     sourceImage,
     backboneHiddenStates: backboneHiddenStatesArtifact,
     weights: weightsArtifact,
@@ -1057,17 +1204,28 @@ export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
     model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
     kernel: input.kernel || runtime.kernel,
     profile: runtime.profile,
-  });
+  };
+  const receipt = descriptor.includePosition
+    ? createSam31ImageTrackingNeckPhaseProgramRouteReceipt(receiptInput, descriptor)
+    : createSam31PropagationNeckPhaseProgramRouteReceipt(receiptInput);
   const result = createRouteWorkerResult(route, { request: input.request, receipt });
   const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
   if (input.includeReadback === true) {
-    authoritative.debugReadback = {
-      mode: 'explicit-debug-evidence',
-      propagationFeature0: Array.from(new Float32Array(readback.propagationFeature0)),
-      propagationFeature1: Array.from(new Float32Array(readback.propagationFeature1)),
-      propagationFeature2: Array.from(new Float32Array(readback.propagationFeature2)),
-    };
+    authoritative.debugReadback = { mode: 'explicit-debug-evidence' };
+    for (const [key, value] of Object.entries(readback)) authoritative.debugReadback[key] = Array.from(new Float32Array(value));
   }
   authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
+}
+
+export async function runSam31PropagationNeckPhaseProgramRoute(input = {}) {
+  return runSam31TrackingNeckPhaseProgramRoute(input, createSam31PropagationNeckPhaseProgramRouteDefinition({ kernel: input.kernel }));
+}
+
+export async function runSam31InteractiveNeckPhaseProgramRoute(input = {}) {
+  return runSam31TrackingNeckPhaseProgramRoute(input, createSam31InteractiveNeckPhaseProgramRouteDefinition({ kernel: input.kernel }));
+}
+
+export async function runSam31ImagePropagationNeckPhaseProgramRoute(input = {}) {
+  return runSam31TrackingNeckPhaseProgramRoute(input, createSam31ImagePropagationNeckPhaseProgramRouteDefinition({ kernel: input.kernel }));
 }

@@ -330,7 +330,7 @@ struct BlockDims {
   window_tokens: u32,
   total_values: u32,
   padded_total_values: u32,
-  _pad0: u32,
+  rope_scale: f32,
 };
 
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
@@ -346,7 +346,7 @@ fn rope_cos(token: u32, d: u32) -> f32 {
   let y = token / dims.window_size;
   let position = select(y, x, is_x);
   let freq = 1.0 / pow(10000.0, f32(freq_index * 4u) / f32(dims.head_dim));
-  return cos(f32(position) * freq);
+  return cos(f32(position) * dims.rope_scale * freq);
 }
 
 fn rope_sin(token: u32, d: u32) -> f32 {
@@ -358,7 +358,7 @@ fn rope_sin(token: u32, d: u32) -> f32 {
   let y = token / dims.window_size;
   let position = select(y, x, is_x);
   let freq = 1.0 / pow(10000.0, f32(freq_index * 4u) / f32(dims.head_dim));
-  return sin(f32(position) * freq);
+  return sin(f32(position) * dims.rope_scale * freq);
 }
 
 @compute @workgroup_size(64)
@@ -485,6 +485,8 @@ function normalizeShape(shape = {}) {
     intermediateSize: shape.intermediateSize ?? shape.mlpHidden,
     layerNormEps: shape.layerNormEps ?? 0.000001,
     ropeTheta: shape.ropeTheta ?? 10000,
+    ropePretrainGridSize: shape.ropePretrainGridSize ?? shape.windowSize,
+    interpolateRope: shape.interpolateRope === true,
     startLayerIndex: shape.startLayerIndex ?? 0,
     endLayerIndex: shape.endLayerIndex ?? shape.firstGlobalLayerIndex ?? 0,
     finalLayerIndex: shape.finalLayerIndex ?? shape.endLayerIndex ?? null,
@@ -516,6 +518,7 @@ function normalizeShape(shape = {}) {
   if (!Number.isInteger(out.headDim) || out.headDim % 4 !== 0) throw new Error('shape.hiddenSize / shape.numHeads must be divisible by 4 for SAM3 axial RoPE');
   if (out.layerNormEps !== 0.000001) throw new Error('shape.layerNormEps must be 0.000001 until the WebGPU block-stack shader accepts configurable epsilon');
   if (out.ropeTheta !== 10000) throw new Error('shape.ropeTheta must be 10000 until the WebGPU block-stack shader accepts configurable RoPE theta');
+  if (!Number.isInteger(out.ropePretrainGridSize) || out.ropePretrainGridSize <= 0) throw new Error('shape.ropePretrainGridSize must be a positive integer');
   return out;
 }
 
@@ -541,6 +544,7 @@ function blockShapeForLayer(baseShape, layer) {
     windowCount,
     windowTokens,
     paddedTotalValues: baseShape.batch * windowCount * windowTokens * baseShape.hiddenSize,
+    ropeScale: baseShape.interpolateRope ? baseShape.ropePretrainGridSize / windowSize : 1,
   };
 }
 
@@ -675,7 +679,7 @@ function computeAxialRope(shape) {
       const halfPairs = shape.headDim / 4;
       const isX = pair < halfPairs;
       const freqIndex = isX ? pair : pair - halfPairs;
-      const position = isX ? x : y;
+      const position = (isX ? x : y) * shape.ropeScale;
       const freq = 1 / (shape.ropeTheta ** ((freqIndex * 4) / shape.headDim));
       cos[token * shape.headDim + d] = Math.cos(position * freq);
       sin[token * shape.headDim + d] = Math.sin(position * freq);
@@ -809,7 +813,7 @@ export function createSam3ImageVitBlockStackPhaseProgramRouteReceipt(input) {
     status: input.status || 'real',
     fallbackReason: null,
     backend: input.backend,
-    model: { id: SAM3_MODEL_ID, revision: input.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+    model: { id: input.model?.id || SAM3_MODEL_ID, revision: input.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
     kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
       createRouteReceiptInputArtifact('source-image', input.sourceImage),
@@ -830,7 +834,7 @@ export function createSam3ImageVitBlockStackPhaseProgramRouteDefinition(input = 
   return defineWebGpuRoute({
     routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
     backendKind: 'webgpu-local',
-    model: { id: SAM3_MODEL_ID, revision: input.model?.revision || 'sam3-browser-image-vit-block-stack', dtype: input.model?.dtype || 'fp32' },
+    model: { id: input.model?.id || SAM3_MODEL_ID, revision: input.model?.revision || 'sam3-browser-image-vit-block-stack', dtype: input.model?.dtype || 'fp32' },
     kernel: routeMetadata.kernel,
     inputs: INPUT_ROLES.map(role => ({ role, required: true, artifactRequired: true, hashRequired: true })),
     outputs: OUTPUT_ROLES.map(output => ({ role: output.role, required: output.required, artifactRequired: true, hashRequired: true })),
@@ -985,7 +989,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
     window_tokens: layerShape.windowTokens,
     total_values: layerShape.totalValues,
     padded_total_values: layerShape.paddedTotalValues,
-    _pad0: 0,
+    rope_scale: layerShape.ropeScale,
   });
   const uploadLayerWeights = (stage, layer) => {
     for (const name of [
@@ -1063,7 +1067,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
           { name: 'window_tokens', type: 'u32' },
           { name: 'total_values', type: 'u32' },
           { name: 'padded_total_values', type: 'u32' },
-          { name: '_pad0', type: 'u32' },
+          { name: 'rope_scale', type: 'f32' },
         ],
         values: blockDimsValues(blockShapeForLayer(shape, weights.layers[0])),
       }),
@@ -1212,7 +1216,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
     weights: weightsArtifact,
     outputs,
     backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+    model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
     kernel: input.kernel || runtime.kernel,
     profile: runtime.profile,
   });

@@ -183,6 +183,32 @@ assert.deepEqual(oracle.layerCheckpoints.map(checkpoint => checkpoint.layerIndex
 assert.deepEqual(oracle.layerCheckpoints.map(checkpoint => checkpoint.isGlobal), [false, true]);
 assert.deepEqual(Array.from(oracle.vitBlockStackHiddenStates), Array.from(hiddenStates), 'zero attention output and zero MLP should preserve residual identity through window then global block');
 
+const interpolatedRopeOracle = createSam3ImageVitBlockStackPhaseProgramCpuOracle({
+  hiddenStates,
+  weights: { layers: [makeZeroBlock(0), makeZeroBlock(1)] },
+  shape: {
+    batch: 1,
+    height: 2,
+    width: 2,
+    hiddenSize: 8,
+    numHeads: 2,
+    windowSize: 1,
+    intermediateSize: 8,
+    layerNormEps: 0.000001,
+    ropeTheta: 10000,
+    ropePretrainGridSize: 1,
+    interpolateRope: true,
+    startLayerIndex: 0,
+    endLayerIndex: 1,
+    globalAttnIndexes: [1],
+    firstGlobalLayerIndex: 1,
+  },
+});
+assert.ok(
+  Math.abs(interpolatedRopeOracle.ropeCos[4] - Math.cos(0.5)) <= 1e-7,
+  'global SAM 3.1 RoPE must scale coordinates from the pretrained grid instead of using unscaled target-grid positions',
+);
+
 const fullBackboneOracle = createSam3ImageVitBlockStackPhaseProgramCpuOracle({
   hiddenStates,
   weights: { layers: [makeZeroBlock(0), makeZeroBlock(1), makeZeroBlock(2), makeZeroBlock(3)] },

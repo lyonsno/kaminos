@@ -21,6 +21,25 @@ const TWO_FRAME_REFERENCE = Object.freeze({
   sourceCommit: '5dd401d1c5c1d5c3eedff06d41b77af824517619',
 });
 
+export const SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY = Object.freeze({
+  manifestSchema: 'kaminos.sam31-two-image-ingress-meta-packet.v0',
+  receiptSchema: 'kaminos.sam31-two-image-ingress-meta-reference-receipt.v0',
+  boundary: 'sam31-two-distinct-raw-images-to-interactive-propagation-backbone-features',
+  modelId: 'facebook/sam3.1',
+  modelRevision: TWO_FRAME_REFERENCE.modelRevision,
+  checkpointSha256: TWO_FRAME_REFERENCE.checkpointSha256,
+  sourceCommit: TWO_FRAME_REFERENCE.sourceCommit,
+  routeIds: Object.freeze([
+    'sam3.image-preprocess.phase-program.webgpu-local.v0',
+    'sam3.image-patch-embed.phase-program.webgpu-local.v0',
+    'sam3.image-vit-prefix.phase-program.webgpu-local.v0',
+    'sam3.image-vit-block-stack.phase-program.webgpu-local.v0',
+    'sam3.1.interactive-neck.phase-program.webgpu-local.v0',
+    'sam3.1.image-propagation-neck.phase-program.webgpu-local.v0',
+    'sam3.1.decoder-high-resolution-projection.phase-program.webgpu-local.v0',
+  ]),
+});
+
 const TWO_FRAME_EPISODE_SHAPE = Object.freeze({
   batch: 1,
   multiplexCount: 16,
@@ -217,7 +236,75 @@ export const SAM31_TWO_FRAME_PACKET_AUTHORITIES = Object.freeze({
       officialFrame1DecoderExecuted: true,
     }),
   }),
+  twoImageEpisode: Object.freeze({
+    manifestSchema: 'kaminos.sam31-two-image-tracker-meta-packet.v0',
+    receiptSchema: 'kaminos.sam31-two-image-tracker-meta-reference-receipt.v0',
+    boundary: 'two-distinct-raw-images-through-browser-backbone-to-mask-conditioned-temporal-tracker',
+    mode: 'official-meta-two-image-mask-conditioning-memory-attention-propagation-decoder',
+    shape: TWO_FRAME_EPISODE_SHAPE,
+    plan: TWO_FRAME_EPISODE_PLAN,
+    stateTransition: Object.freeze({
+      frame0OriginKind: 'mask-conditioning',
+      maskOwner: 'browser-webgpu',
+      pointerOwner: 'official-reference-bridge',
+    }),
+    claims: Object.freeze({
+      fullImageBackboneExecuted: true,
+      twoDistinctRawImagesComposed: true,
+      distinctInteractiveAndPropagationFeatures: true,
+      packetOwnsImageEmbeddingsAtBrowserRuntime: false,
+    }),
+  }),
 });
+
+export async function verifySam31TwoImageIngressPacketAuthority({ manifestText, manifest, referenceReceipt, expectedManifestSha256 }) {
+  const expected = SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY;
+  if (typeof manifestText !== 'string' || manifestText.length === 0) throw new Error('two-image ingress manifest text is required');
+  if (!manifest || typeof manifest !== 'object') throw new Error('two-image ingress manifest is required');
+  if (!referenceReceipt || typeof referenceReceipt !== 'object') throw new Error('two-image ingress reference receipt is required');
+  if (typeof expectedManifestSha256 !== 'string' || !expectedManifestSha256.startsWith('sha256:')) throw new Error('two-image ingress authority requires invocation-scoped expectedManifestSha256');
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(manifestText));
+  const manifestSha256 = `sha256:${sha256Hex(new Uint8Array(digest))}`;
+  assertNamedEqual('ingress', manifestSha256, expectedManifestSha256, 'expectedManifestSha256');
+  assertNamedEqual('ingress', manifest.schema, expected.manifestSchema, 'manifest.schema');
+  assertNamedEqual('ingress', referenceReceipt.schema, expected.receiptSchema, 'referenceReceipt.schema');
+  assertNamedEqual('ingress', referenceReceipt.ok, true, 'referenceReceipt.ok');
+  assertNamedEqual('ingress', manifest.boundary, expected.boundary, 'manifest.boundary');
+  assertNamedEqual('ingress', referenceReceipt.boundary, expected.boundary, 'referenceReceipt.boundary');
+  assertNamedEqual('ingress', referenceReceipt.outputs?.tensorManifestSha256, manifestSha256, 'referenceReceipt.outputs.tensorManifestSha256');
+  assertNamedJsonEqual('ingress', manifest.routeIds, expected.routeIds, 'manifest.routeIds');
+  assertNamedJsonEqual('ingress', referenceReceipt.routeIds, expected.routeIds, 'referenceReceipt.routeIds');
+  assertNamedEqual('ingress', manifest.reference?.model?.id, expected.modelId, 'manifest.reference.model.id');
+  assertNamedEqual('ingress', manifest.reference?.model?.revision, expected.modelRevision, 'manifest.reference.model.revision');
+  assertNamedEqual('ingress', manifest.reference?.checkpoint?.sha256, expected.checkpointSha256, 'manifest.reference.checkpoint.sha256');
+  assertNamedEqual('ingress', manifest.reference?.source?.commit, expected.sourceCommit, 'manifest.reference.source.commit');
+  assertNamedEqual('ingress', manifest.reference?.source?.clean, true, 'manifest.reference.source.clean');
+  assertNamedEqual('ingress', manifest.claims?.twoDistinctSourceImages, true, 'manifest.claims.twoDistinctSourceImages');
+  assertNamedEqual('ingress', manifest.claims?.officialMetaViTExecuted, true, 'manifest.claims.officialMetaViTExecuted');
+  assertNamedEqual('ingress', manifest.claims?.officialMetaTriNeckExecuted, true, 'manifest.claims.officialMetaTriNeckExecuted');
+  assertNamedEqual('ingress', manifest.claims?.officialMetaHighResolutionProjectionExecuted, true, 'manifest.claims.officialMetaHighResolutionProjectionExecuted');
+  assertNamedEqual('ingress', manifest.claims?.packetOwnsImageEmbeddingsAtBrowserRuntime, false, 'manifest.claims.packetOwnsImageEmbeddingsAtBrowserRuntime');
+  if (!Array.isArray(manifest.sourceImages) || manifest.sourceImages.length !== 2) throw new Error('ingress packet authority mismatch for manifest.sourceImages');
+  assertNamedEqual('ingress', manifest.sourceImages[0]?.frameIndex, 0, 'manifest.sourceImages[0].frameIndex');
+  assertNamedEqual('ingress', manifest.sourceImages[1]?.frameIndex, 1, 'manifest.sourceImages[1].frameIndex');
+  if (manifest.sourceImages[0]?.rgbaSha256 === manifest.sourceImages[1]?.rgbaSha256) throw new Error('ingress packet authority rejected identical source image tensors');
+  if (manifest.sourceImages[0]?.originalSha256 === manifest.sourceImages[1]?.originalSha256) throw new Error('ingress packet authority rejected identical encoded source images');
+  return {
+    passed: true,
+    name: 'ingress',
+    manifestSha256,
+    expectedManifestSha256,
+    manifestSchema: manifest.schema,
+    receiptSchema: referenceReceipt.schema,
+    boundary: manifest.boundary,
+    routeIds: manifest.routeIds,
+    modelId: manifest.reference.model.id,
+    modelRevision: manifest.reference.model.revision,
+    checkpointSha256: manifest.reference.checkpoint.sha256,
+    sourceCommit: manifest.reference.source.commit,
+    sourceImages: manifest.sourceImages.map(image => ({ frameIndex: image.frameIndex, originalSha256: image.originalSha256, rgbaSha256: image.rgbaSha256 })),
+  };
+}
 
 function assertEqual(actual, expected, field) {
   if (actual !== expected) throw new Error(`temporal packet authority mismatch for ${field}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);

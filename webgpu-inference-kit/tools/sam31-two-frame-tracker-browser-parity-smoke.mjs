@@ -4,9 +4,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
-import { verifySam31TwoFramePacketAuthority } from '../src/sam31-packet-artifact.js';
+import { createHash } from 'node:crypto';
+import { verifySam31TwoFramePacketAuthority, verifySam31TwoImageIngressPacketAuthority } from '../src/sam31-packet-artifact.js';
 
-const REPORT_SCHEMA = 'kaminos.sam31-two-frame-tracker.browser-parity-smoke.v0';
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
 const root = resolve(new URL('..', import.meta.url).pathname);
@@ -19,21 +19,28 @@ const timeoutMs = Number(args.get('--timeout-ms') || 300000);
 const reusePacket = args.get('--reuse-packet') === '1';
 const verifyOnly = args.get('--verify-only') === '1';
 const episodeMode = args.get('--episode-mode') || 'propagation-decoder';
-if (!['propagation-decoder', 'mask-conditioning'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
-const episodeAuthorityName = episodeMode === 'mask-conditioning' ? 'conditionedEpisode' : 'episode';
+if (!['propagation-decoder', 'mask-conditioning', 'two-image'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
+const isTwoImage = episodeMode === 'two-image';
+const REPORT_SCHEMA = isTwoImage
+  ? 'kaminos.sam31-two-image-tracker.browser-parity-smoke.v0'
+  : 'kaminos.sam31-two-frame-tracker.browser-parity-smoke.v0';
+const episodeAuthorityName = isTwoImage ? 'twoImageEpisode' : episodeMode === 'mask-conditioning' ? 'conditionedEpisode' : 'episode';
 const POINTER_EXPECTED_MANIFEST_ARG = '--expected-pointer-manifest-sha256';
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const python = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
 const userDataDir = mkdtempSync(join(tmpdir(), `kaminos-sam31-two-frame-chrome-${process.pid}-`));
-const baseUrl = `http://127.0.0.1:${serverPort}/smokes/sam31-two-frame-tracker-parity.html`;
+const baseUrl = `http://127.0.0.1:${serverPort}/smokes/${isTwoImage ? 'sam31-two-image-tracker-parity.html' : 'sam31-two-frame-tracker-parity.html'}`;
 let url = baseUrl;
 const packetTools = {
+  ...(isTwoImage ? { ingress: 'sam31-two-image-ingress-meta-packet.py' } : {}),
   decoder: 'sam31-multiplex-mask-decoder-meta-packet.py',
   memory: 'sam31-propagation-memory-meta-packet.py',
   temporal: 'sam31-temporal-memory-bank-meta-packet.py',
   episode: 'sam31-two-frame-tracker-meta-packet.py',
 };
-if (episodeMode === 'mask-conditioning') packetTools.pointer = 'sam31-interactive-pointer-meta-packet.py';
+if (episodeMode !== 'propagation-decoder') packetTools.pointer = 'sam31-interactive-pointer-meta-packet.py';
+const externalIngressPacketDir = args.get('--ingress-packet-dir') ? resolve(args.get('--ingress-packet-dir')) : null;
+const packetDirs = Object.fromEntries(Object.keys(packetTools).map(name => [name, name === 'ingress' && externalIngressPacketDir ? externalIngressPacketDir : join(packetDir, name)]));
 const expectedManifestSha256 = Object.fromEntries(Object.keys(packetTools).map(name => [
   name,
   args.get(name === 'pointer' ? POINTER_EXPECTED_MANIFEST_ARG : `--expected-${name}-manifest-sha256`) || null,
@@ -60,6 +67,7 @@ function writeReport(extra = {}) {
     failure_phase: phase,
     url,
     packetDir,
+    packetDirs,
     packetSource: reusePacket ? 'caller-provided-existing' : 'generated',
     episodeMode,
     packetTools,
@@ -97,7 +105,7 @@ async function verifyPacketAuthority() {
   const verifiedPackets = [];
   const packets = {};
   for (const name of Object.keys(packetTools)) {
-    const outDir = join(packetDir, name);
+    const outDir = packetDirs[name];
     const manifestPath = join(outDir, 'tensor-manifest.json');
     const receiptPath = join(outDir, 'reference-receipt.json');
     if (!existsSync(manifestPath)) throw new Error(`${name} manifest missing: ${manifestPath}`);
@@ -105,16 +113,19 @@ async function verifyPacketAuthority() {
     const manifestText = readFileSync(manifestPath, 'utf8');
     const manifest = JSON.parse(manifestText);
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
-    const expectedDigest = expectedManifestSha256[name] || (!reusePacket ? receipt.outputs?.tensorManifestSha256 : null);
-    if (reusePacket && !expectedDigest) throw new Error(`${name} reused packet requires --expected-${name}-manifest-sha256`);
-    packets[name] = await verifySam31TwoFramePacketAuthority({
-      name,
-      authorityName: name === 'episode' ? episodeAuthorityName : name,
-      manifestText,
-      manifest,
-      referenceReceipt: receipt,
-      expectedManifestSha256: expectedDigest,
-    });
+    const externallyOwned = reusePacket || (name === 'ingress' && externalIngressPacketDir);
+    const expectedDigest = expectedManifestSha256[name] || (!externallyOwned ? receipt.outputs?.tensorManifestSha256 : null);
+    if (externallyOwned && !expectedDigest) throw new Error(`${name} reused packet requires --expected-${name}-manifest-sha256`);
+    packets[name] = name === 'ingress'
+      ? await verifySam31TwoImageIngressPacketAuthority({ manifestText, manifest, referenceReceipt: receipt, expectedManifestSha256: expectedDigest })
+      : await verifySam31TwoFramePacketAuthority({
+        name,
+        authorityName: name === 'episode' ? episodeAuthorityName : name,
+        manifestText,
+        manifest,
+        referenceReceipt: receipt,
+        expectedManifestSha256: expectedDigest,
+      });
     expectedManifestSha256[name] = packets[name].manifestSha256;
     verifiedPackets.push(name);
   }
@@ -123,15 +134,28 @@ async function verifyPacketAuthority() {
 
 function generatePackets() {
   for (const [name, tool] of Object.entries(packetTools)) {
-    const outDir = join(packetDir, name);
+    const outDir = packetDirs[name];
     const manifest = join(outDir, 'tensor-manifest.json');
-    if (reusePacket) {
+    if (reusePacket || (name === 'ingress' && externalIngressPacketDir)) {
       if (!existsSync(manifest)) throw new Error(`reused ${name} manifest missing: ${manifest}`);
       continue;
     }
     mkdirSync(outDir, { recursive: true });
     const toolArgs = [resolve(root, 'tools', tool), '--out-dir', outDir];
-    if (name === 'episode') toolArgs.push('--frame0-mode', episodeMode);
+    if (name === 'ingress') {
+      const sourceRoot = args.get('--source-root') || '/Users/noahlyons/dev/sam3';
+      toolArgs.push('--frame-0', args.get('--frame-0') || join(sourceRoot, 'assets', 'videos', '0001', '0.jpg'));
+      toolArgs.push('--frame-1', args.get('--frame-1') || join(sourceRoot, 'assets', 'videos', '0001', '1.jpg'));
+      toolArgs.push('--resolution', args.get('--resolution') || '28');
+    }
+    if (name === 'episode') {
+      toolArgs.push('--frame0-mode', isTwoImage ? 'mask-conditioning' : episodeMode);
+      if (isTwoImage) {
+        const ingressManifestPath = join(packetDirs.ingress, 'tensor-manifest.json');
+        const ingressDigest = expectedManifestSha256.ingress || `sha256:${createHash('sha256').update(readFileSync(ingressManifestPath)).digest('hex')}`;
+        toolArgs.push('--ingress-packet-dir', packetDirs.ingress, '--expected-ingress-manifest-sha256', ingressDigest);
+      }
+    }
     const result = spawnSync(python, toolArgs, { cwd: root, encoding: 'utf8', timeout: 240000 });
     if (result.status !== 0) throw new Error(`${name} official packet generation failed: ${result.stderr || result.stdout}`);
   }
@@ -141,8 +165,8 @@ function startServer() {
   server = createServer((request, response) => {
     try {
       const parsed = new URL(request.url, url);
-      const match = parsed.pathname.match(/^\/oracle\/(decoder|memory|temporal|episode|pointer)\/(.+)$/);
-      const base = match ? join(packetDir, match[1]) : root;
+      const match = parsed.pathname.match(/^\/oracle\/(ingress|decoder|memory|temporal|episode|pointer)\/(.+)$/);
+      const base = match ? packetDirs[match[1]] : root;
       const relative = match ? match[2] : parsed.pathname.slice(1);
       const path = resolve(base, relative || 'smokes/sam31-two-frame-tracker-parity.html');
       if (path !== base && !path.startsWith(`${base}/`)) { response.writeHead(403); response.end('forbidden'); return; }
@@ -209,7 +233,7 @@ async function main() {
     chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
     browserVersion = await Promise.race([waitCdp(), spawnError]);
     const pages = await cdp('/json/list');
-    const page = pages.find(item => item.url.includes('sam31-two-frame-tracker-parity')) || pages[0];
+    const page = pages.find(item => item.url.includes(isTwoImage ? 'sam31-two-image-tracker-parity' : 'sam31-two-frame-tracker-parity')) || pages[0];
     if (!page?.webSocketDebuggerUrl) throw new Error('Chrome page target missing debugger URL');
     socket = new WebSocket(page.webSocketDebuggerUrl);
     await new Promise((resolveOpen, reject) => { socket.addEventListener('open', resolveOpen, { once: true }); socket.addEventListener('error', reject, { once: true }); });

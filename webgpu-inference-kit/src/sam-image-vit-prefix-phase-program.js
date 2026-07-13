@@ -259,7 +259,7 @@ export function createSam3ImageVitPrefixPhaseProgramRouteReceipt(input) {
     status: input.status || 'real',
     fallbackReason: null,
     backend: input.backend,
-    model: { id: SAM3_MODEL_ID, revision: input.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+    model: { id: input.model?.id || SAM3_MODEL_ID, revision: input.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
     kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
       createRouteReceiptInputArtifact('source-image', input.sourceImage),
@@ -280,7 +280,7 @@ export function createSam3ImageVitPrefixPhaseProgramRouteDefinition(input = {}) 
   return defineWebGpuRoute({
     routeId: SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
     backendKind: 'webgpu-local',
-    model: { id: SAM3_MODEL_ID, revision: input.model?.revision || 'sam3-browser-image-vit-prefix', dtype: input.model?.dtype || 'fp32' },
+    model: { id: input.model?.id || SAM3_MODEL_ID, revision: input.model?.revision || 'sam3-browser-image-vit-prefix', dtype: input.model?.dtype || 'fp32' },
     kernel: routeMetadata.kernel,
     inputs: INPUT_ROLES.map(role => ({ role, required: true, artifactRequired: true, hashRequired: true })),
     outputs: OUTPUT_ROLES.map(output => ({ role: output.role, required: output.required, artifactRequired: true, hashRequired: true })),
@@ -417,7 +417,7 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
     weights: weightsArtifact,
     outputs,
     backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
+    model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash, dtype: input.model?.dtype || 'fp32' },
     kernel: input.kernel || runtime.kernel,
     profile: runtime.profile,
   });

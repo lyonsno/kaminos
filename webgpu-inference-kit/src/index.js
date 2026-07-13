@@ -182,14 +182,21 @@ export {
 } from './sam-image-vit-block-stack-phase-program.js';
 
 export {
+  SAM31_IMAGE_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
+  SAM31_INTERACTIVE_NECK_PHASE_PROGRAM_ROUTE_ID,
   SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
+  createSam31ImagePropagationNeckPhaseProgramRouteDefinition,
+  createSam31InteractiveNeckPhaseProgramRouteDefinition,
   createSam31PropagationNeckPhaseProgramCpuOracle,
   createSam31PropagationNeckPhaseProgramRouteDefinition,
   createSam31PropagationNeckPhaseProgramRouteReceipt,
+  createSam31TrackingNeckPhaseProgramCpuOracle,
   createSam3ImageFpnNeckPhaseProgramCpuOracle,
   createSam3ImageFpnNeckPhaseProgramRouteDefinition,
   createSam3ImageFpnNeckPhaseProgramRouteReceipt,
+  runSam31ImagePropagationNeckPhaseProgramRoute,
+  runSam31InteractiveNeckPhaseProgramRoute,
   runSam31PropagationNeckPhaseProgramRoute,
   runSam3ImageFpnNeckPhaseProgramRoute,
 } from './sam-image-fpn-neck-phase-program.js';
@@ -207,6 +214,14 @@ export {
   classifySam31PropagationMemoryAdapter,
   evaluateSam31PropagationMemoryEvidence,
 } from './sam31-propagation-memory-evidence.js';
+
+export {
+  SAM31_DECODER_HIGH_RESOLUTION_PROJECTION_PHASE_PROGRAM_ROUTE_ID,
+  createSam31DecoderHighResolutionProjectionPhaseProgramCpuOracle,
+  createSam31DecoderHighResolutionProjectionPhaseProgramRouteDefinition,
+  createSam31DecoderHighResolutionProjectionPhaseProgramRouteReceipt,
+  runSam31DecoderHighResolutionProjectionPhaseProgramRoute,
+} from './sam31-decoder-high-resolution-projection-phase-program.js';
 
 export {
   MEMORY_ATTENTION_ONLINE_SOFTMAX_WGSL,
@@ -295,10 +310,12 @@ export {
 } from './route-schema-contract.js';
 
 export {
+  SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY,
   SAM31_TEMPORAL_PACKET_AUTHORITY,
   SAM31_TWO_FRAME_PACKET_AUTHORITIES,
   verifySam31PacketFloat32Bytes,
   verifySam31TemporalPacketAuthority,
+  verifySam31TwoImageIngressPacketAuthority,
   verifySam31TwoFramePacketAuthority,
 } from './sam31-packet-artifact.js';
 

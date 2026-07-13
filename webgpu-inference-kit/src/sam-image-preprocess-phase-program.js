@@ -152,7 +152,7 @@ export function createSam3ImagePreprocessPhaseProgramRouteReceipt(input) {
     status: input.status || 'real',
     fallbackReason: null,
     backend: input.backend,
-    model: { id: SAM3_MODEL_ID, revision: input.model?.revision, weightsHash: input.model?.weightsHash || 'none', dtype: input.model?.dtype || 'u8-to-fp32' },
+    model: { id: input.model?.id || SAM3_MODEL_ID, revision: input.model?.revision, weightsHash: input.model?.weightsHash || 'none', dtype: input.model?.dtype || 'u8-to-fp32' },
     kernel: createKernelProfileMetadata(input.kernel, { requireProfile: true }),
     inputs: [
       createRouteReceiptInputArtifact('source-image', input.sourceImage),
@@ -172,7 +172,7 @@ export function createSam3ImagePreprocessPhaseProgramRouteDefinition(input = {})
   return defineWebGpuRoute({
     routeId: SAM3_IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID,
     backendKind: 'webgpu-local',
-    model: { id: SAM3_MODEL_ID, revision: input.model?.revision || 'sam3-browser-image-preprocess', dtype: input.model?.dtype || 'u8-to-fp32' },
+    model: { id: input.model?.id || SAM3_MODEL_ID, revision: input.model?.revision || 'sam3-browser-image-preprocess', dtype: input.model?.dtype || 'u8-to-fp32' },
     kernel: routeMetadata.kernel,
     inputs: INPUT_ROLES.map(role => ({ role, required: true, artifactRequired: true, hashRequired: true })),
     outputs: OUTPUT_ROLES.map(output => ({ role: output.role, required: output.required, artifactRequired: true, hashRequired: true })),
@@ -274,7 +274,7 @@ export async function runSam3ImagePreprocessPhaseProgramRoute(input = {}) {
     tensorPacket,
     outputs,
     backend: runtime.backendIdentity,
-    model: { revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || 'none', dtype: input.model?.dtype || 'u8-to-fp32' },
+    model: { id: input.model?.id || route.model?.id, revision: input.model?.revision || route.model?.revision, weightsHash: input.model?.weightsHash || 'none', dtype: input.model?.dtype || 'u8-to-fp32' },
     kernel: input.kernel || runtime.kernel,
     profile: runtime.profile,
   });

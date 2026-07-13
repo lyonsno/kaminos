@@ -80,7 +80,7 @@ for (const token of [
   'effectiveStateTransition',
   'parityPassed',
   'packetAuthorityPassed',
-  'verifiedPackets.length === (episodeMode === \'mask-conditioning\' ? 5 : 4)',
+  'verifiedPackets.length === (isTwoImage ? 6 : isMaskConditioned ? 5 : 4)',
 ]) {
   assert.match(browser, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `browser episode must make ${token} load-bearing`);
 }
