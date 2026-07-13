@@ -347,6 +347,37 @@ try {
     budgetedReport.pixelMetrics.phasePredictionToExactMse <= budgetedReport.baselines.currentCopy.pixelMse,
     'budgeted dense-negative fixture should beat current-copy identity on rendered pixels',
   );
+  assert.equal(
+    budgetedReport.diagnostics.residuals.authority,
+    'phase-render-raster-residual-maps-v0',
+    'budgeted report must expose residual maps that make subtle phase deltas inspectable',
+  );
+  assert.equal(
+    budgetedReport.diagnostics.churnOverlay.authority,
+    'world-position-support-churn-overlay-v0',
+    'budgeted report must expose support churn overlays, not only final fire rasters',
+  );
+  assert.equal(
+    budgetedReport.diagnostics.churnOverlay.counts.trueBirth,
+    budgetedReport.metrics.birthDeathPrecisionRecall.birth.truePositive,
+    'churn overlay counts must be tied to held-out birth/death metrics',
+  );
+  assert.ok(
+    budgetedReport.diagnostics.churnOverlay.counts.falseSupport >= 0,
+    'churn overlay must expose false predicted support counts',
+  );
+  const diagnosticArtifacts = [
+    budgetedReport.diagnostics.residuals.artifacts.exactMinusIdentity,
+    budgetedReport.diagnostics.residuals.artifacts.exactMinusPrediction,
+    budgetedReport.diagnostics.residuals.artifacts.predictionMinusIdentity,
+    budgetedReport.diagnostics.churnOverlay.artifacts.supportChurn,
+    budgetedReport.diagnostics.inspection.artifacts.contextSheet,
+  ];
+  for (const artifact of diagnosticArtifacts) {
+    const bytes = await readFile(artifact.path);
+    assert.equal(bytes.readUInt32BE(0), 0x89504e47);
+    assert.equal(hash(bytes), artifact.sha256);
+  }
 } finally {
   await rm(root, { recursive: true, force: true });
 }

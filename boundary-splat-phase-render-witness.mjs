@@ -712,6 +712,118 @@ function imageMse(left, right) {
   return total / Math.max(1, count);
 }
 
+function pixelLuminance(rgba, index) {
+  return (rgba[index] / 255) * 0.2126 + (rgba[index + 1] / 255) * 0.7152 + (rgba[index + 2] / 255) * 0.0722;
+}
+
+function renderResidualMapPng(positive, negative) {
+  if (positive.width !== negative.width || positive.height !== negative.height) throw new Error('residual map dimensions differ');
+  const width = positive.width;
+  const height = positive.height;
+  const deltas = new Float32Array(width * height);
+  let maxAbs = 0;
+  let positivePixelCount = 0;
+  let negativePixelCount = 0;
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const index = pixel * 4;
+    const delta = pixelLuminance(positive.rgba, index) - pixelLuminance(negative.rgba, index);
+    deltas[pixel] = delta;
+    maxAbs = Math.max(maxAbs, Math.abs(delta));
+    if (delta > 1 / 255) positivePixelCount += 1;
+    else if (delta < -1 / 255) negativePixelCount += 1;
+  }
+  const scale = Math.max(maxAbs, 1 / 255);
+  const rgba = Buffer.alloc(width * height * 4);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const value = Math.min(1, Math.abs(deltas[pixel]) / scale);
+    const index = pixel * 4;
+    if (deltas[pixel] >= 0) {
+      rgba[index] = Math.round(20 + value * 235);
+      rgba[index + 1] = Math.round(16 + value * 168);
+      rgba[index + 2] = Math.round(22 + value * 42);
+    } else {
+      rgba[index] = Math.round(14 + value * 46);
+      rgba[index + 1] = Math.round(18 + value * 122);
+      rgba[index + 2] = Math.round(28 + value * 227);
+    }
+    rgba[index + 3] = 255;
+  }
+  return {
+    authority: 'phase-render-luminance-residual-map-v0',
+    width,
+    height,
+    rgba,
+    png: writeRgbaPng(width, height, rgba),
+    maxAbsLuminanceDelta: maxAbs,
+    positivePixelCount,
+    negativePixelCount,
+  };
+}
+
+function makeDiagnosticSplat(position, color, radius, opacity = 0.9) {
+  return [
+    position[0], position[1], position[2], 1,
+    color[0], color[1], color[2], opacity,
+    radius, radius, 0.5, 1,
+  ];
+}
+
+function diagnosticPrototypeRadius(row, gridStep) {
+  if (!row) return Math.max(0.02, gridStep * 0.75);
+  return Math.max(gridStep * 0.55, Math.max(Number(row[8] || 0), Number(row[9] || 0)) * 1.35);
+}
+
+function renderSupportChurnOverlay(sourceRows, targetRows, predictionSites, predictedOccupiedKeys, camera, renderOptions, gridStep) {
+  const keys = new Set([...sourceRows.keys(), ...targetRows.keys(), ...predictionSites.keys(), ...predictedOccupiedKeys]);
+  const rows = [];
+  const counts = {
+    trueSurvival: 0,
+    missedSupport: 0,
+    falseSupport: 0,
+    trueBirth: 0,
+    falseBirth: 0,
+    trueDeath: 0,
+    retainedDeadSource: 0,
+  };
+  for (const key of keys) {
+    const sourceRow = sourceRows.get(key);
+    const targetRow = targetRows.get(key);
+    const site = predictionSites.get(key);
+    const predicted = predictedOccupiedKeys.has(key);
+    const sourceOccupied = Boolean(sourceRow);
+    const targetOccupied = Boolean(targetRow);
+    let color = null;
+    let opacity = 0.88;
+    if (sourceOccupied && targetOccupied && predicted) {
+      counts.trueSurvival += 1;
+      color = [0.16, 1.0, 0.42];
+      opacity = 0.58;
+    } else if (targetOccupied && !predicted) {
+      counts.missedSupport += 1;
+      color = [1.0, 0.08, 0.18];
+    } else if (predicted && !targetOccupied) {
+      counts.falseSupport += 1;
+      color = [1.0, 0.46, 0.05];
+      if (!sourceOccupied) counts.falseBirth += 1;
+      else counts.retainedDeadSource += 1;
+    } else if (!sourceOccupied && targetOccupied && predicted) {
+      counts.trueBirth += 1;
+      color = [1.0, 0.88, 0.16];
+    } else if (sourceOccupied && !targetOccupied && !predicted) {
+      counts.trueDeath += 1;
+      color = [0.12, 0.48, 1.0];
+      opacity = 0.72;
+    }
+    if (!color) continue;
+    const prototype = sourceRow?.splat || targetRow?.splat;
+    const position = sourceRow?.position || targetRow?.position || site?.position || keyToWorldPosition(key);
+    rows.push(makeDiagnosticSplat(position, color, diagnosticPrototypeRadius(prototype, gridStep), opacity));
+  }
+  const render = renderBoundarySplatRowsPng(rows.length ? rows : [makeDiagnosticSplat([0, 0, 0], [0.05, 0.05, 0.05], gridStep, 0.01)], camera, renderOptions);
+  render.authority = 'world-position-support-churn-overlay-v0';
+  return { render, counts };
+}
+
 function composeHorizontal(rendered) {
   const gap = 4;
   const width = rendered.reduce((sum, item) => sum + item.width, 0) + gap * (rendered.length - 1);
@@ -1168,6 +1280,13 @@ async function runLocalGridOccupancyRenderWitness(context) {
   const priorSplats = new Float32Array(priorRows.length * SPLAT_STRIDE_FLOATS);
   priorRows.forEach((row, index) => priorSplats.set(row, index * SPLAT_STRIDE_FLOATS));
   const evalSiteKeys = new Set([...sourceRows.keys(), ...targetRows.keys(), ...predictionSites.keys()]);
+  const predictedOccupiedKeys = new Set();
+  for (const key of evalSiteKeys) {
+    const predictedOccupied = budgetedSupport
+      ? selectedKeys.has(key)
+      : (probabilityByKey.get(key) ?? 0) >= occupancyThreshold;
+    if (predictedOccupied) predictedOccupiedKeys.add(key);
+  }
   const occupancyPr = emptyPr();
   const birthPr = emptyPr();
   const deathPr = emptyPr();
@@ -1176,7 +1295,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
     const sourceOccupied = sourceRows.has(key);
     const targetOccupied = targetRows.has(key);
     const predictedOccupied = (probabilityByKey.get(key) ?? 0) >= occupancyThreshold;
-    const budgetedPredictedOccupied = budgetedSupport ? selectedKeys.has(key) : predictedOccupied;
+    const budgetedPredictedOccupied = predictedOccupiedKeys.has(key);
     if (budgetedPredictedOccupied && targetOccupied) occupancyPr.truePositive += 1;
     else if (budgetedPredictedOccupied && !targetOccupied) occupancyPr.falsePositive += 1;
     else if (!budgetedPredictedOccupied && targetOccupied) occupancyPr.falseNegative += 1;
@@ -1213,7 +1332,27 @@ async function runLocalGridOccupancyRenderWitness(context) {
   const advectionRender = renderBoundarySplatRowsPng(source.splats.values, source.frame.camera, renderOptions);
   const predictionRender = renderBoundarySplatRowsPng(predictedSplats, source.frame.camera, renderOptions);
   const exactRender = renderBoundarySplatRowsPng(target.splats.values, target.frame.camera, renderOptions);
+  const exactMinusIdentityRender = renderResidualMapPng(exactRender, identityRender);
+  const exactMinusPredictionRender = renderResidualMapPng(exactRender, predictionRender);
+  const predictionMinusIdentityRender = renderResidualMapPng(predictionRender, identityRender);
+  const churnOverlay = renderSupportChurnOverlay(
+    sourceRows,
+    targetRows,
+    predictionSites,
+    predictedOccupiedKeys,
+    source.frame.camera,
+    renderOptions,
+    gridStep,
+  );
   const comparisonRender = composeHorizontal([identityRender, priorRender, advectionRender, predictionRender, exactRender]);
+  const diagnosticContextRender = composeHorizontal([
+    identityRender,
+    predictionRender,
+    exactRender,
+    exactMinusIdentityRender,
+    exactMinusPredictionRender,
+    churnOverlay.render,
+  ]);
   const offsetLabel = offset > 0 ? `p${offset}` : `m${Math.abs(offset)}`;
   const artifacts = {
     identity: await writeRenderArtifact(resolve(outDir, `phase-render-identity-${offsetLabel}.png`), identityRender),
@@ -1222,6 +1361,13 @@ async function runLocalGridOccupancyRenderWitness(context) {
     phasePrediction: await writeRenderArtifact(resolve(outDir, `phase-render-local-grid-occupancy-prediction-${offsetLabel}.png`), predictionRender),
     exactTarget: await writeRenderArtifact(resolve(outDir, `phase-render-exact-${offsetLabel}.png`), exactRender),
     comparison: await writeRenderArtifact(resolve(outDir, `phase-render-local-grid-occupancy-comparison-${offsetLabel}.png`), comparisonRender),
+  };
+  const diagnosticArtifacts = {
+    exactMinusIdentity: await writeRenderArtifact(resolve(outDir, `phase-render-residual-exact-minus-identity-${offsetLabel}.png`), exactMinusIdentityRender),
+    exactMinusPrediction: await writeRenderArtifact(resolve(outDir, `phase-render-residual-exact-minus-prediction-${offsetLabel}.png`), exactMinusPredictionRender),
+    predictionMinusIdentity: await writeRenderArtifact(resolve(outDir, `phase-render-residual-prediction-minus-identity-${offsetLabel}.png`), predictionMinusIdentityRender),
+    supportChurn: await writeRenderArtifact(resolve(outDir, `phase-render-support-churn-overlay-${offsetLabel}.png`), churnOverlay.render),
+    contextSheet: await writeRenderArtifact(resolve(outDir, `phase-render-diagnostic-context-${offsetLabel}.png`), diagnosticContextRender),
   };
   const identityPixelMse = imageMse(identityRender.rgba, exactRender.rgba);
   const priorPixelMse = imageMse(priorRender.rgba, exactRender.rgba);
@@ -1302,6 +1448,48 @@ async function runLocalGridOccupancyRenderWitness(context) {
         authority: 'held-out-birth-death-pr-v0',
         birth: finishPr(birthPr),
         death: finishPr(deathPr),
+      },
+    },
+    diagnostics: {
+      residuals: {
+        authority: 'phase-render-raster-residual-maps-v0',
+        interpretation: 'Residual maps encode luminance delta under the isolated captured-splat raster route; warm means the first named image is brighter, blue means the second named image is brighter.',
+        artifacts: {
+          exactMinusIdentity: diagnosticArtifacts.exactMinusIdentity,
+          exactMinusPrediction: diagnosticArtifacts.exactMinusPrediction,
+          predictionMinusIdentity: diagnosticArtifacts.predictionMinusIdentity,
+        },
+        maxAbsLuminanceDelta: {
+          exactMinusIdentity: exactMinusIdentityRender.maxAbsLuminanceDelta,
+          exactMinusPrediction: exactMinusPredictionRender.maxAbsLuminanceDelta,
+          predictionMinusIdentity: predictionMinusIdentityRender.maxAbsLuminanceDelta,
+        },
+        positivePixelCount: {
+          exactMinusIdentity: exactMinusIdentityRender.positivePixelCount,
+          exactMinusPrediction: exactMinusPredictionRender.positivePixelCount,
+          predictionMinusIdentity: predictionMinusIdentityRender.positivePixelCount,
+        },
+        negativePixelCount: {
+          exactMinusIdentity: exactMinusIdentityRender.negativePixelCount,
+          exactMinusPrediction: exactMinusPredictionRender.negativePixelCount,
+          predictionMinusIdentity: predictionMinusIdentityRender.negativePixelCount,
+        },
+      },
+      churnOverlay: {
+        authority: 'world-position-support-churn-overlay-v0',
+        interpretation: 'Categorical world-position support overlay: green true survival, yellow true birth, red missed target support, orange false predicted support, blue true death.',
+        artifacts: {
+          supportChurn: diagnosticArtifacts.supportChurn,
+        },
+        counts: churnOverlay.counts,
+      },
+      inspection: {
+        authority: 'phase-render-diagnostic-context-sheet-v0',
+        blocks: ['identity', 'phasePrediction', 'exactTarget', 'exactMinusIdentity', 'exactMinusPrediction', 'supportChurn'],
+        artifacts: {
+          contextSheet: diagnosticArtifacts.contextSheet,
+        },
+        note: 'Raw PNG has no embedded text labels; report block order and artifact names carry panel identity.',
       },
     },
     featureMetrics: {
