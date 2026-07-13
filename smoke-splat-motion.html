@@ -13,8 +13,11 @@
   <canvas id="smoke-motion-canvas"></canvas>
   <script type="module">
     import {
+      SMOKE_SPLAT_FOOTPRINT_BILLBOARD_AUTHORITY,
+      SMOKE_SPLAT_FOOTPRINT_PROJECTED_COVARIANCE_AUTHORITY,
       SMOKE_SPLAT_MOTION_ROUTE_IDENTITY,
       SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY,
+      cameraFrame,
       loadSmokeSplatMotionSource,
     } from './smoke-splat-motion-source.mjs';
 
@@ -25,6 +28,12 @@
     const instanceCount = requirePositiveInteger(params.get('instances') || 4, 'instances');
     const fineLodFraction = requireUnitInterval(params.get('fine_lod') || 1, 'fine_lod');
     const motionRate = requirePositiveNumber(params.get('motion_rate') || 0.16, 'motion_rate');
+    const requestedCoarseCoverageScale = requirePositiveNumber(params.get('coarse_coverage') || 1, 'coarse_coverage');
+    const requestedFootprintAuthority = params.get('footprint') || SMOKE_SPLAT_FOOTPRINT_BILLBOARD_AUTHORITY;
+    const supportedFootprintAuthorities = new Set([
+      SMOKE_SPLAT_FOOTPRINT_BILLBOARD_AUTHORITY,
+      SMOKE_SPLAT_FOOTPRINT_PROJECTED_COVARIANCE_AUTHORITY,
+    ]);
     const state = window.__kaminosSmokeSplatMotion = {
       schema: 'kaminos.smoke-splat-motion-runtime.v0',
       status: 'initializing',
@@ -33,6 +42,10 @@
       fallbackReason: null,
       backend: null,
       temporalAuthority: SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY,
+      requestedFootprintAuthority,
+      effectiveFootprintAuthority: null,
+      requestedCoarseCoverageScale,
+      effectiveCoarseCoverageScale: null,
       manifestPath,
       instanceCount,
       fineLodFraction,
@@ -51,6 +64,10 @@
 
     try {
       if (requestedRoute !== SMOKE_SPLAT_MOTION_ROUTE_IDENTITY) throw new Error(`unsupported requested route: ${requestedRoute}`);
+      if (!supportedFootprintAuthorities.has(requestedFootprintAuthority)) {
+        throw new Error(`unsupported requested footprint authority: ${requestedFootprintAuthority}`);
+      }
+      const usesProjectedCovariance = requestedFootprintAuthority === SMOKE_SPLAT_FOOTPRINT_PROJECTED_COVARIANCE_AUTHORITY;
       if (!navigator.gpu) throw new Error('navigator.gpu is unavailable');
       const source = await loadSmokeSplatMotionSource(new URL(manifestPath, location.href), { instanceCount, fineLodFraction });
       const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
@@ -131,7 +148,7 @@
         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
       });
 
-      const splatModule = device.createShaderModule({ label: 'kaminos hierarchical smoke splat raster v0', code: `
+      const splatModule = device.createShaderModule({ label: 'kaminos hierarchical smoke splat raster v1', code: `
 struct PackedSplat { a: vec4<f32>, b: vec4<f32>, c: vec4<f32>, d: vec4<f32> };
 struct Descriptor { transform: vec4<f32>, phase: vec4<f32> };
 struct Uniforms {
@@ -190,16 +207,45 @@ fn vs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) drawInst
   let transformedPosition = splat.a.xyz + velocity * phaseTime + descriptor.transform.xyz;
   let radiusX = max(0.008, splat.b.z) * descriptor.transform.w;
   let radiusY = max(0.008, splat.b.w) * descriptor.transform.w;
-  let footprintScale = mix(1.05, 1.22, splat.d.w);
+  let radiusZ = max(0.008, splat.c.x) * descriptor.transform.w;
+  let footprintScale = mix(1.05 * ${requestedCoarseCoverageScale.toFixed(8)}, 1.22, splat.d.w);
+  var footprintRight = u.cameraRight.xyz;
+  var footprintUp = u.cameraUp.xyz;
+  var projectedRadiusX = radiusX;
+  var projectedRadiusY = radiusY;
+  var supportArea = 3.14159265 * radiusX * radiusY * footprintScale * footprintScale;
+  if (${usesProjectedCovariance ? 'true' : 'false'}) {
+    let packedPrincipalAxis = vec3<f32>(splat.a.w, splat.b.x, splat.b.y);
+    let principalAxis = packedPrincipalAxis / max(length(packedPrincipalAxis), 0.000001);
+    let radialRadius = sqrt(radiusX * radiusZ);
+    let radialVariance = radialRadius * radialRadius;
+    let varianceDelta = radiusY * radiusY - radialVariance;
+    let axisRight = dot(principalAxis, u.cameraRight.xyz);
+    let axisUp = dot(principalAxis, u.cameraUp.xyz);
+    let covarianceXX = radialVariance + varianceDelta * axisRight * axisRight;
+    let covarianceYY = radialVariance + varianceDelta * axisUp * axisUp;
+    let covarianceXY = varianceDelta * axisRight * axisUp;
+    let discriminant = length(vec2<f32>(covarianceXX - covarianceYY, 2.0 * covarianceXY));
+    let majorVariance = max(0.0000001, (covarianceXX + covarianceYY + discriminant) * 0.5);
+    let minorVariance = max(0.0000001, (covarianceXX + covarianceYY - discriminant) * 0.5);
+    let angle = 0.5 * atan2(2.0 * covarianceXY, covarianceXX - covarianceYY);
+    let angleCos = cos(angle);
+    let angleSin = sin(angle);
+    footprintRight = u.cameraRight.xyz * angleCos + u.cameraUp.xyz * angleSin;
+    footprintUp = -u.cameraRight.xyz * angleSin + u.cameraUp.xyz * angleCos;
+    projectedRadiusX = sqrt(majorVariance);
+    projectedRadiusY = sqrt(minorVariance);
+    supportArea = 3.14159265 * projectedRadiusX * projectedRadiusY * footprintScale * footprintScale;
+  }
   let world = transformedPosition
-    + u.cameraRight.xyz * corner.x * radiusX * footprintScale
-    + u.cameraUp.xyz * corner.y * radiusY * footprintScale;
+    + footprintRight * corner.x * projectedRadiusX * footprintScale
+    + footprintUp * corner.y * projectedRadiusY * footprintScale;
   out.position = u.viewProj * vec4<f32>(world, 1.0);
   out.local = corner;
   out.extinctionMass = splat.c.y;
   out.densityTemperature = splat.c.zw;
   out.role = splat.d.w;
-  out.supportArea = 3.14159265 * radiusX * radiusY;
+  out.supportArea = supportArea;
   return out;
 }
 
@@ -310,6 +356,8 @@ struct VertexOut { @builtin(position) position: vec4<f32>, @location(0) uv: vec2
       state.drawPlan.drawInstanceCount = drawInstanceCount;
       state.drawPlan.maxSelectedProductCount = maxSelectedCount;
       state.effectiveRoute = SMOKE_SPLAT_MOTION_ROUTE_IDENTITY;
+      state.effectiveFootprintAuthority = requestedFootprintAuthority;
+      state.effectiveCoarseCoverageScale = requestedCoarseCoverageScale;
       state.status = 'running';
       let lastFrameAt = null;
       const startedAt = performance.now();
@@ -329,14 +377,16 @@ struct VertexOut { @builtin(position) position: vec4<f32>, @location(0) uv: vec2
         const rows = Math.ceil(instanceCount / columns);
         const extent = Math.max(columns, rows) * (instanceCount <= 4 ? 2.15 : Math.max(1.55, 4.8 / Math.sqrt(instanceCount)));
         const cameraPosition = [extent * 0.34, 2.2 + extent * 0.18, 5.2 + extent * 0.82];
+        const cameraTarget = [0, 0.05, 0];
+        const camera = cameraFrame(cameraPosition, cameraTarget, [0, 1, 0]);
         const viewProj = multiplyMat4(
           perspectiveMat4(Math.PI / 4.2, aspect, 0.05, 80),
-          lookAtMat4(cameraPosition, [0, 0.05, 0], [0, 1, 0]),
+          lookAtMat4(cameraPosition, cameraTarget, [0, 1, 0]),
         );
         const uniforms = new Float32Array(32);
         uniforms.set(viewProj, 0);
-        uniforms.set([1, 0, 0, 0], 16);
-        uniforms.set([0, 1, 0, 0], 20);
+        uniforms.set([...camera.right, 0], 16);
+        uniforms.set([...camera.up, 0], 20);
         uniforms.set([...cameraPosition, 0], 24);
         uniforms.set([(now - startedAt) / 1000, instanceCount, source.drawPlan.productUploads[0].selectedCount, source.drawPlan.productUploads[1].selectedCount], 28);
         device.queue.writeBuffer(uniformBuffer, 0, uniforms);

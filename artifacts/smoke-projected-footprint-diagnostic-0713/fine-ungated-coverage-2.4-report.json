@@ -1,0 +1,1068 @@
+{
+  "schema": "kaminos.smoke-splat-motion-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "startedAt": "2026-07-13T23:01:30.662Z",
+  "completedAt": "2026-07-13T23:01:38.704Z",
+  "requestedUrl": "http://127.0.0.1:8237/smoke-splat-motion.html?route=webgpu-real-field-hierarchical-smoke-motion-v0&manifest=./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json&instances=4&fine_lod=1&motion_rate=0.16&footprint=axisymmetric-projected-covariance-v1&coarse_coverage=2.4",
+  "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "fallbackReason": null,
+  "backend": "WebGPU:apple",
+  "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+  "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+  "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+  "requestedCoarseCoverageScale": 2.4,
+  "effectiveCoarseCoverageScale": 2.4,
+  "browser": {
+    "identity": "kaminos-smoke-motion-single-cdp-browser-v0",
+    "mode": "launched-owned",
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "chromePort": 19490,
+    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-smoke-motion-chrome-9KRjBj",
+    "keepBrowserOpen": false,
+    "windowSize": "1280,960"
+  },
+  "captureConfig": {
+    "frameCount": 4,
+    "stepMs": 300,
+    "settleMs": 1200,
+    "loadTimeoutMs": 120000,
+    "noHiddenFrameCap": true
+  },
+  "source": {
+    "products": [
+      {
+        "phaseIndex": 0,
+        "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+        "producerKind": "authoritative-articulation-target",
+        "modelIdentity": "smoke-sparse-residual-target:v0",
+        "historySlot": 0,
+        "slotWriteTick": 96,
+        "sourceCount": 3815,
+        "coarseCount": 341,
+        "fineCount": 3474,
+        "sourceExtinctionMass": 3.4296106743467547,
+        "representedExtinctionMass": 3.429610674346578,
+        "rejectedExtinctionMass": 0,
+        "artifactSha256": "c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26"
+      },
+      {
+        "phaseIndex": 1,
+        "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+        "producerKind": "learned-heldout-residual-selector",
+        "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
+        "historySlot": 1,
+        "slotWriteTick": 97,
+        "sourceCount": 3748,
+        "coarseCount": 345,
+        "fineCount": 3403,
+        "sourceExtinctionMass": 3.4333030511244917,
+        "representedExtinctionMass": 3.433303051124963,
+        "rejectedExtinctionMass": 0,
+        "artifactSha256": "3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d"
+      }
+    ],
+    "drawPlan": {
+      "identity": "smoke-splat-motion-draw-plan-v0",
+      "instanceCount": 4,
+      "uniqueProductCount": 2,
+      "fineLodFraction": 1,
+      "coarseSplatsAlwaysPresent": true,
+      "rejectedExtinctionMass": 0,
+      "productUploads": [
+        {
+          "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "sourceCount": 3815,
+          "selectedCount": 3815,
+          "coarseCount": 341,
+          "fineCount": 3474,
+          "sourceExtinctionMass": 3.429610655829947,
+          "representedExtinctionMass": 3.429610655829947,
+          "rejectedExtinctionMass": 0,
+          "coarseMassCompensation": 0
+        },
+        {
+          "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "sourceCount": 3748,
+          "selectedCount": 3748,
+          "coarseCount": 345,
+          "fineCount": 3403,
+          "sourceExtinctionMass": 3.43330304897745,
+          "representedExtinctionMass": 3.43330304897745,
+          "rejectedExtinctionMass": 0,
+          "coarseMassCompensation": 0
+        }
+      ],
+      "instanceBindings": [
+        {
+          "instanceIndex": 0,
+          "productIndex": 0,
+          "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "translation": [
+            -1.075,
+            0,
+            -1.075
+          ],
+          "phaseOffset": 0
+        },
+        {
+          "instanceIndex": 1,
+          "productIndex": 1,
+          "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "translation": [
+            1.075,
+            0,
+            -1.075
+          ],
+          "phaseOffset": 0.25
+        },
+        {
+          "instanceIndex": 2,
+          "productIndex": 0,
+          "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "translation": [
+            -1.075,
+            0,
+            1.075
+          ],
+          "phaseOffset": 0.5
+        },
+        {
+          "instanceIndex": 3,
+          "productIndex": 1,
+          "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "translation": [
+            1.075,
+            0,
+            1.075
+          ],
+          "phaseOffset": 0.75
+        }
+      ],
+      "drawInstanceCount": 15260,
+      "maxSelectedProductCount": 3815
+    }
+  },
+  "runtime": {
+    "initial": {
+      "schema": "kaminos.smoke-splat-motion-runtime.v0",
+      "status": "running",
+      "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+      "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+      "fallbackReason": null,
+      "backend": "WebGPU:apple",
+      "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+      "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+      "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+      "requestedCoarseCoverageScale": 2.4,
+      "effectiveCoarseCoverageScale": 2.4,
+      "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
+      "instanceCount": 4,
+      "fineLodFraction": 1,
+      "motionRate": 0.16,
+      "frameCount": 13,
+      "elapsedMs": 98.20000002384185,
+      "products": [
+        {
+          "phaseIndex": 0,
+          "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "producerKind": "authoritative-articulation-target",
+          "modelIdentity": "smoke-sparse-residual-target:v0",
+          "historySlot": 0,
+          "slotWriteTick": 96,
+          "sourceCount": 3815,
+          "coarseCount": 341,
+          "fineCount": 3474,
+          "sourceExtinctionMass": 3.4296106743467547,
+          "representedExtinctionMass": 3.429610674346578,
+          "rejectedExtinctionMass": 0,
+          "artifactSha256": "c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26"
+        },
+        {
+          "phaseIndex": 1,
+          "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "producerKind": "learned-heldout-residual-selector",
+          "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
+          "historySlot": 1,
+          "slotWriteTick": 97,
+          "sourceCount": 3748,
+          "coarseCount": 345,
+          "fineCount": 3403,
+          "sourceExtinctionMass": 3.4333030511244917,
+          "representedExtinctionMass": 3.433303051124963,
+          "rejectedExtinctionMass": 0,
+          "artifactSha256": "3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d"
+        }
+      ],
+      "drawPlan": {
+        "identity": "smoke-splat-motion-draw-plan-v0",
+        "instanceCount": 4,
+        "uniqueProductCount": 2,
+        "fineLodFraction": 1,
+        "coarseSplatsAlwaysPresent": true,
+        "rejectedExtinctionMass": 0,
+        "productUploads": [
+          {
+            "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "sourceCount": 3815,
+            "selectedCount": 3815,
+            "coarseCount": 341,
+            "fineCount": 3474,
+            "sourceExtinctionMass": 3.429610655829947,
+            "representedExtinctionMass": 3.429610655829947,
+            "rejectedExtinctionMass": 0,
+            "coarseMassCompensation": 0
+          },
+          {
+            "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "sourceCount": 3748,
+            "selectedCount": 3748,
+            "coarseCount": 345,
+            "fineCount": 3403,
+            "sourceExtinctionMass": 3.43330304897745,
+            "representedExtinctionMass": 3.43330304897745,
+            "rejectedExtinctionMass": 0,
+            "coarseMassCompensation": 0
+          }
+        ],
+        "instanceBindings": [
+          {
+            "instanceIndex": 0,
+            "productIndex": 0,
+            "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "translation": [
+              -1.075,
+              0,
+              -1.075
+            ],
+            "phaseOffset": 0
+          },
+          {
+            "instanceIndex": 1,
+            "productIndex": 1,
+            "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "translation": [
+              1.075,
+              0,
+              -1.075
+            ],
+            "phaseOffset": 0.25
+          },
+          {
+            "instanceIndex": 2,
+            "productIndex": 0,
+            "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "translation": [
+              -1.075,
+              0,
+              1.075
+            ],
+            "phaseOffset": 0.5
+          },
+          {
+            "instanceIndex": 3,
+            "productIndex": 1,
+            "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "translation": [
+              1.075,
+              0,
+              1.075
+            ],
+            "phaseOffset": 0.75
+          }
+        ],
+        "drawInstanceCount": 15260,
+        "maxSelectedProductCount": 3815
+      },
+      "timing": {
+        "authority": "browser-request-animation-frame-cpu-submit-v0",
+        "sampleCount": 12,
+        "p50Ms": 8.199999999999996,
+        "p95Ms": 9.299999999999997
+      },
+      "error": null
+    },
+    "final": {
+      "schema": "kaminos.smoke-splat-motion-runtime.v0",
+      "status": "running",
+      "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+      "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+      "fallbackReason": null,
+      "backend": "WebGPU:apple",
+      "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+      "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+      "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+      "requestedCoarseCoverageScale": 2.4,
+      "effectiveCoarseCoverageScale": 2.4,
+      "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
+      "instanceCount": 4,
+      "fineLodFraction": 1,
+      "motionRate": 0.16,
+      "frameCount": 150,
+      "elapsedMs": 2372.7000000238418,
+      "products": [
+        {
+          "phaseIndex": 0,
+          "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "producerKind": "authoritative-articulation-target",
+          "modelIdentity": "smoke-sparse-residual-target:v0",
+          "historySlot": 0,
+          "slotWriteTick": 96,
+          "sourceCount": 3815,
+          "coarseCount": 341,
+          "fineCount": 3474,
+          "sourceExtinctionMass": 3.4296106743467547,
+          "representedExtinctionMass": 3.429610674346578,
+          "rejectedExtinctionMass": 0,
+          "artifactSha256": "c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26"
+        },
+        {
+          "phaseIndex": 1,
+          "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+          "producerKind": "learned-heldout-residual-selector",
+          "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
+          "historySlot": 1,
+          "slotWriteTick": 97,
+          "sourceCount": 3748,
+          "coarseCount": 345,
+          "fineCount": 3403,
+          "sourceExtinctionMass": 3.4333030511244917,
+          "representedExtinctionMass": 3.433303051124963,
+          "rejectedExtinctionMass": 0,
+          "artifactSha256": "3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d"
+        }
+      ],
+      "drawPlan": {
+        "identity": "smoke-splat-motion-draw-plan-v0",
+        "instanceCount": 4,
+        "uniqueProductCount": 2,
+        "fineLodFraction": 1,
+        "coarseSplatsAlwaysPresent": true,
+        "rejectedExtinctionMass": 0,
+        "productUploads": [
+          {
+            "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "sourceCount": 3815,
+            "selectedCount": 3815,
+            "coarseCount": 341,
+            "fineCount": 3474,
+            "sourceExtinctionMass": 3.429610655829947,
+            "representedExtinctionMass": 3.429610655829947,
+            "rejectedExtinctionMass": 0,
+            "coarseMassCompensation": 0
+          },
+          {
+            "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "sourceCount": 3748,
+            "selectedCount": 3748,
+            "coarseCount": 345,
+            "fineCount": 3403,
+            "sourceExtinctionMass": 3.43330304897745,
+            "representedExtinctionMass": 3.43330304897745,
+            "rejectedExtinctionMass": 0,
+            "coarseMassCompensation": 0
+          }
+        ],
+        "instanceBindings": [
+          {
+            "instanceIndex": 0,
+            "productIndex": 0,
+            "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "translation": [
+              -1.075,
+              0,
+              -1.075
+            ],
+            "phaseOffset": 0
+          },
+          {
+            "instanceIndex": 1,
+            "productIndex": 1,
+            "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "translation": [
+              1.075,
+              0,
+              -1.075
+            ],
+            "phaseOffset": 0.25
+          },
+          {
+            "instanceIndex": 2,
+            "productIndex": 0,
+            "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "translation": [
+              -1.075,
+              0,
+              1.075
+            ],
+            "phaseOffset": 0.5
+          },
+          {
+            "instanceIndex": 3,
+            "productIndex": 1,
+            "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "translation": [
+              1.075,
+              0,
+              1.075
+            ],
+            "phaseOffset": 0.75
+          }
+        ],
+        "drawInstanceCount": 15260,
+        "maxSelectedProductCount": 3815
+      },
+      "timing": {
+        "authority": "browser-request-animation-frame-cpu-submit-v0",
+        "sampleCount": 149,
+        "p50Ms": 8.300000000000068,
+        "p95Ms": 9.299999999999997
+      },
+      "error": null
+    },
+    "frameCountDelta": 137,
+    "runtimeExceptionCount": 0
+  },
+  "motionEvidence": {
+    "frameDigestAuthority": "sha256-of-live-cdp-page-capture-v0",
+    "uniqueFrameDigestCount": 4,
+    "frameDigests": [
+      "ab627a674bf00ad02e296dc8c53850edf8508d6b12baa6a6c5ea7087e859a414",
+      "fad12dce6acaea8aff202693f8c9f493d7997f1a99a499732920c9e2b77a8c13",
+      "545bc21554b33aa18b10af13d72b82a63c46acef60aa359bbd56986853d7c2c1",
+      "961a8a90203cc104a43734368127d3b2ce66a100ac0ee34a0f8bd8edc73f8fee"
+    ],
+    "runtimeFrameCounts": [
+      112,
+      126,
+      137,
+      150
+    ],
+    "staticOrCached": false
+  },
+  "frames": [
+    {
+      "index": 0,
+      "capturedAt": "2026-07-13T23:01:37.280Z",
+      "image": {
+        "path": "/private/tmp/kaminos-ungated-fine-coverage-2.4/frame-000.png",
+        "byteLength": 269637,
+        "sha256": "ab627a674bf00ad02e296dc8c53850edf8508d6b12baa6a6c5ea7087e859a414",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 161.50836277345203,
+        "luminanceStdDev": 29.206057855444246,
+        "nonUniformPixelCount": 4031709
+      },
+      "frameDigest": "ab627a674bf00ad02e296dc8c53850edf8508d6b12baa6a6c5ea7087e859a414",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 2.4,
+        "effectiveCoarseCoverageScale": 2.4,
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 112,
+        "elapsedMs": 922.1000000238419,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "producerKind": "authoritative-articulation-target",
+            "modelIdentity": "smoke-sparse-residual-target:v0",
+            "historySlot": 0,
+            "slotWriteTick": 96,
+            "sourceCount": 3815,
+            "coarseCount": 341,
+            "fineCount": 3474,
+            "sourceExtinctionMass": 3.4296106743467547,
+            "representedExtinctionMass": 3.429610674346578,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "producerKind": "learned-heldout-residual-selector",
+            "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
+            "historySlot": 1,
+            "slotWriteTick": 97,
+            "sourceCount": 3748,
+            "coarseCount": 345,
+            "fineCount": 3403,
+            "sourceExtinctionMass": 3.4333030511244917,
+            "representedExtinctionMass": 3.433303051124963,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d"
+          }
+        ],
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "sourceCount": 3815,
+              "selectedCount": 3815,
+              "coarseCount": 341,
+              "fineCount": 3474,
+              "sourceExtinctionMass": 3.429610655829947,
+              "representedExtinctionMass": 3.429610655829947,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0
+            },
+            {
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "sourceCount": 3748,
+              "selectedCount": 3748,
+              "coarseCount": 345,
+              "fineCount": 3403,
+              "sourceExtinctionMass": 3.43330304897745,
+              "representedExtinctionMass": 3.43330304897745,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 15260,
+          "maxSelectedProductCount": 3815
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 111,
+          "p50Ms": 8.300000000000011,
+          "p95Ms": 9
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 1,
+      "capturedAt": "2026-07-13T23:01:37.749Z",
+      "image": {
+        "path": "/private/tmp/kaminos-ungated-fine-coverage-2.4/frame-001.png",
+        "byteLength": 269114,
+        "sha256": "fad12dce6acaea8aff202693f8c9f493d7997f1a99a499732920c9e2b77a8c13",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 161.52040827946934,
+        "luminanceStdDev": 29.198206779646206,
+        "nonUniformPixelCount": 4032618
+      },
+      "frameDigest": "fad12dce6acaea8aff202693f8c9f493d7997f1a99a499732920c9e2b77a8c13",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 2.4,
+        "effectiveCoarseCoverageScale": 2.4,
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 126,
+        "elapsedMs": 1414.300000023842,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "producerKind": "authoritative-articulation-target",
+            "modelIdentity": "smoke-sparse-residual-target:v0",
+            "historySlot": 0,
+            "slotWriteTick": 96,
+            "sourceCount": 3815,
+            "coarseCount": 341,
+            "fineCount": 3474,
+            "sourceExtinctionMass": 3.4296106743467547,
+            "representedExtinctionMass": 3.429610674346578,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "producerKind": "learned-heldout-residual-selector",
+            "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
+            "historySlot": 1,
+            "slotWriteTick": 97,
+            "sourceCount": 3748,
+            "coarseCount": 345,
+            "fineCount": 3403,
+            "sourceExtinctionMass": 3.4333030511244917,
+            "representedExtinctionMass": 3.433303051124963,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d"
+          }
+        ],
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "sourceCount": 3815,
+              "selectedCount": 3815,
+              "coarseCount": 341,
+              "fineCount": 3474,
+              "sourceExtinctionMass": 3.429610655829947,
+              "representedExtinctionMass": 3.429610655829947,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0
+            },
+            {
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "sourceCount": 3748,
+              "selectedCount": 3748,
+              "coarseCount": 345,
+              "fineCount": 3403,
+              "sourceExtinctionMass": 3.43330304897745,
+              "representedExtinctionMass": 3.43330304897745,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 15260,
+          "maxSelectedProductCount": 3815
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 125,
+          "p50Ms": 8.300000000000011,
+          "p95Ms": 9.099999999999994
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 2,
+      "capturedAt": "2026-07-13T23:01:38.225Z",
+      "image": {
+        "path": "/private/tmp/kaminos-ungated-fine-coverage-2.4/frame-002.png",
+        "byteLength": 270393,
+        "sha256": "545bc21554b33aa18b10af13d72b82a63c46acef60aa359bbd56986853d7c2c1",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 161.51081444199045,
+        "luminanceStdDev": 29.190822278674872,
+        "nonUniformPixelCount": 4032410
+      },
+      "frameDigest": "545bc21554b33aa18b10af13d72b82a63c46acef60aa359bbd56986853d7c2c1",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 2.4,
+        "effectiveCoarseCoverageScale": 2.4,
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 137,
+        "elapsedMs": 1889.4000000238418,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "producerKind": "authoritative-articulation-target",
+            "modelIdentity": "smoke-sparse-residual-target:v0",
+            "historySlot": 0,
+            "slotWriteTick": 96,
+            "sourceCount": 3815,
+            "coarseCount": 341,
+            "fineCount": 3474,
+            "sourceExtinctionMass": 3.4296106743467547,
+            "representedExtinctionMass": 3.429610674346578,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "producerKind": "learned-heldout-residual-selector",
+            "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
+            "historySlot": 1,
+            "slotWriteTick": 97,
+            "sourceCount": 3748,
+            "coarseCount": 345,
+            "fineCount": 3403,
+            "sourceExtinctionMass": 3.4333030511244917,
+            "representedExtinctionMass": 3.433303051124963,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d"
+          }
+        ],
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "sourceCount": 3815,
+              "selectedCount": 3815,
+              "coarseCount": 341,
+              "fineCount": 3474,
+              "sourceExtinctionMass": 3.429610655829947,
+              "representedExtinctionMass": 3.429610655829947,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0
+            },
+            {
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "sourceCount": 3748,
+              "selectedCount": 3748,
+              "coarseCount": 345,
+              "fineCount": 3403,
+              "sourceExtinctionMass": 3.43330304897745,
+              "representedExtinctionMass": 3.43330304897745,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 15260,
+          "maxSelectedProductCount": 3815
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 136,
+          "p50Ms": 8.300000000000068,
+          "p95Ms": 9.100000000000023
+        },
+        "error": null
+      }
+    },
+    {
+      "index": 3,
+      "capturedAt": "2026-07-13T23:01:38.703Z",
+      "image": {
+        "path": "/private/tmp/kaminos-ungated-fine-coverage-2.4/frame-003.png",
+        "byteLength": 271289,
+        "sha256": "961a8a90203cc104a43734368127d3b2ce66a100ac0ee34a0f8bd8edc73f8fee",
+        "width": 2560,
+        "height": 1746,
+        "luminanceMean": 161.50103979068658,
+        "luminanceStdDev": 29.183168543360136,
+        "nonUniformPixelCount": 4032329
+      },
+      "frameDigest": "961a8a90203cc104a43734368127d3b2ce66a100ac0ee34a0f8bd8edc73f8fee",
+      "runtime": {
+        "schema": "kaminos.smoke-splat-motion-runtime.v0",
+        "status": "running",
+        "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+        "fallbackReason": null,
+        "backend": "WebGPU:apple",
+        "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+        "requestedFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "effectiveFootprintAuthority": "axisymmetric-projected-covariance-v1",
+        "requestedCoarseCoverageScale": 2.4,
+        "effectiveCoarseCoverageScale": 2.4,
+        "manifestPath": "./artifacts/smoke-coarse-consolidation-v1-0713/motion-source.json",
+        "instanceCount": 4,
+        "fineLodFraction": 1,
+        "motionRate": 0.16,
+        "frameCount": 150,
+        "elapsedMs": 2372.7000000238418,
+        "products": [
+          {
+            "phaseIndex": 0,
+            "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "producerKind": "authoritative-articulation-target",
+            "modelIdentity": "smoke-sparse-residual-target:v0",
+            "historySlot": 0,
+            "slotWriteTick": 96,
+            "sourceCount": 3815,
+            "coarseCount": 341,
+            "fineCount": 3474,
+            "sourceExtinctionMass": 3.4296106743467547,
+            "representedExtinctionMass": 3.429610674346578,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "c4c0ca096868c54dd5e0eebc9aed51e4968d4aa1b5280fda3457a8ab2d56bc26"
+          },
+          {
+            "phaseIndex": 1,
+            "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+            "producerKind": "learned-heldout-residual-selector",
+            "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
+            "historySlot": 1,
+            "slotWriteTick": 97,
+            "sourceCount": 3748,
+            "coarseCount": 345,
+            "fineCount": 3403,
+            "sourceExtinctionMass": 3.4333030511244917,
+            "representedExtinctionMass": 3.433303051124963,
+            "rejectedExtinctionMass": 0,
+            "artifactSha256": "3b38ac7725e6329343230f53fc6460b59c6a601fe25a9f2e370c6d6ab743840d"
+          }
+        ],
+        "drawPlan": {
+          "identity": "smoke-splat-motion-draw-plan-v0",
+          "instanceCount": 4,
+          "uniqueProductCount": 2,
+          "fineLodFraction": 1,
+          "coarseSplatsAlwaysPresent": true,
+          "rejectedExtinctionMass": 0,
+          "productUploads": [
+            {
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "sourceCount": 3815,
+              "selectedCount": 3815,
+              "coarseCount": 341,
+              "fineCount": 3474,
+              "sourceExtinctionMass": 3.429610655829947,
+              "representedExtinctionMass": 3.429610655829947,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0
+            },
+            {
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "sourceCount": 3748,
+              "selectedCount": 3748,
+              "coarseCount": 345,
+              "fineCount": 3403,
+              "sourceExtinctionMass": 3.43330304897745,
+              "representedExtinctionMass": 3.43330304897745,
+              "rejectedExtinctionMass": 0,
+              "coarseMassCompensation": 0
+            }
+          ],
+          "instanceBindings": [
+            {
+              "instanceIndex": 0,
+              "productIndex": 0,
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                -1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0
+            },
+            {
+              "instanceIndex": 1,
+              "productIndex": 1,
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                1.075,
+                0,
+                -1.075
+              ],
+              "phaseOffset": 0.25
+            },
+            {
+              "instanceIndex": 2,
+              "productIndex": 0,
+              "productIdentity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                -1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.5
+            },
+            {
+              "instanceIndex": 3,
+              "productIndex": 1,
+              "productIdentity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7Cuncapped",
+              "translation": [
+                1.075,
+                0,
+                1.075
+              ],
+              "phaseOffset": 0.75
+            }
+          ],
+          "drawInstanceCount": 15260,
+          "maxSelectedProductCount": 3815
+        },
+        "timing": {
+          "authority": "browser-request-animation-frame-cpu-submit-v0",
+          "sampleCount": 149,
+          "p50Ms": 8.300000000000068,
+          "p95Ms": 9.299999999999997
+        },
+        "error": null
+      }
+    }
+  ],
+  "falseClosureChecks": {
+    "rejectsWrongOrFallbackRoute": true,
+    "rejectsWrongFootprintAuthority": true,
+    "rejectsWrongCoarseCoverageScale": true,
+    "rejectsMissingPartialOrBlankOutput": true,
+    "rejectsStaticOrCachedFrames": true,
+    "rejectsTruncatedOrMassLosingProducts": true,
+    "preservesFailurePhaseBeforePrimaryOutput": true
+  },
+  "claimBoundary": "Standalone WebGPU smoke representation and raster motion evidence. This does not prove final flame-smoke depth composition or live recurrent smoke decode."
+}

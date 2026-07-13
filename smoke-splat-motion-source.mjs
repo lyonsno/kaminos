@@ -1,6 +1,8 @@
 export const SMOKE_SPLAT_MOTION_MANIFEST_SCHEMA = 'kaminos.smoke-splat-motion-source.v0';
 export const SMOKE_SPLAT_MOTION_ROUTE_IDENTITY = 'webgpu-real-field-hierarchical-smoke-motion-v0';
 export const SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY = 'velocity-carried-short-horizon-extrapolation-v0';
+export const SMOKE_SPLAT_FOOTPRINT_BILLBOARD_AUTHORITY = 'camera-upright-billboard-v0';
+export const SMOKE_SPLAT_FOOTPRINT_PROJECTED_COVARIANCE_AUTHORITY = 'axisymmetric-projected-covariance-v1';
 
 const PRODUCT_SCHEMA = 'kaminos-hierarchical-smoke-splats-v0';
 const PRODUCER_AUTHORITY = 'real-field-hierarchical-smoke-splat-producer-v0';
@@ -50,6 +52,75 @@ function requireInteger(value, label) {
   const number = requireFinite(value, label);
   if (!Number.isInteger(number)) throw new TypeError(`${label} must be an integer`);
   return number;
+}
+
+function requireVector3(value, label) {
+  if (!Array.isArray(value) || value.length !== 3) throw new TypeError(`${label} must be a vec3 array`);
+  return value.map((component, index) => requireFinite(component, `${label}[${index}]`));
+}
+
+function subtract3(left, right) {
+  return left.map((value, index) => value - right[index]);
+}
+
+function dot3(left, right) {
+  return left.reduce((sum, value, index) => sum + value * right[index], 0);
+}
+
+function cross3(left, right) {
+  return [
+    left[1] * right[2] - left[2] * right[1],
+    left[2] * right[0] - left[0] * right[2],
+    left[0] * right[1] - left[1] * right[0],
+  ];
+}
+
+function normalize3(value, label) {
+  const length = Math.hypot(...value);
+  if (!(length > 1e-12)) throw new RangeError(`${label} must have nonzero length`);
+  return value.map(component => component / length);
+}
+
+export function cameraFrame(eyeValue, targetValue, worldUpValue) {
+  const eye = requireVector3(eyeValue, 'eye');
+  const target = requireVector3(targetValue, 'target');
+  const worldUp = normalize3(requireVector3(worldUpValue, 'worldUp'), 'worldUp');
+  const backward = normalize3(subtract3(eye, target), 'eye-target');
+  const right = normalize3(cross3(worldUp, backward), 'camera right');
+  const up = normalize3(cross3(backward, right), 'camera up');
+  return { right, up, backward };
+}
+
+export function projectAxisymmetricSmokeFootprint(request = {}) {
+  const principalAxis = normalize3(requireVector3(request.principalAxis, 'principalAxis'), 'principalAxis');
+  const cameraRight = normalize3(requireVector3(request.cameraRight, 'cameraRight'), 'cameraRight');
+  const cameraUp = normalize3(requireVector3(request.cameraUp, 'cameraUp'), 'cameraUp');
+  const radialRadius = requireFinite(request.radialRadius, 'radialRadius');
+  const longitudinalRadius = requireFinite(request.longitudinalRadius, 'longitudinalRadius');
+  if (!(radialRadius > 0) || !(longitudinalRadius > 0)) throw new RangeError('footprint radii must be positive');
+  const axisRight = dot3(principalAxis, cameraRight);
+  const axisUp = dot3(principalAxis, cameraUp);
+  const radialVariance = radialRadius * radialRadius;
+  const varianceDelta = longitudinalRadius * longitudinalRadius - radialVariance;
+  const covarianceXX = radialVariance + varianceDelta * axisRight * axisRight;
+  const covarianceYY = radialVariance + varianceDelta * axisUp * axisUp;
+  const covarianceXY = varianceDelta * axisRight * axisUp;
+  const discriminant = Math.hypot(covarianceXX - covarianceYY, 2 * covarianceXY);
+  const majorVariance = Math.max(0, (covarianceXX + covarianceYY + discriminant) * 0.5);
+  const minorVariance = Math.max(0, (covarianceXX + covarianceYY - discriminant) * 0.5);
+  const angle = 0.5 * Math.atan2(2 * covarianceXY, covarianceXX - covarianceYY);
+  const majorAxis = [Math.cos(angle), Math.sin(angle)];
+  const minorAxis = [-majorAxis[1], majorAxis[0]];
+  const majorRadius = Math.sqrt(majorVariance);
+  const minorRadius = Math.sqrt(minorVariance);
+  return {
+    covariance: [covarianceXX, covarianceXY, covarianceYY],
+    majorAxis,
+    minorAxis,
+    majorRadius,
+    minorRadius,
+    supportArea: Math.PI * majorRadius * minorRadius,
+  };
 }
 
 function validateArtifact(artifact, productIndex) {

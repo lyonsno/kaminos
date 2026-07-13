@@ -5,12 +5,22 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { inflateSync } from 'node:zlib';
+import {
+  SMOKE_SPLAT_FOOTPRINT_BILLBOARD_AUTHORITY,
+} from './smoke-splat-motion-source.mjs';
 
 const SCHEMA = 'kaminos.smoke-splat-motion-witness.v0';
 const ROUTE_IDENTITY = 'webgpu-real-field-hierarchical-smoke-motion-v0';
 const TEMPORAL_AUTHORITY = 'velocity-carried-short-horizon-extrapolation-v0';
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = requireIdentity(args.get('--url'), '--url');
+const requestedRoute = new URL(requestedUrl).searchParams.get('route') || ROUTE_IDENTITY;
+const requestedFootprintAuthority = new URL(requestedUrl).searchParams.get('footprint')
+  || SMOKE_SPLAT_FOOTPRINT_BILLBOARD_AUTHORITY;
+const requestedCoarseCoverageScale = requirePositiveNumber(
+  new URL(requestedUrl).searchParams.get('coarse_coverage') || 1,
+  'coarse_coverage',
+);
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-smoke-splat-motion-witness'));
 const reportPath = resolve(String(args.get('--report') || join(outDir, 'report.json')));
 const frameCount = requirePositiveInteger(args.get('--frames') || 8, '--frames');
@@ -104,11 +114,15 @@ try {
     startedAt,
     completedAt: new Date().toISOString(),
     requestedUrl,
-    requestedRoute: ROUTE_IDENTITY,
+    requestedRoute,
     effectiveRoute: finalCompact.effectiveRoute,
     fallbackReason: finalCompact.fallbackReason,
     backend: finalCompact.backend,
     temporalAuthority: finalCompact.temporalAuthority,
+    requestedFootprintAuthority,
+    effectiveFootprintAuthority: finalCompact.effectiveFootprintAuthority,
+    requestedCoarseCoverageScale,
+    effectiveCoarseCoverageScale: finalCompact.effectiveCoarseCoverageScale,
     browser: {
       identity: 'kaminos-smoke-motion-single-cdp-browser-v0',
       mode: browser.mode,
@@ -145,6 +159,8 @@ try {
     frames,
     falseClosureChecks: {
       rejectsWrongOrFallbackRoute: true,
+      rejectsWrongFootprintAuthority: true,
+      rejectsWrongCoarseCoverageScale: true,
       rejectsMissingPartialOrBlankOutput: true,
       rejectsStaticOrCachedFrames: true,
       rejectsTruncatedOrMassLosingProducts: true,
@@ -162,7 +178,11 @@ try {
     startedAt,
     failedAt: new Date().toISOString(),
     requestedUrl,
-    requestedRoute: ROUTE_IDENTITY,
+    requestedRoute,
+    requestedFootprintAuthority,
+    effectiveFootprintAuthority: null,
+    requestedCoarseCoverageScale,
+    effectiveCoarseCoverageScale: null,
     effectiveRoute: null,
     fallbackReason: null,
     runtimeExceptionCount,
@@ -345,11 +365,15 @@ async function waitForLiveState(timeoutMs) {
 function validateState(state) {
   assert.ok(state, 'missing live smoke motion runtime state');
   assert.equal(state.status, 'running');
-  assert.equal(state.requestedRoute, ROUTE_IDENTITY);
+  assert.equal(state.requestedRoute, requestedRoute);
   assert.equal(state.effectiveRoute, ROUTE_IDENTITY);
   assert.equal(state.fallbackReason, null);
   assert.match(state.backend || '', /^WebGPU:/);
   assert.equal(state.temporalAuthority, TEMPORAL_AUTHORITY);
+  assert.equal(state.requestedFootprintAuthority, requestedFootprintAuthority);
+  assert.equal(state.effectiveFootprintAuthority, requestedFootprintAuthority);
+  assert.equal(state.requestedCoarseCoverageScale, requestedCoarseCoverageScale);
+  assert.equal(state.effectiveCoarseCoverageScale, requestedCoarseCoverageScale);
   assert.equal(state.products?.length, 2);
   assert.equal(state.products.some(product => product.producerKind === 'learned-heldout-residual-selector'), true);
   assert.equal(state.products.every(product => product.rejectedExtinctionMass === 0), true);
@@ -369,6 +393,10 @@ function compactState(state) {
     fallbackReason: state.fallbackReason,
     backend: state.backend,
     temporalAuthority: state.temporalAuthority,
+    requestedFootprintAuthority: state.requestedFootprintAuthority,
+    effectiveFootprintAuthority: state.effectiveFootprintAuthority,
+    requestedCoarseCoverageScale: state.requestedCoarseCoverageScale,
+    effectiveCoarseCoverageScale: state.effectiveCoarseCoverageScale,
     manifestPath: state.manifestPath,
     instanceCount: state.instanceCount,
     fineLodFraction: state.fineLodFraction,

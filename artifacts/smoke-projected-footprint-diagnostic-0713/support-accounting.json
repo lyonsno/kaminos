@@ -1,0 +1,53 @@
+{
+  "schema": "kaminos.smoke-splat-support-accounting.v0",
+  "status": "passed",
+  "source": {
+    "artifact": "../real-smoke-hierarchy-0713/sim-step-96-target.splats.f32",
+    "coarse": {
+      "count": 7964,
+      "extinctionMass": 3.2981810193662784,
+      "bounds": {
+        "minimum": [-0.9438859820365906, -0.924284815788269, -0.9433721303939819],
+        "maximum": [0.9432936310768127, 0.9242167472839355, 0.9441522359848022]
+      },
+      "massWeightedCentroid": [0.14442541484929308, 0.3405328089768759, -0.03217372430711394]
+    },
+    "fine": {
+      "count": 3474,
+      "extinctionMass": 0.13142965287033803,
+      "bounds": {
+        "minimum": [-0.8715311288833618, -0.871921718120575, -0.8740176558494568],
+        "maximum": [0.8739492893218994, 0.914046049118042, 0.872666597366333]
+      },
+      "massWeightedCentroid": [0.0643967073980009, -0.07715806138422002, 0.066404590450977]
+    }
+  },
+  "consolidated": {
+    "artifact": "../smoke-coarse-consolidation-v1-0713/sim-step-96-target.splats.f32",
+    "coarse": {
+      "count": 341,
+      "extinctionMass": 3.298181002959609,
+      "bounds": {
+        "minimum": [-0.7514246702194214, 0.6506253480911255, -0.8497487902641296],
+        "maximum": [0.8506777882575989, 0.8515897989273071, 0.8493889570236206]
+      },
+      "massWeightedCentroid": [0.15224380357047268, 0.704254432924871, -0.03279650885277952]
+    },
+    "fine": {
+      "count": 3474,
+      "extinctionMass": 0.13142965287033803,
+      "bounds": {
+        "minimum": [-0.8715311288833618, -0.871921718120575, -0.8740176558494568],
+        "maximum": [0.8739492893218994, 0.914046049118042, 0.872666597366333]
+      },
+      "massWeightedCentroid": [0.0643967073980009, -0.07715806138422002, 0.066404590450977]
+    }
+  },
+  "invariants": {
+    "coarseExtinctionMassPreserved": true,
+    "coarseSourceSupportPreserved": false,
+    "coarseYSpanRatio": 0.10873696623094209,
+    "coarseWeightedYShift": 0.3637216239479951
+  },
+  "verdict": "Global nearest-anchor transfer conserves extinction mass while collapsing coarse transport support into the high-mass band."
+}
