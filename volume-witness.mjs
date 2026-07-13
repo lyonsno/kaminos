@@ -156,6 +156,9 @@ const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderSca
 const controlledStepPrefix = String(args.get('--controlled-step-prefix') || 'controlled-step-sequence');
 const freezeIntegrityProbeRequested = args.has('--freeze-integrity-probe') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe') || '1').toLowerCase());
 const freezeIntegrityProbeOnly = freezeIntegrityProbeRequested && args.has('--freeze-integrity-probe-only') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe-only') || '1').toLowerCase());
+const boundarySplatCostProbeRequested = args.has('--boundary-splat-cost-probe') && !['0', 'false', 'no'].includes(String(args.get('--boundary-splat-cost-probe') || '1').toLowerCase());
+const boundarySplatCostWarmupSamples = Math.max(0, Math.floor(Number(args.get('--boundary-splat-cost-warmup-samples') || 2)));
+const boundarySplatCostSteadySamples = Math.max(1, Math.floor(Number(args.get('--boundary-splat-cost-steady-samples') || 8)));
 const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
@@ -2503,6 +2506,20 @@ async function main() {
         return;
       }
     }
+    let boundarySplatCostProbe = null;
+    if (boundarySplatCostProbeRequested) {
+      phase = 'boundary-splat-cost-probe';
+      const costProbeEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `window.__kaminosVolumePrototype.sampleBoundarySplatCostAlternation(${JSON.stringify({
+          warmupSamples: boundarySplatCostWarmupSamples,
+          steadySamples: boundarySplatCostSteadySamples,
+        })})`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      boundarySplatCostProbe = costProbeEval.result.value;
+      assert.ok(boundarySplatCostProbe?.ok, `boundary splat cost probe failed: ${JSON.stringify(boundarySplatCostProbe)}`);
+    }
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     if (rayBudgetPreset && !routeParams.has('volume_steps') && !routeParams.has('volume_adaptive_rays')) {
@@ -4260,6 +4277,7 @@ async function main() {
       renderScaleSet: renderScaleSetReport,
       controlledStepSequence: controlledStepSequenceReport,
       freezeIntegrityProbe,
+      boundarySplatCostProbe,
       identityFrameRecovery,
       metrics,
       mainRendererMetrics,

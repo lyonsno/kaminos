@@ -8198,13 +8198,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return false;
     }
     device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([6, 0, 0, 0, 0, 0, 0, 0]));
-    const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
+    const compactPass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass`,
+      ...(hooks.compactTimestampWrites ? { timestampWrites: hooks.compactTimestampWrites } : {}),
+    });
     compactPass.setPipeline(boundarySplatCompactPipeline);
     compactPass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
     const workgroups = Math.ceil(gridSize / 4);
     compactPass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     compactPass.end();
-    const finalizePass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize pass` });
+    const finalizePass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize pass`,
+      ...(hooks.finalizeTimestampWrites ? { timestampWrites: hooks.finalizeTimestampWrites } : {}),
+    });
     finalizePass.setPipeline(boundarySplatFinalizePipeline);
     finalizePass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
     finalizePass.dispatchWorkgroups(1);
@@ -8219,10 +8225,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return true;
   }
 
-  function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline) {
+  function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline, options = {}) {
     if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
     const pass = encoder.beginRenderPass({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} canvas pass`,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
       colorAttachments: [{
         view,
         clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
@@ -8417,6 +8424,181 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatCandidateCount = result.candidateCount;
     state.boundarySplatOverflowCount = result.overflowCount;
     return result;
+  }
+
+  async function sampleBoundarySplatPassTimestampCost(mode) {
+    if (!device?.features?.has?.('timestamp-query') || typeof device.createQuerySet !== 'function') {
+      return { status: 'unsupported', reason: 'timestamp-query-not-supported' };
+    }
+    const querySet = device.createQuerySet({ type: 'timestamp', count: 6 });
+    const resolveBuffer = device.createBuffer({
+      label: 'kaminos boundary splat pass timestamp resolve',
+      size: 48,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    const readbackBuffer = device.createBuffer({
+      label: 'kaminos boundary splat pass timestamp readback',
+      size: 48,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      controlsSnapshot = { ...controlsSnapshot, boundarySplatMode: mode };
+      updateUniforms(state.lookFreezeRenderTimeMs ?? performance.now());
+      ensureFrameTexture();
+      device.pushErrorScope('validation');
+      const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat pass timestamp encoder' });
+      encodeBoundarySidecar(encoder);
+      const encoded = encodeBoundarySplats(encoder, {
+        compactTimestampWrites: {
+          querySet,
+          beginningOfPassWriteIndex: 0,
+          endOfPassWriteIndex: 1,
+        },
+        finalizeTimestampWrites: {
+          querySet,
+          beginningOfPassWriteIndex: 2,
+          endOfPassWriteIndex: 3,
+        },
+      });
+      const drawn = encoded && encodeBoundarySplatDraw(
+        encoder,
+        frameTexture.createView(),
+        boundarySplatReadbackPipeline,
+        {
+          timestampWrites: {
+            querySet,
+            beginningOfPassWriteIndex: 4,
+            endOfPassWriteIndex: 5,
+          },
+        },
+      );
+      if (!drawn) throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-pass-timestamp-route-unavailable');
+      encoder.resolveQuerySet(querySet, 0, 6, resolveBuffer, 0);
+      encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, 48);
+      device.queue.submit([encoder.finish()]);
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      const validationError = await device.popErrorScope();
+      if (validationError) throw new Error(validationError.message || String(validationError));
+      const elapsedMs = (end, start) => Number(timestamps[end] - timestamps[start]) / 1_000_000;
+      const drawState = await sampleBoundarySplatDrawState();
+      return {
+        status: 'available',
+        measurementAuthority: 'gpu-pass-descriptor-timestamp-query-v0',
+        measurementDisclaimer: 'gpu-exclusive-for-named-passes-not-end-to-end-renderer-latency',
+        elapsedMs: elapsedMs(1, 0) + elapsedMs(3, 2) + elapsedMs(5, 4),
+        stages: {
+          compactionMs: elapsedMs(1, 0),
+          finalizeMs: elapsedMs(3, 2),
+          splatRasterMs: elapsedMs(5, 4),
+        },
+        drawState,
+      };
+    } catch (error) {
+      try {
+        const validationError = await device.popErrorScope();
+        if (validationError && !String(error?.message || error).includes(validationError.message)) {
+          error = new Error(`${error?.message || String(error)}; validation:${validationError.message || String(validationError)}`);
+        }
+      } catch {
+        // Preserve the first pass-descriptor failure when the validation scope is already consumed.
+      }
+      return {
+        status: 'unsupported',
+        reason: `pass-descriptor-timestamp-writes-unavailable:${error?.message || String(error)}`,
+      };
+    } finally {
+      readbackBuffer.destroy();
+      resolveBuffer.destroy();
+      querySet.destroy?.();
+    }
+  }
+
+  async function sampleBoundarySplatQueueCost(mode) {
+    controlsSnapshot = { ...controlsSnapshot, boundarySplatMode: mode };
+    updateUniforms(state.lookFreezeRenderTimeMs ?? performance.now());
+    ensureFrameTexture();
+    const startedAt = performance.now();
+    const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat queue proxy encoder' });
+    encodeBoundarySidecar(encoder);
+    const encoded = encodeBoundarySplats(encoder);
+    const drawn = encoded && encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline);
+    if (!drawn) throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-queue-proxy-route-unavailable');
+    device.queue.submit([encoder.finish()]);
+    await device.queue.onSubmittedWorkDone();
+    const elapsedMs = performance.now() - startedAt;
+    const drawState = await sampleBoundarySplatDrawState();
+    return {
+      status: 'available',
+      measurementAuthority: 'cpu-visible-queue-completion-proxy-v0',
+      measurementDisclaimer: 'not-gpu-exclusive-or-present-latency; valid-only-for-matched-analytic-versus-learned-incremental-overhead',
+      elapsedMs,
+      stages: null,
+      drawState,
+    };
+  }
+
+  async function sampleBoundarySplatCostAlternation(options = {}) {
+    const warmupSamples = Math.max(0, Math.floor(Number(options.warmupSamples ?? 2)));
+    const steadySamples = Math.max(1, Math.floor(Number(options.steadySamples ?? 8)));
+    const controlsBefore = controlsSnapshot;
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    cancelAnimationFrame(raf);
+    try {
+      controlsSnapshot = { ...controlsSnapshot, lookFreeze: 1, boundarySplatMode: 'analytic' };
+      state.lookFreeze = 1;
+      if (!lookFreezeCanPin(state)) throw new Error('look-freeze-cannot-pin-uninitialized-state');
+      if (state.lookFreezeRenderTimeMs == null) state.lookFreezeRenderTimeMs = performance.now();
+      if (state.lookFreezeRenderFrame == null) state.lookFreezeRenderFrame = state.frameCount;
+
+      const timestampProbe = await sampleBoundarySplatPassTimestampCost('analytic');
+      const useGpuTimestamps = timestampProbe.status === 'available';
+      const samples = [];
+      const perModeOrdinal = { analytic: 0, learned: 0 };
+      const totalSamples = (warmupSamples + steadySamples) * 2;
+      for (let index = 0; index < totalSamples; index += 1) {
+        const mode = index % 2 === 0 ? 'analytic' : 'learned';
+        const ordinal = perModeOrdinal[mode]++;
+        const phase = ordinal < warmupSamples ? 'warmup' : 'steady';
+        const cost = useGpuTimestamps
+          ? await sampleBoundarySplatPassTimestampCost(mode)
+          : await sampleBoundarySplatQueueCost(mode);
+        samples.push({
+          index,
+          mode,
+          phase,
+          ordinal,
+          rendererIdentity: state.boundarySplatRendererIdentity,
+          modelIdentity: state.boundarySplatAttributeModelIdentity,
+          sourceAuthority: state.boundarySplatSourceAuthority,
+          candidateCopyBytes: state.boundarySplatCopyBytesThisFrame,
+          ...cost,
+        });
+      }
+      return {
+        ok: true,
+        identity: 'boundary-splat-matched-learned-cost-alternation-v0',
+        requestedModes: ['analytic', 'learned'],
+        warmupSamples,
+        steadySamples,
+        baseFrameCount,
+        finalFrameCount: state.frameCount,
+        baseSimStepCount,
+        finalSimStepCount: state.simStepCount,
+        frozenStatePreserved: state.simStepCount === baseSimStepCount,
+        timestampProbe,
+        measurementAuthority: useGpuTimestamps
+          ? 'gpu-pass-descriptor-timestamp-query-v0'
+          : 'cpu-visible-queue-completion-proxy-v0',
+        samples,
+      };
+    } finally {
+      controlsSnapshot = controlsBefore;
+      state.lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze);
+      if (state.active) raf = requestAnimationFrame(render);
+    }
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline) {
@@ -10907,6 +11089,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleBoundarySplatCostAlternation,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
