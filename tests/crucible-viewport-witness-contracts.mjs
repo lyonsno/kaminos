@@ -8,6 +8,62 @@ const projectorSource = witness.match(
 );
 assert.ok(projectorSource, 'witness must expose a testable Node-side firing evidence projector');
 const projectFriendlyFiringEvidence = vm.runInNewContext(`(${projectorSource[0]})`);
+const presentationValidatorSource = witness.match(
+  /function validateRequestedFirePresentation\([\s\S]*?\n}\n(?=\nfunction projectFriendlyFiringEvidence)/,
+);
+assert.ok(
+  presentationValidatorSource,
+  'witness must expose a testable requested/effective presentation validator',
+);
+const validateRequestedFirePresentation = vm.runInNewContext(`(${presentationValidatorSource[0]})`);
+
+const hybridPresentation = {
+  firingId: 'firing-hybrid-witness',
+  requestedMode: 'learned-splat-flame-raymarched-smoke',
+  effectiveMode: 'learned-splat-flame-raymarched-smoke',
+  fallbackReason: null,
+  candidateCount: 512,
+  candidateCapacity: 2048,
+  candidateOverflow: 0,
+  candidateCopyBytes: 0,
+  fireEpisodeHooks: {
+    identity: 'foreground-kiln-fire-episode-hooks-v0',
+    firingId: 'firing-hybrid-witness',
+    routeIdentity: {
+      compositionRequested: 'hybrid-smoke',
+      compositionEffective: 'hybrid-smoke',
+      compositionFallbackReason: null,
+    },
+  },
+};
+assert.deepEqual(
+  Array.from(validateRequestedFirePresentation({
+    requestedPresentation: 'hybrid-smoke-preview',
+    firingId: 'firing-hybrid-witness',
+    expected: { effectiveMode: hybridPresentation.effectiveMode },
+    effective: hybridPresentation,
+  })),
+  [],
+);
+for (const [effective, expectedFailure] of [
+  [null, 'effective-presentation-missing'],
+  [{ ...hybridPresentation, effectiveMode: 'raymarched-fire-smoke' }, 'effective-presentation-mode-mismatch'],
+  [{ ...hybridPresentation, fallbackReason: 'hybrid-route-unavailable' }, 'effective-presentation-fallback-present'],
+  [{ ...hybridPresentation, firingId: 'other-firing' }, 'effective-presentation-firing-id-mismatch'],
+  [{ ...hybridPresentation, candidateOverflow: 1 }, 'effective-presentation-candidate-overflow'],
+  [{ ...hybridPresentation, candidateCopyBytes: 4096 }, 'effective-presentation-cpu-copy-present'],
+]) {
+  assert.ok(
+    validateRequestedFirePresentation({
+      requestedPresentation: 'hybrid-smoke-preview',
+      firingId: 'firing-hybrid-witness',
+      expected: { effectiveMode: hybridPresentation.effectiveMode },
+      effective,
+    }).includes(expectedFailure),
+    `hybrid witness must reject ${expectedFailure}`,
+  );
+}
+
 const projectedEvidence = projectFriendlyFiringEvidence({
   browserFiringEvidence: {
     status: 'complete',
@@ -42,6 +98,7 @@ for (const [pattern, message] of [
   [/--out/, 'Witness must let callers choose the screenshot path'],
   [/--report/, 'Witness must let callers choose the JSON report path'],
   [/--fire-friendly/, 'Witness must expose an explicit opt-in real Friendly firing mode'],
+  [/--fire-presentation/, 'Witness must accept an explicit central fire presentation instead of inheriting a UI default'],
   [/--expected-sharp-revision/, 'Full-route witness must accept the exact expected SHARP source revision'],
   [/openGenerateTabExpression[\s\S]*data-tab="generate"[\s\S]*evaluate\(ws, openGenerateTabExpression\)/, 'Witness must open the real Generate tab path'],
   [/id: 'crucible-viewport-workspace'/, 'Witness report must include the requested workspace selector'],
@@ -53,6 +110,8 @@ for (const [pattern, message] of [
   [/sourceSelectionExercise/, 'Witness must prove changing the plate selector changes the effective shared source'],
   [/backgroundHeartbeat/, 'Full-route witness mode must preserve the corrected heartbeat receipt'],
   [/foregroundKilnHeartbeat/, 'Full-route witness must preserve the exact foreground firing-window heartbeat'],
+  [/validateRequestedFirePresentation/, 'Full-route witness must validate requested and effective fire presentation truth'],
+  [/crucible-viewport-presentation-select/, 'Full-route witness must actuate the real central presentation selector'],
   [/sharpDutyCorrelation/, 'Full-route witness must preserve the foreground-to-SHARP epoch correlation'],
   [/kaminos\.foreground-sharp-duty-correlation\.v0/, 'Full-route witness must require the correlation schema'],
   [/sampleRetention[\s\S]*uncapped/, 'Full-route witness must reject capped foreground samples'],

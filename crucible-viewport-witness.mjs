@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -32,6 +32,7 @@ const reportPath = args.get('report') || '/tmp/kaminos-crucible-viewport-witness
 const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = Number(args.get('cdp-port') || 9341);
 const fireFriendly = args.has('fire-friendly');
+const requestedFirePresentation = args.get('fire-presentation') || 'full-volume';
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
 const userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
@@ -44,6 +45,10 @@ let primaryOutputWritten = false;
 let stderr = '';
 let lastTrustworthyEvidence = null;
 const runtimeExceptions = [];
+
+if (!['full-volume', 'hybrid-smoke-preview'].includes(requestedFirePresentation)) {
+  throw new Error(`Unsupported --fire-presentation ${requestedFirePresentation}`);
+}
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -122,6 +127,44 @@ async function evaluate(ws, expression, timeoutMs = 20000) {
     throw new Error(`evaluation failed during ${phase}: ${result.exceptionDetails.text || 'exception'}`);
   }
   return result.result?.value;
+}
+
+function validateRequestedFirePresentation({ requestedPresentation, firingId, expected, effective }) {
+  if (requestedPresentation !== 'hybrid-smoke-preview') return [];
+  const failures = [];
+  const hybridMode = 'learned-splat-flame-raymarched-smoke';
+  if (!expected) failures.push('expected-presentation-missing');
+  if (expected && expected.effectiveMode !== hybridMode) failures.push('expected-presentation-mode-mismatch');
+  if (expected?.firingId && expected.firingId !== firingId) failures.push('expected-presentation-firing-id-mismatch');
+  if (!effective) return [...failures, 'effective-presentation-missing'];
+  if (effective.firingId !== firingId) failures.push('effective-presentation-firing-id-mismatch');
+  if (effective.requestedMode !== hybridMode) failures.push('requested-presentation-mode-mismatch');
+  if (effective.effectiveMode !== hybridMode) failures.push('effective-presentation-mode-mismatch');
+  if (effective.fallbackReason) failures.push('effective-presentation-fallback-present');
+  if (!Number.isFinite(effective.candidateCount)
+    || !Number.isFinite(effective.candidateCapacity)
+    || effective.candidateCount < 0
+    || effective.candidateCapacity < effective.candidateCount) {
+    failures.push('effective-presentation-candidate-evidence-missing');
+  }
+  if (effective.candidateOverflow !== 0) failures.push('effective-presentation-candidate-overflow');
+  if (effective.candidateCopyBytes !== 0) failures.push('effective-presentation-cpu-copy-present');
+  const hooks = effective.fireEpisodeHooks;
+  if (hooks?.identity !== 'foreground-kiln-fire-episode-hooks-v0') {
+    failures.push('effective-presentation-fire-episode-hooks-missing');
+  } else {
+    if (hooks.firingId !== firingId) failures.push('effective-presentation-hook-firing-id-mismatch');
+    if (hooks.routeIdentity?.compositionRequested !== 'hybrid-smoke') {
+      failures.push('effective-presentation-hook-request-mismatch');
+    }
+    if (hooks.routeIdentity?.compositionEffective !== 'hybrid-smoke') {
+      failures.push('effective-presentation-hook-effective-mismatch');
+    }
+    if (hooks.routeIdentity?.compositionFallbackReason) {
+      failures.push('effective-presentation-hook-fallback-present');
+    }
+  }
+  return [...new Set(failures)];
 }
 
 function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }) {
@@ -236,6 +279,9 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     } : null,
     foregroundKilnHeartbeat: browserFiringEvidence.foregroundKilnHeartbeat || null,
     sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation || null,
+    requestedFirePresentation: browserFiringEvidence.requestedFirePresentation || null,
+    selectedFirePresentation: browserFiringEvidence.selectedFirePresentation || null,
+    firePresentationFailures: browserFiringEvidence.firePresentationFailures || [],
     volumeReleased: Boolean(browserFiringEvidence.volumeReleased),
     volumeReleaseConfirmed: Boolean(browserFiringEvidence.volumeReleaseConfirmed),
     autoOpenedTab: browserFiringEvidence.autoOpenedTab || null,
@@ -313,6 +359,7 @@ try {
       sourceThumbHidden: Boolean(sourceThumb?.hidden),
       sourceOptionCount: sourceSelect?.options?.length || 0,
       selectedSourceId: sourceSelect?.value || null,
+      selectedFirePresentation: document.getElementById('crucible-viewport-presentation-select')?.value || null,
       fireButtonDisabled: Boolean(fireButton?.disabled),
       fireButtonLabel: fireButton?.textContent || null,
       castButtonDisabled: Boolean(castButton?.disabled),
@@ -370,8 +417,11 @@ try {
       const profile = document.getElementById('crucible-viewport-profile-select');
       profile.value = 'cooperative-spn-gaussian';
       profile.dispatchEvent(new Event('change', { bubbles: true }));
+      const presentation = document.getElementById('crucible-viewport-presentation-select');
+      presentation.value = '${requestedFirePresentation}';
+      presentation.dispatchEvent(new Event('change', { bubbles: true }));
       document.getElementById('crucible-viewport-fire-button').click();
-      return true;
+      return { profile: profile.value, presentation: presentation.value };
     })()`);
     const deadline = Date.now() + fireTimeoutMs;
     let observedRunning = false;
@@ -417,6 +467,8 @@ try {
       return {
         status: routeState.status || null,
         message: routeState.message || null,
+        requestedFirePresentation: '${requestedFirePresentation}',
+        selectedFirePresentation: document.getElementById('crucible-viewport-presentation-select')?.value || null,
         reportPath,
         snapshotIdentity,
         foregroundKilnHeartbeat: foregroundKilnHeartbeatWitness,
@@ -429,11 +481,26 @@ try {
     if (!browserFiringEvidence.reportPath) throw new Error('Friendly firing did not expose its durable pipeline report path');
     if (!browserFiringEvidence.foregroundKilnHeartbeat) throw new Error('Friendly firing did not expose its foreground heartbeat summary');
     if (!browserFiringEvidence.sharpDutyCorrelation) throw new Error('Friendly firing did not expose its SHARP duty correlation summary');
+    if (browserFiringEvidence.selectedFirePresentation !== requestedFirePresentation) {
+      throw new Error(`Friendly firing did not retain the requested fire presentation: ${JSON.stringify(browserFiringEvidence)}`);
+    }
+    browserFiringEvidence.firePresentationFailures = validateRequestedFirePresentation({
+      requestedPresentation: requestedFirePresentation,
+      firingId: browserFiringEvidence.foregroundKilnHeartbeat.firingId,
+      expected: browserFiringEvidence.foregroundKilnHeartbeat.expectedFirePresentation,
+      effective: browserFiringEvidence.foregroundKilnHeartbeat.effectiveFirePresentation,
+    });
+    if (browserFiringEvidence.firePresentationFailures.length) {
+      throw new Error(`Friendly firing did not prove the requested fire presentation: ${browserFiringEvidence.firePresentationFailures.join(', ')}`);
+    }
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       postFiringSummary: {
         status: browserFiringEvidence.status,
         reportPath: browserFiringEvidence.reportPath,
+        requestedFirePresentation: browserFiringEvidence.requestedFirePresentation,
+        selectedFirePresentation: browserFiringEvidence.selectedFirePresentation,
+        firePresentationFailures: browserFiringEvidence.firePresentationFailures,
         snapshotIdentity: browserFiringEvidence.snapshotIdentity,
         foregroundHeartbeat: {
           schema: browserFiringEvidence.foregroundKilnHeartbeat.schema,
