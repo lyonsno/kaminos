@@ -100,9 +100,16 @@ for (const [pattern, message] of [
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],
   [/lastTrustworthyEvidence/, 'Witness failures after inference must preserve the last trustworthy route and heartbeat evidence'],
   [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)[\s\S]*const browserFiringEvidence = await evaluate\(ws,[\s\S]*fireTimeoutMs\)/, 'Post-firing browser evidence collection must inherit the explicit firing budget instead of timing out while the completed cast binds'],
-  [/const browserFiringEvidence = await evaluate\(ws,[\s\S]*reportPath:\s*routeState\.result\?\.report\?\.path/, 'Browser evidence read must return the durable report path instead of projecting the backend report in the busy page'],
+  [/const browserFiringEvidence = await evaluate\(ws,[\s\S]*const reportPath = routeState\.result\?\.report\?\.path[\s\S]*reportPath,/, 'Browser evidence read must return the durable report path instead of projecting the backend report in the busy page'],
   [/JSON\.parse\(readFileSync\(browserFiringEvidence\.reportPath, 'utf8'\)\)/, 'Node witness must read the backend report from its durable filesystem path'],
   [/projectFriendlyFiringEvidence\(\{[\s\S]*browserFiringEvidence,[\s\S]*pipelineReport/, 'Node witness must join browser-owned firing evidence with filesystem-owned backend evidence outside CDP'],
+  [/import \{ readBrowserArrayInChunks \} from '.\/lib\/chunked-browser-array-reader\.mjs'/, 'Witness must use the executable lossless browser-array reader'],
+  [/__kaminosCrucibleWitnessSnapshot/, 'Witness must pin browser-owned evidence to a completed firing snapshot'],
+  [/snapshotIdentity/, 'Witness must carry snapshot identity through every chunk read'],
+  [/foregroundKilnHeartbeat\.samples = await readBrowserArrayInChunks/, 'Witness must reconstruct every uncapped foreground sample outside the browser payload'],
+  [/sharpDutyCorrelation\.foregroundGaps = await readBrowserArrayInChunks/, 'Witness must reconstruct every correlated foreground gap outside the browser payload'],
+  [/samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined/, 'Initial CDP summary must omit duplicated large heartbeat evidence'],
+  [/lastTrustworthyEvidence = \{[\s\S]*postFiringSummary:[\s\S]*reportPath: browserFiringEvidence\.reportPath[\s\S]*readBrowserArrayInChunks/, 'Chunk failures must preserve the compact post-firing identity and declared-count evidence'],
 ]) {
   assert.match(witness, pattern, message);
 }

@@ -4,6 +4,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
+import { readBrowserArrayInChunks } from './lib/chunked-browser-array-reader.mjs';
+
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
   const part = process.argv[i];
@@ -394,21 +396,79 @@ try {
       const foregroundKilnHeartbeat = routeState.result?.foregroundKilnHeartbeat || null;
       const sharpDutyCorrelation = foregroundKilnHeartbeat?.sharpDutyCorrelation || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
+      const reportPath = routeState.result?.report?.path || null;
+      const snapshotIdentity = {
+        nonce: globalThis.crypto?.randomUUID?.() || ('witness-' + Date.now() + '-' + Math.random()),
+        reportPath,
+        firingId: foregroundKilnHeartbeat?.firingId || null,
+        runId: sharpDutyCorrelation?.runId || null,
+      };
+      window.__kaminosCrucibleWitnessSnapshot = {
+        identity: Object.freeze({ ...snapshotIdentity }),
+        foregroundSamples: Object.freeze([...(foregroundKilnHeartbeat?.samples || [])]),
+        foregroundGaps: Object.freeze([...(sharpDutyCorrelation?.foregroundGaps || [])]),
+      };
       const foregroundKilnHeartbeatWitness = foregroundKilnHeartbeat
-        ? { ...foregroundKilnHeartbeat, sharpDutyCorrelation: undefined }
+        ? { ...foregroundKilnHeartbeat, samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined }
+        : null;
+      const sharpDutyCorrelationWitness = sharpDutyCorrelation
+        ? { ...sharpDutyCorrelation, foregroundGaps: undefined }
         : null;
       return {
         status: routeState.status || null,
         message: routeState.message || null,
-        reportPath: routeState.result?.report?.path || null,
+        reportPath,
+        snapshotIdentity,
         foregroundKilnHeartbeat: foregroundKilnHeartbeatWitness,
-        sharpDutyCorrelation,
+        sharpDutyCorrelation: sharpDutyCorrelationWitness,
         volumeReleased: Boolean(fire?.volumeReleased),
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
       };
     })()`, fireTimeoutMs);
     if (!browserFiringEvidence.reportPath) throw new Error('Friendly firing did not expose its durable pipeline report path');
+    if (!browserFiringEvidence.foregroundKilnHeartbeat) throw new Error('Friendly firing did not expose its foreground heartbeat summary');
+    if (!browserFiringEvidence.sharpDutyCorrelation) throw new Error('Friendly firing did not expose its SHARP duty correlation summary');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      postFiringSummary: {
+        status: browserFiringEvidence.status,
+        reportPath: browserFiringEvidence.reportPath,
+        snapshotIdentity: browserFiringEvidence.snapshotIdentity,
+        foregroundHeartbeat: {
+          schema: browserFiringEvidence.foregroundKilnHeartbeat.schema,
+          status: browserFiringEvidence.foregroundKilnHeartbeat.status,
+          firingId: browserFiringEvidence.foregroundKilnHeartbeat.firingId,
+          sampleRetention: browserFiringEvidence.foregroundKilnHeartbeat.sampleRetention,
+          sampleCount: browserFiringEvidence.foregroundKilnHeartbeat.sampleCount,
+        },
+        sharpDutyCorrelation: {
+          schema: browserFiringEvidence.sharpDutyCorrelation.schema,
+          status: browserFiringEvidence.sharpDutyCorrelation.status,
+          firingId: browserFiringEvidence.sharpDutyCorrelation.firingId,
+          runId: browserFiringEvidence.sharpDutyCorrelation.runId,
+          foregroundGapCount: browserFiringEvidence.sharpDutyCorrelation.foregroundGapCount,
+        },
+      },
+    };
+    browserFiringEvidence.foregroundKilnHeartbeat.samples = await readBrowserArrayInChunks({
+      evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+      snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+      arrayKey: 'foregroundSamples',
+      expectedCount: browserFiringEvidence.foregroundKilnHeartbeat.sampleCount,
+      expectedIdentity: browserFiringEvidence.snapshotIdentity,
+      timeoutMs: fireTimeoutMs,
+      label: 'foreground heartbeat samples',
+    });
+    browserFiringEvidence.sharpDutyCorrelation.foregroundGaps = await readBrowserArrayInChunks({
+      evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+      snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+      arrayKey: 'foregroundGaps',
+      expectedCount: browserFiringEvidence.sharpDutyCorrelation.foregroundGapCount,
+      expectedIdentity: browserFiringEvidence.snapshotIdentity,
+      timeoutMs: fireTimeoutMs,
+      label: 'foreground SHARP duty correlation gaps',
+    });
     const pipelineReport = JSON.parse(readFileSync(browserFiringEvidence.reportPath, 'utf8'));
     state.fullRoute = projectFriendlyFiringEvidence({
       browserFiringEvidence,
