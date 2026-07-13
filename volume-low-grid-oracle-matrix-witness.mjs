@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { createHash, randomInt } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
@@ -10,10 +10,38 @@ const ROUTE_IDENTITY = 'continuous-low-grid-oracle-splat-matrix-v0';
 const SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const PLAYBACK_AUTHORITY = 'consecutive-sim-steps-fixed-playback-v0';
 const CONTROL_ROUTES = [
-  { id: 'untouched_low', sourceMode: 'none', viewport: 'low' },
-  { id: 'low_self', sourceMode: 'lowSelf', viewport: 'low' },
-  { id: 'high_projected_oracle', sourceMode: 'highProjected', viewport: 'low' },
-  { id: 'high_reference', sourceMode: 'highProjected', viewport: 'high' },
+  {
+    id: 'untouched_low', sourceMode: 'none', viewport: 'low',
+    title: 'Untouched low control',
+    summary: 'The low-grid receiver steps normally. Nothing is injected.',
+    cueSource: 'Cue source: none',
+    runtimeAuthority: 'Runtime authority: product-valid control',
+    comparisonRole: 'Comparison role: low-grid baseline',
+  },
+  {
+    id: 'low_self', sourceMode: 'lowSelf', viewport: 'low',
+    title: 'Low self-forcing',
+    summary: 'Current low-grid scalar activity is reinjected into the same low-grid receiver every step.',
+    cueSource: 'Cue source: current low-grid scalar activity',
+    runtimeAuthority: 'Runtime authority: available from low-grid state',
+    comparisonRole: 'Comparison role: self-derived forcing control',
+  },
+  {
+    id: 'high_projected_oracle', sourceMode: 'highProjected', viewport: 'low',
+    title: 'High-truth oracle forcing',
+    summary: 'Current high-grid truth activity is projected down and injected into the low-grid receiver every step.',
+    cueSource: 'Cue source: current high-grid truth scalar activity',
+    runtimeAuthority: 'Runtime authority: offline oracle only',
+    comparisonRole: 'Comparison role: learnable forcing ceiling',
+  },
+  {
+    id: 'high_reference', sourceMode: 'highProjected', viewport: 'high',
+    title: 'Actual high-grid reference',
+    summary: 'The high-grid simulation is rendered directly. It is not a forced low-grid receiver.',
+    cueSource: 'Cue source: none; direct high-grid render',
+    runtimeAuthority: 'Runtime authority: high-grid reference only',
+    comparisonRole: 'Comparison role: visual target',
+  },
 ];
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
@@ -21,6 +49,8 @@ const baseUrl = args.get('--url') || 'http://127.0.0.1:8099/volume-low-grid-orac
 const outDir = resolve(args.get('--out-dir') || '/tmp/kaminos-low-grid-oracle-matrix');
 const reportPath = resolve(args.get('--report') || join(outDir, 'manifest.json'));
 const operatorIndexPath = join(outDir, 'operator-index.html');
+const operatorIndexReportPath = resolve(args.get('--index-report') || join(outDir, 'operator-index.report.json'));
+const indexOnly = args.has('--index-only');
 const lowGrid = Number(args.get('--low-grid') || 64);
 const highGrid = Number(args.get('--high-grid') || 128);
 const framesPerRoute = Math.max(2, Number(args.get('--frames') || 30));
@@ -127,20 +157,79 @@ function encodeVideo(frameDir, videoPath) {
   if (result.status !== 0) throw new Error(`ffmpeg failed for ${videoPath}: ${result.stderr || result.stdout || `status ${result.status}`}`);
   return { path: videoPath, byteLength: readFileSync(videoPath).length, sha256: sha256(videoPath), codec: 'vp9-webm', fps: playbackFps };
 }
-function writeOperatorIndex(routeReports) {
-  const cells = routeReports.map(route => `
+function writeOperatorIndex(routeReports, config = {}) {
+  const effectiveLowGrid = Number(config.lowGrid ?? lowGrid);
+  const effectiveHighGrid = Number(config.highGrid ?? highGrid);
+  const effectiveFrames = Number(config.framesPerRoute ?? framesPerRoute);
+  const effectiveFps = Number(config.playbackFps ?? playbackFps);
+  const effectivePlaybackAuthority = config.playbackAuthority || PLAYBACK_AUTHORITY;
+  const effectiveControls = config.controls || { vorticity, curlNoise, material, cadence: 1 };
+  const cells = routeReports.map(route => {
+    const routeContract = CONTROL_ROUTES.find(candidate => candidate.id === route.id);
+    assert.ok(routeContract, `operator index received unknown route ${route.id}`);
+    return `
     <figure>
       <video controls loop muted autoplay playsinline src="${basename(route.video.path)}"></video>
-      <figcaption><strong>${route.id}</strong><span>${route.viewport} · ${route.sourceMode} · ${highGrid}→${lowGrid}</span></figcaption>
-    </figure>`).join('');
+      <figcaption>
+        <div class="route-heading"><strong>${routeContract.title}</strong><code>${route.id}</code></div>
+        <p>${routeContract.summary}</p>
+        <dl>
+          <div><dt>Cue</dt><dd>${routeContract.cueSource}</dd></div>
+          <div><dt>Learned forcing</dt><dd>No</dd></div>
+          <div><dt>Authority</dt><dd>${routeContract.runtimeAuthority}</dd></div>
+          <div><dt>Role</dt><dd>${routeContract.comparisonRole}</dd></div>
+        </dl>
+      </figcaption>
+    </figure>`;
+  }).join('');
   const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Kaminos Low-Grid Oracle Matrix</title><style>
-    :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#090b0c;color:#edf2f4}body{margin:0;padding:16px}h1{font-size:18px;margin:0 0 6px}p{margin:0 0 14px;color:#aab7bc;font-size:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}figure{margin:0;background:#000;border:1px solid #2b363b}video{width:100%;display:block;aspect-ratio:1/1;object-fit:contain}figcaption{display:flex;justify-content:space-between;gap:8px;padding:8px 10px;font-size:11px;background:#111619}figcaption span{color:#9dabb0}@media(max-width:780px){.grid{grid-template-columns:1fr}}</style></head><body>
-    <h1>Low-Grid Oracle Forcing Matrix</h1><p>${PLAYBACK_AUTHORITY}; learned-splat renderer; controls and oracle use ${framesPerRoute} consecutive controlled steps at ${playbackFps} fps.</p><main class="grid">${cells}</main></body></html>`;
+    :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#090b0c;color:#edf2f4}*{box-sizing:border-box}body{margin:0;padding:18px;max-width:1500px;margin-inline:auto}h1{font-size:20px;margin:0 0 6px;letter-spacing:0}.lede{margin:0 0 10px;color:#aab7bc;font-size:13px}.warning{margin:0 0 16px;padding:10px 12px;border-left:3px solid #efb35f;background:#19150f;color:#f6d7aa;font-size:13px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}figure{margin:0;background:#050607;border:1px solid #2b363b}video{width:100%;display:block;aspect-ratio:1/1;object-fit:contain;background:#000}figcaption{padding:10px 12px 12px;background:#111619}.route-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.route-heading strong{font-size:14px}.route-heading code{color:#8fa2aa;font-size:10px}figcaption>p{margin:5px 0 9px;color:#d4dde0;font-size:12px;line-height:1.35}dl{margin:0;display:grid;gap:4px;font-size:10px}dl div{display:grid;grid-template-columns:94px 1fr;gap:8px}dt{color:#82939a;text-transform:uppercase}dd{margin:0;color:#bcc8cc}@media(max-width:780px){body{padding:10px}.grid{grid-template-columns:1fr}.route-heading{align-items:flex-start;flex-direction:column;gap:3px}}</style></head><body>
+    <h1>Low-Grid Oracle Forcing Matrix · ${effectiveHighGrid}<sup>3</sup> source / ${effectiveLowGrid}<sup>3</sup> receiver</h1>
+    <p class="lede">${effectivePlaybackAuthority}; learned-splat renderer; ${effectiveFrames} consecutive controlled steps at ${effectiveFps} fps; receiver gains vorticity ${effectiveControls.vorticity}, curl ${effectiveControls.curlNoise}, material ${effectiveControls.material}.</p>
+    <p class="warning"><strong>No learned forcing predictor generates any cue in this assay.</strong> The learned model is the splat renderer shared by all four routes. Only the third route uses high-grid truth, as an offline oracle ceiling.</p>
+    <main class="grid">${cells}</main></body></html>`;
   writeFileSync(operatorIndexPath, html);
+}
+
+function refreshOperatorIndexFromReport() {
+  let sourceReport = null;
+  let failurePhase = 'index-only-report-read';
+  try {
+    sourceReport = JSON.parse(readFileSync(reportPath, 'utf8'));
+    assert.equal(sourceReport.status, 'captured', 'index-only source report is not a completed capture');
+    assert.deepEqual(sourceReport.routes.map(route => route.id), CONTROL_ROUTES.map(route => route.id), 'index-only source report route order mismatch');
+    failurePhase = 'index-only-video-validation';
+    const localRoutes = sourceReport.routes.map(route => {
+      const localVideoPath = join(outDir, basename(route.video.path));
+      assert.ok(existsSync(localVideoPath), `index-only video is missing: ${localVideoPath}`);
+      assert.equal(sha256(localVideoPath), route.video.sha256, `index-only video checksum mismatch: ${route.id}`);
+      return { ...route, video: { ...route.video, path: localVideoPath } };
+    });
+    failurePhase = 'index-only-render';
+    writeOperatorIndex(localRoutes, sourceReport);
+    const operatorIndex = { path: operatorIndexPath, byteLength: readFileSync(operatorIndexPath).length, sha256: sha256(operatorIndexPath) };
+    writeFileSync(reportPath, `${JSON.stringify({ ...sourceReport, operatorIndex }, null, 2)}\n`);
+    writeFileSync(operatorIndexReportPath, `${JSON.stringify({
+      schema: 'kaminos.volume.low-grid-oracle-operator-index-refresh.v0', status: 'written', failurePhase: null,
+      sourceReport: reportPath, operatorIndex, routeOrder: localRoutes.map(route => route.id),
+    }, null, 2)}\n`);
+    console.log(JSON.stringify({ ok: true, report: operatorIndexReportPath, operatorIndex: operatorIndexPath }, null, 2));
+  } catch (error) {
+    writeFileSync(operatorIndexReportPath, `${JSON.stringify({
+      schema: 'kaminos.volume.low-grid-oracle-operator-index-refresh.v0', status: 'failed', failurePhase,
+      sourceReport: reportPath, reason: error?.message || String(error),
+    }, null, 2)}\n`);
+    console.error(JSON.stringify({ ok: false, report: operatorIndexReportPath, failurePhase, reason: error?.message || String(error) }, null, 2));
+    process.exitCode = 1;
+  }
 }
 
 async function main() {
   mkdirSync(outDir, { recursive: true });
+  if (indexOnly) {
+    refreshOperatorIndexFromReport();
+    return;
+  }
   let failurePhase = 'launch';
   let ws = null;
   const browserProcess = spawn(chrome, [

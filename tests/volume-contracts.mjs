@@ -2267,6 +2267,14 @@ assert.match(lowGridOracleWitness, /lastObservedState/, 'oracle matrix witness p
 assert.match(lowGridOracleWitness, /partialRoute/, 'oracle matrix witness preserves partial route progress instead of erasing it on failure');
 assert.match(lowGridOracleWitness, /failurePhase/, 'oracle matrix witness writes a durable report when failure precedes visual output');
 assert.match(lowGridOracleWitness, /operator-index\.html/, 'oracle matrix witness writes an operator-clickable comparison surface');
+assert.match(lowGridOracleWitness, /No learned forcing predictor generates any cue in this assay/, 'oracle matrix operator surface states that the forcing cues are not learned');
+assert.match(lowGridOracleWitness, /Untouched low control/, 'oracle matrix operator surface gives the untouched receiver a human-readable control label');
+assert.match(lowGridOracleWitness, /Low self-forcing/, 'oracle matrix operator surface names low-grid self-reinjection without implying learned generation');
+assert.match(lowGridOracleWitness, /High-truth oracle forcing/, 'oracle matrix operator surface names projected high-grid truth as an offline oracle');
+assert.match(lowGridOracleWitness, /Actual high-grid reference/, 'oracle matrix operator surface distinguishes the rendered high reference from a low-grid receiver');
+assert.match(lowGridOracleWitness, /Cue source: current low-grid scalar activity/, 'oracle matrix operator surface identifies the self-forcing cue source');
+assert.match(lowGridOracleWitness, /Cue source: current high-grid truth scalar activity/, 'oracle matrix operator surface identifies the oracle cue source');
+assert.match(lowGridOracleWitness, /Runtime authority: offline oracle only/, 'oracle matrix operator surface fails loud that projected high truth is unavailable to the product runtime');
 
 assert.match(core, /SCALAR_ACTIVITY_CUE_EXPORT_IDENTITY\s*=\s*'current-field-scalar-activity-cue-export-v0'/, 'volume core names the live current-field scalar cue export contract');
 assert.match(core, /exportCurrentScalarActivityCue/, 'volume prototype exposes current-field scalar activity for oracle experiments');
