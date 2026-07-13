@@ -25,6 +25,7 @@
       padding: 10px 14px;
       border-bottom: 1px solid #273242;
       background: #121722;
+      min-width: 0;
     }
     button {
       appearance: none;
@@ -56,6 +57,16 @@
       font-size: 12px;
       color: #9fb4c7;
       white-space: nowrap;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #force-readout {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      color: #f8d36b;
+      white-space: nowrap;
+      flex: 0 0 auto;
     }
   </style>
 </head>
@@ -64,6 +75,7 @@
     <button id="reset">Reset</button>
     <button id="fracture">Strike</button>
     <button id="bind">Bind</button>
+    <div id="force-readout"></div>
     <div id="readout"></div>
   </header>
   <main id="stage" aria-label="Structural material proxy plane"></main>
@@ -71,6 +83,7 @@
     import {
       applyStructuralMaterialInteraction,
       bindStructuralMaterialConnectivity,
+      createStructuralMaterialDragInteraction,
       createStructuralMaterialProxyPlane,
       renderStructuralMaterialSvg,
       summarizeStructuralMaterialState,
@@ -78,8 +91,12 @@
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
+    const forceReadout = document.querySelector('#force-readout');
     let material = createStructuralMaterialProxyPlane({ columns: 13, rows: 7, notch: true });
     let pointerDown = false;
+    let dragStart = null;
+    let dragCurrent = null;
+    let forceEnvelope = null;
     let lastPoint = { x: 0.94, y: 0.5 };
 
     function render() {
@@ -87,9 +104,13 @@
         title: 'screen-space sympathetic effigy proxy',
         width: 960,
         height: 560,
+        forceGesture: forceEnvelope,
       });
       const summary = summarizeStructuralMaterialState(material);
       readout.textContent = `broken ${summary.brokenBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
+      forceReadout.textContent = forceEnvelope
+        ? `drag ${forceEnvelope.dragLength.toFixed(3)} | mag ${forceEnvelope.magnitude.toFixed(3)} | r ${forceEnvelope.radius.toFixed(3)} | stress ${summary.maxStress.toFixed(3)}`
+        : `drag 0.000 | mag 0.000 | r 0.000 | stress ${summary.maxStress.toFixed(3)}`;
     }
 
     function eventPoint(event) {
@@ -100,36 +121,48 @@
       };
     }
 
-    function applyAt(point, magnitude = 1.05) {
-      lastPoint = point;
-      material = applyStructuralMaterialInteraction(material, {
-        kind: 'screen-space-hand-drag',
-        point,
-        vector: { x: point.x > 0.5 ? 1 : -1, y: point.y - 0.5 },
-        magnitude,
-        radius: 0.24,
-      }, { steps: 1 });
+    function applyDrag(point, steps = 1) {
+      dragCurrent = point;
+      forceEnvelope = createStructuralMaterialDragInteraction({
+        start: dragStart || point,
+        current: dragCurrent,
+      });
+      lastPoint = forceEnvelope.point;
+      material = applyStructuralMaterialInteraction(material, forceEnvelope, { steps });
       render();
     }
 
     stage.addEventListener('pointerdown', (event) => {
       pointerDown = true;
+      dragStart = eventPoint(event);
+      dragCurrent = dragStart;
+      forceEnvelope = createStructuralMaterialDragInteraction({ start: dragStart, current: dragCurrent });
       stage.setPointerCapture(event.pointerId);
-      applyAt(eventPoint(event), 1.35);
+      render();
     });
     stage.addEventListener('pointermove', (event) => {
       if (!pointerDown) return;
-      applyAt(eventPoint(event), 0.92);
+      applyDrag(eventPoint(event), 1);
     });
     stage.addEventListener('pointerup', (event) => {
+      if (pointerDown) applyDrag(eventPoint(event), 1);
       pointerDown = false;
       stage.releasePointerCapture(event.pointerId);
     });
     document.querySelector('#reset').addEventListener('click', () => {
       material = createStructuralMaterialProxyPlane({ columns: 13, rows: 7, notch: true });
+      dragStart = null;
+      dragCurrent = null;
+      forceEnvelope = null;
       render();
     });
-    document.querySelector('#fracture').addEventListener('click', () => applyAt(lastPoint, 1.35));
+    document.querySelector('#fracture').addEventListener('click', () => {
+      dragStart = { x: Math.max(0, lastPoint.x - 0.36), y: lastPoint.y };
+      dragCurrent = lastPoint;
+      forceEnvelope = createStructuralMaterialDragInteraction({ start: dragStart, current: dragCurrent });
+      material = applyStructuralMaterialInteraction(material, forceEnvelope, { steps: 3 });
+      render();
+    });
     document.querySelector('#bind').addEventListener('click', () => {
       material = bindStructuralMaterialConnectivity(material, {
         point: lastPoint,

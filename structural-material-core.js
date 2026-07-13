@@ -26,6 +26,13 @@ function normalizedVector(vector = {}) {
   return { x: x / length, y: y / length };
 }
 
+function normalizedPoint(point = {}, fallback = { x: 0.5, y: 0.5 }) {
+  return {
+    x: clamp(point.x, 0, 1) ?? fallback.x,
+    y: clamp(point.y, 0, 1) ?? fallback.y,
+  };
+}
+
 function cloneState(state) {
   return {
     ...state,
@@ -335,6 +342,27 @@ export function applyStructuralMaterialInteraction(state, interaction = {}, opti
   return finalizeState(next, direction, magnitude);
 }
 
+export function createStructuralMaterialDragInteraction({ start, current } = {}) {
+  const dragStart = normalizedPoint(start);
+  const dragCurrent = normalizedPoint(current, dragStart);
+  const dx = dragCurrent.x - dragStart.x;
+  const dy = dragCurrent.y - dragStart.y;
+  const length = Math.hypot(dx, dy);
+  const direction = normalizedVector({ x: dx, y: dy });
+  const magnitude = clamp(length * 4.2, 0.08, 1.85);
+  const radius = clamp(0.12 + length * 0.32, 0.12, 0.34);
+  return {
+    kind: 'screen-space-hand-drag',
+    authority: 'screen-space-drag-force-envelope-v0',
+    start: { x: round(dragStart.x), y: round(dragStart.y) },
+    point: { x: round(dragCurrent.x), y: round(dragCurrent.y) },
+    vector: { x: round(direction.x), y: round(direction.y) },
+    dragLength: round(length),
+    magnitude: round(magnitude),
+    radius: round(radius),
+  };
+}
+
 export function bindStructuralMaterialConnectivity(state, binding = {}) {
   let next = cloneState(state);
   const point = binding.point || { x: 0.5, y: 0.5 };
@@ -436,6 +464,10 @@ export function renderStructuralMaterialSvg(state, options = {}) {
     x: pad + (node.x + node.displacement.x) * scaleX,
     y: pad + (node.y + node.displacement.y) * scaleY,
   });
+  const scalePoint = (rawPoint = {}) => ({
+    x: pad + clamp(rawPoint.x, 0, 1) * scaleX,
+    y: pad + clamp(rawPoint.y, 0, 1) * scaleY,
+  });
   const maxStress = Math.max(0.001, ...state.bonds.map(bond => finite(bond.lastStress)));
   const lines = state.bonds.map(bond => {
     const a = point(nodeById.get(bond.a));
@@ -453,6 +485,19 @@ export function renderStructuralMaterialSvg(state, options = {}) {
     const fill = node.pinned ? '#283044' : node.componentId === 'c0' ? '#f7f2df' : '#fff8b8';
     return `<circle cx="${round(p.x, 2)}" cy="${round(p.y, 2)}" r="${node.pinned ? 4.5 : 3.2}" fill="${fill}" stroke="#20202a" stroke-width="1"/>`;
   });
+  const gesture = options.forceGesture
+    ? (() => {
+        const start = scalePoint(options.forceGesture.start || options.forceGesture.point);
+        const end = scalePoint(options.forceGesture.point);
+        const radius = clamp(options.forceGesture.radius, 0.04, 0.45) * Math.min(scaleX, scaleY);
+        return `<g>
+  <circle cx="${round(end.x, 2)}" cy="${round(end.y, 2)}" r="${round(radius, 2)}" fill="none" stroke="#f8d36b" stroke-width="2" stroke-dasharray="6 5" opacity="0.92"/>
+  <line x1="${round(start.x, 2)}" y1="${round(start.y, 2)}" x2="${round(end.x, 2)}" y2="${round(end.y, 2)}" stroke="#f8d36b" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="${round(start.x, 2)}" cy="${round(start.y, 2)}" r="5" fill="#f8d36b"/>
+  <circle cx="${round(end.x, 2)}" cy="${round(end.y, 2)}" r="7" fill="#ff785a" stroke="#f8d36b" stroke-width="2"/>
+</g>`;
+      })()
+    : '';
   const summary = summarizeStructuralMaterialState(state);
   const title = svgEscape(options.title || 'Structural material proxy');
   const subtitle = svgEscape(`broken ${summary.brokenBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`);
@@ -462,6 +507,7 @@ export function renderStructuralMaterialSvg(state, options = {}) {
   <text x="24" y="${height - 18}" fill="#9fb4c7" font-family="ui-monospace, Menlo, monospace" font-size="12">${subtitle}</text>
   <g>${lines.join('\n')}</g>
   <g>${nodes.join('\n')}</g>
+  ${gesture}
 </svg>`;
 }
 

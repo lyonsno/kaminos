@@ -7,6 +7,7 @@ import {
   STRUCTURAL_MATERIAL_SCHEMA,
   applyStructuralMaterialInteraction,
   bindStructuralMaterialConnectivity,
+  createStructuralMaterialDragInteraction,
   createStructuralMaterialProxyPlane,
   summarizeStructuralMaterialState,
 } from '../structural-material-core.js';
@@ -32,6 +33,9 @@ assert.match(coreSource, /material-derived-sound-impulses-v0/, 'sound model auth
 assert.match(witnessSource, /requestedRoute/, 'witness records requested route identity');
 assert.match(witnessSource, /effectiveRoute/, 'witness records effective route identity');
 assert.match(pageSource, /pointermove/, 'browser witness has fast pointer-coupled force input');
+assert.match(pageSource, /dragStart/, 'browser witness tracks a click-drag origin instead of treating every move as an isolated strike');
+assert.match(pageSource, /dragCurrent/, 'browser witness preserves the current drag point for force-vector display');
+assert.match(pageSource, /forceEnvelope/, 'browser witness surfaces live drag force-envelope telemetry');
 assert.match(pageSource, /bindStructuralMaterialConnectivity/, 'browser witness exposes connectivity binding, not only fracture');
 
 const force = {
@@ -49,6 +53,22 @@ const lowForce = createStructuralMaterialProxyPlane({ columns: 13, rows: 7, notc
 const notchedAfter = applyStructuralMaterialInteraction(notched, force, { steps: 3 });
 const unnotchedAfter = applyStructuralMaterialInteraction(unnotched, force, { steps: 3 });
 const lowForceAfter = applyStructuralMaterialInteraction(lowForce, { ...force, magnitude: 0.32 }, { steps: 3 });
+
+const shortDrag = createStructuralMaterialDragInteraction({
+  start: { x: 0.48, y: 0.5 },
+  current: { x: 0.55, y: 0.5 },
+});
+const longDrag = createStructuralMaterialDragInteraction({
+  start: { x: 0.48, y: 0.5 },
+  current: { x: 0.94, y: 0.56 },
+});
+
+assert.equal(shortDrag.kind, 'screen-space-hand-drag', 'drag mapping produces the same causal interaction kind as the material solver');
+assert.ok(longDrag.magnitude > shortDrag.magnitude, 'longer click-drag gestures produce stronger force');
+assert.ok(longDrag.radius >= shortDrag.radius, 'drag contact radius grows monotonically with gesture scale');
+assert.ok(longDrag.vector.x > 0.9, 'drag vector preserves the horizontal pull direction');
+assert.ok(longDrag.point.x > shortDrag.point.x, 'drag force point follows the current hand location');
+assert.equal(longDrag.authority, 'screen-space-drag-force-envelope-v0', 'drag envelope authority is explicit');
 
 const notchedSummary = summarizeStructuralMaterialState(notchedAfter);
 const unnotchedSummary = summarizeStructuralMaterialState(unnotchedAfter);
