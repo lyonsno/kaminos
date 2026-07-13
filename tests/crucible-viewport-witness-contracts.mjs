@@ -3,6 +3,32 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
+const compactSummarySource = witness.match(
+  /function compactWitnessSummary\([\s\S]*?\n}\n(?=\nfunction validateVolumeReleaseEvidence)/,
+);
+assert.ok(compactSummarySource, 'witness must expose a testable compact terminal summary projector');
+const compactWitnessSummary = vm.runInNewContext(`(${compactSummarySource[0]})`);
+const compactSummary = compactWitnessSummary({
+  state: {
+    fullRoute: {
+      status: 'complete',
+      requestedFirePresentation: 'hybrid-smoke-preview',
+      selectedFirePresentation: 'hybrid-smoke-preview',
+      output: { path: '/tmp/output.ply', bytes: 64, sha256: 'abc', status: 'real' },
+      foregroundKilnHeartbeat: { sampleCount: 2, samples: [{ huge: 'do-not-print' }] },
+      sharpDutyCorrelation: { foregroundGaps: [{ huge: 'do-not-print' }] },
+      volumeReleased: true,
+      volumeReleaseConfirmed: true,
+    },
+  },
+  out: '/tmp/final.png',
+  inFlightCapture: { status: 'captured', path: '/tmp/in-flight.png' },
+  reportPath: '/tmp/report.json',
+});
+assert.equal(compactSummary.status, 'complete');
+assert.equal(compactSummary.output.sha256, 'abc');
+assert.equal(compactSummary.inFlightCapture.status, 'captured');
+assert.ok(!JSON.stringify(compactSummary).includes('do-not-print'), 'terminal summary must not replay uncapped sample arrays');
 const releaseValidatorSource = witness.match(
   /function validateVolumeReleaseEvidence\([\s\S]*?\n}\n(?=\nfunction validateRequestedFirePresentation)/,
 );
@@ -73,6 +99,7 @@ for (const [effective, expectedFailure] of [
   [{ ...hybridPresentation, effectiveMode: 'raymarched-fire-smoke' }, 'effective-presentation-mode-mismatch'],
   [{ ...hybridPresentation, fallbackReason: 'hybrid-route-unavailable' }, 'effective-presentation-fallback-present'],
   [{ ...hybridPresentation, firingId: 'other-firing' }, 'effective-presentation-firing-id-mismatch'],
+  [{ ...hybridPresentation, candidateCount: 0 }, 'effective-presentation-candidate-empty'],
   [{ ...hybridPresentation, candidateOverflow: 1 }, 'effective-presentation-candidate-overflow'],
   [{ ...hybridPresentation, candidateCopyBytes: 4096 }, 'effective-presentation-cpu-copy-present'],
 ]) {
@@ -122,6 +149,8 @@ for (const [pattern, message] of [
   [/--report/, 'Witness must let callers choose the JSON report path'],
   [/--fire-friendly/, 'Witness must expose an explicit opt-in real Friendly firing mode'],
   [/--fire-presentation/, 'Witness must accept an explicit central fire presentation instead of inheriting a UI default'],
+  [/--capture-in-flight/, 'Transient visual capture must be explicit so ordinary cadence witnesses remain unperturbed'],
+  [/--in-flight-out/, 'Witness must let callers choose the transient hybrid screenshot path'],
   [/--expected-sharp-revision/, 'Full-route witness must accept the exact expected SHARP source revision'],
   [/openGenerateTabExpression[\s\S]*data-tab="generate"[\s\S]*evaluate\(ws, openGenerateTabExpression\)/, 'Witness must open the real Generate tab path'],
   [/id: 'crucible-viewport-workspace'/, 'Witness report must include the requested workspace selector'],
@@ -180,6 +209,11 @@ for (const [pattern, message] of [
   [/castButtonDisabled/, 'Witness must record whether the cast action truthfully has a target'],
   [/pointerEvents/, 'Witness must prove the workroom is hittable instead of visually clickable only'],
   [/Page\.captureScreenshot/, 'Witness must capture the actual browser viewport'],
+  [/routeState\.effectiveFirePresentation[\s\S]*validateRequestedFirePresentation[\s\S]*inFlightCapture = \{[\s\S]*status: 'captured'/, 'Transient capture must wait for executable effective hybrid presentation validation'],
+  [/candidateCount > 0/, 'Transient hybrid capture must require a nonempty live candidate set'],
+  [/inFlightCapture[\s\S]*requestedFirePresentation[\s\S]*effectiveFirePresentation/, 'Transient capture evidence must preserve requested/effective presentation identity'],
+  [/observerEffect[\s\S]*CDP viewport capture may perturb foreground cadence/, 'Transient visual evidence must disclose its cadence observer effect'],
+  [/compactWitnessSummary\([\s\S]*console\.log\(JSON\.stringify\(terminalSummary/, 'Successful stdout must emit only the compact locator summary'],
   [/Runtime\.exceptionThrown/, 'Witness must fail loud on browser runtime exceptions'],
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],
   [/lastTrustworthyEvidence/, 'Witness failures after inference must preserve the last trustworthy route and heartbeat evidence'],
@@ -194,7 +228,6 @@ for (const [pattern, message] of [
   [/sharpDutyCorrelation\.foregroundGaps = await readBrowserArrayInChunks/, 'Witness must reconstruct every correlated foreground gap outside the browser payload'],
   [/samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined/, 'Initial CDP summary must omit duplicated large heartbeat evidence'],
   [/lastTrustworthyEvidence = \{[\s\S]*postFiringSummary:[\s\S]*reportPath: browserFiringEvidence\.reportPath[\s\S]*readBrowserArrayInChunks/, 'Chunk failures must preserve the compact post-firing identity and declared-count evidence'],
-  [/lastTrustworthyEvidence = \{[\s\S]*postFiringSummary:[\s\S]*status: browserFiringEvidence\.status,[\s\S]*message: browserFiringEvidence\.message,[\s\S]*volumeReleased: browserFiringEvidence\.volumeReleased,[\s\S]*volumeReleaseConfirmed: browserFiringEvidence\.volumeReleaseConfirmed,[\s\S]*\};\n\s*if \(!browserFiringEvidence\.reportPath\)/, 'Missing backend reports must preserve the terminal route status, message, presentation, and furnace release truth before failing'],
 ]) {
   assert.match(witness, pattern, message);
 }
@@ -209,3 +242,21 @@ assert.doesNotMatch(
   /state\.fullRoute = await evaluate\(ws,[\s\S]*const report = routeState\.result\?\.report\?\.document/,
   'CDP witness must not traverse the multi-megabyte backend report inside the busy browser page',
 );
+assert.doesNotMatch(
+  witness,
+  /console\.log\(JSON\.stringify\(\{ ok: true, out, report: reportPath, state \}/,
+  'Successful stdout must not replay the uncapped full witness state',
+);
+const postFiringSummaryIndex = witness.indexOf('postFiringSummary: {');
+const missingReportGateIndex = witness.indexOf("if (!browserFiringEvidence.reportPath)");
+assert.ok(postFiringSummaryIndex >= 0 && missingReportGateIndex > postFiringSummaryIndex);
+for (const field of [
+  'status: browserFiringEvidence.status',
+  'message: browserFiringEvidence.message',
+  'volumeReleased: browserFiringEvidence.volumeReleased',
+  'volumeReleaseConfirmed: browserFiringEvidence.volumeReleaseConfirmed',
+]) {
+  const fieldIndex = witness.indexOf(field, postFiringSummaryIndex);
+  assert.ok(fieldIndex >= postFiringSummaryIndex && fieldIndex < missingReportGateIndex,
+    `Missing backend reports must preserve ${field} before failing`);
+}

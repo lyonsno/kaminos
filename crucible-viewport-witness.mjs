@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -33,6 +33,10 @@ const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Application
 const port = Number(args.get('cdp-port') || 9341);
 const fireFriendly = args.has('fire-friendly');
 const requestedFirePresentation = args.get('fire-presentation') || 'full-volume';
+const captureInFlight = args.has('capture-in-flight');
+const outParts = path.parse(out);
+const inFlightOut = args.get('in-flight-out')
+  || path.join(outParts.dir, `${outParts.name}-in-flight${outParts.ext || '.png'}`);
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
 const userDataDir = mkdtempSync(path.join(tmpdir(), 'kaminos-crucible-viewport-'));
@@ -44,10 +48,21 @@ let browser = null;
 let primaryOutputWritten = false;
 let stderr = '';
 let lastTrustworthyEvidence = null;
+let inFlightCapture = {
+  requested: captureInFlight,
+  status: captureInFlight ? 'awaiting-effective-hybrid' : 'not-requested',
+  path: captureInFlight ? inFlightOut : null,
+  observerEffect: captureInFlight
+    ? 'CDP viewport capture may perturb foreground cadence; this visual run must not close performance acceptance.'
+    : null,
+};
 const runtimeExceptions = [];
 
 if (!['full-volume', 'hybrid-smoke-preview'].includes(requestedFirePresentation)) {
   throw new Error(`Unsupported --fire-presentation ${requestedFirePresentation}`);
+}
+if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-smoke-preview')) {
+  throw new Error('--capture-in-flight requires --fire-friendly with --fire-presentation hybrid-smoke-preview');
 }
 
 function sleep(ms) {
@@ -66,6 +81,8 @@ function writeReport(payload) {
     screenshot: primaryOutputWritten ? out : null,
     reportPath,
     primaryOutputWritten,
+    inFlightScreenshot: inFlightCapture.status === 'captured' ? inFlightCapture.path : null,
+    inFlightCapture,
     phase,
     startedAt,
     finishedAt: new Date().toISOString(),
@@ -129,6 +146,56 @@ async function evaluate(ws, expression, timeoutMs = 20000) {
   return result.result?.value;
 }
 
+async function captureViewportPng(ws, outputPath) {
+  const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+  });
+  const png = Buffer.from(screenshot.data, 'base64');
+  if (png.length < 4096) throw new Error('screenshot is too small to be credible evidence');
+  ensureParent(outputPath);
+  writeFileSync(outputPath, png);
+  return png;
+}
+
+function compactWitnessSummary({ state, out, inFlightCapture, reportPath }) {
+  const route = state?.fullRoute || null;
+  const foreground = route?.foregroundKilnHeartbeat || null;
+  return {
+    ok: true,
+    out,
+    report: reportPath,
+    status: route?.status || 'non-firing-witness-complete',
+    requestedFirePresentation: route?.requestedFirePresentation || null,
+    selectedFirePresentation: route?.selectedFirePresentation || state?.selectedFirePresentation || null,
+    output: route?.output
+      ? {
+          path: route.output.path,
+          bytes: route.output.bytes,
+          sha256: route.output.sha256,
+          status: route.output.status,
+        }
+      : null,
+    furnace: route
+      ? {
+          volumeReleased: route.volumeReleased,
+          volumeReleaseConfirmed: route.volumeReleaseConfirmed,
+          autoOpenedTab: route.autoOpenedTab,
+        }
+      : null,
+    foreground: foreground
+      ? {
+          sampleCount: foreground.sampleCount,
+          p95FrameGapMs: foreground.p95FrameGapMs,
+          p99FrameGapMs: foreground.p99FrameGapMs,
+          maxFrameGapMs: foreground.maxFrameGapMs,
+        }
+      : null,
+    inFlightCapture,
+  };
+}
+
 function validateVolumeReleaseEvidence({ volumeReleased, volumeReleaseConfirmed }) {
   const failures = [];
   if (volumeReleased !== true) failures.push('furnace-release-not-attempted');
@@ -148,11 +215,14 @@ function validateRequestedFirePresentation({ requestedPresentation, firingId, ex
   if (effective.requestedMode !== hybridMode) failures.push('requested-presentation-mode-mismatch');
   if (effective.effectiveMode !== hybridMode) failures.push('effective-presentation-mode-mismatch');
   if (effective.fallbackReason) failures.push('effective-presentation-fallback-present');
-  if (!Number.isFinite(effective.candidateCount)
-    || !Number.isFinite(effective.candidateCapacity)
-    || effective.candidateCount < 0
-    || effective.candidateCapacity < effective.candidateCount) {
+  const candidateEvidencePresent = Number.isFinite(effective.candidateCount)
+    && Number.isFinite(effective.candidateCapacity)
+    && effective.candidateCount >= 0
+    && effective.candidateCapacity >= effective.candidateCount;
+  if (!candidateEvidencePresent) {
     failures.push('effective-presentation-candidate-evidence-missing');
+  } else if (effective.candidateCount <= 0) {
+    failures.push('effective-presentation-candidate-empty');
   }
   if (effective.candidateOverflow !== 0) failures.push('effective-presentation-candidate-overflow');
   if (effective.candidateCopyBytes !== 0) failures.push('effective-presentation-cpu-copy-present');
@@ -439,9 +509,50 @@ try {
         status: window.__kaminosKilnRouteBenchState?.status || null,
         message: window.__kaminosKilnRouteBenchState?.message || null,
         runningProfileId: window.__kaminosKilnRouteBenchState?.runningProfileId || null,
+        firePhase: window.__kaminosSharpBreathingRoomKilnFireState?.phase || null,
+        firingId: window.__kaminosSharpBreathingRoomKilnFireState?.firingId || null,
+        expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
+        effectiveFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.volumeDebugState?.firePresentation || null,
       }))()`);
       if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
+      if (captureInFlight
+        && inFlightCapture.status === 'awaiting-effective-hybrid'
+        && routeState.firePhase === 'burning'
+        && routeState.effectiveFirePresentation?.candidateCount > 0) {
+        const presentationFailures = validateRequestedFirePresentation({
+          requestedPresentation: requestedFirePresentation,
+          firingId: routeState.firingId,
+          expected: routeState.expectedFirePresentation,
+          effective: routeState.effectiveFirePresentation,
+        });
+        if (!presentationFailures.length) {
+          phase = 'capturing-in-flight-hybrid';
+          const inFlightPng = await captureViewportPng(ws, inFlightOut);
+          inFlightCapture = {
+            ...inFlightCapture,
+            status: 'captured',
+            path: inFlightOut,
+            bytes: inFlightPng.length,
+            capturedAt: new Date().toISOString(),
+            firingId: routeState.firingId,
+            requestedFirePresentation,
+            effectiveFirePresentation: routeState.effectiveFirePresentation,
+            presentationFailures,
+          };
+          lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
+          phase = 'waiting-for-friendly-firing';
+        }
+      }
       if (observedRunning && !routeState.runningProfileId && ['complete', 'error', 'evidence-only'].includes(routeState.status)) break;
+    }
+    if (captureInFlight && inFlightCapture.status !== 'captured') {
+      inFlightCapture = {
+        ...inFlightCapture,
+        status: 'not-captured',
+        reason: 'effective-hybrid-presentation-not-observed-before-route-finished',
+        lastRouteState: routeState,
+      };
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
     }
     if (!observedRunning) throw new Error(`Friendly firing never entered running state: ${JSON.stringify(routeState)}`);
     if (!routeState || routeState.runningProfileId || !['complete', 'error', 'evidence-only'].includes(routeState.status)) {
@@ -516,6 +627,9 @@ try {
           : null,
       },
     };
+    if (captureInFlight && inFlightCapture.status !== 'captured') {
+      throw new Error(`Friendly firing did not expose an effective hybrid frame for visual capture: ${JSON.stringify(inFlightCapture)}`);
+    }
     if (!browserFiringEvidence.reportPath) throw new Error('Friendly firing did not expose its durable pipeline report path');
     if (!browserFiringEvidence.foregroundKilnHeartbeat) throw new Error('Friendly firing did not expose its foreground heartbeat summary');
     if (!browserFiringEvidence.sharpDutyCorrelation) throw new Error('Friendly firing did not expose its SHARP duty correlation summary');
@@ -666,15 +780,7 @@ try {
   }
 
   phase = 'capturing-screenshot';
-  const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
-    format: 'png',
-    fromSurface: true,
-    captureBeyondViewport: false,
-  });
-  const png = Buffer.from(screenshot.data, 'base64');
-  if (png.length < 4096) throw new Error('screenshot is too small to be credible evidence');
-  ensureParent(out);
-  writeFileSync(out, png);
+  const png = await captureViewportPng(ws, out);
   primaryOutputWritten = true;
 
   phase = 'writing-report';
@@ -685,7 +791,8 @@ try {
     runtimeExceptions,
     stderrTail: stderr.slice(-1000),
   });
-  console.log(JSON.stringify({ ok: true, out, report: reportPath, state }, null, 2));
+  const terminalSummary = compactWitnessSummary({ state, out, inFlightCapture, reportPath });
+  console.log(JSON.stringify(terminalSummary, null, 2));
   ws.close();
   browser.kill('SIGTERM');
 } catch (error) {
