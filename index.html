@@ -2760,7 +2760,7 @@ let fingerFluidBenchSolver = null;
 let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchDiagnosticsRequestedAt = Number.NEGATIVE_INFINITY;
-let fingerFluidBenchCamera = { yaw: -0.55, pitch: 0.34, distance: 5.2, target: [0, -0.12, 0] };
+let fingerFluidBenchCamera = { yaw: -0.55, pitch: 0.34, distance: 4.45, target: [0, -0.12, 0] };
 let fingerFluidBenchState = createFingerFluidBenchState({
   status: 'idle',
   viewport: { width: 0, height: 0 },
@@ -9797,9 +9797,12 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     gridDimensions: gpuState.gridDimensions,
     neighborGridContract: gpuState.neighborGridContract,
     densityContract: gpuState.densityContract,
+    vorticityConfinementContract: gpuState.vorticityConfinementContract,
+    obstacleContract: gpuState.obstacleContract,
     stepCount: gpuState.stepCount,
     linkedCellGridBuildCount: gpuState.linkedCellGridBuildCount,
     densityIterationCount: gpuState.densityIterationCount,
+    vorticityPassCount: gpuState.vorticityPassCount,
     directRenderFrameCount: gpuState.directRenderFrameCount,
     activeExtent3d: gpuState.diagnostics?.activeExtent3d || null,
   });

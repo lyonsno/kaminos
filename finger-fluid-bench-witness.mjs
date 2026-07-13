@@ -54,6 +54,7 @@ function writeReport(report = {}) {
     canvasActivity,
     cadenceProbe,
     canvasOut,
+    output: primaryOutputWritten ? out : null,
     ...report,
   }, null, 2));
 }
@@ -222,9 +223,14 @@ async function main() {
     if (lastDebugState.runtime?.solverRoute !== 'webgpu-pbf-linked-cell-fluid-v0') throw new Error(`solver route mismatch: ${lastDebugState.runtime?.solverRoute}`);
     if (lastDebugState.runtime?.neighborGridContract !== 'wgsl-linked-cell-neighbor-grid-v0') throw new Error(`neighbor grid contract mismatch: ${lastDebugState.runtime?.neighborGridContract}`);
     if (lastDebugState.runtime?.densityContract !== 'wgsl-pbf-density-constraint-v0') throw new Error(`density contract mismatch: ${lastDebugState.runtime?.densityContract}`);
+    if (lastDebugState.runtime?.vorticityConfinementContract !== 'wgsl-neighbor-vorticity-confinement-v0') throw new Error(`vorticity contract mismatch: ${lastDebugState.runtime?.vorticityConfinementContract}`);
+    if (lastDebugState.runtime?.obstacleContract !== 'shared-solver-render-obstacle-v0' || lastDebugState.runtime?.obstacle?.rendered !== true) throw new Error(`solver obstacle is not attributable in the renderer: ${JSON.stringify(lastDebugState.runtime?.obstacle)}`);
     if (lastDebugState.runtime?.stepCount < 20) throw new Error(`insufficient real compute steps: ${lastDebugState.runtime?.stepCount}`);
     if (lastDebugState.runtime?.linkedCellGridBuildCount < 20) throw new Error(`missing linked-cell grid builds: ${lastDebugState.runtime?.linkedCellGridBuildCount}`);
     if (lastDebugState.runtime?.densityIterationCount < 60) throw new Error(`missing density iterations: ${lastDebugState.runtime?.densityIterationCount}`);
+    if (lastDebugState.runtime?.vorticityUpdateInterval !== 3) throw new Error(`unexpected vorticity update interval: ${lastDebugState.runtime?.vorticityUpdateInterval}`);
+    const minimumVorticityPassCount = Math.floor(lastDebugState.runtime.stepCount / lastDebugState.runtime.vorticityUpdateInterval) * 2;
+    if (lastDebugState.runtime?.vorticityPassCount < minimumVorticityPassCount) throw new Error(`missing temporally scheduled two-stage vorticity passes: ${JSON.stringify({ actual: lastDebugState.runtime?.vorticityPassCount, minimum: minimumVorticityPassCount })}`);
     if (lastDebugState.runtime?.directRenderFrameCount < 20) throw new Error(`missing direct GPU render frames: ${lastDebugState.runtime?.directRenderFrameCount}`);
     const activeExtent3d = lastDebugState.runtime?.diagnostics?.activeExtent3d;
     if (!activeExtent3d || activeExtent3d.size?.length !== 3) throw new Error('missing activeExtent3d diagnostics');
@@ -235,6 +241,11 @@ async function main() {
     }
     if (activeExtent3d.size.some(value => !Number.isFinite(value) || value < 0.35)) throw new Error(`fluid state is not materially 3D: ${JSON.stringify(activeExtent3d)}`);
     if (lastDebugState.runtime?.diagnostics?.maxSpeed > 3.35) throw new Error(`bounded-energy stability failure: maxSpeed ${lastDebugState.runtime.diagnostics.maxSpeed}`);
+    const averageVorticity = lastDebugState.runtime?.diagnostics?.averageVorticity;
+    const maxVorticity = lastDebugState.runtime?.diagnostics?.maxVorticity;
+    if (!Number.isFinite(averageVorticity) || averageVorticity <= 0.001 || !Number.isFinite(maxVorticity) || maxVorticity <= averageVorticity || maxVorticity >= 4095) {
+      throw new Error(`neighbor-derived vorticity evidence is absent or saturated: ${JSON.stringify({ averageVorticity, maxVorticity })}`);
+    }
     const restDensity = lastDebugState.runtime?.restDensity;
     const averageDensity = lastDebugState.runtime?.diagnostics?.averageDensity;
     const relativeDensityError = Math.abs(averageDensity - restDensity) / Math.max(0.001, restDensity);
@@ -242,27 +253,6 @@ async function main() {
     if (activeExtent3d.size[0] > 4.66 && activeExtent3d.size[2] > 4.66 && lastDebugState.runtime.diagnostics.averageSpeed > 1.2) {
       throw new Error(`energetic fluid saturated the full horizontal domain: ${JSON.stringify(activeExtent3d)}`);
     }
-
-    phase = 'cadence_probe';
-    const cadenceBefore = {
-      stepCount: lastDebugState.runtime.stepCount,
-      directRenderFrameCount: lastDebugState.runtime.directRenderFrameCount,
-    };
-    const cadenceStartedAt = performance.now();
-    await delay(cadenceMs);
-    const cadenceState = await evaluate(ws, `(() => {
-      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
-      return typeof read === 'function' ? read() : null;
-    })()`);
-    const cadenceElapsedMs = performance.now() - cadenceStartedAt;
-    cadenceProbe = {
-      elapsedMs: Number(cadenceElapsedMs.toFixed(1)),
-      deltaSteps: cadenceState.runtime.stepCount - cadenceBefore.stepCount,
-      deltaRenderFrames: cadenceState.runtime.directRenderFrameCount - cadenceBefore.directRenderFrameCount,
-      framesPerSecond: Number(((cadenceState.runtime.directRenderFrameCount - cadenceBefore.directRenderFrameCount) * 1000 / cadenceElapsedMs).toFixed(2)),
-    };
-    if (cadenceProbe.framesPerSecond < 18) throw new Error(`settled GPU fluid cadence below floor: ${JSON.stringify(cadenceProbe)}`);
-    lastDebugState = cadenceState;
 
     phase = 'measure_canvas';
     const canvasRect = await evaluate(ws, `(() => {
@@ -309,6 +299,28 @@ async function main() {
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, Buffer.from(screenshot.data, 'base64'));
     primaryOutputWritten = true;
+
+    phase = 'cadence_probe';
+    const cadenceBefore = {
+      stepCount: lastDebugState.runtime.stepCount,
+      directRenderFrameCount: lastDebugState.runtime.directRenderFrameCount,
+    };
+    const cadenceStartedAt = performance.now();
+    await delay(cadenceMs);
+    const cadenceState = await evaluate(ws, `(() => {
+      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+      return typeof read === 'function' ? read() : null;
+    })()`);
+    const cadenceElapsedMs = performance.now() - cadenceStartedAt;
+    cadenceProbe = {
+      elapsedMs: Number(cadenceElapsedMs.toFixed(1)),
+      deltaSteps: cadenceState.runtime.stepCount - cadenceBefore.stepCount,
+      deltaRenderFrames: cadenceState.runtime.directRenderFrameCount - cadenceBefore.directRenderFrameCount,
+      framesPerSecond: Number(((cadenceState.runtime.directRenderFrameCount - cadenceBefore.directRenderFrameCount) * 1000 / cadenceElapsedMs).toFixed(2)),
+    };
+    lastDebugState = cadenceState;
+    if (cadenceProbe.framesPerSecond < 18) throw new Error(`settled GPU fluid cadence below floor: ${JSON.stringify(cadenceProbe)}`);
+
     phase = null;
     writeReport({
       ok: true,

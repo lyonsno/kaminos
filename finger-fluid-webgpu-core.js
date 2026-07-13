@@ -1,6 +1,8 @@
 export const KAMINOS_FINGER_FLUID_GPU_SOLVER_ROUTE = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT = 'wgsl-linked-cell-neighbor-grid-v0';
 export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constraint-v0';
+export const KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT = 'wgsl-neighbor-vorticity-confinement-v0';
+export const KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT = 'shared-solver-render-obstacle-v0';
 export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-renderer-v0';
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE = 'wgsl-fluid-particle-sphere-v0';
@@ -15,6 +17,9 @@ const GRID_DIMS = [32, 20, 32];
 const GRID_CELL_COUNT = GRID_DIMS[0] * GRID_DIMS[1] * GRID_DIMS[2];
 const BOUNDS_MIN = [-3.4, -1.2, -3.4];
 const BOUNDS_MAX = [3.4, 3.0, 3.4];
+const OBSTACLE_CENTER = [0.85, -0.43, 0.02];
+const OBSTACLE_RADIUS = 0.52;
+const VORTICITY_UPDATE_INTERVAL = 3;
 
 const COMPUTE_SHADER = /* wgsl */`
 struct Particle {
@@ -70,8 +75,8 @@ fn collideDomain(inputPosition: vec3<f32>) -> vec3<f32> {
     p = p + normal * (penetration / max(normal.y, 0.15));
   }
 
-  let sphereCenter = vec3<f32>(0.85, -0.43, 0.02);
-  let sphereRadius = 0.52 + radius;
+  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  let sphereRadius = ${OBSTACLE_RADIUS} + radius;
   let fromSphere = p - sphereCenter;
   let sphereDistance = length(fromSphere);
   if (sphereDistance < sphereRadius) {
@@ -118,8 +123,6 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   var particle = particles[index];
   var velocity = particle.velocity.xyz;
   velocity.y = velocity.y + params.forces.x * params.dt;
-  let swirl = vec3<f32>(-particle.position.z, 0.0, particle.position.x) * params.forces.w * params.dt;
-  velocity = velocity + swirl;
   particle.velocity = vec4<f32>(velocity, particle.velocity.w);
   particle.predicted = vec4<f32>(collideDomain(particle.position.xyz + velocity * params.dt), 0.0);
   particle.delta = vec4<f32>(0.0);
@@ -253,6 +256,14 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
     let normalSpeed = dot(velocity, normal);
     if (normalSpeed < 0.0) { velocity = velocity - normal * normalSpeed; }
   }
+  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  let fromSphere = position - sphereCenter;
+  let sphereDistance = length(fromSphere);
+  if (sphereDistance <= ${OBSTACLE_RADIUS} + radius + 0.01) {
+    let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+    let sphereNormalSpeed = dot(velocity, sphereNormal);
+    if (sphereNormalSpeed < 0.0) { velocity = velocity - sphereNormal * sphereNormalSpeed; }
+  }
   if (position.x <= params.boundsMin.x + radius + 0.006 && velocity.x < 0.0) { velocity.x = 0.0; }
   if (position.x >= params.boundsMax.x - radius - 0.006 && velocity.x > 0.0) { velocity.x = 0.0; }
   if (position.z <= params.boundsMin.z + radius + 0.006 && velocity.z < 0.0) { velocity.z = 0.0; }
@@ -263,11 +274,84 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
+fn compute_vorticity(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let particle = particles[index];
+  let position = particle.predicted.xyz;
+  let velocity = particle.delta.xyz;
+  let baseCell = gridCoord(position);
+  var omega = vec3<f32>(0.0);
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          if (neighborIndex != index) {
+            let offset = position - particles[neighborIndex].predicted.xyz;
+            let velocityDifference = particles[neighborIndex].delta.xyz - velocity;
+            omega = omega + cross(velocityDifference, kernelGradient(offset));
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+  particles[index].velocity = vec4<f32>(omega, particle.velocity.w);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn apply_vorticity_confinement(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let particle = particles[index];
+  let position = particle.predicted.xyz;
+  let omega = particle.velocity.xyz;
+  let omegaMagnitude = length(omega);
+  let baseCell = gridCoord(position);
+  var magnitudeGradient = vec3<f32>(0.0);
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          if (neighborIndex != index) {
+            let offset = position - particles[neighborIndex].predicted.xyz;
+            let neighborMagnitude = length(particles[neighborIndex].velocity.xyz);
+            magnitudeGradient = magnitudeGradient + (neighborMagnitude - omegaMagnitude) * kernelGradient(offset);
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+
+  let gradientLength = length(magnitudeGradient);
+  let confinementNormal = magnitudeGradient / max(gradientLength, 0.00001);
+  var confinement = cross(confinementNormal, omega) * params.forces.w;
+  let confinementLength = length(confinement);
+  if (confinementLength > 1.25) { confinement = confinement * (1.25 / confinementLength); }
+  var velocity = particle.delta.xyz + confinement * params.dt;
+  let speed = length(velocity);
+  if (speed > ${MAX_FLUID_SPEED}) { velocity = velocity * (${MAX_FLUID_SPEED} / speed); }
+  particles[index].delta = vec4<f32>(velocity, particle.delta.w);
+  particles[index].position.w = min(omegaMagnitude, 4096.0);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
 fn apply_velocity_position(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
   particles[index].velocity = vec4<f32>(particles[index].delta.xyz, particles[index].velocity.w);
-  particles[index].position = vec4<f32>(particles[index].predicted.xyz, 1.0);
+  particles[index].position = vec4<f32>(particles[index].predicted.xyz, particles[index].position.w);
 }
 `;
 
@@ -294,6 +378,7 @@ struct VertexOutput {
   @location(0) uv: vec2<f32>,
   @location(1) color: vec3<f32>,
   @location(2) speed: f32,
+  @location(3) supportKind: f32,
 }
 
 @vertex
@@ -302,21 +387,31 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(-1.0, 1.0),
     vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0)
   );
-  let particle = particles[instanceIndex];
   let corner = quad[vertexIndex];
-  let speed = length(particle.velocity.xyz);
-  let radius = params.viewport.z * (0.88 + clamp(particle.delta.w / 16.0, 0.0, 0.42));
-  let worldPosition = particle.position.xyz + params.cameraRight.xyz * corner.x * radius + params.cameraUp.xyz * corner.y * radius;
+  let isObstacle = instanceIndex >= u32(params.viewport.w);
+  var center = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  var radius = ${OBSTACLE_RADIUS};
+  var speed = 0.0;
+  var phase = 0.0;
   let cold = vec3<f32>(0.055, 0.54, 0.78);
   let warm = vec3<f32>(0.18, 0.94, 0.71);
   let crest = vec3<f32>(0.80, 0.57, 1.0);
-  let phase = particle.velocity.w;
-  let base = mix(cold, warm, smoothstep(0.0, 0.62, phase));
+  var base = vec3<f32>(0.19, 0.23, 0.25);
+  if (!isObstacle) {
+    let particle = particles[instanceIndex];
+    center = particle.position.xyz;
+    speed = length(particle.velocity.xyz);
+    radius = params.viewport.z * (0.88 + clamp(particle.delta.w / 16.0, 0.0, 0.42));
+    phase = particle.velocity.w;
+    base = mix(cold, warm, smoothstep(0.0, 0.62, phase));
+  }
+  let worldPosition = center + params.cameraRight.xyz * corner.x * radius + params.cameraUp.xyz * corner.y * radius;
   var output: VertexOutput;
   output.position = params.viewProjection * vec4<f32>(worldPosition, 1.0);
   output.uv = corner;
   output.color = mix(base, crest, smoothstep(0.68, 1.0, phase) * 0.72);
   output.speed = speed;
+  output.supportKind = select(0.0, 1.0, isObstacle);
   return output;
 }
 
@@ -330,9 +425,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
   let rim = pow(1.0 - normal.z, 2.2);
   let specular = pow(max(dot(reflect(-light, normal), vec3<f32>(0.0, 0.0, 1.0)), 0.0), 34.0);
   let speedGlow = smoothstep(0.7, 4.0, input.speed);
-  let color = input.color * (0.28 + diffuse * 0.86) + vec3<f32>(0.36, 0.72, 0.90) * rim * 0.24 + vec3<f32>(1.0) * specular * 0.72 + speedGlow * vec3<f32>(0.12, 0.18, 0.24);
+  let fluidColor = input.color * (0.28 + diffuse * 0.86) + vec3<f32>(0.36, 0.72, 0.90) * rim * 0.24 + vec3<f32>(1.0) * specular * 0.72 + speedGlow * vec3<f32>(0.12, 0.18, 0.24);
+  let obstacleColor = input.color * (0.30 + diffuse * 0.64) + vec3<f32>(0.72, 0.58, 0.30) * rim * 0.28 + vec3<f32>(1.0) * specular * 0.32;
+  let color = mix(fluidColor, obstacleColor, input.supportKind);
   let edgeAlpha = smoothstep(1.0, 0.70, radiusSquared);
-  return vec4<f32>(color, 0.90 * edgeAlpha);
+  let alpha = mix(0.90, 0.82, input.supportKind);
+  return vec4<f32>(color, alpha * edgeAlpha);
 }
 `;
 
@@ -514,6 +612,8 @@ export async function createWebGPUFingerFluidSolver({
       delta: await pipelineFor('solve_position_delta'),
       applyDelta: await pipelineFor('apply_position_delta'),
       velocity: await pipelineFor('compute_velocity_viscosity'),
+      vorticity: await pipelineFor('compute_vorticity'),
+      confinement: await pipelineFor('apply_vorticity_confinement'),
       applyVelocity: await pipelineFor('apply_velocity_position'),
     };
   } catch (error) {
@@ -576,6 +676,7 @@ export async function createWebGPUFingerFluidSolver({
   let stepCount = 0;
   let linkedCellGridBuildCount = 0;
   let densityIterationCount = 0;
+  let vorticityPassCount = 0;
   let directRenderFrameCount = 0;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -651,6 +752,11 @@ export async function createWebGPUFingerFluidSolver({
         densityIterationCount += 1;
       }
       dispatch(pass, pipelines.velocity, safeParticleCount);
+      if (frameIndex % VORTICITY_UPDATE_INTERVAL === 0) {
+        dispatch(pass, pipelines.vorticity, safeParticleCount);
+        dispatch(pass, pipelines.confinement, safeParticleCount);
+        vorticityPassCount += 2;
+      }
       dispatch(pass, pipelines.applyVelocity, safeParticleCount);
       pass.end();
       device.queue.submit([encoder.finish()]);
@@ -666,7 +772,7 @@ export async function createWebGPUFingerFluidSolver({
     pixelRatio = globalThis.devicePixelRatio || 1,
     yaw = -0.55,
     pitch = 0.34,
-    distance = 5.2,
+    distance = 4.45,
     target = [0, -0.05, 0],
   } = {}) {
     if (destroyed) return;
@@ -708,7 +814,7 @@ export async function createWebGPUFingerFluidSolver({
     });
     pass.setPipeline(renderPipeline);
     pass.setBindGroup(0, renderBindGroup);
-    pass.draw(6, safeParticleCount);
+    pass.draw(6, safeParticleCount + 1);
     pass.end();
     device.queue.submit([encoder.finish()]);
     directRenderFrameCount += 1;
@@ -730,6 +836,8 @@ export async function createWebGPUFingerFluidSolver({
       let speedSum = 0;
       let maxSpeed = 0;
       let densitySum = 0;
+      let vorticitySum = 0;
+      let maxVorticity = 0;
       for (let index = 0; index < safeParticleCount; index += 1) {
         const offset = index * PARTICLE_FLOATS;
         for (let axis = 0; axis < 3; axis += 1) {
@@ -740,6 +848,9 @@ export async function createWebGPUFingerFluidSolver({
         speedSum += speed;
         maxSpeed = Math.max(maxSpeed, speed);
         densitySum += values[offset + 15];
+        const vorticity = values[offset + 3];
+        vorticitySum += vorticity;
+        maxVorticity = Math.max(maxVorticity, vorticity);
       }
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
@@ -753,6 +864,8 @@ export async function createWebGPUFingerFluidSolver({
         averageSpeed: Number((speedSum / safeParticleCount).toFixed(4)),
         maxSpeed: Number(maxSpeed.toFixed(4)),
         averageDensity: Number((densitySum / safeParticleCount).toFixed(4)),
+        averageVorticity: Number((vorticitySum / safeParticleCount).toFixed(4)),
+        maxVorticity: Number(maxVorticity.toFixed(4)),
       };
       diagnosticsBuffer.unmap();
       return diagnostics;
@@ -770,6 +883,9 @@ export async function createWebGPUFingerFluidSolver({
       shaderRoute: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE,
       neighborGridContract: KAMINOS_FINGER_FLUID_NEIGHBOR_GRID_CONTRACT,
       densityContract: KAMINOS_FINGER_FLUID_DENSITY_CONTRACT,
+      vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
+      obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
+      obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: true },
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
       renderRoute: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,
       renderShaderRoute: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE,
@@ -783,6 +899,8 @@ export async function createWebGPUFingerFluidSolver({
       stepCount,
       linkedCellGridBuildCount,
       densityIterationCount,
+      vorticityPassCount,
+      vorticityUpdateInterval: VORTICITY_UPDATE_INTERVAL,
       directRenderFrameCount,
       lastFrameCpuMs: Number(lastFrameCpuMs.toFixed(3)),
       diagnostics: diagnostics ? {
