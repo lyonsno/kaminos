@@ -317,6 +317,10 @@ export function decodeReferenceSmokeHierarchy(request = {}) {
 
 export function createSmokeSplatSlotCache(options = {}) {
   if (typeof options.decodeSlot !== 'function') throw new TypeError('decodeSlot must be an explicit function');
+  const producerAuthority = options.producerAuthority === undefined
+    ? SMOKE_SPLAT_PRODUCER_AUTHORITY
+    : requireIdentity(options.producerAuthority, 'producerAuthority');
+  const cacheIdentity = `${SMOKE_SPLAT_SLOT_CACHE_IDENTITY}:${encodeURIComponent(producerAuthority)}`;
   const products = new Map();
   let activeIdentity = null;
 
@@ -333,8 +337,8 @@ export function createSmokeSplatSlotCache(options = {}) {
     }
     const simulatorGeneration = requireFinite(request.simulatorGeneration, 'simulatorGeneration');
     const modelIdentity = requireIdentity(request.modelIdentity, 'modelIdentity');
-    const requestedProducerAuthority = request.requestedProducerAuthority ?? SMOKE_SPLAT_PRODUCER_AUTHORITY;
-    if (requestedProducerAuthority !== SMOKE_SPLAT_PRODUCER_AUTHORITY) {
+    const requestedProducerAuthority = request.requestedProducerAuthority ?? producerAuthority;
+    if (requestedProducerAuthority !== producerAuthority) {
       throw makeFailure(`unsupported smoke producer authority ${requestedProducerAuthority}`, {
         failurePhase: 'producer-authority-resolution',
         requestedProducerAuthority,
@@ -407,7 +411,7 @@ export function createSmokeSplatSlotCache(options = {}) {
           fineMassFraction: decodeConfig.fineMassFraction,
           capacity: decodeConfig.capacity,
         });
-        if (!product || product.producerAuthority !== SMOKE_SPLAT_PRODUCER_AUTHORITY) {
+        if (!product || product.producerAuthority !== producerAuthority) {
           throw makeFailure(`smoke decoder returned invalid authority for phase slot ${group.slotIdentity.historySlot}`, {
             failurePhase: 'slot-decode-validation',
             requestedProducerAuthority,
@@ -442,9 +446,9 @@ export function createSmokeSplatSlotCache(options = {}) {
     return {
       identity: 'smoke-splat-slot-resolve-report-v0',
       status: 'resolved',
-      cacheIdentity: SMOKE_SPLAT_SLOT_CACHE_IDENTITY,
+      cacheIdentity,
       requestedProducerAuthority,
-      effectiveProducerAuthority: SMOKE_SPLAT_PRODUCER_AUTHORITY,
+      effectiveProducerAuthority: producerAuthority,
       simulatorGeneration,
       modelIdentity,
       decoderConfigIdentities: Array.from(decoderConfigIdentities).sort(),
@@ -474,7 +478,8 @@ export function createSmokeSplatSlotCache(options = {}) {
   }
 
   return {
-    identity: SMOKE_SPLAT_SLOT_CACHE_IDENTITY,
+    identity: cacheIdentity,
+    producerAuthority,
     resolve,
     clear,
     size() {
