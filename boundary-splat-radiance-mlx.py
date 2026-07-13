@@ -30,6 +30,7 @@ BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER = [
 ]
 FEATURES = BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER[3:]
 OUTPUTS = ["color.r", "color.g", "color.b", "opacity", "radius.x", "radius.y"]
+GRID_PYRAMID_RADII = (1, 2, 4, 8)
 DEFAULT_WARM_START_RELATIVE = "models/boundary-splat-attribute/live-support-h64-v0/model-artifact.json"
 DEFAULT_WARM_START = Path(__file__).parent / DEFAULT_WARM_START_RELATIVE
 
@@ -289,7 +290,7 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies, r
         warm_context_mode = artifact.get("contextMode")
         warm_frequencies = [float(value) for value in artifact.get("fourierFrequencies", [])]
         warm_spatial_mixing = "none"
-        if warm_context_mode in ("world-fourier", "world-grid-neighborhood") and not warm_frequencies:
+        if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") and not warm_frequencies:
             recovered_frequencies = infer_fourier_frequencies(artifact.get("features") or [])
             warm_frequencies = recovered_frequencies
         context_expansion = warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood"
@@ -297,7 +298,7 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies, r
             raise ValueError(
                 f"warm start context mode {warm_context_mode!r} does not match requested context mode {requested_context_mode!r}"
             )
-        if warm_context_mode in ("world-fourier", "world-grid-neighborhood") and warm_frequencies != requested_frequencies:
+        if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") and warm_frequencies != requested_frequencies:
             raise ValueError(
                 f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
             )
@@ -325,7 +326,7 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies, r
         raise ValueError(
             f"warm start context mode {warm_context_mode!r} does not match requested context mode {requested_context_mode!r}"
         )
-    if warm_context_mode in ("world-fourier", "world-grid-neighborhood") and warm_frequencies != requested_frequencies:
+    if warm_context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") and warm_frequencies != requested_frequencies:
         raise ValueError(
             f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
         )
@@ -390,27 +391,37 @@ def parse_fourier_frequencies(value):
 
 def context_feature_names(context_mode, frequencies):
     names = list(FEATURES)
-    if context_mode in ("world-xyz", "world-fourier", "world-grid-neighborhood"):
+    if context_mode in ("world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid"):
         names.extend(["position.x", "position.y", "position.z"])
-    if context_mode in ("world-fourier", "world-grid-neighborhood"):
+    if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid"):
         for frequency in frequencies:
             label = format(frequency, "g")
             names.extend([f"position.sin.{axis}.{label}" for axis in "xyz"])
             names.extend([f"position.cos.{axis}.{label}" for axis in "xyz"])
     if context_mode == "world-grid-neighborhood":
-        names.extend([
-            "neighbor.occupancy.x-", "neighbor.occupancy.x+",
-            "neighbor.occupancy.y-", "neighbor.occupancy.y+",
-            "neighbor.occupancy.z-", "neighbor.occupancy.z+",
-        ])
-        for statistic in ("mean", "max", "laplacian", "gradient.x", "gradient.y", "gradient.z"):
-            names.extend([f"neighbor.{statistic}.{feature}" for feature in FEATURES])
+        names.extend(grid_neighborhood_feature_names("neighbor"))
+    if context_mode == "world-grid-pyramid":
+        for radius in GRID_PYRAMID_RADII:
+            names.extend(grid_neighborhood_feature_names(f"neighbor.r{radius}"))
     return names
 
 
-def local_grid_neighbor_rows(candidates, grid):
+def grid_neighborhood_feature_names(prefix):
+    names = [
+        f"{prefix}.occupancy.x-", f"{prefix}.occupancy.x+",
+        f"{prefix}.occupancy.y-", f"{prefix}.occupancy.y+",
+        f"{prefix}.occupancy.z-", f"{prefix}.occupancy.z+",
+    ]
+    for statistic in ("mean", "max", "laplacian", "gradient.x", "gradient.y", "gradient.z"):
+        names.extend([f"{prefix}.{statistic}.{feature}" for feature in FEATURES])
+    return names
+
+
+def local_grid_neighbor_rows(candidates, grid, radius=1):
     if not isinstance(grid, int) or grid <= 0:
         raise ValueError("local-grid context requires a positive integer source grid")
+    if not isinstance(radius, int) or radius <= 0:
+        raise ValueError("local-grid context radius must be a positive integer")
     positions = candidates[:, :3].astype(np.float32)
     indices = np.rint((positions + 1.0) * 0.5 * grid - 0.5).astype(np.int32)
     if np.any(indices < 0) or np.any(indices >= grid):
@@ -423,7 +434,7 @@ def local_grid_neighbor_rows(candidates, grid):
         raise ValueError("candidate positions contain duplicate source-grid cells")
     lookup = np.full(grid ** 3, -1, dtype=np.int32)
     lookup[linear] = np.arange(linear.size, dtype=np.int32)
-    offsets = np.asarray([
+    offsets = radius * np.asarray([
         [-1, 0, 0], [1, 0, 0],
         [0, -1, 0], [0, 1, 0],
         [0, 0, -1], [0, 0, 1],
@@ -437,8 +448,8 @@ def local_grid_neighbor_rows(candidates, grid):
     return neighbor_rows
 
 
-def local_grid_neighborhood_channels(candidates, grid):
-    neighbor_rows = local_grid_neighbor_rows(candidates, grid)
+def local_grid_neighborhood_channels(candidates, grid, radius=1):
+    neighbor_rows = local_grid_neighbor_rows(candidates, grid, radius)
     features = candidates[:, 3:].astype(np.float32)
     neighbor_values = np.zeros((len(candidates), 6, len(FEATURES)), dtype=np.float32)
     occupancy = (neighbor_rows >= 0).astype(np.float32)
@@ -455,18 +466,27 @@ def local_grid_neighborhood_channels(candidates, grid):
     return np.concatenate([occupancy, neighbor_mean, neighbor_max, laplacian, *gradients], axis=1)
 
 
+def local_grid_pyramid_channels(candidates, grid):
+    return np.concatenate([
+        local_grid_neighborhood_channels(candidates, grid, radius)
+        for radius in GRID_PYRAMID_RADII
+    ], axis=1)
+
+
 def encode_candidate_inputs(candidates, context_mode, frequencies, grid=None):
     features = mx.array(candidates[:, 3:].astype(np.float32))
     if context_mode == "none":
         return features
     positions = mx.array(candidates[:, :3].astype(np.float32))
     channels = [features, positions]
-    if context_mode in ("world-fourier", "world-grid-neighborhood"):
+    if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid"):
         for frequency in frequencies:
             channels.append(mx.sin(positions * frequency * 2.0 * np.pi))
             channels.append(mx.cos(positions * frequency * 2.0 * np.pi))
     if context_mode == "world-grid-neighborhood":
         channels.append(mx.array(local_grid_neighborhood_channels(candidates, grid)))
+    if context_mode == "world-grid-pyramid":
+        channels.append(mx.array(local_grid_pyramid_channels(candidates, grid)))
     return mx.concatenate(channels, axis=1)
 
 
@@ -745,7 +765,7 @@ def serialize_spatial_model(model, output_ranges, feature_names, context_mode, f
         "hiddenSize": int(model.hidden.weight.shape[0]),
         "outputRanges": output_ranges.astype(float).tolist(),
         "contextMode": context_mode,
-        "fourierFrequencies": frequencies if context_mode in ("world-fourier", "world-grid-neighborhood") else [],
+        "fourierFrequencies": frequencies if context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") else [],
         "deployable": False,
         "layers": [
             {
@@ -839,7 +859,7 @@ def parse_args():
     parser.add_argument("--radius-preservation", type=float, default=0.18)
     parser.add_argument("--depth-bins", type=int, default=1)
     parser.add_argument("--edge-weight", type=float, default=0.0)
-    parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier", "world-grid-neighborhood"], default="none")
+    parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid"], default="none")
     parser.add_argument("--fourier-frequencies", default="1,2,4,8")
     parser.add_argument("--hidden-size", type=int, default=0)
     parser.add_argument("--spatial-mixing", choices=["none", "six-neighbor-hidden-residual"], default="none")
@@ -1048,7 +1068,11 @@ def main():
                 "authority": (
                     "shared-local-grid-conditioned-feature-mlp-v0"
                     if args.context_mode == "world-grid-neighborhood"
-                    else "shared-position-conditioned-feature-mlp-v0"
+                    else (
+                        "shared-multi-radius-grid-conditioned-feature-mlp-v0"
+                        if args.context_mode == "world-grid-pyramid"
+                        else "shared-position-conditioned-feature-mlp-v0"
+                    )
                 ),
                 "deployable": False,
             }
@@ -1094,7 +1118,8 @@ def main():
                 "evaluationFrameIndices": frame_split["evaluationIndices"],
                 "evaluationFrameIds": frame_split["evaluationFrameIds"],
                 "spatialMixingExpansionAuthority": "zero-delta-active-six-neighbor-hidden-residual-v0" if warm_spatial_mixing == "none" and args.spatial_mixing == "six-neighbor-hidden-residual" else None,
-                "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood") else [],
+                "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") else [],
+                "gridContextAuthority": "multi-radius-axial-grid-context-v0" if args.context_mode == "world-grid-pyramid" else None,
                 "inputChannels": len(feature_names),
                 "warmHiddenSize": warm_hidden_size,
                 "hiddenSize": requested_hidden_size,

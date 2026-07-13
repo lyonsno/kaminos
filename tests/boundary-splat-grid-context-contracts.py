@@ -53,6 +53,26 @@ np.testing.assert_allclose(encoded[0, offset], 4.0 / 6.0 - 2.0)
 offset += len(MODULE.FEATURES)
 np.testing.assert_allclose(encoded[0, offset], 1.0)
 
+pyramid_grid = 10
+pyramid_candidates = np.zeros((5, len(MODULE.BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER)), dtype=np.float32)
+for row, index in enumerate(((4, 4, 4), (3, 4, 4), (5, 4, 4), (2, 4, 4), (6, 4, 4))):
+    pyramid_candidates[row, :3] = position(index, pyramid_grid)
+pyramid_candidates[:, 3] = [10.0, 1.0, 2.0, 3.0, 4.0]
+pyramid_names = MODULE.context_feature_names("world-grid-pyramid", [1.0])
+pyramid_encoded = np.asarray(MODULE.encode_candidate_inputs(pyramid_candidates, "world-grid-pyramid", [1.0], pyramid_grid))
+assert pyramid_encoded.shape == (5, len(pyramid_names))
+assert "neighbor.r1.occupancy.x-" in pyramid_names
+assert "neighbor.r2.occupancy.x-" in pyramid_names
+base_offset = len(MODULE.FEATURES) + 3 + 6
+radius_block = 6 + len(MODULE.FEATURES) * 6
+np.testing.assert_array_equal(pyramid_encoded[0, base_offset:base_offset + 6], [1, 1, 0, 0, 0, 0])
+np.testing.assert_array_equal(
+    pyramid_encoded[0, base_offset + radius_block:base_offset + radius_block + 6],
+    [1, 1, 0, 0, 0, 0],
+)
+radius_two_mean = base_offset + radius_block + 6
+np.testing.assert_allclose(pyramid_encoded[0, radius_two_mean], 7.0 / 6.0)
+
 base_model = MODULE.AttributeMlp(2, 3)
 base_model.load_weights([
     ("hidden.weight", MODULE.mx.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])),

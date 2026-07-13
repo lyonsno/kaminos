@@ -51,7 +51,7 @@ assert.match(script, /class\s+CandidateAttributeTable\(nn\.Module\)/, 'candidate
 assert.match(script, /per-candidate-free-attribute-oracle-v0/, 'candidate oracle receipts distinguish diagnostic authority from deployable MLP authority');
 assert.match(script, /candidate oracle requires exactly one corpus frame/, 'candidate oracle rejects ambiguous cross-frame candidate identity');
 assert.match(script, /--context-mode/, 'radiance trainer exposes explicit spatial conditioning rather than silently changing the live feature contract');
-assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-grid-neighborhood"\]/, 'spatial conditioning distinguishes pointwise position from explicit local-grid neighborhood context');
+assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid"\]/, 'spatial conditioning distinguishes pointwise position, local-grid, and multiscale grid context');
 assert.match(script, /--fourier-frequencies/, 'Fourier conditioning exposes its exact frequency ladder');
 assert.match(script, /--hidden-size/, 'spatial trainer exposes an explicit hidden-width experiment control');
 assert.match(script, /--spatial-mixing/, 'spatial trainer exposes an explicit learned mixing family instead of conflating it with handcrafted context');
@@ -93,9 +93,11 @@ assert.match(
   'training receipts say explicitly when optimization continued from either experimental spatial checkpoint family',
 );
 assert.match(script, /world-grid-neighborhood/, 'radiance trainer exposes local-grid optical context as a distinct experimental family');
-assert.match(script, /neighbor\.occupancy\.x-/, 'local-grid context records missing and present six-neighbor support explicitly');
+assert.match(script, /grid_neighborhood_feature_names\("neighbor"\)/, 'local-grid context records missing and present six-neighbor support explicitly');
+assert.match(script, /GRID_PYRAMID_RADII\s*=\s*\(1,\s*2,\s*4,\s*8\)/, 'multiscale grid context records explicit radius-one through radius-eight support');
+assert.match(script, /multi-radius-axial-grid-context-v0/, 'multiscale grid receipts identify their wider receptive-field authority');
 assert.match(script, /zero-delta-local-grid-context-expansion-v0/, 'local-grid context starts as an exact zero-delta extension of the proven Fourier head');
 assert.match(script, /zero-delta-active-hidden-width-expansion-v0/, 'wider spatial heads begin as exact zero-output-delta extensions with active new hidden features');
-assert.match(script, /args\.context_mode in \("world-fourier", "world-grid-neighborhood"\)/, 'local-grid receipts preserve the Fourier frequency contract used by their encoder');
+assert.match(script, /args\.context_mode in \("world-fourier", "world-grid-neighborhood", "world-grid-pyramid"\)/, 'grid-context receipts preserve the Fourier frequency contract used by their encoder');
 
 console.log('boundary splat radiance training contracts passed');
