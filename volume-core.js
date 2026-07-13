@@ -5086,9 +5086,10 @@ fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_in
   let historyIndex = historySlot * historyCapacity + sourceCandidateIndex;
   let splat = boundarySplatHistoryForRender[historyIndex];
   let corner = boundarySplatQuadCorner(vertexIndex);
-  let offset = boundarySplatCamera.cameraRight.xyz * corner.x * splat.shape.x * boundarySplatCamera.controls.x
-    + boundarySplatCamera.cameraUp.xyz * corner.y * splat.shape.y * boundarySplatCamera.controls.x;
-  let transformedPosition = splat.positionSupport.xyz * descriptor.transform.w + descriptor.transform.xyz;
+  let instanceScale = descriptor.transform.w;
+  let offset = boundarySplatCamera.cameraRight.xyz * corner.x * splat.shape.x * boundarySplatCamera.controls.x * instanceScale
+    + boundarySplatCamera.cameraUp.xyz * corner.y * splat.shape.y * boundarySplatCamera.controls.x * instanceScale;
+  let transformedPosition = splat.positionSupport.xyz * instanceScale + descriptor.transform.xyz;
   var out: BoundarySplatVertexOut;
   out.position = boundarySplatCamera.viewProj * vec4<f32>(transformedPosition + offset, 1.0);
   out.colorOpacity = splat.colorOpacity;

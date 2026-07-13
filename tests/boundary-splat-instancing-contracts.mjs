@@ -24,6 +24,7 @@ assert.match(core, /const phaseSourceCount = Math\.max\(1, Math\.min\(historyDep
 assert.match(core, /candidateCount\s*\*\s*boundarySplatDraw\.requestedInstanceCount/, 'finalize pass must multiply one source candidate count into many rendered instances');
 assert.match(core, /sourceCandidateIndex\s*=\s*instanceIndex\s*\/\s*max\(1u,\s*u32\(boundarySplatCamera\.instanceInfo\.y\)\)/, 'vertex shader must reuse one compacted source candidate buffer without CPU readback');
 assert.match(core, /fireInstanceIndex\s*=\s*instanceIndex\s*%\s*max\(1u,\s*u32\(boundarySplatCamera\.instanceInfo\.y\)\)/, 'vertex shader must derive the transformed fire index from the indirect instance id');
+assert.match(core, /let instanceScale = descriptor\.transform\.w;[\s\S]*splat\.shape\.x[\s\S]*instanceScale[\s\S]*splat\.positionSupport\.xyz \* instanceScale/, 'per-instance scale must transform both splat footprint and candidate position');
 assert.match(core, /phaseSourceIdentity:\s*'shared-current-control'/, 'runtime telemetry must label the synchronized shared-current control phase source');
 assert.match(core, /phaseSourceIdentity:\s*'live-history-offset'/, 'runtime telemetry must reserve truthful live-history phase source identity');
 assert.match(core, /boundarySplatIncrementalInstanceCost/, 'runtime telemetry must report incremental per-instance cost proxy');
