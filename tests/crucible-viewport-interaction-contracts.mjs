@@ -5,6 +5,12 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 assert.doesNotMatch(
   html,
+  /cooperative-fixed-16ms-donation/,
+  'The fixed-donation diagnostic profile must not become another operator-facing Crucible mode',
+);
+
+assert.doesNotMatch(
+  html,
   /#crucible-viewport-workspace\s*\{[^}]*pointer-events:\s*none/s,
   'The Crucible workroom must accept pointer input instead of behaving like an untouchable overlay',
 );

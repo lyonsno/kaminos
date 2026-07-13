@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -32,6 +32,11 @@ const reportPath = args.get('report') || '/tmp/kaminos-crucible-viewport-witness
 const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = Number(args.get('cdp-port') || 9341);
 const fireFriendly = args.has('fire-friendly');
+const schedulerProfileId = args.get('scheduler-profile') || 'cooperative-spn-gaussian';
+const schedulerProfileLabel = schedulerProfileId === 'cooperative-fixed-16ms-donation'
+  ? 'Fixed 16 ms donation test'
+  : 'Friendly';
+const requestedSourceAssetId = args.get('source-asset-id') || null;
 const requestedFirePresentation = args.get('fire-presentation') || 'full-volume';
 const captureInFlight = args.has('capture-in-flight');
 const outParts = path.parse(out);
@@ -68,11 +73,31 @@ if (!['full-volume', 'hybrid-smoke-preview'].includes(requestedFirePresentation)
 if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-smoke-preview')) {
   throw new Error('--capture-in-flight requires --fire-friendly with --fire-presentation hybrid-smoke-preview');
 }
+if (args.has('scheduler-profile') && !fireFriendly) {
+  throw new Error('--scheduler-profile requires --fire-friendly');
+}
 if (!Number.isFinite(inFlightSettleMs) || inFlightSettleMs < 0) {
   throw new Error('--in-flight-settle-ms must be a finite nonnegative number');
 }
 if (!Number.isFinite(inFlightMaxObservationGapMs) || inFlightMaxObservationGapMs <= 0) {
   throw new Error('--in-flight-max-observation-gap-ms must be a finite positive number');
+}
+
+function expectedSchedulerForProfile(profileId) {
+  const common = {
+    mode: 'cooperative',
+    spnPatchChunkSize: 1,
+    waitForSubmittedWorkDone: true,
+    vitBlockChunkSize: 2,
+    cpuChunkItems: 16384,
+  };
+  if (profileId === 'cooperative-spn-gaussian') {
+    return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3 };
+  }
+  if (profileId === 'cooperative-fixed-16ms-donation') {
+    return { ...common, yieldMs: 16, gaussianPhaseYieldMs: 16, routeTailYieldMs: 16 };
+  }
+  throw new Error(`Unsupported --scheduler-profile ${profileId}`);
 }
 
 function sleep(ms) {
@@ -687,8 +712,15 @@ try {
   state.sourceSelectionExercise = await evaluate(ws, `(async () => {
     const select = document.getElementById('crucible-viewport-source-select');
     const before = window.kaminosCrucibleViewportDebugState?.() || null;
-    const target = Array.from(select?.options || []).find(option => option.value && option.value !== before?.source?.assetId);
-    if (!target) return { attempted: false, reason: 'no alternate indexed source' };
+    const requestedSourceAssetId = ${JSON.stringify(requestedSourceAssetId)};
+    const target = requestedSourceAssetId
+      ? Array.from(select?.options || []).find(option => option.value === requestedSourceAssetId)
+      : Array.from(select?.options || []).find(option => option.value && option.value !== before?.source?.assetId);
+    if (!target) return {
+      attempted: false,
+      requestedAssetId: requestedSourceAssetId,
+      reason: requestedSourceAssetId ? 'requested indexed source missing' : 'no alternate indexed source',
+    };
     select.value = target.value;
     select.dispatchEvent(new Event('change', { bubbles: true }));
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -702,6 +734,9 @@ try {
       effectivePipelineId: after?.effectivePipelineId || null,
     };
   })()`);
+  if (requestedSourceAssetId && state.sourceSelectionExercise.effectiveAssetId !== requestedSourceAssetId) {
+    throw new Error(`Requested Crucible source did not become effective: ${JSON.stringify(state.sourceSelectionExercise)}`);
+  }
   if (state.sourceSelectionExercise.attempted && state.sourceSelectionExercise.effectiveAssetId !== state.sourceSelectionExercise.requestedAssetId) {
     throw new Error(`Crucible source selection did not become effective: ${JSON.stringify(state.sourceSelectionExercise)}`);
   }
@@ -709,16 +744,21 @@ try {
   if (runtimeExceptions.length) throw new Error(`browser runtime exceptions: ${runtimeExceptions.join('; ')}`);
 
   if (fireFriendly) {
+    const expectedScheduler = expectedSchedulerForProfile(schedulerProfileId);
     phase = 'starting-friendly-firing';
     await evaluate(ws, `(() => {
-      const profile = document.getElementById('crucible-viewport-profile-select');
-      profile.value = 'cooperative-spn-gaussian';
-      profile.dispatchEvent(new Event('change', { bubbles: true }));
       const presentation = document.getElementById('crucible-viewport-presentation-select');
       presentation.value = '${requestedFirePresentation}';
       presentation.dispatchEvent(new Event('change', { bubbles: true }));
-      document.getElementById('crucible-viewport-fire-button').click();
-      return { profile: profile.value, presentation: presentation.value };
+      window.__kaminosWitnessFiringPromise = window.runKilnRouteBenchRoute(
+        'sharp-image-to-splat-live-v0',
+        ${JSON.stringify(schedulerProfileId)},
+        {
+          firePresentationMode: ${JSON.stringify(requestedFirePresentation)},
+          profileLabel: ${JSON.stringify(schedulerProfileLabel)},
+        },
+      );
+      return { schedulerProfileId: ${JSON.stringify(schedulerProfileId)}, presentation: presentation.value };
     })()`);
     if (captureInFlight) {
       phase = 'installing-in-flight-hybrid-settle-monitor';
@@ -983,8 +1023,15 @@ try {
     if (expectedSharpRevision && state.fullRoute.effectiveSharpRevision !== expectedSharpRevision) {
       throw new Error(`Friendly firing used unexpected SHARP revision: ${state.fullRoute.effectiveSharpRevision}`);
     }
-    if (state.fullRoute.effectiveScheduler?.cpuChunkItems !== 16384 || state.fullRoute.effectiveScheduler?.routeTailYieldMs !== 3) {
-      throw new Error(`Friendly firing did not use cooperative compose/PLY settings: ${JSON.stringify(state.fullRoute.effectiveScheduler)}`);
+    for (const [field, requestedValue] of Object.entries(expectedScheduler)) {
+      if (state.fullRoute.requestedScheduler?.[field] !== requestedValue
+        || state.fullRoute.effectiveScheduler?.[field] !== requestedValue) {
+        throw new Error(`Friendly firing did not preserve requested/effective scheduler field ${field}=${JSON.stringify(requestedValue)}: ${JSON.stringify({
+          schedulerProfileId,
+          requestedScheduler: state.fullRoute.requestedScheduler,
+          effectiveScheduler: state.fullRoute.effectiveScheduler,
+        })}`);
+      }
     }
     if (state.fullRoute.routeTailCheckpointEvents?.prep < 6 || state.fullRoute.routeTailCheckpointEvents?.gaussian < 1) {
       throw new Error(`Friendly firing is missing prep or Gaussian route-tail checkpoints: ${JSON.stringify(state.fullRoute.routeTailCheckpointEvents)}`);

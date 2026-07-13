@@ -120,6 +120,26 @@ def test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_e
     assert friendly_scheduler["routeTailYieldMs"] == 3
 
 
+def test_fixed_16ms_donation_profile_changes_only_post_drain_donation():
+    baseline = resolve_sharp_scheduler_profile("cooperative-spn-gaussian")
+    fixed = resolve_sharp_scheduler_profile("cooperative-fixed-16ms-donation")
+
+    assert fixed["id"] == "cooperative-fixed-16ms-donation"
+    assert fixed["operatorVisible"] is False
+    baseline_scheduler = json.loads(baseline["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
+    fixed_scheduler = json.loads(fixed["env"]["KAMINOS_SHARP_WEBGPU_SCHEDULER"])
+    assert fixed_scheduler == {
+        **baseline_scheduler,
+        "yieldMs": 16,
+        "gaussianPhaseYieldMs": 16,
+        "routeTailYieldMs": 16,
+    }
+    assert fixed_scheduler["spnPatchChunkSize"] == 1
+    assert fixed_scheduler["vitBlockChunkSize"] == 2
+    assert fixed_scheduler["waitForSubmittedWorkDone"] is True
+    assert fixed_scheduler["cpuChunkItems"] == 16384
+
+
 def test_sharp_breathing_room_unknown_profile_fails_instead_of_falling_back():
     try:
         resolve_sharp_scheduler_profile("friendly-but-typo")
@@ -786,6 +806,11 @@ if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
     test_forge_host_registry_snapshot_fallback_is_not_live()
+    test_sharp_breathing_room_profiles_are_named_operator_routes_with_explicit_env()
+    test_fixed_16ms_donation_profile_changes_only_post_drain_donation()
+    test_sharp_breathing_room_unknown_profile_fails_instead_of_falling_back()
+    test_pipeline_witness_env_for_payload_preserves_requested_scheduler_profile()
+    test_image_inbox_webp_read_serves_bytes_without_json_fallback()
     test_volume_only_scene_save_name_uses_scene_fallback()
     test_greenroom_job_display_metadata_promotes_receipt_identity_over_job_id()
     test_greenroom_output_display_metadata_uses_job_context_for_hostile_output_names()

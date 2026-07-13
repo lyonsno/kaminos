@@ -166,6 +166,40 @@ SHARP_SCHEDULER_PROFILES = {
             "unsupported": ["phaseChunkSize.vitBlock"],
         },
     },
+    "cooperative-fixed-16ms-donation": {
+        "id": "cooperative-fixed-16ms-donation",
+        "operatorVisible": False,
+        "operatorLabel": "Fixed 16 ms donation test",
+        "label": "Cooperative SHARP with fixed 16 ms post-drain donation",
+        "scheduler": {
+            "mode": "cooperative",
+            "spnPatchChunkSize": 1,
+            "yieldMs": 16,
+            "waitForSubmittedWorkDone": True,
+            "gaussianPhaseYieldMs": 16,
+            "vitBlockChunkSize": 2,
+            "cpuChunkItems": 16384,
+            "routeTailYieldMs": 16,
+        },
+        "env": {
+            "KAMINOS_SHARP_WEBGPU_SCHEDULER": json.dumps({
+                "mode": "cooperative",
+                "spnPatchChunkSize": 1,
+                "yieldMs": 16,
+                "waitForSubmittedWorkDone": True,
+                "gaussianPhaseYieldMs": 16,
+                "vitBlockChunkSize": 2,
+                "cpuChunkItems": 16384,
+                "routeTailYieldMs": 16,
+            }, separators=(",", ":")),
+        },
+        "unsupportedFields": ["vitBlockChunkSize"],
+        "proofExpectation": {
+            "schedulerVerification": "observed-events-plus-boundary-assertions",
+            "comparisonRole": "fixed-post-drain-donation-experiment",
+            "unsupported": ["phaseChunkSize.vitBlock"],
+        },
+    },
 }
 
 

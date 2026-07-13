@@ -3,6 +3,30 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
+const schedulerExpectationSource = witness.match(
+  /function expectedSchedulerForProfile\([\s\S]*?\n}\n(?=\nfunction )/,
+);
+assert.ok(schedulerExpectationSource, 'witness must expose a testable scheduler expectation for each experimental run profile');
+const expectedSchedulerForProfile = vm.runInNewContext(`(${schedulerExpectationSource[0]})`);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(expectedSchedulerForProfile('cooperative-fixed-16ms-donation'))),
+  {
+    mode: 'cooperative',
+    spnPatchChunkSize: 1,
+    yieldMs: 16,
+    waitForSubmittedWorkDone: true,
+    gaussianPhaseYieldMs: 16,
+    vitBlockChunkSize: 2,
+    cpuChunkItems: 16384,
+    routeTailYieldMs: 16,
+  },
+  'fixed-boundary experiment must not change chunk granularity or silently inherit ordinary Friendly donations',
+);
+assert.throws(
+  () => expectedSchedulerForProfile('cooperative-typo'),
+  /Unsupported --scheduler-profile/,
+  'unknown scheduler profiles must fail before a GPU run instead of falling back',
+);
 const compactSummarySource = witness.match(
   /function compactWitnessSummary\([\s\S]*?\n}\n(?=\nfunction validateVolumeReleaseEvidence)/,
 );
@@ -315,6 +339,8 @@ for (const [pattern, message] of [
   [/--out/, 'Witness must let callers choose the screenshot path'],
   [/--report/, 'Witness must let callers choose the JSON report path'],
   [/--fire-friendly/, 'Witness must expose an explicit opt-in real Friendly firing mode'],
+  [/--scheduler-profile/, 'Witness must accept an explicit scheduler profile for adjacent route experiments'],
+  [/--source-asset-id/, 'Witness must accept an exact indexed source identity for adjacent route experiments'],
   [/--fire-presentation/, 'Witness must accept an explicit central fire presentation instead of inheriting a UI default'],
   [/--capture-in-flight/, 'Transient visual capture must be explicit so ordinary cadence witnesses remain unperturbed'],
   [/--in-flight-out/, 'Witness must let callers choose the transient hybrid screenshot path'],
@@ -328,10 +354,12 @@ for (const [pattern, message] of [
   [/crucible-worktable-stage/, 'Witness must verify the worktable stage is actually mounted'],
   [/sourceOptionCount/, 'Witness must prove the plate has real source choices'],
   [/sourceSelectionExercise/, 'Witness must prove changing the plate selector changes the effective shared source'],
+  [/requestedSourceAssetId[\s\S]*effectiveAssetId/, 'Witness must fail loud unless the requested source identity becomes effective'],
   [/backgroundHeartbeat/, 'Full-route witness mode must preserve the corrected heartbeat receipt'],
   [/foregroundKilnHeartbeat/, 'Full-route witness must preserve the exact foreground firing-window heartbeat'],
   [/validateRequestedFirePresentation/, 'Full-route witness must validate requested and effective fire presentation truth'],
   [/crucible-viewport-presentation-select/, 'Full-route witness must actuate the real central presentation selector'],
+  [/window\.runKilnRouteBenchRoute[\s\S]*schedulerProfileId/, 'Witness must invoke the requested hidden profile without adding it to the operator mode selector'],
   [/sharpDutyCorrelation/, 'Full-route witness must preserve the foreground-to-SHARP epoch correlation'],
   [/kaminos\.foreground-sharp-duty-correlation\.v0/, 'Full-route witness must require the correlation schema'],
   [/sampleRetention[\s\S]*uncapped/, 'Full-route witness must reject capped foreground samples'],
@@ -367,7 +395,8 @@ for (const [pattern, message] of [
   [/composePreparationIntervals/, 'Full-route witness must preserve all six bounded preparation intervals'],
   [/maxGaussianDutyMs/, 'Full-route witness must calculate the maximum observed Gaussian CPU duty'],
   [/maxGaussianDutyMs >= 50/, 'Full-route witness must reject a Gaussian CPU duty that misses the sub-50ms target'],
-  [/cpuChunkItems !== 16384/, 'Full-route witness must require the effective smaller Gaussian CPU chunk target'],
+  [/expectedSchedulerForProfile[\s\S]*cpuChunkItems:\s*16384/, 'Full-route witness must require the effective smaller Gaussian CPU chunk target'],
+  [/expectedSchedulerForProfile[\s\S]*effectiveScheduler/, 'Full-route witness must compare every requested scheduler field against effective route evidence'],
   [/ply-data-allocation/, 'Full-route witness must require the PLY data allocation interval'],
   [/gaussian-activation-setup/, 'Full-route witness must require the activation setup interval'],
   [/allocation\.bytes > 0/, 'PLY allocation interval must carry a positive actual byte count'],

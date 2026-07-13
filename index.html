@@ -13765,7 +13765,7 @@ async function beginSharpBreathingRoomKilnFire({
   pipelineId,
   firingId,
   firePresentationMode = 'full-volume',
-  requireSharpDutyCorrelation = profileId === 'cooperative-spn-gaussian',
+  requireSharpDutyCorrelation = profileId !== 'baseline-default',
 }) {
   const previousState = volumePrototype?.debugState?.() || null;
   const fireState = {
@@ -18028,7 +18028,7 @@ function classifyKilnNonLoadableResult({ firingEvidence = null, artifactPath = n
 
 async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
   const route = selectedKilnRouteBenchRoute(routeId);
-  const profileLabel = route.profileLabels?.[profileId] || profileId;
+  const profileLabel = options.profileLabel || route.profileLabels?.[profileId] || profileId;
   const source = kilnRouteBenchSelectedSource(route);
   const pipelineId = route.pipelineId;
   if (!source?.source) {
@@ -18066,7 +18066,7 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
     pipelineId,
     firingId: crucibleFiring.id,
     firePresentationMode: options.firePresentationMode || 'full-volume',
-    requireSharpDutyCorrelation: profileId === 'cooperative-spn-gaussian',
+    requireSharpDutyCorrelation: profileId !== 'baseline-default',
   });
   if (!foregroundKilnStartAllowsPipeline(kilnFire)) {
     const failedRun = {
@@ -18125,7 +18125,7 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
     });
     kilnFireEnded = true;
     const firingEvidence = classifyKilnFiringEvidence({
-      required: profileId === 'cooperative-spn-gaussian',
+      required: profileId !== 'baseline-default',
       firingId: crucibleFiring.id,
       heartbeat: run?.foregroundKilnHeartbeat || null,
       requiredPresentationMode: options.firePresentationMode === 'hybrid-smoke-preview'

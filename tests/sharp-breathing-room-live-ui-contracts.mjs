@@ -124,8 +124,8 @@ assert.match(
 );
 assert.match(
   index,
-  /requireSharpDutyCorrelation:\s*profileId\s*===\s*'cooperative-spn-gaussian'/,
-  'The real Friendly firing must require the foreground/SHARP shared-clock duty correlation',
+  /requireSharpDutyCorrelation:\s*profileId\s*!==\s*'baseline-default'/,
+  'Every cooperative firing must require the foreground/SHARP shared-clock duty correlation',
 );
 assert.match(
   index,
