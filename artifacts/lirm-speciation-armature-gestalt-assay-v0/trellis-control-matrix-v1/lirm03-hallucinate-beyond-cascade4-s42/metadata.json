@@ -1,0 +1,19 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_cascade_steps",
+  "job_id": "4914f073a999",
+  "input_path": "/private/tmp/kaminos-molten-lirm-speciation-armature-0707/artifacts/lirm-speciation-armature-gestalt-assay-v0/imagegen-basin-map-v0/lirm03-hallucinate-beyond/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "42",
+    "steps": "4",
+    "target_faces": "200000",
+    "texture_size": "1024",
+    "resolution": "512"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1783941861.083808,
+  "duration_s": 96.3
+}
