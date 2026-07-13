@@ -189,6 +189,68 @@ assert.notEqual(
   'public product identity includes the effective coarse consolidation configuration',
 );
 
+const broadFineRequest = {
+  ...denseTailRequest,
+  fineSelector: () => true,
+  fineMassFraction: 0.5,
+};
+const ungatedFine = compileSmokeFieldHierarchy(broadFineRequest);
+const massGatedFine = compileSmokeFieldHierarchy({
+  ...broadFineRequest,
+  fineOccupancyMassRatio: 0.8,
+});
+assert.equal(massGatedFine.fineOccupancy.identity, 'mass-relative-fine-occupancy-v0');
+assert.equal(massGatedFine.fineOccupancy.enabled, true);
+assert.equal(massGatedFine.fineOccupancy.selectorSelectedFineBinCount, ungatedFine.fineSplats.length);
+assert.equal(massGatedFine.fineOccupancy.emittedFineBinCount, massGatedFine.fineSplats.length);
+assert.ok(
+  massGatedFine.fineSplats.length < ungatedFine.fineSplats.length * 0.25,
+  'mass-relative occupancy removes the domain-wide low-mass fine tail without a count cap',
+);
+assert.ok(massGatedFine.fineOccupancy.occupancyTransferredSourceExtinctionMass > 0);
+assert.ok(Math.abs(
+  massGatedFine.fineOccupancy.selectorSelectedSourceExtinctionMass
+    - massGatedFine.fineOccupancy.emittedFineSourceExtinctionMass
+    - massGatedFine.fineOccupancy.occupancyTransferredSourceExtinctionMass,
+) < 1e-8, 'fine source mass is either emitted or transferred back to coarse transport');
+assert.ok(Math.abs(
+  massGatedFine.accounting.sourceExtinctionMass - massGatedFine.accounting.representedExtinctionMass,
+) < 1e-8);
+assert.equal(massGatedFine.accounting.rejectedExtinctionMass, 0);
+assert.equal(ungatedFine.fineOccupancy.enabled, false, 'default ratio preserves pre-gate fine selection');
+assert.equal(ungatedFine.fineOccupancy.emittedFineBinCount, ungatedFine.fineSplats.length);
+assert.notEqual(massGatedFine.identity, ungatedFine.identity, 'fine occupancy ratio enters product identity');
+assert.deepEqual(
+  compileSmokeFieldHierarchy({ ...broadFineRequest, fineOccupancyMassRatio: 0.8 }).fineSplats,
+  massGatedFine.fineSplats,
+  'mass-relative fine occupancy and output order are deterministic',
+);
+const massGatedFineNext = compileSmokeFieldHierarchy({
+  ...broadFineRequest,
+  field: makeDenseTailField(16, 1),
+  sourceIdentity: 'sha256:dense-tail-fine-frame-97',
+  slotIdentity: { ...broadFineRequest.slotIdentity, historySlot: 1, slotWriteTick: 97 },
+  fineOccupancyMassRatio: 0.8,
+});
+const sharedMassGatedFineKeys = massGatedFine.temporalKeys.fine.filter(key => massGatedFineNext.temporalKeys.fine.includes(key));
+assert.ok(
+  sharedMassGatedFineKeys.length >= massGatedFine.temporalKeys.fine.length * 0.8,
+  'mass-relative fine occupancy retains stable spatial keys across adjacent phases',
+);
+const highOccupancyGrid = 52;
+assert.doesNotThrow(
+  () => compileSmokeFieldHierarchy({
+    ...broadFineRequest,
+    grid: highOccupancyGrid,
+    field: makeDenseTailField(highOccupancyGrid),
+    fineBlockSize: 1,
+    coarseBlockSize: 13,
+    fineSelector: () => false,
+    fineOccupancyMassRatio: 0.8,
+  }),
+  'fine occupancy thresholding must not spread occupied bins into the JavaScript argument stack',
+);
+
 const overflow = compileSmokeFieldHierarchy({ ...baseRequest, capacity: 2 });
 assert.equal(overflow.capacity.status, 'capacity-overflow-untruncated');
 assert.equal(overflow.capacity.outputWasTruncated, false);
@@ -206,6 +268,10 @@ assert.throws(
 assert.throws(
   () => compileSmokeFieldHierarchy({ ...baseRequest, field: new Float32Array(baseRequest.field.length) }),
   /blank smoke/i,
+);
+assert.throws(
+  () => compileSmokeFieldHierarchy({ ...baseRequest, fineOccupancyMassRatio: 1.01 }),
+  /fineOccupancyMassRatio/i,
 );
 
 console.log('smoke splat field hierarchy contracts passed');
