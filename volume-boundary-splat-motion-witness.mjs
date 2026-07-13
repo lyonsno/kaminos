@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
-import { inflateSync as zlibInflateSync } from 'node:zlib';
+import { deflateSync as zlibDeflateSync, inflateSync as zlibInflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.boundary-splat-motion-witness.v0';
 const ALIGNED_BUDGET_PAIR_SCHEMA = 'kaminos.volume.boundary-splat-aligned-budget-pair.v0';
@@ -686,7 +686,7 @@ async function captureAlignedBudgetSequence(config) {
     mkdirSync(frameDir, { recursive: true });
     const budgetCaptures = [];
     for (const budget of alignedBudgetPair) {
-      budgetCaptures.push(await captureRenderer({
+      budgetCaptures.push(await captureAlignedBudgetRendererReadback({
         frameDir,
         frameIndex,
         scaleSet,
@@ -696,7 +696,7 @@ async function captureAlignedBudgetSequence(config) {
         boundarySplatCandidateBudget: budget,
       }));
     }
-    const raymarch = await captureRenderer({
+    const raymarch = await captureAlignedBudgetRendererReadback({
       frameDir,
       frameIndex,
       scaleSet,
@@ -747,6 +747,145 @@ async function captureAlignedBudgetSequence(config) {
   };
   addAlignedBudgetMotionEnergy(sequence);
   return sequence;
+}
+
+async function captureAlignedBudgetRendererReadback({
+  frameDir,
+  frameIndex,
+  scaleSet,
+  camera,
+  requestedRenderer,
+  boundarySplatMode,
+  boundarySplatCandidateBudget = null,
+}) {
+  const controlOverrides = { boundarySplatMode };
+  if (boundarySplatCandidateBudget) controlOverrides.boundarySplatCandidateBudget = boundarySplatCandidateBudget;
+  const readbackEval = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const proto = window.__kaminosVolumePrototype;
+      const before = proto?.debugState?.().controls || {};
+      proto.setControls({ ...before, ...${JSON.stringify(controlOverrides)}, renderScale: 1 });
+      return proto.sampleFrame({
+        advanceSim: false,
+        now: ${JSON.stringify(scaleSet.fixedNowMs)},
+        includeRgba: true,
+        sameStateCaptureId: ${JSON.stringify(scaleSet.sameStateCaptureId)},
+        baseFrameCount: ${JSON.stringify(scaleSet.baseFrameCount)},
+        baseSimStepCount: ${JSON.stringify(scaleSet.baseSimStepCount)}
+      }).finally(() => proto.setControls(before));
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const sample = readbackEval.result.value;
+  if (sample?.ok !== true || sample.sampleAuthority !== 'render-only-frozen-sim-state') {
+    throw new Error(`aligned-budget native readback failed for ${requestedRenderer}: ${JSON.stringify(sample)}`);
+  }
+  if (!sample.image || !Array.isArray(sample.image.rgba) || sample.image.rgba.length !== sample.image.width * sample.image.height * 4) {
+    throw new Error(`aligned-budget native readback missing rgba image for ${requestedRenderer}: ${JSON.stringify({
+      width: sample.image?.width,
+      height: sample.image?.height,
+      rgbaLength: sample.image?.rgba?.length,
+    })}`);
+  }
+  const imagePath = resolve(frameDir, `${String(frameIndex + 1).padStart(3, '0')}-${slug(requestedRenderer)}.native-readback.png`);
+  writeRgbaPng(imagePath, sample.image.width, sample.image.height, sample.image.rgba);
+  const imageBuffer = readFileSync(imagePath);
+  const isSplat = boundarySplatMode !== 'off';
+  const selectorCostProfile = isSplat ? sample.boundarySplatSelectorCostProfile ?? null : null;
+  const gpuProfile = isSplat ? sample.boundarySplatGpuProfile ?? null : null;
+  const selectorGpuMs = Number(selectorCostProfile?.selectorGpuMs ?? 0);
+  const splatRasterMs = Number(gpuProfile?.stages?.splatRaster?.ms ?? 0);
+  const capture = {
+    requestedRenderer,
+    effectiveRenderer: sample.volumeReconstructionStyle,
+    fallbackReason: sample.boundarySplatFallbackReason ?? null,
+    requestedRoute,
+    effectiveRoute: sample.effectiveRoute,
+    rendererIdentity: sample.boundarySplatRendererIdentity || (isSplat ? SPLAT_RENDERER : sample.volumeReconstructionStyle),
+    appliedModelIdentity: sample.boundarySplatAttributeModelIdentity ?? null,
+    sourceAuthority: sample.boundarySplatSourceAuthority || SOURCE_AUTHORITY,
+    boundarySplatInstanceDescriptorIdentity: isSplat ? sample.boundarySplatInstanceDescriptorIdentity ?? null : null,
+    boundarySplatRequestedInstanceCount: isSplat ? sample.boundarySplatRequestedInstanceCount ?? null : null,
+    boundarySplatSourceCandidateCount: isSplat ? sample.boundarySplatSourceCandidateCount ?? null : null,
+    boundarySplatSelectorPolicyIdentity: isSplat ? sample.boundarySplatSelectorPolicyIdentity ?? null : null,
+    boundarySplatRequestedCandidateBudget: isSplat ? sample.boundarySplatRequestedCandidateBudget ?? null : null,
+    boundarySplatEffectiveCandidateBudget: isSplat ? sample.boundarySplatEffectiveCandidateBudget ?? null : null,
+    boundarySplatSelectedCandidateCount: isSplat ? sample.boundarySplatSelectedCandidateCount ?? null : null,
+    boundarySplatSelectorCostProfile: selectorCostProfile,
+    boundarySplatGpuProfile: gpuProfile,
+    selectorGpuMs: isSplat && Number.isFinite(selectorGpuMs) ? selectorGpuMs : null,
+    splatRasterMs: isSplat && Number.isFinite(splatRasterMs) ? splatRasterMs : null,
+    selectorPlusRasterMs: isSplat && Number.isFinite(selectorGpuMs) && Number.isFinite(splatRasterMs) ? selectorGpuMs + splatRasterMs : null,
+    boundarySplatPhaseSourceCount: isSplat ? sample.boundarySplatPhaseSourceCount ?? null : null,
+    phaseMode: isSplat ? sample.boundarySplatPhaseMode ?? null : null,
+    phaseModeIdentity: isSplat ? sample.boundarySplatPhaseModeIdentity ?? null : null,
+    boundarySplatPhaseStride: isSplat ? sample.boundarySplatPhaseStride ?? null : null,
+    boundarySplatHistoryDepth: isSplat ? sample.boundarySplatHistoryDepth ?? null : null,
+    boundarySplatHistoryFrameStride: isSplat ? sample.boundarySplatHistoryFrameStride ?? null : null,
+    boundarySplatEffectiveHistoryWindowFrames: isSplat ? sample.boundarySplatEffectiveHistoryWindowFrames ?? null : null,
+    phaseSourceIdentity: isSplat ? sample.boundarySplatPhaseSourceIdentity ?? null : null,
+    phaseSources: isSplat ? sample.boundarySplatPhaseSources ?? null : null,
+    instanceDescriptors: isSplat ? sample.boundarySplatInstanceDescriptors ?? null : null,
+    incrementalInstanceCost: isSplat ? sample.boundarySplatIncrementalInstanceCost ?? null : null,
+    boundarySplatCandidateCount: isSplat ? sample.boundarySplatCandidateCount ?? null : null,
+    boundarySplatInstanceCount: isSplat ? sample.boundarySplatInstanceCount ?? null : null,
+    boundarySplatOverflowCount: isSplat ? sample.boundarySplatOverflowCount ?? null : null,
+    boundarySplatCountAuthority: isSplat ? sample.boundarySplatCountAuthority ?? null : null,
+    boundarySplatCandidateCopyBytes: isSplat ? sample.boundarySplatCopyBytesThisFrame ?? null : null,
+    boundarySplatCandidateCopyDisposition: isSplat ? sample.boundarySplatCopyDisposition ?? null : null,
+    nativeReadbackAuthority: 'aligned-budget-native-gpu-readback-v0',
+    captureAuthority: 'native-gpu-readback',
+    image: {
+      path: imagePath,
+      basename: basename(imagePath),
+      sha256: sha256(imageBuffer),
+      authority: 'gpu-frame-texture-rgba8-readback',
+      metrics: measureScreenshot(imageBuffer),
+      width: sample.image.width,
+      height: sample.image.height,
+    },
+    camera,
+    canvasCapture: {
+      sampleAuthority: sample.sampleAuthority,
+      imageAuthority: 'gpu-frame-texture-rgba8-readback',
+      sameStateCaptureId: sample.sameStateCaptureId,
+      baseFrameCount: sample.baseFrameCount,
+      baseSimStepCount: sample.baseSimStepCount,
+      frameCount: sample.frameCount,
+      simStepCount: sample.simStepCount,
+      renderScale: sample.renderScale,
+      renderWidth: sample.renderWidth,
+      renderHeight: sample.renderHeight,
+      backend: sample.backend,
+      boundarySidecarIdentity: sample.boundarySidecarIdentity,
+      boundarySidecarAuthority: sample.boundarySidecarAuthority,
+      boundarySidecarSource: sample.boundarySidecarSource,
+      boundarySplatMode: sample.boundarySplatMode,
+      boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity,
+      boundarySplatInstanceDescriptorIdentity: sample.boundarySplatInstanceDescriptorIdentity,
+      boundarySplatRequestedInstanceCount: sample.boundarySplatRequestedInstanceCount,
+      boundarySplatRequestedCandidateBudget: sample.boundarySplatRequestedCandidateBudget,
+      boundarySplatEffectiveCandidateBudget: sample.boundarySplatEffectiveCandidateBudget,
+      boundarySplatSelectedCandidateCount: sample.boundarySplatSelectedCandidateCount,
+      boundarySplatSelectorPolicyIdentity: sample.boundarySplatSelectorPolicyIdentity,
+      boundarySplatSelectorCostProfile: sample.boundarySplatSelectorCostProfile,
+      boundarySplatGpuProfile: sample.boundarySplatGpuProfile,
+      boundarySplatSourceCandidateCount: sample.boundarySplatSourceCandidateCount,
+      boundarySplatPhaseSourceCount: sample.boundarySplatPhaseSourceCount,
+      phaseMode: sample.boundarySplatPhaseMode,
+      phaseModeIdentity: sample.boundarySplatPhaseModeIdentity,
+      boundarySplatPhaseStride: sample.boundarySplatPhaseStride,
+      boundarySplatHistoryDepth: sample.boundarySplatHistoryDepth,
+      boundarySplatHistoryFrameStride: sample.boundarySplatHistoryFrameStride,
+      boundarySplatEffectiveHistoryWindowFrames: sample.boundarySplatEffectiveHistoryWindowFrames,
+      phaseSourceIdentity: sample.boundarySplatPhaseSourceIdentity,
+      incrementalInstanceCost: sample.boundarySplatIncrementalInstanceCost,
+    },
+  };
+  validateCapture(capture);
+  return capture;
 }
 
 async function captureRenderer({
@@ -1365,6 +1504,48 @@ function interpolatePose(from, to, t) {
     position: from.position.map((value, index) => value + (to.position[index] - value) * t),
     target: from.target.map((value, index) => value + (to.target[index] - value) * t),
   };
+}
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const typeBuf = Buffer.from(type, 'ascii');
+  const out = Buffer.alloc(12 + data.length);
+  out.writeUInt32BE(data.length, 0);
+  typeBuf.copy(out, 4);
+  data.copy(out, 8);
+  out.writeUInt32BE(crc32(Buffer.concat([typeBuf, data])), 8 + data.length);
+  return out;
+}
+
+function writeRgbaPng(path, width, height, rgba) {
+  const stride = width * 4;
+  const raw = Buffer.alloc((stride + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    raw[y * (stride + 1)] = 0;
+    Buffer.from(rgba.slice(y * stride, (y + 1) * stride)).copy(raw, y * (stride + 1) + 1);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlibDeflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+  writeFileSync(path, png);
 }
 
 function parsePngRgba(buffer) {

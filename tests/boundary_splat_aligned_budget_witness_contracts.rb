@@ -35,6 +35,20 @@ class BoundarySplatAlignedBudgetWitnessContracts < Minitest::Test
     assert_match(/MIXED_CURRENT_AND_LIVE_HISTORY_PHASE_SOURCE\s*=\s*'mixed-current-and-live-history-offset'/, @witness)
   end
 
+  def test_aligned_pair_uses_native_gpu_readback_not_cdp_screenshot
+    aligned_sequence = @witness[/async function captureAlignedBudgetSequence[\s\S]*?\n}\n\nasync function captureAlignedBudgetRendererReadback/, 0]
+    refute_nil aligned_sequence
+    assert_match(/captureAlignedBudgetRendererReadback/, @witness)
+    assert_match(/sampleFrame\(\{[\s\S]*advanceSim:\s*false[\s\S]*includeRgba:\s*true/, @witness)
+    assert_match(/gpu-frame-texture-rgba8-readback/, @witness)
+    assert_match(/writeRgbaPng/, @witness)
+    assert_match(/nativeReadbackAuthority/, @witness)
+    assert_match(/aligned-budget-native-gpu-readback-v0/, @witness)
+    assert_match(/captureAuthority:\s*'native-gpu-readback'/, @witness)
+    refute_match(/captureRenderer/, aligned_sequence)
+    refute_match(/Page\.captureScreenshot/, aligned_sequence)
+  end
+
   def test_pair_reports_quality_loss_and_rejects_false_closure
     assert_match(/budgetQualityComparisons/, @witness)
     assert_match(/retainedLightRatio/, @witness)
