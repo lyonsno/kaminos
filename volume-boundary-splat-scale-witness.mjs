@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -28,11 +29,12 @@ const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const warmupSamples = Math.max(0, Math.floor(Number(args.get('--warmup-samples') || 3)));
 const steadySamples = Math.max(1, Math.floor(Number(args.get('--steady-samples') || 12)));
 const browserContinuity = String(args.get('--browser-continuity') || 'unverified-existing');
-const browserProfilePath = String(args.get('--browser-profile') || '');
+const requestedBrowserProfilePath = String(args.get('--browser-profile') || '');
 const runStartedAt = new Date().toISOString();
 
 let ws = null;
 let browserPageId = null;
+let browserProcessIdentity = null;
 let finalTargetReachable = false;
 let failurePhase = 'startup';
 const lastTrustworthyEvidence = {};
@@ -42,7 +44,16 @@ try {
   if (!BROWSER_CONTINUITY_MODES.has(browserContinuity)) {
     throw new Error(`invalid --browser-continuity ${JSON.stringify(browserContinuity)}`);
   }
-  if (!browserProfilePath) throw new Error('missing --browser-profile');
+  browserProcessIdentity = discoverBrowserProcessIdentity(port);
+  if (
+    requestedBrowserProfilePath
+    && resolve(requestedBrowserProfilePath) !== resolve(browserProcessIdentity.browserProfilePath)
+  ) {
+    throw new Error(`browser-profile-disagreement:${JSON.stringify({
+      requested: requestedBrowserProfilePath,
+      effective: browserProcessIdentity.browserProfilePath,
+    })}`);
+  }
   mkdirSync(outDir, { recursive: true });
   failurePhase = 'connect-existing-browser';
   const version = await cdpFetch('/json/version');
@@ -131,7 +142,13 @@ try {
       pageId: page.id,
       pageUrl: effectivePageUrl,
       browserContinuity,
-      browserProfilePath,
+      browserProcessId: browserProcessIdentity.browserProcessId,
+      browserProfilePath: browserProcessIdentity.browserProfilePath,
+      browserProfileAuthority: browserProcessIdentity.authority,
+      requestedBrowserProfilePath: requestedBrowserProfilePath || null,
+      requestedEffectiveProfileAgreement: requestedBrowserProfilePath
+        ? resolve(requestedBrowserProfilePath) === resolve(browserProcessIdentity.browserProfilePath)
+        : null,
       sameBrowserAuthority: 'measurement-run-only',
       finalTargetReachable,
       disposition: finalTargetReachable ? 'preserved-open' : 'target-unreachable',
@@ -199,7 +216,10 @@ try {
       mode: 'connected-existing',
       port,
       browserContinuity,
-      browserProfilePath,
+      browserProcessId: browserProcessIdentity?.browserProcessId ?? null,
+      browserProfilePath: browserProcessIdentity?.browserProfilePath ?? null,
+      browserProfileAuthority: browserProcessIdentity?.authority ?? null,
+      requestedBrowserProfilePath: requestedBrowserProfilePath || null,
       sameBrowserAuthority: 'measurement-run-only',
       finalTargetReachable,
       disposition: finalTargetReachable ? 'preserved-open' : 'target-unreachable-or-unobserved',
@@ -237,6 +257,29 @@ function parseArgs(argv) {
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+}
+
+function discoverBrowserProcessIdentity(chromePort) {
+  const rows = execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' }).split('\n');
+  const marker = `--remote-debugging-port=${chromePort}`;
+  const parent = rows
+    .map(row => row.match(/^\s*(\d+)\s+(\d+)\s+(.+)$/))
+    .filter(Boolean)
+    .map(match => ({ pid: Number(match[1]), ppid: Number(match[2]), command: match[3] }))
+    .find(process => process.command.includes(marker)
+      && process.command.includes('Google Chrome')
+      && !process.command.includes('--type='));
+  if (!parent) throw new Error(`browser-process-not-found-for-cdp-port:${chromePort}`);
+  const profileMatch = parent.command.match(/--user-data-dir=(?:"([^"]+)"|'([^']+)'|(\S+))/);
+  const browserProfilePath = profileMatch?.[1] || profileMatch?.[2] || profileMatch?.[3] || null;
+  if (!browserProfilePath) throw new Error(`browser-profile-not-found-for-process:${parent.pid}`);
+  return {
+    browserProcessId: parent.pid,
+    browserParentProcessId: parent.ppid,
+    browserProfilePath,
+    chromePort,
+    authority: 'effective-os-process-command-line',
+  };
 }
 
 async function cdpFetch(path) {
