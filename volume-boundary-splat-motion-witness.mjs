@@ -27,12 +27,14 @@ const SHARED_CURRENT_PHASE_SOURCE = 'shared-current-control';
 const LIVE_HISTORY_PHASE_SOURCE = 'live-history-offset';
 const SAME_HISTORY_SLOT_PHASE_SOURCE = 'same-history-slot-control';
 const AGE_SWEEP_PHASE_SOURCE = 'age-sweep-history';
+const MIXED_CURRENT_AND_LIVE_HISTORY_PHASE_SOURCE = 'mixed-current-and-live-history-offset';
 const PHASE_LAB_MODES = ['shared-current', 'same-history-slot', 'offset-history', 'age-sweep'];
 const PHASE_SOURCE_IDENTITIES = new Set([
   SHARED_CURRENT_PHASE_SOURCE,
   LIVE_HISTORY_PHASE_SOURCE,
   SAME_HISTORY_SLOT_PHASE_SOURCE,
   AGE_SWEEP_PHASE_SOURCE,
+  MIXED_CURRENT_AND_LIVE_HISTORY_PHASE_SOURCE,
 ]);
 
 const args = parseArgs(process.argv.slice(2));
@@ -235,7 +237,7 @@ try {
   }
 } catch (error) {
   const failureReport = {
-    schema: SCHEMA,
+    schema: alignedBudgetPair ? ALIGNED_BUDGET_PAIR_SCHEMA : SCHEMA,
     status: 'failed',
     failurePhase,
     error: error?.stack || error?.message || String(error),

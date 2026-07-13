@@ -32,6 +32,7 @@ class BoundarySplatAlignedBudgetWitnessContracts < Minitest::Test
     assert_match(/selectorPlusRasterMs/, @witness)
     assert_match(/splatRasterMs/, @witness)
     assert_match(/selectorGpuMs/, @witness)
+    assert_match(/MIXED_CURRENT_AND_LIVE_HISTORY_PHASE_SOURCE\s*=\s*'mixed-current-and-live-history-offset'/, @witness)
   end
 
   def test_pair_reports_quality_loss_and_rejects_false_closure
