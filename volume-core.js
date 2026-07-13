@@ -5031,8 +5031,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     active: false,
     width: 0,
     height: 0,
+    cssWidth: 0,
+    cssHeight: 0,
     displayWidth: 0,
     displayHeight: 0,
+    nativeDevicePixelRatio: 1,
+    canvasDevicePixelRatio: 1,
     viewportSizeFallback: false,
     renderWidth: 0,
     renderHeight: 0,
@@ -6931,7 +6935,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const useFallbackSize = !(rect.width > 0 && rect.height > 0);
     const cssWidth = useFallbackSize ? fallbackWidth : rect.width;
     const cssHeight = useFallbackSize ? fallbackHeight : rect.height;
-    const dpr = 1;
+    const nativeDevicePixelRatio = Math.max(1, Number(win?.devicePixelRatio) || 1);
+    const canvasDevicePixelRatio = boundarySplatRequested() ? nativeDevicePixelRatio : 1;
+    const dpr = canvasDevicePixelRatio;
     const displayWidth = Math.max(1, Math.floor(cssWidth * dpr));
     const displayHeight = Math.max(1, Math.floor(cssHeight * dpr));
     const renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
@@ -6947,8 +6953,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       canvas.style.height = '100%';
       state.width = renderWidth;
       state.height = renderHeight;
+      state.cssWidth = cssWidth;
+      state.cssHeight = cssHeight;
       state.displayWidth = displayWidth;
       state.displayHeight = displayHeight;
+      state.nativeDevicePixelRatio = nativeDevicePixelRatio;
+      state.canvasDevicePixelRatio = canvasDevicePixelRatio;
       state.viewportSizeFallback = useFallbackSize;
       state.renderWidth = renderWidth;
       state.renderHeight = renderHeight;
@@ -7947,8 +7957,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.simCostLedger;
   }
 
-  function encodeSim(encoder) {
-    const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
+  function encodeSim(encoder, options = {}) {
+    const pass = encoder.beginComputePass({
+      label: 'kaminos fluid sim pass',
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+    });
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, bindGroups[currentFluid]);
     const workgroups = Math.ceil(gridSize / 4);
@@ -8092,7 +8105,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateSimCostLedger({ majorantBuiltThisFrame: true });
   }
 
-  function encodeBoundarySidecar(encoder) {
+  function encodeBoundarySidecar(encoder, options = {}) {
     const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     state.boundarySidecarSource = sourceName;
@@ -8110,7 +8123,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
       return;
     }
-    const pass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} bake pass` });
+    const pass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} bake pass`,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+    });
     pass.setPipeline(boundarySidecarBuildPipeline);
     pass.setBindGroup(0, boundarySidecarReadBindGroups[currentFluid]);
     pass.setBindGroup(3, boundarySidecarWriteBindGroup);
@@ -8230,7 +8246,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const workgroups = Math.ceil(gridSize / 4);
     compactPass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     compactPass.end();
-    const finalizePass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize pass` });
+    const finalizePass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize pass`,
+      ...(hooks.finalizeTimestampWrites ? { timestampWrites: hooks.finalizeTimestampWrites } : {}),
+    });
     finalizePass.setPipeline(boundarySplatFinalizePipeline);
     finalizePass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
     finalizePass.dispatchWorkgroups(1);
@@ -8245,10 +8264,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return true;
   }
 
-  function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline) {
+  function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline, options = {}) {
     if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
     const pass = encoder.beginRenderPass({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} canvas pass`,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
       colorAttachments: [{
         view,
         clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
@@ -8283,7 +8303,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!device?.features?.has?.('timestamp-query')) return false;
     if (typeof device.createQuerySet !== 'function') return false;
     const probeEncoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp availability probe` });
-    return typeof probeEncoder.writeTimestamp === 'function' && typeof probeEncoder.resolveQuerySet === 'function';
+    return typeof probeEncoder.beginComputePass === 'function' && typeof probeEncoder.resolveQuerySet === 'function';
+  }
+
+  function encodeBoundarySplatTimestampMarker(encoder, querySet, index, label) {
+    const pass = encoder.beginComputePass({
+      label,
+      timestampWrites: {
+        querySet,
+        endOfPassWriteIndex: index,
+      },
+    });
+    pass.end();
   }
 
   async function sampleBoundarySplatGpuProfile() {
@@ -8304,7 +8335,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }));
     }
 
-    const queryCount = 8;
+    const queryCount = 7;
     const querySet = device.createQuerySet({
       type: 'timestamp',
       count: queryCount,
@@ -8324,27 +8355,45 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ensureFrameTexture();
       device.pushErrorScope('validation');
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
-      const writeTimestamp = index => encoder.writeTimestamp(querySet, index);
-      writeTimestamp(0);
-      encodeSim(encoder);
-      writeTimestamp(1);
-      encodeBoundarySidecar(encoder);
-      writeTimestamp(2);
+      const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
+      encodeSim(encoder, {
+        timestampWrites: {
+          querySet,
+          beginningOfPassWriteIndex: 0,
+        },
+      });
+      writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
+      encodeBoundarySidecar(encoder, {
+        timestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 2,
+        },
+      });
       const splatsEncoded = encodeBoundarySplats(encoder, {
-        afterCompaction: () => writeTimestamp(3),
-        afterCandidateCopy: () => writeTimestamp(4),
-        afterIndirectSetup: () => writeTimestamp(5),
+        finalizeTimestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 3,
+        },
       });
       if (!splatsEncoded) {
         throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable');
       }
-      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline);
+      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
+        timestampWrites: {
+          querySet,
+          beginningOfPassWriteIndex: 4,
+          endOfPassWriteIndex: 5,
+        },
+      });
       if (!splatApplied) {
         throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-raster-unavailable');
       }
-      writeTimestamp(6);
-      encodeDraw(encoder, frameTexture.createView(), 'kaminos boundary splat matched raymarch timestamp pass', readbackPipeline);
-      writeTimestamp(7);
+      encodeDraw(encoder, frameTexture.createView(), 'kaminos boundary splat matched raymarch timestamp pass', readbackPipeline, {
+        timestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 6,
+        },
+      });
       encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
       encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
       device.queue.submit([encoder.finish()]);
@@ -8354,6 +8403,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const validationError = await device.popErrorScope();
       if (validationError) {
         throw new Error(validationError.message || String(validationError));
+      }
+      if (timestamps.some(value => value === 0n)) {
+        throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
+      }
+      for (let index = 1; index < timestamps.length; index += 1) {
+        if (timestamps[index] < timestamps[index - 1]) {
+          throw new Error(`timestamp-query-nonmonotonic:${Array.from(timestamps, value => value.toString()).join(',')}`);
+        }
       }
       const nsToMs = (endIndex, startIndex) => Number(timestamps[endIndex] - timestamps[startIndex]) / 1_000_000;
       const candidateCopyBytes = state.boundarySplatCopyBytesThisFrame ?? 0;
@@ -8366,14 +8423,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           simulation: makeBoundarySplatStage('sampled', nsToMs(1, 0)),
           sidecar: makeBoundarySplatStage('sampled', nsToMs(2, 1)),
           compaction: makeBoundarySplatStage('sampled', nsToMs(3, 2)),
-          candidateCopy: makeBoundarySplatStage('sampled', nsToMs(4, 3), {
+          candidateCopy: makeBoundarySplatStage('sampled', 0, {
             disposition: 'removed-full-capacity-copy',
             candidateCopyBytes,
           }),
-          indirectSetup: makeBoundarySplatStage('sampled', nsToMs(5, 4)),
-          splatRaster: makeBoundarySplatStage('sampled', nsToMs(6, 5)),
-          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(7, 6)),
-          total: makeBoundarySplatStage('sampled', nsToMs(7, 0)),
+          indirectSetup: makeBoundarySplatStage('sampled', nsToMs(4, 3)),
+          splatRaster: makeBoundarySplatStage('sampled', nsToMs(5, 4)),
+          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(6, 5)),
+          total: makeBoundarySplatStage('sampled', nsToMs(6, 0)),
         },
       }));
     } catch (error) {
@@ -8483,9 +8540,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
-  function encodeDraw(encoder, view, label, targetPipeline = pipeline) {
+  function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     const pass = encoder.beginRenderPass({
       label,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
       colorAttachments: [{
         view,
         clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
@@ -10208,8 +10266,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ok: true,
       width: state.width,
       height: state.height,
+      cssWidth: state.cssWidth,
+      cssHeight: state.cssHeight,
       displayWidth: state.displayWidth,
       displayHeight: state.displayHeight,
+      nativeDevicePixelRatio: state.nativeDevicePixelRatio,
+      canvasDevicePixelRatio: state.canvasDevicePixelRatio,
       renderWidth: state.renderWidth,
       renderHeight: state.renderHeight,
       renderScale: state.renderScale,

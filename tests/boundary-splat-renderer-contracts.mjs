@@ -35,6 +35,10 @@ assert.doesNotMatch(splatDrawFunction, /mapAsync|await/, 'live splat drawing mus
 
 assert.match(core, /encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)/, 'splat compaction runs after the current frame sidecar bake');
 assert.match(core, /boundarySplatRequested[\s\S]*encodeBoundarySplatDraw/, 'the opt-in route selects splat rasterization instead of silently falling back');
+assert.match(core, /const nativeDevicePixelRatio\s*=\s*Math\.max\(1,\s*Number\(win\?\.devicePixelRatio\)\s*\|\|\s*1\)/, 'renderer reads the physical display pixel ratio explicitly');
+assert.match(core, /const canvasDevicePixelRatio\s*=\s*boundarySplatRequested\(\)\s*\?\s*nativeDevicePixelRatio\s*:\s*1/, 'live splats rasterize at native device pixel ratio without changing the raymarch default');
+assert.match(core, /state\.canvasDevicePixelRatio\s*=\s*canvasDevicePixelRatio/, 'runtime state exposes the effective canvas pixel ratio used for splat rasterization');
+assert.match(core, /return \{\s*ok:\s*true,[\s\S]*cssWidth:\s*state\.cssWidth[\s\S]*nativeDevicePixelRatio:\s*state\.nativeDevicePixelRatio[\s\S]*canvasDevicePixelRatio:\s*state\.canvasDevicePixelRatio/, 'successful frame samples preserve CSS size and requested/effective device pixel ratios');
 assert.match(core, /sampleFrame[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*frameTexture\.createView\(\),\s*boundarySplatReadbackPipeline\)/, 'frozen witness renders the requested splat route instead of substituting raymarch');
 assert.match(core, /renderFrozenScaleToCanvas[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeBoundarySplats\(encoder\)[\s\S]*encodeBoundarySplatDraw\(encoder,\s*currentTexture\.createView\(\)\)/, 'controlled canvas capture renders the requested splat route instead of substituting raymarch');
 assert.match(core, /boundarySplatRendererIdentity:\s*boundarySplatEffectiveRendererIdentity\(/, 'runtime state reports the effective analytic or learned splat renderer identity');
@@ -52,10 +56,17 @@ assert.match(witness, /boundarySplatSourceAuthority:\s*sample\.boundarySplatSour
 assert.match(witness, /boundarySplatCandidateCount:\s*sample\.boundarySplatCandidateCount\s*\?\?\s*state\.boundarySplatCandidateCount/, 'witness preserves candidate-count evidence');
 assert.match(witness, /boundarySplatOverflowCount:\s*sample\.boundarySplatOverflowCount\s*\?\?\s*state\.boundarySplatOverflowCount/, 'witness preserves overflow evidence');
 assert.match(witness, /boundarySplatFallbackReason:\s*sample\.boundarySplatFallbackReason\s*\?\?\s*state\.boundarySplatFallbackReason/, 'witness preserves explicit splat fallback state');
+assert.match(witness, /cssWidth:\s*sample\.cssWidth\s*\?\?\s*state\.cssWidth/, 'witness preserves the CSS-pixel render extent');
+assert.match(witness, /nativeDevicePixelRatio:\s*sample\.nativeDevicePixelRatio\s*\?\?\s*state\.nativeDevicePixelRatio/, 'witness preserves the physical display pixel ratio');
+assert.match(witness, /canvasDevicePixelRatio:\s*sample\.canvasDevicePixelRatio\s*\?\?\s*state\.canvasDevicePixelRatio/, 'witness preserves the effective canvas pixel ratio');
 
 assert.match(core, /BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY\s*=\s*'boundary-splat-stage-gpu-timestamp-profile-v0'/, 'splat timing profile has a durable schema identity');
 assert.match(core, /boundarySplatTimestampStatus:\s*'(?:unsupported|available)'/, 'splat timing distinguishes unsupported timestamps from zero-time stages');
 assert.match(core, /timestamp-query/, 'splat timing explicitly requests WebGPU timestamp-query support when available');
+assert.match(core, /timestampWrites:\s*\{[\s\S]*querySet[\s\S]*endOfPassWriteIndex/, 'splat timing uses current pass-descriptor timestamp writes');
+assert.doesNotMatch(core, /encoder\.writeTimestamp/, 'splat timing does not depend on the removed command-encoder timestamp API');
+assert.match(core, /timestamps\.some\(value\s*=>\s*value\s*===\s*0n\)/, 'splat timing rejects incomplete timestamp query writes');
+assert.match(core, /timestamps\[index\]\s*<\s*timestamps\[index\s*-\s*1\]/, 'splat timing rejects nonmonotonic timestamp results');
 assert.match(core, /boundarySplatGpuProfile[\s\S]*simulation[\s\S]*sidecar[\s\S]*compaction[\s\S]*candidateCopy[\s\S]*indirectSetup[\s\S]*splatRaster[\s\S]*matchedRaymarchRaster[\s\S]*total/, 'splat profile names every required timing stage');
 assert.match(core, /boundarySplatCopyDisposition[\s\S]*removed-full-capacity-copy/, 'splat state records the full-capacity candidate-copy disposition');
 assert.match(core, /candidateCopyBytes[\s\S]*boundarySplatCopyBytesThisFrame/, 'splat profile records effective candidate-copy bytes');
