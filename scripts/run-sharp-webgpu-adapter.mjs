@@ -58,6 +58,8 @@ const downloadDir = outputDir ? join(outputDir, '.sharp-webgpu-download') : null
 const url = `http://127.0.0.1:${port}/`;
 const progressStreamEnabled = process.env.KAMINOS_PIPELINE_PROGRESS_STREAM === '1';
 const SHARP_BACKGROUND_HEARTBEAT_SCHEMA = 'sharp-webgpu.background-heartbeat.v0';
+const CROSS_PAGE_CLOCK_SCHEMA = 'kaminos.browser-epoch-monotonic-clock.v0';
+const SHARP_GPU_DUTY_INTERVALS_SCHEMA = 'sharp-webgpu.submitted-work-drain-intervals.v0';
 
 let phase = 'initializing';
 let server = null;
@@ -231,6 +233,30 @@ async function loadSharpHeartbeatHelpers() {
   return helpers;
 }
 
+function validateSharpProbeIntegrationSource(source) {
+  const missingHooks = [];
+  if (!/window\.__sharpContentionProbe\?\.markInferenceStart\?\.\(currentSchedulerTelemetry\.runId\)/.test(source)) {
+    missingHooks.push('markInferenceStart(currentSchedulerTelemetry.runId)');
+  }
+  if (!/window\.__sharpContentionProbe\?\.markInferenceEnd\?\.\(currentSchedulerTelemetry\.runId\)/.test(source)) {
+    missingHooks.push('markInferenceEnd(currentSchedulerTelemetry.runId)');
+  }
+  if (missingHooks.length) {
+    throw new Error(`SHARP source does not actuate the run-bound contention probe: missing ${missingHooks.join(', ')}`);
+  }
+  return true;
+}
+
+function preserveInvalidSharpHeartbeatEvidence({ evidenceStore, backgroundHeartbeat, schedulerTelemetry, error }) {
+  evidenceStore.backgroundHeartbeatValidation = {
+    status: 'invalid',
+    error: error?.message || String(error),
+    candidate: backgroundHeartbeat,
+    schedulerTelemetry: schedulerTelemetry || null,
+  };
+  return evidenceStore.backgroundHeartbeatValidation;
+}
+
 function validateKaminosSharpHeartbeat(backgroundHeartbeat) {
   const errors = [];
   if (backgroundHeartbeat?.schema !== SHARP_BACKGROUND_HEARTBEAT_SCHEMA) {
@@ -244,6 +270,38 @@ function validateKaminosSharpHeartbeat(backgroundHeartbeat) {
   }
   if (!Array.isArray(backgroundHeartbeat?.worstFrameGaps) || backgroundHeartbeat.worstFrameGaps.length === 0) {
     errors.push('backgroundHeartbeat.worstFrameGaps must contain scoped frame-gap rows');
+  }
+  const crossPageClock = backgroundHeartbeat?.crossPageClock;
+  if (crossPageClock?.schema !== CROSS_PAGE_CLOCK_SCHEMA
+    || crossPageClock?.timingAuthority !== 'performance-time-origin-plus-now'
+    || !crossPageClock?.runId
+    || !Number.isFinite(crossPageClock?.timeOriginEpochMs)
+    || !Number.isFinite(crossPageClock?.inferenceWindowStartEpochMs)
+    || !Number.isFinite(crossPageClock?.inferenceWindowEndEpochMs)
+    || crossPageClock.inferenceWindowEndEpochMs <= crossPageClock.inferenceWindowStartEpochMs) {
+    errors.push(`backgroundHeartbeat.crossPageClock must be a complete ${CROSS_PAGE_CLOCK_SCHEMA} envelope`);
+  }
+  if (backgroundHeartbeat?.inferenceWindow?.runId !== crossPageClock?.runId) {
+    errors.push('backgroundHeartbeat.inferenceWindow.runId must match backgroundHeartbeat.crossPageClock.runId');
+  }
+  const gpuDutyIntervals = backgroundHeartbeat?.gpuDutyIntervals;
+  const requiresDutyIntervals = backgroundHeartbeat?.effectiveScheduler?.waitForSubmittedWorkDone === true;
+  if (gpuDutyIntervals?.schema !== SHARP_GPU_DUTY_INTERVALS_SCHEMA
+    || gpuDutyIntervals?.timingAuthority !== 'queue-on-submitted-work-done-host-await-not-gpu-exclusive'
+    || gpuDutyIntervals?.runId !== crossPageClock?.runId
+    || !Array.isArray(gpuDutyIntervals?.intervals)
+    || gpuDutyIntervals?.count !== gpuDutyIntervals?.intervals?.length
+    || (requiresDutyIntervals && gpuDutyIntervals.intervals.length === 0)
+    || (gpuDutyIntervals.pairingFailures?.length || 0) > 0) {
+    errors.push(`backgroundHeartbeat.gpuDutyIntervals must be a complete run-bound ${SHARP_GPU_DUTY_INTERVALS_SCHEMA} envelope`);
+  }
+  for (const [index, interval] of gpuDutyIntervals?.intervals?.entries?.() || []) {
+    if (!interval?.dutyId || !interval?.phase || !interval?.boundary
+      || interval?.runId !== crossPageClock?.runId
+      || !Number.isFinite(interval?.startEpochMs)
+      || !Number.isFinite(interval?.endEpochMs)) {
+      errors.push(`backgroundHeartbeat.gpuDutyIntervals.intervals[${index}] must preserve run identity and epoch bounds`);
+    }
   }
   for (const [index, gap] of backgroundHeartbeat?.worstFrameGaps?.entries?.() || []) {
     if (!['scheduler-event-overlap', 'uninstrumented-gap'].includes(gap?.overlapClassification)) {
@@ -262,6 +320,7 @@ async function installSharpHeartbeatProbe(page) {
     const probe = {
       running: true,
       startedAt: performance.now(),
+      timeOriginEpochMs: performance.timeOrigin,
       rafFrames: 0,
       frameGapIntervals: [],
       lastFrameAt: performance.now(),
@@ -282,13 +341,34 @@ async function installSharpHeartbeatProbe(page) {
     requestAnimationFrame(frame);
 
     window.__sharpContentionProbe = {
-      markInferenceStart() {
-        probe.inferenceWindow = { startMs: performance.now(), endMs: null };
+      markInferenceStart(runId) {
+        const startMs = performance.now();
+        probe.inferenceWindow = {
+          runId: runId || null,
+          startMs,
+          startEpochMs: performance.timeOrigin + startMs,
+          endMs: null,
+          endEpochMs: null,
+        };
       },
-      markInferenceEnd() {
-        if (!probe.inferenceWindow) probe.inferenceWindow = { startMs: null, endMs: null };
+      markInferenceEnd(runId) {
+        if (!probe.inferenceWindow) {
+          probe.inferenceWindow = {
+            runId: runId || null,
+            startMs: null,
+            startEpochMs: null,
+            endMs: null,
+            endEpochMs: null,
+          };
+        }
+        if (probe.inferenceWindow.runId && runId && probe.inferenceWindow.runId !== runId) {
+          probe.inferenceWindow.runMismatch = { startedRunId: probe.inferenceWindow.runId, endedRunId: runId };
+          return null;
+        }
+        if (!probe.inferenceWindow.runId) probe.inferenceWindow.runId = runId || null;
         if (Number.isFinite(probe.inferenceWindow.endMs)) return probe.inferenceWindow.endMs;
         probe.inferenceWindow.endMs = performance.now();
+        probe.inferenceWindow.endEpochMs = performance.timeOrigin + probe.inferenceWindow.endMs;
         return probe.inferenceWindow.endMs;
       },
       stop() {
@@ -310,7 +390,19 @@ async function installSharpHeartbeatProbe(page) {
           ? Math.min(sortedDurations.length - 1, Math.floor(sortedDurations.length * 0.95))
           : 0;
         return {
-          inferenceWindow: { startMs: window.startMs, endMs: window.endMs },
+          clock: {
+            schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+            timingAuthority: 'performance-time-origin-plus-now',
+            timeOriginEpochMs: probe.timeOriginEpochMs,
+          },
+          inferenceWindow: {
+            runId: window.runId || null,
+            startMs: window.startMs,
+            endMs: window.endMs,
+            startEpochMs: window.startEpochMs,
+            endEpochMs: window.endEpochMs,
+            ...(window.runMismatch ? { runMismatch: window.runMismatch } : {}),
+          },
           rafFrames: scopedGaps.length,
           maxFrameGapMs: sortedDurations.at(-1) || 0,
           p95FrameGapMs: sortedDurations[p95Index] || 0,
@@ -794,6 +886,7 @@ function validateInputs() {
   if (!existsSync(input)) throw new Error(`input image does not exist: ${input}`);
   if (!existsSync(sharpRepo)) throw new Error(`SHARP-WebGPU repo does not exist: ${sharpRepo}`);
   if (!existsSync(join(sharpRepo, 'package.json'))) throw new Error(`SHARP-WebGPU package.json missing under ${sharpRepo}`);
+  validateSharpProbeIntegrationSource(readFileSync(join(sharpRepo, 'src', 'main.js'), 'utf8'));
   if (!existsSync(join(sharpRepo, 'public', 'weights.bin'))) throw new Error(`SHARP-WebGPU weights missing: ${join(sharpRepo, 'public', 'weights.bin')}`);
   if (!existsSync(chromePath)) throw new Error(`Chrome executable not found: ${chromePath}`);
   mkdirSync(outputDir, { recursive: true });
@@ -1177,7 +1270,6 @@ async function runBrowserInference() {
     }, { timeout: timeoutMs });
     const result = JSON.parse(await outcome.jsonValue());
     const heartbeatProbe = await page.evaluate(() => {
-      window.__sharpContentionProbe?.markInferenceEnd?.();
       window.__sharpContentionProbe?.stop?.();
       return window.__sharpContentionProbe?.snapshot?.() || null;
     });
@@ -1197,7 +1289,19 @@ async function runBrowserInference() {
       probe: heartbeatProbe || {},
       responsiveness: heartbeatResponsiveness,
     });
-    validateKaminosSharpHeartbeat(backgroundHeartbeat);
+    lastTrustworthyEvidence.backgroundHeartbeatCandidate = backgroundHeartbeat;
+    lastTrustworthyEvidence.schedulerTelemetry = result.schedulerTelemetry || null;
+    try {
+      validateKaminosSharpHeartbeat(backgroundHeartbeat);
+    } catch (error) {
+      preserveInvalidSharpHeartbeatEvidence({
+        evidenceStore: lastTrustworthyEvidence,
+        backgroundHeartbeat,
+        schedulerTelemetry: result.schedulerTelemetry || null,
+        error,
+      });
+      throw error;
+    }
     result.backgroundHeartbeat = backgroundHeartbeat;
     lastTrustworthyEvidence.backgroundHeartbeat = backgroundHeartbeat;
 

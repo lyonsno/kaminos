@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import vm from 'node:vm';
 
 const root = new URL('..', import.meta.url).pathname;
 const manifestPath = join(root, 'pipelines', 'asset-pipelines.json');
@@ -27,6 +28,105 @@ assert.equal(sharpRoute.stages[0].route.effectiveBackend, 'browser-webgpu');
 assert.deepEqual(sharpRoute.stages[0].requiredSideArtifacts, ['depthMap', 'metadata', 'autoCropEvidence']);
 
 const wrapperSource = readFileSync(wrapperPath, 'utf8');
+const probeIntegrationValidatorSource = wrapperSource.match(
+  /function validateSharpProbeIntegrationSource\([\s\S]*?\n}\n(?=\nfunction preserveInvalidSharpHeartbeatEvidence)/,
+);
+assert.ok(probeIntegrationValidatorSource, 'adapter must expose a testable SHARP probe-integration source validator');
+const validateSharpProbeIntegrationSource = vm.runInNewContext(
+  `(${probeIntegrationValidatorSource[0].replace(/^function /, 'function ')})`,
+);
+assert.doesNotThrow(() => validateSharpProbeIntegrationSource(`
+  window.__sharpContentionProbe?.markInferenceStart?.(currentSchedulerTelemetry.runId);
+  window.__sharpContentionProbe?.markInferenceEnd?.(currentSchedulerTelemetry.runId);
+`));
+assert.throws(
+  () => validateSharpProbeIntegrationSource(`
+    window.__sharpContentionProbe?.markInferenceStart?.(currentSchedulerTelemetry.runId);
+  `),
+  /markInferenceEnd/,
+  'adapter must reject a SHARP source that cannot close its run-bound heartbeat window',
+);
+const invalidHeartbeatPreserverSource = wrapperSource.match(
+  /function preserveInvalidSharpHeartbeatEvidence\([\s\S]*?\n}\n(?=\nfunction validateKaminosSharpHeartbeat)/,
+);
+assert.ok(invalidHeartbeatPreserverSource, 'adapter must expose a testable invalid-heartbeat evidence preserver');
+const preserveInvalidSharpHeartbeatEvidence = vm.runInNewContext(
+  `(${invalidHeartbeatPreserverSource[0].replace(/^function /, 'function ')})`,
+);
+const invalidEvidenceStore = {};
+const invalidCandidate = {
+  schema: 'sharp-webgpu.background-heartbeat.v0',
+  crossPageClock: null,
+  gpuDutyIntervals: {
+    runId: 'sharp-current',
+    pairingFailures: ['stale run sharp-stale did not match sharp-current'],
+  },
+};
+preserveInvalidSharpHeartbeatEvidence({
+  evidenceStore: invalidEvidenceStore,
+  backgroundHeartbeat: invalidCandidate,
+  schedulerTelemetry: { runId: 'sharp-current' },
+  error: new Error('SHARP heartbeat evidence invalid: mixed run'),
+});
+assert.equal(invalidEvidenceStore.backgroundHeartbeatValidation.status, 'invalid');
+assert.equal(invalidEvidenceStore.backgroundHeartbeatValidation.candidate, invalidCandidate);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(invalidEvidenceStore.backgroundHeartbeatValidation.candidate.gpuDutyIntervals.pairingFailures)),
+  ['stale run sharp-stale did not match sharp-current'],
+);
+assert.equal(invalidEvidenceStore.backgroundHeartbeatValidation.schedulerTelemetry.runId, 'sharp-current');
+assert.match(invalidEvidenceStore.backgroundHeartbeatValidation.error, /mixed run/);
+const heartbeatValidatorSource = wrapperSource.match(
+  /function validateKaminosSharpHeartbeat\([\s\S]*?\n}\n(?=\nasync function installSharpHeartbeatProbe)/,
+);
+assert.ok(heartbeatValidatorSource, 'adapter must expose a testable heartbeat validator');
+const validateKaminosSharpHeartbeat = vm.runInNewContext(
+  `(${heartbeatValidatorSource[0].replace(/^function /, 'function ')})`,
+  {
+    SHARP_BACKGROUND_HEARTBEAT_SCHEMA: 'sharp-webgpu.background-heartbeat.v0',
+    CROSS_PAGE_CLOCK_SCHEMA: 'kaminos.browser-epoch-monotonic-clock.v0',
+    SHARP_GPU_DUTY_INTERVALS_SCHEMA: 'sharp-webgpu.submitted-work-drain-intervals.v0',
+  },
+);
+const zeroDutyHeartbeat = {
+  schema: 'sharp-webgpu.background-heartbeat.v0',
+  effectiveScheduler: { mode: 'default', waitForSubmittedWorkDone: false },
+  inferenceWindow: { runId: 'sharp-default', startMs: 100, endMs: 200 },
+  worstFrameGaps: [{
+    startMs: 120,
+    endMs: 140,
+    durationMs: 20,
+    overlapClassification: 'uninstrumented-gap',
+  }],
+  crossPageClock: {
+    schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now',
+    runId: 'sharp-default',
+    timeOriginEpochMs: 1_700_000_000_000,
+    inferenceWindowStartEpochMs: 1_700_000_000_100,
+    inferenceWindowEndEpochMs: 1_700_000_000_200,
+  },
+  gpuDutyIntervals: {
+    schema: 'sharp-webgpu.submitted-work-drain-intervals.v0',
+    timingAuthority: 'queue-on-submitted-work-done-host-await-not-gpu-exclusive',
+    runId: 'sharp-default',
+    count: 0,
+    intervals: [],
+    pairingFailures: [],
+  },
+};
+assert.doesNotThrow(
+  () => validateKaminosSharpHeartbeat(zeroDutyHeartbeat),
+  'default SHARP runs may preserve a valid zero-duty envelope when submitted-work waiting is disabled',
+);
+assert.throws(
+  () => validateKaminosSharpHeartbeat({
+    ...zeroDutyHeartbeat,
+    effectiveScheduler: { mode: 'cooperative', waitForSubmittedWorkDone: true },
+  }),
+  /gpuDutyIntervals/,
+  'Friendly SHARP runs must fail loud when submitted-work waiting produced no duty intervals',
+);
 assert.match(wrapperSource, /kaminos\.sharp-webgpu-adapter-report\.v0/, 'wrapper report must name native SHARP-WebGPU schema');
 assert.match(wrapperSource, /kaminos\.splat-autocrop-evidence\.v0/, 'wrapper must emit the autocrop evidence schema consumed by Gutterglass');
 assert.match(wrapperSource, /--input/, 'wrapper must keep explicit --input CLI contract');
@@ -71,15 +171,24 @@ assert.match(wrapperSource, /requestfailed/, 'wrapper must record failed browser
 assert.match(wrapperSource, /sharp-webgpu\.background-heartbeat\.v0/, 'wrapper must require the reviewed SHARP background heartbeat schema');
 assert.match(wrapperSource, /createSharpBackgroundHeartbeatReport/, 'wrapper must classify gaps with SHARP source-owned heartbeat logic');
 assert.match(wrapperSource, /function installSharpHeartbeatProbe\(/, 'wrapper must install a RAF probe in the real browser route');
-assert.match(wrapperSource, /markInferenceStart[\s\S]*uploadFile\(input\)/, 'wrapper must open the heartbeat window immediately before inference actuation');
-assert.match(wrapperSource, /markInferenceEnd[\s\S]*backgroundHeartbeat/, 'wrapper must close the heartbeat window before constructing normal evidence');
+assert.match(wrapperSource, /validateSharpProbeIntegrationSource\(readFileSync\(join\(sharpRepo, 'src', 'main\.js'\)/, 'wrapper must verify that its effective SHARP source owns heartbeat window actuation');
 assert.match(
   wrapperSource,
-  /markInferenceEnd\(\)\s*\{[\s\S]*Number\.isFinite\(probe\.inferenceWindow\.endMs\)[\s\S]*return probe\.inferenceWindow\.endMs/,
-  'heartbeat inference end must be first-write authoritative so adapter harvest cannot overwrite the source endpoint',
+  /markInferenceEnd\(runId\)\s*\{[\s\S]*probe\.inferenceWindow\.runId !== runId[\s\S]*Number\.isFinite\(probe\.inferenceWindow\.endMs\)[\s\S]*return probe\.inferenceWindow\.endMs/,
+  'heartbeat inference end must preserve run identity and remain first-write authoritative',
 );
 assert.match(wrapperSource, /backgroundHeartbeat\.inferenceWindow/, 'wrapper must fail loud when the scoped inference window is absent');
 assert.match(wrapperSource, /backgroundHeartbeat\.worstFrameGaps/, 'wrapper must fail loud when scoped worst-gap rows are absent');
+assert.match(wrapperSource, /markInferenceStart\(runId\)/, 'adapter probe must bind the inference window to SHARP run identity');
+assert.match(wrapperSource, /markInferenceEnd\(runId\)/, 'adapter probe must reject or preserve the source run identity at inference end');
+assert.match(wrapperSource, /timeOriginEpochMs/, 'adapter probe must preserve its declared epoch-monotonic clock origin');
+assert.match(wrapperSource, /backgroundHeartbeat\.crossPageClock/, 'adapter must fail loud when the shared cross-page clock is absent');
+assert.match(wrapperSource, /backgroundHeartbeat\.gpuDutyIntervals/, 'adapter must fail loud when run-bound submitted-work duty intervals are absent');
+assert.match(
+  wrapperSource,
+  /lastTrustworthyEvidence\.backgroundHeartbeatCandidate = backgroundHeartbeat;[\s\S]*try \{[\s\S]*validateKaminosSharpHeartbeat\(backgroundHeartbeat\)[\s\S]*preserveInvalidSharpHeartbeatEvidence/,
+  'adapter must preserve the candidate heartbeat before validation can throw',
+);
 assert.match(wrapperSource, /sharpRepoRevision/, 'wrapper must record the effective SHARP source revision used by the route');
 
 const witnessSource = readFileSync(witnessPath, 'utf8');

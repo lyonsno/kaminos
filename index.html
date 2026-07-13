@@ -13318,7 +13318,13 @@ function applyKilnContentionFireBudget() {
   return { requestedFireBudget, effectiveFireBudget };
 }
 
-async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }) {
+async function beginSharpBreathingRoomKilnFire({
+  profileId,
+  source,
+  pipelineId,
+  firingId,
+  requireSharpDutyCorrelation = profileId === 'cooperative-spn-gaussian',
+}) {
   const previousState = volumePrototype?.debugState?.() || null;
   const fireState = {
     schema: 'kaminos.sharp-breathing-room.kiln-fire-state.v0',
@@ -13327,6 +13333,7 @@ async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }
     pipelineId,
     source: source?.source || null,
     sourceLabel: source?.label || null,
+    firingId: firingId || null,
     startedAt: new Date().toISOString(),
     activatedByRun: false,
     previousActive: previousState?.active === true,
@@ -13352,6 +13359,8 @@ async function beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId }
       routeId: 'sharp-image-to-splat-live-v0',
       profileId,
       pipelineId,
+      firingId,
+      requireSharpDutyCorrelation,
       expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
       requestedFireBudget: fireState.requestedFireBudget,
       readVolumeState: () => volumePrototype?.debugState?.() || null,
@@ -17458,6 +17467,30 @@ function kilnRouteBenchHeartbeatSummary(result) {
   return `The longest pause while the model was working was ${roundedMs} ms${nearEnd ? ' near the end of model work' : ''}; no named scheduler event covered it.`;
 }
 
+function classifyKilnFiringEvidence({ required = false, firingId = null, heartbeat = null } = {}) {
+  const failures = [];
+  if (!heartbeat) {
+    failures.push('foreground-heartbeat-missing');
+  } else {
+    if (heartbeat.status !== 'verified') {
+      failures.push(...(heartbeat.failures?.length ? heartbeat.failures : ['foreground-heartbeat-invalid']));
+    }
+    if (!firingId || heartbeat.firingId !== firingId) failures.push('foreground-firing-id-mismatch');
+    if (required) {
+      const correlation = heartbeat.sharpDutyCorrelation;
+      if (correlation?.status !== 'verified') failures.push('sharp-duty-correlation-invalid');
+      if (!firingId || correlation?.firingId !== firingId) failures.push('sharp-duty-correlation-firing-id-mismatch');
+    }
+  }
+  const uniqueFailures = [...new Set(failures)];
+  return {
+    ok: uniqueFailures.length === 0,
+    status: uniqueFailures.length ? 'invalid' : 'verified',
+    receiptStatus: uniqueFailures.length ? 'evidence-invalid' : 'complete',
+    failures: uniqueFailures,
+  };
+}
+
 function kilnRouteBenchForegroundHeartbeatSummary(result) {
   const heartbeat = result?.foregroundKilnHeartbeat || null;
   if (!heartbeat) return 'Foreground kiln timing was not recorded for this firing.';
@@ -17465,8 +17498,36 @@ function kilnRouteBenchForegroundHeartbeatSummary(result) {
     const failures = heartbeat.failures?.length ? ` (${heartbeat.failures.join(', ')})` : '';
     return `The cast finished, but foreground kiln timing could not verify the firing${failures}.`;
   }
+  const correlation = heartbeat.sharpDutyCorrelation;
+  if (correlation?.status === 'verified') {
+    const total = Math.round(correlation.totals?.foregroundGapDurationMs || 0);
+    const attributed = Math.round(correlation.totals?.attributedDurationMs || 0);
+    const unattributed = Math.round(correlation.totals?.unattributedDurationMs || 0);
+    const leading = correlation.phaseRankings?.[0];
+    const leadingCopy = leading
+      ? ` The largest named overlap was ${leading.phase} at ${Math.round(leading.overlapDurationMs)} ms.`
+      : '';
+    return `While this cast was cooking, ${attributed} of ${total} ms between foreground frames overlapped named model queue waits; ${unattributed} ms happened elsewhere.${leadingCopy}`;
+  }
   const maxGap = Number.isFinite(heartbeat.maxFrameGapMs) ? `${Math.round(heartbeat.maxFrameGapMs)} ms maximum frame gap` : 'frame gaps recorded';
   return `Foreground kiln timing verified ${maxGap} across ${heartbeat.sampleCount} main-page samples.`;
+}
+
+function classifyKilnNonLoadableResult({ firingEvidence = null, artifactPath = null } = {}) {
+  if (firingEvidence?.ok !== true) {
+    return {
+      receiptStatus: firingEvidence?.receiptStatus || 'evidence-invalid',
+      tone: 'error',
+      message: 'The model wrote an output, but Kaminos could not verify that the live evidence belonged to this firing.',
+    };
+  }
+  return {
+    receiptStatus: 'evidence-only',
+    tone: 'evidence-only',
+    message: artifactPath
+      ? 'The model wrote an output, but it is not a splat that Kaminos can place in the room.'
+      : 'The model finished without producing a splat that Kaminos can place in the room.',
+  };
 }
 
 async function runKilnRouteBenchRoute(routeId, profileId) {
@@ -17503,7 +17564,13 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     progressEvent: null,
   });
   const crucibleFiring = crucibleBenchRecordFiring({ routeId: route.id, profileId, source, profileLabel });
-  const kilnFire = await beginSharpBreathingRoomKilnFire({ profileId, source, pipelineId });
+  const kilnFire = await beginSharpBreathingRoomKilnFire({
+    profileId,
+    source,
+    pipelineId,
+    firingId: crucibleFiring.id,
+    requireSharpDutyCorrelation: profileId === 'cooperative-spn-gaussian',
+  });
   if (!foregroundKilnStartAllowsPipeline(kilnFire)) {
     const failedRun = {
       ok: false,
@@ -17560,6 +17627,12 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
       runResult: run,
     });
     kilnFireEnded = true;
+    const firingEvidence = classifyKilnFiringEvidence({
+      required: profileId === 'cooperative-spn-gaussian',
+      firingId: crucibleFiring.id,
+      heartbeat: run?.foregroundKilnHeartbeat || null,
+    });
+    if (run && typeof run === 'object') run.kilnFiringEvidence = firingEvidence;
     const artifact = pipelinePrimaryRunArtifact(run);
     const backgroundHeartbeat = kilnRouteBenchBackgroundHeartbeat(run);
     const heartbeatSummary = [
@@ -17578,15 +17651,25 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
           });
           crucibleBenchRecordReceipt({
             firingId: crucibleFiring.id,
-            status: 'complete',
-            message: `${profileLabel} finished and loaded a cast into the scene.${heartbeatSummary ? ` ${heartbeatSummary}` : ''}`,
+            status: firingEvidence.receiptStatus,
+            message: firingEvidence.ok
+              ? `${profileLabel} finished and loaded a cast into the scene.${heartbeatSummary ? ` ${heartbeatSummary}` : ''}`
+              : `${profileLabel} produced and loaded a cast, but Kaminos could not verify that the live firing evidence belonged to this firing. ${firingEvidence.failures.join(', ')}.`,
             run,
           });
-          setKilnRouteBenchStatus(
-            `${profileLabel} finished and loaded the generated splat into the scene: ${record?.label || artifact.path.split('/').pop() || 'pipeline output'}.${heartbeatSummary ? ` ${heartbeatSummary}` : ''}`,
-            'complete',
-            { routeId: route.id, source, result: run, loadedRecord: record, backgroundHeartbeat, runningProfileId: null },
-          );
+          if (firingEvidence.ok) {
+            setKilnRouteBenchStatus(
+              `${profileLabel} finished and loaded the generated splat into the scene: ${record?.label || artifact.path.split('/').pop() || 'pipeline output'}.${heartbeatSummary ? ` ${heartbeatSummary}` : ''}`,
+              'complete',
+              { routeId: route.id, source, result: run, loadedRecord: record, backgroundHeartbeat, runningProfileId: null },
+            );
+          } else {
+            setKilnRouteBenchStatus(
+              `${profileLabel} produced and loaded a cast, but Kaminos could not verify that the live firing evidence belonged to this firing. The cast remains available; this firing is not marked complete.`,
+              'error',
+              { routeId: route.id, source, result: run, loadedRecord: record, backgroundHeartbeat, runningProfileId: null },
+            );
+          }
         } catch (loadErr) {
           crucibleBenchRecordReceipt({
             firingId: crucibleFiring.id,
@@ -17602,19 +17685,19 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
           );
         }
       } else {
+        const nonLoadableResult = classifyKilnNonLoadableResult({
+          firingEvidence,
+          artifactPath: artifact?.path || null,
+        });
         crucibleBenchRecordReceipt({
           firingId: crucibleFiring.id,
-          status: 'evidence-only',
-          message: artifact?.path
-            ? `${profileLabel} wrote an output that is not a loadable splat.`
-            : `${profileLabel} finished with evidence only.`,
+          status: nonLoadableResult.receiptStatus,
+          message: nonLoadableResult.message,
           run,
         });
         setKilnRouteBenchStatus(
-          artifact?.path
-            ? `${profileLabel} finished and wrote an output, but that output is not a loadable splat.`
-            : `${profileLabel} finished with evidence only; inspect the run result for the failure boundary.`,
-          artifact?.path ? 'evidence-only' : 'evidence-only',
+          `${profileLabel}: ${nonLoadableResult.message}`,
+          nonLoadableResult.tone,
           { routeId: route.id, source, result: run, runningProfileId: null },
         );
       }
@@ -17725,10 +17808,13 @@ async function runSharpBreathingRoomComparison() {
       || null;
     window.__kaminosSharpBreathingRoomComparisonState = comparisonState;
     renderKilnRouteBench();
-    if (!run?.ok) {
+    if (!run?.ok || run?.kilnFiringEvidence?.ok === false) {
       comparisonState.status = 'failed';
       comparisonState.finishedAt = new Date().toISOString();
-      setKilnRouteBenchStatus(`${step.label} failed during the default-then-friendly comparison. ${pipelineRunFailureSummary(run)}`.trim(), 'error', {
+      const comparisonFailure = run?.kilnFiringEvidence?.ok === false
+        ? `Kaminos could not verify that the live firing evidence belonged to this firing: ${run.kilnFiringEvidence.failures.join(', ')}.`
+        : pipelineRunFailureSummary(run);
+      setKilnRouteBenchStatus(`${step.label} failed during the default-then-friendly comparison. ${comparisonFailure}`.trim(), 'error', {
         routeId: route.id,
         source,
         result: run,

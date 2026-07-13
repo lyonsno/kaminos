@@ -277,6 +277,8 @@ try {
       const stage = (report.stages || [])[0] || {};
       const adapter = stage.effectiveRoute?.adapterReport || {};
       const backgroundHeartbeat = adapter.backgroundHeartbeat || null;
+      const foregroundKilnHeartbeat = routeState.result?.foregroundKilnHeartbeat || null;
+      const sharpDutyCorrelation = foregroundKilnHeartbeat?.sharpDutyCorrelation || null;
       const schedulerEvents = adapter.breathingRoom?.telemetry?.events || [];
       const routeTailEvents = schedulerEvents.filter(event => event?.phase === 'route-tail');
       const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
@@ -371,6 +373,8 @@ try {
         uninstrumentedGapsAtOrAbove50Ms,
         output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
         backgroundHeartbeat,
+        foregroundKilnHeartbeat,
+        sharpDutyCorrelation,
         volumeReleased: Boolean(fire?.volumeReleased),
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
@@ -391,6 +395,36 @@ try {
     if (backgroundHeartbeat?.schema !== 'sharp-webgpu.background-heartbeat.v0') throw new Error('Friendly firing is missing the corrected backgroundHeartbeat schema');
     if (!backgroundHeartbeat.inferenceWindow || !Number.isFinite(backgroundHeartbeat.inferenceWindow.durationMs)) throw new Error('Friendly firing is missing its measured inferenceWindow');
     if (!Array.isArray(backgroundHeartbeat.worstFrameGaps) || !backgroundHeartbeat.worstFrameGaps.length) throw new Error('Friendly firing is missing scoped worstFrameGaps');
+    if (backgroundHeartbeat.crossPageClock?.schema !== 'kaminos.browser-epoch-monotonic-clock.v0') throw new Error('Friendly firing is missing the shared epoch clock');
+    if (backgroundHeartbeat.gpuDutyIntervals?.schema !== 'sharp-webgpu.submitted-work-drain-intervals.v0'
+      || backgroundHeartbeat.gpuDutyIntervals.runId !== backgroundHeartbeat.crossPageClock.runId
+      || backgroundHeartbeat.gpuDutyIntervals.count !== backgroundHeartbeat.gpuDutyIntervals.intervals?.length
+      || !backgroundHeartbeat.gpuDutyIntervals.intervals?.length) {
+      throw new Error('Friendly firing is missing complete run-bound submitted-work duty intervals');
+    }
+    const foregroundKilnHeartbeat = state.fullRoute.foregroundKilnHeartbeat;
+    if (foregroundKilnHeartbeat?.schema !== 'kaminos.foreground-kiln-heartbeat.v0'
+      || foregroundKilnHeartbeat.status !== 'verified'
+      || foregroundKilnHeartbeat.sampleRetention !== 'uncapped'
+      || foregroundKilnHeartbeat.sampleCount !== foregroundKilnHeartbeat.samples?.length) {
+      throw new Error('Friendly firing is missing an uncapped verified foreground firing heartbeat');
+    }
+    const sharpDutyCorrelation = state.fullRoute.sharpDutyCorrelation;
+    if (sharpDutyCorrelation?.schema !== 'kaminos.foreground-sharp-duty-correlation.v0'
+      || sharpDutyCorrelation.status !== 'verified'
+      || sharpDutyCorrelation.runId !== backgroundHeartbeat.crossPageClock.runId
+      || sharpDutyCorrelation.foregroundGapCount !== sharpDutyCorrelation.foregroundGaps?.length
+      || !Array.isArray(sharpDutyCorrelation.phaseRankings)
+      || !Array.isArray(sharpDutyCorrelation.boundaryRankings)) {
+      throw new Error('Friendly firing is missing its verified foreground-to-model duty correlation');
+    }
+    const correlationTotals = sharpDutyCorrelation.totals || {};
+    if (![correlationTotals.foregroundGapDurationMs, correlationTotals.attributedDurationMs, correlationTotals.unattributedDurationMs].every(Number.isFinite)
+      || Math.abs(correlationTotals.foregroundGapDurationMs
+        - correlationTotals.attributedDurationMs
+        - correlationTotals.unattributedDurationMs) > 1) {
+      throw new Error('Friendly firing correlation does not preserve its unattributed foreground remainder');
+    }
     const expectedLateTailSteps = ['ply-blob-assembly', 'object-url-create', 'output-bind'];
     for (const step of expectedLateTailSteps) {
       const interval = state.fullRoute.lateTailBlockingIntervals?.find(candidate => candidate.step === step);

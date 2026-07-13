@@ -1,7 +1,81 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+const firingEvidenceClassifierSource = index.match(
+  /function classifyKilnFiringEvidence\([\s\S]*?\n}\n(?=\nfunction kilnRouteBenchForegroundHeartbeatSummary)/,
+);
+assert.ok(firingEvidenceClassifierSource, 'Generate route must expose a testable firing-evidence classifier');
+const classifyKilnFiringEvidence = vm.runInNewContext(
+  `(${firingEvidenceClassifierSource[0].replace(/^function /, 'function ')})`,
+);
+const validFiringEvidence = classifyKilnFiringEvidence({
+  required: true,
+  firingId: 'firing-current',
+  heartbeat: {
+    status: 'verified',
+    firingId: 'firing-current',
+    sharpDutyCorrelation: { status: 'verified', firingId: 'firing-current' },
+  },
+});
+assert.deepEqual(JSON.parse(JSON.stringify(validFiringEvidence)), {
+  ok: true,
+  status: 'verified',
+  receiptStatus: 'complete',
+  failures: [],
+});
+const invalidFiringEvidence = classifyKilnFiringEvidence({
+  required: true,
+  firingId: 'firing-current',
+  heartbeat: {
+    status: 'invalid',
+    firingId: 'firing-current',
+    failures: ['sharp-duty-correlation-invalid'],
+    sharpDutyCorrelation: { status: 'invalid', firingId: 'firing-current' },
+  },
+});
+assert.equal(invalidFiringEvidence.ok, false);
+assert.equal(invalidFiringEvidence.receiptStatus, 'evidence-invalid');
+assert.ok(invalidFiringEvidence.failures.includes('sharp-duty-correlation-invalid'));
+const staleFiringEvidence = classifyKilnFiringEvidence({
+  required: true,
+  firingId: 'firing-current',
+  heartbeat: {
+    status: 'verified',
+    firingId: 'firing-stale',
+    sharpDutyCorrelation: { status: 'verified', firingId: 'firing-stale' },
+  },
+});
+assert.equal(staleFiringEvidence.ok, false);
+assert.ok(staleFiringEvidence.failures.includes('foreground-firing-id-mismatch'));
+
+const nonLoadableClassifierSource = index.match(
+  /function classifyKilnNonLoadableResult\([\s\S]*?\n}\n(?=\nasync function runKilnRouteBenchRoute)/,
+);
+assert.ok(nonLoadableClassifierSource, 'Generate route must expose a testable non-loadable result classifier');
+const classifyKilnNonLoadableResult = vm.runInNewContext(
+  `(${nonLoadableClassifierSource[0].replace(/^function /, 'function ')})`,
+);
+assert.deepEqual(
+  JSON.parse(JSON.stringify(classifyKilnNonLoadableResult({
+    firingEvidence: validFiringEvidence,
+    artifactPath: '/tmp/depth.png',
+  }))),
+  {
+    receiptStatus: 'evidence-only',
+    tone: 'evidence-only',
+    message: 'The model wrote an output, but it is not a splat that Kaminos can place in the room.',
+  },
+);
+const invalidNonLoadable = classifyKilnNonLoadableResult({
+  firingEvidence: invalidFiringEvidence,
+  artifactPath: '/tmp/depth.png',
+});
+assert.equal(invalidNonLoadable.receiptStatus, 'evidence-invalid');
+assert.equal(invalidNonLoadable.tone, 'error');
+assert.match(invalidNonLoadable.message, /could not verify that the live evidence belonged to this firing/i);
 
 assert.match(
   index,
@@ -17,6 +91,21 @@ assert.match(
   index,
   /backgroundHeartbeat/,
   'Generate route completion must consume the validated heartbeat projected by the adapter report',
+);
+assert.match(
+  index,
+  /requireSharpDutyCorrelation:\s*profileId\s*===\s*'cooperative-spn-gaussian'/,
+  'The real Friendly firing must require the foreground/SHARP shared-clock duty correlation',
+);
+assert.match(
+  index,
+  /beginSharpBreathingRoomKilnFire\(\{[\s\S]*firingId:\s*crucibleFiring\.id/,
+  'The foreground correlation must bind to the exact Crucible firing identity',
+);
+assert.match(
+  index,
+  /const firingEvidence = classifyKilnFiringEvidence\([\s\S]*status: firingEvidence\.receiptStatus/,
+  'A successful cast must use firing evidence, not run.ok alone, when writing its receipt status',
 );
 
 assert.match(

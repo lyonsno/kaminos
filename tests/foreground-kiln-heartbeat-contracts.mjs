@@ -64,6 +64,9 @@ function episodeHarness({
   routeIdentity = 'native-3d-compute-fluid-raymarch-v0',
   firePresentation = null,
   expectedFirePresentation = null,
+  firingId = null,
+  requireSharpDutyCorrelation = false,
+  timeOriginEpochMs = 1_700_000_000_000,
 } = {}) {
   let nowMs = 100;
   let nextFrameId = 0;
@@ -85,6 +88,9 @@ function episodeHarness({
     expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
     requestedFireBudget: budget,
     expectedFirePresentation,
+    firingId,
+    requireSharpDutyCorrelation,
+    timeOriginEpochMs,
     readVolumeState: () => ({ ...volume }),
     now: () => nowMs,
     requestFrame: callback => {
@@ -111,6 +117,65 @@ function episodeHarness({
     },
     setVolume(nextVolume) {
       volume = { ...volume, ...nextVolume };
+    },
+  };
+}
+
+function sharpDutyHeartbeat({
+  runId = 'sharp-run-0713-a',
+  intervalRunId = runId,
+  includeClock = true,
+} = {}) {
+  const timeOriginEpochMs = 1_699_999_995_000;
+  return {
+    schema: 'sharp-webgpu.background-heartbeat.v0',
+    inferenceWindow: {
+      runId,
+      startMs: 5110,
+      endMs: 5200,
+      durationMs: 90,
+      startEpochMs: 1_700_000_000_110,
+      endEpochMs: 1_700_000_000_200,
+    },
+    crossPageClock: includeClock ? {
+      schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+      timingAuthority: 'performance-time-origin-plus-now',
+      runId,
+      timeOriginEpochMs,
+      inferenceWindowStartEpochMs: 1_700_000_000_110,
+      inferenceWindowEndEpochMs: 1_700_000_000_200,
+    } : null,
+    gpuDutyIntervals: {
+      schema: 'sharp-webgpu.submitted-work-drain-intervals.v0',
+      timingAuthority: 'queue-on-submitted-work-done-host-await-not-gpu-exclusive',
+      runId,
+      count: 2,
+      intervals: [
+        {
+          runId: intervalRunId,
+          dutyId: 'spn-fusion:0',
+          phase: 'spn-fusion',
+          boundary: 'readback-lowres',
+          kind: 'submitted-work-drain-interval',
+          startMs: 5135,
+          endMs: 5155,
+          durationMs: 20,
+          startEpochMs: 1_700_000_000_135,
+          endEpochMs: 1_700_000_000_155,
+        },
+        {
+          runId: intervalRunId,
+          dutyId: 'monodepth:0',
+          phase: 'monodepth',
+          boundary: 'vit-block-chunk',
+          kind: 'submitted-work-drain-interval',
+          startMs: 5170,
+          endMs: 5180,
+          durationMs: 10,
+          startEpochMs: 1_700_000_000_170,
+          endEpochMs: 1_700_000_000_180,
+        },
+      ],
     },
   };
 }
@@ -329,6 +394,62 @@ assert.equal(liveReport.simStepCountDelta > 0, true);
 assert.deepEqual(liveReport.requestedFireBudget, budget);
 assert.deepEqual(liveReport.effectiveFireBudget, budget);
 assert.equal(liveReport.sharpHeartbeat.schema, 'sharp-webgpu.background-heartbeat.v0');
+
+const correlated = episodeHarness({
+  firingId: 'firing-correlation-a',
+  requireSharpDutyCorrelation: true,
+});
+correlated.episode.start();
+correlated.advance({ gapMs: 16 });
+correlated.advance({ gapMs: 40 });
+correlated.advance({ gapMs: 30 });
+const correlatedReport = correlated.episode.finish({
+  phase: 'complete',
+  sharpHeartbeat: sharpDutyHeartbeat(),
+});
+assert.equal(correlatedReport.status, 'verified');
+assert.equal(correlatedReport.firingId, 'firing-correlation-a');
+assert.equal(correlatedReport.sampleRetention, 'uncapped');
+assert.equal(correlatedReport.samples.length, correlatedReport.sampleCount);
+assert.equal(correlatedReport.samples[0].epochMs, 1_700_000_000_100);
+assert.equal(correlatedReport.sharpDutyCorrelation.schema, 'kaminos.foreground-sharp-duty-correlation.v0');
+assert.equal(correlatedReport.sharpDutyCorrelation.status, 'verified');
+assert.equal(correlatedReport.sharpDutyCorrelation.runId, 'sharp-run-0713-a');
+assert.equal(correlatedReport.sharpDutyCorrelation.foregroundGaps.length, 3, 'all inference-window foreground gaps remain uncapped');
+assert.equal(correlatedReport.sharpDutyCorrelation.totals.foregroundGapDurationMs, 76);
+assert.equal(correlatedReport.sharpDutyCorrelation.totals.attributedDurationMs, 30);
+assert.equal(correlatedReport.sharpDutyCorrelation.totals.unattributedDurationMs, 46);
+assert.deepEqual(
+  correlatedReport.sharpDutyCorrelation.phaseRankings.map(row => [row.phase, row.overlapDurationMs]),
+  [['spn-fusion', 20], ['monodepth', 10]],
+);
+
+const mixedRunCorrelation = episodeHarness({
+  firingId: 'firing-correlation-mixed',
+  requireSharpDutyCorrelation: true,
+});
+mixedRunCorrelation.episode.start();
+mixedRunCorrelation.advance({ gapMs: 40 });
+const mixedRunReport = mixedRunCorrelation.episode.finish({
+  phase: 'complete',
+  sharpHeartbeat: sharpDutyHeartbeat({ intervalRunId: 'stale-sharp-run' }),
+});
+assert.equal(mixedRunReport.status, 'invalid');
+assert.ok(mixedRunReport.failures.includes('sharp-duty-correlation-invalid'));
+assert.ok(mixedRunReport.sharpDutyCorrelation.failures.includes('sharp-duty-interval-run-mismatch'));
+
+const missingClockCorrelation = episodeHarness({
+  firingId: 'firing-correlation-clockless',
+  requireSharpDutyCorrelation: true,
+});
+missingClockCorrelation.episode.start();
+missingClockCorrelation.advance({ gapMs: 40 });
+const missingClockReport = missingClockCorrelation.episode.finish({
+  phase: 'complete',
+  sharpHeartbeat: sharpDutyHeartbeat({ includeClock: false }),
+});
+assert.equal(missingClockReport.status, 'invalid');
+assert.ok(missingClockReport.sharpDutyCorrelation.failures.includes('sharp-cross-page-clock-missing'));
 
 const wrongBudget = episodeHarness({ effectiveBudget: { ...budget, resolution: 160 } });
 wrongBudget.episode.start();
