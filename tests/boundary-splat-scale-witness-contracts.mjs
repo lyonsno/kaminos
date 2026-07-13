@@ -17,6 +17,9 @@ assert.match(witness, /browserProfilePath/, 'scale witness must identify the rep
 assert.match(witness, /discoverBrowserProcessIdentity/, 'scale witness must recover effective profile identity when a cached Greenroom route omits the expected profile argument');
 assert.match(witness, /browserProcessId/, 'scale witness must bind effective profile evidence to the Chrome parent process');
 assert.match(witness, /finalTargetReachable/, 'scale witness must observe final CDP target reachability rather than hard-code browser survival');
+assert.match(witness, /pageId:\s*browserPageId/, 'failure browser evidence must preserve the selected page id');
+assert.match(witness, /lastTrustworthyEvidence\.composedCapture/, 'late browser failures must preserve completed capture evidence');
+assert.match(witness, /lastTrustworthyEvidence\.finalState/, 'late browser failures must preserve the last validated runtime state');
 assert.match(witness, /preserved-open/, 'scale witness must leave the existing browser session open');
 assert.match(witness, /failed-before-primary-output/, 'scale witness must write a durable failure report before primary output exists');
 assert.match(witness, /stale-or-default-config/, 'scale witness must fail loud when requested composition or instance controls do not become effective');

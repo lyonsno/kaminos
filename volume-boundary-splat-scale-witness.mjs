@@ -34,6 +34,8 @@ const runStartedAt = new Date().toISOString();
 
 let ws = null;
 let browserPageId = null;
+let browserPageUrl = null;
+let browserVersion = null;
 let browserProcessIdentity = null;
 let finalTargetReachable = false;
 let failurePhase = 'startup';
@@ -57,9 +59,11 @@ try {
   mkdirSync(outDir, { recursive: true });
   failurePhase = 'connect-existing-browser';
   const version = await cdpFetch('/json/version');
-  lastTrustworthyEvidence.browserVersion = version.Browser;
+  browserVersion = version.Browser;
+  lastTrustworthyEvidence.browserVersion = browserVersion;
   const page = await findPage();
   browserPageId = page.id;
+  browserPageUrl = page.url;
   ws = new WebSocket(page.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
   await wsRequest('Page.enable');
@@ -75,6 +79,7 @@ try {
   const initialState = await debugState();
   const cameraState = await evaluate('window.kaminosBoundarySplatCompositionDebugState?.()');
   const effectivePageUrl = await evaluate('location.href');
+  browserPageUrl = effectivePageUrl;
   validateEffectiveState(initialState, cameraState, effectivePageUrl);
   lastTrustworthyEvidence.initialState = compactState(initialState);
   lastTrustworthyEvidence.cameraState = cameraState;
@@ -122,7 +127,24 @@ try {
   mkdirSync(dirname(imagePath), { recursive: true });
   writeFileSync(imagePath, imageBuffer);
   const finalState = await debugState();
-  validateEffectiveState(finalState, await evaluate('window.kaminosBoundarySplatCompositionDebugState?.()'), await evaluate('location.href'));
+  const finalPageUrl = await evaluate('location.href');
+  browserPageUrl = finalPageUrl;
+  validateEffectiveState(finalState, await evaluate('window.kaminosBoundarySplatCompositionDebugState?.()'), finalPageUrl);
+  const composedCaptureEvidence = {
+    path: imagePath,
+    sha256: sha256(imageBuffer),
+    metrics: imageMetrics,
+    sampleAuthority: capture.sampleAuthority,
+    imageAuthority: capture.imageAuthority,
+    frameCount: capture.frameCount,
+    simStepCount: capture.simStepCount,
+    requestedInstanceCount: capture.boundarySplatRequestedInstanceCount,
+    sourceCandidateCount: capture.boundarySplatSourceCandidateCount,
+    phaseSourceCount: capture.boundarySplatPhaseSourceCount,
+  };
+  lastTrustworthyEvidence.composedCapture = composedCaptureEvidence;
+  lastTrustworthyEvidence.finalState = compactState(finalState);
+  lastTrustworthyEvidence.finalPageUrl = finalPageUrl;
   finalTargetReachable = await targetIsReachable(browserPageId);
   if (!finalTargetReachable) throw new Error('browser-target-unreachable-after-witness');
 
@@ -138,7 +160,7 @@ try {
       identity: 'boundary-splat-scale-single-cdp-browser-v0',
       mode: 'connected-existing',
       port,
-      version: version.Browser,
+      version: browserVersion,
       pageId: page.id,
       pageUrl: effectivePageUrl,
       browserContinuity,
@@ -167,16 +189,8 @@ try {
     historyPrime,
     ladder,
     composedCapture: {
-      path: imagePath,
-      sha256: sha256(imageBuffer),
-      metrics: imageMetrics,
+      ...composedCaptureEvidence,
       clip: clipFromCanvas(capture.canvasCssRect),
-      sampleAuthority: capture.sampleAuthority,
-      imageAuthority: capture.imageAuthority,
-      frameCount: capture.frameCount,
-      simStepCount: capture.simStepCount,
-      requestedInstanceCount: capture.boundarySplatRequestedInstanceCount,
-      sourceCandidateCount: capture.boundarySplatSourceCandidateCount,
       rendererIdentity: capture.boundarySplatRendererIdentity,
       modelIdentity: capture.boundarySplatAttributeModelIdentity,
       compositionIdentity: capture.boundarySplatCompositionIdentity || finalState.boundarySplatCompositionIdentity,
@@ -215,6 +229,9 @@ try {
       identity: 'boundary-splat-scale-single-cdp-browser-v0',
       mode: 'connected-existing',
       port,
+      version: browserVersion,
+      pageId: browserPageId,
+      pageUrl: browserPageUrl,
       browserContinuity,
       browserProcessId: browserProcessIdentity?.browserProcessId ?? null,
       browserProfilePath: browserProcessIdentity?.browserProfilePath ?? null,
