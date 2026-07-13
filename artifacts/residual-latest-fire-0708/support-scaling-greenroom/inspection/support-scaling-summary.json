@@ -1,0 +1,62 @@
+[
+  {
+    "trainPairCount": 5,
+    "evalPairCount": 1,
+    "modelArch": "direct-residual",
+    "learningRate": 0.001,
+    "deltaPsnr": -0.23017038708297832,
+    "weightedDeltaPsnr": -0.20154721051262925,
+    "edgeBandDeltaPsnr": 0.17322691606722884,
+    "temporalDeltaPsnr": -0.0750146504293383,
+    "improvedPatchFraction": 0.3828125,
+    "durationSeconds": 27.999547958374023
+  },
+  {
+    "trainPairCount": 10,
+    "evalPairCount": 2,
+    "modelArch": "direct-residual",
+    "learningRate": 0.001,
+    "deltaPsnr": -0.08586158774069474,
+    "weightedDeltaPsnr": -0.052192776598019464,
+    "edgeBandDeltaPsnr": 0.1891114848354647,
+    "temporalDeltaPsnr": -0.006048948494672857,
+    "improvedPatchFraction": 0.3828125,
+    "durationSeconds": 31.591471195220947
+  },
+  {
+    "trainPairCount": 50,
+    "evalPairCount": 5,
+    "modelArch": "direct-residual",
+    "learningRate": 0.001,
+    "deltaPsnr": 0.003059047547893101,
+    "weightedDeltaPsnr": 0.025576944238736132,
+    "edgeBandDeltaPsnr": 0.24366923260427598,
+    "temporalDeltaPsnr": -0.006009802934514141,
+    "improvedPatchFraction": 0.515625,
+    "durationSeconds": 37.819032192230225
+  },
+  {
+    "trainPairCount": 50,
+    "evalPairCount": 5,
+    "modelArch": "gated-detail-residual",
+    "learningRate": 0.001,
+    "deltaPsnr": -0.08173801248680235,
+    "weightedDeltaPsnr": -0.018191550959592462,
+    "edgeBandDeltaPsnr": 0.22510794849264215,
+    "temporalDeltaPsnr": -0.0001826266568656365,
+    "improvedPatchFraction": 0.3875,
+    "durationSeconds": 82.97780561447144
+  },
+  {
+    "trainPairCount": 50,
+    "evalPairCount": 5,
+    "modelArch": "direct-residual",
+    "learningRate": 0.004,
+    "deltaPsnr": -0.17620419913084362,
+    "weightedDeltaPsnr": -0.10079820318241417,
+    "edgeBandDeltaPsnr": 0.10880020854610706,
+    "temporalDeltaPsnr": -0.00039023629113899005,
+    "improvedPatchFraction": 0.28125,
+    "durationSeconds": 76.04488015174866
+  }
+]

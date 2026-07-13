@@ -4,24 +4,164 @@ import { deflateSync, inflateSync as zlibInflateSync } from 'node:zlib';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
-import { randomInt } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 
-const args = new Map();
-for (let i = 2; i < process.argv.length; i += 2) {
-  args.set(process.argv[i], process.argv[i + 1]);
+function parseCliArgs(argv) {
+  const parsed = new Map();
+  for (let index = 0; index < argv.length; index += 1) {
+    const key = argv[index];
+    if (!key.startsWith('--')) continue;
+    const next = argv[index + 1];
+    const value = next && !next.startsWith('--') ? next : true;
+    parsed.set(key, value);
+    if (value !== true) index += 1;
+  }
+  return parsed;
 }
 
-const url = args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
+const args = parseCliArgs(process.argv.slice(2));
+
+function readVolumeCaptureReplay(capturePath) {
+  if (!capturePath) return null;
+  const resolved = resolve(capturePath);
+  const document = JSON.parse(readFileSync(resolved, 'utf8'));
+  const capture = document.capture || document;
+  const route = capture.route || capture.href || document.route;
+  if (!route) {
+    throw new Error(`Volume capture ${resolved} has no replay route`);
+  }
+  return {
+    path: resolved,
+    documentIdentity: document.identity || null,
+    captureId: document.captureId || capture.captureId || null,
+    artifactRelativePath: document.artifactRelativePath || null,
+    witnessCommand: document.witnessCommand || null,
+    capture,
+    route,
+  };
+}
+
+function volumeParamNameFromControlKey(key) {
+  return `volume_${String(key).replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`;
+}
+
+function captureControlValue(entry) {
+  return entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value')
+    ? entry.value
+    : entry;
+}
+
+function buildRouteParamsForWitness(routeUrl, replay) {
+  const params = new URL(routeUrl).searchParams;
+  const controls = replay?.capture?.domControls || {};
+  for (const [key, value] of Object.entries(controls)) {
+    const capturedValue = captureControlValue(value);
+    if (capturedValue === undefined || capturedValue === null || typeof capturedValue === 'object') continue;
+    params.set(volumeParamNameFromControlKey(key), String(capturedValue));
+  }
+  return params;
+}
+
+function assertApprox(actual, expected, message, tolerance = 0.001) {
+  assert.ok(Math.abs((actual ?? 0) - expected) < tolerance, message);
+}
+
+function assertCaptureReplayControls({
+  captureReplay,
+  replayedCaptureControls,
+  state,
+  expectedVolumeScene,
+  expectedGrid,
+  expectedRaySteps,
+  expectedRenderScale,
+  expectedDensity,
+  expectedFire,
+  expectedSmoke,
+}) {
+  const controls = captureReplay?.capture?.domControls || {};
+  const keys = Object.keys(controls);
+  assert.ok(keys.length > 0, 'capture replay had no saved DOM controls to verify');
+  assert.equal(replayedCaptureControls?.total, keys.length, 'capture replay did not enumerate every saved DOM control');
+  assert.equal(replayedCaptureControls?.applied, keys.length, 'capture replay did not apply every saved DOM control');
+  assert.equal(replayedCaptureControls?.skipped ?? 0, 0, 'capture replay skipped saved DOM controls');
+
+  const has = (key) => Object.prototype.hasOwnProperty.call(controls, key);
+  const value = (key) => captureControlValue(controls[key]);
+  const numeric = (key) => Number(value(key));
+
+  if (has('scene')) {
+    assert.equal(state.volumeScene, expectedVolumeScene, 'captured volume scene did not apply');
+    assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'captured volume scene did not reach debug controls');
+  }
+  if (has('resolution')) {
+    assert.equal(Number(state.simGrid), expectedGrid, `captured grid did not apply as ${expectedGrid}^3`);
+  }
+  if (has('steps')) assertApprox(Number(state.controls?.raySteps), expectedRaySteps, 'captured ray steps did not apply');
+  if (has('renderScale')) {
+    assertApprox(Number(state.controls?.renderScale), expectedRenderScale, 'captured render scale did not apply');
+    assertApprox(Number(state.renderScale), expectedRenderScale, 'captured effective render scale did not apply', 0.02);
+  }
+  if (has('density')) assertApprox(Number(state.controls?.density), numeric('density'), 'captured density did not apply');
+  if (has('fire')) assertApprox(Number(state.controls?.fire), numeric('fire'), 'captured fire did not apply');
+  if (has('smoke')) assertApprox(Number(state.controls?.smoke), numeric('smoke'), 'captured smoke did not apply');
+}
+
+const captureReplay = args.has('--capture') ? readVolumeCaptureReplay(args.get('--capture')) : null;
+const isCaptureReplay = Boolean(captureReplay);
+const url = captureReplay?.route || args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1';
+
+function parseNumberList(value) {
+  return String(value || '')
+    .split(',')
+    .map(entry => Number(entry.trim()))
+    .filter(entry => Number.isFinite(entry));
+}
+
+function clampRenderScale(value) {
+  const requested = Number(value);
+  if (!Number.isFinite(requested)) return 0.25;
+  return Math.max(0.1, Math.min(1, requested));
+}
+
+function scaleSlug(value) {
+  return `rs${String(Math.round(clampRenderScale(value) * 100)).padStart(3, '0')}`;
+}
+
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
+const boundarySplatFeatureOutArg = args.get('--boundary-splat-feature-out');
+const boundarySplatFeatureOut = resolve(
+  typeof boundarySplatFeatureOutArg === 'string'
+    ? boundarySplatFeatureOutArg
+    : reportPath.replace(/\.json$/i, '.boundary-splat-features.f32'),
+);
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-volume-witness-profile-');
+const reuseBrowser = args.has('--reuse-browser');
+const keepBrowserOpen = args.has('--keep-browser-open');
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = args.get('--window-size') || '1280,960';
 const fullScreenshot = args.has('--full-screenshot')
   ? resolve(args.get('--full-screenshot') || out.replace(/\.png$/i, '.full.png'))
   : '';
+const renderScaleSet = parseNumberList(args.get('--render-scale-set')).map(clampRenderScale);
+const renderScaleSetDir = resolve(args.get('--render-scale-set-dir') || dirname(out));
+const renderScaleSetPrefix = String(args.get('--render-scale-set-prefix') || 'same-state-render-scale-set');
+const renderScaleFeatureCaptures = args.has('--render-scale-feature-captures') && !['0', 'false', 'no'].includes(String(args.get('--render-scale-feature-captures') || '1').toLowerCase());
+const renderScaleAuxiliaryCaptureModes = new Set(String(args.get('--render-scale-auxiliary-captures') || '')
+  .split(',')
+  .map(entry => entry.trim().toLowerCase())
+  .filter(Boolean));
+const renderScaleFlowDebugCaptures = renderScaleAuxiliaryCaptureModes.has('flow-debug') || renderScaleAuxiliaryCaptureModes.has('flow_debug');
+const renderScaleBoundarySidecarSupportCaptures = renderScaleAuxiliaryCaptureModes.has('boundary-sidecar-support') || renderScaleAuxiliaryCaptureModes.has('boundary_sidecar_support');
+const controlledStepSequenceRequested = args.has('--controlled-step-sequence') && !['0', 'false', 'no'].includes(String(args.get('--controlled-step-sequence') || '1').toLowerCase());
+const controlledStepFrames = Math.max(1, Math.floor(Number(args.get('--controlled-step-frames') || 1)));
+const controlledStepDeltaMs = Math.max(0, Number(args.get('--controlled-step-delta-ms') || 220));
+const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderScaleSetDir);
+const controlledStepPrefix = String(args.get('--controlled-step-prefix') || 'controlled-step-sequence');
+const freezeIntegrityProbeRequested = args.has('--freeze-integrity-probe') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe') || '1').toLowerCase());
+const freezeIntegrityProbeOnly = freezeIntegrityProbeRequested && args.has('--freeze-integrity-probe-only') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe-only') || '1').toLowerCase());
 const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'receiver-support', 'receiver-light-isolate', 'receiver-light-brick-wall']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
@@ -34,6 +174,8 @@ const expectsReceiverSupportEvidence = evidenceMode === 'receiver-support';
 const expectsReceiverLightIsolateEvidence = evidenceMode === 'receiver-light-isolate';
 const expectsReceiverLightBrickWallEvidence = evidenceMode === 'receiver-light-brick-wall';
 const expectsRenderedReceiverLightEvidence = expectsReceiverLightIsolateEvidence || expectsReceiverLightBrickWallEvidence;
+const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
+const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
   : (expectsRenderedReceiverLightEvidence
@@ -65,6 +207,31 @@ const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
+
+function materializeBoundarySplatFeatureCapture(capture) {
+  if (!capture) return null;
+  if (capture.status !== 'captured') throw new Error(`Boundary splat feature capture status was ${capture.status || 'missing'}`);
+  if (capture.packedEncoding !== 'float32-le-base64' || typeof capture.packedFloat32Base64 !== 'string') {
+    throw new Error('Boundary splat feature capture omitted packed float32 payload');
+  }
+  const bytes = Buffer.from(capture.packedFloat32Base64, 'base64');
+  const expectedBytes = Number(capture.rowCount) * Number(capture.strideFloats) * Float32Array.BYTES_PER_ELEMENT;
+  if (bytes.byteLength !== expectedBytes || Number(capture.packedByteLength) !== expectedBytes) {
+    throw new Error(`Boundary splat feature capture byte length ${bytes.byteLength} did not equal expected ${expectedBytes}`);
+  }
+  mkdirSync(dirname(boundarySplatFeatureOut), { recursive: true });
+  writeFileSync(boundarySplatFeatureOut, bytes);
+  const { packedFloat32Base64, ...metadata } = capture;
+  return {
+    ...metadata,
+    artifact: {
+      path: boundarySplatFeatureOut,
+      encoding: 'float32-le',
+      byteLength: bytes.byteLength,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    },
+  };
+}
 
 function normalizeLifecycleEffect(value) {
   const normalized = String(value || 'none').toLowerCase();
@@ -262,6 +429,47 @@ function buildPyroRawCarrierPaintEvidence(sample = {}, state = {}) {
       combustionFrontMean,
       frontTopologyMean,
       detailMean,
+      radianceMean,
+    },
+  };
+}
+
+function buildBoundaryFireReadbackEvidence(sample = {}, state = {}) {
+  const sim = sample.simReadback || {};
+  const controls = sample.controls || state.controls || {};
+  const reactionLiveView = String(controls.reactionLiveView || state.reactionLiveView || '');
+  const shellInspectMode = String(controls.shellInspectMode || state.shellInspectMode || '');
+  const fireRenderMode = String(controls.fireRenderMode || state.fireRenderMode || '');
+  const emissionDetailMean = finiteNumber(sim.emissionDetailMean);
+  const combustionFrontMean = finiteNumber(sim.combustionFrontMean);
+  const frontTopologyMean = finiteNumber(sim.frontTopologyMean);
+  const fireLickMean = finiteNumber(sim.fireLickMean);
+  const radianceMean = finiteNumber(sim.radianceMean);
+  const expectsBoundaryFire =
+    reactionLiveView === 'boundary_fire' ||
+    shellInspectMode === 'boundary_fire' ||
+    fireRenderMode === 'boundary_fire';
+  const hasTopologyEmissionCarriers =
+    emissionDetailMean > 0.0005 &&
+    combustionFrontMean > 0.00025 &&
+    frontTopologyMean > 0.00003;
+  const hasBreakupCarrier = fireLickMean > 0.00025;
+  const acceptsZeroRadiance = expectsBoundaryFire && hasTopologyEmissionCarriers && hasBreakupCarrier;
+  return {
+    identity: 'boundary-fire-readback-evidence-v0',
+    phase: acceptsZeroRadiance
+      ? 'boundary-fire-topology-emission-carriers-live'
+      : (expectsBoundaryFire ? 'boundary-fire-carriers-insufficient' : 'not-boundary-fire-route'),
+    acceptsZeroRadiance,
+    expectsBoundaryFire,
+    reactionLiveView,
+    shellInspectMode,
+    fireRenderMode,
+    carriers: {
+      emissionDetailMean,
+      combustionFrontMean,
+      frontTopologyMean,
+      fireLickMean,
       radianceMean,
     },
   };
@@ -938,6 +1146,240 @@ const TALL_PLUME_OPERATOR_PRESETS = {
     canonicalCenterline: 1.00,
     canonicalBodyBalance: 0.00,
   },
+  rgb_upscale_basin_0711: {
+    label: 'rgb upscale basin 0711',
+    sourceCaptureIdentity: 'kaminos-rgb-upscale-basin-live-capture-v1',
+    sourceCaptureHash: 'c4d3f040',
+    sourceCapturedAt: '2026-07-11T18:05:39.977Z',
+    sourceCaptureSha256: 'cc5cf502cf3720c8b9d31555f66770d3febb48e279d1c2f12cc194c3b21790d1',
+    sourceRawCaptureFixture: 'fixtures/volume/rgb-upscale-basin-0711-c4d3f040.capture.json',
+    sourceCanvasFixture: 'fixtures/volume/rgb-upscale-basin-0711-c4d3f040.png',
+    sourceCanvasCaveat: 'blank-webgpu-drawing-buffer-capture',
+    sourceReplayWitnessFixture: 'fixtures/volume/rgb-upscale-basin-0711-c4d3f040.replay-witness.png',
+    sourceTrainingTarget: 'visual-rgb-upscaling',
+    volumeScene: 'tall_plume',
+    density: 6,
+    fire: 0,
+    radiance: 0,
+    absorption: 0.75,
+    glow: 0,
+    smoke: 2.8,
+    curl: 4,
+    microdetail: 1.7,
+    interfaceShred: 3.2,
+    fireLicks: 2.15,
+    projection: 1.5,
+    speed: 4.4,
+    raySteps: 88,
+    adaptiveRays: 1,
+    occupancySkip: 1,
+    majorantSkip: 0,
+    majorantSmooth: 1,
+    majorantGuard: 1,
+    temporalAccum: 0,
+    temporalJitter: 0,
+    historyClamp: 0,
+    fireScale: 0.95,
+    detailScale: 0.45,
+    plumeHeight: 0.9,
+    windStrength: 0.4,
+    windAngle: -65,
+    windHeight: -0.8,
+    renderScale: 0.3,
+    inputRadius: 0.7,
+    flowRate: 0.5,
+    reactionLiveView: 'boundary_fire',
+    reactionLiveViewIdentity: 'reaction-live-view-shader-inspect-v0',
+    boundarySidecarSource: 'baked',
+    boundarySidecarView: 'off',
+    reactionBoundaryGradient: 2.85,
+    reactionBoundarySupportThermal: 1.76,
+    reactionBoundarySupportReaction: 2,
+    reactionBoundarySupportFront: 1.92,
+    reactionBoundarySupportInterface: 0,
+    reactionBoundaryCut: 0.55,
+    reactionBoundarySoftness: 0.45,
+    reactionBoundaryCoreReject: 0.92,
+    reactionBoundaryTopology: 2.5,
+    reactionBoundaryCurl: 1.12,
+    reactionBoundaryDivergence: 1,
+    reactionBoundaryContrast: 0.8,
+    reactionBoundaryGamma: 2,
+    reactionBoundaryOpacity: 1.85,
+    reactionBoundaryFireRidge: 2,
+    reactionBoundaryFireRidgeCut: 0.365,
+    reactionBoundaryFireTip: 1.16,
+    reactionBoundaryFireErosion: 0.2,
+    reactionBoundaryFireCleanBlue: 0.7,
+    reactionBoundaryFireSoot: 1.46,
+    reactionBoundaryFireYellow: 0.3,
+    reactionBoundaryFireWarmth: 0.34,
+    reactionBoundaryFireLuma: 5,
+    boundarySidecarBlur: 1,
+    boundarySidecarWidth: 2,
+    boundarySidecarRidge: 0.3,
+    fireRenderMode: 'inspect',
+    shellInspectMode: 'boundary_fire',
+    shellAmount: 0,
+    shellWidth: 0.05,
+    shellThermal: 0.85,
+    shellReaction: 1.1,
+    shellFront: 1.25,
+    shellEdge: 0.85,
+    shellCoreSuppress: 0.55,
+    shellBite: 0.8,
+    shellCurl: 0.25,
+    shellHeat: 1.65,
+    shellDivergence: 0,
+    shellLuma: 1.35,
+    shellExposure: 1.15,
+    shellSoftClip: 0.2,
+    shellSmoke: 2,
+    resolution: 128,
+    majorantGrid: 24,
+    gridOverlay: 0,
+    flowDebug: 0,
+    oracleActivityCue: 1,
+    oracleActivityDisplay: 0,
+    oracleActivityCurlNoise: 0.4,
+    oracleActivityVorticity: 3,
+    oracleActivityMaterial: 0,
+    lookFreeze: 0,
+    reactionHeatMin: 0,
+    reactionHeatMax: 0.42,
+    reactionFuelMin: 0,
+    reactionFuelMax: 0.071,
+    reactionFlameMin: 0.03,
+    reactionFlameMax: 0.12,
+    reactionFrontMin: 0,
+    reactionFrontMax: 0.08,
+    reactionGradientMin: 0.02,
+    reactionGradientMax: 0.18,
+    reactionCoreMin: 0.18,
+    reactionCoreMax: 0.95,
+    reactionCoreReject: 0.82,
+    reactionTopologyGain: 0,
+    reactionStretchErode: 0,
+    reactionDivergenceMin: 0,
+    reactionDivergenceMax: 0.07,
+    reactionDivergenceGain: 0,
+    reactionCurlWarp: 0,
+    reactionShellGamma: 1.45,
+    reactionShellContrast: 3.1,
+    pyroCompareMode: 'base',
+    pyroDynamicDetail: 0,
+    pyroMaterialGain: 0,
+    pyroInterfaceFocus: 0,
+    pyroEdgeBite: 0,
+    pyroBiteBorder: 0,
+    pyroBiteTeeth: 0,
+    pyroBiteWake: 0,
+    pyroBiteHeight: 0,
+    pyroBiteFireLock: 1,
+    pyroBiteCore: 0,
+    pyroBiteCoreCut: 1,
+    pyroBiteRim: 0,
+    pyroBiteRimCut: 1,
+    pyroBiteAfter: 0,
+    pyroBiteAfterCut: 1,
+    pyroFireMode: 'stock',
+    pyroFlamePaint: 0,
+    pyroStockMix: 1,
+    pyroFlameLuma: 1,
+    pyroFlameCoreColor: '#ffae00',
+    pyroFlameEdgeColor: '#ff4d00',
+    pyroBiteHeat: 0,
+    pyroBiteChroma: 0,
+    pyroBiteLuma: 1,
+    pyroBiteEmberColor: '#ff6600',
+    pyroBiteHotColor: '#ff4000',
+    pyroSmokeFold: 0,
+    pyroFoldBorder: 0,
+    pyroFoldWake: 0,
+    pyroWakeLift: 0,
+    pyroWakeWarmth: 0,
+    pyroWakeLuma: 1,
+    pyroWakeShadowColor: '#384c50',
+    pyroWakeEmberColor: '#b06a2a',
+    pyroRadiance: 0,
+    pyroRadianceGate: 1,
+    pyroRadianceSpill: 0,
+    pyroRadianceWarmth: 0,
+    pyroRadianceHue: 0.5,
+    pyroRadianceChroma: 0,
+    pyroRadianceLuma: 1,
+    pyroRadianceCoolColor: '#eb0000',
+    pyroRadianceWarmColor: '#ffcd75',
+    pyroRadianceSource: 'fire',
+    pyroRadianceHeight: 0,
+    pyroRadianceBorder: 0,
+    pyroRadianceTeeth: 0,
+    pyroRadianceRise: 0,
+    pyroRadianceFireLock: 1,
+    pyroFlowBite: 0,
+    pyroFlowBorder: 0,
+    pyroFlowTeeth: 0,
+    pyroFlowRise: 0,
+    pyroFlowFireLock: 1,
+    pyroFlowLuma: 1,
+    pyroFlowRadiance: 0,
+    pyroFlowSpikes: 0,
+    pyroFlowCoolColor: '#ff6400',
+    pyroFlowHotColor: '#ff320f',
+    pyroDiagnosticPaint: 0,
+    pyroCarrierView: 'normal',
+    pyroOverdrive: 1,
+    pressureMode: 'global-p3',
+    pressureEffectiveLabel: 'Full P3',
+    pressureTierOverlay: 0,
+    pressureTierLowerMax: 0.61,
+    pressureTierHeroMin: 0,
+    pressureTierHeroMax: 0.34,
+    activityPressureP4Enabled: true,
+    activityPressureMaxTier: 4,
+    activityPressureDispatchStrategy: 'coarse-brick-activity-pressure-mask-v0',
+    activityPressureShadowOverhead: false,
+    gpuTiming: true,
+    activityVorticityGate: 0,
+    activityDetailGate: 0,
+    canonicalSpread: 1,
+    canonicalCenterline: 1,
+    canonicalBodyBalance: 0,
+    canonicalMacroPreset: '',
+    canonicalSourceMode: 'current',
+    canonicalSourceModeValue: 0,
+    canonicalRenderMode: 'default',
+    canonicalRenderModeValue: 0,
+    canonicalMotionMode: 'animated',
+    canonicalMotionModeValue: 0,
+    canonicalContentMode: 'smoke',
+    canonicalContentModeValue: 0,
+    canonicalSourceY: -0.74,
+    canonicalSourceInjection: 1,
+    canonicalBuoyancy: 1,
+    reactionFuelScale: 1,
+    lifecycleEffect: 'none',
+    lifecycleT: 0,
+    quenchVapor: 0,
+    runtimeQualityRequested: 'live_high',
+    gpuPressure: 0,
+    runtimeQualityReason: 'route-default',
+    majorantCadence: 1,
+    pressureIterations: 3,
+    pressureStrategy: 'global',
+    simProfile: false,
+    rayBudgetPreset: '',
+    bonfireRecenter: 1,
+    bonfireLateralDamping: 1,
+    bonfireShear: 1,
+    bonfireDetailForces: 1,
+    bonfireDepinch: 1,
+    bonfireProjection: 1,
+    bonfireTemporal: 1,
+    bonfireInstabilityProbe: 0,
+    runtimeQualityEffective: 'live_high',
+    legacyPyroBackedOff: true,
+  },
 };
 
 const DEFAULT_VOLUME_SMOKE_TALL_PRESET = 'boundary_fire_bonfire_a_la_ruffles_0709';
@@ -1378,19 +1820,216 @@ async function waitForCdp() {
   throw new Error('Chrome DevTools endpoint did not open');
 }
 
+async function cdpAvailable() {
+  try {
+    await cdpFetch('/json/version');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function attachOrLaunchSharedBrowser() {
+  if (reuseBrowser && await cdpAvailable()) {
+    return {
+      identity: 'attach-or-launch-shared-cdp-browser-v0',
+      mode: 'attached-existing',
+      port,
+      userDataDir,
+      keepBrowserOpen,
+      process: null,
+    };
+  }
+  const proc = spawn(chrome, [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${userDataDir}`,
+    '--no-first-run',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    `--window-size=${windowSize}`,
+    url,
+  ], { stdio: 'ignore', detached: keepBrowserOpen });
+  if (keepBrowserOpen) proc.unref();
+  return {
+    identity: reuseBrowser ? 'attach-or-launch-shared-cdp-browser-v0' : 'per-capture-chrome-process-v0',
+    mode: reuseBrowser ? 'launched-shared' : 'launched-per-capture',
+    port,
+    userDataDir,
+    keepBrowserOpen,
+    process: proc,
+  };
+}
+
+function closeBrowserSession(browserSession) {
+  if (browserSession?.keepBrowserOpen) return;
+  browserSession?.process?.kill('SIGTERM');
+}
+
 function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
-  ws.send(JSON.stringify({ id, method, params }));
+  const keepAlive = setInterval(() => {}, 1000);
   return new Promise((resolveReq, rejectReq) => {
+    const cleanup = () => {
+      clearInterval(keepAlive);
+      ws.removeEventListener('message', onMessage);
+      ws.removeEventListener('close', onClose);
+      ws.removeEventListener('error', onError);
+    };
+    const settle = (fn, value) => {
+      cleanup();
+      fn(value);
+    };
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.id !== id) return;
-      ws.removeEventListener('message', onMessage);
-      if (msg.error) rejectReq(new Error(`${method}: ${msg.error.message}`));
-      else resolveReq(msg.result);
+      if (msg.error) settle(rejectReq, new Error(`${method}: ${msg.error.message}`));
+      else settle(resolveReq, msg.result);
     };
+    const onClose = () => settle(rejectReq, new Error(`${method}: WebSocket closed before CDP response ${id}`));
+    const onError = () => settle(rejectReq, new Error(`${method}: WebSocket error before CDP response ${id}`));
     ws.addEventListener('message', onMessage);
+    ws.addEventListener('close', onClose, { once: true });
+    ws.addEventListener('error', onError, { once: true });
+    try {
+      ws.send(JSON.stringify({ id, method, params }));
+    } catch (err) {
+      settle(rejectReq, err);
+    }
   });
+}
+
+async function captureFlowDebugAuxiliary({
+  ws,
+  renderScale,
+  scaleSet,
+  outputPath,
+  screenshotClip,
+  canvasCssRect,
+  hudSuppression,
+}) {
+  const flowDebugEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+      renderScale,
+      now: scaleSet.fixedNowMs,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      baseFrameCount: scaleSet.baseFrameCount,
+      baseSimStepCount: scaleSet.baseSimStepCount,
+      includeFeatureRgba: false,
+      controlOverrides: { flowDebug: 1 },
+      restoreControls: true,
+      resumeRenderLoop: false,
+    })})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const flowDebugCapture = flowDebugEval.result.value;
+  if (flowDebugCapture?.ok !== true || flowDebugCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+    throw new Error(`Flow Debug auxiliary capture failed: ${JSON.stringify({
+      renderScale,
+      ok: flowDebugCapture?.ok,
+      reason: flowDebugCapture?.reason,
+      sampleAuthority: flowDebugCapture?.sampleAuthority,
+      sameStateCaptureId: flowDebugCapture?.sameStateCaptureId,
+    })}`);
+  }
+  const flowDebugShot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    clip: screenshotClip,
+  });
+  const imageBuffer = Buffer.from(flowDebugShot.data, 'base64');
+  writeFileSync(outputPath, imageBuffer);
+  const metrics = measureScreenshot(imageBuffer);
+  return {
+    path: outputPath,
+    width: metrics.width,
+    height: metrics.height,
+    auxiliaryAuthority: FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY,
+    imageAuthority: flowDebugCapture.imageAuthority,
+    inputChannels: 4,
+    channelLayout: 'flow-debug-interface-cyan-red-rgba',
+    source: 'volume_flow_debug',
+    controlOverrides: { flowDebug: 1 },
+    sampleAuthority: flowDebugCapture.sampleAuthority,
+    sameStateCaptureId: flowDebugCapture.sameStateCaptureId,
+    frameCount: flowDebugCapture.frameCount,
+    simStepCount: flowDebugCapture.simStepCount,
+    canvasCssRect,
+    screenshotClip,
+    devicePixelRatio: flowDebugCapture.devicePixelRatio,
+    hudSuppression,
+    metrics,
+  };
+}
+
+async function captureBoundarySidecarSupportAuxiliary({
+  ws,
+  renderScale,
+  scaleSet,
+  outputPath,
+  screenshotClip,
+  canvasCssRect,
+  hudSuppression,
+}) {
+  const controlOverrides = {
+    boundarySidecarSource: 'baked',
+    boundarySidecarView: 'support',
+  };
+  const sidecarEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+      renderScale,
+      now: scaleSet.fixedNowMs,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      baseFrameCount: scaleSet.baseFrameCount,
+      baseSimStepCount: scaleSet.baseSimStepCount,
+      includeFeatureRgba: false,
+      controlOverrides,
+      restoreControls: true,
+      resumeRenderLoop: false,
+    })})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const sidecarCapture = sidecarEval.result.value;
+  if (sidecarCapture?.ok !== true || sidecarCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+    throw new Error(`Boundary sidecar support auxiliary capture failed: ${JSON.stringify({
+      renderScale,
+      ok: sidecarCapture?.ok,
+      reason: sidecarCapture?.reason,
+      sampleAuthority: sidecarCapture?.sampleAuthority,
+      sameStateCaptureId: sidecarCapture?.sameStateCaptureId,
+    })}`);
+  }
+  const sidecarShot = await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    clip: screenshotClip,
+  });
+  const imageBuffer = Buffer.from(sidecarShot.data, 'base64');
+  writeFileSync(outputPath, imageBuffer);
+  const metrics = measureScreenshot(imageBuffer);
+  return {
+    path: outputPath,
+    width: metrics.width,
+    height: metrics.height,
+    auxiliaryAuthority: BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY,
+    imageAuthority: sidecarCapture.imageAuthority,
+    inputChannels: 4,
+    channelLayout: 'boundary-sidecar-support-rgba',
+    source: 'volume_boundary_sidecar_view',
+    sidecarIdentity: sidecarCapture.boundarySidecarIdentity || null,
+    sidecarAuthority: sidecarCapture.boundarySidecarAuthority || null,
+    controlOverrides,
+    sampleAuthority: sidecarCapture.sampleAuthority,
+    sameStateCaptureId: sidecarCapture.sameStateCaptureId,
+    frameCount: sidecarCapture.frameCount,
+    simStepCount: sidecarCapture.simStepCount,
+    canvasCssRect,
+    screenshotClip,
+    devicePixelRatio: sidecarCapture.devicePixelRatio,
+    hudSuppression,
+    metrics,
+  };
 }
 
 function waitForWebSocketOpen(ws) {
@@ -1541,26 +2180,146 @@ async function captureViewportScreenshot(ws, path) {
   return path;
 }
 
+async function replayCaptureControls(ws, capture = {}) {
+  const controls = capture.domControls || {};
+  if (!controls || Object.keys(controls).length === 0) {
+    return {
+      identity: 'kaminos-volume-capture-control-replay-v0',
+      applied: 0,
+      skipped: 0,
+      total: 0,
+      reason: 'no-dom-controls',
+    };
+  }
+  const replayEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `(() => {
+      const controls = ${JSON.stringify(controls)};
+      const results = [];
+      const idForKey = (key) => 'volume-' + String(key).replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+      const valueFor = (entry) => entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : entry;
+      for (const [key, entry] of Object.entries(controls)) {
+        const id = entry && typeof entry === 'object' && entry.id ? entry.id : idForKey(key);
+        const el = document.getElementById(id);
+        if (!el) {
+          results.push({ key, id, applied: false, reason: 'missing-element' });
+          continue;
+        }
+        const value = valueFor(entry);
+        if (el.type === 'checkbox') {
+          el.checked = Boolean(value);
+        } else {
+          el.value = String(value);
+        }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        results.push({ key, id, applied: true, value });
+      }
+      if (typeof readVolumeControls === 'function') {
+        window.__kaminosVolumePrototype?.setControls?.(readVolumeControls());
+      }
+      return {
+        identity: 'kaminos-volume-capture-control-replay-v0',
+        total: results.length,
+        applied: results.filter((item) => item.applied).length,
+        skipped: results.filter((item) => !item.applied).length,
+        results,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return replayEval.result.value;
+}
+
+async function replayCaptureCamera(ws, capture = {}) {
+  const camera = capture.camera || null;
+  if (!camera) {
+    return {
+      identity: 'kaminos-volume-capture-camera-replay-v0',
+      applied: false,
+      reason: 'no-camera',
+    };
+  }
+  const cameraEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: `(() => {
+      const camera = ${JSON.stringify(camera)};
+      if (typeof window.kaminosSetCameraDebugPose !== 'function') {
+        return {
+          identity: 'kaminos-volume-capture-camera-replay-v0',
+          applied: false,
+          reason: 'missing-kaminosSetCameraDebugPose',
+          camera,
+        };
+      }
+      return {
+        identity: 'kaminos-volume-capture-camera-replay-v0',
+        applied: true,
+        camera,
+        result: window.kaminosSetCameraDebugPose(camera),
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return cameraEval.result.value;
+}
+
+async function recoverIdentityFrameState(ws, state) {
+  const frameCount = Number(state?.frameCount || 0);
+  const displayWidth = Number(state?.displayWidth || 0);
+  const displayHeight = Number(state?.displayHeight || 0);
+  if (frameCount > 5 && displayWidth > 1 && displayHeight > 1) {
+    return { state, recovery: { attempted: false, reason: 'identity-state-already-sufficient' } };
+  }
+  const before = {
+    frameCount,
+    displayWidth,
+    displayHeight,
+    active: state?.active ?? null,
+    backend: state?.backend ?? null,
+  };
+  await wsRequest(ws, 'Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+  });
+  await delay(500);
+  const recoveredEval = await wsRequest(ws, 'Runtime.evaluate', {
+    expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+    returnByValue: true,
+  });
+  const recoveredState = recoveredEval.result.value || state;
+  return {
+    state: recoveredState,
+    recovery: {
+      identity: 'volume-witness-identity-frame-recovery-v0',
+      attempted: true,
+      trigger: 'insufficient-frame-count-or-dimensions-before-identity-assert',
+      mechanism: 'cdp-page-capture-screenshot-compositor-read-then-debugState-reread',
+      before,
+      after: {
+        frameCount: Number(recoveredState?.frameCount || 0),
+        displayWidth: Number(recoveredState?.displayWidth || 0),
+        displayHeight: Number(recoveredState?.displayHeight || 0),
+        active: recoveredState?.active ?? null,
+        backend: recoveredState?.backend ?? null,
+      },
+    },
+  };
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
+  let replayedCaptureControls = null;
+  let replayedCaptureCamera = null;
 
-  let phase = 'setup';
+  const browserSession = await attachOrLaunchSharedBrowser();
+
+  let phase = 'launch';
+  let identityFrameRecovery = null;
   let receiverLightDebug = null;
   let receiverLightEvidence = null;
   let sceneContextDebug = null;
   let sceneContextEvidence = null;
   let sceneContextLocalAssetMount = null;
-  const proc = spawn(chrome, [
-    `--remote-debugging-port=${port}`,
-    `--user-data-dir=${userDataDir}`,
-    '--no-first-run',
-    '--disable-background-timer-throttling',
-    '--disable-renderer-backgrounding',
-    `--window-size=${windowSize}`,
-    url,
-  ], { stdio: 'ignore' });
-
   try {
     if (expectsVolumeBrickWallSceneContext) {
       phase = 'brick-wall-local-asset-mount';
@@ -1578,7 +2337,15 @@ async function main() {
     await wsRequest(ws, 'Page.enable');
     phase = 'load';
     await wsRequest(ws, 'Page.navigate', { url });
-    await wsRequest(ws, 'Page.bringToFront');
+    if (!reuseBrowser) {
+      await wsRequest(ws, 'Page.bringToFront');
+    }
+    if (isCaptureReplay) {
+      phase = 'capture-replay';
+      await delay(500);
+      replayedCaptureControls = await replayCaptureControls(ws, captureReplay.capture);
+      replayedCaptureCamera = await replayCaptureCamera(ws, captureReplay.capture);
+    }
     await delay(settleMs);
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
       await wsRequest(ws, 'Runtime.evaluate', {
@@ -1608,6 +2375,9 @@ async function main() {
       if (state?.frameCount > 8) break;
       await delay(250);
     }
+    const recoveredIdentity = await recoverIdentityFrameState(ws, state);
+    state = recoveredIdentity.state;
+    identityFrameRecovery = recoveredIdentity.recovery;
     assert.ok(state, 'missing volume debug state');
     assert.equal(state.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0', 'wrong effective route');
     assert.equal(state.prototypeIdentity, 'kaminos-volume-prototype-v0', 'wrong prototype identity');
@@ -1685,7 +2455,9 @@ async function main() {
         receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
         receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
         receiverLightDebug.dynamicEnvelopeIdentity === 'tier2-live-debug-receiver-envelope-v1' &&
-        receiverLightDebug.dynamicEnvelopeSource === 'volume-debug-frame-energy-procedural-envelope-no-readback-v1' &&
+        receiverLightDebug.requestedEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+        receiverLightDebug.effectiveEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+        receiverLightDebug.splatMomentEnvelopeAccepted === true &&
         receiverLightDebug.cpuReadbackAuthority === false &&
         receiverLightDebug.hiddenThreeLightAuthority === false &&
         receiverLightDebug.canvasBridgeAuthority === false &&
@@ -1701,6 +2473,13 @@ async function main() {
     if (expectsRenderedReceiverLightEvidence) {
       if (!receiverLightDebug || receiverLightDebug.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0') {
         throw new Error(`wrong rendered Tier 2 receiver-light identity: ${JSON.stringify(receiverLightDebug)}`);
+      }
+      if (
+        receiverLightDebug.requestedEnvelopeSource !== 'gpu-splat-radiance-coverage-depth-moments-v0' ||
+        receiverLightDebug.effectiveEnvelopeSource !== 'gpu-splat-radiance-coverage-depth-moments-v0' ||
+        receiverLightDebug.splatMomentEnvelopeAccepted !== true
+      ) {
+        throw new Error(`Tier 2 receiver-light did not consume splat-moment envelope authority: ${JSON.stringify(receiverLightDebug)}`);
       }
       const expectedIsolate = expectsReceiverLightIsolateEvidence;
       if (!receiverLightEvidence.accepted || receiverLightDebug.active !== true || receiverLightDebug.isolate !== expectedIsolate) {
@@ -1730,10 +2509,264 @@ async function main() {
         throw new Error(`stale receiver-light envelope: ${JSON.stringify(receiverLightEvidence)}`);
       }
     }
+    if ((state.frameCount || 0) <= 5 || (state.displayWidth || 0) <= 0 || (state.displayHeight || 0) <= 0) {
+      await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
+      for (let i = 0; i < 40; i++) {
+        const stateEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+          returnByValue: true,
+        });
+        state = stateEval.result.value || state;
+        if ((state.frameCount || 0) > 5 && (state.displayWidth || 0) > 0 && (state.displayHeight || 0) > 0) break;
+        await delay(250);
+      }
+    }
     assert.ok(
       state.frameCount > 5,
       `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
     );
+    if (expectsRenderedReceiverLightEvidence && !isCaptureReplay) {
+      phase = 'receiver-light-rendered-evidence';
+      const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+      });
+      const screenshotBuffer = Buffer.from(pageShot.data || '', 'base64');
+      if (screenshotBuffer.length === 0) {
+        throw new Error('receiver-light rendered evidence screenshot was empty');
+      }
+      writeFileSync(out, screenshotBuffer);
+      if (fullScreenshot) writeFileSync(fullScreenshot, screenshotBuffer);
+      const screenshotMetrics = measureScreenshot(screenshotBuffer);
+      if (screenshotMetrics.litPixels < 500 || screenshotMetrics.meanLuma < 2.0) {
+        throw new Error(`receiver-light rendered evidence screenshot missing visible signal: ${JSON.stringify(screenshotMetrics)}`);
+      }
+      if (screenshotMetrics.meanLuma > 94 || screenshotMetrics.litPixels > 610000) {
+        throw new Error(`receiver-light rendered evidence overexposed: ${JSON.stringify(screenshotMetrics)}`);
+      }
+      const refreshedStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+        returnByValue: true,
+      });
+      state = refreshedStateEval.result.value || state;
+      const refreshedBridgeEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumeBridge?.debugState?.()',
+        returnByValue: true,
+      });
+      const refreshedSceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumeSceneContext?.debugState?.() ?? null',
+        returnByValue: true,
+      });
+      const refreshedReceiverLightEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+        returnByValue: true,
+      });
+      const report = {
+        identity: 'kaminos-volume-witness-report-v0',
+        requestedRoute: url,
+        windowSize,
+        settleMs,
+        evidenceMode,
+        visualEvidenceMode,
+        phase,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        active: state.active,
+        state,
+        volumeBridge: refreshedBridgeEval.result.value || bridge,
+        receiverLightEvidence: {
+          ...receiverLightEvidence,
+          debug: refreshedReceiverLightEval.result.value || receiverLightEvidence.debug,
+        },
+        sceneContextEvidence: {
+          ...sceneContextEvidence,
+          debug: refreshedSceneContextEval.result.value || sceneContextEvidence.debug,
+        },
+        sceneContextLocalAssetMount,
+        identityFrameRecovery,
+        screenshotMetrics,
+        screenshot: out,
+        fullScreenshot: fullScreenshot || null,
+        browserSession: {
+          identity: browserSession.identity,
+          mode: browserSession.mode,
+          port: browserSession.port,
+          userDataDir: browserSession.userDataDir,
+          keepBrowserOpen: browserSession.keepBrowserOpen,
+        },
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      closeBrowserSession(browserSession);
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
+    if (isCaptureReplay) {
+      assertCaptureReplayControls({
+        captureReplay,
+        replayedCaptureControls,
+        state,
+        expectedVolumeScene,
+        expectedGrid,
+        expectedRaySteps,
+        expectedRenderScale,
+        expectedDensity,
+        expectedFire,
+        expectedSmoke,
+      });
+      phase = 'capture-replay-evidence';
+      const nativeFrameEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const sample = await window.__kaminosVolumePrototype?.sampleFrame?.({ advanceSim: false, includeRgba: true });
+          if (!sample?.ok) {
+            throw new Error('native GPU frame readback failed: ' + JSON.stringify({
+              reason: sample?.reason || 'missing-sample',
+              effectiveRoute: sample?.effectiveRoute || null,
+              prototypeIdentity: sample?.prototypeIdentity || null,
+              backend: sample?.backend || null,
+            }));
+          }
+          if (!sample.image || !Array.isArray(sample.image.rgba)) {
+            throw new Error('native GPU frame readback omitted full RGBA image');
+          }
+          const expectedLength = sample.image.width * sample.image.height * 4;
+          if (sample.image.rgba.length !== expectedLength) {
+            throw new Error('native GPU frame readback was partial: ' + sample.image.rgba.length + '/' + expectedLength);
+          }
+          window.__kaminosCaptureReplayNativeFrame = Uint8Array.from(sample.image.rgba);
+          return {
+            authority: 'gpu-frame-texture-rgba8-readback',
+            width: sample.image.width,
+            height: sample.image.height,
+            expectedLength,
+            sampleAuthority: sample.sampleAuthority,
+            simAdvanced: sample.simAdvanced,
+            effectiveRoute: sample.effectiveRoute,
+            prototypeIdentity: sample.prototypeIdentity,
+            backend: sample.backend,
+            volumeReconstructionStyle: sample.volumeReconstructionStyle,
+            boundarySplatMode: sample.boundarySplatMode,
+            boundarySplatCompositionRequested: sample.boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: sample.boundarySplatCompositionEffective,
+            boundarySplatCompositionFallbackReason: sample.boundarySplatCompositionFallbackReason,
+            hybridSplatSmokeCompositorIdentity: sample.hybridSplatSmokeCompositorIdentity,
+            hybridSplatSmokeApproximation: sample.hybridSplatSmokeApproximation,
+            splatDepthConditionedSmokeSplit: sample.splatDepthConditionedSmokeSplit,
+            hybridSmokePhaseAuthority: sample.hybridSmokePhaseAuthority,
+            hybridSplatLayer: sample.hybridSplatLayer,
+            hybridSmokeLayer: sample.hybridSmokeLayer,
+            boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity,
+            boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity,
+            boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority,
+            boundarySplatCapacity: sample.boundarySplatCapacity,
+            boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
+            boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
+            boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
+            boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
+            boundarySplatFallbackReason: sample.boundarySplatFallbackReason,
+            boundarySplatCopyBytesThisFrame: sample.boundarySplatCopyBytesThisFrame,
+            frameCount: sample.frameCount,
+            simStepCount: sample.simStepCount,
+            meanLuma: sample.meanLuma,
+            litPixels: sample.litPixels,
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (nativeFrameEval.exceptionDetails) {
+        throw new Error(`capture replay native GPU readback failed: ${nativeFrameEval.exceptionDetails.text || 'runtime exception'}`);
+      }
+      const nativeFrame = nativeFrameEval.result.value;
+      assert.equal(nativeFrame?.authority, 'gpu-frame-texture-rgba8-readback', 'capture replay received wrong pixel authority');
+      assert.equal(nativeFrame?.effectiveRoute, state.effectiveRoute, 'capture replay native pixels came from the wrong route');
+      assert.equal(nativeFrame?.prototypeIdentity, state.prototypeIdentity, 'capture replay native pixels came from the wrong prototype');
+      assert.equal(nativeFrame?.sampleAuthority, 'render-only-frozen-sim-state', 'capture replay native readback advanced simulation');
+      assert.equal(nativeFrame?.simAdvanced, false, 'capture replay native readback reported simulation advancement');
+      const nativeFrameTransportChunkBytes = 256 * 1024;
+      const nativeRgbaChunks = [];
+      for (let offset = 0; offset < nativeFrame.expectedLength; offset += nativeFrameTransportChunkBytes) {
+        const length = Math.min(nativeFrameTransportChunkBytes, nativeFrame.expectedLength - offset);
+        const chunkEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `(() => {
+            const bytes = window.__kaminosCaptureReplayNativeFrame;
+            if (!(bytes instanceof Uint8Array) || bytes.length !== ${nativeFrame.expectedLength}) {
+              throw new Error('native frame transport cache missing or partial');
+            }
+            let binary = '';
+            const end = ${offset + length};
+            for (let index = ${offset}; index < end; index += 1) binary += String.fromCharCode(bytes[index]);
+            return btoa(binary);
+          })()`,
+          returnByValue: true,
+        });
+        if (chunkEval.exceptionDetails || typeof chunkEval.result.value !== 'string') {
+          throw new Error(`capture replay native RGBA chunk failed at ${offset}/${nativeFrame.expectedLength}`);
+        }
+        const chunk = Buffer.from(chunkEval.result.value, 'base64');
+        if (chunk.length !== length) {
+          throw new Error(`capture replay native RGBA chunk was partial at ${offset}: ${chunk.length}/${length}`);
+        }
+        nativeRgbaChunks.push(chunk);
+      }
+      const nativeRgba = Buffer.concat(nativeRgbaChunks);
+      if (nativeRgba.length !== nativeFrame.expectedLength) {
+        throw new Error(`capture replay native RGBA transport was partial: ${nativeRgba.length}/${nativeFrame.expectedLength}`);
+      }
+      await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'delete window.__kaminosCaptureReplayNativeFrame',
+        returnByValue: true,
+      });
+      writeRgbaPng(out, nativeFrame.width, nativeFrame.height, nativeRgba);
+      const screenshotBuffer = readFileSync(out);
+      if (fullScreenshot) writeFileSync(fullScreenshot, screenshotBuffer);
+      const screenshotMetrics = measureScreenshot(screenshotBuffer);
+      if (screenshotMetrics.litPixels < 1000 || screenshotMetrics.meanLuma < 1.2) {
+        throw new Error(`capture replay native GPU frame missing visible volume: ${JSON.stringify(screenshotMetrics)}`);
+      }
+      const refreshedStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+        returnByValue: true,
+      });
+      state = refreshedStateEval.result.value || state;
+      const report = {
+        identity: 'kaminos-volume-witness-report-v0',
+        requestedRoute: url,
+        captureReplay: {
+          path: captureReplay.path,
+          documentIdentity: captureReplay.documentIdentity,
+          captureId: captureReplay.captureId,
+          artifactRelativePath: captureReplay.artifactRelativePath,
+          witnessCommand: captureReplay.witnessCommand,
+          kind: captureReplay.capture?.kind || null,
+          route: captureReplay.route,
+          controls: replayedCaptureControls,
+          camera: replayedCaptureCamera,
+        },
+        windowSize,
+        settleMs,
+        evidenceMode,
+        visualEvidenceMode,
+        phase,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        active: state.active,
+        state,
+        nativeFrameReadback: {
+          ...nativeFrame,
+          transportedBytes: nativeRgba.length,
+          transportChunkBytes: nativeFrameTransportChunkBytes,
+          transportChunkCount: nativeRgbaChunks.length,
+        },
+        screenshotMetrics,
+        screenshot: out,
+        fullScreenshot: fullScreenshot || null,
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      closeBrowserSession(browserSession);
+      return;
+    }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
     assert.equal(state.controls?.volumeScene, expectedVolumeScene, 'volume scene debug controls did not preserve route identity');
     assert.equal(state.simGrid, expectedGrid, `fluid sim is not running on the expected ${expectedGrid}^3 grid`);
@@ -1741,6 +2774,131 @@ async function main() {
     assert.equal(state.frontFieldIdentity, 'combustion-front-topology-sidecar-v0', 'front topology sidecar identity did not reach debug state');
     assert.equal(state.frontFieldBytes, expectedGrid * expectedGrid * expectedGrid * 4, 'front topology sidecar byte cost does not match one scalar per cell');
     assert.ok(Math.abs((state.controls?.gridOverlay || 0) - expectedGridOverlay) < 0.001, 'fluid grid overlay did not apply route/debug state');
+    let freezeIntegrityProbe = null;
+    if (freezeIntegrityProbeRequested) {
+      phase = 'freeze-integrity-probe';
+      const freezeProbeEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(${async function runFreezeIntegrityProbe() {
+          const delay = ms => new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+          const prototype = window.__kaminosVolumePrototype;
+          if (!prototype?.debugState || !prototype?.setControls) {
+            return { ok: false, reason: 'missing-volume-prototype-control-surface' };
+          }
+          let state = prototype.debugState();
+          prototype.setControls({ ...(state.controls || {}), lookFreeze: 0 });
+          await delay(160);
+          state = prototype.debugState();
+          prototype.setControls({ ...(state.controls || {}), lookFreeze: 1 });
+          await delay(260);
+          const pinned = prototype.debugState();
+          const baseControls = { ...(pinned.controls || {}) };
+          const residualStrengths = [0, 2, 0.25, 1.75, 1];
+          const steps = [];
+          for (const volumeResidualStrength of residualStrengths) {
+            prototype.setControls({
+              ...baseControls,
+              lookFreeze: 1,
+              volumeResidualStrength,
+            });
+            await delay(140);
+            const stepState = prototype.debugState();
+            steps.push({
+              volumeResidualStrength,
+              frameCount: stepState.frameCount,
+              simStepCount: stepState.simStepCount,
+              lookFreeze: stepState.lookFreeze,
+              lookFreezeFrame: stepState.lookFreezeFrame,
+              lookFreezeSkippedFrames: stepState.lookFreezeSkippedFrames,
+              renderPhaseTimeMs: stepState.renderPhaseTimeMs,
+              renderPhaseFrame: stepState.renderPhaseFrame,
+              renderPhaseAuthority: stepState.renderPhaseAuthority,
+              lookFreezeRenderTimeMs: stepState.lookFreezeRenderTimeMs,
+              lookFreezeRenderFrame: stepState.lookFreezeRenderFrame,
+              pyroDynamicDetailStatePhase: stepState.pyroDynamicDetail?.statePhase ?? null,
+              pyroDynamicDetailLastInputKind: stepState.pyroDynamicDetail?.lastInputKind ?? null,
+              volumeResidualMode: stepState.volumeResidualMode,
+              volumeResidualStatus: stepState.volumeResidualStatus,
+              volumeResidualAuthority: stepState.volumeResidualAuthority,
+            });
+          }
+          const firstStep = steps[0] || {};
+          const allEqual = (key) => steps.every(entry => Object.is(entry[key], firstStep[key]));
+          const simStepFrozen = steps.length > 0 && steps.every(entry => entry.simStepCount === pinned.simStepCount);
+          const renderPhaseTimeFrozen = steps.length > 0 && allEqual('renderPhaseTimeMs');
+          const renderPhaseFrameFrozen = steps.length > 0 && allEqual('renderPhaseFrame');
+          const renderPhaseFinite = steps.length > 0
+            && Number.isFinite(pinned.renderPhaseTimeMs)
+            && Number.isFinite(pinned.lookFreezeRenderTimeMs)
+            && Number.isFinite(pinned.renderPhaseFrame)
+            && Number.isFinite(pinned.lookFreezeRenderFrame)
+            && steps.every(entry => Number.isFinite(entry.renderPhaseTimeMs) && Number.isFinite(entry.lookFreezeRenderTimeMs) && Number.isFinite(entry.renderPhaseFrame) && Number.isFinite(entry.lookFreezeRenderFrame));
+          const renderPhasePinned = steps.length > 0 && steps.every(entry => entry.renderPhaseAuthority === 'look-freeze-pinned-render-phase');
+          const frameCounterAdvanced = steps.length > 0 && steps[steps.length - 1].frameCount > pinned.frameCount;
+          const pyroDynamicDetailPhaseFrozen = steps.length === 0 || allEqual('pyroDynamicDetailStatePhase');
+          return {
+            ok: simStepFrozen && renderPhaseTimeFrozen && renderPhaseFrameFrozen && renderPhaseFinite && renderPhasePinned && frameCounterAdvanced && pyroDynamicDetailPhaseFrozen,
+            identity: 'look-freeze-render-phase-integrity-probe-v0',
+            predicate: 'control-scrub-under-look-freeze-must-not-advance-sim-render-phase-or-pyro-material-memory',
+            pinned: {
+              frameCount: pinned.frameCount,
+              simStepCount: pinned.simStepCount,
+              renderPhaseTimeMs: pinned.renderPhaseTimeMs,
+              renderPhaseFrame: pinned.renderPhaseFrame,
+              renderPhaseAuthority: pinned.renderPhaseAuthority,
+              lookFreezeRenderTimeMs: pinned.lookFreezeRenderTimeMs,
+              lookFreezeRenderFrame: pinned.lookFreezeRenderFrame,
+              pyroDynamicDetailStatePhase: pinned.pyroDynamicDetail?.statePhase ?? null,
+              pyroDynamicDetailLastInputKind: pinned.pyroDynamicDetail?.lastInputKind ?? null,
+            },
+            steps,
+            verdicts: {
+              simStepFrozen,
+              renderPhaseTimeFrozen,
+              renderPhaseFrameFrozen,
+              renderPhaseFinite,
+              renderPhasePinned,
+              frameCounterAdvanced,
+              pyroDynamicDetailPhaseFrozen,
+            },
+          };
+        }})()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      freezeIntegrityProbe = freezeProbeEval.result.value;
+      assert.ok(freezeIntegrityProbe?.ok, `freeze integrity probe failed: ${JSON.stringify(freezeIntegrityProbe)}`);
+      if (freezeIntegrityProbeOnly) {
+        const postProbeStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+          returnByValue: true,
+        });
+        const postProbeState = postProbeStateEval.result.value;
+        const report = {
+          requestedRoute: url,
+          settleMs,
+          windowSize,
+          evidenceMode,
+          visualEvidenceMode,
+          effectiveRoute: postProbeState?.effectiveRoute || state.effectiveRoute,
+          prototypeIdentity: postProbeState?.prototypeIdentity || state.prototypeIdentity,
+          backend: postProbeState?.backend || state.backend,
+          freezeIntegrityProbe,
+          state: postProbeState,
+          browserSession: {
+            identity: browserSession.identity,
+            mode: browserSession.mode,
+            port: browserSession.port,
+            userDataDir: browserSession.userDataDir,
+            keepBrowserOpen: browserSession.keepBrowserOpen,
+          },
+        };
+        writeFileSync(reportPath, JSON.stringify(report, null, 2));
+        ws.close();
+        closeBrowserSession(browserSession);
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
+    }
     assert.ok(Math.abs((state.controls?.raySteps ?? 0) - expectedRaySteps) < 0.001, 'ray-step route/control did not apply');
     assert.ok(Math.abs((state.controls?.adaptiveRays ?? 0) - expectedAdaptiveRays) < 0.001, 'adaptive raymarch route/control did not apply');
     if (rayBudgetPreset && !routeParams.has('volume_steps') && !routeParams.has('volume_adaptive_rays')) {
@@ -1982,6 +3140,9 @@ async function main() {
     assert.ok(Number.isFinite(stateTiming.rafFps) && stateTiming.rafFps > 0, 'route-local RAF timing did not report a positive cadence');
     assert.ok(Number.isFinite(stateTiming.frameP95Ms) && stateTiming.frameP95Ms > 0, 'route-local frame p95 timing is missing');
     assert.ok(Number.isFinite(stateTiming.cpuFrameMs) && stateTiming.cpuFrameMs >= 0, 'route-local CPU frame timing is missing');
+    const stateFireEpisodeHooks = state.fireEpisodeHooks || {};
+    assert.equal(stateFireEpisodeHooks.identity, 'foreground-kiln-fire-episode-hooks-v0', 'fire episode lifecycle did not reach debug state');
+    assert.ok(Array.isArray(stateFireEpisodeHooks.rawRafGapSamplesMs), 'fire episode lifecycle did not preserve its exact-window samples');
 
     phase = 'gpu-readback';
     const fullScreenshotPath = await captureViewportScreenshot(ws, fullScreenshot);
@@ -1994,6 +3155,9 @@ async function main() {
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
     }
+    const boundarySplatFeatureCapture = sample.boundarySplatFeatureCaptureRequested
+      ? materializeBoundarySplatFeatureCapture(sample.boundarySplatFeatureCapture)
+      : null;
     const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const sampleFireLicks = sample.controls?.fireLicks ?? effectiveFireLicks;
     const sampleMainFluidStrategy = expectedMainFluidKernelStrategy(sampleFireLicks);
@@ -2119,6 +3283,10 @@ async function main() {
         throw new Error(`GPU queue completion timing was sampled but did not report finite latency: ${JSON.stringify(sampleTiming)}`);
       }
     }
+    const sampleFireEpisodeHooks = sample.fireEpisodeHooks || stateFireEpisodeHooks;
+    if (sampleFireEpisodeHooks.identity !== 'foreground-kiln-fire-episode-hooks-v0') {
+      throw new Error(`Fire episode lifecycle did not survive GPU readback: ${JSON.stringify(sampleFireEpisodeHooks)}`);
+    }
     if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
       throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
     }
@@ -2126,6 +3294,7 @@ async function main() {
       throw new Error(`GPU sim readback does not show transported material detail: ${JSON.stringify(sample.simReadback)}`);
     }
     const pyroRawCarrierPaintEvidence = buildPyroRawCarrierPaintEvidence(sample, state);
+    const boundaryFireReadbackEvidence = buildBoundaryFireReadbackEvidence(sample, state);
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
@@ -2135,8 +3304,11 @@ async function main() {
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005)) {
-      throw new Error(`GPU sim readback does not show fire radiance evidence: ${JSON.stringify(sample.simReadback)}`);
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) && !boundaryFireReadbackEvidence.acceptsZeroRadiance) {
+      throw new Error(`GPU sim readback does not show fire radiance or boundary-fire topology/emission evidence: ${JSON.stringify({
+        simReadback: sample.simReadback,
+        boundaryFireReadbackEvidence,
+      })}`);
     }
     if (expectedVolumeScene === 'tall_plume') {
       if (
@@ -2167,7 +3339,10 @@ async function main() {
         sample.simReadback.fuelMean <= 0.0005 ||
         sample.simReadback.reactionMean <= 0.0005 ||
         sample.simReadback.fuelConsumptionMean <= 0.00001 ||
-        sample.simReadback.fireFuelOverlapRatio <= 0.01
+        (
+          sample.simReadback.fireFuelOverlapRatio <= 0.01 &&
+          !boundaryFireReadbackEvidence.acceptsZeroRadiance
+        )
       )) {
         throw new Error(`tall plume fire was not supported by live fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
       }
@@ -2584,6 +3759,10 @@ async function main() {
     const mainRendererBuffer = Buffer.from(pageShot.data, 'base64');
     writeFileSync(mainRendererScreenshot, mainRendererBuffer);
     const mainRendererMetrics = measureScreenshot(mainRendererBuffer);
+    const boundaryFireMainRendererEvidence =
+      boundaryFireReadbackEvidence.acceptsZeroRadiance &&
+      mainRendererMetrics.litPixels >= 1500 &&
+      mainRendererMetrics.meanLuma >= 8;
     const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
       expectsFuelStarvedTallPlume ||
       (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
@@ -2610,10 +3789,15 @@ async function main() {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
       }
-    } else if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8) {
+    } else if (!boundaryFireMainRendererEvidence && (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8)) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
     }
     const visibleFirePixels = metrics.fireLikePixels + metrics.emissiveLikePixels;
+    const boundaryFireVisualEvidence =
+      boundaryFireReadbackEvidence.acceptsZeroRadiance &&
+      metrics.litPixels >= 220 &&
+      (metrics.volumeBounds?.pixelCount ?? 0) >= 180 &&
+      metrics.meanLuma >= 1.5;
     const performanceVisualWarnings = [];
     const canonicalPassiveBottomFieldProof = canonicalPassiveBottomNonRiseProof &&
       (sample.simReadback?.smokeWeight ?? 0) > 20 &&
@@ -2726,8 +3910,572 @@ async function main() {
           meanLuma: metrics.meanLuma,
         });
       }
-    } else if (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8) {
+    } else if (!boundaryFireVisualEvidence && (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
+    }
+    let renderScaleSetReport = null;
+    if (renderScaleSet.length && !controlledStepSequenceRequested) {
+      mkdirSync(renderScaleSetDir, { recursive: true });
+      const hudSuppressionEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const el = document.getElementById('fps-counter');
+          if (!el) return { ok: true, found: false, selector: '#fps-counter' };
+          const previous = {
+            visibility: el.style.visibility || '',
+            display: el.style.display || '',
+            textContent: el.textContent || '',
+          };
+          el.style.visibility = 'hidden';
+          return {
+            ok: true,
+            found: true,
+            selector: '#fps-counter',
+            previous,
+            applied: { visibility: el.style.visibility },
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const hudSuppression = hudSuppressionEval.result.value || {
+        ok: false,
+        found: false,
+        selector: '#fps-counter',
+      };
+      const renderScaleSetEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `window.__kaminosVolumePrototype.sampleRenderScaleSet(${JSON.stringify({
+          renderScales: renderScaleSet,
+          includeRgba: false,
+          includeFeatureRgba: renderScaleFeatureCaptures,
+          compactSamples: true,
+          resumeRenderLoop: false,
+        })})`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const scaleSet = renderScaleSetEval.result.value;
+      if (scaleSet?.ok !== true || scaleSet?.sampleSetAuthority !== 'frame-locked-render-scale-set-v0') {
+        throw new Error(`Frame-locked render-scale set capture failed: ${JSON.stringify({
+          ok: scaleSet?.ok,
+          reason: scaleSet?.reason,
+          sampleSetAuthority: scaleSet?.sampleSetAuthority,
+          sameStateCaptureId: scaleSet?.sameStateCaptureId,
+        })}`);
+      }
+      const captures = [];
+      for (let index = 0; index < scaleSet.samples.length; index += 1) {
+        const scaleSample = scaleSet.samples[index];
+        const renderScale = clampRenderScale(scaleSample.requestedRenderScale ?? scaleSample.renderScale);
+        const shouldCaptureFeature = renderScaleFeatureCaptures && scaleSample.role !== 'high';
+        const slug = `${renderScaleSetPrefix}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
+        const imagePath = resolve(renderScaleSetDir, `${slug}.png`);
+        const previewPath = resolve(renderScaleSetDir, `${slug}.preview.png`);
+        const featurePath = resolve(renderScaleSetDir, `${slug}.feature.png`);
+        const flowDebugPath = resolve(renderScaleSetDir, `${slug}.flow-debug.png`);
+        const boundarySidecarSupportPath = resolve(renderScaleSetDir, `${slug}.boundary-sidecar-support.png`);
+        const captureReportPath = resolve(renderScaleSetDir, `${slug}.json`);
+        if (scaleSample.preview?.rgba && Number.isFinite(scaleSample.preview.width) && Number.isFinite(scaleSample.preview.height)) {
+          writeRgbaPng(previewPath, scaleSample.preview.width, scaleSample.preview.height, scaleSample.preview.rgba);
+        }
+        const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+            renderScale,
+            now: scaleSet.fixedNowMs,
+            sameStateCaptureId: scaleSet.sameStateCaptureId,
+            baseFrameCount: scaleSet.baseFrameCount,
+            baseSimStepCount: scaleSet.baseSimStepCount,
+            includeFeatureRgba: shouldCaptureFeature,
+            restoreControls: false,
+            resumeRenderLoop: false,
+          })})`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const canvasCapture = canvasEval.result.value;
+        if (canvasCapture?.ok !== true || canvasCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+          throw new Error(`Frame-locked render-scale canvas capture failed: ${JSON.stringify({
+            renderScale,
+            ok: canvasCapture?.ok,
+            reason: canvasCapture?.reason,
+            sampleAuthority: canvasCapture?.sampleAuthority,
+            sameStateCaptureId: canvasCapture?.sameStateCaptureId,
+          })}`);
+        }
+        const canvasCssRect = canvasCapture.canvasCssRect || {};
+        const screenshotClip = {
+          x: Math.max(0, Number(canvasCssRect.x) || 0),
+          y: Math.max(0, Number(canvasCssRect.y) || 0),
+          width: Math.max(1, Number(canvasCssRect.width) || 0),
+          height: Math.max(1, Number(canvasCssRect.height) || 0),
+          scale: 1,
+        };
+        if (!Number.isFinite(screenshotClip.width) || !Number.isFinite(screenshotClip.height) || screenshotClip.width <= 1 || screenshotClip.height <= 1) {
+          throw new Error(`missing-canvas-clip-bounds: ${JSON.stringify({
+            renderScale,
+            canvasCssRect,
+            imageAuthority: canvasCapture.imageAuthority,
+          })}`);
+        }
+        const scaleShot = await wsRequest(ws, 'Page.captureScreenshot', {
+          format: 'png',
+          fromSurface: true,
+          clip: screenshotClip,
+        });
+        const imageBuffer = Buffer.from(scaleShot.data, 'base64');
+        writeFileSync(imagePath, imageBuffer);
+        const imageMetrics = measureScreenshot(imageBuffer);
+        const featureCapture = canvasCapture.featureCapture || null;
+        if (featureCapture?.rgba && Number.isFinite(featureCapture.width) && Number.isFinite(featureCapture.height)) {
+          writeRgbaPng(featurePath, featureCapture.width, featureCapture.height, featureCapture.rgba);
+        }
+        const auxiliaryCaptures = {};
+        if (renderScaleFlowDebugCaptures && scaleSample.role !== 'high') {
+          auxiliaryCaptures.flowDebug = await captureFlowDebugAuxiliary({
+            ws,
+            renderScale,
+            scaleSet,
+            outputPath: flowDebugPath,
+            screenshotClip,
+            canvasCssRect,
+            hudSuppression,
+          });
+        }
+        if (renderScaleBoundarySidecarSupportCaptures && scaleSample.role !== 'high') {
+          auxiliaryCaptures.boundarySidecarSupport = await captureBoundarySidecarSupportAuxiliary({
+            ws,
+            renderScale,
+            scaleSet,
+            outputPath: boundarySidecarSupportPath,
+            screenshotClip,
+            canvasCssRect,
+            hudSuppression,
+          });
+        }
+        const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+        const captureReport = {
+          ...sampleReport,
+          image: {
+            path: imagePath,
+            width: imageMetrics.width,
+            height: imageMetrics.height,
+            authority: canvasCapture.imageAuthority,
+            canvasCssRect,
+            screenshotClip,
+            devicePixelRatio: canvasCapture.devicePixelRatio,
+            hudSuppression,
+            metrics: imageMetrics,
+          },
+          preview: preview ? {
+            path: previewPath,
+            width: preview.width,
+            height: preview.height,
+          } : null,
+          canvasCapture,
+          featureCapture: featureCapture ? {
+            path: featurePath,
+            width: featureCapture.width,
+            height: featureCapture.height,
+            featureAuthority: featureCapture.featureAuthority,
+            imageAuthority: featureCapture.imageAuthority,
+            inputChannels: featureCapture.inputChannels,
+            channelLayout: featureCapture.channelLayout,
+            source: featureCapture.source,
+            sourcePassApplied: featureCapture.sourcePassApplied,
+          } : null,
+          auxiliaryCaptures: Object.keys(auxiliaryCaptures).length ? auxiliaryCaptures : null,
+          simReadback: simReadback ? {
+            grid: simReadback.grid,
+            densityMean: simReadback.densityMean,
+            densityMax: simReadback.densityMax,
+            velocityMean: simReadback.velocityMean,
+            fireLayerMean: simReadback.fireLayerMean,
+            radianceMean: simReadback.radianceMean,
+            extinctionMean: simReadback.extinctionMean,
+            liveVoxels: simReadback.liveVoxels,
+            frontFieldIdentity: simReadback.frontFieldIdentity,
+          } : null,
+          majorantReadback: majorantReadback ? {
+            grid: majorantReadback.grid,
+            occupiedBricks: majorantReadback.occupiedBricks,
+            importanceMax: majorantReadback.importanceMax,
+          } : null,
+        };
+        writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
+        captures.push({
+          role: scaleSample.role,
+          requestedRenderScale: renderScale,
+          renderScale: scaleSample.renderScale,
+          renderPixelRatio: scaleSample.renderPixelRatio,
+          renderWidth: scaleSample.renderWidth,
+          renderHeight: scaleSample.renderHeight,
+          displayWidth: scaleSample.displayWidth,
+          displayHeight: scaleSample.displayHeight,
+          volumeReconstructionStyle: scaleSample.volumeReconstructionStyle,
+          sampleAuthority: scaleSample.sampleAuthority,
+          imageAuthority: canvasCapture.imageAuthority,
+          canvasCssRect,
+          screenshotClip,
+          devicePixelRatio: canvasCapture.devicePixelRatio,
+          hudSuppression,
+          sameStateCaptureId: scaleSample.sameStateCaptureId,
+          baseFrameCount: scaleSample.baseFrameCount,
+          baseSimStepCount: scaleSample.baseSimStepCount,
+          frameCount: canvasCapture.frameCount,
+          simStepCount: canvasCapture.simStepCount,
+          imageWidth: imageMetrics.width,
+          imageHeight: imageMetrics.height,
+          image: imagePath,
+          feature: featureCapture ? featurePath : null,
+          featureCapture: featureCapture ? {
+            path: featurePath,
+            width: featureCapture.width,
+            height: featureCapture.height,
+            featureAuthority: featureCapture.featureAuthority,
+            imageAuthority: featureCapture.imageAuthority,
+            inputChannels: featureCapture.inputChannels,
+            channelLayout: featureCapture.channelLayout,
+            source: featureCapture.source,
+            sourcePassApplied: featureCapture.sourcePassApplied,
+          } : null,
+          auxiliaryCaptures: Object.keys(auxiliaryCaptures).length ? auxiliaryCaptures : null,
+          preview: previewPath,
+          report: captureReportPath,
+        });
+      }
+      const uniqueFrameCounts = new Set(captures.map(capture => capture.frameCount));
+      const uniqueSimStepCounts = new Set(captures.map(capture => capture.simStepCount));
+      renderScaleSetReport = {
+        sampleSetAuthority: scaleSet.sampleSetAuthority,
+        sampleAuthority: scaleSet.sampleAuthority,
+        sameStateCaptureId: scaleSet.sameStateCaptureId,
+        baseFrameCount: scaleSet.baseFrameCount,
+        baseSimStepCount: scaleSet.baseSimStepCount,
+        fixedNowMs: scaleSet.fixedNowMs,
+        renderScales: scaleSet.renderScales,
+        hudSuppression,
+        supervisedResidualTrainingSuitable: uniqueFrameCounts.size === 1 && uniqueSimStepCounts.size === 1,
+        captures,
+      };
+      if (!renderScaleSetReport.supervisedResidualTrainingSuitable) {
+        throw new Error(`Frame-locked render-scale set did not preserve one frame/sim state: ${JSON.stringify({
+          sameStateCaptureId: renderScaleSetReport.sameStateCaptureId,
+          frameCounts: Array.from(uniqueFrameCounts),
+          simStepCounts: Array.from(uniqueSimStepCounts),
+        })}`);
+      }
+    }
+    let controlledStepSequenceReport = null;
+    if (controlledStepSequenceRequested) {
+      if (!renderScaleSet.length) {
+        throw new Error('controlled-step-sequence requires --render-scale-set');
+      }
+      mkdirSync(controlledStepDir, { recursive: true });
+      const hudSuppressionEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(() => {
+          const el = document.getElementById('fps-counter');
+          if (!el) return { ok: true, found: false, selector: '#fps-counter' };
+          const previous = {
+            visibility: el.style.visibility || '',
+            display: el.style.display || '',
+            textContent: el.textContent || '',
+          };
+          el.style.visibility = 'hidden';
+          return {
+            ok: true,
+            found: true,
+            selector: '#fps-counter',
+            previous,
+            applied: { visibility: el.style.visibility },
+          };
+        })()`,
+        returnByValue: true,
+      });
+      const hudSuppression = hudSuppressionEval.result.value || {
+        ok: false,
+        found: false,
+        selector: '#fps-counter',
+      };
+      const frames = [];
+      let sameBrowserSessionId = null;
+      let sequenceStartNowMs = null;
+      for (let controlledFrameIndex = 0; controlledFrameIndex < controlledStepFrames; controlledFrameIndex += 1) {
+        const controlledStepFrameIndex = controlledFrameIndex;
+        const controlledEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+            controlledStepFrameIndex,
+            advanceSim: controlledFrameIndex > 0,
+            sameBrowserSessionId,
+            startNow: sequenceStartNowMs,
+            stepDeltaMs: controlledStepDeltaMs,
+            renderScales: renderScaleSet,
+            includeRgba: false,
+            includeFeatureRgba: renderScaleFeatureCaptures,
+            compactSamples: true,
+            resumeRenderLoop: false,
+          })})`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        const frame = controlledEval.result.value;
+        if (frame?.ok !== true || frame?.sequenceAuthority !== 'controlled-step-sequence-v0') {
+          throw new Error(`Controlled-step frame capture failed: ${JSON.stringify({
+            ok: frame?.ok,
+            reason: frame?.reason,
+            sequenceAuthority: frame?.sequenceAuthority,
+            sameBrowserSessionId: frame?.sameBrowserSessionId,
+            controlledStepFrameIndex,
+          })}`);
+        }
+        sameBrowserSessionId = frame.sameBrowserSessionId;
+        sequenceStartNowMs = frame.sequenceStartNowMs;
+        const scaleSet = frame.scaleSet;
+        if (scaleSet?.ok !== true || scaleSet?.sampleSetAuthority !== 'frame-locked-render-scale-set-v0') {
+          throw new Error(`Controlled-step frame scale set failed: ${JSON.stringify({
+            controlledStepFrameIndex,
+            ok: scaleSet?.ok,
+            reason: scaleSet?.reason,
+            sampleSetAuthority: scaleSet?.sampleSetAuthority,
+            sameStateCaptureId: scaleSet?.sameStateCaptureId,
+          })}`);
+        }
+        const frameSlug = `frame-${String(controlledFrameIndex + 1).padStart(3, '0')}`;
+        const frameDir = resolve(controlledStepDir, frameSlug);
+        mkdirSync(frameDir, { recursive: true });
+        const captures = [];
+        for (let index = 0; index < scaleSet.samples.length; index += 1) {
+          const scaleSample = scaleSet.samples[index];
+          const renderScale = clampRenderScale(scaleSample.requestedRenderScale ?? scaleSample.renderScale);
+          const shouldCaptureFeature = renderScaleFeatureCaptures && scaleSample.role !== 'high';
+          const slug = `${controlledStepPrefix}-${frameSlug}-${String(index + 1).padStart(2, '0')}-${scaleSlug(renderScale)}`;
+          const imagePath = resolve(frameDir, `${slug}.png`);
+          const featurePath = resolve(frameDir, `${slug}.feature.png`);
+          const flowDebugPath = resolve(frameDir, `${slug}.flow-debug.png`);
+          const boundarySidecarSupportPath = resolve(frameDir, `${slug}.boundary-sidecar-support.png`);
+          const captureReportPath = resolve(frameDir, `${slug}.json`);
+          const canvasEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+              renderScale,
+              now: scaleSet.fixedNowMs,
+              sameStateCaptureId: scaleSet.sameStateCaptureId,
+              baseFrameCount: scaleSet.baseFrameCount,
+              baseSimStepCount: scaleSet.baseSimStepCount,
+              includeFeatureRgba: shouldCaptureFeature,
+              restoreControls: false,
+              resumeRenderLoop: false,
+            })})`,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          const canvasCapture = canvasEval.result.value;
+          if (canvasCapture?.ok !== true || canvasCapture?.sampleAuthority !== 'render-only-frozen-sim-state') {
+            throw new Error(`Controlled-step canvas capture failed: ${JSON.stringify({
+              controlledStepFrameIndex,
+              renderScale,
+              ok: canvasCapture?.ok,
+              reason: canvasCapture?.reason,
+              sampleAuthority: canvasCapture?.sampleAuthority,
+              sameStateCaptureId: canvasCapture?.sameStateCaptureId,
+            })}`);
+          }
+          const canvasCssRect = canvasCapture.canvasCssRect || {};
+          const screenshotClip = {
+            x: Math.max(0, Number(canvasCssRect.x) || 0),
+            y: Math.max(0, Number(canvasCssRect.y) || 0),
+            width: Math.max(1, Number(canvasCssRect.width) || 0),
+            height: Math.max(1, Number(canvasCssRect.height) || 0),
+            scale: 1,
+          };
+          if (!Number.isFinite(screenshotClip.width) || !Number.isFinite(screenshotClip.height) || screenshotClip.width <= 1 || screenshotClip.height <= 1) {
+            throw new Error(`controlled-step-missing-canvas-clip-bounds: ${JSON.stringify({
+              controlledStepFrameIndex,
+              renderScale,
+              canvasCssRect,
+              imageAuthority: canvasCapture.imageAuthority,
+            })}`);
+          }
+          const scaleShot = await wsRequest(ws, 'Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            clip: screenshotClip,
+          });
+          const imageBuffer = Buffer.from(scaleShot.data, 'base64');
+          writeFileSync(imagePath, imageBuffer);
+          const imageMetrics = measureScreenshot(imageBuffer);
+          const featureCapture = canvasCapture.featureCapture || null;
+          if (featureCapture?.rgba && Number.isFinite(featureCapture.width) && Number.isFinite(featureCapture.height)) {
+            writeRgbaPng(featurePath, featureCapture.width, featureCapture.height, featureCapture.rgba);
+          }
+          const auxiliaryCaptures = {};
+          if (renderScaleFlowDebugCaptures && scaleSample.role !== 'high') {
+            auxiliaryCaptures.flowDebug = await captureFlowDebugAuxiliary({
+              ws,
+              renderScale,
+              scaleSet,
+              outputPath: flowDebugPath,
+              screenshotClip,
+              canvasCssRect,
+              hudSuppression,
+            });
+          }
+          if (renderScaleBoundarySidecarSupportCaptures && scaleSample.role !== 'high') {
+            auxiliaryCaptures.boundarySidecarSupport = await captureBoundarySidecarSupportAuxiliary({
+              ws,
+              renderScale,
+              scaleSet,
+              outputPath: boundarySidecarSupportPath,
+              screenshotClip,
+              canvasCssRect,
+              hudSuppression,
+            });
+          }
+          const { image, preview, simReadback, majorantReadback, ...sampleReport } = scaleSample;
+          const captureReport = {
+            ...sampleReport,
+            sequenceAuthority: frame.sequenceAuthority,
+            sameBrowserSessionId: frame.sameBrowserSessionId,
+            controlledStepFrameIndex,
+            controlledStepDeltaMs: frame.controlledStepDeltaMs,
+            controlledStepNowMs: frame.controlledStepNowMs,
+            controlledStepCapture: frame.controlledStepCapture,
+            image: {
+              path: imagePath,
+              width: imageMetrics.width,
+              height: imageMetrics.height,
+              authority: canvasCapture.imageAuthority,
+              canvasCssRect,
+              screenshotClip,
+              devicePixelRatio: canvasCapture.devicePixelRatio,
+              hudSuppression,
+              metrics: imageMetrics,
+            },
+            canvasCapture,
+            featureCapture: featureCapture ? {
+              path: featurePath,
+              width: featureCapture.width,
+              height: featureCapture.height,
+              featureAuthority: featureCapture.featureAuthority,
+              imageAuthority: featureCapture.imageAuthority,
+              inputChannels: featureCapture.inputChannels,
+              channelLayout: featureCapture.channelLayout,
+              source: featureCapture.source,
+              sourcePassApplied: featureCapture.sourcePassApplied,
+            } : null,
+            auxiliaryCaptures: Object.keys(auxiliaryCaptures).length ? auxiliaryCaptures : null,
+            simReadback: simReadback ? {
+              grid: simReadback.grid,
+              densityMean: simReadback.densityMean,
+              densityMax: simReadback.densityMax,
+              velocityMean: simReadback.velocityMean,
+              fireLayerMean: simReadback.fireLayerMean,
+              radianceMean: simReadback.radianceMean,
+              extinctionMean: simReadback.extinctionMean,
+              liveVoxels: simReadback.liveVoxels,
+              frontFieldIdentity: simReadback.frontFieldIdentity,
+            } : null,
+            majorantReadback: majorantReadback ? {
+              grid: majorantReadback.grid,
+              occupiedBricks: majorantReadback.occupiedBricks,
+              importanceMax: majorantReadback.importanceMax,
+            } : null,
+          };
+          writeFileSync(captureReportPath, JSON.stringify(captureReport, null, 2));
+          captures.push({
+            role: scaleSample.role,
+            requestedRenderScale: renderScale,
+            renderScale: scaleSample.renderScale,
+            renderPixelRatio: scaleSample.renderPixelRatio,
+            renderWidth: scaleSample.renderWidth,
+            renderHeight: scaleSample.renderHeight,
+            displayWidth: scaleSample.displayWidth,
+            displayHeight: scaleSample.displayHeight,
+            volumeReconstructionStyle: scaleSample.volumeReconstructionStyle,
+            sampleAuthority: scaleSample.sampleAuthority,
+            imageAuthority: canvasCapture.imageAuthority,
+            canvasCssRect,
+            screenshotClip,
+            devicePixelRatio: canvasCapture.devicePixelRatio,
+            hudSuppression,
+            sameBrowserSessionId: frame.sameBrowserSessionId,
+            sequenceAuthority: frame.sequenceAuthority,
+            controlledStepFrameIndex,
+            controlledStepDeltaMs: frame.controlledStepDeltaMs,
+            controlledStepNowMs: frame.controlledStepNowMs,
+            controlledStepCapture: frame.controlledStepCapture,
+            sameStateCaptureId: scaleSample.sameStateCaptureId,
+            baseFrameCount: scaleSample.baseFrameCount,
+            baseSimStepCount: scaleSample.baseSimStepCount,
+            frameCount: canvasCapture.frameCount,
+            simStepCount: canvasCapture.simStepCount,
+            imageWidth: imageMetrics.width,
+            imageHeight: imageMetrics.height,
+            image: imagePath,
+            feature: featureCapture ? featurePath : null,
+            featureCapture: featureCapture ? {
+              path: featurePath,
+              width: featureCapture.width,
+              height: featureCapture.height,
+              featureAuthority: featureCapture.featureAuthority,
+              imageAuthority: featureCapture.imageAuthority,
+              inputChannels: featureCapture.inputChannels,
+              channelLayout: featureCapture.channelLayout,
+              source: featureCapture.source,
+              sourcePassApplied: featureCapture.sourcePassApplied,
+            } : null,
+            auxiliaryCaptures: Object.keys(auxiliaryCaptures).length ? auxiliaryCaptures : null,
+            report: captureReportPath,
+          });
+        }
+        const uniqueFrameCounts = new Set(captures.map(capture => capture.frameCount));
+        const uniqueSimStepCounts = new Set(captures.map(capture => capture.simStepCount));
+        const controlledStepFrameReport = {
+          sequenceAuthority: frame.sequenceAuthority,
+          sampleSetAuthority: scaleSet.sampleSetAuthority,
+          sampleAuthority: scaleSet.sampleAuthority,
+          sameBrowserSessionId: frame.sameBrowserSessionId,
+          controlledStepFrameIndex,
+          controlledStepDeltaMs: frame.controlledStepDeltaMs,
+          controlledStepNowMs: frame.controlledStepNowMs,
+          controlledStepCapture: frame.controlledStepCapture,
+          sameStateCaptureId: scaleSet.sameStateCaptureId,
+          baseFrameCount: scaleSet.baseFrameCount,
+          baseSimStepCount: scaleSet.baseSimStepCount,
+          fixedNowMs: scaleSet.fixedNowMs,
+          renderScales: scaleSet.renderScales,
+          hudSuppression,
+          supervisedResidualTrainingSuitable: uniqueFrameCounts.size === 1 && uniqueSimStepCounts.size === 1,
+          captures,
+        };
+        if (!controlledStepFrameReport.supervisedResidualTrainingSuitable) {
+          throw new Error(`Controlled-step frame did not preserve one frame/sim state: ${JSON.stringify({
+            sameBrowserSessionId: frame.sameBrowserSessionId,
+            controlledStepFrameIndex,
+            sameStateCaptureId: scaleSet.sameStateCaptureId,
+            frameCounts: Array.from(uniqueFrameCounts),
+            simStepCounts: Array.from(uniqueSimStepCounts),
+          })}`);
+        }
+        frames.push(controlledStepFrameReport);
+      }
+      const sessionIds = new Set(frames.map(frame => frame.sameBrowserSessionId));
+      controlledStepSequenceReport = {
+        sequenceAuthority: 'controlled-step-sequence-v0',
+        sampleAuthority: 'controlled-step-sim-advance',
+        sameBrowserSessionId,
+        controlledStepDeltaMs,
+        requestedFrameCount: controlledStepFrames,
+        startNowMs: sequenceStartNowMs,
+        renderScales: renderScaleSet,
+        hudSuppression,
+        controlledStepCapture: frames.map(frame => frame.controlledStepCapture),
+        sameBrowserSequenceSuitable: sessionIds.size === 1 && frames.length === controlledStepFrames,
+        frames,
+      };
+      if (!controlledStepSequenceReport.sameBrowserSequenceSuitable) {
+        throw new Error(`Controlled-step sequence did not preserve one browser session: ${JSON.stringify({
+          sessionIds: Array.from(sessionIds),
+          frameCount: frames.length,
+          requestedFrameCount: controlledStepFrames,
+        })}`);
+      }
     }
     const reportControls = {
       ...(state.controls || {}),
@@ -2751,6 +4499,17 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      captureReplay: isCaptureReplay ? {
+        path: captureReplay.path,
+        documentIdentity: captureReplay.documentIdentity,
+        captureId: captureReplay.captureId,
+        artifactRelativePath: captureReplay.artifactRelativePath,
+        witnessCommand: captureReplay.witnessCommand,
+        kind: captureReplay.capture?.kind || null,
+        route: captureReplay.route,
+        controls: replayedCaptureControls,
+        camera: replayedCaptureCamera,
+      } : null,
       settleMs,
       windowSize,
       evidenceMode,
@@ -2762,6 +4521,8 @@ async function main() {
       sceneContextLocalAssetMount,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
       pyroRawCarrierPaintEvidence,
+      boundaryFireReadbackEvidence,
+      boundaryFireMainRendererEvidence,
       performanceVisualWarnings,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
@@ -2861,11 +4622,51 @@ async function main() {
       expectedRenderScale,
       renderScale: sample.renderScale,
       renderPixelRatio: sample.renderPixelRatio,
+      cssWidth: sample.cssWidth ?? state.cssWidth,
+      cssHeight: sample.cssHeight ?? state.cssHeight,
       displayWidth: sample.displayWidth,
       displayHeight: sample.displayHeight,
+      nativeDevicePixelRatio: sample.nativeDevicePixelRatio ?? state.nativeDevicePixelRatio,
+      canvasDevicePixelRatio: sample.canvasDevicePixelRatio ?? state.canvasDevicePixelRatio,
       renderWidth: sample.renderWidth,
       renderHeight: sample.renderHeight,
       volumeReconstructionStyle: sample.volumeReconstructionStyle,
+      boundarySplatMode: sample.boundarySplatMode ?? state.boundarySplatMode,
+      boundarySplatCompositionRequested: sample.boundarySplatCompositionRequested ?? state.boundarySplatCompositionRequested,
+      boundarySplatCompositionEffective: sample.boundarySplatCompositionEffective ?? state.boundarySplatCompositionEffective,
+      boundarySplatCompositionFallbackReason: sample.boundarySplatCompositionFallbackReason ?? state.boundarySplatCompositionFallbackReason,
+      hybridSplatSmokeCompositorIdentity: sample.hybridSplatSmokeCompositorIdentity ?? state.hybridSplatSmokeCompositorIdentity,
+      hybridSplatSmokeApproximation: sample.hybridSplatSmokeApproximation ?? state.hybridSplatSmokeApproximation,
+      splatDepthConditionedSmokeSplit: sample.splatDepthConditionedSmokeSplit ?? state.splatDepthConditionedSmokeSplit,
+      hybridSmokePhaseAuthority: sample.hybridSmokePhaseAuthority ?? state.hybridSmokePhaseAuthority,
+      hybridSplatLayer: sample.hybridSplatLayer ?? state.hybridSplatLayer,
+      hybridSmokeLayer: sample.hybridSmokeLayer ?? state.hybridSmokeLayer,
+      boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity ?? state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity ?? state.boundarySplatAttributeModelIdentity,
+      boundarySplatFeatureCaptureRequested: sample.boundarySplatFeatureCaptureRequested ?? state.boundarySplatFeatureCaptureRequested,
+      boundarySplatFeatureCaptureEffective: sample.boundarySplatFeatureCaptureEffective ?? state.boundarySplatFeatureCaptureEffective,
+      boundarySplatFeatureCapture,
+      boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority ?? state.boundarySplatSourceAuthority,
+      boundarySplatCapacity: sample.boundarySplatCapacity ?? state.boundarySplatCapacity,
+      boundarySplatInstanceCount: sample.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount,
+      boundarySplatCandidateCount: sample.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount,
+      boundarySplatOverflowCount: sample.boundarySplatOverflowCount ?? state.boundarySplatOverflowCount,
+      boundarySplatCountAuthority: sample.boundarySplatCountAuthority ?? state.boundarySplatCountAuthority,
+      boundarySplatFallbackReason: sample.boundarySplatFallbackReason ?? state.boundarySplatFallbackReason,
+      boundarySplatFrameCount: sample.boundarySplatFrameCount ?? state.boundarySplatFrameCount,
+      boundarySplatTimestampStatus: sample.boundarySplatTimestampStatus ?? state.boundarySplatTimestampStatus,
+      boundarySplatGpuProfile: sample.boundarySplatGpuProfile ?? state.boundarySplatGpuProfile,
+      boundarySplatCopyBytesThisFrame: sample.boundarySplatCopyBytesThisFrame ?? state.boundarySplatCopyBytesThisFrame,
+      boundarySplatCopyDisposition: sample.boundarySplatCopyDisposition ?? state.boundarySplatCopyDisposition,
+      volumeResidualMode: sample.volumeResidualMode ?? state.volumeResidualMode ?? null,
+      volumeResidualStatus: sample.volumeResidualStatus ?? state.volumeResidualStatus ?? null,
+      volumeResidualAuthority: sample.volumeResidualAuthority ?? state.volumeResidualAuthority ?? null,
+      volumeResidualFeatureAuthority: sample.volumeResidualFeatureAuthority ?? state.volumeResidualFeatureAuthority ?? null,
+      volumeResidualFeatureDebug: sample.volumeResidualFeatureDebug ?? state.volumeResidualFeatureDebug ?? null,
+      volumeResidualFeatureDebugMode: sample.volumeResidualFeatureDebugMode ?? state.volumeResidualFeatureDebugMode ?? null,
+      volumeResidualModelSchema: sample.volumeResidualModelSchema ?? state.volumeResidualModelSchema ?? null,
+      volumeResidualModelError: sample.volumeResidualModelError ?? state.volumeResidualModelError ?? null,
+      volumeResidualCost: sample.volumeResidualCost ?? state.volumeResidualCost ?? null,
       externalEmitterMode: sample.externalEmitterMode,
       externalEmitterCoordinateSpace: sample.externalEmitterCoordinateSpace,
       externalEmitterCount: sample.externalEmitterCount,
@@ -2941,6 +4742,7 @@ async function main() {
       expectedVolumeSceneContext,
       sceneContextEvidence,
       timing: sample.timing || stateTiming,
+      fireEpisodeHooks: sample.fireEpisodeHooks || stateFireEpisodeHooks,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,
       controls: reportControls,
@@ -2958,12 +4760,23 @@ async function main() {
       mainRendererCaptureBackend: 'cdp-page-capture',
       fullScreenshot: fullScreenshotPath || null,
       fieldSliceScreenshot: fieldSliceOut || null,
+      renderScaleSet: renderScaleSetReport,
+      controlledStepSequence: controlledStepSequenceReport,
+      freezeIntegrityProbe,
+      identityFrameRecovery,
       metrics,
       mainRendererMetrics,
+      browserSession: {
+        identity: browserSession.identity,
+        mode: browserSession.mode,
+        port: browserSession.port,
+        userDataDir: browserSession.userDataDir,
+        keepBrowserOpen: browserSession.keepBrowserOpen,
+      },
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
     ws.close();
-    proc.kill('SIGTERM');
+    closeBrowserSession(browserSession);
     console.log(JSON.stringify(report, null, 2));
   } catch (err) {
     let state = null;
@@ -3014,7 +4827,9 @@ async function main() {
             receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
             receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
             receiverLightDebug.dynamicEnvelopeIdentity === 'tier2-live-debug-receiver-envelope-v1' &&
-            receiverLightDebug.dynamicEnvelopeSource === 'volume-debug-frame-energy-procedural-envelope-no-readback-v1' &&
+            receiverLightDebug.requestedEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+            receiverLightDebug.effectiveEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+            receiverLightDebug.splatMomentEnvelopeAccepted === true &&
             receiverLightDebug.cpuReadbackAuthority === false &&
             receiverLightDebug.hiddenThreeLightAuthority === false &&
             receiverLightDebug.canvasBridgeAuthority === false &&
@@ -3035,6 +4850,17 @@ async function main() {
     }
     const report = {
       requestedRoute: url,
+      captureReplay: isCaptureReplay ? {
+        path: captureReplay.path,
+        documentIdentity: captureReplay.documentIdentity,
+        captureId: captureReplay.captureId,
+        artifactRelativePath: captureReplay.artifactRelativePath,
+        witnessCommand: captureReplay.witnessCommand,
+        kind: captureReplay.capture?.kind || null,
+        route: captureReplay.route,
+        controls: replayedCaptureControls,
+        camera: replayedCaptureCamera,
+      } : null,
       windowSize,
       evidenceMode,
       visualEvidenceMode,
@@ -3046,9 +4872,16 @@ async function main() {
       sceneContextLocalAssetMount,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
+      browserSession: {
+        identity: browserSession.identity,
+        mode: browserSession.mode,
+        port: browserSession.port,
+        userDataDir: browserSession.userDataDir,
+        keepBrowserOpen: browserSession.keepBrowserOpen,
+      },
     };
     writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    proc.kill('SIGTERM');
+    closeBrowserSession(browserSession);
     console.error(JSON.stringify(report, null, 2));
     process.exit(1);
   }

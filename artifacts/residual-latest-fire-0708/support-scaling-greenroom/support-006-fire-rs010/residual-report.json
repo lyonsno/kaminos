@@ -1,0 +1,459 @@
+{
+  "schema": "kaminos.volume.residual-upscale-mlx.v0",
+  "createdAt": "2026-07-08T22:59:07Z",
+  "corpusManifest": "/private/tmp/kaminos-latest-fire-expanded-corpus-0707/corpus-manifest.json",
+  "corpusSchema": "kaminos.volume.frame-locked-pair-corpus.v0",
+  "pairAuthority": "frame-locked-render-scale-set-v0",
+  "imageAuthority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+  "lowRenderScale": 0.1,
+  "requestedModelArch": "direct-residual",
+  "modelArch": "direct-residual",
+  "modelConfigSource": "cli",
+  "modelArtifactSchema": "kaminos.volume.residual-upscale-model-artifact.v0",
+  "modelArtifactAuthority": "offline-mlx-residual-upscaler-weights-v0",
+  "requestedSaveModelDir": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/model",
+  "requestedLoadModelDir": null,
+  "savedModelArtifact": {
+    "schema": "kaminos.volume.residual-upscale-model-artifact.v0",
+    "authority": "offline-mlx-residual-upscaler-weights-v0",
+    "manifestPath": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/model/model-artifact.json",
+    "manifestSha256": "aea79bb74b87d253ff1623c61f8b40e01a4754a890c0c557c2ea13935e652a80",
+    "weightsPath": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/model/weights.safetensors",
+    "weightsSha256": "b0873fadce831fb2af1d8b926afe404c5fef8ebb23f7c39574b81da2fede5e3b",
+    "model": {
+      "modelArch": "direct-residual",
+      "hiddenChannels": 16,
+      "inputChannels": 7,
+      "conditionRenderScale": false,
+      "scaleChannel": null,
+      "featureInputMode": "feature-rgba",
+      "featureInputAuthority": "shader-material-authority-residual-feature-v0",
+      "featureInputChannels": 4,
+      "detailGate": null,
+      "residualOutputLimit": 0.35,
+      "residualApplicationMaskMode": "off",
+      "residualMaskFeatherRadius": 0,
+      "residualColorMode": "rgb",
+      "chromaResidualScale": 1.0
+    }
+  },
+  "loadedModelArtifact": null,
+  "evalOnly": false,
+  "trainingSkipped": false,
+  "seed": 630,
+  "seededRandomGenerators": [
+    "numpy.default_rng",
+    "mlx.core.random"
+  ],
+  "selectedPairCount": 6,
+  "trainPairCount": 5,
+  "evalPairCount": 1,
+  "requestedEvalPairCount": 1,
+  "evalSelection": "even",
+  "trainPairs": [
+    "default-5200::pair-001-rs010-to-rs100",
+    "default-9400::pair-001-rs010-to-rs100",
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100",
+    "flow-basin-wider-body::pair-001-rs010-to-rs100",
+    "frontbite-7000::pair-001-rs010-to-rs100"
+  ],
+  "evalPairs": [
+    "flow-basin-default-7200::pair-001-rs010-to-rs100"
+  ],
+  "temporalSequenceCount": 0,
+  "temporalTrainPairCount": 4,
+  "temporalEvalPairCount": 0,
+  "temporalSelectedPairCount": 5,
+  "maxSteps": 2000,
+  "effectiveMaxSteps": 2000,
+  "sleepMs": 0.0,
+  "lossMode": "weighted",
+  "foregroundThreshold": 0.025,
+  "foregroundProbability": 0.98,
+  "foregroundLossWeight": 2.5,
+  "differenceLossWeight": 0.35,
+  "edgeBandMode": "difference-gradient",
+  "edgeBandAuthority": "target-derived-low-high",
+  "edgeBandThreshold": 0.022,
+  "edgeBandDilate": 2,
+  "edgeSamplingProbability": 0.9,
+  "edgeLossWeight": 1.6,
+  "edgeGradientLossWeight": 2.2,
+  "outsideEdgeResidualWeight": 0.0,
+  "residualOutputLimit": 0.35,
+  "residualColorMode": "rgb",
+  "chromaResidualScale": 1.0,
+  "chromaResidualLossWeight": 0.05,
+  "residualApplicationMaskMode": "off",
+  "residualMaskFeatherRadius": 0,
+  "residualApplicationMaskAuthority": "off",
+  "residualSmoothnessLossWeight": 0.02,
+  "smokeStructureLossWeight": 0.0,
+  "smokeResidualDcLossWeight": 0.0,
+  "smokeResidualEnergyLossWeight": 0.0,
+  "smokeMaskThreshold": 0.025,
+  "materialFocus": "fire-interface",
+  "materialMaskAuthority": "shader-material-authority-residual-feature-v0",
+  "outsideMaterialResidualWeight": 0.0,
+  "conditionRenderScale": false,
+  "featureInputMode": "feature-rgba",
+  "featureInputAuthority": "shader-material-authority-residual-feature-v0",
+  "featureInputChannels": 4,
+  "featurePaths": {
+    "default-5200::pair-001-rs010-to-rs100": "/tmp/kaminos-latest-fire-supplements2-0707/default-5200/pair-001-rs010-to-rs100/pair-001-rs010-to-rs100-01-rs010.feature.png",
+    "default-9400::pair-001-rs010-to-rs100": "/tmp/kaminos-latest-fire-supplements2-0707/default-9400/pair-001-rs010-to-rs100/pair-001-rs010-to-rs100-01-rs010.feature.png",
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": "/tmp/kaminos-latest-fire-supplement-default-0707/pair-001-rs010-to-rs100/pair-001-rs010-to-rs100-01-rs010.feature.png",
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": "/tmp/kaminos-latest-fire-corpus-0707/flow-basin-thinner-core/pair-001-rs010-to-rs100/pair-001-rs010-to-rs100-01-rs010.feature.png",
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": "/tmp/kaminos-latest-fire-corpus-0707/flow-basin-wider-body/pair-001-rs010-to-rs100/pair-001-rs010-to-rs100-01-rs010.feature.png",
+    "frontbite-7000::pair-001-rs010-to-rs100": "/tmp/kaminos-latest-fire-supplements2-0707/frontbite-7000/pair-001-rs010-to-rs100/pair-001-rs010-to-rs100-01-rs010.feature.png"
+  },
+  "temporalLossWeight": 0.0,
+  "activeTemporalLossWeight": 0.0,
+  "residualTemporalLossWeight": 0.0,
+  "activeResidualTemporalLossWeight": 0.0,
+  "residualContinuationMode": "none",
+  "residualContinuationEffectiveMode": "none",
+  "residualContinuationAlpha": 1.0,
+  "temporalLossPairCount": 4,
+  "temporalLossPairs": [
+    {
+      "previous": "default-5200::pair-001-rs010-to-rs100",
+      "current": "default-9400::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "default-9400::pair-001-rs010-to-rs100",
+      "current": "flow-basin-thinner-core::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "flow-basin-thinner-core::pair-001-rs010-to-rs100",
+      "current": "flow-basin-wider-body::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "flow-basin-wider-body::pair-001-rs010-to-rs100",
+      "current": "frontbite-7000::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    }
+  ],
+  "temporalLossFallback": null,
+  "previewMode": "foreground",
+  "previewFrameCount": 2,
+  "fullFramePreview": false,
+  "previewFocus": {
+    "mode": "foreground",
+    "centerY": 724.4065251403359,
+    "centerX": 855.4015062708885,
+    "foregroundPixels": 2130958,
+    "top": 532,
+    "left": 663,
+    "height": 384,
+    "width": 384
+  },
+  "temporalEval": true,
+  "temporalEvalScope": "selected",
+  "inputChannels": 7,
+  "scaleChannel": null,
+  "foregroundPixels": {
+    "default-5200::pair-001-rs010-to-rs100": 1335360,
+    "default-9400::pair-001-rs010-to-rs100": 1985216,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 2130958,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 1257310,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 2259913,
+    "frontbite-7000::pair-001-rs010-to-rs100": 1781558
+  },
+  "edgeBandPixels": {
+    "default-5200::pair-001-rs010-to-rs100": 245882,
+    "default-9400::pair-001-rs010-to-rs100": 183561,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 182253,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 172029,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 180752,
+    "frontbite-7000::pair-001-rs010-to-rs100": 183875
+  },
+  "edgeBandCoverage": {
+    "default-5200::pair-001-rs010-to-rs100": 0.0782366043018964,
+    "default-9400::pair-001-rs010-to-rs100": 0.05840683466972127,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 0.05799064528445972,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 0.05473749522718595,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 0.05751304569173985,
+    "frontbite-7000::pair-001-rs010-to-rs100": 0.058506745577192314
+  },
+  "edgeBandSignalMax": {
+    "default-5200::pair-001-rs010-to-rs100": 0.2823529541492462,
+    "default-9400::pair-001-rs010-to-rs100": 0.35294121503829956,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 0.20000000298023224,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 0.24313724040985107,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 0.2392157018184662,
+    "frontbite-7000::pair-001-rs010-to-rs100": 0.2549019455909729
+  },
+  "targetEdgeBandPixels": {
+    "default-5200::pair-001-rs010-to-rs100": 245882,
+    "default-9400::pair-001-rs010-to-rs100": 183561,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 182253,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 172029,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 180752,
+    "frontbite-7000::pair-001-rs010-to-rs100": 183875
+  },
+  "targetEdgeBandCoverage": {
+    "default-5200::pair-001-rs010-to-rs100": 0.0782366043018964,
+    "default-9400::pair-001-rs010-to-rs100": 0.05840683466972127,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 0.05799064528445972,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 0.05473749522718595,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 0.05751304569173985,
+    "frontbite-7000::pair-001-rs010-to-rs100": 0.058506745577192314
+  },
+  "targetEdgeBandSignalMax": {
+    "default-5200::pair-001-rs010-to-rs100": 0.2823529541492462,
+    "default-9400::pair-001-rs010-to-rs100": 0.35294121503829956,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 0.20000000298023224,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 0.24313724040985107,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 0.2392157018184662,
+    "frontbite-7000::pair-001-rs010-to-rs100": 0.2549019455909729
+  },
+  "materialFireCoverage": {
+    "default-5200::pair-001-rs010-to-rs100": 0.08505882322788239,
+    "default-9400::pair-001-rs010-to-rs100": 0.09577040374279022,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 0.10097731649875641,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 0.06473754346370697,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 0.11995968967676163,
+    "frontbite-7000::pair-001-rs010-to-rs100": 0.0844566747546196
+  },
+  "materialSmokeCoverage": {
+    "default-5200::pair-001-rs010-to-rs100": 0.02110872231423855,
+    "default-9400::pair-001-rs010-to-rs100": 0.03382883965969086,
+    "flow-basin-default-7200::pair-001-rs010-to-rs100": 0.0359642393887043,
+    "flow-basin-thinner-core::pair-001-rs010-to-rs100": 0.017361130565404892,
+    "flow-basin-wider-body::pair-001-rs010-to-rs100": 0.03774931654334068,
+    "frontbite-7000::pair-001-rs010-to-rs100": 0.030429428443312645
+  },
+  "batchSize": 4,
+  "patchSize": 96,
+  "hiddenChannels": 16,
+  "detailGate": null,
+  "learningRate": 0.001,
+  "evalPatches": 128,
+  "durationSeconds": 27.999547958374023,
+  "device": "Device(gpu, 0)",
+  "trainingLosses": [
+    {
+      "step": 1,
+      "loss": 0.0011082664132118225
+    },
+    {
+      "step": 200,
+      "loss": 0.0015528843505308032
+    },
+    {
+      "step": 400,
+      "loss": 0.0012872120132669806
+    },
+    {
+      "step": 600,
+      "loss": 0.0013495561433956027
+    },
+    {
+      "step": 800,
+      "loss": 0.00048601272283121943
+    },
+    {
+      "step": 1000,
+      "loss": 0.0015344643034040928
+    },
+    {
+      "step": 1200,
+      "loss": 0.0012862923322245479
+    },
+    {
+      "step": 1400,
+      "loss": 0.0013449983671307564
+    },
+    {
+      "step": 1600,
+      "loss": 0.0014104243600741029
+    },
+    {
+      "step": 1800,
+      "loss": 0.001560596632771194
+    },
+    {
+      "step": 2000,
+      "loss": 0.001466106274165213
+    }
+  ],
+  "temporalTrainingLosses": [],
+  "residualTemporalTrainingLosses": [],
+  "baselineMse": 0.0002757919100986328,
+  "modelMse": 0.0002908027850025974,
+  "baselinePsnr": 35.59418477286537,
+  "modelPsnr": 35.36401438578239,
+  "deltaPsnr": -0.23017038708297832,
+  "weightedBaselineMse": 0.00028738356854773883,
+  "weightedModelMse": 0.00030103476592557854,
+  "weightedBaselinePsnr": 35.41538066727365,
+  "weightedModelPsnr": 35.21383345676102,
+  "weightedDeltaPsnr": -0.20154721051262925,
+  "edgeBandBaselineMse": 0.0005472967804962536,
+  "edgeBandModelMse": 0.0005258964047243353,
+  "edgeBandBaselinePsnr": 32.617771066114216,
+  "edgeBandModelPsnr": 32.790997982181445,
+  "edgeBandDeltaPsnr": 0.17322691606722884,
+  "edgeBandEvalCoverage": 0.47780439956113696,
+  "targetEdgeBandBaselineMse": 0.0005472967804962536,
+  "targetEdgeBandModelMse": 0.0005258964047243353,
+  "targetEdgeBandBaselinePsnr": 32.617771066114216,
+  "targetEdgeBandModelPsnr": 32.790997982181445,
+  "targetEdgeBandDeltaPsnr": 0.17322691606722884,
+  "targetEdgeBandEvalCoverage": 0.47780439956113696,
+  "outsideEdgeResidualMse": 4.891254340577689e-05,
+  "improvedPatchFraction": 0.3828125,
+  "temporalPairCount": 5,
+  "temporalBaselineDeltaMse": 8.46255490614567e-05,
+  "temporalModelDeltaMse": 8.60999629367143e-05,
+  "temporalBaselineDeltaPsnr": 40.7249850053915,
+  "temporalModelDeltaPsnr": 40.649970354962164,
+  "temporalDeltaPsnr": -0.0750146504293383,
+  "temporalFlickerAmplification": 1.0608524111494286,
+  "temporalPairs": [
+    {
+      "previous": "default-5200::pair-001-rs010-to-rs100",
+      "current": "default-9400::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": null,
+      "previousTemporalFrameIndex": null,
+      "currentTemporalFrameIndex": null,
+      "baselineDeltaMse": 8.461665129289031e-05,
+      "modelDeltaMse": 8.464077109238133e-05,
+      "temporalDeltaPsnr": -0.0012377709345727794,
+      "temporalFlickerAmplification": 1.054852390270853
+    },
+    {
+      "previous": "default-9400::pair-001-rs010-to-rs100",
+      "current": "flow-basin-default-7200::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": null,
+      "previousTemporalFrameIndex": null,
+      "currentTemporalFrameIndex": null,
+      "baselineDeltaMse": 0.00011093824286945164,
+      "modelDeltaMse": 0.00010787657811306417,
+      "temporalDeltaPsnr": 0.12154120876607521,
+      "temporalFlickerAmplification": 1.0721022666536588
+    },
+    {
+      "previous": "flow-basin-default-7200::pair-001-rs010-to-rs100",
+      "current": "flow-basin-thinner-core::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": null,
+      "previousTemporalFrameIndex": null,
+      "currentTemporalFrameIndex": null,
+      "baselineDeltaMse": 6.294292688835412e-05,
+      "modelDeltaMse": 6.948530790396035e-05,
+      "temporalDeltaPsnr": -0.4294605227404773,
+      "temporalFlickerAmplification": 1.0550423011844332
+    },
+    {
+      "previous": "flow-basin-thinner-core::pair-001-rs010-to-rs100",
+      "current": "flow-basin-wider-body::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": null,
+      "previousTemporalFrameIndex": null,
+      "currentTemporalFrameIndex": null,
+      "baselineDeltaMse": 5.3941530495649204e-05,
+      "modelDeltaMse": 7.134167390177026e-05,
+      "temporalDeltaPsnr": -1.2142003041631568,
+      "temporalFlickerAmplification": 1.049107441949902
+    },
+    {
+      "previous": "flow-basin-wider-body::pair-001-rs010-to-rs100",
+      "current": "frontbite-7000::pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": null,
+      "previousTemporalFrameIndex": null,
+      "currentTemporalFrameIndex": null,
+      "baselineDeltaMse": 0.0001106883937609382,
+      "modelDeltaMse": 9.715548367239535e-05,
+      "temporalDeltaPsnr": 0.5663476711083177,
+      "temporalFlickerAmplification": 1.073157655688297
+    }
+  ],
+  "temporalPreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png",
+  "temporalPreviewFocus": {
+    "mode": "foreground",
+    "centerY": 863.6669781931464,
+    "centerX": 895.8826136772107,
+    "foregroundPixels": 1335360,
+    "top": 671,
+    "left": 703,
+    "height": 384,
+    "width": 384
+  },
+  "temporalSequencePreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/temporal-sequence-preview-low-model-target-error-mask.png",
+  "temporalSequenceFrames": [
+    {
+      "item": "default-5200::pair-001-rs010-to-rs100",
+      "temporalSequenceId": null,
+      "temporalFrameIndex": null,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "default-9400::pair-001-rs010-to-rs100",
+      "temporalSequenceId": null,
+      "temporalFrameIndex": null,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "flow-basin-default-7200::pair-001-rs010-to-rs100",
+      "temporalSequenceId": null,
+      "temporalFrameIndex": null,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "flow-basin-thinner-core::pair-001-rs010-to-rs100",
+      "temporalSequenceId": null,
+      "temporalFrameIndex": null,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "flow-basin-wider-body::pair-001-rs010-to-rs100",
+      "temporalSequenceId": null,
+      "temporalFrameIndex": null,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "frontbite-7000::pair-001-rs010-to-rs100",
+      "temporalSequenceId": null,
+      "temporalFrameIndex": null,
+      "lowRenderScale": 0.1
+    }
+  ],
+  "residualContinuationAuthority": null,
+  "continuationStillBaselinePsnr": null,
+  "continuationStillRawModelPsnr": null,
+  "continuationStillModelPsnr": null,
+  "continuationStillDeltaPsnr": null,
+  "continuationStillVsRawDeltaPsnr": null,
+  "continuationTemporalModelDeltaPsnr": null,
+  "continuationTemporalDeltaPsnr": null,
+  "continuationFlickerAmplification": null,
+  "continuationPreview": null,
+  "preview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/residual-preview-low-model-target-diff.png",
+  "diagnosticPreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/residual-preview-low-model-target-targetres-modelres-error-mask.png",
+  "previewFrames": [
+    {
+      "index": 0,
+      "item": "flow-basin-default-7200::pair-001-rs010-to-rs100",
+      "preview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/residual-preview-low-model-target-diff.png",
+      "diagnosticPreview": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/support-scaling-greenroom/support-006-fire-rs010/residual-preview-low-model-target-targetres-modelres-error-mask.png",
+      "previewFocus": {
+        "mode": "foreground",
+        "centerY": 724.4065251403359,
+        "centerX": 855.4015062708885,
+        "foregroundPixels": 2130958,
+        "top": 532,
+        "left": 663,
+        "height": 384,
+        "width": 384
+      }
+    }
+  ]
+}

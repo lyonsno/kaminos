@@ -1,0 +1,24 @@
+{
+  "schema": "kaminos.volume.residual-aggressive-sweep-plan.v0",
+  "createdAt": "2026-07-08T00:00:00Z",
+  "corpusManifest": "/private/tmp/kaminos-latest-fire-expanded-corpus-0707/corpus-manifest.json",
+  "lowRenderScale": 0.10,
+  "intent": "Make the exportable direct residual less timid while preserving the no-obvious-artifact behavior seen at strength 2.0.",
+  "candidates": [
+    {
+      "id": "edgebite-x2",
+      "hypothesis": "The current direct residual is underweighted on target edge/difference structure; stronger edge sampling plus edge-gradient loss should increase crisp reconstruction.",
+      "outputDir": "artifacts/residual-latest-fire-0708/aggressive-rs010-sweep/edgebite-x2"
+    },
+    {
+      "id": "highlimit-x2",
+      "hypothesis": "The learned residual may be amplitude timid; a higher residual output limit and stronger foreground/difference loss should allow larger truthful deltas.",
+      "outputDir": "artifacts/residual-latest-fire-0708/aggressive-rs010-sweep/highlimit-x2"
+    },
+    {
+      "id": "smokeclaw-x2",
+      "hypothesis": "Smoke needs structure pressure but not haze; add smoke gradient reward with mild DC suppression while keeping edge pressure high.",
+      "outputDir": "artifacts/residual-latest-fire-0708/aggressive-rs010-sweep/smokeclaw-x2"
+    }
+  ]
+}
