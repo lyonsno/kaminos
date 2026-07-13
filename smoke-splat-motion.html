@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Smoke Motion Witness</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #11161b; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <canvas id="smoke-motion-canvas"></canvas>
+  <script type="module">
+    import {
+      SMOKE_SPLAT_MOTION_ROUTE_IDENTITY,
+      SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY,
+      loadSmokeSplatMotionSource,
+    } from './smoke-splat-motion-source.mjs';
+
+    const canvas = document.getElementById('smoke-motion-canvas');
+    const params = new URLSearchParams(location.search);
+    const requestedRoute = params.get('route') || SMOKE_SPLAT_MOTION_ROUTE_IDENTITY;
+    const manifestPath = params.get('manifest') || './artifacts/real-smoke-hierarchy-0713/motion-source.json';
+    const instanceCount = requirePositiveInteger(params.get('instances') || 4, 'instances');
+    const fineLodFraction = requireUnitInterval(params.get('fine_lod') || 1, 'fine_lod');
+    const motionRate = requirePositiveNumber(params.get('motion_rate') || 0.16, 'motion_rate');
+    const state = window.__kaminosSmokeSplatMotion = {
+      schema: 'kaminos.smoke-splat-motion-runtime.v0',
+      status: 'initializing',
+      requestedRoute,
+      effectiveRoute: null,
+      fallbackReason: null,
+      backend: null,
+      temporalAuthority: SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY,
+      manifestPath,
+      instanceCount,
+      fineLodFraction,
+      motionRate,
+      frameCount: 0,
+      error: null,
+      products: [],
+      drawPlan: null,
+      timing: {
+        authority: 'browser-request-animation-frame-cpu-submit-v0',
+        frameIntervalsMs: [],
+        p50Ms: null,
+        p95Ms: null,
+      },
+    };
+
+    try {
+      if (requestedRoute !== SMOKE_SPLAT_MOTION_ROUTE_IDENTITY) throw new Error(`unsupported requested route: ${requestedRoute}`);
+      if (!navigator.gpu) throw new Error('navigator.gpu is unavailable');
+      const source = await loadSmokeSplatMotionSource(new URL(manifestPath, location.href), { instanceCount, fineLodFraction });
+      const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (!adapter) throw new Error('WebGPU adapter request returned null');
+      const device = await adapter.requestDevice();
+      const context = canvas.getContext('webgpu');
+      if (!context) throw new Error('WebGPU canvas context is unavailable');
+      const adapterInfo = adapter.info || {};
+      const backendSuffix = String(adapterInfo.vendor || adapterInfo.architecture || 'unknown').toLowerCase();
+      state.backend = `WebGPU:${backendSuffix}`;
+      state.products = source.products.map((product, index) => ({
+        phaseIndex: index,
+        identity: product.identity,
+        producerKind: product.producerKind,
+        modelIdentity: product.slotIdentity.modelIdentity,
+        historySlot: product.slotIdentity.historySlot,
+        slotWriteTick: product.slotIdentity.slotWriteTick,
+        sourceCount: product.hierarchyCounts.total,
+        coarseCount: product.hierarchyCounts.coarse,
+        fineCount: product.hierarchyCounts.fine,
+        sourceExtinctionMass: product.accounting.sourceExtinctionMass,
+        representedExtinctionMass: product.accounting.representedExtinctionMass,
+        rejectedExtinctionMass: product.accounting.rejectedExtinctionMass,
+        artifactSha256: product.artifact.sha256,
+      }));
+      state.drawPlan = {
+        identity: source.drawPlan.identity,
+        instanceCount: source.drawPlan.instanceCount,
+        uniqueProductCount: source.drawPlan.uniqueProductCount,
+        fineLodFraction: source.drawPlan.fineLodFraction,
+        coarseSplatsAlwaysPresent: source.drawPlan.coarseSplatsAlwaysPresent,
+        rejectedExtinctionMass: source.drawPlan.rejectedExtinctionMass,
+        productUploads: source.drawPlan.productUploads.map(upload => ({
+          productIdentity: upload.productIdentity,
+          sourceCount: upload.sourceCount,
+          selectedCount: upload.selectedCount,
+          coarseCount: upload.coarseCount,
+          fineCount: upload.fineCount,
+          sourceExtinctionMass: upload.sourceExtinctionMass,
+          representedExtinctionMass: upload.representedExtinctionMass,
+          rejectedExtinctionMass: upload.rejectedExtinctionMass,
+          coarseMassCompensation: upload.coarseMassCompensation,
+        })),
+        instanceBindings: source.drawPlan.instanceBindings,
+      };
+
+      const format = navigator.gpu.getPreferredCanvasFormat();
+      context.configure({ device, format, alphaMode: 'opaque' });
+      const productBuffers = source.drawPlan.productUploads.map((upload, index) => {
+        if (!(upload.packed instanceof Float32Array)) throw new Error(`phase ${index} has no packed upload`);
+        const buffer = device.createBuffer({
+          label: `kaminos smoke phase ${index} exact product`,
+          size: upload.packed.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+          mappedAtCreation: true,
+        });
+        new Float32Array(buffer.getMappedRange()).set(upload.packed);
+        buffer.unmap();
+        return buffer;
+      });
+      if (productBuffers.length !== 2) throw new Error(`first motion route requires exactly two products, got ${productBuffers.length}`);
+
+      const descriptorValues = new Float32Array(instanceCount * 8);
+      for (const binding of source.drawPlan.instanceBindings) {
+        const offset = binding.instanceIndex * 8;
+        descriptorValues.set([...binding.translation, 1], offset);
+        descriptorValues.set([binding.productIndex, binding.phaseOffset, 0, 0], offset + 4);
+      }
+      const descriptorBuffer = device.createBuffer({
+        label: 'kaminos smoke exact phase instance descriptors',
+        size: descriptorValues.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(descriptorBuffer, 0, descriptorValues);
+      const uniformBuffer = device.createBuffer({
+        label: 'kaminos smoke motion uniforms',
+        size: 128,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+
+      const splatModule = device.createShaderModule({ label: 'kaminos hierarchical smoke splat raster v0', code: `
+struct PackedSplat { a: vec4<f32>, b: vec4<f32>, c: vec4<f32>, d: vec4<f32> };
+struct Descriptor { transform: vec4<f32>, phase: vec4<f32> };
+struct Uniforms {
+  viewProj: mat4x4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  cameraPosition: vec4<f32>,
+  params: vec4<f32>,
+};
+struct VertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) local: vec2<f32>,
+  @location(1) extinctionMass: f32,
+  @location(2) densityTemperature: vec2<f32>,
+  @location(3) role: f32,
+  @location(4) supportArea: f32,
+};
+@group(0) @binding(0) var<storage, read> phase0: array<PackedSplat>;
+@group(0) @binding(1) var<storage, read> phase1: array<PackedSplat>;
+@group(0) @binding(2) var<storage, read> descriptors: array<Descriptor>;
+@group(0) @binding(3) var<uniform> u: Uniforms;
+
+fn cornerFor(vertexIndex: u32) -> vec2<f32> {
+  let index = vertexIndex % 6u;
+  if (index == 0u) { return vec2<f32>(-1.0, -1.0); }
+  if (index == 1u) { return vec2<f32>(1.0, -1.0); }
+  if (index == 2u) { return vec2<f32>(-1.0, 1.0); }
+  if (index == 3u) { return vec2<f32>(-1.0, 1.0); }
+  if (index == 4u) { return vec2<f32>(1.0, -1.0); }
+  return vec2<f32>(1.0, 1.0);
+}
+
+@vertex
+fn vs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) drawInstance: u32) -> VertexOut {
+  let visibleInstanceCount = max(1u, u32(u.params.y));
+  let sourceIndex = drawInstance / visibleInstanceCount;
+  let visibleInstance = drawInstance % visibleInstanceCount;
+  let descriptor = descriptors[visibleInstance];
+  let phaseIndex = u32(descriptor.phase.x);
+  let productCount = select(u32(u.params.w), u32(u.params.z), phaseIndex == 0u);
+  var out: VertexOut;
+  if (sourceIndex >= productCount) {
+    out.position = vec4<f32>(2.0, 2.0, 2.0, 1.0);
+    out.local = vec2<f32>(2.0);
+    out.extinctionMass = 0.0;
+    out.densityTemperature = vec2<f32>(0.0);
+    out.role = 0.0;
+    out.supportArea = 1.0;
+    return out;
+  }
+  var splat = phase0[sourceIndex];
+  if (phaseIndex == 1u) { splat = phase1[sourceIndex]; }
+  let corner = cornerFor(vertexIndex);
+  let phaseTime = fract(u.params.x * ${motionRate.toFixed(8)} + descriptor.phase.y) * 0.20;
+  let velocity = splat.d.xyz;
+  let transformedPosition = splat.a.xyz + velocity * phaseTime + descriptor.transform.xyz;
+  let radiusX = max(0.008, splat.b.z) * descriptor.transform.w;
+  let radiusY = max(0.008, splat.b.w) * descriptor.transform.w;
+  let footprintScale = mix(1.05, 1.22, splat.d.w);
+  let world = transformedPosition
+    + u.cameraRight.xyz * corner.x * radiusX * footprintScale
+    + u.cameraUp.xyz * corner.y * radiusY * footprintScale;
+  out.position = u.viewProj * vec4<f32>(world, 1.0);
+  out.local = corner;
+  out.extinctionMass = splat.c.y;
+  out.densityTemperature = splat.c.zw;
+  out.role = splat.d.w;
+  out.supportArea = 3.14159265 * radiusX * radiusY;
+  return out;
+}
+
+@fragment
+fn fs(in: VertexOut) -> @location(0) vec4<f32> {
+  let radius2 = dot(in.local, in.local);
+  if (radius2 > 1.0 || in.extinctionMass <= 0.0) { discard; }
+  let gaussian = exp(-radius2 * mix(2.6, 4.2, in.role));
+  let tau = clamp((in.extinctionMass / max(in.supportArea, 0.000001)) * gaussian, 0.0, 0.55);
+  let densityCue = clamp(in.densityTemperature.x * 0.45, 0.0, 1.0);
+  let heatCue = clamp(in.densityTemperature.y * 0.16, 0.0, 0.35);
+  let coarseColor = mix(vec3<f32>(0.055, 0.070, 0.078), vec3<f32>(0.105, 0.115, 0.120), densityCue);
+  let fineColor = mix(vec3<f32>(0.080, 0.090, 0.095), vec3<f32>(0.145, 0.135, 0.120), heatCue);
+  let smokeColor = mix(coarseColor, fineColor, in.role);
+  return vec4<f32>(smokeColor * tau, tau);
+}
+` });
+
+      const resolveModule = device.createShaderModule({ label: 'kaminos hierarchical smoke optical resolve v0', code: `
+struct VertexOut { @builtin(position) position: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex fn vs(@builtin(vertex_index) index: u32) -> VertexOut {
+  var positions = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
+  let p = positions[index];
+  var out: VertexOut;
+  out.position = vec4<f32>(p, 0.0, 1.0);
+  out.uv = p * 0.5 + vec2<f32>(0.5);
+  return out;
+}
+@group(0) @binding(0) var accumulation: texture_2d<f32>;
+@fragment fn fs(in: VertexOut) -> @location(0) vec4<f32> {
+  let dimensions = textureDimensions(accumulation);
+  let pixel = vec2<i32>(clamp(in.uv, vec2<f32>(0.0), vec2<f32>(0.999999)) * vec2<f32>(dimensions));
+  let optical = textureLoad(accumulation, pixel, 0);
+  let tau = max(0.0, optical.a);
+  let transmittance = exp(-tau);
+  let smokeColor = optical.rgb / max(tau, 0.000001);
+  let horizon = smoothstep(0.0, 1.0, in.uv.y);
+  let background = mix(vec3<f32>(0.56, 0.60, 0.61), vec3<f32>(0.16, 0.20, 0.23), horizon);
+  let color = smokeColor * (1.0 - transmittance) + background * transmittance;
+  return vec4<f32>(pow(max(color, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), 1.0);
+}
+` });
+
+      const splatPipeline = device.createRenderPipeline({
+        label: 'kaminos order-independent hierarchical smoke accumulation v0',
+        layout: 'auto',
+        vertex: { module: splatModule, entryPoint: 'vs' },
+        fragment: {
+          module: splatModule,
+          entryPoint: 'fs',
+          targets: [{
+            format: 'rgba16float',
+            blend: {
+              color: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+              alpha: { srcFactor: 'one', dstFactor: 'one', operation: 'add' },
+            },
+          }],
+        },
+        primitive: { topology: 'triangle-list', cullMode: 'none' },
+      });
+      const resolvePipeline = device.createRenderPipeline({
+        label: 'kaminos smoke transmittance resolve v0',
+        layout: 'auto',
+        vertex: { module: resolveModule, entryPoint: 'vs' },
+        fragment: { module: resolveModule, entryPoint: 'fs', targets: [{ format }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      const splatBindGroup = device.createBindGroup({
+        layout: splatPipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: productBuffers[0] } },
+          { binding: 1, resource: { buffer: productBuffers[1] } },
+          { binding: 2, resource: { buffer: descriptorBuffer } },
+          { binding: 3, resource: { buffer: uniformBuffer } },
+        ],
+      });
+
+      let accumulationTexture = null;
+      let resolveBindGroup = null;
+      let width = 0;
+      let height = 0;
+      function resize() {
+        const nextWidth = Math.max(1, Math.floor(innerWidth * devicePixelRatio));
+        const nextHeight = Math.max(1, Math.floor(innerHeight * devicePixelRatio));
+        if (nextWidth === width && nextHeight === height) return;
+        width = nextWidth;
+        height = nextHeight;
+        canvas.width = width;
+        canvas.height = height;
+        accumulationTexture?.destroy();
+        accumulationTexture = device.createTexture({
+          label: 'kaminos smoke optical accumulation rgba16float',
+          size: [width, height],
+          format: 'rgba16float',
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        resolveBindGroup = device.createBindGroup({
+          layout: resolvePipeline.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: accumulationTexture.createView() }],
+        });
+      }
+
+      const maxSelectedCount = Math.max(...source.drawPlan.productUploads.map(upload => upload.selectedCount));
+      const drawInstanceCount = maxSelectedCount * instanceCount;
+      if (!Number.isSafeInteger(drawInstanceCount) || drawInstanceCount > 0xffffffff) {
+        throw new Error(`requested uncapped draw exceeds WebGPU draw instance address space: ${drawInstanceCount}`);
+      }
+      state.drawPlan.drawInstanceCount = drawInstanceCount;
+      state.drawPlan.maxSelectedProductCount = maxSelectedCount;
+      state.effectiveRoute = SMOKE_SPLAT_MOTION_ROUTE_IDENTITY;
+      state.status = 'running';
+      let lastFrameAt = null;
+      const startedAt = performance.now();
+      function frame(now) {
+        resize();
+        const interval = lastFrameAt === null ? null : now - lastFrameAt;
+        lastFrameAt = now;
+        if (interval !== null && Number.isFinite(interval)) {
+          state.timing.frameIntervalsMs.push(interval);
+          if (state.timing.frameIntervalsMs.length > 240) state.timing.frameIntervalsMs.shift();
+          const sorted = [...state.timing.frameIntervalsMs].sort((a, b) => a - b);
+          state.timing.p50Ms = percentile(sorted, 0.50);
+          state.timing.p95Ms = percentile(sorted, 0.95);
+        }
+        const aspect = width / height;
+        const columns = Math.ceil(Math.sqrt(instanceCount));
+        const rows = Math.ceil(instanceCount / columns);
+        const extent = Math.max(columns, rows) * (instanceCount <= 4 ? 2.15 : Math.max(1.55, 4.8 / Math.sqrt(instanceCount)));
+        const cameraPosition = [extent * 0.34, 2.2 + extent * 0.18, 5.2 + extent * 0.82];
+        const viewProj = multiplyMat4(
+          perspectiveMat4(Math.PI / 4.2, aspect, 0.05, 80),
+          lookAtMat4(cameraPosition, [0, 0.05, 0], [0, 1, 0]),
+        );
+        const uniforms = new Float32Array(32);
+        uniforms.set(viewProj, 0);
+        uniforms.set([1, 0, 0, 0], 16);
+        uniforms.set([0, 1, 0, 0], 20);
+        uniforms.set([...cameraPosition, 0], 24);
+        uniforms.set([(now - startedAt) / 1000, instanceCount, source.drawPlan.productUploads[0].selectedCount, source.drawPlan.productUploads[1].selectedCount], 28);
+        device.queue.writeBuffer(uniformBuffer, 0, uniforms);
+        const encoder = device.createCommandEncoder({ label: 'kaminos smoke motion frame' });
+        const splatPass = encoder.beginRenderPass({
+          label: 'kaminos hierarchical smoke optical accumulation pass',
+          colorAttachments: [{
+            view: accumulationTexture.createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 0 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          }],
+        });
+        splatPass.setPipeline(splatPipeline);
+        splatPass.setBindGroup(0, splatBindGroup);
+        splatPass.draw(6, drawInstanceCount);
+        splatPass.end();
+        const resolvePass = encoder.beginRenderPass({
+          label: 'kaminos hierarchical smoke transmittance resolve pass',
+          colorAttachments: [{
+            view: context.getCurrentTexture().createView(),
+            clearValue: { r: 0.12, g: 0.15, b: 0.17, a: 1 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          }],
+        });
+        resolvePass.setPipeline(resolvePipeline);
+        resolvePass.setBindGroup(0, resolveBindGroup);
+        resolvePass.draw(3);
+        resolvePass.end();
+        device.queue.submit([encoder.finish()]);
+        state.frameCount += 1;
+        state.elapsedMs = now - startedAt;
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    } catch (error) {
+      state.status = 'failed';
+      state.effectiveRoute = null;
+      state.fallbackReason = null;
+      state.error = error?.stack || error?.message || String(error);
+      console.error(error);
+    }
+
+    function requirePositiveInteger(value, label) {
+      const number = Number(value);
+      if (!Number.isInteger(number) || number <= 0) throw new Error(`${label} must be a positive integer`);
+      return number;
+    }
+
+    function requirePositiveNumber(value, label) {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number <= 0) throw new Error(`${label} must be positive`);
+      return number;
+    }
+
+    function requireUnitInterval(value, label) {
+      const number = Number(value);
+      if (!Number.isFinite(number) || number < 0 || number > 1) throw new Error(`${label} must be between zero and one`);
+      return number;
+    }
+
+    function percentile(sorted, fraction) {
+      if (!sorted.length) return null;
+      return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1))];
+    }
+
+    function perspectiveMat4(fovY, aspect, near, far) {
+      const f = 1 / Math.tan(fovY / 2);
+      const out = new Float32Array(16);
+      out[0] = f / aspect;
+      out[5] = f;
+      out[10] = far / (near - far);
+      out[11] = -1;
+      out[14] = (near * far) / (near - far);
+      return out;
+    }
+
+    function lookAtMat4(eye, target, up) {
+      const z = normalize(subtract(eye, target));
+      const x = normalize(cross(up, z));
+      const y = cross(z, x);
+      return new Float32Array([
+        x[0], y[0], z[0], 0,
+        x[1], y[1], z[1], 0,
+        x[2], y[2], z[2], 0,
+        -dot(x, eye), -dot(y, eye), -dot(z, eye), 1,
+      ]);
+    }
+
+    function multiplyMat4(a, b) {
+      const out = new Float32Array(16);
+      for (let column = 0; column < 4; column += 1) {
+        for (let row = 0; row < 4; row += 1) {
+          let value = 0;
+          for (let k = 0; k < 4; k += 1) value += a[k * 4 + row] * b[column * 4 + k];
+          out[column * 4 + row] = value;
+        }
+      }
+      return out;
+    }
+
+    function subtract(a, b) { return a.map((value, index) => value - b[index]); }
+    function dot(a, b) { return a.reduce((sum, value, index) => sum + value * b[index], 0); }
+    function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+    function normalize(value) {
+      const length = Math.hypot(...value) || 1;
+      return value.map(component => component / length);
+    }
+  </script>
+</body>
+</html>

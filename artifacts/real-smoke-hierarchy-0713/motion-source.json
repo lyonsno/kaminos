@@ -1,0 +1,127 @@
+{
+  "schema": "kaminos.smoke-splat-motion-source.v0",
+  "status": "passed",
+  "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "fallbackReason": null,
+  "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+  "producerAuthority": "real-field-hierarchical-smoke-splat-producer-v0",
+  "sourceReport": {
+    "path": "selected-report.json",
+    "sha256": "29b110a6f9c55e6ef7b465ae7cd43a7b69f9d0025541467998b89f6f3eb2e302",
+    "schema": "kaminos-real-smoke-splat-corpus-report-v0"
+  },
+  "sourceRoute": {
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "grid": [160, 160, 160]
+  },
+  "products": [
+    {
+      "phaseIndex": 0,
+      "frameId": "sim-step-96",
+      "step": 96,
+      "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7Cuncapped",
+      "schema": "kaminos-hierarchical-smoke-splats-v0",
+      "producerAuthority": "real-field-hierarchical-smoke-splat-producer-v0",
+      "producerKind": "authoritative-articulation-target",
+      "sourceProducerKind": "real-field-hierarchical-target",
+      "slotIdentity": {
+        "historySlot": 0,
+        "slotWriteTick": 96,
+        "simulatorGeneration": 1,
+        "modelIdentity": "smoke-sparse-residual-target:v0"
+      },
+      "payloadIdentity": "sha256:d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+      "decoderConfigIdentity": "8|4|1.35000000000|0.500000000000|0.500000000000|uncapped",
+      "hierarchyCounts": {
+        "coarse": 7964,
+        "fine": 3474,
+        "total": 11438
+      },
+      "accounting": {
+        "identity": "smoke-splat-extinction-accounting-v0",
+        "sourceExtinctionMass": 3.4296106743467547,
+        "representedExtinctionMass": 3.429610674346581,
+        "rejectedExtinctionMass": 0,
+        "retentionRatio": 0.9999999999999494
+      },
+      "capacity": {
+        "requested": null,
+        "status": "within-capacity",
+        "overflowCount": 0,
+        "outputWasTruncated": false
+      },
+      "artifact": {
+        "path": "sim-step-96-target.splats.f32",
+        "sha256": "757f20d47ca0eb680c51433231df012b8fb600bd891c4e3d982fbd724f0f0efe",
+        "byteLength": 732032,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [11438, 16],
+        "channelOrder": [
+          "positionX", "positionY", "positionZ", "principalAxisX",
+          "principalAxisY", "principalAxisZ", "radiusX", "radiusY",
+          "radiusZ", "extinctionMass", "densityWitness", "temperatureWitness",
+          "velocityX", "velocityY", "velocityZ", "hierarchyRoleCode"
+        ]
+      }
+    },
+    {
+      "phaseIndex": 1,
+      "frameId": "sim-step-97",
+      "step": 97,
+      "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7Cuncapped",
+      "schema": "kaminos-hierarchical-smoke-splats-v0",
+      "producerAuthority": "real-field-hierarchical-smoke-splat-producer-v0",
+      "producerKind": "learned-heldout-residual-selector",
+      "sourceProducerKind": "learned-sparse-residual-plus-conserved-coarse",
+      "slotIdentity": {
+        "historySlot": 1,
+        "slotWriteTick": 97,
+        "simulatorGeneration": 1,
+        "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3"
+      },
+      "payloadIdentity": "sha256:749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385",
+      "decoderConfigIdentity": "8|4|1.35000000000|0.500000000000|0.500000000000|uncapped",
+      "hierarchyCounts": {
+        "coarse": 7968,
+        "fine": 3403,
+        "total": 11371
+      },
+      "accounting": {
+        "identity": "smoke-splat-extinction-accounting-v0",
+        "sourceExtinctionMass": 3.4333030511244917,
+        "representedExtinctionMass": 3.4333030511249607,
+        "rejectedExtinctionMass": 0,
+        "retentionRatio": 1.0000000000001366
+      },
+      "capacity": {
+        "requested": null,
+        "status": "within-capacity",
+        "overflowCount": 0,
+        "outputWasTruncated": false
+      },
+      "artifact": {
+        "path": "sim-step-97-learned.splats.f32",
+        "sha256": "ba5009179d42d64b5d825c31cacf9ef4ddf8a8107a50bfc0654f076af150430e",
+        "byteLength": 727744,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [11371, 16],
+        "channelOrder": [
+          "positionX", "positionY", "positionZ", "principalAxisX",
+          "principalAxisY", "principalAxisZ", "radiusX", "radiusY",
+          "radiusZ", "extinctionMass", "densityWitness", "temperatureWitness",
+          "velocityX", "velocityY", "velocityZ", "hierarchyRoleCode"
+        ]
+      }
+    }
+  ],
+  "limitations": [
+    "Phase zero carries the authoritative articulation target while phase one carries the held-out learned selector output.",
+    "Motion is short-horizon velocity extrapolation from stored exact products, not a live recurrent smoke decode.",
+    "This witness isolates smoke representation and raster behavior; it does not claim final flame-smoke depth composition."
+  ]
+}

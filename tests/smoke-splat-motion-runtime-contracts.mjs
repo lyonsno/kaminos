@@ -34,6 +34,12 @@ assert.match(witness, /lastTrustworthyEvidence/, 'motion witness must preserve p
 assert.match(witness, /fallback/i, 'motion witness must reject fallback output');
 assert.match(witness, /blank/i, 'motion witness must reject blank output');
 assert.match(witness, /frameDigest/i, 'motion witness must reject cached or static frames');
+assert.match(witness, /sampleCount:\s*state\.timing\.frameIntervalsMs\.length/, 'motion witness must retain timing sample count');
+assert.doesNotMatch(
+  witness,
+  /timing:\s*state\.timing\s*,/,
+  'durable frame evidence must not duplicate the full rolling timing sample window',
+);
 
 assert.notEqual(manifestText, '', 'real motion source manifest must exist');
 const manifest = JSON.parse(manifestText);
