@@ -80,6 +80,10 @@ try {
   assert.equal(report.selectedSampleCount, 2);
   assert.equal(report.teacher.selection, 'preselected-live-candidates');
   assert.equal(report.teacher.observedRanges.length, 6);
+  assert.ok(report.teacher.observedRanges[4][0] >= 0.719 && report.teacher.observedRanges[4][1] <= 1.081, 'radius.x target is the hook multiplier, not an absolute radius');
+  assert.ok(report.teacher.observedRanges[5][0] >= 0.999 && report.teacher.observedRanges[5][1] <= 1.601, 'radius.y target is the hook multiplier, not an absolute radius');
+  assert.deepEqual(report.teacher.outputRanges[4], [0.2, 2.0]);
+  assert.deepEqual(report.teacher.outputRanges[5], [0.2, 2.0]);
 } finally {
   await rm(liveOutputDir, { recursive: true, force: true });
 }

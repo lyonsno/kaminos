@@ -35,7 +35,7 @@ FEATURES = [
     "micro.w",
 ]
 OUTPUTS = ["color.r", "color.g", "color.b", "opacity", "radius.x", "radius.y"]
-OUTPUT_RANGES = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.001, 0.08], [0.2, 6.0], [0.2, 6.0]]
+OUTPUT_RANGES = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0], [0.001, 0.08], [0.2, 2.0], [0.2, 2.0]]
 
 
 def smoothstep(lower, upper, value):
@@ -59,9 +59,8 @@ def evaluate_teacher(features):
     white_mix = white_hot[:, None] * 0.52
     color = base_color * (1.0 - white_mix) + white[None, :] * white_mix
     opacity = np.clip(structural_signal * (0.008 + fire_signal * 0.055), 0.002, 0.038)
-    radius = 0.60 + sidecar[:, 3] * 2.65 + sidecar[:, 2] * 0.48
-    radius_x = radius * (0.72 + sidecar[:, 2] * 0.36)
-    radius_y = radius * (1.0 + sidecar[:, 3] * 0.42)
+    radius_x = 0.72 + sidecar[:, 2] * 0.36
+    radius_y = 1.0 + sidecar[:, 3] * 0.42
     targets = np.concatenate(
         [color, opacity[:, None], radius_x[:, None], radius_y[:, None]],
         axis=1,
@@ -84,11 +83,7 @@ def sample_teacher(sample_count, seed):
 
 
 def output_ranges_for_targets(targets, live_support):
-    ranges = [list(entry) for entry in OUTPUT_RANGES]
-    if live_support:
-        for index in (4, 5):
-            ranges[index][1] = max(ranges[index][1], float(np.max(targets[:, index])) * 1.05)
-    return ranges
+    return [list(entry) for entry in OUTPUT_RANGES]
 
 
 class AttributeMlp(nn.Module):

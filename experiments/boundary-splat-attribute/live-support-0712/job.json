@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.boundary-splat-attribute-job.v0",
-  "routeIdentity": "live-support-analytic-boundary-splat-teacher-v0",
-  "purpose": "Test whether unchanged tiny-head architecture recovers the analytic splat mapping when trained on the exact selected-candidate distribution consumed by the live WebGPU shader.",
+  "routeIdentity": "live-support-analytic-boundary-splat-radius-multiplier-teacher-v1",
+  "purpose": "Test whether unchanged tiny-head architecture recovers the analytic splat hook outputs when trained on exact live selected-candidate support with radius multipliers rather than pre-multiplied absolute radii.",
   "claimBoundary": "One-frame live-support analytic-teacher approximation and export evidence only; visual improvement requires frozen-state browser A/B and this corpus does not establish cross-basin generalization.",
   "featureInput": {
     "path": "selected-candidate-features.f32",
