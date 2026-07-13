@@ -159,6 +159,42 @@ async function captureViewportPng(ws, outputPath) {
   return png;
 }
 
+async function attemptInFlightHybridCapture({
+  ws,
+  outputPath,
+  authorization,
+  capturePng = captureViewportPng,
+  persistEvidence,
+}) {
+  let receipt = {
+    ...authorization,
+    status: 'capture-attempting',
+    path: outputPath,
+    attemptedAt: new Date().toISOString(),
+  };
+  persistEvidence(receipt);
+  try {
+    const png = await capturePng(ws, outputPath);
+    receipt = {
+      ...receipt,
+      status: 'captured',
+      bytes: png.length,
+      capturedAt: new Date().toISOString(),
+    };
+    persistEvidence(receipt);
+    return receipt;
+  } catch (error) {
+    receipt = {
+      ...receipt,
+      status: 'capture-failed',
+      failedAt: new Date().toISOString(),
+      error: error.message || String(error),
+    };
+    persistEvidence(receipt);
+    throw error;
+  }
+}
+
 function compactWitnessSummary({ state, out, inFlightCapture, reportPath }) {
   const route = state?.fullRoute || null;
   const foreground = route?.foregroundKilnHeartbeat || null;
@@ -527,19 +563,23 @@ try {
         });
         if (!presentationFailures.length) {
           phase = 'capturing-in-flight-hybrid';
-          const inFlightPng = await captureViewportPng(ws, inFlightOut);
-          inFlightCapture = {
-            ...inFlightCapture,
-            status: 'captured',
-            path: inFlightOut,
-            bytes: inFlightPng.length,
-            capturedAt: new Date().toISOString(),
-            firingId: routeState.firingId,
-            requestedFirePresentation,
-            effectiveFirePresentation: routeState.effectiveFirePresentation,
-            presentationFailures,
-          };
-          lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
+          inFlightCapture = await attemptInFlightHybridCapture({
+            ws,
+            outputPath: inFlightOut,
+            authorization: {
+              ...inFlightCapture,
+              firingId: routeState.firingId,
+              firePhase: routeState.firePhase,
+              requestedFirePresentation,
+              expectedFirePresentation: routeState.expectedFirePresentation,
+              effectiveFirePresentation: routeState.effectiveFirePresentation,
+              presentationFailures,
+            },
+            persistEvidence: receipt => {
+              inFlightCapture = receipt;
+              lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture: receipt };
+            },
+          });
           phase = 'waiting-for-friendly-firing';
         }
       }

@@ -29,6 +29,41 @@ assert.equal(compactSummary.status, 'complete');
 assert.equal(compactSummary.output.sha256, 'abc');
 assert.equal(compactSummary.inFlightCapture.status, 'captured');
 assert.ok(!JSON.stringify(compactSummary).includes('do-not-print'), 'terminal summary must not replay uncapped sample arrays');
+
+const captureAttemptSource = witness.match(
+  /async function attemptInFlightHybridCapture\([\s\S]*?\n}\n(?=\nfunction compactWitnessSummary)/,
+);
+assert.ok(
+  captureAttemptSource,
+  'witness must expose a testable in-flight capture attempt that persists authorization before I/O',
+);
+const attemptInFlightHybridCapture = vm.runInNewContext(`(${captureAttemptSource[0]})`);
+const captureReceipts = [];
+await assert.rejects(
+  attemptInFlightHybridCapture({
+    ws: {},
+    outputPath: '/tmp/failing-in-flight.png',
+    authorization: {
+      firingId: 'firing-capture-failure',
+      firePhase: 'burning',
+      requestedFirePresentation: 'hybrid-smoke-preview',
+      expectedFirePresentation: { effectiveMode: 'learned-splat-flame-raymarched-smoke' },
+      effectiveFirePresentation: { candidateCount: 512, candidateCapacity: 2048 },
+      presentationFailures: [],
+    },
+    capturePng: async () => { throw new Error('simulated CDP screenshot failure'); },
+    persistEvidence: receipt => captureReceipts.push(receipt),
+  }),
+  /simulated CDP screenshot failure/,
+);
+assert.deepEqual(
+  captureReceipts.map(receipt => receipt.status),
+  ['capture-attempting', 'capture-failed'],
+  'capture authorization must be durable before screenshot I/O and remain available on failure',
+);
+assert.equal(captureReceipts[0].firingId, 'firing-capture-failure');
+assert.equal(captureReceipts[0].effectiveFirePresentation.candidateCount, 512);
+assert.equal(captureReceipts[1].error, 'simulated CDP screenshot failure');
 const releaseValidatorSource = witness.match(
   /function validateVolumeReleaseEvidence\([\s\S]*?\n}\n(?=\nfunction validateRequestedFirePresentation)/,
 );
@@ -209,7 +244,7 @@ for (const [pattern, message] of [
   [/castButtonDisabled/, 'Witness must record whether the cast action truthfully has a target'],
   [/pointerEvents/, 'Witness must prove the workroom is hittable instead of visually clickable only'],
   [/Page\.captureScreenshot/, 'Witness must capture the actual browser viewport'],
-  [/routeState\.effectiveFirePresentation[\s\S]*validateRequestedFirePresentation[\s\S]*inFlightCapture = \{[\s\S]*status: 'captured'/, 'Transient capture must wait for executable effective hybrid presentation validation'],
+  [/routeState\.effectiveFirePresentation[\s\S]*validateRequestedFirePresentation[\s\S]*attemptInFlightHybridCapture\(\{[\s\S]*authorization:[\s\S]*effectiveFirePresentation/, 'Transient capture must wait for executable effective hybrid presentation validation'],
   [/candidateCount > 0/, 'Transient hybrid capture must require a nonempty live candidate set'],
   [/inFlightCapture[\s\S]*requestedFirePresentation[\s\S]*effectiveFirePresentation/, 'Transient capture evidence must preserve requested/effective presentation identity'],
   [/observerEffect[\s\S]*CDP viewport capture may perturb foreground cadence/, 'Transient visual evidence must disclose its cadence observer effect'],
