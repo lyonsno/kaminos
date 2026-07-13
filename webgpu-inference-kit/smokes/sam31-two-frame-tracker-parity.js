@@ -111,7 +111,17 @@ async function verifyPacketAuthority() {
     const referenceReceipt = await fetchJson(`/oracle/${name}/reference-receipt.json`);
     packets[name] = name === 'ingress'
       ? await verifySam31TwoImageIngressPacketAuthority({ manifestText, manifest, referenceReceipt, expectedManifestSha256 })
-      : await verifySam31TwoFramePacketAuthority({ name, authorityName: name === 'episode' ? episodeAuthorityName : name, manifestText, manifest, referenceReceipt, expectedManifestSha256 });
+      : await verifySam31TwoFramePacketAuthority({
+        name,
+        authorityName: name === 'episode' ? episodeAuthorityName : name,
+        manifestText,
+        manifest,
+        referenceReceipt,
+        expectedManifestSha256,
+        authenticatedIngress: name === 'episode' && isTwoImage
+          ? { manifest: manifests.ingress, authority: packets.ingress }
+          : null,
+      });
     manifests[name] = manifest;
   }
   return { authority: { passed: true, packetSource, verifiedPackets: PACKET_NAMES, packets }, manifests };
@@ -319,13 +329,7 @@ async function run() {
   const adapterInfo = adapterIdentity(adapter);
   let imageBackbone = null;
   if (isTwoImage) {
-    const ingressManifestSha256 = packetAuthority.packets.ingress.manifestSha256;
-    const ingressBindingsPassed = episode.imageIngress?.tensorManifestSha256 === ingressManifestSha256
-      && JSON.stringify(episode.imageIngress?.sourceImages) === JSON.stringify(ingress.sourceImages)
-      && episode.imageIngress?.bindings?.frame0InteractiveFeature === entryMap(ingress.tensors)['frame-0-interactive-feature-2'].sha256
-      && episode.imageIngress?.bindings?.frame0PropagationFeature === entryMap(ingress.tensors)['frame-0-propagation-feature-2'].sha256
-      && episode.imageIngress?.bindings?.frame1PropagationFeature === entryMap(ingress.tensors)['frame-1-propagation-feature-2'].sha256;
-    if (!ingressBindingsPassed) throw new Error('two-image episode does not bind the authenticated ingress packet and branch features');
+    if (packetAuthority.packets.episode.ingressBindingsPassed !== true) throw new Error('two-image episode does not bind the complete authenticated ingress packet');
     imageBackbone = await runSam31TwoImageBackbone({ manifest: ingress, adapter, device, errors, commit: params.get('commit') || null, update: phase => update('running', phase, { episodeMode, adapterInfo, packetAuthority }) });
   }
   const decoderWeights = await loadDecoderWeights(decoderManifest);
@@ -513,7 +517,8 @@ async function run() {
     : maximums.frame0Decoder <= frame0Tolerance;
   const parityPassed = (imageBackbone?.parityPassed ?? true) && suppressionParity <= frame0Tolerance && frame0ProducerParityPassed && maximums.frame0Memory <= episode.tolerances.memoryMaxAbsDiff && maximums.temporalBank <= episode.tolerances.bankMaxAbsDiff && maximums.frame1Attention <= episode.tolerances.conditionedMaxAbsDiff && maximums.frame1Decoder <= episode.tolerances.decoderMaxAbsDiff;
   const packetAuthorityPassed = packetAuthority.passed === true && packetAuthority.verifiedPackets.length === (isTwoImage ? 6 : isMaskConditioned ? 5 : 4);
-  const evidence = { packetAuthorityPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, adapterPassed: adapterInfo.isFallbackAdapter === false, routeChainPassed, persistentStatePassed, stateTransitionPassed, parityPassed, errorsPassed: errors.length === 0 };
+  const ingressBindingsPassed = !isTwoImage || packetAuthority.packets.episode.ingressBindingsPassed === true;
+  const evidence = { packetAuthorityPassed, ingressBindingsPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, adapterPassed: adapterInfo.isFallbackAdapter === false, routeChainPassed, persistentStatePassed, stateTransitionPassed, parityPassed, errorsPassed: errors.length === 0 };
   evidence.passed = Object.values(evidence).every(Boolean);
   const referenceStateTransition = episode.stateTransition;
   const effectiveStateTransition = {

@@ -104,6 +104,7 @@ function writeReport(extra = {}) {
 async function verifyPacketAuthority() {
   const verifiedPackets = [];
   const packets = {};
+  const manifests = {};
   for (const name of Object.keys(packetTools)) {
     const outDir = packetDirs[name];
     const manifestPath = join(outDir, 'tensor-manifest.json');
@@ -125,7 +126,11 @@ async function verifyPacketAuthority() {
         manifest,
         referenceReceipt: receipt,
         expectedManifestSha256: expectedDigest,
+        authenticatedIngress: name === 'episode' && isTwoImage
+          ? { manifest: manifests.ingress, authority: packets.ingress }
+          : null,
       });
+    manifests[name] = manifest;
     expectedManifestSha256[name] = packets[name].manifestSha256;
     verifiedPackets.push(name);
   }

@@ -374,7 +374,44 @@ function assertNamedJsonEqual(name, actual, expected, field) {
   }
 }
 
-export async function verifySam31TwoFramePacketAuthority({ name, authorityName = name, manifestText, manifest, referenceReceipt, expectedManifestSha256 }) {
+const TWO_IMAGE_EPISODE_INGRESS_BINDINGS = Object.freeze({
+  frame0InteractiveFeature: 'frame-0-interactive-feature-2',
+  frame0InteractiveHighResolution0: 'frame-0-interactive-high-resolution-s0',
+  frame0InteractiveHighResolution1: 'frame-0-interactive-high-resolution-s1',
+  frame0PropagationFeature: 'frame-0-propagation-feature-2',
+  frame0PropagationPosition: 'frame-0-propagation-position-2',
+  frame1PropagationFeature: 'frame-1-propagation-feature-2',
+  frame1PropagationPosition: 'frame-1-propagation-position-2',
+  frame1HighResolutionS0: 'frame-1-high-resolution-s0',
+  frame1HighResolutionS1: 'frame-1-high-resolution-s1',
+});
+
+function verifyTwoImageEpisodeIngressBindings({ authorityName, manifest, authenticatedIngress }) {
+  const ingressAuthority = authenticatedIngress?.authority;
+  const ingressManifest = authenticatedIngress?.manifest;
+  assertNamedEqual(authorityName, ingressAuthority?.passed, true, 'authenticatedIngress.authority.passed');
+  if (!ingressManifest || typeof ingressManifest !== 'object') {
+    throw new Error(`${authorityName} packet authority mismatch for authenticatedIngress.manifest`);
+  }
+  assertNamedEqual(authorityName, manifest.imageIngress?.schema, ingressManifest.schema, 'manifest.imageIngress.schema');
+  assertNamedEqual(authorityName, manifest.imageIngress?.boundary, ingressManifest.boundary, 'manifest.imageIngress.boundary');
+  assertNamedEqual(authorityName, manifest.imageIngress?.tensorManifestSha256, ingressAuthority.manifestSha256, 'manifest.imageIngress.tensorManifestSha256');
+  assertNamedJsonEqual(authorityName, manifest.imageIngress?.sourceImages, ingressManifest.sourceImages, 'manifest.imageIngress.sourceImages');
+
+  const entriesByRole = new Map();
+  for (const entry of ingressManifest.tensors || []) {
+    if (entriesByRole.has(entry.role)) throw new Error(`${authorityName} packet authority mismatch for duplicate ingress tensor role ${entry.role}`);
+    entriesByRole.set(entry.role, entry);
+  }
+  for (const [binding, role] of Object.entries(TWO_IMAGE_EPISODE_INGRESS_BINDINGS)) {
+    const entry = entriesByRole.get(role);
+    if (!entry?.sha256) throw new Error(`${authorityName} packet authority mismatch for authenticatedIngress.manifest.tensors.${role}`);
+    assertNamedEqual(authorityName, manifest.imageIngress?.bindings?.[binding], entry.sha256, `manifest.imageIngress.bindings.${binding}`);
+  }
+  return { passed: true, bindingCount: Object.keys(TWO_IMAGE_EPISODE_INGRESS_BINDINGS).length };
+}
+
+export async function verifySam31TwoFramePacketAuthority({ name, authorityName = name, manifestText, manifest, referenceReceipt, expectedManifestSha256, authenticatedIngress = null }) {
   const expected = SAM31_TWO_FRAME_PACKET_AUTHORITIES[authorityName];
   if (!expected) throw new Error(`unknown two-frame packet authority name: ${authorityName}`);
   if (typeof manifestText !== 'string' || manifestText.length === 0) throw new Error(`${authorityName} packet manifest text is required`);
@@ -428,6 +465,9 @@ export async function verifySam31TwoFramePacketAuthority({ name, authorityName =
       assertNamedJsonEqual(authorityName, manifest.claims?.[field], value, `manifest.claims.${field}`);
     }
   }
+  const ingressBindings = authorityName === 'twoImageEpisode'
+    ? verifyTwoImageEpisodeIngressBindings({ authorityName, manifest, authenticatedIngress })
+    : null;
 
   return {
     passed: true,
@@ -446,6 +486,8 @@ export async function verifySam31TwoFramePacketAuthority({ name, authorityName =
     sourceRepository: manifest.reference.source.repository,
     sourceCommit: manifest.reference.source.commit,
     sourceWorkingTreeClean: manifest.reference.source.workingTreeClean,
+    ingressBindingsPassed: ingressBindings?.passed ?? null,
+    ingressBindingCount: ingressBindings?.bindingCount ?? 0,
   };
 }
 

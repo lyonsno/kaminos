@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { SAM31_TWO_FRAME_PACKET_AUTHORITIES } from '../src/sam31-packet-artifact.js';
+import { SAM31_TWO_FRAME_PACKET_AUTHORITIES, SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY } from '../src/sam31-packet-artifact.js';
 
 const root = new URL('../', import.meta.url);
 const driver = new URL('../tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', import.meta.url);
@@ -41,6 +41,19 @@ const specs = {
     },
     receiptExtra: { shape: episodeShape, plan: episodePlan, stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' } },
   },
+  twoImageEpisode: {
+    manifestSchema: 'kaminos.sam31-two-image-tracker-meta-packet.v0',
+    receiptSchema: 'kaminos.sam31-two-image-tracker-meta-reference-receipt.v0',
+    boundary: 'two-distinct-raw-images-through-browser-backbone-to-mask-conditioned-temporal-tracker',
+    manifestExtra: {
+      mode: 'official-meta-two-image-mask-conditioning-memory-attention-propagation-decoder',
+      shape: episodeShape,
+      plan: episodePlan,
+      stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' },
+      claims: { fullImageBackboneExecuted: true, twoDistinctRawImagesComposed: true, distinctInteractiveAndPropagationFeatures: true, packetOwnsImageEmbeddingsAtBrowserRuntime: false },
+    },
+    receiptExtra: { shape: episodeShape, plan: episodePlan, stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' } },
+  },
 };
 
 async function writePacket(name, { reference = pinnedReference, manifestSchema = null, overrides = {}, authorityName = name } = {}) {
@@ -52,6 +65,66 @@ async function writePacket(name, { reference = pinnedReference, manifestSchema =
   await writeFile(join(directory, 'tensor-manifest.json'), manifestText);
   await writeFile(join(directory, 'reference-receipt.json'), `${JSON.stringify({ ok: true, schema: spec.receiptSchema, boundary: spec.boundary, reference, ...spec.receiptExtra, ...overrides, outputs: { tensorManifest: join(directory, 'tensor-manifest.json'), tensorManifestSha256: digest } }, null, 2)}\n`);
   return digest;
+}
+
+async function writeIngressPacket() {
+  const authority = SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY;
+  const directory = join(packetDir, 'ingress');
+  await mkdir(directory, { recursive: true });
+  const sourceImages = [
+    { frameIndex: 0, originalSha256: `sha256:${'1'.repeat(64)}`, rgbaSha256: `sha256:${'2'.repeat(64)}` },
+    { frameIndex: 1, originalSha256: `sha256:${'3'.repeat(64)}`, rgbaSha256: `sha256:${'4'.repeat(64)}` },
+  ];
+  const tensors = [
+    ['frame-0-interactive-feature-2', 'a'],
+    ['frame-0-interactive-high-resolution-s0', 'b'],
+    ['frame-0-interactive-high-resolution-s1', 'c'],
+    ['frame-0-propagation-feature-2', 'd'],
+    ['frame-0-propagation-position-2', 'e'],
+    ['frame-1-propagation-feature-2', 'f'],
+    ['frame-1-propagation-position-2', '5'],
+    ['frame-1-high-resolution-s0', '6'],
+    ['frame-1-high-resolution-s1', '7'],
+  ].map(([role, digit]) => ({ role, sha256: `sha256:${digit.repeat(64)}` }));
+  const manifest = {
+    schema: authority.manifestSchema,
+    boundary: authority.boundary,
+    routeIds: authority.routeIds,
+    reference: {
+      model: { id: authority.modelId, revision: authority.modelRevision },
+      checkpoint: { sha256: authority.checkpointSha256 },
+      source: { commit: authority.sourceCommit, clean: true },
+    },
+    claims: { twoDistinctSourceImages: true, officialMetaViTExecuted: true, officialMetaTriNeckExecuted: true, officialMetaHighResolutionProjectionExecuted: true, packetOwnsImageEmbeddingsAtBrowserRuntime: false },
+    sourceImages,
+    tensors,
+  };
+  const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
+  const digest = `sha256:${createHash('sha256').update(manifestText).digest('hex')}`;
+  await writeFile(join(directory, 'tensor-manifest.json'), manifestText);
+  await writeFile(join(directory, 'reference-receipt.json'), `${JSON.stringify({ ok: true, schema: authority.receiptSchema, boundary: authority.boundary, routeIds: authority.routeIds, outputs: { tensorManifestSha256: digest } }, null, 2)}\n`);
+  return { digest, manifest };
+}
+
+function imageIngressFor(ingressDigest, ingressManifest, bindings = null) {
+  const entries = Object.fromEntries(ingressManifest.tensors.map(entry => [entry.role, entry]));
+  return {
+    schema: ingressManifest.schema,
+    boundary: ingressManifest.boundary,
+    tensorManifestSha256: ingressDigest,
+    sourceImages: ingressManifest.sourceImages,
+    bindings: bindings || {
+      frame0InteractiveFeature: entries['frame-0-interactive-feature-2'].sha256,
+      frame0InteractiveHighResolution0: entries['frame-0-interactive-high-resolution-s0'].sha256,
+      frame0InteractiveHighResolution1: entries['frame-0-interactive-high-resolution-s1'].sha256,
+      frame0PropagationFeature: entries['frame-0-propagation-feature-2'].sha256,
+      frame0PropagationPosition: entries['frame-0-propagation-position-2'].sha256,
+      frame1PropagationFeature: entries['frame-1-propagation-feature-2'].sha256,
+      frame1PropagationPosition: entries['frame-1-propagation-position-2'].sha256,
+      frame1HighResolutionS0: entries['frame-1-high-resolution-s0'].sha256,
+      frame1HighResolutionS1: entries['frame-1-high-resolution-s1'].sha256,
+    },
+  };
 }
 
 const digests = {};
@@ -71,7 +144,8 @@ function verifyOnly(report, expected = digests, episodeMode = 'propagation-decod
     '--debug-port', String(20000 + process.pid % 10000),
     '--server-port', String(30000 + process.pid % 10000),
     '--timeout-ms', '1000'];
-  if (episodeMode === 'mask-conditioning') command.push('--expected-pointer-manifest-sha256', expected.pointer);
+  if (episodeMode !== 'propagation-decoder') command.push('--expected-pointer-manifest-sha256', expected.pointer);
+  if (episodeMode === 'two-image') command.push('--expected-ingress-manifest-sha256', expected.ingress);
   return spawnSync(process.execPath, command, { cwd: root.pathname, encoding: 'utf8', timeout: 10000 });
 }
 
@@ -138,5 +212,26 @@ const wrongIdentityReportPath = join(packetDir, 'wrong-identity-report.json');
 const wrongIdentity = verifyOnly(wrongIdentityReportPath, { ...digests, episode: wrongIdentityDigest });
 assert.notEqual(wrongIdentity.status, 0, 'an externally pinned packet must still fail the wrong Meta source identity');
 assert.match(JSON.parse(await readFile(wrongIdentityReportPath, 'utf8')).error, /episode.*source\.commit/);
+
+const ingressPacket = await writeIngressPacket();
+const validImageIngress = imageIngressFor(ingressPacket.digest, ingressPacket.manifest);
+const twoImageEpisodeDigest = await writePacket('episode', { authorityName: 'twoImageEpisode', overrides: { imageIngress: validImageIngress } });
+const twoImageDigests = { ...digests, ingress: ingressPacket.digest, episode: twoImageEpisodeDigest, pointer: pointerDigest };
+const twoImageReportPath = join(packetDir, 'two-image-report.json');
+const twoImage = verifyOnly(twoImageReportPath, twoImageDigests, 'two-image');
+assert.equal(twoImage.status, 0, twoImage.stderr || twoImage.stdout);
+const twoImageReport = JSON.parse(await readFile(twoImageReportPath, 'utf8'));
+assert.equal(twoImageReport.packetAuthority.packets.episode.ingressBindingsPassed, true);
+assert.equal(twoImageReport.packetAuthority.packets.episode.ingressBindingCount, 9);
+
+const falseBindings = { ...validImageIngress.bindings, frame0PropagationPosition: `sha256:${'0'.repeat(64)}` };
+const falseEpisodeDigest = await writePacket('episode', { authorityName: 'twoImageEpisode', overrides: { imageIngress: imageIngressFor(ingressPacket.digest, ingressPacket.manifest, falseBindings) } });
+const falseBindingReportPath = join(packetDir, 'two-image-false-binding-report.json');
+const falseBinding = verifyOnly(falseBindingReportPath, { ...twoImageDigests, episode: falseEpisodeDigest }, 'two-image');
+assert.notEqual(falseBinding.status, 0, 'the terminal authority gate must reject a coordinated rewrite of an ingress-owned position binding');
+const falseBindingReport = JSON.parse(await readFile(falseBindingReportPath, 'utf8'));
+assert.equal(falseBindingReport.failure_phase, 'verify_packet_authority');
+assert.match(falseBindingReport.error, /twoImageEpisode.*imageIngress\.bindings\.frame0PropagationPosition/);
+assert.equal(falseBindingReport.primary_output_written, false);
 
 console.log('sam3.1 two-frame tracker driver authority contracts passed');
