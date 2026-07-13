@@ -45,6 +45,7 @@ for (const kernel of [
   'MEMORY_DEPTHWISE_WGSL',
   'MEMORY_POINTWISE_1_GELU_WGSL',
   'MEMORY_POINTWISE_2_SCALE_RESIDUAL_WGSL',
+  'MEMORY_NO_OBJECT_SPATIAL_ADD_WGSL',
   'MEMORY_POSITION_ENCODING_WGSL',
 ]) {
   assert.match(memoryRouteSource, new RegExp(`const ${kernel}`), `memory route must define native ${kernel}`);
@@ -145,6 +146,7 @@ assert.deepEqual(memoryRoute.requiredInputRoles, [
   'sam31-propagation-feature-2',
   'sam31-multiplex-mask-logits',
   'sam31-multiplex-conditioning',
+  'sam31-multiplex-object-scores',
   'sam31-memory-encoder-weights',
 ]);
 assert.deepEqual(memoryRoute.requiredOutputRoles, [
@@ -169,6 +171,7 @@ for (const stage of [
 const memory = createSam31MemoryEncoderPhaseProgramCpuOracle({
   propagationFeature: new Float32Array([2, 3, 4, 5, 6, 7, 8, 9]),
   maskLogits: new Float32Array([1]),
+  objectScores: new Float32Array([-1]),
   shape: {
     batch: 1,
     featureHeight: 1,
@@ -234,6 +237,7 @@ const memory = createSam31MemoryEncoderPhaseProgramCpuOracle({
       pointwise2: { weight: new Float32Array(64), bias: new Float32Array(4), inChannels: 16, outChannels: 4 },
       scale: new Float32Array([1, 1, 1, 1]),
     }],
+    noObjectSpatialEmbedding: new Float32Array([0.5, 1, 1.5, 2]),
   },
 });
 assert.deepEqual(memory.featureShape, [1, 1, 2, 4]);
@@ -241,6 +245,7 @@ assert.deepEqual(memory.positionShape, [1, 1, 2, 4]);
 assert.ok(Number.isFinite(memory.features[0]));
 assert.ok(Number.isFinite(memory.positionEncoding[0]));
 assert.notEqual(memory.features[0], 2, 'mask encoding must materially enter the memory feature');
+assert.equal(memory.noObjectSpatialApplied, true, 'negative object score must apply the no-object spatial embedding');
 
 assert.throws(() => createSam31MemoryEncoderPhaseProgramCpuOracle({
   propagationFeature: new Float32Array(4),

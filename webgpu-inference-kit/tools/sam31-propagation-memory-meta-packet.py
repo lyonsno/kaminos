@@ -221,7 +221,15 @@ def run_propagation_transcription(state: dict, backbone: torch.Tensor):
     return outputs
 
 
-def run_memory_transcription(state: dict, propagation_feature: torch.Tensor, mask_logits: torch.Tensor, conditioning: torch.Tensor):
+def add_no_object_spatial_embedding(state: dict, feature: torch.Tensor, object_scores: torch.Tensor) -> torch.Tensor:
+    embedding = state["tracker.model.no_obj_embed_spatial"]
+    scores_by_bucket = object_scores.reshape(feature.shape[0], embedding.shape[0])
+    absent = (scores_by_bucket <= 0.0).to(feature.dtype)
+    addition = (absent[..., None] * embedding[None, :, :]).sum(dim=1)
+    return feature + addition[..., None, None]
+
+
+def run_memory_transcription(state: dict, propagation_feature: torch.Tensor, mask_logits: torch.Tensor, conditioning: torch.Tensor, object_scores: torch.Tensor):
     prefix = "tracker.model.maskmem_backbone"
     mask = torch.sigmoid(mask_logits) * 2.0 - 1.0
     condition_planes = conditioning[:, :, None, None].expand_as(mask)
@@ -246,10 +254,11 @@ def run_memory_transcription(state: dict, propagation_feature: torch.Tensor, mas
         feature = feature * state[f"{layer}.gamma"]
         feature = feature.permute(0, 3, 1, 2)
         feature = residual + feature
+    feature = add_no_object_spatial_embedding(state, feature, object_scores)
     return feature, position_embedding_sine(feature)
 
 
-def run_official_reference(classes: dict, state: dict, backbone: torch.Tensor, mask_logits: torch.Tensor, conditioning: torch.Tensor):
+def run_official_reference(classes: dict, state: dict, backbone: torch.Tensor, mask_logits: torch.Tensor, conditioning: torch.Tensor, object_scores: torch.Tensor):
     class PacketTrunk(torch.nn.Module):
         channel_list = [1024]
 
@@ -328,7 +337,8 @@ def run_official_reference(classes: dict, state: dict, backbone: torch.Tensor, m
         torch.cat([mask, condition_planes], dim=1),
         skip_mask_sigmoid=True,
     )
-    return propagation, encoded["vision_features"], encoded["vision_pos_enc"][-1]
+    memory_features = add_no_object_spatial_embedding(state, encoded["vision_features"], object_scores)
+    return propagation, memory_features, encoded["vision_pos_enc"][-1]
 
 
 def max_abs_diff(actual: torch.Tensor, expected: torch.Tensor) -> float:
@@ -430,19 +440,39 @@ def main():
                 "transform": transform,
             })
 
+    no_object_role = "memory-no-object-spatial-embedding"
+    no_object_key = "tracker.model.no_obj_embed_spatial"
+    no_object_array = transform_tensor(state[no_object_key], "identity")
+    no_object_file = f"{no_object_role}.f32.bin"
+    no_object_written = write_array(out_dir / no_object_file, no_object_array)
+    weight_entries.append({
+        "role": no_object_role,
+        "file": no_object_file,
+        "sha256": no_object_written["sha256"],
+        "byteLength": no_object_written["byteLength"],
+        "dtype": "float32",
+        "shape": no_object_written["shape"],
+        "layout": "multiplex,channels",
+        "officialKey": no_object_key,
+        "convertedKey": None,
+        "transform": "identity",
+    })
+
     generator = torch.Generator(device="cpu").manual_seed(args.seed)
     backbone = torch.randn((1, 1024, 2, 2), generator=generator, dtype=torch.float32) * 0.05
     mask_logits = torch.randn((1, 16, 8, 8), generator=generator, dtype=torch.float32)
     conditioning = torch.tensor([[1.0 if index % 3 == 0 else 0.0 for index in range(16)]], dtype=torch.float32)
+    object_scores = torch.tensor([[1.0 if index % 2 == 0 else -1.0] for index in range(16)], dtype=torch.float32)
     FAILURE_PHASE = "official-reference-execution"
     with torch.inference_mode():
-        propagation, memory_features, memory_position = run_official_reference(classes, state, backbone, mask_logits, conditioning)
+        propagation, memory_features, memory_position = run_official_reference(classes, state, backbone, mask_logits, conditioning, object_scores)
         transcription_propagation = run_propagation_transcription(state, backbone)
         transcription_memory, transcription_position = run_memory_transcription(
             state,
             transcription_propagation[2],
             mask_logits,
             conditioning,
+            object_scores,
         )
     transcription_diffs = {
         "propagationMaxAbsDiff": max(
@@ -460,6 +490,7 @@ def main():
         ("vit-backbone-hidden-states", "vit-backbone-hidden-states.f32.bin", backbone.permute(0, 2, 3, 1), "B,H,W,C"),
         ("multiplex-mask-logits", "multiplex-mask-logits.f32.bin", mask_logits, "B,M,H,W"),
         ("multiplex-conditioning", "multiplex-conditioning.f32.bin", conditioning, "B,M"),
+        ("multiplex-object-scores", "multiplex-object-scores.f32.bin", object_scores, "B*M,1"),
         ("expected-propagation-feature-0", "expected-propagation-feature-0.f32.bin", propagation[0].permute(0, 2, 3, 1), "B,H,W,C"),
         ("expected-propagation-feature-1", "expected-propagation-feature-1.f32.bin", propagation[1].permute(0, 2, 3, 1), "B,H,W,C"),
         ("expected-propagation-feature-2", "expected-propagation-feature-2.f32.bin", propagation[2].permute(0, 2, 3, 1), "B,H,W,C"),
@@ -508,7 +539,7 @@ def main():
         "source": {"repository": "facebookresearch/sam3", "root": str(source_root), "commit": source_commit, "workingTreeClean": True},
         "converted": {"model": "mlx-community/sam3.1-bf16", "weightsPath": str(converted_path), "sha256": converted_sha},
         "execution": {
-            "kind": "pinned-official-module-classes",
+            "kind": "pinned-official-module-classes-plus-source-exact-no-object-spatial-add",
             "classes": [
                 "sam3.model.necks.Sam3TriViTDetNeck",
                 "sam3.model.memory.SimpleMaskDownSampler",
@@ -530,16 +561,16 @@ def main():
         "reference": reference,
         "fixture": {"seed": args.seed, "kind": "deterministic-composed-component", "sourceImage": False},
         "shape": shape,
-        "config": {"sigmoidScale": 2.0, "sigmoidBias": -1.0, "positionTemperature": 10000.0, "conditioningForeground": 1.0, "conditioningBackground": 0.0},
+        "config": {"sigmoidScale": 2.0, "sigmoidBias": -1.0, "positionTemperature": 10000.0, "objectScoreLogitThreshold": 0.0, "conditioningForeground": 1.0, "conditioningBackground": 0.0},
         "claims": {
             "fullSam31BrowserExecution": False,
-            "officialSourceExecutedStages": ["propagation-neck", "multiplex-mask-preprocess", "memory-mask-downsampler", "memory-feature-projection", "memory-fuser", "memory-position-encoding"],
+            "officialSourceExecutedStages": ["propagation-neck", "multiplex-mask-preprocess", "memory-mask-downsampler", "memory-feature-projection", "memory-fuser", "no-object-spatial-add", "memory-position-encoding"],
             "browserTargetStages": ["propagation-neck", "memory-encoder"],
             "composition": "official propagation feature 2 is the memory encoder pixel-feature input",
         },
         "checkpointAudit": {
             "officialStateTensorCount": len(state),
-            "mappedTensorCount": len(specs),
+            "mappedTensorCount": len(weight_entries),
             "convertedValueMatches": converted_matches,
             "convertedMaxAbsDiff": converted_max_abs_diff,
             "allMappedOfficialKeysPresent": True,

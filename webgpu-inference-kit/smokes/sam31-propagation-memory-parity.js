@@ -160,8 +160,10 @@ async function run() {
       scale: await weight(`memory-fuser-${level}-scale`),
     });
   }
+  memoryWeights.noObjectSpatialEmbedding = await weight('memory-no-object-spatial-embedding');
   const maskLogits = await tensor('multiplex-mask-logits');
   const conditioning = await tensor('multiplex-conditioning');
+  const objectScores = await tensor('multiplex-object-scores');
   const memoryWeightsSha = await sha256Text(manifest.weights.filter(entry => entry.role.startsWith('memory-')).map(entry => `${entry.role}:${entry.sha256}`).join('\n'));
   const propagationOutput2 = propagationResult.receipt.outputs.find(output => output.role === 'sam31-propagation-feature-2');
   const memoryRoute = createSam31MemoryEncoderPhaseProgramRouteDefinition({
@@ -176,6 +178,7 @@ async function run() {
       'sam31-propagation-feature-2': { artifactId: propagationOutput2.artifactId, sha256: propagationOutput2.sha256, shape: propagationOutput2.shape },
       'sam31-multiplex-mask-logits': { artifactId: 'sam31-multiplex-mask-logits:official-packet', sha256: tensorsByRole['multiplex-mask-logits'].sha256, shape: tensorsByRole['multiplex-mask-logits'].shape },
       'sam31-multiplex-conditioning': { artifactId: 'sam31-multiplex-conditioning:official-packet', sha256: tensorsByRole['multiplex-conditioning'].sha256, shape: tensorsByRole['multiplex-conditioning'].shape },
+      'sam31-multiplex-object-scores': { artifactId: 'sam31-multiplex-object-scores:official-packet', sha256: tensorsByRole['multiplex-object-scores'].sha256, shape: tensorsByRole['multiplex-object-scores'].shape },
       'sam31-memory-encoder-weights': { artifactId: 'sam31-memory-encoder-weights:official-packet', sha256: memoryWeightsSha },
     },
     outputs: {
@@ -197,6 +200,7 @@ async function run() {
     tensors: {
       propagationFeature: propagationFeatures[2],
       maskLogits,
+      objectScores,
       shape: {
         batch: manifest.shape.batch,
         featureHeight: memoryShape.featureHeight,

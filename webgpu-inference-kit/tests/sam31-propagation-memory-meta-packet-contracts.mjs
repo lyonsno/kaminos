@@ -56,7 +56,7 @@ assert.equal(manifest.reference.model.sha256, 'sha256:0567debeec80ba4ac6369540c6
 assert.equal(manifest.reference.source.repository, 'facebookresearch/sam3');
 assert.equal(manifest.reference.source.commit, '5dd401d1c5c1d5c3eedff06d41b77af824517619');
 assert.equal(manifest.reference.source.workingTreeClean, true);
-assert.equal(manifest.reference.execution.kind, 'pinned-official-module-classes');
+assert.equal(manifest.reference.execution.kind, 'pinned-official-module-classes-plus-source-exact-no-object-spatial-add');
 assert.deepEqual(manifest.reference.execution.classes, [
   'sam3.model.necks.Sam3TriViTDetNeck',
   'sam3.model.memory.SimpleMaskDownSampler',
@@ -68,12 +68,13 @@ assert.deepEqual(manifest.reference.execution.classes, [
 assert.equal(manifest.reference.converted.model, 'mlx-community/sam3.1-bf16');
 assert.equal(manifest.reference.converted.sha256, 'sha256:a1b1c19dcc9bdd68438bcd74433fadc90740e73c37a1f386872672d134879c42');
 assert.equal(manifest.checkpointAudit.officialStateTensorCount, 1623);
-assert.equal(manifest.checkpointAudit.mappedTensorCount, 56);
+assert.equal(manifest.checkpointAudit.mappedTensorCount, 57);
 assert.equal(manifest.checkpointAudit.convertedValueMatches, 56);
 assert.equal(manifest.checkpointAudit.convertedMaxAbsDiff, 0);
 assert.equal(manifest.checkpointAudit.allMappedOfficialKeysPresent, true);
 assert.equal(manifest.checkpointAudit.allMappedConvertedKeysPresent, true);
-assert.equal(manifest.weights.length, 56);
+assert.equal(manifest.weights.length, 57);
+assert.equal(manifest.tensors.some(entry => entry.role === 'multiplex-object-scores'), true);
 
 const wrongSourceOut = join(outDir, 'wrong-source-out');
 const wrongSource = spawnSync(python, [exporter.pathname, '--out-dir', wrongSourceOut, '--source-root', new URL('../../', import.meta.url).pathname], { cwd: root.pathname, encoding: 'utf8', timeout: 120000 });
@@ -215,9 +216,11 @@ for (let level = 0; level < 2; level += 1) {
     scale: await weight(`memory-fuser-${level}-scale`),
   });
 }
+memoryWeights.noObjectSpatialEmbedding = await weight('memory-no-object-spatial-embedding');
 const memory = createSam31MemoryEncoderPhaseProgramCpuOracle({
   propagationFeature: propagation.features[2],
   maskLogits: await tensor('multiplex-mask-logits'),
+  objectScores: await tensor('multiplex-object-scores'),
   shape: {
     batch: manifest.shape.batch,
     featureHeight: memoryShape.featureHeight,

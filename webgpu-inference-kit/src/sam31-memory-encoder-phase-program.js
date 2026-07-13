@@ -50,6 +50,7 @@ const REQUIRED_STAGES = [
   'memory-fuser-1-layernorm',
   'memory-fuser-1-pointwise-1-gelu',
   'memory-fuser-1-pointwise-2-scale-residual',
+  'memory-no-object-spatial-add',
   'memory-position-encoding',
   'readback-memory-encoder-features',
 ];
@@ -58,6 +59,7 @@ const INPUT_ROLES = [
   'sam31-propagation-feature-2',
   'sam31-multiplex-mask-logits',
   'sam31-multiplex-conditioning',
+  'sam31-multiplex-object-scores',
   'sam31-memory-encoder-weights',
 ];
 const OUTPUT_ROLES = [
@@ -115,6 +117,36 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let top = mix(transformed_mask(batch, channel, y0, x0), transformed_mask(batch, channel, y0, x1), x_weight);
   let bottom = mix(transformed_mask(batch, channel, y1, x0), transformed_mask(batch, channel, y1, x1), x_weight);
   output_values[index] = mix(top, bottom, y_weight);
+}
+`;
+
+const MEMORY_NO_OBJECT_SPATIAL_ADD_WGSL = `
+struct NoObjectDims {
+  batch: u32,
+  spatial: u32,
+  channels: u32,
+  multiplex_count: u32,
+  total_output: u32,
+  score_threshold: f32,
+};
+@group(0) @binding(0) var<storage, read> input_values: array<f32>;
+@group(0) @binding(1) var<storage, read> object_scores: array<f32>;
+@group(0) @binding(2) var<storage, read> no_object_embedding: array<f32>;
+@group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(4) var<uniform> dims: NoObjectDims;
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= dims.total_output) { return; }
+  let channel = index % dims.channels;
+  let batch = index / (dims.spatial * dims.channels);
+  var addition = 0.0;
+  for (var object = 0u; object < dims.multiplex_count; object = object + 1u) {
+    if (object_scores[batch * dims.multiplex_count + object] <= dims.score_threshold) {
+      addition += no_object_embedding[object * dims.channels + channel];
+    }
+  }
+  output_values[index] = input_values[index] + addition;
 }
 `;
 
@@ -458,6 +490,7 @@ function normalizeConfig(config = {}) {
     sigmoidScale: Number(config.sigmoidScale ?? 2),
     sigmoidBias: Number(config.sigmoidBias ?? -1),
     positionTemperature: Number(config.positionTemperature ?? 10000),
+    objectScoreLogitThreshold: Number(config.objectScoreLogitThreshold ?? 0),
   };
   for (const [key, value] of Object.entries(out)) {
     if (!Number.isFinite(value)) throw new Error(`config.${key} must be finite`);
@@ -560,7 +593,9 @@ function normalizeWeights(weights = {}, shape) {
     if (scale.length !== shape.featureChannels) throw new Error(`weights.fuserLayers[${index}].scale must contain shape.featureChannels values`);
     return { depthwise, layerNorm, pointwise1, pointwise2, scale };
   });
-  return { downsampleLayers, maskFinal, featureProjection, fuserLayers };
+  const noObjectSpatialEmbedding = ensureFloat32Array(weights.noObjectSpatialEmbedding, 'weights.noObjectSpatialEmbedding');
+  if (noObjectSpatialEmbedding.length !== shape.multiplexCount * shape.featureChannels) throw new Error('weights.noObjectSpatialEmbedding must contain multiplexCount * featureChannels values');
+  return { downsampleLayers, maskFinal, featureProjection, fuserLayers, noObjectSpatialEmbedding };
 }
 
 function validateInputs(input = {}) {
@@ -572,8 +607,11 @@ function validateInputs(input = {}) {
   const maskLogits = ensureFloat32Array(input.maskLogits, 'maskLogits');
   const expectedMask = shape.batch * shape.multiplexCount * shape.maskHeight * shape.maskWidth;
   if (maskLogits.length !== expectedMask) throw new Error(`maskLogits length ${maskLogits.length} does not match batch * multiplexCount * maskHeight * maskWidth (${expectedMask})`);
+  const objectScores = ensureFloat32Array(input.objectScores, 'objectScores');
+  const expectedScores = shape.batch * shape.multiplexCount;
+  if (objectScores.length !== expectedScores) throw new Error(`objectScores length ${objectScores.length} does not match batch * multiplexCount (${expectedScores})`);
   const weights = normalizeWeights(input.weights, shape);
-  return { shape, config, propagationFeature, maskLogits, weights };
+  return { shape, config, propagationFeature, maskLogits, objectScores, weights };
 }
 
 function maskIndex(shape, batch, channel, y, x) {
@@ -703,7 +741,7 @@ function linear(input, rows, spec, applyActivation = false) {
 }
 
 export function createSam31MemoryEncoderPhaseProgramCpuOracle(input = {}) {
-  const { shape, config, propagationFeature, maskLogits, weights } = validateInputs(input);
+  const { shape, config, propagationFeature, maskLogits, objectScores, weights } = validateInputs(input);
   let maskFeatures = resampleAndMuxMasks(maskLogits, shape, config);
   let maskShape = { height: shape.resampledMaskHeight, width: shape.resampledMaskWidth, channels: shape.maskInputChannels };
   const downsampleShapes = [];
@@ -740,6 +778,19 @@ export function createSam31MemoryEncoderPhaseProgramCpuOracle(input = {}) {
       }
     }
   }
+  let noObjectSpatialApplied = false;
+  const spatial = shape.featureHeight * shape.featureWidth;
+  for (let batch = 0; batch < shape.batch; batch += 1) {
+    for (let object = 0; object < shape.multiplexCount; object += 1) {
+      if (objectScores[batch * shape.multiplexCount + object] > config.objectScoreLogitThreshold) continue;
+      noObjectSpatialApplied = true;
+      for (let position = 0; position < spatial; position += 1) {
+        for (let channel = 0; channel < shape.featureChannels; channel += 1) {
+          features[(batch * spatial + position) * shape.featureChannels + channel] += weights.noObjectSpatialEmbedding[object * shape.featureChannels + channel];
+        }
+      }
+    }
+  }
   const positionEncoding = createSam3PositionEmbeddingSine({
     batch: shape.batch,
     height: shape.featureHeight,
@@ -753,6 +804,7 @@ export function createSam31MemoryEncoderPhaseProgramCpuOracle(input = {}) {
     featureShape: [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels],
     positionShape: [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels],
     downsampleShapes,
+    noObjectSpatialApplied,
     layout: 'B,H,W,C',
     sourceLayout: 'B,C,H,W',
   };
@@ -823,6 +875,7 @@ export function createSam31MemoryEncoderPhaseProgramRouteReceipt(input = {}) {
       createRouteReceiptInputArtifact('sam31-propagation-feature-2', input.propagationFeature),
       createRouteReceiptInputArtifact('sam31-multiplex-mask-logits', input.maskLogits),
       createRouteReceiptInputArtifact('sam31-multiplex-conditioning', input.conditioning),
+      createRouteReceiptInputArtifact('sam31-multiplex-object-scores', input.objectScores),
       createRouteReceiptInputArtifact('sam31-memory-encoder-weights', input.weights),
     ],
     outputs: createRouteReceiptArtifacts({ artifacts: input.outputs, roles: OUTPUT_ROLES }),
@@ -868,12 +921,13 @@ function linearDimsValues(rows, spec) {
 export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || createSam31MemoryEncoderPhaseProgramRouteDefinition({ kernel: input.kernel });
-  const { shape, config, propagationFeature: propagationFeatureValues, maskLogits: maskLogitValues, weights: normalizedWeights } = validateInputs(input.tensors || {});
+  const { shape, config, propagationFeature: propagationFeatureValues, maskLogits: maskLogitValues, objectScores: objectScoreValues, weights: normalizedWeights } = validateInputs(input.tensors || {});
   if (normalizedWeights.downsampleLayers.length !== 4 || normalizedWeights.fuserLayers.length !== 2) {
     throw new Error('authoritative SAM3.1 memory route requires exactly four mask downsample layers and two CXBlock fuser layers');
   }
   if (!shape.conditionChannels) throw new Error('authoritative SAM3.1 memory route requires multiplex conditioning channels');
   const conditioning = roleArtifact(input.request.inputs, 'sam31-multiplex-conditioning');
+  const objectScores = roleArtifact(input.request.inputs, 'sam31-multiplex-object-scores');
   if (JSON.stringify(conditioning.shape) !== JSON.stringify([shape.batch, shape.multiplexCount])) {
     throw new Error(`sam31-multiplex-conditioning artifact shape must be [${shape.batch},${shape.multiplexCount}]`);
   }
@@ -881,6 +935,9 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
   if (conditioning.sha256 !== conditioningSha256) {
     throw new Error(`sam31-multiplex-conditioning artifact hash mismatch: expected ${conditioning.sha256}, got ${conditioningSha256}`);
   }
+  if (JSON.stringify(objectScores.shape) !== JSON.stringify([shape.batch * shape.multiplexCount, 1])) throw new Error(`sam31-multiplex-object-scores artifact shape must be [${shape.batch * shape.multiplexCount},1]`);
+  const objectScoresSha256 = await sha256Hex(objectScoreValues);
+  if (objectScores.sha256 !== objectScoresSha256) throw new Error(`sam31-multiplex-object-scores artifact hash mismatch: expected ${objectScores.sha256}, got ${objectScoresSha256}`);
   const runtime = await createWebGpuInferenceRuntime({
     routeId: SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID,
     runtimeLabel: input.runtimeLabel || 'sam31-memory-encoder-phase-program',
@@ -909,12 +966,15 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     tensors = {
       maskLogits: tensor('sam31.memory.mask-logits', [shape.batch, shape.multiplexCount, shape.maskHeight, shape.maskWidth], readonlyUsage),
       conditioning: tensor('sam31.memory.conditioning', [shape.batch, shape.multiplexCount], readonlyUsage),
+      objectScores: tensor('sam31.memory.object-scores', [shape.batch, shape.multiplexCount], readonlyUsage),
+      noObjectSpatialEmbedding: tensor('sam31.memory.no-object-spatial-embedding', [shape.multiplexCount, shape.featureChannels], readonlyUsage),
       resampledMask: tensor('sam31.memory.resampled-mask', [shape.batch, shape.resampledMaskHeight, shape.resampledMaskWidth, shape.maskInputChannels]),
       propagationFeature: tensor('sam31.memory.propagation-feature-2', [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels], readonlyUsage),
       maskProjected: tensor('sam31.memory.mask-projected', [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]),
       featureProjected: tensor('sam31.memory.feature-projected', [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]),
       fusedInitial: tensor('sam31.memory.fused-initial', [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]),
       positionEncoding: tensor('sam31.memory.position-encoding', [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]),
+      noObjectOutput: tensor('sam31.memory.no-object-output', [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]),
       maskResampleDims: stage.createUniformBuffer({
         label: 'sam31.memory.mask-resample-dims',
         schema: [
@@ -973,6 +1033,18 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
           scale: Math.PI * 2,
         },
       }),
+      noObjectDims: stage.createUniformBuffer({
+        label: 'sam31.memory.no-object-dims',
+        schema: [
+          { name: 'batch', type: 'u32' }, { name: 'spatial', type: 'u32' }, { name: 'channels', type: 'u32' },
+          { name: 'multiplex_count', type: 'u32' }, { name: 'total_output', type: 'u32' }, { name: 'score_threshold', type: 'f32' },
+        ],
+        values: {
+          batch: shape.batch, spatial: shape.featureHeight * shape.featureWidth, channels: shape.featureChannels,
+          multiplex_count: shape.multiplexCount, total_output: shape.batch * shape.featureHeight * shape.featureWidth * shape.featureChannels,
+          score_threshold: config.objectScoreLogitThreshold,
+        },
+      }),
     };
     normalizedWeights.downsampleLayers.forEach((layer, index) => {
       const outShape = downsampleShapes[index];
@@ -1019,6 +1091,8 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     });
     stage.uploadTensor(tensors.maskLogits, maskLogitValues);
     stage.uploadTensor(tensors.conditioning, shape.conditioning);
+    stage.uploadTensor(tensors.objectScores, objectScoreValues);
+    stage.uploadTensor(tensors.noObjectSpatialEmbedding, normalizedWeights.noObjectSpatialEmbedding);
     stage.uploadTensor(tensors.propagationFeature, propagationFeatureValues);
     stage.uploadTensor(tensors.maskFinalWeight, normalizedWeights.maskFinal.weight);
     stage.uploadTensor(tensors.maskFinalBias, normalizedWeights.maskFinal.bias);
@@ -1043,6 +1117,7 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     pointwise1Gelu: { code: MEMORY_POINTWISE_1_GELU_WGSL, bindings: [bindTensor('input'), bindTensor('weight'), bindTensor('bias'), bindTensor('output', 'storage'), bindUniform('linearDims')] },
     pointwise2ScaleResidual: { code: MEMORY_POINTWISE_2_SCALE_RESIDUAL_WGSL, bindings: [bindTensor('input'), bindTensor('residual'), bindTensor('weight'), bindTensor('bias'), bindTensor('scale'), bindTensor('output', 'storage'), bindUniform('linearDims')] },
     positionEncoding: { code: MEMORY_POSITION_ENCODING_WGSL, bindings: [bindTensor('output', 'storage'), bindUniform('positionDims')] },
+    noObjectSpatialAdd: { code: MEMORY_NO_OBJECT_SPATIAL_ADD_WGSL, bindings: [bindTensor('input'), bindTensor('objectScores'), bindTensor('noObjectSpatialEmbedding'), bindTensor('output', 'storage'), bindUniform('noObjectDims')] },
   };
   const metadata = {
     routeId: SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID,
@@ -1130,6 +1205,8 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     });
     residualTensor = `fuser${index}Output`;
   }
+  await runProgram({ name: 'memory-no-object-spatial-add', kernel: 'noObjectSpatialAdd', programTensors: { input: tensors[residualTensor], objectScores: tensors.objectScores, noObjectSpatialEmbedding: tensors.noObjectSpatialEmbedding, output: tensors.noObjectOutput }, uniforms: { noObjectDims: tensors.noObjectDims }, total: featureValues });
+  residualTensor = 'noObjectOutput';
   await runProgram({ name: 'memory-position-encoding', kernel: 'positionEncoding', programTensors: { output: tensors.positionEncoding }, uniforms: { positionDims: tensors.positionDims }, total: featureValues });
   const readback = await runtime.runStage('readback-memory-encoder-features', async stage => ({
     memoryFeatures: await stage.readTensor(tensors[residualTensor]),
@@ -1152,6 +1229,7 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     propagationFeature,
     maskLogits,
     conditioning,
+    objectScores,
     weights,
     outputs,
     backend: runtime.backendIdentity,
