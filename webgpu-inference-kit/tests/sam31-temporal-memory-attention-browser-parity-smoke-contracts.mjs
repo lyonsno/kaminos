@@ -46,5 +46,12 @@ assert.match(runner, /writeReport\(\{ ok: false, failure_phase: phase/, 'pre-pri
 assert.match(runner, /requestedTemporalRouteId/, 'terminal report must preserve temporal requested route identity');
 assert.match(runner, /effectiveAttentionRouteId/, 'terminal report must preserve attention effective route identity');
 assert.match(runner, /packetManifest: lastState\?\.packetManifest/, 'durable report must preserve the complete packet manifest');
+assert.match(runner, /reference-receipt\.json/, 'authoritative packet reuse must require the official reference receipt');
+assert.match(runner, /verifySam31TemporalPacketAuthority/, 'the terminal witness must verify packet authority before launching Chrome');
+assert.match(runner, /packetAuthority: packetAuthority \|\|/, 'the durable terminal report must preserve verified packet authority');
+assert.match(runner, /--expected-manifest-sha256 is required with --reuse-packet=1/, 'reuse mode must require an invocation-scoped manifest digest pin');
+assert.match(smoke, /packetAuthorityPassed/, 'packet authority must be a load-bearing browser evidence predicate');
+assert.match(smoke, /reused packet requires expectedManifestSha256/, 'the browser must independently require the reuse digest pin');
+assert.match(smoke, /manifest\.plan\.maxObjectPointerFrames/, 'the browser planner must use the packet-bound object-pointer limit');
 
 console.log('sam3.1 temporal memory-attention browser evidence contracts passed');

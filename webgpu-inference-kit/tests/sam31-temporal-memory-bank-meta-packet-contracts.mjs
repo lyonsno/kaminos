@@ -13,9 +13,13 @@ const outDir = mkdtempSync(join(tmpdir(), 'kaminos-sam31-temporal-bank-'));
 try {
   const result = spawnSync(python, [tool, '--out-dir', outDir, '--source-root', sourceRoot, '--checkpoint', checkpoint], { encoding: 'utf8', timeout: 180_000 });
   assert.equal(result.status, 0, `official temporal-bank packet failed:\n${result.stdout}\n${result.stderr}`);
-  const manifest = JSON.parse(readFileSync(join(outDir, 'tensor-manifest.json'), 'utf8'));
+  const manifestText = readFileSync(join(outDir, 'tensor-manifest.json'), 'utf8');
+  const manifest = JSON.parse(manifestText);
   const receipt = JSON.parse(readFileSync(join(outDir, 'reference-receipt.json'), 'utf8'));
   assert.equal(receipt.ok, true);
+  const manifestDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(manifestText));
+  const manifestSha256 = `sha256:${Array.from(new Uint8Array(manifestDigest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  assert.equal(receipt.outputs.tensorManifestSha256, manifestSha256);
   assert.equal(manifest.reference.source.commit, '5dd401d1c5c1d5c3eedff06d41b77af824517619');
   assert.equal(manifest.reference.source.workingTreeClean, true);
   assert.equal(manifest.reference.model.sha256, 'sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6');

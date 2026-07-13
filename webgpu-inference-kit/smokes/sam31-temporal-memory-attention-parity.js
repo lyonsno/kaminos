@@ -7,10 +7,13 @@ import {
   runSam31MemoryAttentionPhaseProgramRoute,
   runSam31TemporalMemoryBankPhaseProgramRoute,
   verifySam31PacketFloat32Bytes,
+  verifySam31TemporalPacketAuthority,
 } from '../src/index.js';
 
 const params = new URLSearchParams(location.search);
 const manifestUrl = params.get('manifest') || '/oracle/tensor-manifest.json';
+const packetSource = params.get('packetSource') || 'unknown';
+const expectedManifestSha256 = params.get('expectedManifestSha256');
 const statusElement = document.querySelector('#status');
 let state = { status: 'loading', phase: 'load-manifest', requestedManifestUrl: manifestUrl };
 window.sam31TemporalMemoryAttentionParitySmokeState = () => state;
@@ -25,6 +28,12 @@ async function fetchJson(url) {
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
   return response.json();
+}
+
+async function fetchText(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
+  return response.text();
 }
 
 async function fetchFloat32(entry) {
@@ -77,8 +86,12 @@ function assertArrayEqual(actual, expected, name) {
 }
 
 async function run() {
-  const manifest = await fetchJson(manifestUrl);
+  const manifestText = await fetchText(manifestUrl);
+  const manifest = JSON.parse(manifestText);
   if (manifest.schema !== 'kaminos.sam31-temporal-memory-bank-meta-packet.v0') throw new Error(`unsupported manifest schema ${manifest.schema}`);
+  if (packetSource === 'caller-provided-existing' && !expectedManifestSha256) throw new Error('reused packet requires expectedManifestSha256');
+  const referenceReceipt = await fetchJson('/oracle/reference-receipt.json');
+  const packetAuthority = await verifySam31TemporalPacketAuthority({ manifestText, manifest, referenceReceipt, expectedManifestSha256 });
   const tensorsByRole = Object.fromEntries(manifest.tensors.map(entry => [entry.role, entry]));
   const weightsByRole = Object.fromEntries(manifest.attentionWeights.map(entry => [entry.role, entry]));
   const tensor = role => fetchFloat32(tensorsByRole[role]);
@@ -93,7 +106,7 @@ async function run() {
     multiplexCount: manifest.shape.multiplexCount,
     numMaskmem: manifest.plan.numMaskmem,
     maxConditioningFrames: manifest.plan.maxConditioningFrames,
-    maxObjectPointerFrames: 16,
+    maxObjectPointerFrames: manifest.plan.maxObjectPointerFrames,
     memoryTemporalStride: manifest.plan.memoryTemporalStride,
     useMaskmemTemporalPositionV2: manifest.plan.useMaskmemTemporalPositionV2,
     trackInReverse: manifest.plan.trackInReverse,
@@ -104,7 +117,7 @@ async function run() {
   assertArrayEqual(plan.pointerFrames.map(frame => frame.frameIndex), manifest.plan.pointerFrameIndices, 'pointer frames');
   assertArrayEqual(plan.pointerFrames.map(frame => frame.relativePosition), manifest.plan.pointerRelativePositions, 'pointer relative positions');
 
-  updateStatus('running', 'request-adapter', { packetManifest: manifest, manifest: { schema: manifest.schema, boundary: manifest.boundary, reference: manifest.reference, checkpointAudit: manifest.checkpointAudit, plan: manifest.plan, shape: manifest.shape } });
+  updateStatus('running', 'request-adapter', { packetAuthority, packetManifest: manifest, manifest: { schema: manifest.schema, boundary: manifest.boundary, reference: manifest.reference, checkpointAudit: manifest.checkpointAudit, plan: manifest.plan, shape: manifest.shape } });
   if (!navigator.gpu) throw new Error('navigator.gpu is unavailable');
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new Error('WebGPU adapter unavailable');
@@ -225,6 +238,7 @@ async function run() {
   const requestedAttentionRouteId = attentionRoute.routeId;
   const effectiveAttentionRouteId = attentionResult.receipt.effectiveRouteId;
   const evidence = {
+    packetAuthorityPassed: packetAuthority.passed === true,
     adapterPassed: adapterInfo.isFallbackAdapter === false,
     temporalReceiptPassed: temporalResult.receipt.status === 'real' && temporalResult.receipt.fallbackReason == null,
     attentionReceiptPassed: attentionResult.receipt.status === 'real' && attentionResult.receipt.fallbackReason == null,
@@ -245,6 +259,7 @@ async function run() {
     attentionReceipt: attentionResult.receipt,
     parity: { assemblyMaxAbsDiff, assemblyByTensor: assemblyParity, conditionedFeaturesMaxAbsDiff },
     packet: { spatialFrameCount: 9, pointerFrameCount: 10, numObjPtrTokens: 160, memoryTokens: 196, memoryAttentionTensorCount: 122 },
+    packetAuthority,
     evidence,
     uncapturedErrors,
   };

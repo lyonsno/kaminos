@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
+import { verifySam31TemporalPacketAuthority } from '../src/sam31-packet-artifact.js';
 
 const REPORT_SCHEMA = 'kaminos.sam31-temporal-memory-attention.browser-parity-smoke.v0';
 const args = new Map();
@@ -19,11 +20,12 @@ const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || 180000);
 const settleMs = Number(args.get('--settle-ms') || 300);
 const headless = args.get('--headless') !== '0';
 const reusePacket = args.get('--reuse-packet') === '1';
+const requestedExpectedManifestSha256 = args.get('--expected-manifest-sha256') || null;
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const torchPython = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
 const packetTool = resolve(packageRoot, 'tools/sam31-temporal-memory-bank-meta-packet.py');
 const userDataDir = resolve(args.get('--user-data-dir') || mkdtempSync(join(tmpdir(), `kaminos-sam31-temporal-chrome-${process.pid}-`)));
-const requestedUrl = `http://127.0.0.1:${serverPort}/smokes/sam31-temporal-memory-attention-parity.html?manifest=/oracle/tensor-manifest.json`;
+let requestedUrl = `http://127.0.0.1:${serverPort}/smokes/sam31-temporal-memory-attention-parity.html?manifest=/oracle/tensor-manifest.json`;
 
 let phase = 'initializing';
 let server = null;
@@ -34,6 +36,7 @@ let stderr = '';
 let screenshotWritten = false;
 let screenshotPixelCheck = null;
 let viewportLayout = null;
+let packetAuthority = null;
 const consoleEvents = [];
 
 const delay = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
@@ -56,6 +59,7 @@ function writeReport(extra = {}) {
     requestedUrl,
     packetDir,
     packetSource: reusePacket ? 'caller-provided-existing' : 'generated',
+    requestedExpectedManifestSha256,
     packetTool,
     reportPath,
     screenshot: screenshotWritten ? screenshotPath : null,
@@ -72,6 +76,7 @@ function writeReport(extra = {}) {
     consoleEvents,
     lastState,
     packetManifest: lastState?.packetManifest || null,
+    packetAuthority: packetAuthority || lastState?.packetAuthority || null,
     requestedTemporalRouteId: lastState?.requestedTemporalRouteId || null,
     effectiveTemporalRouteId: lastState?.effectiveTemporalRouteId || null,
     requestedAttentionRouteId: lastState?.requestedAttentionRouteId || null,
@@ -109,6 +114,7 @@ function terminalSummary(report) {
     effectiveAttentionRouteId: report.effectiveAttentionRouteId,
     parity: report.parity,
     packet: report.packet,
+    packetAuthority: report.packetAuthority,
     evidence: report.evidence,
     uncapturedErrors: report.lastState?.uncapturedErrors || [],
   };
@@ -125,6 +131,24 @@ function generatePacket() {
   if (process.env.KAMINOS_SAM31_SOURCE_ROOT) command.push('--source-root', process.env.KAMINOS_SAM31_SOURCE_ROOT);
   const result = spawnSync(torchPython, command, { cwd: packageRoot, encoding: 'utf8', timeout: 180000 });
   if (result.status !== 0) throw new Error(`official packet generation failed: ${result.stderr || result.stdout}`);
+}
+
+async function verifyPacketAuthority() {
+  const manifestPath = join(packetDir, 'tensor-manifest.json');
+  const receiptPath = join(packetDir, 'reference-receipt.json');
+  if (!existsSync(manifestPath)) throw new Error(`packet manifest missing: ${manifestPath}`);
+  if (!existsSync(receiptPath)) throw new Error(`packet reference receipt missing: ${receiptPath}`);
+  const manifestText = readFileSync(manifestPath, 'utf8');
+  const referenceReceipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
+  if (reusePacket && !requestedExpectedManifestSha256) {
+    throw new Error('--expected-manifest-sha256 is required with --reuse-packet=1');
+  }
+  return verifySam31TemporalPacketAuthority({
+    manifestText,
+    manifest: JSON.parse(manifestText),
+    referenceReceipt,
+    expectedManifestSha256: requestedExpectedManifestSha256 || referenceReceipt.outputs?.tensorManifestSha256 || null,
+  });
 }
 
 function startServer() {
@@ -266,6 +290,9 @@ async function main() {
   try {
     phase = 'generate_official_packet';
     generatePacket();
+    phase = 'verify_packet_authority';
+    packetAuthority = await verifyPacketAuthority();
+    requestedUrl = `${requestedUrl}&packetSource=${reusePacket ? 'caller-provided-existing' : 'generated'}&expectedManifestSha256=${encodeURIComponent(packetAuthority.expectedManifestSha256)}`;
     phase = 'start_server';
     await startServer();
     phase = 'launch_chrome';

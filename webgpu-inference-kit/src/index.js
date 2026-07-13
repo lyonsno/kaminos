@@ -295,7 +295,9 @@ export {
 } from './route-schema-contract.js';
 
 export {
+  SAM31_TEMPORAL_PACKET_AUTHORITY,
   verifySam31PacketFloat32Bytes,
+  verifySam31TemporalPacketAuthority,
 } from './sam31-packet-artifact.js';
 
 export {
