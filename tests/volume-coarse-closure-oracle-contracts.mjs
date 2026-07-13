@@ -1,0 +1,163 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+const scriptUrl = new URL('../volume-coarse-closure-oracle.py', import.meta.url);
+assert.ok(existsSync(scriptUrl), 'coarse closure oracle harness exists');
+const script = await readFile(scriptUrl, 'utf8');
+
+assert.match(script, /kaminos\.volume\.coarse-closure-oracle\.v0/, 'oracle publishes a stable result schema');
+assert.match(script, /phase-aligned-filtered-high-low-step-corpus-v0/, 'oracle requires the phase-aligned closure corpus identity');
+assert.match(script, /receiver-initialized-from-filtered-high-t-v0/, 'oracle rejects an independently evolved low history');
+assert.match(script, /offline-oracle-training-and-diagnostic-only/, 'oracle truth application is explicitly unavailable at runtime');
+assert.match(script, /runtimeTruthAvailable/, 'oracle reports runtime truth availability instead of implying product authority');
+assert.match(script, /filteredHighT[\s\S]*ordinaryLowT1[\s\S]*exactClosureResidual[\s\S]*oracleApplied/, 'oracle preserves the load-bearing comparison roles');
+assert.match(script, /failurePhase[\s\S]*lastTrustworthyEvidence/, 'oracle writes phase-local failure evidence');
+assert.match(script, /sha256/, 'oracle binds source arrays and basin identity by checksum');
+
+const root = await mkdtemp(join(tmpdir(), 'kaminos-coarse-closure-contract-'));
+const inputDir = join(root, 'input');
+const outDir = join(root, 'output');
+const failedOutDir = join(root, 'failed-output');
+await import('node:fs/promises').then(({ mkdir }) => Promise.all([
+  mkdir(inputDir, { recursive: true }),
+  mkdir(outDir, { recursive: true }),
+  mkdir(failedOutDir, { recursive: true }),
+]));
+
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+const fluidChannels = [
+  'velocityX', 'velocityY', 'velocityZ', 'densityCarrier', 'smokeDensity', 'heat', 'fuel', 'detail',
+  'flame', 'ember', 'visibleFireCarrier', 'combustionFront', 'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
+];
+
+function floatsToBytes(values) {
+  return Buffer.from(new Float32Array(values).buffer);
+}
+
+async function writeArtifact(name, values, shape) {
+  const path = join(inputDir, `${name}.f32`);
+  const bytes = floatsToBytes(values);
+  await writeFile(path, bytes);
+  return { path, shape, dtype: 'float32-le', byteLength: bytes.byteLength, sha256: sha256(bytes) };
+}
+
+function highValues(grid, channels, timeOffset) {
+  const values = new Float32Array(grid ** 3 * channels);
+  for (let z = 0; z < grid; z += 1) {
+    for (let y = 0; y < grid; y += 1) {
+      for (let x = 0; x < grid; x += 1) {
+        const cell = x + y * grid + z * grid * grid;
+        for (let channel = 0; channel < channels; channel += 1) {
+          values[cell * channels + channel] = x * 0.03 + y * 0.05 + z * 0.07 + channel * 0.011 + timeOffset * (channel + 1) * 0.004;
+        }
+      }
+    }
+  }
+  return values;
+}
+
+function boxAverage(values, highGrid, lowGrid, channels) {
+  assert.equal(highGrid % lowGrid, 0);
+  const scale = highGrid / lowGrid;
+  const output = new Float32Array(lowGrid ** 3 * channels);
+  for (let lz = 0; lz < lowGrid; lz += 1) {
+    for (let ly = 0; ly < lowGrid; ly += 1) {
+      for (let lx = 0; lx < lowGrid; lx += 1) {
+        const lowCell = lx + ly * lowGrid + lz * lowGrid * lowGrid;
+        for (let hz = lz * scale; hz < (lz + 1) * scale; hz += 1) {
+          for (let hy = ly * scale; hy < (ly + 1) * scale; hy += 1) {
+            for (let hx = lx * scale; hx < (lx + 1) * scale; hx += 1) {
+              const highCell = hx + hy * highGrid + hz * highGrid * highGrid;
+              for (let channel = 0; channel < channels; channel += 1) {
+                output[lowCell * channels + channel] += values[highCell * channels + channel] / scale ** 3;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return output;
+}
+
+const highGrid = 4;
+const receiverGrid = 2;
+const highFluidT = highValues(highGrid, fluidChannels.length, 0);
+const highFluidT1 = highValues(highGrid, fluidChannels.length, 1);
+const highFrontT = highValues(highGrid, 1, 0);
+const highFrontT1 = highValues(highGrid, 1, 1);
+const filteredFluidT1 = boxAverage(highFluidT1, highGrid, receiverGrid, fluidChannels.length);
+const filteredFrontT1 = boxAverage(highFrontT1, highGrid, receiverGrid, 1);
+const ordinaryFluidT1 = Float32Array.from(filteredFluidT1, (value, index) => value - 0.0025 * ((index % fluidChannels.length) + 1));
+const ordinaryFrontT1 = Float32Array.from(filteredFrontT1, value => value - 0.006);
+
+const basinBytes = Buffer.from('{"identity":"contract-exact-basin"}\n');
+const basinPath = join(inputDir, 'basin.json');
+await writeFile(basinPath, basinBytes);
+
+const pair = {
+  id: 'pair-000',
+  highT: {
+    simStepCount: 10,
+    fluid: await writeArtifact('high-t-fluid', highFluidT, [highGrid, highGrid, highGrid, fluidChannels.length]),
+    front: await writeArtifact('high-t-front', highFrontT, [highGrid, highGrid, highGrid, 1]),
+  },
+  highT1: {
+    simStepCount: 11,
+    fluid: await writeArtifact('high-t1-fluid', highFluidT1, [highGrid, highGrid, highGrid, fluidChannels.length]),
+    front: await writeArtifact('high-t1-front', highFrontT1, [highGrid, highGrid, highGrid, 1]),
+  },
+  ordinaryLowT1: {
+    simStepCount: 1,
+    initializationAuthority: 'receiver-initialized-from-filtered-high-t-v0',
+    fluid: await writeArtifact('ordinary-low-t1-fluid', ordinaryFluidT1, [receiverGrid, receiverGrid, receiverGrid, fluidChannels.length]),
+    front: await writeArtifact('ordinary-low-t1-front', ordinaryFrontT1, [receiverGrid, receiverGrid, receiverGrid, 1]),
+  },
+};
+
+const inputPath = join(inputDir, 'manifest.json');
+await writeFile(inputPath, `${JSON.stringify({
+  schema: 'kaminos.volume.coarse-closure-corpus.v0',
+  identity: 'phase-aligned-filtered-high-low-step-corpus-v0',
+  basin: { path: basinPath, sha256: sha256(basinBytes), identity: 'contract-exact-basin' },
+  route: {
+    requested: 'contract-route', effective: 'native-3d-compute-fluid-raymarch-v0', backend: 'WebGPU:contract',
+    learnedSplatModelIdentity: 'sha256:contract-model',
+  },
+  grids: { high: highGrid, receiver: receiverGrid },
+  layout: { order: 'x-fastest-zyx-c-interleaved-v0', fluidChannels, frontChannels: ['frontTopology'] },
+  pairs: [pair],
+}, null, 2)}\n`);
+
+const reportPath = join(outDir, 'manifest.json');
+const run = spawnSync('python3', [scriptUrl.pathname, '--input', inputPath, '--out-dir', outDir, '--report', reportPath], { encoding: 'utf8' });
+assert.equal(run.status, 0, run.stderr || run.stdout);
+const report = JSON.parse(await readFile(reportPath, 'utf8'));
+assert.equal(report.status, 'captured');
+assert.equal(report.applicationAuthority, 'offline-oracle-training-and-diagnostic-only');
+assert.equal(report.runtimeTruthAvailable, false);
+assert.deepEqual(report.roleOrder, ['filteredHighT', 'ordinaryLowT1', 'exactClosureResidual', 'oracleApplied', 'filteredHighT1']);
+assert.equal(report.pairs.length, 1);
+assert.ok(report.pairs[0].metrics.global.baselineRmse > 0);
+assert.ok(report.pairs[0].metrics.global.oracleRmse < 1e-7);
+assert.ok(report.pairs[0].metrics.global.rmseReductionFraction > 0.999999);
+assert.equal(report.pairs[0].channels.length, fluidChannels.length + 1);
+assert.equal(report.pairs[0].artifacts.exactClosureResidual.fluid.shape.at(-1), fluidChannels.length);
+assert.equal(report.pairs[0].artifacts.filteredHighT1.front.shape.at(-1), 1);
+
+await writeFile(pair.highT1.fluid.path, Buffer.alloc(pair.highT1.fluid.byteLength, 0xff));
+const failedReportPath = join(failedOutDir, 'manifest.json');
+const reject = spawnSync('python3', [scriptUrl.pathname, '--input', inputPath, '--out-dir', failedOutDir, '--report', failedReportPath], { encoding: 'utf8' });
+assert.equal(reject.status, 2, 'corrupt source array must fail validation');
+const failedReport = JSON.parse(await readFile(failedReportPath, 'utf8'));
+assert.equal(failedReport.status, 'failed');
+assert.equal(failedReport.failurePhase, 'input-validation');
+assert.match(failedReport.reason, /sha256 mismatch/);
+assert.ok(failedReport.lastTrustworthyEvidence.inputManifestSha256);
+
+console.log('coarse closure oracle contracts passed');
