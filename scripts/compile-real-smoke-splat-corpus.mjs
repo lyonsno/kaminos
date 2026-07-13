@@ -35,7 +35,7 @@ function parseArgs(argv) {
       if (!value) throw new Error('--out-dir requires a path');
       options.outDir = resolve(value);
       index += 1;
-    } else if (['--coarse-block-size', '--fine-block-size', '--articulation-threshold', '--fine-mass-fraction', '--capacity', '--steps', '--instance-count', '--phase-slot-count'].includes(key)) {
+    } else if (['--coarse-block-size', '--fine-block-size', '--articulation-threshold', '--fine-mass-fraction', '--coarse-anchor-mass-ratio', '--capacity', '--steps', '--instance-count', '--phase-slot-count'].includes(key)) {
       if (!value) throw new Error(`${key} requires a value`);
       options[key.slice(2).replaceAll('-', '_')] = Number(value);
       index += 1;
@@ -176,6 +176,7 @@ function compactProduct(product) {
     payloadIdentity: product.payloadIdentity,
     decoderConfigIdentity: product.decoderConfigIdentity,
     hierarchyCounts: product.hierarchyCounts,
+    coarseConsolidation: product.coarseConsolidation,
     accounting: product.accounting,
     sourceStatistics: product.sourceStatistics,
     capacity: product.capacity,
@@ -214,6 +215,7 @@ try {
     fineBlockSize: options.fine_block_size ?? 4,
     articulationThreshold: options.articulation_threshold ?? 0.5,
     fineMassFraction: options.fine_mass_fraction ?? 0.5,
+    coarseAnchorMassRatio: options.coarse_anchor_mass_ratio ?? 0,
     capacity: options.capacity ?? null,
   };
   phase = 'hierarchy-target-compilation';

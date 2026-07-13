@@ -133,7 +133,8 @@ const denseTailRequest = {
 };
 const consolidated = compileSmokeFieldHierarchy(denseTailRequest);
 assert.ok(consolidated.coarseConsolidation, 'coarse transport publishes its effective consolidation contract');
-assert.equal(consolidated.coarseConsolidation.identity, 'mass-weighted-anchor-voronoi-v0');
+assert.equal(consolidated.coarseConsolidation.identity, 'mass-preserving-anchor-voronoi-v1');
+assert.equal(consolidated.coarseConsolidation.spatialMomentAuthority, 'anchor-bin-only-tail-optical-transfer-v0');
 assert.equal(consolidated.coarseConsolidation.sourceCoarseBinCount, 8 ** 3);
 assert.ok(
   consolidated.coarseSplats.length < consolidated.coarseConsolidation.sourceCoarseBinCount * 0.25,
@@ -146,6 +147,23 @@ assert.equal(
 );
 assert.ok(Math.abs(consolidated.accounting.sourceExtinctionMass - consolidated.accounting.representedExtinctionMass) < 1e-8);
 assert.equal(consolidated.accounting.rejectedExtinctionMass, 0, 'consolidation transfers tail mass instead of thresholding it away');
+assert.ok(consolidated.coarseConsolidation.anchorSourceExtinctionMass > 0);
+assert.ok(consolidated.coarseConsolidation.transferredTailExtinctionMass > 0);
+assert.ok(Math.abs(
+  consolidated.coarseConsolidation.anchorSourceExtinctionMass
+    + consolidated.coarseConsolidation.transferredTailExtinctionMass
+    - consolidated.accounting.representedExtinctionMass,
+) < 1e-8, 'anchor-origin and transferred-tail accounting covers all coarse extinction');
+assert.equal(
+  consolidated.coarseSplats.every(splat => splat.geometrySourceBinCount === 1),
+  true,
+  'each consolidated footprint derives geometry from exactly one stable anchor bin',
+);
+const maximumConsolidatedRadius = Math.max(...consolidated.coarseSplats.flatMap(splat => splat.radii));
+assert.ok(
+  maximumConsolidatedRadius <= 0.251,
+  `transferred tails do not expand anchor covariance back to domain scale: ${maximumConsolidatedRadius}`,
+);
 assert.deepEqual(
   compileSmokeFieldHierarchy(denseTailRequest).coarseSplats,
   consolidated.coarseSplats,

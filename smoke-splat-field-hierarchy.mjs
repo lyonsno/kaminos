@@ -55,7 +55,9 @@ function makeAggregate(key, coordinates) {
     key,
     coordinates,
     extinctionMass: 0,
+    geometryMass: 0,
     positionMass: [0, 0, 0],
+    positionSecondMass: [0, 0, 0, 0, 0, 0],
     velocityMass: [0, 0, 0],
     temperatureMass: 0,
     densitySum: 0,
@@ -65,12 +67,17 @@ function makeAggregate(key, coordinates) {
     microdetailSum: 0,
     interfaceShredSum: 0,
     sourceCellCount: 0,
+    consolidatedSourceBinCount: 0,
+    geometrySourceBinCount: 0,
+    anchorExtinctionMass: 0,
+    transferredTailExtinctionMass: 0,
   };
 }
 
 function accumulate(bin, sample) {
   const mass = sample.extinctionMass;
   bin.extinctionMass += mass;
+  bin.geometryMass += mass;
   bin.temperatureMass += sample.temperature * mass;
   bin.densitySum += sample.density;
   bin.densitySquareSum += sample.density * sample.density;
@@ -83,12 +90,20 @@ function accumulate(bin, sample) {
     bin.positionMass[axis] += sample.position[axis] * mass;
     bin.velocityMass[axis] += sample.velocity[axis] * mass;
   }
+  const [x, y, z] = sample.position;
+  bin.positionSecondMass[0] += x * x * mass;
+  bin.positionSecondMass[1] += x * y * mass;
+  bin.positionSecondMass[2] += x * z * mass;
+  bin.positionSecondMass[3] += y * y * mass;
+  bin.positionSecondMass[4] += y * z * mass;
+  bin.positionSecondMass[5] += z * z * mass;
 }
 
 function mergeFineIntoCoarse(coarse, fine, mass) {
   if (mass <= 0 || fine.extinctionMass <= 0) return;
   const ratio = mass / fine.extinctionMass;
   coarse.extinctionMass += mass;
+  coarse.geometryMass += mass;
   coarse.temperatureMass += fine.temperatureMass * ratio;
   coarse.sourceCellCount += fine.sourceCellCount;
   coarse.densitySum += fine.densitySum;
@@ -101,6 +116,39 @@ function mergeFineIntoCoarse(coarse, fine, mass) {
     coarse.positionMass[axis] += fine.positionMass[axis] * ratio;
     coarse.velocityMass[axis] += fine.velocityMass[axis] * ratio;
   }
+  for (let component = 0; component < 6; component += 1) {
+    coarse.positionSecondMass[component] += fine.positionSecondMass[component] * ratio;
+  }
+}
+
+function mergeAggregate(target, source, retainGeometry) {
+  if (!(source.extinctionMass > 0)) return;
+  target.extinctionMass += source.extinctionMass;
+  target.temperatureMass += source.temperatureMass;
+  target.sourceCellCount += source.sourceCellCount;
+  target.densitySum += source.densitySum;
+  target.densitySquareSum += source.densitySquareSum;
+  target.maxDensity = Math.max(target.maxDensity, source.maxDensity);
+  target.detailSum += source.detailSum;
+  target.microdetailSum += source.microdetailSum;
+  target.interfaceShredSum += source.interfaceShredSum;
+  target.consolidatedSourceBinCount += 1;
+  for (let axis = 0; axis < 3; axis += 1) {
+    target.velocityMass[axis] += source.velocityMass[axis];
+  }
+  if (retainGeometry) {
+    target.geometryMass += source.geometryMass;
+    target.geometrySourceBinCount += 1;
+    target.anchorExtinctionMass += source.extinctionMass;
+    for (let axis = 0; axis < 3; axis += 1) {
+      target.positionMass[axis] += source.positionMass[axis];
+    }
+    for (let component = 0; component < 6; component += 1) {
+      target.positionSecondMass[component] += source.positionSecondMass[component];
+    }
+  } else {
+    target.transferredTailExtinctionMass += source.extinctionMass;
+  }
 }
 
 function normalizedAxis(velocity) {
@@ -108,13 +156,40 @@ function normalizedAxis(velocity) {
   return speed > 1e-9 ? velocity.map(component => component / speed) : [0, 1, 0];
 }
 
+function dominantCovarianceAxis(covariance, fallback) {
+  let axis = normalizedAxis(fallback);
+  for (let iteration = 0; iteration < 8; iteration += 1) {
+    const next = [
+      covariance[0] * axis[0] + covariance[1] * axis[1] + covariance[2] * axis[2],
+      covariance[1] * axis[0] + covariance[3] * axis[1] + covariance[4] * axis[2],
+      covariance[2] * axis[0] + covariance[4] * axis[1] + covariance[5] * axis[2],
+    ];
+    const length = Math.hypot(...next);
+    if (!(length > 1e-12)) break;
+    axis = next.map(component => component / length);
+  }
+  return axis;
+}
+
 function aggregateWitness(bin) {
   const mass = bin.extinctionMass;
   const count = Math.max(1, bin.sourceCellCount);
   const densityMean = bin.densitySum / count;
   const densityVariance = Math.max(0, bin.densitySquareSum / count - densityMean * densityMean);
-  const position = mass > 0 ? bin.positionMass.map(component => component / mass) : [0, 0, 0];
+  const geometryMass = bin.geometryMass;
+  const position = geometryMass > 0 ? bin.positionMass.map(component => component / geometryMass) : [0, 0, 0];
   const velocity = mass > 0 ? bin.velocityMass.map(component => component / mass) : [0, 0, 0];
+  const second = geometryMass > 0
+    ? bin.positionSecondMass.map(component => component / geometryMass)
+    : [0, 0, 0, 0, 0, 0];
+  const covariance = [
+    Math.max(0, second[0] - position[0] * position[0]),
+    second[1] - position[0] * position[1],
+    second[2] - position[0] * position[2],
+    Math.max(0, second[3] - position[1] * position[1]),
+    second[4] - position[1] * position[2],
+    Math.max(0, second[5] - position[2] * position[2]),
+  ];
   return {
     position,
     velocity,
@@ -125,6 +200,7 @@ function aggregateWitness(bin) {
     detailMean: bin.detailSum / count,
     microdetailMean: bin.microdetailSum / count,
     interfaceShredMean: bin.interfaceShredSum / count,
+    covariance,
   };
 }
 
@@ -163,18 +239,111 @@ function makeSplat(bin, role, blockSize, cellWidth, slotIdentity, spatialKey, ex
   const witness = aggregateWitness(bin);
   const speed = Math.hypot(...witness.velocity);
   const baseRadius = blockSize * cellWidth * (role === 'transport-coarse' ? 0.64 : 0.38);
+  const consolidated = role === 'transport-coarse' && bin.consolidatedSourceBinCount > 1;
+  const principalAxis = consolidated
+    ? dominantCovarianceAxis(witness.covariance, witness.velocity)
+    : normalizedAxis(witness.velocity);
+  const covarianceTrace = witness.covariance[0] + witness.covariance[3] + witness.covariance[5];
+  const longitudinalVariance = Math.max(0,
+    principalAxis[0] * (witness.covariance[0] * principalAxis[0] + witness.covariance[1] * principalAxis[1] + witness.covariance[2] * principalAxis[2])
+    + principalAxis[1] * (witness.covariance[1] * principalAxis[0] + witness.covariance[3] * principalAxis[1] + witness.covariance[4] * principalAxis[2])
+    + principalAxis[2] * (witness.covariance[2] * principalAxis[0] + witness.covariance[4] * principalAxis[1] + witness.covariance[5] * principalAxis[2]));
+  const radialVariance = Math.max(0, (covarianceTrace - longitudinalVariance) * 0.5);
+  const radialRadius = consolidated ? Math.max(baseRadius, Math.sqrt(radialVariance) * 2.35) : baseRadius;
+  const longitudinalRadius = consolidated
+    ? Math.max(baseRadius, Math.sqrt(longitudinalVariance) * 2.35)
+    : baseRadius * (1.12 + Math.min(speed, 3) * 0.18);
   return {
     identity: `${role}:${slotIdentity.historySlot}:${slotIdentity.slotWriteTick}:${spatialKey}`,
     spatialIdentity: spatialKey,
     hierarchyRole: role,
     position: witness.position,
-    principalAxis: normalizedAxis(witness.velocity),
-    radii: [baseRadius, baseRadius * (1.12 + Math.min(speed, 3) * 0.18), baseRadius],
+    principalAxis,
+    radii: [radialRadius, longitudinalRadius, radialRadius],
     extinctionMass,
     densityWitness: witness.densityMean,
     temperatureWitness: witness.temperature,
     velocityWitness: witness.velocity,
     sourceCellCount: bin.sourceCellCount,
+    consolidatedSourceBinCount: role === 'transport-coarse'
+      ? Math.max(1, bin.consolidatedSourceBinCount)
+      : 1,
+    geometrySourceBinCount: role === 'transport-coarse'
+      ? Math.max(1, bin.geometrySourceBinCount)
+      : 1,
+    anchorExtinctionMass: role === 'transport-coarse' ? bin.anchorExtinctionMass || extinctionMass : 0,
+    transferredTailExtinctionMass: role === 'transport-coarse' ? bin.transferredTailExtinctionMass : 0,
+  };
+}
+
+function consolidateCoarseBins(coarseBins, anchorMassRatio) {
+  const sourceBins = [...coarseBins.values()]
+    .filter(bin => bin.extinctionMass > 0)
+    .sort((left, right) => left.key.localeCompare(right.key));
+  if (sourceBins.length === 0) {
+    return {
+      bins: [],
+      report: {
+        identity: 'mass-preserving-anchor-voronoi-v1',
+        spatialMomentAuthority: 'anchor-bin-only-tail-optical-transfer-v0',
+        enabled: anchorMassRatio > 0,
+        anchorMassRatio,
+        anchorMassThreshold: 0,
+        maximumSourceBinMass: 0,
+        sourceCoarseBinCount: 0,
+        consolidatedCoarseBinCount: 0,
+        mergedSourceBinCount: 0,
+        occupancyReductionFraction: 0,
+        anchorSourceExtinctionMass: 0,
+        transferredTailExtinctionMass: 0,
+        representedCoarseExtinctionMass: 0,
+      },
+    };
+  }
+  const maximumSourceBinMass = Math.max(...sourceBins.map(bin => bin.extinctionMass));
+  const anchorMassThreshold = maximumSourceBinMass * anchorMassRatio;
+  const anchors = anchorMassRatio > 0
+    ? sourceBins.filter(bin => bin.extinctionMass >= anchorMassThreshold)
+    : sourceBins;
+  const targets = new Map(anchors.map(anchor => [anchor.key, makeAggregate(anchor.key, [...anchor.coordinates])]));
+  for (const anchor of anchors) mergeAggregate(targets.get(anchor.key), anchor, true);
+  const anchorKeys = new Set(anchors.map(anchor => anchor.key));
+  for (const source of sourceBins) {
+    if (anchorKeys.has(source.key)) continue;
+    let owner = anchors[0];
+    let ownerDistance = Infinity;
+    for (const anchor of anchors) {
+      const distance = source.coordinates.reduce((sum, component, axis) => {
+        const delta = component - anchor.coordinates[axis];
+        return sum + delta * delta;
+      }, 0);
+      if (distance < ownerDistance || (distance === ownerDistance && anchor.key.localeCompare(owner.key) < 0)) {
+        owner = anchor;
+        ownerDistance = distance;
+      }
+    }
+    mergeAggregate(targets.get(owner.key), source, false);
+  }
+  const bins = [...targets.values()].sort((left, right) => left.key.localeCompare(right.key));
+  const anchorSourceExtinctionMass = bins.reduce((sum, bin) => sum + bin.anchorExtinctionMass, 0);
+  const transferredTailExtinctionMass = bins.reduce((sum, bin) => sum + bin.transferredTailExtinctionMass, 0);
+  return {
+    bins,
+    report: {
+      identity: 'mass-preserving-anchor-voronoi-v1',
+      spatialMomentAuthority: 'anchor-bin-only-tail-optical-transfer-v0',
+      enabled: anchorMassRatio > 0,
+      anchorMassRatio,
+      anchorMassThreshold,
+      maximumSourceBinMass,
+      sourceCoarseBinCount: sourceBins.length,
+      consolidatedCoarseBinCount: bins.length,
+      mergedSourceBinCount: sourceBins.length - bins.length,
+      occupancyReductionFraction: sourceBins.length > 0 ? 1 - bins.length / sourceBins.length : 0,
+      anchorSourceExtinctionMass,
+      transferredTailExtinctionMass,
+      representedCoarseExtinctionMass: anchorSourceExtinctionMass + transferredTailExtinctionMass,
+    },
   };
 }
 
@@ -185,6 +354,7 @@ function configIdentity(config) {
     Number(config.extinctionCoefficient).toPrecision(12),
     Number(config.fineMassFraction).toPrecision(12),
     Number(config.articulationThreshold).toPrecision(12),
+    Number(config.coarseAnchorMassRatio).toPrecision(12),
     config.capacity === null ? 'uncapped' : config.capacity,
   ].join('|');
 }
@@ -213,6 +383,8 @@ export function compileSmokeFieldHierarchy(request = {}) {
   const fineMassFraction = nonNegative(request.fineMassFraction ?? 0.5, 'fineMassFraction');
   if (fineMassFraction > 1) throw new RangeError('fineMassFraction must not exceed 1');
   const articulationThreshold = nonNegative(request.articulationThreshold ?? 0.5, 'articulationThreshold');
+  const coarseAnchorMassRatio = nonNegative(request.coarseAnchorMassRatio ?? 0, 'coarseAnchorMassRatio');
+  if (coarseAnchorMassRatio > 1) throw new RangeError('coarseAnchorMassRatio must not exceed 1');
   const capacity = request.capacity === undefined || request.capacity === null
     ? null
     : Math.floor(nonNegative(request.capacity, 'capacity'));
@@ -299,8 +471,9 @@ export function compileSmokeFieldHierarchy(request = {}) {
       ));
     }
   }
+  const consolidatedCoarse = consolidateCoarseBins(coarseBins, coarseAnchorMassRatio);
   const coarseSplats = [];
-  for (const coarse of coarseBins.values()) {
+  for (const coarse of consolidatedCoarse.bins) {
     if (coarse.extinctionMass <= 0) continue;
     const spatialKey = `coarse:${coarse.coordinates.join(':')}`;
     coarseSplats.push(makeSplat(
@@ -327,6 +500,7 @@ export function compileSmokeFieldHierarchy(request = {}) {
     extinctionCoefficient,
     fineMassFraction,
     articulationThreshold,
+    coarseAnchorMassRatio,
     capacity,
   };
   const decoderConfigIdentity = configIdentity(normalizedConfig);
@@ -352,6 +526,7 @@ export function compileSmokeFieldHierarchy(request = {}) {
     splats,
     requiredSplatCount: splats.length,
     hierarchyCounts: { coarse: coarseSplats.length, fine: fineSplats.length, total: splats.length },
+    coarseConsolidation: consolidatedCoarse.report,
     accounting: {
       identity: 'smoke-splat-extinction-accounting-v0',
       sourceExtinctionMass,
@@ -362,6 +537,7 @@ export function compileSmokeFieldHierarchy(request = {}) {
     sourceStatistics: {
       sourceCellCount: grid ** 3,
       occupiedFineBinCount: fineBins.size,
+      sourceCoarseBinCount: consolidatedCoarse.report.sourceCoarseBinCount,
       articulationTargetCount: modelRows.reduce((sum, row) => sum + row.label, 0),
       articulationTargetFraction: modelRows.length
         ? modelRows.reduce((sum, row) => sum + row.label, 0) / modelRows.length
