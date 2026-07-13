@@ -1535,6 +1535,18 @@ assert.match(core, /queueProbePending/, 'volume core exposes whether GPU queue t
 assert.match(core, /timing:/, 'debug state exposes a timing object');
 assert.match(core, /raf-and-queue-proxy/, 'timing evidence is explicitly labeled as RAF/queue proxy data');
 assert.match(core, /not-gpu-exclusive-or-present-latency/, 'timing evidence carries a present-latency disclaimer');
+assert.match(core, /FIRE_EPISODE_HOOK_IDENTITY\s*=\s*'foreground-kiln-fire-episode-hooks-v0'/, 'volume core names the foreground kiln fire episode hook contract');
+assert.match(core, /fireEpisodeHooks/, 'debug state exposes episode-shaped fire hook telemetry for Wake foreground witnesses');
+assert.match(core, /rawRafGapSamplesMs/, 'fire episode hooks preserve raw RAF gap samples for the firing window');
+assert.match(core, /rafGapHistogramMs/, 'fire episode hooks expose a histogram of foreground RAF gaps');
+assert.match(core, /maxRafGapMs/, 'fire episode hooks expose maximum foreground RAF gap cadence');
+assert.match(core, /longGapStreakMax/, 'fire episode hooks expose long-gap streak cadence');
+assert.match(core, /frameAdvanceCount/, 'fire episode hooks expose rendered frame advancement');
+assert.match(core, /simStepAdvanceCount/, 'fire episode hooks expose simulator step advancement');
+assert.match(core, /queueCompletionProxy/, 'fire episode hooks expose WebGPU queue completion as proxy evidence only');
+assert.match(core, /not-displayed-frame-latency/, 'fire episode hooks refuse displayed-frame latency authority');
+assert.match(core, /not-sharp-backend-heartbeat/, 'fire episode hooks distinguish foreground fire evidence from SHARP backend heartbeat evidence');
+assert.match(volumeWitness, /fireEpisodeHooks/, 'volume witness reports fire episode hook telemetry for foreground heartbeat composition');
 assert.match(core, /SIM_COST_LEDGER_IDENTITY\s*=\s*'tall-plume-sim-cost-ledger-v0'/, 'volume core names the tall-plume sim-cost ledger identity');
 assert.match(core, /PRESSURE_SOURCE_STRATEGY_INLINE_DIVERGENCE/, 'volume core names inline-divergence pressure source strategy');
 assert.match(core, /PRESSURE_SOURCE_STRATEGY_DISABLED/, 'volume core names disabled pressure source strategy');

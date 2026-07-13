@@ -9,6 +9,10 @@ const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
+const FIRE_EPISODE_HOOK_IDENTITY = 'foreground-kiln-fire-episode-hooks-v0';
+const FIRE_EPISODE_HOOK_EVIDENCE_SOURCE = 'foreground-volume-render-loop-raf-sim-step-and-queue-proxy-v0';
+const FIRE_EPISODE_HOOK_AUTHORITY = 'renderer-simulator-hooks-for-wake-foreground-heartbeat';
+const FIRE_EPISODE_LONG_GAP_THRESHOLD_MS = 50;
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
@@ -4798,6 +4802,59 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueSamples: 0,
       queueTimingAvailable: false,
     },
+    fireEpisodeHooks: {
+      identity: FIRE_EPISODE_HOOK_IDENTITY,
+      evidenceSource: FIRE_EPISODE_HOOK_EVIDENCE_SOURCE,
+      authority: FIRE_EPISODE_HOOK_AUTHORITY,
+      disclaimers: [
+        'not-gpu-exclusive-or-present-latency',
+        'not-displayed-frame-latency',
+        'not-sharp-backend-heartbeat',
+      ],
+      window: {
+        phase: 'initialized',
+        startedAtMs: null,
+        updatedAtMs: null,
+        durationMs: 0,
+      },
+      routeIdentity: {
+        effectiveRoute: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
+        runtimeQualityRequested: normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested),
+        runtimeQualityEffective: normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested),
+      },
+      rawRafGapSamplesMs: [],
+      rafGapHistogramMs: [],
+      maxRafGapMs: 0,
+      p95RafGapMs: 0,
+      longGapThresholdMs: FIRE_EPISODE_LONG_GAP_THRESHOLD_MS,
+      longGapCount: 0,
+      longGapStreakCurrent: 0,
+      longGapStreakMax: 0,
+      frameStartCount: 0,
+      frameEndCount: 0,
+      frameAdvanceCount: 0,
+      simStepStartCount: 0,
+      simStepEndCount: 0,
+      simStepAdvanceCount: 0,
+      queueCompletionProxy: {
+        evidenceSource: 'webgpu-queue-onSubmittedWorkDone-proxy',
+        disclaimer: 'queue-completion-proxy-not-present-latency',
+        available: false,
+        pending: false,
+        samples: 0,
+        lastDoneMs: null,
+        p95DoneMs: null,
+        error: null,
+      },
+      mohelIndicator: {
+        uncappedRawGapSamples: true,
+        sampleCount: 0,
+        largeSampleSet: false,
+        note: 'Raw firing-window gap samples are intentionally uncapped; use this diagnostic if the window is too broad.',
+      },
+    },
     error: null,
   };
 
@@ -4824,6 +4881,42 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
               : [],
           }
         : null,
+    };
+  }
+
+  function histogramRafGaps(samples) {
+    const buckets = [
+      { label: '0-16ms', minMs: 0, maxMs: 16, count: 0 },
+      { label: '16-33ms', minMs: 16, maxMs: 33, count: 0 },
+      { label: '33-50ms', minMs: 33, maxMs: FIRE_EPISODE_LONG_GAP_THRESHOLD_MS, count: 0 },
+      { label: '50-100ms', minMs: FIRE_EPISODE_LONG_GAP_THRESHOLD_MS, maxMs: 100, count: 0 },
+      { label: '100-250ms', minMs: 100, maxMs: 250, count: 0 },
+      { label: '250ms+', minMs: 250, maxMs: null, count: 0 },
+    ];
+    for (const rawGap of samples) {
+      const gap = Number(rawGap);
+      if (!Number.isFinite(gap)) continue;
+      const bucket = buckets.find(candidate => (
+        gap >= candidate.minMs && (candidate.maxMs === null || gap < candidate.maxMs)
+      ));
+      if (bucket) bucket.count += 1;
+    }
+    return buckets;
+  }
+
+  function cloneFireEpisodeHooks() {
+    const episode = state.fireEpisodeHooks || {};
+    return {
+      ...episode,
+      disclaimers: Array.isArray(episode.disclaimers) ? [...episode.disclaimers] : [],
+      window: episode.window ? { ...episode.window } : null,
+      routeIdentity: episode.routeIdentity ? { ...episode.routeIdentity } : null,
+      rawRafGapSamplesMs: Array.isArray(episode.rawRafGapSamplesMs) ? [...episode.rawRafGapSamplesMs] : [],
+      rafGapHistogramMs: Array.isArray(episode.rafGapHistogramMs)
+        ? episode.rafGapHistogramMs.map(bucket => ({ ...bucket }))
+        : [],
+      queueCompletionProxy: episode.queueCompletionProxy ? { ...episode.queueCompletionProxy } : null,
+      mohelIndicator: episode.mohelIndicator ? { ...episode.mohelIndicator } : null,
     };
   }
 
@@ -5058,8 +5151,97 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return sorted[index];
   }
 
+  function updateFireEpisodeHooks({ now, rafGapMs = null, cpuFrameMs = null } = {}) {
+    const episode = state.fireEpisodeHooks || {};
+    const startedAtMs = Number.isFinite(episode.window?.startedAtMs) ? episode.window.startedAtMs : now;
+    const rawRafGapSamplesMs = Array.isArray(episode.rawRafGapSamplesMs)
+      ? episode.rawRafGapSamplesMs
+      : [];
+    if (Number.isFinite(rafGapMs)) rawRafGapSamplesMs.push(rafGapMs);
+    const p95RafGapMs = percentileTiming(rawRafGapSamplesMs, 0.95) ?? 0;
+    const maxRafGapMs = rawRafGapSamplesMs.reduce((max, gap) => Math.max(max, Number(gap) || 0), 0);
+    const longGapCount = rawRafGapSamplesMs.filter(gap => Number(gap) >= FIRE_EPISODE_LONG_GAP_THRESHOLD_MS).length;
+    let longGapStreakCurrent = 0;
+    let longGapStreakMax = 0;
+    for (const gap of rawRafGapSamplesMs) {
+      if (Number(gap) >= FIRE_EPISODE_LONG_GAP_THRESHOLD_MS) {
+        longGapStreakCurrent += 1;
+        longGapStreakMax = Math.max(longGapStreakMax, longGapStreakCurrent);
+      } else {
+        longGapStreakCurrent = 0;
+      }
+    }
+    const frameStartCount = Number.isFinite(episode.frameStartCount) ? episode.frameStartCount : state.frameCount;
+    const simStepStartCount = Number.isFinite(episode.simStepStartCount) ? episode.simStepStartCount : state.simStepCount;
+    const queueTiming = state.timing || {};
+    state.fireEpisodeHooks = {
+      identity: FIRE_EPISODE_HOOK_IDENTITY,
+      evidenceSource: FIRE_EPISODE_HOOK_EVIDENCE_SOURCE,
+      authority: FIRE_EPISODE_HOOK_AUTHORITY,
+      disclaimers: [
+        'not-gpu-exclusive-or-present-latency',
+        'not-displayed-frame-latency',
+        'not-sharp-backend-heartbeat',
+      ],
+      window: {
+        phase: state.active ? 'active-foreground-volume-window' : 'inactive',
+        startedAtMs,
+        updatedAtMs: now,
+        durationMs: Math.max(0, now - startedAtMs),
+      },
+      routeIdentity: {
+        effectiveRoute: state.effectiveRoute || ROUTE_IDENTITY,
+        prototypeIdentity: state.prototypeIdentity || PROTOTYPE_IDENTITY,
+        volumeScene: state.volumeScene || normalizeVolumeScene(controlsSnapshot.volumeScene),
+        runtimeQualityRequested: state.runtimeQualityRequested || normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested),
+        runtimeQualityEffective: state.runtimeQualityEffective || normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested),
+        simGrid: state.simGrid,
+        renderScale: state.renderScale,
+        renderPixelRatio: state.renderPixelRatio,
+      },
+      rawRafGapSamplesMs,
+      rafGapHistogramMs: histogramRafGaps(rawRafGapSamplesMs),
+      maxRafGapMs,
+      p95RafGapMs,
+      lastRafGapMs: rawRafGapSamplesMs.at(-1) ?? null,
+      longGapThresholdMs: FIRE_EPISODE_LONG_GAP_THRESHOLD_MS,
+      longGapCount,
+      longGapStreakCurrent,
+      longGapStreakMax,
+      frameStartCount,
+      frameEndCount: state.frameCount,
+      frameAdvanceCount: Math.max(0, state.frameCount - frameStartCount),
+      simStepStartCount,
+      simStepEndCount: state.simStepCount,
+      simStepAdvanceCount: Math.max(0, state.simStepCount - simStepStartCount),
+      cpuFrameMs: Number.isFinite(cpuFrameMs) ? cpuFrameMs : queueTiming.cpuFrameMs ?? null,
+      queueCompletionProxy: {
+        evidenceSource: 'webgpu-queue-onSubmittedWorkDone-proxy',
+        disclaimer: 'queue-completion-proxy-not-present-latency',
+        available: queueTiming.queueTimingAvailable === true,
+        pending: queueTiming.queueProbePending === true,
+        samples: queueTiming.queueSamples || 0,
+        lastDoneMs: queueTiming.queueDoneMs ?? null,
+        p95DoneMs: queueTiming.queueDoneP95Ms ?? null,
+        error: queueTiming.queueTimingError || null,
+      },
+      mohelIndicator: {
+        uncappedRawGapSamples: true,
+        sampleCount: rawRafGapSamplesMs.length,
+        largeSampleSet: rawRafGapSamplesMs.length > 10000,
+        note: 'Raw firing-window gap samples are intentionally uncapped; use this diagnostic if the window is too broad.',
+      },
+    };
+    return state.fireEpisodeHooks;
+  }
+
+  function updateFireEpisodeQueueProxy() {
+    updateFireEpisodeHooks({ now: performance.now() });
+  }
+
   function recordVolumeFrameTiming(now, cpuFrameMs) {
-    if (lastRafNow > 0) pushTimingSample('rafDelta', now - lastRafNow);
+    const rafGapMs = lastRafNow > 0 ? now - lastRafNow : null;
+    if (Number.isFinite(rafGapMs)) pushTimingSample('rafDelta', rafGapMs);
     lastRafNow = now;
     pushTimingSample('cpuFrame', cpuFrameMs);
     const rafP95 = percentileTiming(timingSamples.rafDelta, 0.95);
@@ -5076,6 +5258,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueProbePending,
       queueSamples: timingSamples.queueDone.length,
     };
+    updateFireEpisodeHooks({ now, rafGapMs, cpuFrameMs });
   }
 
   function recordVolumeQueueTiming(submittedAt) {
@@ -5091,6 +5274,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueSamples: timingSamples.queueDone.length,
       queueTimingAvailable: true,
     };
+    updateFireEpisodeQueueProxy();
   }
 
   function probeVolumeQueueTiming() {
@@ -5103,6 +5287,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueProbePending: true,
       queueTimingAvailable: true,
     };
+    updateFireEpisodeQueueProxy();
     const submittedAt = performance.now();
     device.queue.onSubmittedWorkDone()
       .then(() => recordVolumeQueueTiming(submittedAt))
@@ -5114,6 +5299,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           queueTimingAvailable: false,
           queueTimingError: error?.message || String(error),
         };
+        updateFireEpisodeQueueProxy();
       })
       .finally(() => {
         queueProbePending = false;
@@ -5123,6 +5309,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
           queueProbePending: false,
         };
+        updateFireEpisodeQueueProxy();
       });
   }
 
@@ -8527,6 +8714,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simProfile: state.simProfile,
         simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
         timing: { ...state.timing },
+        fireEpisodeHooks: cloneFireEpisodeHooks(),
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
@@ -8853,6 +9041,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simProfile: state.simProfile,
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
+      fireEpisodeHooks: cloneFireEpisodeHooks(),
       simReadback,
       majorantReadback,
       effectiveRoute: state.effectiveRoute,
@@ -9049,6 +9238,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),
+        fireEpisodeHooks: cloneFireEpisodeHooks(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
     },

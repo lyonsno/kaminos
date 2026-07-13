@@ -2057,6 +2057,17 @@ async function main() {
     assert.ok(Number.isFinite(stateTiming.rafFps) && stateTiming.rafFps > 0, 'route-local RAF timing did not report a positive cadence');
     assert.ok(Number.isFinite(stateTiming.frameP95Ms) && stateTiming.frameP95Ms > 0, 'route-local frame p95 timing is missing');
     assert.ok(Number.isFinite(stateTiming.cpuFrameMs) && stateTiming.cpuFrameMs >= 0, 'route-local CPU frame timing is missing');
+    const stateFireEpisodeHooks = state.fireEpisodeHooks || {};
+    assert.equal(stateFireEpisodeHooks.identity, 'foreground-kiln-fire-episode-hooks-v0', 'fire episode hooks did not reach debug state');
+    assert.ok(Array.isArray(stateFireEpisodeHooks.rawRafGapSamplesMs), 'fire episode hooks did not preserve raw foreground RAF gap samples');
+    assert.ok(Array.isArray(stateFireEpisodeHooks.rafGapHistogramMs), 'fire episode hooks did not expose foreground RAF gap histogram');
+    assert.ok(Number.isFinite(stateFireEpisodeHooks.maxRafGapMs), 'fire episode hooks did not expose max foreground RAF gap');
+    assert.ok(Number.isFinite(stateFireEpisodeHooks.longGapStreakMax), 'fire episode hooks did not expose long-gap streak cadence');
+    assert.ok(Number.isFinite(stateFireEpisodeHooks.frameAdvanceCount), 'fire episode hooks did not expose frame advancement');
+    assert.ok(Number.isFinite(stateFireEpisodeHooks.simStepAdvanceCount), 'fire episode hooks did not expose sim-step advancement');
+    assert.equal(stateFireEpisodeHooks.queueCompletionProxy?.disclaimer, 'queue-completion-proxy-not-present-latency', 'fire episode queue proxy did not preserve its non-present-latency disclaimer');
+    assert.ok(stateFireEpisodeHooks.disclaimers?.includes('not-displayed-frame-latency'), 'fire episode hooks must refuse displayed-frame latency authority');
+    assert.ok(stateFireEpisodeHooks.disclaimers?.includes('not-sharp-backend-heartbeat'), 'fire episode hooks must not be confused with SHARP backend heartbeat evidence');
 
     phase = 'gpu-readback';
     const fullScreenshotPath = await captureViewportScreenshot(ws, fullScreenshot);
@@ -2180,6 +2191,10 @@ async function main() {
       if (!Number.isFinite(sampleTiming.queueDoneMs) || !Number.isFinite(sampleTiming.queueDoneP95Ms)) {
         throw new Error(`GPU queue completion timing was sampled but did not report finite latency: ${JSON.stringify(sampleTiming)}`);
       }
+    }
+    const sampleFireEpisodeHooks = sample.fireEpisodeHooks || stateFireEpisodeHooks;
+    if (sampleFireEpisodeHooks.identity !== 'foreground-kiln-fire-episode-hooks-v0') {
+      throw new Error(`Fire episode hooks did not survive GPU readback: ${JSON.stringify(sampleFireEpisodeHooks)}`);
     }
     if (sample.simReadback.densityMax <= 0.01 || sample.simReadback.velocityMean <= 0.001 || sample.simReadback.liveVoxels < 8) {
       throw new Error(`GPU sim readback does not show live fluid state: ${JSON.stringify(sample.simReadback)}`);
@@ -2948,6 +2963,7 @@ async function main() {
       expectsNoFireVolumeEvidence,
       expectsPyroMaterialEvidence,
       timing: sample.timing || stateTiming,
+      fireEpisodeHooks: sample.fireEpisodeHooks || stateFireEpisodeHooks,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
       timingDisclaimer: (sample.timing || stateTiming).timingDisclaimer,
       controls: reportControls,
