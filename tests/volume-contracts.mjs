@@ -623,14 +623,17 @@ assert.match(index, /volume_sim_profile/, 'URL route can request sim-cost profil
 assert.match(index, /simProfile/, 'Volume controls carry sim profile request identity into the renderer');
 assert.match(index, /volume_smoke_domain_mode/, 'URL route can select the smoke domain strategy for near-field/far-smoke probes');
 assert.match(index, /volume-smoke-domain-mode/, 'Volume cockpit exposes the smoke domain mode selector');
-assert.match(index, /near-field \+ far smoke scaffold/, 'Volume cockpit names the cascaded domain scaffold without claiming solver handoff');
-assert.match(index, /coupled near-fire \+ far-smoke input/, 'Volume cockpit exposes the real one-way coupled-domain experiment separately from the scaffold');
+assert.match(index, /Scaffold identity \(near render\)/, 'Volume cockpit names the cascaded domain scaffold without claiming a distinct render');
+assert.match(index, /Coupled 2x far advection/, 'Volume cockpit exposes the real one-way coupled-domain experiment separately from the scaffold');
 assert.match(index, /coupled-near-fire-far-smoke-v0/, 'URL route can select the one-way coupled near-fire/far-smoke experiment');
 assert.match(index, /getElementById\('volume-smoke-domain-mode'\)\?\.addEventListener\('change', syncControls\)/, 'Smoke domain selector applies live changes through the shared volume control loop');
+assert.match(index, /\['volume-smoke-domain-mode', 'volume-smoke-domain-inspect'\]\.includes\(event\?\.target\?\.id\)[\s\S]*frameVolumeCamera\(\)/, 'Both smoke-domain architecture and inspect transitions reframe the camera from effective state');
+assert.match(index, /function restoreVolumeBasinSnapshot\(\)[\s\S]*volumePrototype\?\.setControls\(readVolumeControls\(\)\);[\s\S]*frameVolumeCamera\(\)/, 'Restoring the last basin reframes the camera after restoring smoke-domain state');
+assert.match(index, /function restoreVolumeBasinSlot\([\s\S]*volumePrototype\?\.setControls\(readVolumeControls\(\)\);[\s\S]*frameVolumeCamera\(\)/, 'Restoring a basin slot reframes the camera after restoring smoke-domain state');
 assert.match(index, /volume_smoke_domain_inspect/, 'URL route can request a far-smoke-only inspect view');
 assert.match(index, /id="volume-smoke-domain-inspect"/, 'Volume cockpit exposes near-render and far-only domain inspection');
 assert.match(index, /coarse far-smoke advection without far pressure or compositing/, 'Volume cockpit states the coupled-domain proof boundary honestly');
-assert.match(index, /gpu-outlet-persistent-far-input-coarse-advection-no-far-pressure-or-composite-v0/, 'Basin and route receipts preserve the effective coarse-advection proof boundary');
+assert.match(index, /gpu-outlet-persistent-far-input-coarse-advection-explicit-2x-world-bounds-no-metric-velocity-rescale-no-far-pressure-or-composite-v1/, 'Basin and route receipts preserve the effective coarse-advection and metric-scaling proof boundary');
 assert.match(index, /smokeDomainMode/, 'Volume controls carry smoke domain mode identity into the renderer');
 assert.match(index, /smokeDomainNearGrid/, 'Volume controls carry near-field domain grid identity into the renderer');
 assert.match(index, /smokeDomainFarGrid/, 'Volume controls carry far-smoke domain grid identity into the renderer');
@@ -1647,7 +1650,7 @@ assert.match(core, /smokeDomainInspectPipeline/, 'volume core builds a distinct 
 assert.match(core, /smokeDomainInspectReadbackPipeline/, 'far-only inspect owns an rgba8 readback pipeline instead of binding the swapchain pipeline to witness textures');
 assert.match(core, /far-smoke-only-max-projection-v0/, 'far-only inspect identity is explicit and does not imply compositing');
 assert.match(core, /u32\(clamp\(in\.uv\.y, 0\.0, 0\.999999\) \* f32\(FAR_GRID\)\)/, 'far-only inspect maps grid Y=0 to the bottom of the diagnostic');
-assert.match(core, /far-smoke-camera-raymarch-inspection-space-v0/, 'operator far-smoke inspection has a camera-aware identity distinct from the max projection');
+assert.match(core, /far-smoke-camera-raymarch-explicit-2x-world-bounds-v1/, 'operator far-smoke inspection has an explicit world-bounds identity distinct from the max projection');
 assert.match(core, /far-projection/, 'the exact max-depth projection remains separately routable for machine evidence');
 assert.match(core, /struct SmokeInspectUniforms[\s\S]*invViewProj: mat4x4<f32>[\s\S]*cameraPos_time: vec4<f32>/, 'far-volume inspection receives the live camera transform');
 assert.match(core, /@group\(0\) @binding\(5\) var<uniform> smokeInspectUniforms/, 'far-volume camera uniforms are bound explicitly');
@@ -1655,8 +1658,18 @@ assert.match(core, /fn fsSmokeDomainVolumeInspect/, 'operator far-smoke inspecti
 assert.match(core, /let farBoundsMin = vec3<f32>/, 'far-volume inspection names its diagnostic-space bounds explicitly');
 assert.match(core, /transmittance = transmittance \* \(1\.0 - alpha\)/, 'far-volume inspection accumulates smoke front to back');
 assert.match(core, /binding: 5, visibility: GPUShaderStage\.FRAGMENT, buffer: \{ type: 'uniform' \}/, 'far-volume transfer layout exposes the camera uniform to the fragment stage');
-assert.match(index, /value="far-volume">Far volume \(camera\)<\/option>/, 'Domain View names the camera-aware far-volume operator mode');
-assert.match(index, /value="far-projection">Far field projection \(diagnostic\)<\/option>/, 'Domain View labels the fixed projection as a diagnostic');
+assert.match(core, /SMOKE_DOMAIN_NEAR_WORLD_BOUNDS[\s\S]*min: \[-1, -1, -1\][\s\S]*max: \[1, 1, 1\]/, 'near-domain world bounds remain explicit');
+assert.match(core, /SMOKE_DOMAIN_FAR_WORLD_BOUNDS[\s\S]*min: \[-2, 0\.5, -2\][\s\S]*max: \[2, 4\.5, 2\]/, 'far-domain world bounds are a 2x-linear continuation above the near outlet');
+assert.match(core, /explicit-2x-world-bounds-upper-quarter-overlap-v0/, 'far-domain spatial coupling identity names the exact overlap contract');
+assert.match(core, /smokeDomainFarLinearExtentRatio/, 'debug state exposes the far-to-near linear extent ratio');
+assert.match(core, /smokeDomainFarVolumeRatio/, 'debug state exposes the far-to-near volume ratio');
+assert.match(core, /smokeDomainWorldOverlapBounds/, 'debug state exposes the physical near/far overlap bounds');
+assert.match(core, /near-and-far-world-bounds-reference-v0/, 'far-volume inspection names its visible near/far scale reference');
+assert.match(core, /smokeInspectBoxEdge/, 'far-volume inspection draws world-bound reference edges for direct scale comparison');
+assert.match(index, /value="far-volume">Far volume 2x \(camera\)<\/option>/, 'Domain View names the camera-aware 2x far-volume operator mode');
+assert.match(index, /value="far-projection">Far field 2x projection \(diagnostic\)<\/option>/, 'Domain View labels the fixed 2x projection as a diagnostic');
+assert.match(index, /FAR_VOLUME_CAMERA_FRAME[\s\S]*normalizeVolumeSmokeDomainInspect/, 'far-volume inspection owns a framing camera distinct from the near renderer');
+assert.match(index, /Scaffold identity \(near render\)/, 'Smoke Domain control admits that scaffold mode preserves the near render');
 for (const [source, label] of [
   [core, 'volume core'],
   [index, 'volume cockpit'],
@@ -1665,7 +1678,13 @@ for (const [source, label] of [
   assert.match(source, /mode === 'far-projection' \|\| mode === 'projection' \|\| mode === 'far-only' \|\| mode === 'far'/, `${label} preserves legacy far-only/far aliases as the fixed machine projection`);
   assert.match(source, /if \(mode === 'far-volume'\) return 'far-volume'/, `${label} selects camera-aware inspection only for explicit far-volume requests`);
 }
-assert.match(volumeShellLabWitness, /far-smoke-camera-raymarch-inspection-space-v0/, 'shell witness rejects fallback when camera-aware far-volume inspection is requested');
+assert.match(volumeShellLabWitness, /far-smoke-camera-raymarch-explicit-2x-world-bounds-v1/, 'shell witness rejects fallback when explicit world-bounds inspection is requested');
+assert.match(volumeShellLabWitness, /--exercise-domain-inspect/, 'shell witness can exercise every domain inspection mode in one live page');
+assert.match(volumeShellLabWitness, /near-render[\s\S]*far-volume[\s\S]*far-projection/, 'same-page inspection witness covers near render, camera volume, and fixed projection');
+assert.match(volumeShellLabWitness, /domainInspectTransitions/, 'same-page inspection witness records requested and effective identity transitions');
+assert.match(volumeShellLabWitness, /changedPixels/, 'same-page inspection witness requires material pixel deltas between modes');
+assert.match(volumeShellLabWitness, /function assertFarDomainSubstance\(state, mode/, 'same-page inspection witness has a reusable far-field substance gate');
+assert.match(volumeShellLabWitness, /for \(const mode of modes\)[\s\S]*assertFarDomainSubstance\(state, mode/, 'every exercised far inspection mode must prove live far-field substance before pixel comparison');
 assert.match(volumeShellLabWitness, /--expected-domain-inspect/, 'shell-lab witness accepts an explicit far-only domain inspection contract');
 assert.doesNotMatch(volumeShellLabWitness, /Page\.captureScreenshot/, 'far-only witness does not accept page screenshot byte size as field evidence');
 assert.match(volumeShellLabWitness, /sample\.litPixels > 0/, 'far-only witness requires programmatic nonblank GPU readback pixels');
@@ -1676,7 +1695,7 @@ assert.match(volumeShellLabWitness, /far-smoke-only-max-projection-v0/, 'far-onl
 assert.match(core, /const readbackGeneration = smokeDomainTransferGeneration/, 'far-input counter readback captures its resource generation before async mapping');
 assert.match(core, /const readbackBuffer = smokeDomainTransferCounterReadbackBuffer/, 'far-input counter readback holds the exact mapped buffer instead of dereferencing a replacement global');
 assert.match(core, /const readbackFrame = smokeDomainTransferCounterSourceFrame/, 'far-input counter readback preserves the frame that produced the copied counters');
-assert.match(core, /gpu-outlet-persistent-far-input-coarse-advection-no-far-pressure-or-composite-v0/, 'coupled-domain proof boundary names coarse advection without claiming pressure or compositing');
+assert.match(core, /gpu-outlet-persistent-far-input-coarse-advection-explicit-2x-world-bounds-no-metric-velocity-rescale-no-far-pressure-or-composite-v1/, 'coupled-domain proof boundary names explicit bounds without claiming metric velocity rescaling, pressure, or compositing');
 assert.match(core, /coarse-advection-no-pressure-v0/, 'coupled-domain solver status distinguishes coarse advection from a pressure solve');
 assert.match(core, /normalizeSmokeDomainControls/, 'volume core normalizes smoke domain split controls');
 assert.match(core, /smokeDomainStrategy/, 'volume debug state exposes effective smoke domain strategy');

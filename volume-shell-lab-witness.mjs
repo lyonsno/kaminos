@@ -22,6 +22,7 @@ function normalizeDomainInspect(value) {
 }
 
 const expectedDomainInspect = normalizeDomainInspect(args.get('--expected-domain-inspect') || new URL(url).searchParams.get('volume_smoke_domain_inspect'));
+const exerciseDomainInspect = ['1', 'true', 'yes', 'on'].includes(String(args.get('--exercise-domain-inspect') || '').toLowerCase());
 const minFrames = Number(args.get('--min-frames') || 4);
 const settleMs = Number(args.get('--settle-ms') || 2200);
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -34,6 +35,7 @@ let primaryOutputWritten = false;
 let lastDebugState = null;
 let sampleSummary = null;
 let cameraResponse = null;
+let domainInspectTransitions = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -60,6 +62,7 @@ function writeReport(report = {}) {
     consoleEvents,
     lastDebugState,
     sampleSummary,
+    domainInspectTransitions,
     ...report,
   }, null, 2));
 }
@@ -198,6 +201,79 @@ function previewPixels(sample) {
   return sample.preview;
 }
 
+function changedPreviewPixels(before, after) {
+  assert.equal(after.rgba.length, before.rgba.length, 'domain inspection comparison previews have different sizes');
+  let changedPixels = 0;
+  for (let i = 0; i < before.rgba.length; i += 4) {
+    const delta = Math.abs(before.rgba[i] - after.rgba[i])
+      + Math.abs(before.rgba[i + 1] - after.rgba[i + 1])
+      + Math.abs(before.rgba[i + 2] - after.rgba[i + 2]);
+    if (delta > 9) changedPixels += 1;
+  }
+  return changedPixels;
+}
+
+function assertFarDomainSubstance(state, mode) {
+  if (mode === 'near-render') return;
+  assert.ok(state?.smokeDomainFarAdvectedActiveCells > 0, `${mode} has no occupied far-smoke cells beyond the injection band`);
+  assert.ok(state?.smokeDomainFarHighestActiveLayer > 0, `${mode} has no occupied far-smoke layer above its base`);
+  assert.ok(state?.smokeDomainTransferLastReadbackFrame >= minFrames, `${mode} far-smoke counters are stale relative to the requested frame floor`);
+  const farCellCount = state.smokeDomainFarGrid ** 3;
+  assert.ok(state.smokeDomainFarInputActiveCells < farCellCount, `${mode} saturated every far-domain cell instead of preserving empty support`);
+}
+
+async function exerciseDomainInspectModes(ws) {
+  const identities = {
+    'near-render': 'near-domain-render-v0',
+    'far-volume': 'far-smoke-camera-raymarch-explicit-2x-world-bounds-v1',
+    'far-projection': 'far-smoke-only-max-projection-v0',
+  };
+  const modes = ['near-render', 'far-volume', 'far-projection'];
+  const transitions = [];
+  const previews = new Map();
+  for (const mode of modes) {
+    await evaluate(ws, `(() => {
+      const select = document.getElementById('volume-smoke-domain-inspect');
+      select.value = ${JSON.stringify(mode)};
+      select.dispatchEvent(new Event('input', { bubbles: true }));
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return select.value;
+    })()`);
+    let state = null;
+    for (let i = 0; i < 40; i += 1) {
+      state = await evaluate(ws, 'window.__kaminosVolumePrototype.debugState()');
+      if (state?.smokeDomainInspectMode === mode && state?.smokeDomainInspectIdentity === identities[mode]) break;
+      await delay(50);
+    }
+    assert.equal(state?.smokeDomainInspectMode, mode, `${mode} live selector transition did not apply`);
+    assert.equal(state?.smokeDomainInspectIdentity, identities[mode], `${mode} live selector transition reached the wrong identity`);
+    assertFarDomainSubstance(state, mode);
+    await delay(120);
+    const sample = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleFrame()');
+    assert.equal(sample?.ok, true, `${mode} transition sampleFrame failed: ${sample?.reason || 'unknown'}`);
+    const preview = previewPixels(sample);
+    previews.set(mode, preview);
+    transitions.push({
+      requestedMode: mode,
+      effectiveMode: state.smokeDomainInspectMode,
+      effectiveIdentity: state.smokeDomainInspectIdentity,
+      frameCount: state.frameCount,
+      meanLuma: sample.meanLuma,
+      litPixels: sample.litPixels,
+    });
+  }
+  const comparisons = [];
+  for (const [beforeMode, afterMode] of [['near-render', 'far-volume'], ['far-volume', 'far-projection'], ['near-render', 'far-projection']]) {
+    const before = previews.get(beforeMode);
+    const after = previews.get(afterMode);
+    const changedPixels = changedPreviewPixels(before, after);
+    const pixelCount = before.rgba.length / 4;
+    assert.ok(changedPixels > Math.max(32, pixelCount * 0.005), `${beforeMode} and ${afterMode} look materially identical (${changedPixels}/${pixelCount} pixels changed)`);
+    comparisons.push({ beforeMode, afterMode, changedPixels, pixelCount });
+  }
+  return { transitions, comparisons };
+}
+
 async function main() {
   mkdirSync(dirname(reportPath), { recursive: true });
   const proc = spawn(chrome, [
@@ -245,7 +321,7 @@ async function main() {
       assert.equal(lastDebugState.smokeDomainInspectMode, expectedDomainInspect, `${expectedDomainInspect} domain inspect request did not apply`);
       const expectedIdentity = expectedDomainInspect === 'far-projection'
         ? 'far-smoke-only-max-projection-v0'
-        : 'far-smoke-camera-raymarch-inspection-space-v0';
+        : 'far-smoke-camera-raymarch-explicit-2x-world-bounds-v1';
       assert.equal(lastDebugState.smokeDomainInspectIdentity, expectedIdentity, `${expectedDomainInspect} effective identity is wrong`);
       assert.ok(lastDebugState.smokeDomainFarAdvectedActiveCells > 0, 'far-smoke field has no occupied cells beyond the injection band');
       assert.ok(lastDebugState.smokeDomainFarHighestActiveLayer > 0, 'far-smoke field did not report an occupied layer above its base');
@@ -293,7 +369,7 @@ async function main() {
       })()`);
       await delay(180);
       const afterState = await evaluate(ws, 'window.__kaminosVolumePrototype.debugState()');
-      assert.equal(afterState.smokeDomainInspectIdentity, 'far-smoke-camera-raymarch-inspection-space-v0', 'camera orbit fell back from far-volume inspection');
+      assert.equal(afterState.smokeDomainInspectIdentity, 'far-smoke-camera-raymarch-explicit-2x-world-bounds-v1', 'camera orbit fell back from far-volume inspection');
       const afterSample = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleFrame()');
       assert.equal(afterSample?.ok, true, `post-orbit sampleFrame failed: ${afterSample?.reason || 'unknown'}`);
       assert.notDeepEqual(afterCamera.position, beforeCamera.position, 'camera witness pose did not move');
@@ -311,6 +387,29 @@ async function main() {
       assert.ok(changedPixels > Math.max(32, pixelCount * 0.005), `far-volume image did not respond materially to camera orbit (${changedPixels}/${pixelCount} pixels changed)`);
       cameraResponse = { beforeCamera, afterCamera, changedPixels, pixelCount };
       lastDebugState = afterState;
+    }
+
+    if (exerciseDomainInspect) {
+      phase = 'domain-inspect-transitions';
+      await evaluate(ws, `(() => {
+        const freeze = document.getElementById('volume-look-freeze');
+        freeze.value = '1';
+        freeze.dispatchEvent(new Event('input', { bubbles: true }));
+        freeze.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`);
+      await delay(150);
+      domainInspectTransitions = await exerciseDomainInspectModes(ws);
+      await evaluate(ws, `(() => {
+        const select = document.getElementById('volume-smoke-domain-inspect');
+        select.value = ${JSON.stringify(expectedDomainInspect)};
+        select.dispatchEvent(new Event('input', { bubbles: true }));
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return select.value;
+      })()`);
+      await delay(150);
+      lastDebugState = await evaluate(ws, 'window.__kaminosVolumePrototype.debugState()');
+      assert.equal(lastDebugState.smokeDomainInspectMode, expectedDomainInspect, 'domain inspection witness did not restore the requested mode');
     }
 
     phase = 'sample-frame';
@@ -335,6 +434,7 @@ async function main() {
       farAdvectedActiveCells: lastDebugState.smokeDomainFarAdvectedActiveCells,
       farHighestActiveLayer: lastDebugState.smokeDomainFarHighestActiveLayer,
       cameraResponse,
+      domainInspectTransitions,
       topologyShellControls: lastDebugState.topologyShellControls,
     };
     assert.ok(sample.litPixels > 0 || expectedMode === 'off', 'sampleFrame produced no visible volume signal');

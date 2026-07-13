@@ -418,10 +418,15 @@ const SMOKE_DOMAIN_STRATEGY_COUPLED_ONE_WAY = 'coupled-near-fire-far-smoke-v0';
 const SMOKE_DOMAIN_HANDOFF_POLICY_SCAFFOLD = 'no-physical-handoff-debug-scaffold-v0';
 const SMOKE_DOMAIN_HANDOFF_POLICY_ONE_WAY = 'near-fire-to-far-smoke-one-way-v0';
 const SMOKE_DOMAIN_PROOF_BOUNDARY_SCAFFOLD = 'route-control-debug-identity-only-no-far-smoke-solver-v0';
-const SMOKE_DOMAIN_PROOF_BOUNDARY_COUPLED = 'gpu-outlet-persistent-far-input-coarse-advection-no-far-pressure-or-composite-v0';
+const SMOKE_DOMAIN_PROOF_BOUNDARY_COUPLED = 'gpu-outlet-persistent-far-input-coarse-advection-explicit-2x-world-bounds-no-metric-velocity-rescale-no-far-pressure-or-composite-v1';
 const SMOKE_DOMAIN_TRANSFER_READBACK_CADENCE = 30;
-const SMOKE_DOMAIN_FAR_INSPECT_IDENTITY = 'far-smoke-camera-raymarch-inspection-space-v0';
+const SMOKE_DOMAIN_FAR_INSPECT_IDENTITY = 'far-smoke-camera-raymarch-explicit-2x-world-bounds-v1';
 const SMOKE_DOMAIN_FAR_PROJECTION_IDENTITY = 'far-smoke-only-max-projection-v0';
+const SMOKE_DOMAIN_NEAR_WORLD_BOUNDS = Object.freeze({ min: [-1, -1, -1], max: [1, 1, 1] });
+const SMOKE_DOMAIN_FAR_WORLD_BOUNDS = Object.freeze({ min: [-2, 0.5, -2], max: [2, 4.5, 2] });
+const SMOKE_DOMAIN_WORLD_OVERLAP_BOUNDS = Object.freeze({ min: [-1, 0.5, -1], max: [1, 1, 1] });
+const SMOKE_DOMAIN_SPATIAL_COUPLING = 'explicit-2x-world-bounds-upper-quarter-overlap-v0';
+const SMOKE_DOMAIN_INSPECT_REFERENCE_IDENTITY = 'near-and-far-world-bounds-reference-v0';
 const PRESSURE_STRATEGY_SPATIAL_TIERS = 'spatial_tiers';
 const PRESSURE_STRATEGY_ACTIVITY_TIERS = 'activity_tiers';
 const PRESSURE_STRATEGY_GLOBAL = 'global';
@@ -472,6 +477,29 @@ function scalarActivityCueBufferBytes(grid = DEFAULT_GRID_SIZE) {
 
 function smokeDomainFieldBufferBytes(grid) {
   return gridCellCount(grid) * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function smokeDomainWorldDebug(mode) {
+  const coupled = mode === SMOKE_DOMAIN_STRATEGY_COUPLED_ONE_WAY;
+  return {
+    smokeDomainSpatialCoupling: coupled ? SMOKE_DOMAIN_SPATIAL_COUPLING : 'inactive',
+    smokeDomainNearWorldBounds: {
+      min: [...SMOKE_DOMAIN_NEAR_WORLD_BOUNDS.min],
+      max: [...SMOKE_DOMAIN_NEAR_WORLD_BOUNDS.max],
+    },
+    smokeDomainFarWorldBounds: coupled ? {
+      min: [...SMOKE_DOMAIN_FAR_WORLD_BOUNDS.min],
+      max: [...SMOKE_DOMAIN_FAR_WORLD_BOUNDS.max],
+    } : null,
+    smokeDomainWorldOverlapBounds: coupled ? {
+      min: [...SMOKE_DOMAIN_WORLD_OVERLAP_BOUNDS.min],
+      max: [...SMOKE_DOMAIN_WORLD_OVERLAP_BOUNDS.max],
+    } : null,
+    smokeDomainFarLinearExtentRatio: coupled ? 2 : 0,
+    smokeDomainFarVolumeRatio: coupled ? 8 : 0,
+    smokeDomainMetricVelocityScaleStatus: coupled ? 'not-rescaled-across-near-far-cell-size-v0' : 'inactive',
+    smokeDomainInspectReferenceGeometry: coupled ? SMOKE_DOMAIN_INSPECT_REFERENCE_IDENTITY : 'inactive',
+  };
 }
 
 function smokeDomainTransferShaderWGSL(nearGrid, farGrid) {
@@ -535,6 +563,15 @@ fn smokeInspectBoxHit(ro: vec3<f32>, rd: vec3<f32>, halfExtents: vec3<f32>) -> v
   let sy = smokeInspectSlabAxis(ro.y, rd.y, halfExtents.y);
   let sz = smokeInspectSlabAxis(ro.z, rd.z, halfExtents.z);
   return vec2<f32>(max(max(sx.x, sy.x), sz.x), min(min(sx.y, sy.y), sz.y));
+}
+
+fn smokeInspectBoxEdge(ro: vec3<f32>, rd: vec3<f32>, center: vec3<f32>, halfExtents: vec3<f32>) -> f32 {
+  let hit = smokeInspectBoxHit(ro - center, rd, halfExtents);
+  let t = max(hit.x, 0.0);
+  if (hit.y <= t) { return 0.0; }
+  let p = abs((ro + rd * t - center) / halfExtents);
+  let edgeCoordinate = max(max(min(p.x, p.y), min(p.x, p.z)), min(p.y, p.z));
+  return smoothstep(0.94, 0.995, edgeCoordinate);
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -636,9 +673,9 @@ fn fsSmokeDomainVolumeInspect(in: SmokeInspectVSOut) -> @location(0) vec4<f32> {
   let ro = smokeInspectUniforms.cameraPos_time.xyz;
   let rd = normalize(farWorld - nearWorld);
 
-  // This expanded box is inspection space only. It does not assert a closed near/far world join.
-  let farBoundsMin = vec3<f32>(-1.20, -1.0, -1.20);
-  let farBoundsMax = vec3<f32>(1.20, 1.40, 1.20);
+  // The lower eighth and central half align with the near domain's upper-quarter outlet.
+  let farBoundsMin = vec3<f32>(-2.0, 0.5, -2.0);
+  let farBoundsMax = vec3<f32>(2.0, 4.5, 2.0);
   let farBoundsCenter = (farBoundsMin + farBoundsMax) * 0.5;
   let farBoundsHalf = (farBoundsMax - farBoundsMin) * 0.5;
   let hit = smokeInspectBoxHit(ro - farBoundsCenter, rd, farBoundsHalf);
@@ -654,18 +691,26 @@ fn fsSmokeDomainVolumeInspect(in: SmokeInspectVSOut) -> @location(0) vec4<f32> {
     let farUv = clamp((p - farBoundsMin) / (farBoundsMax - farBoundsMin), vec3<f32>(0.0), vec3<f32>(1.0));
     let sample = sampleFarStateTrilinear(farUv * f32(FAR_GRID - 1u));
     let smoke = max(0.0, sample.w);
-    let alpha = clamp(1.0 - exp(-smoke * stepLength * 11.0), 0.0, 0.48);
+    let alpha = clamp(1.0 - exp(-smoke * stepLength * 2.2), 0.0, 0.18);
     let speed = clamp(length(sample.xyz) * 2.5, 0.0, 1.0);
     let cold = vec3<f32>(0.24, 0.46, 0.58);
     let warm = vec3<f32>(0.92, 0.54, 0.24);
-    let sampleColor = mix(cold, warm, speed) * (0.72 + smoke * 0.68);
+    let sampleColor = mix(cold, warm, speed) * (0.52 + smoke * 0.42);
     color = color + transmittance * alpha * sampleColor;
     transmittance = transmittance * (1.0 - alpha);
     if (transmittance < 0.015) { break; }
   }
   let background = vec3<f32>(0.004, 0.005, 0.006);
-  let exposed = vec3<f32>(1.0) - exp(-color * 2.8);
-  return vec4<f32>(pow(max(exposed + transmittance * background, vec3<f32>(0.0)), vec3<f32>(0.82)), 1.0);
+  let exposed = vec3<f32>(1.0) - exp(-color * 1.6);
+  var inspectColor = pow(max(exposed + transmittance * background, vec3<f32>(0.0)), vec3<f32>(0.90));
+  let farEdge = smokeInspectBoxEdge(ro, rd, farBoundsCenter, farBoundsHalf);
+  let nearEdge = smokeInspectBoxEdge(ro, rd, vec3<f32>(0.0), vec3<f32>(1.0));
+  let overlapCenter = vec3<f32>(0.0, 0.75, 0.0);
+  let overlapEdge = smokeInspectBoxEdge(ro, rd, overlapCenter, vec3<f32>(1.0, 0.25, 1.0));
+  inspectColor = mix(inspectColor, vec3<f32>(0.12, 0.68, 0.92), farEdge * 0.74);
+  inspectColor = mix(inspectColor, vec3<f32>(0.95, 0.36, 0.16), nearEdge * 0.86);
+  inspectColor = mix(inspectColor, vec3<f32>(0.98, 0.82, 0.18), overlapEdge * 0.92);
+  return vec4<f32>(inspectColor, 1.0);
 }
 `;
 }
@@ -5593,6 +5638,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     smokeDomainFarSolverStatus: 'absent',
     smokeDomainInspectMode: normalizeSmokeDomainInspectMode(controlsSnapshot.smokeDomainInspect),
     smokeDomainInspectIdentity: 'near-domain-render-v0',
+    ...smokeDomainWorldDebug('single'),
     volumePrimitiveCount: 0,
     volumePrimitiveIds: [],
     volumePrimitives: [],
@@ -7444,6 +7490,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.smokeDomainStrategy = smokeDomainControls.strategy;
     state.smokeDomainNearGrid = smokeDomainControls.nearGrid;
     state.smokeDomainFarGrid = smokeDomainControls.farGrid;
+    Object.assign(state, smokeDomainWorldDebug(smokeDomainControls.mode));
     state.smokeDomainHandoffPolicy = smokeDomainControls.handoffPolicy;
     state.smokeDomainHandoffStatus = smokeDomainControls.handoffStatus;
     state.smokeDomainProofBoundary = smokeDomainControls.proofBoundary;
@@ -8305,6 +8352,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.smokeDomainStrategy = smokeDomainControls.strategy;
     state.smokeDomainNearGrid = smokeDomainControls.nearGrid;
     state.smokeDomainFarGrid = smokeDomainControls.farGrid;
+    Object.assign(state, smokeDomainWorldDebug(smokeDomainControls.mode));
     state.smokeDomainHandoffPolicy = smokeDomainControls.handoffPolicy;
     state.smokeDomainHandoffStatus = smokeDomainControls.handoffStatus;
     state.smokeDomainProofBoundary = smokeDomainControls.proofBoundary;
@@ -10634,6 +10682,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         smokeDomainFarSolverStatus: state.smokeDomainFarSolverStatus,
         smokeDomainInspectMode: state.smokeDomainInspectMode,
         smokeDomainInspectIdentity: state.smokeDomainInspectIdentity,
+        smokeDomainSpatialCoupling: state.smokeDomainSpatialCoupling,
+        smokeDomainNearWorldBounds: state.smokeDomainNearWorldBounds ? { min: [...state.smokeDomainNearWorldBounds.min], max: [...state.smokeDomainNearWorldBounds.max] } : null,
+        smokeDomainFarWorldBounds: state.smokeDomainFarWorldBounds ? { min: [...state.smokeDomainFarWorldBounds.min], max: [...state.smokeDomainFarWorldBounds.max] } : null,
+        smokeDomainWorldOverlapBounds: state.smokeDomainWorldOverlapBounds ? { min: [...state.smokeDomainWorldOverlapBounds.min], max: [...state.smokeDomainWorldOverlapBounds.max] } : null,
+        smokeDomainFarLinearExtentRatio: state.smokeDomainFarLinearExtentRatio,
+        smokeDomainFarVolumeRatio: state.smokeDomainFarVolumeRatio,
+        smokeDomainMetricVelocityScaleStatus: state.smokeDomainMetricVelocityScaleStatus,
+        smokeDomainInspectReferenceGeometry: state.smokeDomainInspectReferenceGeometry,
         mainFluidKernelStrategy: state.mainFluidKernelStrategy,
         mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
         mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,
@@ -10995,6 +11051,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeDomainFarSolverStatus: state.smokeDomainFarSolverStatus,
       smokeDomainInspectMode: state.smokeDomainInspectMode,
       smokeDomainInspectIdentity: state.smokeDomainInspectIdentity,
+      smokeDomainSpatialCoupling: state.smokeDomainSpatialCoupling,
+      smokeDomainNearWorldBounds: state.smokeDomainNearWorldBounds ? { min: [...state.smokeDomainNearWorldBounds.min], max: [...state.smokeDomainNearWorldBounds.max] } : null,
+      smokeDomainFarWorldBounds: state.smokeDomainFarWorldBounds ? { min: [...state.smokeDomainFarWorldBounds.min], max: [...state.smokeDomainFarWorldBounds.max] } : null,
+      smokeDomainWorldOverlapBounds: state.smokeDomainWorldOverlapBounds ? { min: [...state.smokeDomainWorldOverlapBounds.min], max: [...state.smokeDomainWorldOverlapBounds.max] } : null,
+      smokeDomainFarLinearExtentRatio: state.smokeDomainFarLinearExtentRatio,
+      smokeDomainFarVolumeRatio: state.smokeDomainFarVolumeRatio,
+      smokeDomainMetricVelocityScaleStatus: state.smokeDomainMetricVelocityScaleStatus,
+      smokeDomainInspectReferenceGeometry: state.smokeDomainInspectReferenceGeometry,
       mainFluidKernelStrategy: state.mainFluidKernelStrategy,
       mainFluidLocalProjectionStrategy: state.mainFluidLocalProjectionStrategy,
       mainFluidLocalProjectionDivergenceEvaluationsPerCell: state.mainFluidLocalProjectionDivergenceEvaluationsPerCell,

@@ -2089,9 +2089,9 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
     <div class="slider-row">
       <span class="slider-label">Smoke Domain</span>
       <select id="volume-smoke-domain-mode" class="select-input">
-        <option value="single" selected>Single volume</option>
-        <option value="cascaded-uniform-scaffold">near-field + far smoke scaffold</option>
-        <option value="coupled-near-fire-far-smoke-v0">coupled near-fire + far-smoke input</option>
+        <option value="single" selected>Single volume (near only)</option>
+        <option value="cascaded-uniform-scaffold">Scaffold identity (near render)</option>
+        <option value="coupled-near-fire-far-smoke-v0">Coupled 2x far advection</option>
       </select>
       <span class="slider-val" id="volume-smoke-domain-mode-val">Single volume</span>
     </div>
@@ -2100,8 +2100,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-label">Domain View</span>
       <select id="volume-smoke-domain-inspect" class="select-input">
         <option value="near-render" selected>Near render</option>
-        <option value="far-volume">Far volume (camera)</option>
-        <option value="far-projection">Far field projection (diagnostic)</option>
+        <option value="far-volume">Far volume 2x (camera)</option>
+        <option value="far-projection">Far field 2x projection (diagnostic)</option>
       </select>
       <span class="slider-val" id="volume-smoke-domain-inspect-val">Near render</span>
     </div>
@@ -11496,6 +11496,11 @@ const BONFIRE_VOLUME_CAMERA_FRAME = {
   target: [0, 0.10, 0],
 };
 
+const FAR_VOLUME_CAMERA_FRAME = {
+  position: [4.4, 2.0, 7.6],
+  target: [0, 1.75, 0],
+};
+
 let activeVolumeRayBudgetPreset = '';
 let routedVolumeRayBudgetPreset = '';
 let activeCanonicalVolumeMacroPreset = '';
@@ -11728,7 +11733,7 @@ function volumeSmokeDomainControlsForMode(mode, values = {}) {
       smokeDomainFarGrid: farGrid,
       smokeDomainHandoffPolicy: 'near-fire-to-far-smoke-one-way-v0',
       smokeDomainHandoffStatus: 'gpu-transfer-live-coarse-far-advection',
-      smokeDomainProofBoundary: 'gpu-outlet-persistent-far-input-coarse-advection-no-far-pressure-or-composite-v0',
+      smokeDomainProofBoundary: 'gpu-outlet-persistent-far-input-coarse-advection-explicit-2x-world-bounds-no-metric-velocity-rescale-no-far-pressure-or-composite-v1',
     };
   }
   if (smokeDomainMode === 'cascaded-uniform-scaffold') {
@@ -12514,6 +12519,7 @@ function restoreVolumeBasinSnapshot() {
   applyVolumeControlsSnapshot(snapshot.controls);
   updateVolumeControlLabels();
   volumePrototype?.setControls(readVolumeControls());
+  frameVolumeCamera();
   refreshVolumeReadout();
   setInfo(`Restored volume basin from ${snapshot.savedAt || 'local storage'}`);
   return true;
@@ -12565,6 +12571,7 @@ function restoreVolumeBasinSlot(slot = selectedVolumeBasinSlot()) {
   applyVolumeControlsSnapshot(snapshot.controls);
   updateVolumeControlLabels();
   volumePrototype?.setControls(readVolumeControls());
+  frameVolumeCamera();
   refreshVolumeReadout();
   setInfo(`Loaded volume basin slot ${slot.toUpperCase()}`);
   return true;
@@ -17394,7 +17401,11 @@ window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
   const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
-  const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
+  const smokeDomainMode = normalizeVolumeSmokeDomainMode(document.getElementById('volume-smoke-domain-mode')?.value);
+  const smokeDomainInspect = normalizeVolumeSmokeDomainInspect(document.getElementById('volume-smoke-domain-inspect')?.value);
+  const frame = smokeDomainMode === 'coupled-near-fire-far-smoke-v0' && smokeDomainInspect === 'far-volume'
+    ? FAR_VOLUME_CAMERA_FRAME
+    : (sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME);
   camera.position.set(...frame.position);
   controls.target.set(...frame.target);
   controls.update();
@@ -18130,6 +18141,7 @@ async function initKaminosVolumeRoute() {
     }
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
+    if (['volume-smoke-domain-mode', 'volume-smoke-domain-inspect'].includes(event?.target?.id)) frameVolumeCamera();
     refreshVolumeReadout();
     saveVolumeBasinSnapshot(event?.target?.id || 'control-change');
   };
