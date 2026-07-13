@@ -46,6 +46,7 @@ const keepBrowserOpen = args.has('--keep-browser-open');
 const userDataDir = resolve(String(args.get('--user-data-dir') || mkdtempSync(`${tmpdir()}/kaminos-splat-motion-chrome-`)));
 const requestedPhaseStride = Math.max(1, Math.floor(Number(args.get('--phase-stride') || 1)));
 const requestedHistoryDepth = Math.max(4, Math.floor(Number(args.get('--history-depth') || 4)));
+const requestedHistoryFrameStride = Math.max(1, Math.floor(Number(args.get('--history-frame-stride') || 1)));
 const operatorPrettySubstratePath = args.get('--operator-pretty-substrate')
   ? resolve(String(args.get('--operator-pretty-substrate')))
   : null;
@@ -68,11 +69,14 @@ try {
   await wsRequest('Page.enable');
   await wsRequest('Runtime.enable');
   failurePhase = 'route-load';
+  await navigateToRequestedRoute();
   await waitForPrototype();
   await delay(settleMs);
   await hideHud();
   const initialState = await debugState();
+  validateRequestedEffectiveConfig(initialState);
   lastTrustworthyEvidence.initialState = compactState(initialState);
+  const effectivePageUrl = await currentPageUrl();
 
   const requestedRouteIdentity = {
     requestedRoute,
@@ -124,12 +128,15 @@ try {
       userDataDir,
       keepBrowserOpen,
       windowSize,
-      pageUrl: page.url,
+      pageUrl: effectivePageUrl,
     },
     captureConfig: {
       frameCount,
       stepMs,
       wallStepMs,
+      requestedPhaseStride,
+      requestedHistoryDepth,
+      requestedHistoryFrameStride,
       staticCameraDurationMs: (frameCount - 1) * stepMs,
       grazingCameraDurationMs: (frameCount - 1) * stepMs,
     },
@@ -215,6 +222,14 @@ function defaultChromePath() {
 }
 
 async function launchBrowser() {
+  try {
+    await cdpFetch('/json/version');
+    return {
+      identity: 'boundary-splat-motion-single-cdp-browser-v0',
+      mode: 'connected-existing',
+      process: null,
+    };
+  } catch {}
   const proc = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
@@ -295,6 +310,58 @@ function wsRequest(method, params = {}) {
     ws.addEventListener('error', onError, { once: true });
     ws.send(JSON.stringify({ id, method, params }));
   });
+}
+
+async function currentPageUrl() {
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: 'location.href',
+    returnByValue: true,
+  });
+  return result.result.value || '';
+}
+
+async function navigateToRequestedRoute() {
+  const current = await currentPageUrl().catch(() => '');
+  if (current !== requestedRoute) {
+    await wsRequest('Page.navigate', { url: requestedRoute });
+  }
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    const result = await wsRequest('Runtime.evaluate', {
+      expression: `({ href: location.href, readyState: document.readyState })`,
+      returnByValue: true,
+    });
+    const value = result.result.value || {};
+    if (value.href === requestedRoute && value.readyState !== 'loading') return value;
+    await delay(125);
+  }
+  throw new Error(`stale page route: requested ${requestedRoute}`);
+}
+
+function validateRequestedEffectiveConfig(state) {
+  const params = new URL(requestedRoute).searchParams;
+  const expected = {
+    boundarySplatPhaseMode: params.get('volume_boundary_splat_phase_mode') || null,
+    boundarySplatPhaseStride: Number(params.get('volume_boundary_splat_phase_stride') || requestedPhaseStride),
+    boundarySplatHistoryDepth: Number(params.get('volume_boundary_splat_history_depth') || requestedHistoryDepth),
+    boundarySplatHistoryFrameStride: Number(params.get('volume_boundary_splat_history_frame_stride') || requestedHistoryFrameStride),
+  };
+  const mismatches = [];
+  if (expected.boundarySplatPhaseMode && state?.boundarySplatPhaseMode !== expected.boundarySplatPhaseMode) {
+    mismatches.push({ key: 'boundarySplatPhaseMode', requested: expected.boundarySplatPhaseMode, effective: state?.boundarySplatPhaseMode ?? null });
+  }
+  for (const key of ['boundarySplatPhaseStride', 'boundarySplatHistoryDepth', 'boundarySplatHistoryFrameStride']) {
+    if (Number.isFinite(expected[key]) && state?.[key] !== expected[key]) {
+      mismatches.push({ key, requested: expected[key], effective: state?.[key] ?? null });
+    }
+  }
+  if (mismatches.length) {
+    lastTrustworthyEvidence.staleConfigMismatch = {
+      requestedRoute,
+      effectiveState: compactState(state || {}),
+      mismatches,
+    };
+    throw new Error(`stale/default config mismatch: ${JSON.stringify(mismatches)}`);
+  }
 }
 
 async function waitForPrototype() {
@@ -417,6 +484,7 @@ async function captureSequence(config) {
           boundarySplatPhaseMode: phaseMode,
           boundarySplatPhaseStride: requestedPhaseStride,
           boundarySplatHistoryDepth: requestedHistoryDepth,
+          boundarySplatHistoryFrameStride: requestedHistoryFrameStride,
         }));
         phaseLabCaptures.push(await captureRenderer({
           frameDir,
@@ -428,6 +496,7 @@ async function captureSequence(config) {
           boundarySplatPhaseMode: phaseMode,
           boundarySplatPhaseStride: requestedPhaseStride,
           boundarySplatHistoryDepth: requestedHistoryDepth,
+          boundarySplatHistoryFrameStride: requestedHistoryFrameStride,
         }));
       }
     }
@@ -482,11 +551,13 @@ async function captureRenderer({
   boundarySplatPhaseMode = null,
   boundarySplatPhaseStride = null,
   boundarySplatHistoryDepth = null,
+  boundarySplatHistoryFrameStride = null,
 }) {
   const controlOverrides = { boundarySplatMode };
   if (boundarySplatPhaseMode) controlOverrides.boundarySplatPhaseMode = boundarySplatPhaseMode;
   if (boundarySplatPhaseStride) controlOverrides.boundarySplatPhaseStride = boundarySplatPhaseStride;
   if (boundarySplatHistoryDepth) controlOverrides.boundarySplatHistoryDepth = boundarySplatHistoryDepth;
+  if (boundarySplatHistoryFrameStride) controlOverrides.boundarySplatHistoryFrameStride = boundarySplatHistoryFrameStride;
   const canvasEval = await wsRequest('Runtime.evaluate', {
     expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
       renderScale: 1,
@@ -537,6 +608,8 @@ async function captureRenderer({
     phaseModeIdentity: isSplat ? canvasCapture.boundarySplatPhaseModeIdentity ?? postState?.boundarySplatPhaseModeIdentity ?? null : null,
     boundarySplatPhaseStride: isSplat ? canvasCapture.boundarySplatPhaseStride ?? postState?.boundarySplatPhaseStride ?? null : null,
     boundarySplatHistoryDepth: isSplat ? canvasCapture.boundarySplatHistoryDepth ?? postState?.boundarySplatHistoryDepth ?? null : null,
+    boundarySplatHistoryFrameStride: isSplat ? canvasCapture.boundarySplatHistoryFrameStride ?? postState?.boundarySplatHistoryFrameStride ?? null : null,
+    boundarySplatEffectiveHistoryWindowFrames: isSplat ? canvasCapture.boundarySplatEffectiveHistoryWindowFrames ?? postState?.boundarySplatEffectiveHistoryWindowFrames ?? null : null,
     phaseSourceIdentity: isSplat ? canvasCapture.boundarySplatPhaseSourceIdentity ?? postState?.boundarySplatPhaseSourceIdentity ?? null : null,
     phaseSources: isSplat ? canvasCapture.boundarySplatPhaseSources ?? postState?.boundarySplatPhaseSources ?? null : null,
     instanceDescriptors: isSplat ? canvasCapture.boundarySplatInstanceDescriptors ?? postState?.boundarySplatInstanceDescriptors ?? null : null,
@@ -583,6 +656,8 @@ async function captureRenderer({
       phaseModeIdentity: canvasCapture.boundarySplatPhaseModeIdentity,
       boundarySplatPhaseStride: canvasCapture.boundarySplatPhaseStride,
       boundarySplatHistoryDepth: canvasCapture.boundarySplatHistoryDepth,
+      boundarySplatHistoryFrameStride: canvasCapture.boundarySplatHistoryFrameStride,
+      boundarySplatEffectiveHistoryWindowFrames: canvasCapture.boundarySplatEffectiveHistoryWindowFrames,
       phaseSourceIdentity: canvasCapture.boundarySplatPhaseSourceIdentity,
       incrementalInstanceCost: canvasCapture.boundarySplatIncrementalInstanceCost,
     },
@@ -788,6 +863,8 @@ function summarizePhaseLabWitness(frames) {
       phaseSourceIdentity: latest?.phaseSourceIdentity ?? null,
       phaseStride: latest?.boundarySplatPhaseStride ?? null,
       historyDepth: latest?.boundarySplatHistoryDepth ?? null,
+      historyFrameStride: latest?.boundarySplatHistoryFrameStride ?? null,
+      effectiveHistoryWindowFrames: latest?.boundarySplatEffectiveHistoryWindowFrames ?? null,
       phaseSources: latest?.phaseSources ?? null,
       requestedInstanceCount: latest?.boundarySplatRequestedInstanceCount ?? null,
       sourceCandidateCount: latest?.boundarySplatSourceCandidateCount ?? null,
@@ -821,6 +898,8 @@ function loadOperatorPrettySubstrate(path) {
       phaseMode: parsed.kaminosDebugState?.boundarySplatPhaseMode ?? null,
       phaseStride: parsed.kaminosDebugState?.boundarySplatPhaseStride ?? null,
       historyDepth: parsed.kaminosDebugState?.boundarySplatHistoryDepth ?? null,
+      historyFrameStride: parsed.kaminosDebugState?.boundarySplatHistoryFrameStride ?? null,
+      effectiveHistoryWindowFrames: parsed.kaminosDebugState?.boundarySplatEffectiveHistoryWindowFrames ?? null,
       phaseSourceIdentity: parsed.kaminosDebugState?.boundarySplatPhaseSourceIdentity ?? null,
       requestedInstanceCount: parsed.kaminosDebugState?.boundarySplatRequestedInstanceCount ?? null,
       sourceCandidateCount: parsed.kaminosDebugState?.boundarySplatSourceCandidateCount ?? null,
@@ -1050,6 +1129,8 @@ function compactState(state) {
     phaseModeIdentity: state.boundarySplatPhaseModeIdentity,
     boundarySplatPhaseStride: state.boundarySplatPhaseStride,
     boundarySplatHistoryDepth: state.boundarySplatHistoryDepth,
+    boundarySplatHistoryFrameStride: state.boundarySplatHistoryFrameStride,
+    boundarySplatEffectiveHistoryWindowFrames: state.boundarySplatEffectiveHistoryWindowFrames,
     phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
     phaseSources: state.boundarySplatPhaseSources,
     incrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,

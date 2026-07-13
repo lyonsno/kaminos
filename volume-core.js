@@ -25,6 +25,7 @@ const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES = 32;
 const BOUNDARY_SPLAT_MAX_INSTANCES = 4;
 const BOUNDARY_SPLAT_HISTORY_SLOTS = 16;
 const BOUNDARY_SPLAT_DEFAULT_HISTORY_DEPTH = 4;
+const BOUNDARY_SPLAT_MAX_HISTORY_FRAME_STRIDE = 16;
 const BOUNDARY_SPLAT_PHASE_LAB_MODES = new Set([
   'shared-current',
   'same-history-slot',
@@ -214,6 +215,12 @@ function normalizeBoundarySplatHistoryDepth(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return BOUNDARY_SPLAT_DEFAULT_HISTORY_DEPTH;
   return Math.max(BOUNDARY_SPLAT_DEFAULT_HISTORY_DEPTH, Math.min(BOUNDARY_SPLAT_HISTORY_SLOTS, requested));
+}
+
+function normalizeBoundarySplatHistoryFrameStride(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(1, Math.min(BOUNDARY_SPLAT_MAX_HISTORY_FRAME_STRIDE, requested));
 }
 
 function boundarySplatPhaseModeIdentity(mode) {
@@ -5283,6 +5290,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatPhaseModeIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
     boundarySplatPhaseStride: normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride),
     boundarySplatHistoryDepth: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
+    boundarySplatHistoryFrameStride: normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride),
     boundarySplatInstanceDescriptorIdentity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
     boundarySplatRequestedInstanceCount: normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances),
     boundarySplatSourceCandidateCount: null,
@@ -5291,6 +5299,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatHistoryRingIdentity: 'boundary-splat-live-history-ring-v0',
     boundarySplatHistorySlots: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
     boundarySplatHistoryWriteSlot: 0,
+    boundarySplatHistoryWriteTick: 0,
+    boundarySplatEffectiveHistoryWindowFrames: (normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth) - 1) * normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride),
     boundarySplatPhaseSources: [
       { index: 0, phaseSourceIdentity: 'shared-current-control', historyOffsetFrames: 0, authority: 'current-live-candidate-buffer' },
       { index: 1, phaseSourceIdentity: 'live-history-offset', historyOffsetFrames: 0, status: 'reserved-not-active', authority: 'truthful-live-history-ring-required' },
@@ -8418,7 +8428,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const phaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
     const phaseStride = normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride);
     const historyDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
-    const historyWriteSlot = state.frameCount % historyDepth;
+    const historyFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
+    const historyWriteTick = Math.floor(state.frameCount / historyFrameStride);
+    const historyWriteSlot = historyWriteTick % historyDepth;
     const layouts = [
       [-1.35, 0, -0.18, 0.72],
       [-0.45, 0, 0.16, 0.72],
@@ -8426,12 +8438,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       [1.35, 0, 0.18, 0.72],
     ];
     const active = layouts.slice(0, requestedInstanceCount).map((entry, index) => {
+      let historyOffsetSlots = 0;
       let historyOffsetFrames = 0;
-      if (phaseMode === 'same-history-slot') historyOffsetFrames = requestedInstanceCount > 1 ? Math.min(phaseStride, historyDepth - 1) : 0;
+      if (phaseMode === 'same-history-slot') historyOffsetSlots = requestedInstanceCount > 1 ? Math.min(phaseStride, historyDepth - 1) : 0;
       else if (phaseMode === 'offset-history') historyOffsetFrames = requestedInstanceCount > 1 ? index : 0;
-      else if (phaseMode === 'age-sweep') historyOffsetFrames = requestedInstanceCount > 1 ? Math.min(index * phaseStride, historyDepth - 1) : 0;
-      const historySlot = (historyWriteSlot - historyOffsetFrames + historyDepth) % historyDepth;
-      const phaseSourceIdentity = historyOffsetFrames > 0
+      else if (phaseMode === 'age-sweep') historyOffsetSlots = requestedInstanceCount > 1 ? Math.min(index * phaseStride, historyDepth - 1) : 0;
+      if (phaseMode === 'offset-history') historyOffsetSlots = historyOffsetFrames;
+      const effectiveHistoryOffsetFrames = historyOffsetSlots * historyFrameStride;
+      const historySlot = (historyWriteSlot - historyOffsetSlots + historyDepth) % historyDepth;
+      const phaseSourceIdentity = historyOffsetSlots > 0
         ? boundarySplatPhaseModeIdentity(phaseMode)
         : 'shared-current-control';
       return {
@@ -8440,12 +8455,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         phaseMode,
         phaseStride,
         historyDepth,
+        historyFrameStride,
         phaseModeIdentity: boundarySplatPhaseModeIdentity(phaseMode),
         transform: { translate: entry.slice(0, 3), scale: entry[3] },
         phaseSourceIdentity,
-        phaseHistoryOffsetFrames: historyOffsetFrames,
+        phaseHistoryOffsetSlots: historyOffsetSlots,
+        phaseHistoryOffsetFrames: effectiveHistoryOffsetFrames,
+        effectiveHistoryOffsetFrames,
         phaseHistorySlot: historySlot,
-        phaseSourceAuthority: historyOffsetFrames > 0 ? 'live-gpu-candidate-history-ring' : 'current-live-candidate-buffer',
+        phaseSourceAuthority: historyOffsetSlots > 0 ? 'live-gpu-candidate-history-ring' : 'current-live-candidate-buffer',
       };
     });
     return active;
@@ -8473,10 +8491,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatPhaseModeIdentity = boundarySplatPhaseModeIdentity(state.boundarySplatPhaseMode);
     state.boundarySplatPhaseStride = normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride);
     state.boundarySplatHistoryDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
+    state.boundarySplatHistoryFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
     state.boundarySplatInstanceDescriptorIdentity = BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY;
     state.boundarySplatInstanceDescriptors = descriptors;
     state.boundarySplatHistorySlots = state.boundarySplatHistoryDepth;
-    state.boundarySplatHistoryWriteSlot = state.frameCount % state.boundarySplatHistoryDepth;
+    state.boundarySplatHistoryWriteTick = Math.floor(state.frameCount / state.boundarySplatHistoryFrameStride);
+    state.boundarySplatHistoryWriteSlot = state.boundarySplatHistoryWriteTick % state.boundarySplatHistoryDepth;
+    state.boundarySplatEffectiveHistoryWindowFrames = (state.boundarySplatHistoryDepth - 1) * state.boundarySplatHistoryFrameStride;
     state.boundarySplatPhaseSourceCount = new Set(descriptors.map(descriptor => descriptor.phaseHistorySlot)).size;
     state.boundarySplatPhaseSourceIdentity = state.boundarySplatPhaseModeIdentity;
     state.boundarySplatPhaseSources = descriptors.map(descriptor => ({
@@ -8484,9 +8505,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         phaseMode: descriptor.phaseMode,
         phaseStride: descriptor.phaseStride,
         historyDepth: descriptor.historyDepth,
+        historyFrameStride: descriptor.historyFrameStride,
         phaseModeIdentity: descriptor.phaseModeIdentity,
         phaseSourceIdentity: descriptor.phaseSourceIdentity,
+        historyOffsetSlots: descriptor.phaseHistoryOffsetSlots,
         historyOffsetFrames: descriptor.phaseHistoryOffsetFrames,
+        effectiveHistoryOffsetFrames: descriptor.effectiveHistoryOffsetFrames,
         historySlot: descriptor.phaseHistorySlot,
         authority: descriptor.phaseSourceAuthority,
       }));
@@ -8503,6 +8527,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       phaseMode: state.boundarySplatPhaseMode,
       phaseStride: state.boundarySplatPhaseStride,
       historyDepth: state.boundarySplatHistoryDepth,
+      historyFrameStride: state.boundarySplatHistoryFrameStride,
+      effectiveHistoryWindowFrames: state.boundarySplatEffectiveHistoryWindowFrames,
+      maxEffectiveHistoryOffsetFrames: Math.max(...descriptors.map(descriptor => descriptor.effectiveHistoryOffsetFrames), 0),
       phaseModeIdentity: state.boundarySplatPhaseModeIdentity,
       phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
     };
@@ -8583,7 +8610,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const requestedInstanceCount = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances);
     const historyDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
-    const historyWriteSlot = state.frameCount % historyDepth;
+    const historyFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
+    const historyWriteSlot = Math.floor(state.frameCount / historyFrameStride) % historyDepth;
     const phaseSourceCount = Math.max(1, Math.min(historyDepth, state.boundarySplatPhaseSourceCount || 1));
     device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([
       6, 0, 0, 0,
@@ -8831,6 +8859,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatPhaseModeIdentity = boundarySplatPhaseModeIdentity(state.boundarySplatPhaseMode);
       state.boundarySplatPhaseStride = normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride);
       state.boundarySplatHistoryDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
+      state.boundarySplatHistoryFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
+      state.boundarySplatEffectiveHistoryWindowFrames = (state.boundarySplatHistoryDepth - 1) * state.boundarySplatHistoryFrameStride;
       state.boundarySplatPhaseSourceIdentity = state.boundarySplatPhaseModeIdentity;
       boundarySplatReadbackBuffer.unmap();
       if (overflowCount > 0) growBoundarySplatCapacity(candidateCount);
@@ -8868,6 +8898,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       phaseMode: normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode),
       phaseStride: normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride),
       historyDepth: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
+      historyFrameStride: normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride),
+      effectiveHistoryWindowFrames: (normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth) - 1) * normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride),
       phaseModeIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
       phaseSourceIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
       authority: 'gpu-indirect-post-submit-witness-readback',
@@ -8885,6 +8917,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatPhaseMode = result.phaseMode;
     state.boundarySplatPhaseStride = result.phaseStride;
     state.boundarySplatHistoryDepth = result.historyDepth;
+    state.boundarySplatHistoryFrameStride = result.historyFrameStride;
+    state.boundarySplatEffectiveHistoryWindowFrames = result.effectiveHistoryWindowFrames;
     state.boundarySplatPhaseModeIdentity = result.phaseModeIdentity;
     state.boundarySplatPhaseSourceIdentity = result.phaseSourceIdentity;
     return result;
@@ -10463,11 +10497,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatPhaseModeIdentity: state.boundarySplatPhaseModeIdentity,
         boundarySplatPhaseStride: state.boundarySplatPhaseStride,
         boundarySplatHistoryDepth: state.boundarySplatHistoryDepth,
+        boundarySplatHistoryFrameStride: state.boundarySplatHistoryFrameStride,
+        boundarySplatEffectiveHistoryWindowFrames: state.boundarySplatEffectiveHistoryWindowFrames,
         boundarySplatPhaseSourceCount: state.boundarySplatPhaseSourceCount,
         boundarySplatPhaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
         boundarySplatHistoryRingIdentity: state.boundarySplatHistoryRingIdentity,
         boundarySplatHistorySlots: state.boundarySplatHistorySlots,
         boundarySplatHistoryWriteSlot: state.boundarySplatHistoryWriteSlot,
+        boundarySplatHistoryWriteTick: state.boundarySplatHistoryWriteTick,
         boundarySplatPhaseSources: state.boundarySplatPhaseSources,
         boundarySplatInstanceDescriptors: state.boundarySplatInstanceDescriptors,
         boundarySplatIncrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,
@@ -10842,11 +10879,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatPhaseModeIdentity: boundarySplatSample?.phaseModeIdentity ?? state.boundarySplatPhaseModeIdentity,
       boundarySplatPhaseStride: boundarySplatSample?.phaseStride ?? state.boundarySplatPhaseStride,
       boundarySplatHistoryDepth: boundarySplatSample?.historyDepth ?? state.boundarySplatHistoryDepth,
+      boundarySplatHistoryFrameStride: boundarySplatSample?.historyFrameStride ?? state.boundarySplatHistoryFrameStride,
+      boundarySplatEffectiveHistoryWindowFrames: boundarySplatSample?.effectiveHistoryWindowFrames ?? state.boundarySplatEffectiveHistoryWindowFrames,
       boundarySplatPhaseSourceCount: boundarySplatSample?.phaseSourceCount ?? state.boundarySplatPhaseSourceCount,
       boundarySplatPhaseSourceIdentity: boundarySplatSample?.phaseSourceIdentity ?? state.boundarySplatPhaseSourceIdentity,
       boundarySplatHistoryRingIdentity: state.boundarySplatHistoryRingIdentity,
       boundarySplatHistorySlots: boundarySplatSample?.historySlots ?? state.boundarySplatHistorySlots,
       boundarySplatHistoryWriteSlot: boundarySplatSample?.historyWriteSlot ?? state.boundarySplatHistoryWriteSlot,
+      boundarySplatHistoryWriteTick: state.boundarySplatHistoryWriteTick,
       boundarySplatPhaseSources: state.boundarySplatPhaseSources,
       boundarySplatInstanceDescriptors: state.boundarySplatInstanceDescriptors,
       boundarySplatIncrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,
@@ -11246,6 +11286,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatPhaseModeIdentity: state.boundarySplatPhaseModeIdentity,
         boundarySplatPhaseStride: state.boundarySplatPhaseStride,
         boundarySplatHistoryDepth: state.boundarySplatHistoryDepth,
+        boundarySplatHistoryFrameStride: state.boundarySplatHistoryFrameStride,
+        boundarySplatEffectiveHistoryWindowFrames: state.boundarySplatEffectiveHistoryWindowFrames,
         boundarySplatMode: state.boundarySplatMode,
         boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
         boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
