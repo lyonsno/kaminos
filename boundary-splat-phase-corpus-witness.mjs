@@ -43,6 +43,7 @@ const previewReportPath = resolve(String(args.get('--preview-report') || `${outD
 const frames = Math.max(13, Math.floor(Number(args.get('--frames') || 13)));
 const stepMs = Math.max(1, Number(args.get('--step-ms') || 180));
 const liveSampleIntervalMs = Math.max(0, Number(args.get('--live-sample-interval-ms') || 0));
+const featureChunkChars = Math.max(4, Math.floor(Number(args.get('--feature-chunk-chars') || 262144) / 4) * 4);
 const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const port = Math.max(1, Math.floor(Number(args.get('--chrome-port') || 19437)));
 const chrome = String(args.get('--chrome') || process.env.CHROME || defaultChromePath());
@@ -475,14 +476,142 @@ function materializeFeatureCapture(capture, outputPath) {
   };
 }
 
+async function captureBrowserSideFeatureFrame(options) {
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: `(async () => {
+      const options = ${JSON.stringify(options)};
+      const proto = window.__kaminosVolumePrototype;
+      if (!proto?.controlledStepFrame) throw new Error('missing controlledStepFrame');
+      const frame = await proto.controlledStepFrame(options);
+      const sample = frame?.scaleSet?.samples?.[0] || null;
+      const capture = sample?.boundarySplatFeatureCapture || null;
+      const token = 'phase-feature-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
+      window.__kaminosPhaseFeatureCaptureStore = window.__kaminosPhaseFeatureCaptureStore || {};
+      window.__kaminosPhaseFeatureCaptureStore[token] = {
+        createdAt: Date.now(),
+        packedFloat32Base64: capture?.packedFloat32Base64 || '',
+        meta: {
+          status: capture?.status || 'missing',
+          packedEncoding: capture?.packedEncoding || null,
+          rowCount: capture?.rowCount ?? null,
+          strideFloats: capture?.strideFloats ?? null,
+        },
+      };
+      return {
+        token,
+        frame: {
+          ok: frame?.ok ?? false,
+          sequenceAuthority: frame?.sequenceAuthority ?? null,
+          sameBrowserSessionId: frame?.sameBrowserSessionId ?? null,
+          sequenceStartNowMs: frame?.sequenceStartNowMs ?? null,
+          controlledStepDeltaMs: frame?.controlledStepDeltaMs ?? null,
+          controlledStepNowMs: frame?.controlledStepNowMs ?? null,
+        },
+        sample: sample ? {
+          ok: sample.ok ?? false,
+          sameStateCaptureId: sample.sameStateCaptureId ?? null,
+          simStepCount: sample.simStepCount ?? null,
+          frameCount: sample.frameCount ?? null,
+          effectiveRoute: sample.effectiveRoute ?? null,
+          boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity ?? null,
+          boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity ?? null,
+          boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority ?? null,
+          boundarySplatFallbackReason: sample.boundarySplatFallbackReason ?? null,
+          boundarySplatCandidateCount: sample.boundarySplatCandidateCount ?? null,
+          boundarySplatInstanceCount: sample.boundarySplatInstanceCount ?? null,
+          boundarySplatOverflowCount: sample.boundarySplatOverflowCount ?? null,
+          boundarySplatCountAuthority: sample.boundarySplatCountAuthority ?? null,
+        } : null,
+        capture: window.__kaminosPhaseFeatureCaptureStore[token].meta,
+      };
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  return result.result.value;
+}
+
+async function materializeBrowserSideFeatureCapture(token, outputPath) {
+  const metaResult = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const entry = window.__kaminosPhaseFeatureCaptureStore?.[${JSON.stringify(token)}];
+      if (!entry) return { status: 'missing-store-entry' };
+      return {
+        ...entry.meta,
+        base64Chars: entry.packedFloat32Base64.length,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  const capture = metaResult.result.value;
+  if (!capture || capture.status !== 'captured') throw new Error(`feature capture status was ${capture?.status || 'missing'}`);
+  if (capture.packedEncoding !== 'float32-le-base64') throw new Error('feature capture omitted packed float32 payload');
+  const expectedBytes = Number(capture.rowCount) * Number(capture.strideFloats) * Float32Array.BYTES_PER_ELEMENT;
+  if (capture.strideFloats !== 16 || !Number.isFinite(expectedBytes) || expectedBytes <= 0) {
+    throw new Error(`feature capture metadata was invalid: ${JSON.stringify(capture)}`);
+  }
+
+  const chunks = [];
+  for (let start = 0; start < Number(capture.base64Chars); start += featureChunkChars) {
+    const end = Math.min(start + featureChunkChars, Number(capture.base64Chars));
+    const chunkResult = await wsRequest('Runtime.evaluate', {
+      expression: `(() => {
+        const entry = window.__kaminosPhaseFeatureCaptureStore?.[${JSON.stringify(token)}];
+        if (!entry) throw new Error('missing staged feature capture ${token}');
+        return entry.packedFloat32Base64.slice(${start}, ${end});
+      })()`,
+      returnByValue: true,
+    });
+    chunks.push(Buffer.from(chunkResult.result.value || '', 'base64'));
+  }
+  const bytes = Buffer.concat(chunks);
+  if (bytes.byteLength !== expectedBytes) {
+    throw new Error(`feature capture byte length ${bytes.byteLength} did not equal expected ${expectedBytes}`);
+  }
+  writeFileSync(outputPath, bytes);
+  return {
+    path: outputPath,
+    bytes: bytes.byteLength,
+    sha256: sha256(bytes),
+    count: Number(capture.rowCount),
+    strideFloats: Number(capture.strideFloats),
+    dtype: 'float32-le',
+    transport: {
+      identity: 'browser-side-feature-capture-chunked-cdp-v0',
+      chunkChars: featureChunkChars,
+      chunkCount: chunks.length,
+      base64Chars: Number(capture.base64Chars),
+    },
+  };
+}
+
+async function clearBrowserSideFeatureCapture(token) {
+  if (!token) return { cleared: false, reason: 'missing-token' };
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const store = window.__kaminosPhaseFeatureCaptureStore;
+      const existed = Boolean(store?.[${JSON.stringify(token)}]);
+      if (store) delete store[${JSON.stringify(token)}];
+      return {
+        identity: 'browser-side-feature-capture-clear-v0',
+        token: ${JSON.stringify(token)},
+        cleared: existed,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return result.result.value;
+}
+
 async function captureFeatureFrames(requestedRoute) {
   const captured = [];
   let sameBrowserSessionId = null;
   let sequenceStartNowMs = null;
   for (let frameIndex = 0; frameIndex < frames; frameIndex += 1) {
     logProgress({ phase: 'frame-start', frameIndex, frames });
-    const result = await wsRequest('Runtime.evaluate', {
-      expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+    let staged = null;
+    try {
+      staged = await captureBrowserSideFeatureFrame({
         controlledStepFrameIndex: frameIndex,
         advanceSim: frameIndex > 0,
         sameBrowserSessionId,
@@ -492,57 +621,59 @@ async function captureFeatureFrames(requestedRoute) {
         includeRgba: false,
         compactSamples: false,
         resumeRenderLoop: false,
-      })})`,
-      awaitPromise: true,
-      returnByValue: true,
-    });
-    const frame = result.result.value;
-    if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
-      throw new Error(`controlled-step frame ${frameIndex} failed: ${JSON.stringify(frame)}`);
+      });
+      const frame = staged.frame;
+      if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
+        throw new Error(`controlled-step frame ${frameIndex} failed: ${JSON.stringify(frame)}`);
+      }
+      sameBrowserSessionId = frame.sameBrowserSessionId;
+      sequenceStartNowMs = frame.sequenceStartNowMs;
+      const sample = staged.sample;
+      if (sample?.ok !== true) throw new Error(`frame ${frameIndex} did not return a valid scale sample`);
+      const candidatePath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.features.f32`);
+      const candidates = await materializeBrowserSideFeatureCapture(staged.token, candidatePath);
+      const fallbackReason = sample.boundarySplatFallbackReason ?? null;
+      captured.push({
+        id: `frame-${frameIndex}`,
+        sameBrowserSessionId,
+        sameStateCaptureId: sample.sameStateCaptureId,
+        controlledStepFrameIndex: frameIndex,
+        controlledStepDeltaMs: frame.controlledStepDeltaMs,
+        controlledStepNowMs: frame.controlledStepNowMs,
+        simStepCount: sample.simStepCount,
+        requestedRoute,
+        effectiveRoute: sample.effectiveRoute,
+        rendererIdentity: sample.boundarySplatRendererIdentity,
+        modelIdentity: sample.boundarySplatAttributeModelIdentity,
+        sourceAuthority: sample.boundarySplatSourceAuthority,
+        fallbackReason,
+        boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
+        boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
+        boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
+        boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
+        candidates,
+      });
+      lastTrustworthyEvidence[`frame-${frameIndex}`] = {
+        rowCount: candidates.count,
+        simStepCount: sample.simStepCount,
+        rendererIdentity: sample.boundarySplatRendererIdentity,
+        fallbackReason,
+        transport: candidates.transport,
+      };
+      logProgress({
+        phase: 'frame-captured',
+        frameIndex,
+        frames,
+        rowCount: candidates.count,
+        bytes: candidates.bytes,
+        chunkCount: candidates.transport.chunkCount,
+        simStepCount: sample.simStepCount,
+        rendererIdentity: sample.boundarySplatRendererIdentity,
+        fallbackReason,
+      });
+    } finally {
+      await clearBrowserSideFeatureCapture(staged?.token);
     }
-    sameBrowserSessionId = frame.sameBrowserSessionId;
-    sequenceStartNowMs = frame.sequenceStartNowMs;
-    const sample = frame.scaleSet?.samples?.[0];
-    if (sample?.ok !== true) throw new Error(`frame ${frameIndex} did not return a valid scale sample`);
-    const candidatePath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.features.f32`);
-    const candidates = materializeFeatureCapture(sample.boundarySplatFeatureCapture, candidatePath);
-    const fallbackReason = sample.boundarySplatFallbackReason ?? null;
-    captured.push({
-      id: `frame-${frameIndex}`,
-      sameBrowserSessionId,
-      sameStateCaptureId: sample.sameStateCaptureId,
-      controlledStepFrameIndex: frameIndex,
-      controlledStepDeltaMs: frame.controlledStepDeltaMs,
-      controlledStepNowMs: frame.controlledStepNowMs,
-      simStepCount: sample.simStepCount,
-      requestedRoute,
-      effectiveRoute: sample.effectiveRoute,
-      rendererIdentity: sample.boundarySplatRendererIdentity,
-      modelIdentity: sample.boundarySplatAttributeModelIdentity,
-      sourceAuthority: sample.boundarySplatSourceAuthority,
-      fallbackReason,
-      boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
-      boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
-      boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
-      boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
-      candidates,
-    });
-    lastTrustworthyEvidence[`frame-${frameIndex}`] = {
-      rowCount: candidates.count,
-      simStepCount: sample.simStepCount,
-      rendererIdentity: sample.boundarySplatRendererIdentity,
-      fallbackReason,
-    };
-    logProgress({
-      phase: 'frame-captured',
-      frameIndex,
-      frames,
-      rowCount: candidates.count,
-      bytes: candidates.bytes,
-      simStepCount: sample.simStepCount,
-      rendererIdentity: sample.boundarySplatRendererIdentity,
-      fallbackReason,
-    });
   }
   return captured;
 }
@@ -553,67 +684,70 @@ async function captureLiveSampleFeatureFrames(requestedRoute) {
   for (let frameIndex = 0; frameIndex < frames; frameIndex += 1) {
     if (frameIndex > 0) await delay(liveSampleIntervalMs);
     logProgress({ phase: 'live-sample-start', frameIndex, frames, liveSampleIntervalMs });
-    const result = await wsRequest('Runtime.evaluate', {
-      expression: `window.__kaminosVolumePrototype.controlledStepFrame({
+    let staged = null;
+    try {
+      staged = await captureBrowserSideFeatureFrame({
         advanceSim: false,
-        controlledStepFrameIndex: ${frameIndex},
+        controlledStepFrameIndex: frameIndex,
         renderScales: [1],
         includeRgba: false,
         compactSamples: false,
-        resumeRenderLoop: true
-      })`,
-      awaitPromise: true,
-      returnByValue: true,
-    });
-    const frame = result.result.value;
-    if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
-      throw new Error(`live sample frame ${frameIndex} failed: ${JSON.stringify(frame)}`);
+        resumeRenderLoop: true,
+      });
+      const frame = staged.frame;
+      if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
+        throw new Error(`live sample frame ${frameIndex} failed: ${JSON.stringify(frame)}`);
+      }
+      const sample = staged.sample;
+      if (sample?.ok !== true) throw new Error(`live sample frame ${frameIndex} did not return a valid scale sample`);
+      const candidatePath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.features.f32`);
+      const candidates = await materializeBrowserSideFeatureCapture(staged.token, candidatePath);
+      const fallbackReason = sample.boundarySplatFallbackReason ?? null;
+      captured.push({
+        id: `frame-${frameIndex}`,
+        sequenceAuthority: 'live-running-sample-sequence-v0',
+        sameBrowserSessionId,
+        sameStateCaptureId: sample.sameStateCaptureId,
+        liveSampleFrameIndex: frameIndex,
+        liveSampleIntervalMs,
+        simStepCount: sample.simStepCount,
+        frameCount: sample.frameCount,
+        requestedRoute,
+        effectiveRoute: sample.effectiveRoute,
+        rendererIdentity: sample.boundarySplatRendererIdentity,
+        modelIdentity: sample.boundarySplatAttributeModelIdentity,
+        sourceAuthority: sample.boundarySplatSourceAuthority,
+        fallbackReason,
+        boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
+        boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
+        boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
+        boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
+        candidates,
+      });
+      lastTrustworthyEvidence[`frame-${frameIndex}`] = {
+        sequenceAuthority: 'live-running-sample-sequence-v0',
+        rowCount: candidates.count,
+        simStepCount: sample.simStepCount,
+        frameCount: sample.frameCount,
+        rendererIdentity: sample.boundarySplatRendererIdentity,
+        fallbackReason,
+        transport: candidates.transport,
+      };
+      logProgress({
+        phase: 'live-sample-captured',
+        frameIndex,
+        frames,
+        rowCount: candidates.count,
+        bytes: candidates.bytes,
+        chunkCount: candidates.transport.chunkCount,
+        simStepCount: sample.simStepCount,
+        frameCount: sample.frameCount,
+        rendererIdentity: sample.boundarySplatRendererIdentity,
+        fallbackReason,
+      });
+    } finally {
+      await clearBrowserSideFeatureCapture(staged?.token);
     }
-    const sample = frame.scaleSet?.samples?.[0];
-    if (sample?.ok !== true) throw new Error(`live sample frame ${frameIndex} did not return a valid scale sample`);
-    const candidatePath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.features.f32`);
-    const candidates = materializeFeatureCapture(sample.boundarySplatFeatureCapture, candidatePath);
-    const fallbackReason = sample.boundarySplatFallbackReason ?? null;
-    captured.push({
-      id: `frame-${frameIndex}`,
-      sequenceAuthority: 'live-running-sample-sequence-v0',
-      sameBrowserSessionId,
-      sameStateCaptureId: sample.sameStateCaptureId,
-      liveSampleFrameIndex: frameIndex,
-      liveSampleIntervalMs,
-      simStepCount: sample.simStepCount,
-      frameCount: sample.frameCount,
-      requestedRoute,
-      effectiveRoute: sample.effectiveRoute,
-      rendererIdentity: sample.boundarySplatRendererIdentity,
-      modelIdentity: sample.boundarySplatAttributeModelIdentity,
-      sourceAuthority: sample.boundarySplatSourceAuthority,
-      fallbackReason,
-      boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
-      boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
-      boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
-      boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
-      candidates,
-    });
-    lastTrustworthyEvidence[`frame-${frameIndex}`] = {
-      sequenceAuthority: 'live-running-sample-sequence-v0',
-      rowCount: candidates.count,
-      simStepCount: sample.simStepCount,
-      frameCount: sample.frameCount,
-      rendererIdentity: sample.boundarySplatRendererIdentity,
-      fallbackReason,
-    };
-    logProgress({
-      phase: 'live-sample-captured',
-      frameIndex,
-      frames,
-      rowCount: candidates.count,
-      bytes: candidates.bytes,
-      simStepCount: sample.simStepCount,
-      frameCount: sample.frameCount,
-      rendererIdentity: sample.boundarySplatRendererIdentity,
-      fallbackReason,
-    });
   }
   return captured;
 }

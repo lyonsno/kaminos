@@ -166,7 +166,11 @@ try {
   assert.match(witnessSource, /captureReplay/, 'phase corpus witness report must preserve capture replay identity');
   assert.match(witnessSource, /--live-sample-interval-ms/, 'phase corpus witness must support live-interval sampling when controlled stepping is too destructive');
   assert.match(witnessSource, /live-running-sample-sequence-v0/, 'live sampling must carry distinct sequence authority');
-  assert.match(witnessSource, /controlledStepFrame\(\{\s*advanceSim:\s*false/, 'live sampling must read feature frames without forcing simulator steps');
+  assert.match(witnessSource, /captureBrowserSideFeatureFrame\(\{\s*advanceSim:\s*false/, 'live sampling must read feature frames without forcing simulator steps');
+  assert.match(witnessSource, /captureBrowserSideFeatureFrame/, 'dense phase corpus witness must stage feature payloads browser-side before CDP transport');
+  assert.match(witnessSource, /materializeBrowserSideFeatureCapture/, 'dense phase corpus witness must retrieve staged feature payloads without one giant Runtime.evaluate result');
+  assert.match(witnessSource, /clearBrowserSideFeatureCapture/, 'dense phase corpus witness must release staged feature payloads after each frame');
+  assert.match(witnessSource, /chunkCount/, 'chunked feature transport must report chunk count for evidence and false-closure checks');
 } finally {
   await rm(root, { recursive: true, force: true });
 }
