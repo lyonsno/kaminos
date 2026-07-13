@@ -38,7 +38,7 @@ function parseArgs(argv) {
       if (!value) throw new Error('--out-dir requires a path');
       options.outDir = resolve(value);
       index += 1;
-    } else if (['--coarse-block-size', '--fine-block-size', '--articulation-threshold', '--fine-mass-fraction', '--coarse-anchor-mass-ratio', '--capacity', '--steps', '--instance-count', '--phase-slot-count'].includes(key)) {
+    } else if (['--coarse-block-size', '--fine-block-size', '--articulation-threshold', '--fine-mass-fraction', '--coarse-anchor-mass-ratio', '--fine-occupancy-mass-ratio', '--capacity', '--steps', '--instance-count', '--phase-slot-count'].includes(key)) {
       if (!value) throw new Error(`${key} requires a value`);
       options[key.slice(2).replaceAll('-', '_')] = Number(value);
       index += 1;
@@ -194,6 +194,7 @@ function compactProduct(product) {
     decoderConfigIdentity: product.decoderConfigIdentity,
     hierarchyCounts: product.hierarchyCounts,
     coarseConsolidation: product.coarseConsolidation,
+    fineOccupancy: product.fineOccupancy,
     accounting: product.accounting,
     sourceStatistics: product.sourceStatistics,
     capacity: product.capacity,
@@ -251,6 +252,7 @@ try {
     articulationThreshold: options.articulation_threshold ?? 0.5,
     fineMassFraction: options.fine_mass_fraction ?? 0.5,
     coarseAnchorMassRatio: options.coarse_anchor_mass_ratio ?? 0,
+    fineOccupancyMassRatio: options.fine_occupancy_mass_ratio ?? 0,
     capacity: options.capacity ?? null,
   };
   phase = 'hierarchy-target-compilation';

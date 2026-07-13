@@ -97,6 +97,7 @@ execFileSync(process.execPath, [
   '--fine-block-size', '1',
   '--articulation-threshold', '0.05',
   '--coarse-anchor-mass-ratio', '0.08',
+  '--fine-occupancy-mass-ratio', '0.2',
   '--instance-count', '100',
   '--phase-slot-count', '4',
 ], { cwd: root.pathname, stdio: 'pipe' });
@@ -123,6 +124,10 @@ assert.equal(
   'bundle-owned learned artifacts use portable output-directory-relative paths',
 );
 assert.equal(report.requestedConfig.coarseAnchorMassRatio, 0.08);
+assert.equal(report.requestedConfig.fineOccupancyMassRatio, 0.2);
+assert.equal(report.frames.every(frame => frame.fineOccupancy.identity === 'mass-relative-fine-occupancy-v0'), true);
+assert.equal(report.frames.every(frame => frame.fineOccupancy.enabled === true), true);
+assert.equal(report.learnedSelector.heldOutProduct.fineOccupancy.massRatio, 0.2);
 assert.equal(report.frames.every(frame => frame.coarseConsolidation.identity === 'mass-preserving-anchor-voronoi-v1'), true);
 assert.equal(report.frames.every(frame => frame.coarseConsolidation.enabled === true), true);
 assert.equal(report.frames.every(frame => frame.coarseConsolidation.mergedSourceBinCount > 0), true);

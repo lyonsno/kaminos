@@ -355,6 +355,7 @@ function configIdentity(config) {
     Number(config.fineMassFraction).toPrecision(12),
     Number(config.articulationThreshold).toPrecision(12),
     Number(config.coarseAnchorMassRatio).toPrecision(12),
+    Number(config.fineOccupancyMassRatio).toPrecision(12),
     config.capacity === null ? 'uncapped' : config.capacity,
   ].join('|');
 }
@@ -385,6 +386,8 @@ export function compileSmokeFieldHierarchy(request = {}) {
   const articulationThreshold = nonNegative(request.articulationThreshold ?? 0.5, 'articulationThreshold');
   const coarseAnchorMassRatio = nonNegative(request.coarseAnchorMassRatio ?? 0, 'coarseAnchorMassRatio');
   if (coarseAnchorMassRatio > 1) throw new RangeError('coarseAnchorMassRatio must not exceed 1');
+  const fineOccupancyMassRatio = nonNegative(request.fineOccupancyMassRatio ?? 0, 'fineOccupancyMassRatio');
+  if (fineOccupancyMassRatio > 1) throw new RangeError('fineOccupancyMassRatio must not exceed 1');
   const capacity = request.capacity === undefined || request.capacity === null
     ? null
     : Math.floor(nonNegative(request.capacity, 'capacity'));
@@ -438,16 +441,38 @@ export function compileSmokeFieldHierarchy(request = {}) {
     }
   }
   if (!(sourceExtinctionMass > 0)) throw new Error('blank smoke field has no positive extinction mass');
+  let maximumFineBinMass = 0;
+  for (const fine of fineBins.values()) {
+    maximumFineBinMass = Math.max(maximumFineBinMass, fine.extinctionMass);
+  }
+  const fineOccupancyMassThreshold = maximumFineBinMass * fineOccupancyMassRatio;
 
   const frameId = `sim-step-${slotIdentity.slotWriteTick}`;
   const modelRows = [];
   const fineSplats = [];
   const coarseBins = new Map();
+  let selectorSelectedFineBinCount = 0;
+  let occupancyAcceptedSelectedFineBinCount = 0;
+  let selectorSelectedSourceExtinctionMass = 0;
+  let emittedFineSourceExtinctionMass = 0;
+  let occupancyTransferredSourceExtinctionMass = 0;
   for (const fine of fineBins.values()) {
     const row = articulationRow(fine, grid, fineBlockSize, frameId);
     row.label = row.score >= articulationThreshold ? 1 : 0;
     modelRows.push(row);
-    const selected = fineSelector ? Boolean(fineSelector(row)) : row.label === 1;
+    const selectorSelected = fineSelector ? Boolean(fineSelector(row)) : row.label === 1;
+    if (selectorSelected) {
+      selectorSelectedFineBinCount += 1;
+      selectorSelectedSourceExtinctionMass += fine.extinctionMass;
+    }
+    const occupancySelected = fineOccupancyMassRatio === 0
+      || fine.extinctionMass >= fineOccupancyMassThreshold;
+    const selected = selectorSelected && occupancySelected;
+    if (selected) {
+      occupancyAcceptedSelectedFineBinCount += 1;
+      emittedFineSourceExtinctionMass += fine.extinctionMass;
+    }
+    else if (selectorSelected) occupancyTransferredSourceExtinctionMass += fine.extinctionMass;
     const fineMass = selected ? fine.extinctionMass * fineMassFraction : 0;
     const coarseMass = fine.extinctionMass - fineMass;
     const ratio = coarseBlockSize / fineBlockSize;
@@ -501,6 +526,7 @@ export function compileSmokeFieldHierarchy(request = {}) {
     fineMassFraction,
     articulationThreshold,
     coarseAnchorMassRatio,
+    fineOccupancyMassRatio,
     capacity,
   };
   const decoderConfigIdentity = configIdentity(normalizedConfig);
@@ -527,6 +553,23 @@ export function compileSmokeFieldHierarchy(request = {}) {
     requiredSplatCount: splats.length,
     hierarchyCounts: { coarse: coarseSplats.length, fine: fineSplats.length, total: splats.length },
     coarseConsolidation: consolidatedCoarse.report,
+    fineOccupancy: {
+      identity: 'mass-relative-fine-occupancy-v0',
+      enabled: fineOccupancyMassRatio > 0,
+      massRatio: fineOccupancyMassRatio,
+      massThreshold: fineOccupancyMassThreshold,
+      maximumFineBinMass,
+      sourceOccupiedFineBinCount: fineBins.size,
+      selectorSelectedFineBinCount,
+      occupancyAcceptedSelectedFineBinCount,
+      emittedFineBinCount: fineSplats.length,
+      occupancyTransferredFineBinCount: selectorSelectedFineBinCount - occupancyAcceptedSelectedFineBinCount,
+      selectorSelectedSourceExtinctionMass,
+      emittedFineSourceExtinctionMass,
+      occupancyTransferredSourceExtinctionMass,
+      emittedFineExtinctionMass: emittedFineSourceExtinctionMass * fineMassFraction,
+      occupancyTransferredFineAllocationMass: occupancyTransferredSourceExtinctionMass * fineMassFraction,
+    },
     accounting: {
       identity: 'smoke-splat-extinction-accounting-v0',
       sourceExtinctionMass,
