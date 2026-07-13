@@ -4,7 +4,7 @@ import { deflateSync, inflateSync as zlibInflateSync } from 'node:zlib';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
-import { randomInt } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -129,6 +129,12 @@ function scaleSlug(value) {
 
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
+const boundarySplatFeatureOutArg = args.get('--boundary-splat-feature-out');
+const boundarySplatFeatureOut = resolve(
+  typeof boundarySplatFeatureOutArg === 'string'
+    ? boundarySplatFeatureOutArg
+    : reportPath.replace(/\.json$/i, '.boundary-splat-features.f32'),
+);
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-volume-witness-profile-');
@@ -193,6 +199,31 @@ const TALL_PLUME_DETAIL_COHERENCE_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_STAGGERED_RETIREMENT = 'staggered-transition-retirement-v0';
 const TALL_PLUME_TRANSITION_BAND_STRATEGY_INACTIVE = 'inactive';
 const FIRE_LICK_BREAKUP_BYPASS_THRESHOLD = 0.0005;
+
+function materializeBoundarySplatFeatureCapture(capture) {
+  if (!capture) return null;
+  if (capture.status !== 'captured') throw new Error(`Boundary splat feature capture status was ${capture.status || 'missing'}`);
+  if (capture.packedEncoding !== 'float32-le-base64' || typeof capture.packedFloat32Base64 !== 'string') {
+    throw new Error('Boundary splat feature capture omitted packed float32 payload');
+  }
+  const bytes = Buffer.from(capture.packedFloat32Base64, 'base64');
+  const expectedBytes = Number(capture.rowCount) * Number(capture.strideFloats) * Float32Array.BYTES_PER_ELEMENT;
+  if (bytes.byteLength !== expectedBytes || Number(capture.packedByteLength) !== expectedBytes) {
+    throw new Error(`Boundary splat feature capture byte length ${bytes.byteLength} did not equal expected ${expectedBytes}`);
+  }
+  mkdirSync(dirname(boundarySplatFeatureOut), { recursive: true });
+  writeFileSync(boundarySplatFeatureOut, bytes);
+  const { packedFloat32Base64, ...metadata } = capture;
+  return {
+    ...metadata,
+    artifact: {
+      path: boundarySplatFeatureOut,
+      encoding: 'float32-le',
+      byteLength: bytes.byteLength,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+    },
+  };
+}
 
 function normalizeLifecycleEffect(value) {
   const normalized = String(value || 'none').toLowerCase();
@@ -2756,6 +2787,9 @@ async function main() {
     if (sample?.ok !== true) {
       throw new Error(`GPU frame readback failed: ${JSON.stringify(sample)}`);
     }
+    const boundarySplatFeatureCapture = sample.boundarySplatFeatureCaptureRequested
+      ? materializeBoundarySplatFeatureCapture(sample.boundarySplatFeatureCapture)
+      : null;
     const samplePressureSourceStrategy = sample.pressureProjectionEnabled ? 'jacobi-inline-divergence-v0' : 'disabled';
     const sampleFireLicks = sample.controls?.fireLicks ?? effectiveFireLicks;
     const sampleMainFluidStrategy = expectedMainFluidKernelStrategy(sampleFireLicks);
@@ -4149,6 +4183,10 @@ async function main() {
       volumeReconstructionStyle: sample.volumeReconstructionStyle,
       boundarySplatMode: sample.boundarySplatMode ?? state.boundarySplatMode,
       boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity ?? state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity ?? state.boundarySplatAttributeModelIdentity,
+      boundarySplatFeatureCaptureRequested: sample.boundarySplatFeatureCaptureRequested ?? state.boundarySplatFeatureCaptureRequested,
+      boundarySplatFeatureCaptureEffective: sample.boundarySplatFeatureCaptureEffective ?? state.boundarySplatFeatureCaptureEffective,
+      boundarySplatFeatureCapture,
       boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority ?? state.boundarySplatSourceAuthority,
       boundarySplatCapacity: sample.boundarySplatCapacity ?? state.boundarySplatCapacity,
       boundarySplatInstanceCount: sample.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount,
@@ -4157,6 +4195,10 @@ async function main() {
       boundarySplatCountAuthority: sample.boundarySplatCountAuthority ?? state.boundarySplatCountAuthority,
       boundarySplatFallbackReason: sample.boundarySplatFallbackReason ?? state.boundarySplatFallbackReason,
       boundarySplatFrameCount: sample.boundarySplatFrameCount ?? state.boundarySplatFrameCount,
+      boundarySplatTimestampStatus: sample.boundarySplatTimestampStatus ?? state.boundarySplatTimestampStatus,
+      boundarySplatGpuProfile: sample.boundarySplatGpuProfile ?? state.boundarySplatGpuProfile,
+      boundarySplatCopyBytesThisFrame: sample.boundarySplatCopyBytesThisFrame ?? state.boundarySplatCopyBytesThisFrame,
+      boundarySplatCopyDisposition: sample.boundarySplatCopyDisposition ?? state.boundarySplatCopyDisposition,
       volumeResidualMode: sample.volumeResidualMode ?? state.volumeResidualMode ?? null,
       volumeResidualStatus: sample.volumeResidualStatus ?? state.volumeResidualStatus ?? null,
       volumeResidualAuthority: sample.volumeResidualAuthority ?? state.volumeResidualAuthority ?? null,

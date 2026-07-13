@@ -1154,6 +1154,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <select id="volume-boundary-splat-mode" class="select-input">
           <option value="off">raymarch</option>
           <option value="analytic">analytic splats</option>
+          <option value="learned">learned attributes</option>
         </select>
         <span class="slider-val" id="volume-boundary-splat-mode-val">raymarch</span>
       </div>
@@ -11812,7 +11813,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
 const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
-const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic']);
+const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11972,6 +11973,7 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
   ['boundarySplatMode', 'volume_boundary_splat_mode'],
+  ['boundarySplatFeatureCapture', 'volume_boundary_splat_feature_capture'],
   ...REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS.map(field => [field.key, field.param]),
 ];
 
@@ -12139,7 +12141,11 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   if (sidecarViewLabel) sidecarViewLabel.textContent = sidecarView;
   const boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
   const boundarySplatModeLabel = document.getElementById('volume-boundary-splat-mode-val');
-  if (boundarySplatModeLabel) boundarySplatModeLabel.textContent = boundarySplatMode === 'analytic' ? 'analytic splats' : 'raymarch';
+  if (boundarySplatModeLabel) boundarySplatModeLabel.textContent = boundarySplatMode === 'learned'
+    ? 'learned attributes'
+    : boundarySplatMode === 'analytic'
+      ? 'analytic splats'
+      : 'raymarch';
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
@@ -16332,6 +16338,7 @@ function readVolumeControls() {
   const boundarySidecarSource = normalizeBoundarySidecarSource(document.getElementById('volume-boundary-sidecar-source')?.value);
   const boundarySidecarView = normalizeBoundarySidecarView(document.getElementById('volume-boundary-sidecar-view')?.value);
   const boundarySplatMode = normalizeBoundarySplatMode(document.getElementById('volume-boundary-splat-mode')?.value);
+  const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
     gradientGain: parseFloat(document.getElementById('volume-reaction-boundary-gradient').value),
@@ -16398,6 +16405,7 @@ function readVolumeControls() {
     boundarySidecarSource,
     boundarySidecarView,
     boundarySplatMode,
+    boundarySplatFeatureCapture,
     boundarySidecarControls: {
       identity: 'baked-boundary-sidecar-v0',
       authority: 'band-limited-support-coverage-ridge-proximity-footprint-v1',

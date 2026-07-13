@@ -1,0 +1,40 @@
+{
+  "schema": "kaminos-boundary-splat-attribute-compiled-v0",
+  "identity": "sha256:09aecca934991ba8321485b5ab7fa7c685c2c8544423286b843195a5e441c64d",
+  "inputPath": "/Users/noahlyons/dev/gpu-greenroom/artifacts/kaminos-splat-attribute-0712/analytic-teacher-parity-h64/model-artifact.json",
+  "inputSha256": "00010ee92e7942412b68d88dba2c42fa6889c903631539680b043c147470993d",
+  "inputSize": 16,
+  "hiddenSize": 64,
+  "outputSize": 6,
+  "parity": {
+    "path": "/Users/noahlyons/dev/gpu-greenroom/artifacts/kaminos-splat-attribute-0712/analytic-teacher-parity-h64/parity-samples.json",
+    "bytes": 38578,
+    "sha256": "868baff2f536401915a83655d7100f7befcd5087659df5022795834afb947cfc",
+    "sampleCount": 64,
+    "meanAbsoluteError": 8.107510781334402e-8,
+    "maxAbsoluteError": 7.649246944740895e-7,
+    "threshold": 0.00001
+  },
+  "model": {
+    "path": "model-artifact.json",
+    "bytes": 44741,
+    "sha256": "544275adaca5ed1c68b5a58aae80b81e10cb9f6026a9835ef8d488eee38bbae8"
+  },
+  "wgsl": {
+    "path": "boundary-splat-attribute-model.wgsl",
+    "bytes": 34338,
+    "sha256": "7f3fff4fbaeff0e5b03ac616cdd75a35599b657421eb953a43c68ba6d026b6b3"
+  },
+  "module": {
+    "path": "boundary-splat-attribute-model.generated.js",
+    "bytes": 34752,
+    "sha256": "c4374885151a0634959cfa27c0bc8c3c03b069f5d9a57c6c8bf0e1989829fe45"
+  },
+  "weights": {
+    "path": "boundary-splat-attribute-weights.f32",
+    "bytes": 5912,
+    "floatCount": 1478,
+    "dtype": "float32-native-little-endian",
+    "sha256": "71b21d78bb255ed58ea5de2af6f438b9877183414bfb2d659f243c858c85b818"
+  }
+}
