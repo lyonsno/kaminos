@@ -1,3 +1,5 @@
+import { createFireEpisodeHooks } from './fire-episode-hooks.mjs';
+
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
@@ -4801,6 +4803,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     error: null,
   };
 
+  const fireEpisodeHooks = createFireEpisodeHooks({
+    readCounters: () => ({ frameCount: state.frameCount, simStepCount: state.simStepCount }),
+    readRouteIdentity: () => ({
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      volumeScene: state.volumeScene,
+      runtimeQualityRequested: state.runtimeQualityRequested,
+      runtimeQualityEffective: state.runtimeQualityEffective,
+      simGrid: state.simGrid,
+      renderScale: state.renderScale,
+      renderPixelRatio: state.renderPixelRatio,
+      flameRendererIdentity: state.boundarySplatRendererIdentity,
+      learnedModelIdentity: state.boundarySplatAttributeModelIdentity,
+      fallbackReason: state.boundarySplatFallbackReason,
+    }),
+  });
+
   let pyroDynamicDetailEnergy = 0;
   let pyroDynamicDetailConfidence = 0;
   let pyroDynamicDetailPhase = 0;
@@ -5059,7 +5078,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function recordVolumeFrameTiming(now, cpuFrameMs) {
-    if (lastRafNow > 0) pushTimingSample('rafDelta', now - lastRafNow);
+    const rafGapMs = lastRafNow > 0 ? now - lastRafNow : null;
+    if (Number.isFinite(rafGapMs)) pushTimingSample('rafDelta', rafGapMs);
     lastRafNow = now;
     pushTimingSample('cpuFrame', cpuFrameMs);
     const rafP95 = percentileTiming(timingSamples.rafDelta, 0.95);
@@ -5076,6 +5096,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueProbePending,
       queueSamples: timingSamples.queueDone.length,
     };
+    fireEpisodeHooks.recordFrame({ now, rafGapMs, cpuFrameMs });
   }
 
   function recordVolumeQueueTiming(submittedAt) {
@@ -5091,6 +5112,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueSamples: timingSamples.queueDone.length,
       queueTimingAvailable: true,
     };
+    fireEpisodeHooks.recordQueueProxy({
+      available: true,
+      pending: queueProbePending,
+      samples: timingSamples.queueDone.length,
+      lastDoneMs: queueDoneMs,
+      p95DoneMs: state.timing.queueDoneP95Ms,
+    });
   }
 
   function probeVolumeQueueTiming() {
@@ -5103,6 +5131,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueProbePending: true,
       queueTimingAvailable: true,
     };
+    fireEpisodeHooks.recordQueueProxy({
+      available: true,
+      pending: true,
+      samples: timingSamples.queueDone.length,
+      lastDoneMs: state.timing.queueDoneMs,
+      p95DoneMs: state.timing.queueDoneP95Ms,
+    });
     const submittedAt = performance.now();
     device.queue.onSubmittedWorkDone()
       .then(() => recordVolumeQueueTiming(submittedAt))
@@ -5114,6 +5149,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           queueTimingAvailable: false,
           queueTimingError: error?.message || String(error),
         };
+        fireEpisodeHooks.recordQueueProxy({
+          available: false,
+          pending: false,
+          samples: timingSamples.queueDone.length,
+          error: state.timing.queueTimingError,
+        });
       })
       .finally(() => {
         queueProbePending = false;
@@ -5123,6 +5164,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           timingDisclaimer: 'not-gpu-exclusive-or-present-latency',
           queueProbePending: false,
         };
+        fireEpisodeHooks.recordQueueProxy({
+          available: state.timing.queueTimingAvailable === true,
+          pending: false,
+          samples: timingSamples.queueDone.length,
+          lastDoneMs: state.timing.queueDoneMs,
+          p95DoneMs: state.timing.queueDoneP95Ms,
+          error: state.timing.queueTimingError,
+        });
       });
   }
 
@@ -8853,6 +8902,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simProfile: state.simProfile,
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
+      fireEpisodeHooks: fireEpisodeHooks.snapshot(),
       simReadback,
       majorantReadback,
       effectiveRoute: state.effectiveRoute,
@@ -9049,8 +9099,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),
+        fireEpisodeHooks: fireEpisodeHooks.snapshot(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
+    },
+    beginFireEpisode(options) {
+      return fireEpisodeHooks.begin(options);
+    },
+    endFireEpisode(options) {
+      return fireEpisodeHooks.end(options);
     },
     canvasElement() {
       return canvas;
