@@ -743,6 +743,7 @@ export async function createWebGPUFingerFluidSolver({
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
         stepCount: diagnosticsStepCount,
+        capturedAtMs: Number(performance.now().toFixed(1)),
         activeExtent3d: {
           min: min.map(value => Number(value.toFixed(4))),
           max: max.map(value => Number(value.toFixed(4))),
@@ -783,7 +784,10 @@ export async function createWebGPUFingerFluidSolver({
       densityIterationCount,
       directRenderFrameCount,
       lastFrameCpuMs: Number(lastFrameCpuMs.toFixed(3)),
-      diagnostics,
+      diagnostics: diagnostics ? {
+        ...diagnostics,
+        ageMs: Number(Math.max(0, performance.now() - diagnostics.capturedAtMs).toFixed(1)),
+      } : null,
       adapterInfo: adapter.info ? {
         vendor: adapter.info.vendor || null,
         architecture: adapter.info.architecture || null,

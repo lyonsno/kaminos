@@ -9748,12 +9748,9 @@ function updateFingerFluidBenchReadout() {
 
 function ensureFingerFluidBenchCanvasSize(canvas) {
   const rect = canvas.getBoundingClientRect();
-  const width = Math.max(1, Math.floor(rect.width * window.devicePixelRatio));
-  const height = Math.max(1, Math.floor(rect.height * window.devicePixelRatio));
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+  const width = Math.max(1, Math.floor(rect.width * pixelRatio));
+  const height = Math.max(1, Math.floor(rect.height * pixelRatio));
   return { width, height };
 }
 

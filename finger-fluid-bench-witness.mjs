@@ -15,6 +15,7 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-finger-fluid-bench-profile-${port}-${process.pid}`;
 const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1120);
+const deviceScaleFactor = Number(args.get('--device-scale-factor') || 1);
 const settleMs = Number(args.get('--settle-ms') || 3200);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
 const cadenceMs = Number(args.get('--cadence-ms') || 1500);
@@ -40,7 +41,7 @@ function writeReport(report = {}) {
     debugPort: port,
     chrome,
     userDataDir,
-    viewport: { width: viewportWidth, height: viewportHeight },
+    viewport: { width: viewportWidth, height: viewportHeight, deviceScaleFactor },
     settleMs,
     hookWaitMs,
     cadenceWindowMs: cadenceMs,
@@ -171,7 +172,7 @@ async function main() {
     await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
       width: viewportWidth,
       height: viewportHeight,
-      deviceScaleFactor: 1,
+      deviceScaleFactor,
       mobile: false,
     });
 
@@ -228,8 +229,9 @@ async function main() {
     const activeExtent3d = lastDebugState.runtime?.diagnostics?.activeExtent3d;
     if (!activeExtent3d || activeExtent3d.size?.length !== 3) throw new Error('missing activeExtent3d diagnostics');
     const diagnosticsLagSteps = lastDebugState.runtime.stepCount - lastDebugState.runtime.diagnostics?.stepCount;
-    if (!Number.isInteger(diagnosticsLagSteps) || diagnosticsLagSteps < 0 || diagnosticsLagSteps > 120) {
-      throw new Error(`stale GPU diagnostics rejected: ${JSON.stringify({ diagnosticsLagSteps, stepCount: lastDebugState.runtime.stepCount, diagnosticsStepCount: lastDebugState.runtime.diagnostics?.stepCount })}`);
+    const diagnosticsAgeMs = lastDebugState.runtime.diagnostics?.ageMs;
+    if (!Number.isInteger(diagnosticsLagSteps) || diagnosticsLagSteps < 0 || !Number.isFinite(diagnosticsAgeMs) || diagnosticsAgeMs > 3000) {
+      throw new Error(`stale GPU diagnostics rejected: ${JSON.stringify({ diagnosticsAgeMs, diagnosticsLagSteps, stepCount: lastDebugState.runtime.stepCount, diagnosticsStepCount: lastDebugState.runtime.diagnostics?.stepCount })}`);
     }
     if (activeExtent3d.size.some(value => !Number.isFinite(value) || value < 0.35)) throw new Error(`fluid state is not materially 3D: ${JSON.stringify(activeExtent3d)}`);
     if (lastDebugState.runtime?.diagnostics?.maxSpeed > 3.35) throw new Error(`bounded-energy stability failure: maxSpeed ${lastDebugState.runtime.diagnostics.maxSpeed}`);

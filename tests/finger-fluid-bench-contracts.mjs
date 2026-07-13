@@ -53,6 +53,7 @@ assert.match(webgpuCoreSource, /dispatchWorkgroups/, 'solver dispatches GPU comp
 assert.match(webgpuCoreSource, /createRenderPipeline/, 'solver state is rendered directly on GPU');
 assert.match(webgpuCoreSource, /createWebGPUFingerFluidSolver/, 'GPU solver factory is exported');
 assert.match(webgpuCoreSource, /stepCount:\s*diagnosticsStepCount/, 'sparse GPU diagnostics carry the exact simulation step they represent');
+assert.match(webgpuCoreSource, /capturedAtMs:\s*Number\(performance\.now\(\)\.toFixed\(1\)\)/, 'sparse GPU diagnostics carry monotonic capture time');
 
 assert.match(indexSource, /data-tab="finger-fluid-bench"/, 'Kaminos sidebar exposes a Finger Fluid bench tab');
 assert.match(indexSource, /id="tab-finger-fluid-bench"/, 'Kaminos app shell contains Finger Fluid bench content');
@@ -62,6 +63,9 @@ assert.match(indexSource, /window\.kaminosFingerFluidBenchDebugState/, 'fluid be
 assert.match(indexSource, /createWebGPUFingerFluidSolver/, 'native bench constructs the real WebGPU fluid solver');
 assert.match(indexSource, /fingerFluidBenchCamera = \{ yaw: -0\.55, pitch: 0\.34, distance: 5\.2/, 'default camera frames the simulated volume for inspection');
 assert.doesNotMatch(indexSource, /smoothFluidNoise/, 'native bench no longer renders a synthetic noise field');
+const canvasExtentFunction = indexSource.match(/function ensureFingerFluidBenchCanvasSize\(canvas\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(canvasExtentFunction, 'fluid bench canvas extent measurement exists');
+assert.doesNotMatch(canvasExtentFunction, /canvas\.(?:width|height)\s*=/, 'page code must not resize a WebGPU-configured drawing buffer');
 assert.match(indexSource, /kaminos\/finger-fluid-bench/, 'fluid bench displays route identity');
 assert.doesNotMatch(indexSource, /finger-fluid-bench-open-direct/, 'fluid bench must not expose Open Direct/new-tab acceptance escape');
 assert.doesNotMatch(indexSource, /id="finger-fluid-bench-frame"/, 'fluid bench must not use iframe as acceptance surface');
@@ -80,9 +84,11 @@ assert.match(benchWitnessSource, /densityIterationCount/, 'bench witness require
 assert.match(benchWitnessSource, /activeExtent3d/, 'bench witness requires non-flat 3D extent evidence');
 assert.match(benchWitnessSource, /maxSpeed\s*>\s*3\.35/, 'bench witness rejects energetic solver blow-up');
 assert.match(benchWitnessSource, /relativeDensityError/, 'bench witness rejects density convergence to the wrong basin');
-assert.match(benchWitnessSource, /diagnosticsLagSteps > 120/, 'bench witness rejects stale sparse diagnostics');
+assert.match(benchWitnessSource, /diagnosticsAgeMs > 3000/, 'bench witness rejects stale sparse diagnostics by elapsed time rather than frame count');
 assert.match(benchWitnessSource, /cadenceProbe/, 'bench witness measures settled live cadence');
 assert.match(benchWitnessSource, /--cadence-ms/, 'bench witness accepts an explicit, reportable cadence observation window');
+assert.match(benchWitnessSource, /--device-scale-factor/, 'bench witness can reproduce Retina drawing-buffer behavior');
+assert.match(benchWitnessSource, /deviceScaleFactor/, 'bench witness records and applies its effective device scale factor');
 assert.match(benchWitnessSource, /cadenceWindowMs:\s*cadenceMs/, 'bench witness records its effective cadence window');
 assert.match(benchWitnessSource, /fallback/, 'bench witness explicitly rejects fallback closure');
 
