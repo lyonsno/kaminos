@@ -25,6 +25,8 @@ assert.match(composerSource, /dense-ungated-residual-v0/, 'composer names the de
 assert.match(composerSource, /sparse-hard-support-gated-residual-v0/, 'composer names the sparse carrier policy');
 assert.match(composerSource, /--support-threshold/, 'composer accepts an explicit calibration-assay support threshold');
 assert.match(composerSource, /caller-specified-calibration-assay-v0/, 'threshold overrides carry explicit non-checkpoint authority');
+assert.match(composerSource, /--residual-scale/, 'composer accepts an explicit calibration-assay residual scale');
+assert.match(composerSource, /caller-specified-residual-blend-assay-v0/, 'residual-scale overrides carry explicit assay authority');
 assert.match(composerSource, /failurePhase/, 'composer writes durable failure-phase reports');
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-exact-basin-support-probe-'));
@@ -257,6 +259,19 @@ assert.equal(thresholdComposition.support.threshold, 0.99);
 assert.equal(thresholdComposition.support.thresholdAuthority, 'caller-specified-calibration-assay-v0');
 assert.equal(thresholdComposition.support.checkpointThreshold, composition.support.threshold);
 
+const blendCompositionDir = join(fixtureRoot, 'composition-residual-blend');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', pairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', blendCompositionDir,
+  '--batch-cells', '256',
+  '--residual-scale', '0.5',
+], { stdio: 'pipe' });
+const blendComposition = JSON.parse(readFileSync(join(blendCompositionDir, 'manifest.json'), 'utf8'));
+assert.equal(blendComposition.residualBlend.scale, 0.5);
+assert.equal(blendComposition.residualBlend.authority, 'caller-specified-residual-blend-assay-v0');
+
 function readF32(path) {
   const bytes = readFileSync(path);
   return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
@@ -264,6 +279,8 @@ function readF32(path) {
 
 const composedFluid = readF32(composition.receiver.fluid.path);
 const composedFront = readF32(composition.receiver.front.path);
+const blendFluid = readF32(blendComposition.receiver.fluid.path);
+const blendFront = readF32(blendComposition.receiver.front.path);
 let selectedFuelChanged = false;
 let denseFrontChanged = false;
 for (let z = 0; z < highGrid; z += 1) {
@@ -275,6 +292,19 @@ for (let z = 0; z < highGrid; z += 1) {
         composedFluid[highCell * 16 + 3],
         lowFluid[lowCell * 16 + 3],
         'unselected densityCarrier remains byte-value identical to the low baseline',
+      );
+      assert.ok(
+        Math.abs(blendFluid[highCell * 16 + 6] - (
+          lowFluid[lowCell * 16 + 6]
+          + 0.5 * (composedFluid[highCell * 16 + 6] - lowFluid[lowCell * 16 + 6])
+        )) < 1e-6,
+        'residual blend scales sparse fuel displacement from the low baseline',
+      );
+      assert.ok(
+        Math.abs(blendFront[highCell] - (
+          lowFront[lowCell] + 0.5 * (composedFront[highCell] - lowFront[lowCell])
+        )) < 1e-6,
+        'residual blend scales dense topology displacement from the low baseline',
       );
       if (composedFluid[highCell * 16 + 6] !== lowFluid[lowCell * 16 + 6]) selectedFuelChanged = true;
       if (composedFront[highCell] !== lowFront[lowCell]) denseFrontChanged = true;
