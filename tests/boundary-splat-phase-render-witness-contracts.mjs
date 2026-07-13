@@ -347,6 +347,48 @@ try {
     budgetedReport.pixelMetrics.phasePredictionToExactMse <= budgetedReport.baselines.currentCopy.pixelMse,
     'budgeted dense-negative fixture should beat current-copy identity on rendered pixels',
   );
+
+  const splitHeadReportPath = join(root, 'split-support-heads-render-report.json');
+  const splitHeadReport = await writeBoundarySplatPhaseRenderWitness(manifestPath, {
+    model: modelPath,
+    offset: 3,
+    outDir: root,
+    report: splitHeadReportPath,
+    width: 96,
+    height: 96,
+    phaseModelFamily: 'split-survival-birth-death-local-grid-v0',
+  });
+  assert.equal(splitHeadReport.phaseModel.family, 'split-survival-birth-death-local-grid-v0');
+  assert.equal(
+    splitHeadReport.phaseModel.supportHeads.authority,
+    'conditional-local-grid-survival-birth-death-heads-v0',
+  );
+  assert.equal(
+    splitHeadReport.phaseModel.supportDecision.authority,
+    'split-head-threshold-gated-support-budget-v0',
+  );
+  assert.equal(splitHeadReport.phaseModel.supportHeads.survival.trainingUniverse, 'source-occupied-sites-v0');
+  assert.equal(splitHeadReport.phaseModel.supportHeads.birth.trainingUniverse, 'source-absent-prediction-sites-v0');
+  assert.equal(splitHeadReport.phaseModel.supportHeads.death.trainingUniverse, 'source-occupied-sites-v0');
+  for (const head of ['survival', 'birth', 'death']) {
+    const trainedHead = splitHeadReport.phaseModel.supportHeads[head];
+    assert.ok(trainedHead.trainSampleCount > 0, `${head} head must train on its conditional site universe`);
+    assert.ok(trainedHead.calibration.threshold > 0, `${head} head threshold must be calibrated from training pairs`);
+    assert.ok(
+      splitHeadReport.metrics.splitSupportHeads[head].sampleCount > 0,
+      `${head} head must expose held-out conditional precision/recall`,
+    );
+  }
+  assert.equal(
+    splitHeadReport.metrics.splitSupportHeads.authority,
+    'held-out-conditional-support-head-pr-v0',
+  );
+  assert.ok(
+    splitHeadReport.metrics.splitSupportHeads.sourceDecisionDisagreement.sampleCount > 0,
+    'split heads must expose survival/death disagreement instead of silently collapsing the decisions',
+  );
+  assert.equal(splitHeadReport.route.effective, spatialManifest.frames[0].effectiveRoute);
+  assert.ok(splitHeadReport.renders.inputSplats.phasePrediction > 0, 'split-head prediction must render nonempty support');
   assert.equal(
     budgetedReport.diagnostics.residuals.authority,
     'phase-render-raster-residual-maps-v0',
