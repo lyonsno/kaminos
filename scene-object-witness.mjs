@@ -3897,6 +3897,9 @@ async function runSelectedSplatBakeLayerScenario(ws) {
       const splatObject = (window.kaminosSceneObjectDebugState?.() || []).find(record => record.type === 'splat') || null;
       if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
       await wait(250);
+      const startResult = await window.startHybridSplatSceneRenderer?.();
+      await wait(2200);
+      if (splatObject?.id) window.selectSceneObject?.(splatObject.id);
       const bakeButton = document.getElementById('selected-splat-bake-layer-button');
       const bakePanelBefore = document.getElementById('selected-splat-bake-layer-panel');
       const beforeDebug = window.kaminosSelectedSplatBakeLayerDebugState?.(splatObject?.id) || null;
@@ -3920,6 +3923,7 @@ async function runSelectedSplatBakeLayerScenario(ws) {
         actionExposed: !!actionButton,
         assetRowCount: assetRows.length,
         splatObject,
+        startResult,
         bakeButtonVisible: !!bakeButton
           && !bakeButton.hidden
           && getComputedStyle(bakeButton).display !== 'none'
@@ -3944,6 +3948,10 @@ async function runSelectedSplatBakeLayerScenario(ws) {
 
   if (!lastEvidence.selectedSplatBakeLayer.actionExposed || !lastEvidence.selectedSplatBakeLayer.splatObject) {
     throw new Error(`selected splat bake layer could not import a splat fixture: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (lastEvidence.selectedSplatBakeLayer.startResult?.status !== 'rendering'
+      || lastEvidence.selectedSplatBakeLayer.startResult?.moduleIdentity?.status !== 'loaded') {
+    throw new Error(`selected splat bake layer did not start live hybrid renderer: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
   }
   if (!lastEvidence.selectedSplatBakeLayer.bakeButtonVisible || !lastEvidence.selectedSplatBakeLayer.bakePanelVisibleBefore) {
     throw new Error(`selected splat bake layer did not expose viewport UI: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
@@ -3999,7 +4007,7 @@ async function runSelectedSplatBakeLayerScenario(ws) {
       || Math.abs(afterTuneSize - beforeSize) > Math.max(0.000001, beforeSize * 0.001)) {
     throw new Error(`selected splat bake layer controls did not remove preview contribution: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
   }
-  const telemetryPreview = lastEvidence.selectedSplatBakeLayer.afterCreateRendererControls?.controls?.candidateLayerPreview;
+  const telemetryPreview = layer.receipt?.witness?.rendererControls?.candidateLayerPreview;
   if (telemetryPreview?.schema !== 'kaminos.splat-bake-layer.preview-contribution.v0'
       || telemetryPreview?.targetObjectId !== lastEvidence.selectedSplatBakeLayer.splatObject.id
       || Number(telemetryPreview?.strength || 0) <= 0.99) {
@@ -4007,8 +4015,23 @@ async function runSelectedSplatBakeLayerScenario(ws) {
   }
   const afterCreateControls = lastEvidence.selectedSplatBakeLayer.afterCreateRendererControls?.controls || {};
   const afterTuneControls = lastEvidence.selectedSplatBakeLayer.afterTuneRendererControls?.controls || {};
-  if (afterCreateControls.preview?.sourceColor !== true || afterTuneControls.preview?.sourceColor !== true) {
-    throw new Error(`selected splat bake layer did not preserve source-radiance display mode: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  if (afterCreateControls.preview?.sourceColor !== false
+      || afterCreateControls.presentation?.mode !== 'deferred-pbr') {
+    throw new Error(`selected splat bake layer did not select deferred-PBR presentation: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  if (afterTuneControls.preview?.sourceColor !== true
+      || afterTuneControls.presentation?.mode !== 'source-radiance') {
+    throw new Error(`selected splat bake layer did not restore source-radiance presentation: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
+  }
+  const afterCreatePresentation = lastEvidence.selectedSplatBakeLayer.afterCreateRendererControls?.presentation || {};
+  const afterTunePresentation = lastEvidence.selectedSplatBakeLayer.afterTuneRendererControls?.presentation || {};
+  if (lastEvidence.selectedSplatBakeLayer.afterCreateRendererControls?.accepted !== true
+      || afterCreatePresentation.effectiveMode !== 'deferred-pbr'
+      || afterCreatePresentation.effectiveRoute !== 'deferred-pbr-lighting'
+      || lastEvidence.selectedSplatBakeLayer.afterTuneRendererControls?.accepted !== true
+      || afterTunePresentation.effectiveMode !== 'source-radiance'
+      || afterTunePresentation.effectiveRoute !== 'source-radiance-copy') {
+    throw new Error(`selected splat bake layer presentation was not accepted by live renderer: ${JSON.stringify(lastEvidence.selectedSplatBakeLayer)}`);
   }
   if (telemetryPreview.rendererControlScope !== 'telemetry-only-no-bake-output'
       || Number(afterCreateControls.material?.roughness?.contrast) !== 1

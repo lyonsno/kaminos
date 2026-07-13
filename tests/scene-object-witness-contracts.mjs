@@ -222,7 +222,10 @@ assert.match(witness, /selected splat bake layer did not preserve pipeline outpu
 assert.match(witness, /selected splat bake layer controls did not update/, 'selected-splat bake-layer witness proves enable and strength controls are reversible layer state');
 assert.match(witness, /selected splat bake layer did not couple to point-cloud material/, 'selected-splat bake-layer witness proves Bake View has a visible preview contribution');
 assert.match(witness, /selected splat bake layer did not expose preview contribution telemetry/, 'selected-splat bake-layer witness proves the preview contribution has inspectable route identity');
-assert.match(witness, /selected splat bake layer did not preserve source-radiance display mode/, 'selected-splat bake-layer witness proves Bake View keeps source-radiance display enabled for unbaked candidate layers');
+assert.match(witness, /selected splat bake layer did not select deferred-PBR presentation/, 'selected-splat bake-layer witness proves an enabled candidate selects deferred-PBR evaluation');
+assert.match(witness, /selected splat bake layer did not restore source-radiance presentation/, 'selected-splat bake-layer witness proves disabling candidate contribution restores source radiance');
+assert.match(witness, /selected splat bake layer did not start live hybrid renderer/, 'selected-splat bake-layer witness starts the real packaged renderer before judging presentation coupling');
+assert.match(witness, /selected splat bake layer presentation was not accepted by live renderer/, 'selected-splat bake-layer witness requires renderer-owned effective route acceptance');
 assert.match(witness, /source-radiance presentation route did not change live pixels/, 'real hybrid witness rejects accepted controls without a same-scene visible A\/B delta');
 assert.match(witness, /real hybrid splat overlay reported a renderer frame error/, 'real hybrid witness rejects GPU validation failures before treating pixel comparison as route evidence');
 assert.match(witness, /-deferred-pbr/, 'real hybrid presentation witness captures a deferred-PBR screenshot instead of trusting WebGPU canvas drawImage readback');

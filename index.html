@@ -4460,6 +4460,19 @@ function selectedSplatBakeLayerPreviewContribution(record = selectedSplatRecord(
   };
 }
 
+function syncSelectedSplatBakeLayerPresentation(record = selectedSplatRecord()) {
+  const contribution = selectedSplatBakeLayerPreviewContribution(record);
+  const sourceRadiance = contribution.strength <= 0;
+  const input = document.getElementById('hybrid-control-preview-source-color');
+  if (input instanceof HTMLInputElement) input.checked = sourceRadiance;
+  window._kaminosDirty?.();
+  return {
+    mode: sourceRadiance ? 'source-radiance' : 'deferred-pbr',
+    sourceRadiance,
+    contribution,
+  };
+}
+
 function selectedSplatPointCloudPreviewMaterialState(record) {
   const preview = record?.object?.userData?.kaminosSplatPointCloudPreview || null;
   const materialState = material => material ? {
@@ -4681,7 +4694,6 @@ async function createSelectedSplatViewBakeLayer(options = {}) {
     pipelineId: SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID,
     renderedIntoSplat: false,
   };
-  setHybridSourceColorPreviewEnabled(true);
   const cameraSnapshot = selectedSplatViewBakeLayerCameraSnapshot();
   const rendererControls = hybridSplatRendererControlsPayload();
   const armatureRef = selectedSplatArmatureRef(record);
@@ -4730,6 +4742,8 @@ async function createSelectedSplatViewBakeLayer(options = {}) {
     updatedAt: now,
   };
   layers.push(layer);
+  syncSelectedSplatBakeLayerPresentation(record);
+  layer.receipt.witness.rendererControls = hybridSplatRendererControlsPayload();
   applySelectedSplatBakeLayerPreview(record);
   publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
   renderSelectedSplatBakeLayerPanel(record);
@@ -4767,6 +4781,7 @@ function setSelectedSplatBakeLayerControls(layerId, controls = {}) {
   }
   found.layer.updatedAt = new Date().toISOString();
   applySelectedSplatBakeLayerPreview(found.record);
+  syncSelectedSplatBakeLayerPresentation(found.record);
   publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
   renderSelectedSplatBakeLayerPanel(selectedSplatRecord() || found.record);
   window._kaminosDirty?.();

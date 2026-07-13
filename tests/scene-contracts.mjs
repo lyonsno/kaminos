@@ -321,6 +321,11 @@ assert.match(index, /selected-splat-view-bake-layer-crucible-v0/, 'candidate bak
 assert.match(index, /function selectedSplatBakeLayerPreviewContribution\(/, 'candidate bake layers compute a selected-splat preview contribution instead of only recording receipts');
 assert.match(index, /function applySelectedSplatBakeLayerPreview\(/, 'candidate bake layers are coupled to the visible selected-splat preview path');
 assert.match(index, /function setSelectedSplatBakeLayerControls\(/, 'candidate bake layers can be enabled and strength-tuned without rebaking');
+assert.match(index, /function syncSelectedSplatBakeLayerPresentation\(/, 'candidate bake layers explicitly synchronize reversible renderer presentation');
+assert.match(index, /syncSelectedSplatBakeLayerPresentation\(record\)/, 'creating a candidate bake layer selects its evaluation presentation');
+assert.match(index, /syncSelectedSplatBakeLayerPresentation\(found\.record\)/, 'tuning a candidate bake layer restores presentation when its contribution is removed');
+const createBakeLayerBlock = index.match(/async function createSelectedSplatViewBakeLayer\(options = \{\}\) \{[\s\S]*?\n\}/)?.[0] || '';
+assert.doesNotMatch(createBakeLayerBlock, /setHybridSourceColorPreviewEnabled\(true\)/, 'Bake View must not unconditionally force Source Radiance on');
 assert.match(index, /SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID\s*=\s*'selected-splat-view-bake-layer-v0'/, 'selected-splat Bake View must name the backend pipeline route it fires');
 assert.match(index, /async function runSelectedSplatViewBakeLayerPipeline\(/, 'selected-splat Bake View must route through an explicit async pipeline firing helper');
 assert.match(index, /\/api\/run-pipeline/, 'selected-splat Bake View must call the server pipeline endpoint instead of remaining browser-local');
