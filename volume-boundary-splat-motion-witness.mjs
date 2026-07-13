@@ -9,6 +9,12 @@ import { inflateSync as zlibInflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.boundary-splat-motion-witness.v0';
 const SPLAT_RENDERER = 'live-boundary-sidecar-analytic-splats-v0';
+const LEARNED_SPLAT_RENDERER = 'live-boundary-sidecar-learned-attribute-splats-v0';
+const EXPECTED_LEARNED_MODEL = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
+const REJECTED_LEARNED_MODELS = new Set([
+  'sha256:54a41ba9d04132b8340884adef37a092c367c8cc8443e67907bd5f4f8573b911',
+  'sha256:09aecca934991ba8321485b5ab7fa7c685c2c8544423286b843195a5e441c64d',
+]);
 const SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const SOURCE_AUTHORITY = SPLAT_SOURCE_AUTHORITY;
 const RAYMARCH_RENDERER = 'matched-raymarch';
@@ -92,7 +98,8 @@ try {
     requestedRouteIdentity,
     effectiveRoute: staticSequence.effectiveRoute || grazingSequence.effectiveRoute || null,
     sourceAuthority: SOURCE_AUTHORITY,
-    rendererIdentity: SPLAT_RENDERER,
+    rendererIdentities: [SPLAT_RENDERER, LEARNED_SPLAT_RENDERER, RAYMARCH_RENDERER],
+    expectedLearnedModelIdentity: EXPECTED_LEARNED_MODEL,
     browser: {
       identity: browserSession.identity,
       mode: browserSession.mode,
@@ -110,6 +117,7 @@ try {
       grazingCameraDurationMs: (frameCount - 1) * stepMs,
     },
     frozenDeterminism: computeFrozenDeterminism(staticSequence.frames[0]),
+    analyticLearnedComparison: summarizeAnalyticLearnedComparison([...staticSequence.frames, ...grazingSequence.frames]),
     staticCamera: staticSequence,
     grazingCamera: grazingSequence,
     candidateChurn: summarizeCandidateChurn([...staticSequence.frames, ...grazingSequence.frames]),
@@ -140,6 +148,7 @@ try {
     error: error?.stack || error?.message || String(error),
     requestedRoute,
     rendererIdentity: SPLAT_RENDERER,
+    expectedLearnedModelIdentity: EXPECTED_LEARNED_MODEL,
     sourceAuthority: SOURCE_AUTHORITY,
     browser: browserSession ? {
       identity: browserSession.identity,
@@ -359,6 +368,14 @@ async function captureSequence(config) {
       requestedRenderer: 'analytic-splat',
       boundarySplatMode: 'analytic',
     });
+    const learned = await captureRenderer({
+      frameDir,
+      frameIndex,
+      scaleSet,
+      camera,
+      requestedRenderer: 'learned-splat',
+      boundarySplatMode: 'learned',
+    });
     const raymarch = await captureRenderer({
       frameDir,
       frameIndex,
@@ -389,7 +406,7 @@ async function captureSequence(config) {
       baseFrameCount: scaleSet.baseFrameCount,
       baseSimStepCount: scaleSet.baseSimStepCount,
       camera,
-      captures: [analytic, raymarch, determinismRepeat].filter(Boolean),
+      captures: [analytic, learned, raymarch, determinismRepeat].filter(Boolean),
     });
   }
   const effectiveRoute = frames[0]?.captures[0]?.effectiveRoute || null;
@@ -441,6 +458,7 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
   const metrics = measureScreenshot(imageBuffer);
   const effectiveRenderer = canvasCapture.volumeReconstructionStyle;
   const fallbackReason = postState?.boundarySplatFallbackReason ?? canvasCapture.boundarySplatFallbackReason ?? null;
+  const isSplat = boundarySplatMode !== 'off';
   const capture = {
     requestedRenderer,
     effectiveRenderer,
@@ -448,11 +466,14 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
     requestedRoute,
     effectiveRoute: canvasCapture.effectiveRoute,
     rendererIdentity: postState?.boundarySplatRendererIdentity || SPLAT_RENDERER,
+    appliedModelIdentity: postState?.boundarySplatAttributeModelIdentity ?? canvasCapture.boundarySplatAttributeModelIdentity ?? null,
     sourceAuthority: postState?.boundarySplatSourceAuthority || SOURCE_AUTHORITY,
-    boundarySplatCandidateCount: requestedRenderer.includes('analytic-splat') ? postState?.boundarySplatCandidateCount ?? null : null,
-    boundarySplatInstanceCount: requestedRenderer.includes('analytic-splat') ? postState?.boundarySplatInstanceCount ?? null : null,
-    boundarySplatOverflowCount: requestedRenderer.includes('analytic-splat') ? postState?.boundarySplatOverflowCount ?? null : null,
-    boundarySplatCountAuthority: requestedRenderer.includes('analytic-splat') ? postState?.boundarySplatCountAuthority ?? null : null,
+    boundarySplatCandidateCount: isSplat ? postState?.boundarySplatCandidateCount ?? null : null,
+    boundarySplatInstanceCount: isSplat ? postState?.boundarySplatInstanceCount ?? null : null,
+    boundarySplatOverflowCount: isSplat ? postState?.boundarySplatOverflowCount ?? null : null,
+    boundarySplatCountAuthority: isSplat ? postState?.boundarySplatCountAuthority ?? null : null,
+    boundarySplatCandidateCopyBytes: isSplat ? postState?.boundarySplatCopyBytesThisFrame ?? null : null,
+    boundarySplatCandidateCopyDisposition: isSplat ? postState?.boundarySplatCopyDisposition ?? null : null,
     image: {
       path: imagePath,
       basename: basename(imagePath),
@@ -478,6 +499,9 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
       boundarySidecarIdentity: canvasCapture.boundarySidecarIdentity,
       boundarySidecarAuthority: canvasCapture.boundarySidecarAuthority,
       boundarySidecarSource: canvasCapture.boundarySidecarSource,
+      boundarySplatMode: canvasCapture.boundarySplatMode,
+      boundarySplatRendererIdentity: canvasCapture.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: canvasCapture.boundarySplatAttributeModelIdentity,
     },
   };
   validateCapture(capture);
@@ -508,11 +532,37 @@ function validateCapture(capture) {
     if (capture.rendererIdentity !== SPLAT_RENDERER) {
       throw new Error(`substituted raymarch rejected: analytic splat identity missing, got ${capture.rendererIdentity}`);
     }
+    if (capture.appliedModelIdentity !== null) {
+      throw new Error(`stale/default config rejected: analytic capture applied model ${capture.appliedModelIdentity}`);
+    }
     if (!Number.isFinite(capture.boundarySplatCandidateCount) || capture.boundarySplatCandidateCount <= 0) {
       throw new Error(`candidate telemetry missing for analytic splat: ${JSON.stringify({
         candidateCount: capture.boundarySplatCandidateCount,
         authority: capture.boundarySplatCountAuthority,
       })}`);
+    }
+  }
+  if (capture.requestedRenderer === 'learned-splat') {
+    if (capture.effectiveRenderer !== LEARNED_SPLAT_RENDERER || capture.rendererIdentity !== LEARNED_SPLAT_RENDERER) {
+      throw new Error(`renderer disagreement: requested learned splat but effective renderer was ${capture.effectiveRenderer}/${capture.rendererIdentity}`);
+    }
+    if (capture.fallbackReason) throw new Error(`fallback route rejected for learned splat: ${capture.fallbackReason}`);
+    if (REJECTED_LEARNED_MODELS.has(capture.appliedModelIdentity)) {
+      throw new Error(`stale/default config rejected: forbidden learned model ${capture.appliedModelIdentity}`);
+    }
+    if (capture.appliedModelIdentity !== EXPECTED_LEARNED_MODEL) {
+      throw new Error(`renderer disagreement: expected learned model ${EXPECTED_LEARNED_MODEL}, got ${capture.appliedModelIdentity}`);
+    }
+    if (!Number.isFinite(capture.boundarySplatCandidateCount) || capture.boundarySplatCandidateCount <= 0) {
+      throw new Error(`candidate telemetry missing for learned splat: ${JSON.stringify(capture)}`);
+    }
+  }
+  if (capture.requestedRenderer.includes('splat')) {
+    if (capture.boundarySplatCandidateCopyBytes !== 0) {
+      throw new Error(`candidate-copy disagreement: expected zero bytes, got ${capture.boundarySplatCandidateCopyBytes}`);
+    }
+    if (!capture.boundarySplatCandidateCopyDisposition) {
+      throw new Error('candidate-copy disagreement: missing copy disposition');
     }
   }
   if (capture.requestedRenderer === RAYMARCH_RENDERER && capture.effectiveRenderer === SPLAT_RENDERER) {
@@ -534,10 +584,18 @@ function rejectFalseClosure(report) {
     }
     for (const frame of sequence.frames) {
       const analytic = frame.captures.find(capture => capture.requestedRenderer === 'analytic-splat');
+      const learned = frame.captures.find(capture => capture.requestedRenderer === 'learned-splat');
       const raymarch = frame.captures.find(capture => capture.requestedRenderer === RAYMARCH_RENDERER);
-      if (!analytic || !raymarch) throw new Error(`partial A/B report for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      if (!analytic || !learned || !raymarch) throw new Error(`partial A/B report for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
       validateCapture(analytic);
+      validateCapture(learned);
       validateCapture(raymarch);
+      if (analytic.canvasCapture.sameStateCaptureId !== learned.canvasCapture.sameStateCaptureId) {
+        throw new Error(`same-state disagreement for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+      }
+      if (analytic.boundarySplatCandidateCount !== learned.boundarySplatCandidateCount) {
+        throw new Error(`candidate-count disagreement for ${sequence.label} frame ${frame.controlledStepFrameIndex}: analytic=${analytic.boundarySplatCandidateCount} learned=${learned.boundarySplatCandidateCount}`);
+      }
     }
   }
   if (report.frozenDeterminism.meanAbsDiff > 1.5) {
@@ -546,6 +604,38 @@ function rejectFalseClosure(report) {
   if (report.candidateChurn.maxAbsDelta <= 0 && report.staticCamera.motionEnergy.maxMeanAbsDiff <= 0.1) {
     throw new Error('cached or static output rejected: sequence did not move in candidates or pixels');
   }
+}
+
+function summarizeAnalyticLearnedComparison(frames) {
+  const comparisons = frames.map(frame => {
+    const analytic = frame.captures.find(capture => capture.requestedRenderer === 'analytic-splat');
+    const learned = frame.captures.find(capture => capture.requestedRenderer === 'learned-splat');
+    if (!analytic || !learned) return null;
+    return {
+      sameBrowserSessionId: frame.sameBrowserSessionId,
+      sameStateCaptureId: frame.sameStateCaptureId,
+      baseFrameCount: frame.baseFrameCount,
+      baseSimStepCount: frame.baseSimStepCount,
+      analyticRendererIdentity: analytic.rendererIdentity,
+      learnedRendererIdentity: learned.rendererIdentity,
+      learnedModelIdentity: learned.appliedModelIdentity,
+      candidateCount: analytic.boundarySplatCandidateCount,
+      instanceCount: analytic.boundarySplatInstanceCount,
+      overflowCount: analytic.boundarySplatOverflowCount,
+      analyticCopyDisposition: analytic.boundarySplatCandidateCopyDisposition,
+      learnedCopyDisposition: learned.boundarySplatCandidateCopyDisposition,
+      pixelDelta: imageDiff(analytic.image.path, learned.image.path),
+      analyticImage: analytic.image.path,
+      learnedImage: learned.image.path,
+    };
+  }).filter(Boolean);
+  return {
+    authority: 'same-browser-same-frozen-state-analytic-learned-native-png-v0',
+    expectedLearnedModelIdentity: EXPECTED_LEARNED_MODEL,
+    rejectedLearnedModelIdentities: [...REJECTED_LEARNED_MODELS],
+    comparisonCount: comparisons.length,
+    comparisons,
+  };
 }
 
 function computeFrozenDeterminism(frame) {
@@ -752,10 +842,13 @@ function compactState(state) {
     volumeReconstructionStyle: state.volumeReconstructionStyle,
     boundarySplatMode: state.boundarySplatMode,
     boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+    boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
     boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
     boundarySplatCandidateCount: state.boundarySplatCandidateCount,
     boundarySplatOverflowCount: state.boundarySplatOverflowCount,
     boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+    boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
+    boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
     frameCount: state.frameCount,
     simStepCount: state.simStepCount,
   };
