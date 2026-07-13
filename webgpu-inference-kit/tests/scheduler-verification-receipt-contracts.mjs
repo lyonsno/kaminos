@@ -163,6 +163,32 @@ assert.equal(callerSuppliedGenericVerifiedReceipt.boundaryAssertions[0].reported
 assert.deepEqual(callerSuppliedGenericVerifiedReceipt.downgrades, []);
 assert.equal(validateSchedulerVerificationReceipt(callerSuppliedGenericVerifiedReceipt).ok, true);
 
+const unknownPhaseClaim = createMogeStageReceipt({
+  scheduler: {
+    schema: 'kaminos.webgpu-route-scheduler.v0',
+    requestedScheduler: { mode: 'cooperative', phaseChunkSize: { speculativePhase: 4 } },
+    effectiveScheduler: { mode: 'cooperative', phaseChunkSize: { speculativePhase: 4 }, unsupportedFields: [] },
+    verificationState: 'verified',
+  },
+  eventTrace: {
+    schema: SCHEDULER_EVENT_TRACE_SCHEMA,
+    clock: 'performance.now',
+    timingAuthority: 'queue-submit-wait',
+    events: [{ tMs: 1, phase: 'speculativePhase', boundary: 'speculative-phase', kind: 'chunk-start' }],
+  },
+  boundaryAssertions: [{
+    field: 'phaseChunkSize.speculativePhase',
+    requested: 4,
+    effective: 4,
+    status: 'verified',
+    observedBoundary: 'speculative-phase',
+    observedCount: 1,
+  }],
+});
+assert.equal(unknownPhaseClaim.status, 'scheduler-unverified', 'unknown phase claims must remain fail-closed');
+assert.equal(unknownPhaseClaim.boundaryAssertions[0].status, 'observed');
+assert.equal(unknownPhaseClaim.boundaryAssertions[0].reportedStatus, 'verified');
+
 const missingEventsReceipt = createMogeStageReceipt({
   eventTrace: {
     schema: SCHEDULER_EVENT_TRACE_SCHEMA,

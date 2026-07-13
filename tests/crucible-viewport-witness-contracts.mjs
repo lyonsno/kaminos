@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
 
+import { createSchedulerVerificationReceipt } from '../webgpu-inference-kit/src/index.js';
+
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
 const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);
 const argumentFailureRoot = mkdtempSync(join(tmpdir(), 'kaminos-crucible-replay-args-'));
@@ -73,18 +75,55 @@ const spnFusionValidationSource = witness.match(
 );
 assert.ok(spnFusionValidationSource, 'witness must expose a testable SPN fusion tile authority gate');
 const validateSpnFusionTileEvidence = vm.runInNewContext(`(${spnFusionValidationSource[0]})`);
-const validSpnFusionEvidence = {
-  schedulerBoundaryAssertions: [{
+const spnFusionTileEvents = [
+  { phase: 'spn-fusion', boundary: 'spn-fusion', kind: 'chunk-start', role: 'spn-fusion-output-chunk', block: 'upsample0.layer-1.output-chunk-0', parentBlock: 'upsample0.layer-1', outputChunkIndex: 0, outputChunkCount: 2, outputStart: 0, outputEnd: 524288, outputCount: 524288, totalOutputItems: 1048576 },
+  { phase: 'spn-fusion', boundary: 'spn-fusion', kind: 'chunk-start', chunkRole: 'spn-fusion-output-chunk', block: 'upsample0.layer-1', parentBlock: 'upsample0', outputChunkIndex: 1, outputChunkCount: 2, outputStart: 524288, outputEnd: 1048576, outputCount: 524288, totalOutputItems: 1048576 },
+];
+const normalizedSpnFusionReceipt = createSchedulerVerificationReceipt({
+  route: {
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    requestedRouteId: 'adapter.sharp-image-to-splat-live.v0',
+    effectiveRouteId: 'adapter.sharp-image-to-splat-live.v0',
+    backendClass: 'browser-webgpu',
+  },
+  scheduler: {
+    schema: 'kaminos.webgpu-route-scheduler.v0',
+    requestedScheduler: {
+      mode: 'cooperative',
+      phaseChunkSize: { spnFusionOutputItems: 524288 },
+    },
+    effectiveScheduler: {
+      mode: 'cooperative',
+      phaseChunkSize: { spnFusionOutputItems: 524288 },
+      unsupportedFields: [],
+    },
+    verificationState: 'verified',
+  },
+  backpressure: {
+    schema: 'kaminos.webgpu-route-backpressure.v0',
+    requestedBudget: 'visible-wait',
+    effectiveBudget: 'visible-wait',
+  },
+  eventTrace: {
+    schema: 'kaminos.webgpu-scheduler-event-trace.v0',
+    clock: 'performance.now',
+    timingAuthority: 'queue-submit-wait',
+    events: spnFusionTileEvents,
+  },
+  boundaryAssertions: [{
     field: 'phaseChunkSize.spnFusionOutputItems',
     requested: 524288,
     effective: 524288,
     status: 'verified',
     observedCount: 2,
+    observedBoundary: 'spn-fusion',
   }],
-  spnFusionTileEvents: [
-    { block: 'upsample0.layer-1.output-chunk-0', parentBlock: 'upsample0.layer-1', outputChunkIndex: 0, outputChunkCount: 2, outputStart: 0, outputEnd: 524288, outputCount: 524288, totalOutputItems: 1048576 },
-    { block: 'upsample0.layer-1', parentBlock: 'upsample0', outputChunkIndex: 1, outputChunkCount: 2, outputStart: 524288, outputEnd: 1048576, outputCount: 524288, totalOutputItems: 1048576 },
-  ],
+});
+assert.equal(normalizedSpnFusionReceipt.status, 'verified', 'event-backed SPN fusion output ranges must remain verified after receipt normalization');
+assert.equal(normalizedSpnFusionReceipt.boundaryAssertions[0].status, 'verified');
+const validSpnFusionEvidence = {
+  schedulerBoundaryAssertions: normalizedSpnFusionReceipt.boundaryAssertions,
+  spnFusionTileEvents,
 };
 assert.deepEqual(
   JSON.parse(JSON.stringify(validateSpnFusionTileEvidence({
