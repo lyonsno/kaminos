@@ -719,6 +719,7 @@ export async function createWebGPUFingerFluidSolver({
     diagnosticsPending = true;
     try {
       const diagnosticsStepCount = stepCount;
+      const diagnosticsCapturedAtMs = performance.now();
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-diagnostics-copy' });
       encoder.copyBufferToBuffer(particleBuffer, 0, diagnosticsBuffer, 0, particleData.byteLength);
       device.queue.submit([encoder.finish()]);
@@ -743,7 +744,7 @@ export async function createWebGPUFingerFluidSolver({
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
         stepCount: diagnosticsStepCount,
-        capturedAtMs: Number(performance.now().toFixed(1)),
+        capturedAtMs: Number(diagnosticsCapturedAtMs.toFixed(1)),
         activeExtent3d: {
           min: min.map(value => Number(value.toFixed(4))),
           max: max.map(value => Number(value.toFixed(4))),

@@ -53,7 +53,8 @@ assert.match(webgpuCoreSource, /dispatchWorkgroups/, 'solver dispatches GPU comp
 assert.match(webgpuCoreSource, /createRenderPipeline/, 'solver state is rendered directly on GPU');
 assert.match(webgpuCoreSource, /createWebGPUFingerFluidSolver/, 'GPU solver factory is exported');
 assert.match(webgpuCoreSource, /stepCount:\s*diagnosticsStepCount/, 'sparse GPU diagnostics carry the exact simulation step they represent');
-assert.match(webgpuCoreSource, /capturedAtMs:\s*Number\(performance\.now\(\)\.toFixed\(1\)\)/, 'sparse GPU diagnostics carry monotonic capture time');
+assert.match(webgpuCoreSource, /const diagnosticsCapturedAtMs = performance\.now\(\);[\s\S]*?createCommandEncoder/, 'diagnostic age begins when the GPU copy is submitted');
+assert.match(webgpuCoreSource, /capturedAtMs:\s*Number\(diagnosticsCapturedAtMs\.toFixed\(1\)\)/, 'sparse GPU diagnostics preserve submission-time provenance');
 
 assert.match(indexSource, /data-tab="finger-fluid-bench"/, 'Kaminos sidebar exposes a Finger Fluid bench tab');
 assert.match(indexSource, /id="tab-finger-fluid-bench"/, 'Kaminos app shell contains Finger Fluid bench content');
