@@ -60,6 +60,17 @@ assert.deepEqual(invalidMoments, {
   approximation: 'single-representative-depth-no-interpenetration-split',
 });
 
+const invalidSmokeMoments = composeSingleDepthLayers({
+  splat: { premultipliedRadiance: [0.4, 0.2, 0.1], opacity: 0.5, representativeDepth: 2 },
+  smoke: { premultipliedRadiance: [0.1, 0.1, 0.1], opacity: 0.5, representativeDepth: null },
+});
+assert.deepEqual(invalidSmokeMoments, {
+  identity: HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
+  status: 'invalid',
+  fallbackReason: 'smoke-representative-depth-missing',
+  approximation: 'single-representative-depth-no-interpenetration-split',
+});
+
 assert.throws(
   () => composeSingleDepthLayers({
     splat: { premultipliedRadiance: [Number.NaN, 0, 0], opacity: 0.5, representativeDepth: 2 },
@@ -83,6 +94,7 @@ assert.match(core, /boundarySplatCompositionFallbackReason/, 'hybrid route failu
 assert.match(core, /single-representative-depth-no-interpenetration-split/, 'runtime declares the first compositor approximation boundary');
 assert.match(witness, /boundarySplatCompositionRequested/, 'witness preserves requested composition identity');
 assert.match(witness, /boundarySplatCompositionEffective/, 'witness preserves effective composition identity');
+assert.match(witness, /boundarySplatCompositionFallbackReason/, 'witness preserves explicit hybrid fallback evidence');
 assert.match(witness, /hybridSplatLayer/, 'witness preserves splat attachment semantics');
 assert.match(witness, /hybridSmokeLayer/, 'witness preserves smoke attachment semantics');
 
