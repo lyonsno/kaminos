@@ -122,8 +122,9 @@ const resolution = Number(args.get('--resolution') || 224);
 const scoreThreshold = args.get('--score-threshold');
 const viewportWidth = Number(args.get('--viewport-width') || 1000);
 const viewportHeight = Number(args.get('--viewport-height') || 520);
-const hookWaitMs = Number(args.get('--hook-wait-ms') || 20000);
-const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || 20000);
+const fullStackTimeoutMs = isImageFpnNeckPacketMode(packetMode) ? 600000 : 20000;
+const hookWaitMs = Number(args.get('--hook-wait-ms') || fullStackTimeoutMs);
+const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || fullStackTimeoutMs);
 const settleMs = Number(args.get('--settle-ms') || 400);
 const headless = args.get('--headless') !== '0';
 
@@ -363,9 +364,36 @@ function assertDetectorStackEvidence(state) {
   return report;
 }
 
+function positiveIntegerDimensions(dimensions) {
+  return Array.isArray(dimensions)
+    && dimensions.length === 2
+    && dimensions.every(value => Number.isInteger(value) && value > 0);
+}
+
+function dimensionsEqual(actual, expected) {
+  return positiveIntegerDimensions(actual)
+    && positiveIntegerDimensions(expected)
+    && actual[0] === expected[0]
+    && actual[1] === expected[1];
+}
+
 function assertBrowserOriginalImageIngress(state) {
   const sourceIngress = state?.browserOriginalImageIngressEvidence;
-  if (!sourceIngress || sourceIngress.runtimeOwner !== 'browser' || sourceIngress.effectiveSourceImageSha256 !== sourceIngress.requestedSourceImageSha256 || !Array.isArray(sourceIngress.decodedResolution) || !Array.isArray(sourceIngress.targetResolution) || sourceIngress.resizeAlgorithm !== state?.sourceImage?.resize?.algorithm) throw new Error('imagePreprocess browser original-image ingress evidence missing or mismatched');
+  const pixelValuesShape = state?.imagePreprocessEvidence?.pixelValuesOutput?.shape;
+  const receiptTargetResolution = Array.isArray(pixelValuesShape) && pixelValuesShape.length === 4
+    ? [pixelValuesShape[2], pixelValuesShape[1]]
+    : null;
+  if (!sourceIngress
+    || sourceIngress.runtimeOwner !== 'browser'
+    || sourceIngress.effectiveSourceImageSha256 !== sourceIngress.requestedSourceImageSha256
+    || !dimensionsEqual(sourceIngress.decodedResolution, state?.sourceImage?.encodedResolution)
+    || !dimensionsEqual(sourceIngress.targetResolution, state?.sourceImage?.resize?.targetResolution)
+    || !dimensionsEqual(sourceIngress.targetResolution, receiptTargetResolution)
+    || sourceIngress.resizeOwner !== 'browser'
+    || sourceIngress.resizeAlgorithm !== 'pillow-12-fixed-point-bilinear-v0'
+    || sourceIngress.resizeAlgorithm !== state?.sourceImage?.resize?.algorithm) {
+    throw new Error('imagePreprocess browser original-image ingress evidence missing or mismatched');
+  }
   return sourceIngress;
 }
 

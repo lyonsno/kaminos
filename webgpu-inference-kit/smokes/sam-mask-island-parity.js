@@ -81,6 +81,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
 ]);
 const PIXEL_DECODER_WEIGHT_ROLE_EXAMPLES = ['pixel-decoder-stage-0-conv-weight'];
+const SAM3_PILLOW_12_FIXED_POINT_BILINEAR_RESIZE = 'pillow-12-fixed-point-bilinear-v0';
 
 const state = {
   schema: 'kaminos.sam3-mask-island.browser-parity-state.v0',
@@ -111,6 +112,7 @@ const state = {
   browserOriginalImageIngressEvidence: null,
   browserFpnDetrIngressEvidence: null,
   parity: null,
+  binaryThresholdMismatchEvidence: null,
   debugReadbackSamples: null,
   sourceImage: null,
   selectedMaskIndex: null,
@@ -195,6 +197,35 @@ function mismatchCount(a, b) {
   return count;
 }
 
+function collectBinaryThresholdMismatchEvidence(expectedLogits, gpuLogits, expectedBinary, gpuBinary) {
+  if (!expectedLogits || !gpuLogits || !expectedBinary || !gpuBinary) return null;
+  if (expectedLogits.length !== gpuLogits.length || expectedBinary.length !== gpuBinary.length || expectedLogits.length !== expectedBinary.length) {
+    throw new Error('binary threshold mismatch evidence length mismatch');
+  }
+  const mismatches = [];
+  for (let index = 0; index < expectedBinary.length; index += 1) {
+    if (Number(expectedBinary[index]) === Number(gpuBinary[index])) continue;
+    const expectedLogit = Number(expectedLogits[index]);
+    const gpuLogit = Number(gpuLogits[index]);
+    mismatches.push({
+      index,
+      expectedBinary: Number(expectedBinary[index]),
+      gpuBinary: Number(gpuBinary[index]),
+      expectedLogit,
+      gpuLogit,
+      logitAbsDiff: Math.abs(expectedLogit - gpuLogit),
+    });
+  }
+  return {
+    threshold: 0,
+    mismatchCount: mismatches.length,
+    maxExpectedAbsLogit: mismatches.reduce((max, item) => Math.max(max, Math.abs(item.expectedLogit)), 0),
+    maxGpuAbsLogit: mismatches.reduce((max, item) => Math.max(max, Math.abs(item.gpuLogit)), 0),
+    maxLogitAbsDiff: mismatches.reduce((max, item) => Math.max(max, item.logitAbsDiff), 0),
+    mismatches,
+  };
+}
+
 function sliceMask(values, shape, tokenIndex) {
   const hw = shape.height * shape.width;
   const offset = tokenIndex * hw;
@@ -231,9 +262,6 @@ async function loadSourceImageAsset(url, identity) {
       effectiveSourceImageSha256,
       encodedByteLength: bytes.byteLength,
       decodedResolution: [image.naturalWidth, image.naturalHeight],
-      targetResolution: identity?.resize?.targetResolution || identity?.resolution || null,
-      resizeOwner: identity?.resize?.owner || 'browser',
-      resizeAlgorithm: identity?.resize?.algorithm || null,
     },
   };
 }
@@ -3242,6 +3270,7 @@ async function main() {
       throw new Error(`unsupported manifest route: ${manifest.routeId}`);
     }
     state.requestedRouteId = manifest.routeId;
+    state.sourceImage = manifest.sourceImage || null;
     if (manifest.claims?.fullSam3BrowserExecution !== false) {
       throw new Error('oracle packet must not claim full SAM3 browser execution');
     }
@@ -3279,7 +3308,13 @@ async function main() {
     const sourceImage = sourceImageAsset?.image || null;
     if (sourceImageAsset) {
       sourceImageEl.src = sourceImageAsset.objectUrl;
-      state.browserOriginalImageIngressEvidence = sourceImageAsset.evidence;
+      const preprocessShape = payload.imagePreprocessEvidence ? imagePreprocessShape(manifest) : null;
+      state.browserOriginalImageIngressEvidence = {
+        ...sourceImageAsset.evidence,
+        targetResolution: preprocessShape ? [preprocessShape.width, preprocessShape.height] : null,
+        resizeOwner: preprocessShape ? 'browser' : null,
+        resizeAlgorithm: preprocessShape ? SAM3_PILLOW_12_FIXED_POINT_BILINEAR_RESIZE : null,
+      };
     }
     const legacySelectedMaskIndex = Number.isInteger(manifest.visualization?.selectedMaskIndex)
       ? manifest.visualization.selectedMaskIndex
@@ -3548,6 +3583,12 @@ async function main() {
     const gpuLogits = result.debugReadback.maskLogits ? new Float32Array(result.debugReadback.maskLogits) : null;
     const gpuBinary = result.debugReadback.binaryMask ? new Uint32Array(result.debugReadback.binaryMask) : null;
     const gpuPredLogits = result.debugReadback.predLogits ? new Float32Array(result.debugReadback.predLogits) : null;
+    const binaryThresholdMismatchEvidence = collectBinaryThresholdMismatchEvidence(
+      expectedLogits,
+      gpuLogits,
+      expectedBinary,
+      gpuBinary,
+    );
     const parity = {
       promptTokenIdMismatchCount: payload.browserPromptTokenizerEvidence?.promptTokenIdMismatchCount,
       promptAttentionMaskMismatchCount: payload.browserPromptTokenizerEvidence?.promptAttentionMaskMismatchCount,
@@ -3671,6 +3712,7 @@ async function main() {
       throw new Error(`selectedMaskIndex ${selectedMaskIndex} out of range`);
     }
     state.parity = parity;
+    state.binaryThresholdMismatchEvidence = binaryThresholdMismatchEvidence;
     state.debugReadbackSamples = debugReadbackSamples;
     state.routeReceipt = result.receipt;
     state.midstreamRouteReceipt = result.midstreamRouteReceipt || null;

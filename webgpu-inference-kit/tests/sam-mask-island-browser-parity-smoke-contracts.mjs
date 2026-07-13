@@ -82,6 +82,8 @@ assert.match(smokeJs, /referenceBoxesMaxAbsDiff/, 'browser smoke must report DET
 assert.match(smokeJs, /presenceLogitsMaxAbsDiff/, 'browser smoke must report DETR decoder presence-logit diff');
 assert.match(smokeJs, /predLogitsMaxAbsDiff/, 'browser smoke must report SAM3 scoring logit diff');
 assert.match(smokeJs, /binaryMismatchCount/, 'browser smoke must report binary mismatch count');
+assert.match(smokeJs, /collectBinaryThresholdMismatchEvidence/, 'browser smoke must diagnose binary threshold flips against logits');
+assert.match(smokeJs, /binaryThresholdMismatchEvidence/, 'browser smoke state must preserve binary threshold mismatch evidence on failure');
 
 assert.match(witness, /--enable-unsafe-webgpu/, 'witness must launch Chrome with WebGPU enabled');
 assert.match(witness, /Chrome DevTools endpoint did not open/, 'witness must use CDP with loud startup failure');
@@ -89,6 +91,7 @@ assert.match(witness, /samMaskIslandParitySmokeState/, 'witness must poll the br
 assert.match(witness, /kaminos\.sam3-mask-island\.browser-parity-smoke\.v0/, 'witness report must be schema stamped');
 assert.match(witness, /primary_output_written/, 'witness must write whether the primary artifact was preserved');
 assert.match(witness, /failure_phase/, 'witness must record failure phase');
+assert.match(witness, /fullStackTimeoutMs\s*=\s*isImageFpnNeckPacketMode\(packetMode\)\s*\?\s*600000\s*:\s*20000/, 'full image-FPN composition must default to a measured non-shadowing witness timeout');
 assert.match(witness, /requestedRouteId/, 'witness must preserve requested route identity');
 assert.match(witness, /effectiveRouteId/, 'witness must preserve effective route identity');
 assert.match(witness, /backendIdentity/, 'witness must preserve browser backend identity');

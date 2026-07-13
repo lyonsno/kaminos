@@ -31,6 +31,11 @@ assert.match(witness, /pixelValuesMaxAbsDiff/, 'witness must assert normalized p
 assert.match(witness, /browserOriginalImageIngressEvidence/, 'witness must preserve original encoded image browser-ingress evidence');
 assert.match(witness, /effectiveSourceImageSha256/, 'witness must require effective browser-fetched source identity');
 assert.match(witness, /resizeAlgorithm/, 'witness must bind the effective browser resize algorithm to the manifest');
+assert.match(witness, /positiveIntegerDimensions/, 'witness must reject empty, fractional, zero, or negative image dimensions');
+assert.match(witness, /dimensionsEqual\(sourceIngress\.decodedResolution, state\?\.sourceImage\?\.encodedResolution\)/, 'witness must bind live decoded dimensions to manifest source identity');
+assert.match(witness, /dimensionsEqual\(sourceIngress\.targetResolution, state\?\.sourceImage\?\.resize\?\.targetResolution\)/, 'witness must bind effective resize target dimensions to manifest identity');
+assert.match(witness, /dimensionsEqual\(sourceIngress\.targetResolution, receiptTargetResolution\)/, 'witness must bind effective resize target to the pixel-values receipt shape');
+assert.match(witness, /sourceIngress\.resizeOwner !== 'browser'/, 'witness must require effective browser ownership rather than a manifest-parroted owner');
 
 assert.match(smokeJs, /runSam3ImagePreprocessPhaseProgramRoute/, 'browser smoke must execute image-preprocess ingress route');
 assert.match(smokeJs, /image-preprocess-detector-stack-composition/, 'browser smoke must expose detector-stack composition with browser-local image preprocess ingress');
@@ -40,6 +45,8 @@ assert.match(smokeJs, /browserOriginalImageIngressEvidence/, 'browser smoke must
 assert.match(smokeJs, /source image asset hash mismatch/, 'browser smoke must fail when fetched original image bytes do not match the manifest');
 assert.match(smokeJs, /decodedResolution/, 'browser smoke must record decoded source dimensions before resize');
 assert.match(smokeJs, /resizeAlgorithm/, 'browser smoke must record the effective original-image resize algorithm');
+assert.match(smokeJs, /SAM3_PILLOW_12_FIXED_POINT_BILINEAR_RESIZE/, 'browser resize evidence must come from an implementation-owned algorithm constant');
+assert.match(smokeJs, /targetResolution: preprocessShape \? \[preprocessShape\.width, preprocessShape\.height\] : null/, 'browser resize evidence must derive its target from the effective preprocess shape');
 assert.match(smokeJs, /resizeRgbaPillowCompatibleBilinear/, 'browser smoke must use an explicit deterministic resizer rather than canvas interpolation');
 
 const {
