@@ -5042,24 +5042,34 @@ function boundarySplatCompositionCameraPose(params = new URLSearchParams(window.
   const requested = String(params.get('volume_boundary_splat_composition') || '').toLowerCase().replace(/_/g, '-');
   if (!['field', 'composed-field', 'field-100'].includes(requested)) return null;
   return {
-    identity: 'boundary-splat-composed-field-camera-v0',
+    identity: 'boundary-splat-composed-field-camera-v1',
     requestedComposition: requested,
     effectiveComposition: 'field',
-    position: [0, 7.4, 9.2],
-    target: [0, -0.3, 0],
+    position: [0, 10.5, 13.5],
+    target: [0, 0, 0],
   };
 }
 
 function applyBoundarySplatCompositionCamera(params = new URLSearchParams(window.location.search)) {
   const pose = boundarySplatCompositionCameraPose(params);
   if (!pose || !camera || !controls) return null;
+  controls.maxDistance = Math.max(Number(controls.maxDistance) || 0, 30);
   camera.position.fromArray(pose.position);
   controls.target.fromArray(pose.target);
   controls.update();
   camera.updateMatrixWorld?.();
+  const effectivePosition = camera.position.toArray();
+  const effectiveTarget = controls.target.toArray();
+  const requestedEffectiveAgreement = pose.position.every((value, index) => Math.abs(value - effectivePosition[index]) < 1e-6)
+    && pose.target.every((value, index) => Math.abs(value - effectiveTarget[index]) < 1e-6);
   window.__kaminosBoundarySplatCompositionCamera = {
     ...pose,
-    authority: 'url-owned-camera-pose',
+    requestedPosition: [...pose.position],
+    requestedTarget: [...pose.target],
+    position: effectivePosition,
+    target: effectiveTarget,
+    requestedEffectiveAgreement,
+    authority: 'url-owned-effective-camera-pose',
   };
   return window.__kaminosBoundarySplatCompositionCamera;
 }
@@ -17000,6 +17010,8 @@ function refreshVolumeReadout() {
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
 function frameVolumeCamera() {
+  const composedCamera = applyBoundarySplatCompositionCamera();
+  if (composedCamera) return;
   const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
   const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
   camera.position.set(...frame.position);

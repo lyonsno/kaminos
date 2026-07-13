@@ -13,7 +13,7 @@ const RENDERER = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const MODEL = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472';
 const SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const COMPOSITION = 'boundary-splat-composed-field-v0';
-const CAMERA = 'boundary-splat-composed-field-camera-v0';
+const CAMERA = 'boundary-splat-composed-field-camera-v1';
 const BROWSER_CONTINUITY_MODES = new Set([
   'continuous-existing',
   'reseated-after-original-process-disappeared',
@@ -390,6 +390,8 @@ function validateEffectiveState(state, cameraState, pageUrl) {
   if (Number(state?.boundarySplatOverflowCount || 0) !== 0) mismatches.push(['overflow', 0, state?.boundarySplatOverflowCount]);
   if (Number(state?.boundarySplatCopyBytesThisFrame) !== 0) mismatches.push(['copyBytes', 0, state?.boundarySplatCopyBytesThisFrame]);
   if (cameraState?.identity !== CAMERA) mismatches.push(['camera', CAMERA, cameraState?.identity]);
+  if (cameraState?.authority !== 'url-owned-effective-camera-pose') mismatches.push(['cameraAuthority', 'url-owned-effective-camera-pose', cameraState?.authority]);
+  if (cameraState?.requestedEffectiveAgreement !== true) mismatches.push(['cameraAgreement', true, cameraState?.requestedEffectiveAgreement]);
   if (params.get('volume_boundary_splat_composition') !== 'field') mismatches.push(['routeComposition', 'field', params.get('volume_boundary_splat_composition')]);
   if (params.get('volume_boundary_splat_instances') !== '100') mismatches.push(['routeInstances', '100', params.get('volume_boundary_splat_instances')]);
   if (mismatches.length) throw new Error(`stale-or-default-config: ${JSON.stringify(mismatches)}`);

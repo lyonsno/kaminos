@@ -9,6 +9,8 @@ assert.match(core, /BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY\s*=\s*'boundary-
 assert.match(core, /normalizeBoundarySplatInstanceCount/, 'runtime must normalize requested splat instance count explicitly');
 assert.match(page, /volume_boundary_splat_instances/, 'operator route must expose boundary splat instance count');
 assert.match(page, /volume_boundary_splat_composition/, 'operator route must encode the composed-field camera and layout instead of relying on hidden browser pose state');
+assert.match(page, /function frameVolumeCamera\(\)[\s\S]*applyBoundarySplatCompositionCamera[\s\S]*if \(composedCamera\) return/, 'generic smoke framing must not overwrite the composed-field route camera');
+assert.match(page, /url-owned-effective-camera-pose/, 'camera telemetry must identify the actual post-controls pose as effective route authority');
 assert.match(page, /id="volume-boundary-splat-instances"/, 'operator UI must expose a splat instance control');
 assert.match(page, /id="volume-boundary-splat-instances"[^>]*max="128"/, 'operator UI must expose a measured scale-demo range beyond the original four-flame proof');
 assert.match(core, /const BOUNDARY_SPLAT_MAX_INSTANCES = 128/, 'runtime must lift the product cap to the measured 128-instance scale-demo ceiling');

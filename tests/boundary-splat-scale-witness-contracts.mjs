@@ -35,6 +35,8 @@ assert.match(core, /timestampStatus:\s*'available'/, 'GPU ladder must require ti
 assert.match(core, /compactTimestampWrites/, 'GPU timing must bracket compaction with timestamps on the real compact pass');
 assert.match(core, /requiredTimestampIndices/, 'GPU timing must validate only timestamps backed by real passes in frozen mode');
 assert.match(page, /boundarySplatCompositionCameraPose/, 'page must own a deterministic camera pose for composed-field routes');
-assert.match(page, /boundary-splat-composed-field-camera-v0/, 'camera telemetry must publish the effective composed-field camera identity');
+assert.match(page, /boundary-splat-composed-field-camera-v1/, 'camera telemetry must publish the effective composed-field camera identity');
+assert.match(page, /requestedEffectiveAgreement/, 'camera telemetry must compare requested and actual post-controls poses');
+assert.match(witness, /requestedEffectiveAgreement/, 'scale witness must reject composed-camera requests that were overwritten or clamped');
 
 console.log('boundary splat scale witness contracts passed');
