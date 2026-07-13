@@ -13,6 +13,7 @@ const requiredControls = [
   ['crucible-viewport-source-select', 'The source plate must expose a direct image chooser'],
   ['crucible-viewport-route-select', 'The firing mouth must expose the intended output route'],
   ['crucible-viewport-profile-select', 'The firing mouth must expose the available firing behavior'],
+  ['crucible-viewport-presentation-select', 'The firing mouth must expose the visible fire presentation'],
   ['crucible-viewport-fire-button', 'The firing mouth must expose one obvious primary command'],
   ['crucible-viewport-cast-button', 'The cast tray must expose the finished cast action'],
 ];
@@ -39,8 +40,8 @@ assert.match(
 
 assert.match(
   html,
-  /function runCrucibleViewportFiring\([\s\S]*runKilnRouteBenchRoute\(route\.id,\s*profileId\)/,
-  'The central fire command must invoke the existing route runner with the effective route and profile',
+  /function runCrucibleViewportFiring\([\s\S]*firePresentationMode[\s\S]*runKilnRouteBenchRoute\(route\.id,\s*profileId,\s*\{ firePresentationMode \}\)/,
+  'The central fire command must invoke the existing route runner with the effective route, profile, and visible presentation',
 );
 assert.match(
   html,

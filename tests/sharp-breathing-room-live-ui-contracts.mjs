@@ -51,6 +51,36 @@ const staleFiringEvidence = classifyKilnFiringEvidence({
 assert.equal(staleFiringEvidence.ok, false);
 assert.ok(staleFiringEvidence.failures.includes('foreground-firing-id-mismatch'));
 
+const hybridFallbackEvidence = classifyKilnFiringEvidence({
+  firingId: 'firing-current',
+  requiredPresentationMode: 'learned-splat-flame-raymarched-smoke',
+  heartbeat: {
+    status: 'verified',
+    firingId: 'firing-current',
+    expectedFirePresentation: {
+      firingId: 'firing-current',
+      effectiveMode: 'learned-splat-flame-raymarched-smoke',
+      requireNoFallback: true,
+    },
+    effectiveFirePresentation: {
+      firingId: 'firing-current',
+      effectiveMode: 'raymarched-fire-smoke',
+      fallbackReason: 'hybrid-compositor-gpu-route-unavailable',
+    },
+  },
+});
+assert.equal(hybridFallbackEvidence.ok, false);
+assert.ok(hybridFallbackEvidence.failures.includes('fire-presentation-effective-mode-mismatch'));
+assert.ok(hybridFallbackEvidence.failures.includes('fire-presentation-fallback-present'));
+
+const hybridExpectationMissing = classifyKilnFiringEvidence({
+  firingId: 'firing-current',
+  requiredPresentationMode: 'learned-splat-flame-raymarched-smoke',
+  heartbeat: { status: 'verified', firingId: 'firing-current' },
+});
+assert.equal(hybridExpectationMissing.ok, false);
+assert.ok(hybridExpectationMissing.failures.includes('fire-presentation-expectation-missing'));
+
 const nonLoadableClassifierSource = index.match(
   /function classifyKilnNonLoadableResult\([\s\S]*?\n}\n(?=\nasync function runKilnRouteBenchRoute)/,
 );

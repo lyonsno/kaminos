@@ -15,6 +15,7 @@ import {
   HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
   HYBRID_SMOKE_FRONT_OPACITY_CEILING,
 } from './hybrid-splat-smoke-compositor.mjs';
+import { createKilnFirePresentation } from './kiln-fire-presentation.mjs';
 
 // V0 orders whole layers by one representative depth: single-representative-depth-no-interpenetration-split.
 
@@ -5506,6 +5507,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }),
   });
 
+  function firePresentationSnapshot() {
+    const hooks = fireEpisodeHooks.snapshot();
+    if (!hooks.firingId) return null;
+    return createKilnFirePresentation({
+      firingId: hooks.firingId,
+      state: { ...state, fireEpisodeHooks: hooks },
+    });
+  }
+
   let pyroDynamicDetailEnergy = 0;
   let pyroDynamicDetailConfidence = 0;
   let pyroDynamicDetailPhase = 0;
@@ -10971,6 +10981,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
       fireEpisodeHooks: fireEpisodeHooks.snapshot(),
+      firePresentation: firePresentationSnapshot(),
       boundarySplatMode: state.boundarySplatMode,
       boundarySplatCompositionRequested: state.boundarySplatCompositionRequested,
       boundarySplatCompositionEffective: state.boundarySplatCompositionEffective,
@@ -11601,6 +11612,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         scalarActivityReceiver: scalarActivityReceiverDebug(),
         pyroDynamicDetail: clonePyroDynamicDetail(),
         fireEpisodeHooks: fireEpisodeHooks.snapshot(),
+        firePresentation: firePresentationSnapshot(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
     },

@@ -56,6 +56,13 @@ const learnedHybridPresentation = {
     simStepAdvanceCount: 2,
     startedAtMs: 90,
     rawRafGapSamplesMs: [16, 17, 52],
+    routeIdentity: {
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+      prototypeIdentity: 'kaminos-volume-prototype-v0',
+      compositionRequested: 'hybrid-smoke',
+      compositionEffective: 'hybrid-smoke',
+      compositionFallbackReason: null,
+    },
   },
 };
 
@@ -210,8 +217,40 @@ assert.equal(hybridReport.effectiveFirePresentation.effectiveMode, 'learned-spla
 assert.equal(hybridReport.effectiveFirePresentation.candidateOverflow, 0);
 assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.identity, 'foreground-kiln-fire-episode-hooks-v0');
 assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.firingId, 'firing-0713-a');
+assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.routeIdentity.compositionRequested, 'hybrid-smoke');
+assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.routeIdentity.compositionEffective, 'hybrid-smoke');
+assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.routeIdentity.compositionFallbackReason, null);
 assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.rawRafGapSamplesMs, undefined, 'per-frame presentation samples retain only the episode join, not repeated raw gap arrays');
 assert.deepEqual(hybridReport.firePresentationMismatchSamples, []);
+
+const hookCompositionFallback = episodeHarness({
+  firePresentation: {
+    ...learnedHybridPresentation,
+    fireEpisodeHooks: {
+      ...learnedHybridPresentation.fireEpisodeHooks,
+      routeIdentity: {
+        effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+        prototypeIdentity: 'kaminos-volume-prototype-v0',
+        compositionRequested: 'hybrid-smoke',
+        compositionEffective: 'raymarch-fallback',
+        compositionFallbackReason: 'hybrid-compositor-gpu-route-unavailable',
+      },
+    },
+  },
+  expectedFirePresentation: {
+    firingId: learnedHybridPresentation.firingId,
+    effectiveMode: 'learned-splat-flame-raymarched-smoke',
+    requireNoFallback: true,
+    requireFireEpisodeHooks: true,
+  },
+});
+hookCompositionFallback.episode.start();
+hookCompositionFallback.advance();
+const hookCompositionFallbackReport = hookCompositionFallback.episode.finish({ phase: 'complete' });
+assert.equal(hookCompositionFallbackReport.status, 'invalid');
+assert.ok(hookCompositionFallbackReport.failures.includes('effective-fire-presentation-mismatch'));
+assert.ok(hookCompositionFallbackReport.firePresentationMismatchSamples[0].reasons.includes('fire-episode-composition-effective-mismatch'));
+assert.ok(hookCompositionFallbackReport.firePresentationMismatchSamples[0].reasons.includes('fire-episode-composition-fallback-present'));
 
 const exactFireEpisodeRecording = {
   identity: 'foreground-kiln-fire-episode-hooks-v0',

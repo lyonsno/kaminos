@@ -2559,6 +2559,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
                 <select class="crucible-viewport-select" id="crucible-viewport-profile-select"></select>
               </label>
             </div>
+            <label class="crucible-viewport-control-label">Show the flame as
+              <select class="crucible-viewport-select" id="crucible-viewport-presentation-select">
+                <option value="full-volume">Full volume</option>
+                <option value="hybrid-smoke-preview">Live splats with smoke (preview)</option>
+              </select>
+            </label>
             <button type="button" class="crucible-viewport-action" id="crucible-viewport-fire-button">Fire image</button>
             <div class="crucible-viewport-help" id="crucible-viewport-fire-help">Choose an image to begin.</div>
           </div>
@@ -2800,6 +2806,11 @@ import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
 import { createForegroundKilnHeartbeatEpisode, foregroundKilnStartAllowsPipeline } from './lib/foreground-kiln-heartbeat.mjs';
+import {
+  HYBRID_KILN_FIRE_PRESENTATION_MODE,
+  createExpectedHybridKilnFirePresentation,
+  waitForHybridKilnFirePresentation,
+} from './kiln-fire-presentation.mjs';
 import {
   DEFAULT_DECISION_MOTION_PLAN,
   DEFAULT_MOTION_PHRASE_CONTROLS,
@@ -12937,6 +12948,7 @@ let kilnRouteBenchState = {
 
 let sharpBreathingRoomRunningProfileId = null;
 let crucibleViewportProfileId = 'cooperative-spn-gaussian';
+let crucibleViewportPresentationMode = 'full-volume';
 
 const CRUCIBLE_BENCH_STORAGE_KEY = 'kaminosCrucibleBenchState';
 const CRUCIBLE_BENCH_PROXY_ZONES = [
@@ -13261,7 +13273,9 @@ function runCrucibleViewportFiring() {
   const routeId = document.getElementById('crucible-viewport-route-select')?.value || kilnRouteBenchState.selectedRouteId;
   const route = selectedKilnRouteBenchRoute(routeId);
   const profileId = document.getElementById('crucible-viewport-profile-select')?.value || crucibleViewportProfileId;
-  return runKilnRouteBenchRoute(route.id, profileId);
+  const firePresentationMode = document.getElementById('crucible-viewport-presentation-select')?.value
+    || crucibleViewportPresentationMode;
+  return runKilnRouteBenchRoute(route.id, profileId, { firePresentationMode });
 }
 
 function openCrucibleViewportCast() {
@@ -13322,6 +13336,7 @@ function renderCrucibleViewportWorkspace() {
   const sourceSelect = document.getElementById('crucible-viewport-source-select');
   const routeSelect = document.getElementById('crucible-viewport-route-select');
   const profileSelect = document.getElementById('crucible-viewport-profile-select');
+  const presentationSelect = document.getElementById('crucible-viewport-presentation-select');
   const fireButton = document.getElementById('crucible-viewport-fire-button');
   const fireHelp = document.getElementById('crucible-viewport-fire-help');
   const castButton = document.getElementById('crucible-viewport-cast-button');
@@ -13335,6 +13350,10 @@ function renderCrucibleViewportWorkspace() {
   if (heatLabel) heatLabel.textContent = crucibleViewportHeatLabel(heatState);
   renderCrucibleViewportSourceOptions(sourceSelect, currentSource);
   renderCrucibleViewportRouteOptions(routeSelect, profileSelect, route);
+  if (presentationSelect) {
+    presentationSelect.value = crucibleViewportPresentationMode;
+    presentationSelect.disabled = running;
+  }
   if (fireButton) {
     fireButton.disabled = running || !currentSource?.source;
     fireButton.textContent = running ? 'Firing...' : 'Fire image';
@@ -13646,6 +13665,7 @@ async function beginSharpBreathingRoomKilnFire({
   source,
   pipelineId,
   firingId,
+  firePresentationMode = 'full-volume',
   requireSharpDutyCorrelation = profileId === 'cooperative-spn-gaussian',
 }) {
   const previousState = volumePrototype?.debugState?.() || null;
@@ -13657,6 +13677,7 @@ async function beginSharpBreathingRoomKilnFire({
     source: source?.source || null,
     sourceLabel: source?.label || null,
     firingId: firingId || null,
+    firePresentationMode,
     startedAt: new Date().toISOString(),
     activatedByRun: false,
     previousActive: previousState?.active === true,
@@ -13668,6 +13689,9 @@ async function beginSharpBreathingRoomKilnFire({
     const wasActive = volumePrototype?.debugState?.().active === true;
     applyTallPlumeOperatorPreset(DEFAULT_VOLUME_SMOKE_TALL_PRESET, { keepBudgetPreset: true });
     const fireBudget = applyKilnContentionFireBudget();
+    const hybridPresentationRequested = firePresentationMode === 'hybrid-smoke-preview';
+    setVolumeControlValue('volume-boundary-splat-mode', hybridPresentationRequested ? 'learned' : 'off');
+    setVolumeControlValue('volume-boundary-splat-composition', hybridPresentationRequested ? 'hybrid-smoke' : 'splat-only');
     updateVolumeControlLabels();
     volumePrototype.setControls(readVolumeControls());
     frameVolumeCamera();
@@ -13678,6 +13702,12 @@ async function beginSharpBreathingRoomKilnFire({
       || fireEpisodeHooks?.status !== 'recording') {
       throw new Error(`The renderer did not open the requested fire episode ${firingId || '<missing>'}.`);
     }
+    if (hybridPresentationRequested) {
+      await waitForHybridKilnFirePresentation({
+        firingId,
+        readState: () => volumePrototype?.debugState?.() || null,
+      });
+    }
     fireState.phase = 'burning';
     fireState.activatedByRun = !wasActive;
     fireState.previousActive = wasActive;
@@ -13685,6 +13715,13 @@ async function beginSharpBreathingRoomKilnFire({
     fireState.fireEpisodeHooks = fireEpisodeHooks;
     fireState.requestedFireBudget = fireBudget.requestedFireBudget;
     fireState.effectiveFireBudget = fireBudgetFromVolumeState(fireState.volumeDebugState);
+    const expectedFirePresentation = hybridPresentationRequested
+      ? createExpectedHybridKilnFirePresentation({
+          firingId,
+          learnedModelIdentity: fireState.volumeDebugState?.boundarySplatAttributeModelIdentity,
+        })
+      : null;
+    fireState.expectedFirePresentation = expectedFirePresentation;
     activeForegroundKilnHeartbeat = createForegroundKilnHeartbeatEpisode({
       routeId: 'sharp-image-to-splat-live-v0',
       profileId,
@@ -13693,6 +13730,7 @@ async function beginSharpBreathingRoomKilnFire({
       requireSharpDutyCorrelation,
       expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
       requestedFireBudget: fireState.requestedFireBudget,
+      expectedFirePresentation,
       readVolumeState: () => volumePrototype?.debugState?.() || null,
       requireExactFireEpisode: true,
     });
@@ -17810,7 +17848,12 @@ function kilnRouteBenchHeartbeatSummary(result) {
   return `The longest pause while the model was working was ${roundedMs} ms${nearEnd ? ' near the end of model work' : ''}; no named scheduler event covered it.`;
 }
 
-function classifyKilnFiringEvidence({ required = false, firingId = null, heartbeat = null } = {}) {
+function classifyKilnFiringEvidence({
+  required = false,
+  firingId = null,
+  heartbeat = null,
+  requiredPresentationMode = null,
+} = {}) {
   const failures = [];
   if (!heartbeat) {
     failures.push('foreground-heartbeat-missing');
@@ -17819,6 +17862,17 @@ function classifyKilnFiringEvidence({ required = false, firingId = null, heartbe
       failures.push(...(heartbeat.failures?.length ? heartbeat.failures : ['foreground-heartbeat-invalid']));
     }
     if (!firingId || heartbeat.firingId !== firingId) failures.push('foreground-firing-id-mismatch');
+    if (requiredPresentationMode) {
+      const expectedPresentation = heartbeat.expectedFirePresentation;
+      const effectivePresentation = heartbeat.effectiveFirePresentation;
+      if (expectedPresentation?.effectiveMode !== requiredPresentationMode) {
+        failures.push('fire-presentation-expectation-missing');
+      }
+      if (effectivePresentation?.effectiveMode !== requiredPresentationMode) {
+        failures.push('fire-presentation-effective-mode-mismatch');
+      }
+      if (effectivePresentation?.fallbackReason) failures.push('fire-presentation-fallback-present');
+    }
     if (required) {
       const correlation = heartbeat.sharpDutyCorrelation;
       if (correlation?.status !== 'verified') failures.push('sharp-duty-correlation-invalid');
@@ -17873,7 +17927,7 @@ function classifyKilnNonLoadableResult({ firingEvidence = null, artifactPath = n
   };
 }
 
-async function runKilnRouteBenchRoute(routeId, profileId) {
+async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
   const route = selectedKilnRouteBenchRoute(routeId);
   const profileLabel = route.profileLabels?.[profileId] || profileId;
   const source = kilnRouteBenchSelectedSource(route);
@@ -17912,6 +17966,7 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
     source,
     pipelineId,
     firingId: crucibleFiring.id,
+    firePresentationMode: options.firePresentationMode || 'full-volume',
     requireSharpDutyCorrelation: profileId === 'cooperative-spn-gaussian',
   });
   if (!foregroundKilnStartAllowsPipeline(kilnFire)) {
@@ -17974,6 +18029,9 @@ async function runKilnRouteBenchRoute(routeId, profileId) {
       required: profileId === 'cooperative-spn-gaussian',
       firingId: crucibleFiring.id,
       heartbeat: run?.foregroundKilnHeartbeat || null,
+      requiredPresentationMode: options.firePresentationMode === 'hybrid-smoke-preview'
+        ? HYBRID_KILN_FIRE_PRESENTATION_MODE
+        : null,
     });
     if (run && typeof run === 'object') run.kilnFiringEvidence = firingEvidence;
     const artifact = pipelinePrimaryRunArtifact(run);
@@ -18253,6 +18311,12 @@ function initPipelineDock() {
   });
   document.getElementById('crucible-viewport-profile-select')?.addEventListener('change', event => {
     selectCrucibleViewportProfile(event.target.value);
+  });
+  document.getElementById('crucible-viewport-presentation-select')?.addEventListener('change', event => {
+    crucibleViewportPresentationMode = event.target.value === 'hybrid-smoke-preview'
+      ? 'hybrid-smoke-preview'
+      : 'full-volume';
+    renderCrucibleViewportWorkspace();
   });
   document.getElementById('crucible-viewport-fire-button')?.addEventListener('click', () => {
     runCrucibleViewportFiring().catch(err => setInfo(err.message || String(err)));
