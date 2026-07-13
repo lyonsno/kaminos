@@ -23,11 +23,19 @@ assert.match(core, /beginDebugFullFieldImport/, 'runtime exposes checksum-addres
 assert.match(core, /writeDebugFullFieldImportChunk/, 'runtime exposes sequential chunk import custody');
 assert.match(core, /finishDebugFullFieldImport/, 'runtime exposes import validation and application custody');
 assert.match(core, /receiver-initialized-from-filtered-high-t-v0/, 'runtime names receiver initialization authority');
+assert.match(core, /learned-selective-head-composition-not-filtered-high-truth-v0/, 'runtime names learned selective composition authority without impersonating high truth');
+assert.match(core, /learned-selective-head-application-v0/, 'runtime names the selective head application route');
 assert.match(core, /advanceDebugImportedFieldSteps/, 'controlled receiver stepping is atomic and bound to the applied import session');
 assert.match(core, /renderLoopPaused:[\s\S]*state\.active = false/, 'applied imports remain held outside the animation loop');
 assert.match(core, /fluidBuffers\[0\][\s\S]*fluidBuffers\[1\]/, 'runtime initializes both fluid ping-pong buffers');
 assert.match(core, /frontBuffers\[0\][\s\S]*frontBuffers\[1\]/, 'runtime initializes both front ping-pong buffers');
 assert.match(exporter, /--initial-field-manifest/, 'exporter accepts a canonical receiver initializer manifest');
+assert.match(exporter, /kaminos\.volume\.exact-basin-selective-composition\.v0/, 'exporter admits the learned selective composition schema explicitly');
+assert.match(
+  exporter,
+  /learned-selective-head-composition-not-filtered-high-truth-v0[\s\S]*mustNotBeAcceptedAs[\s\S]*filtered-high/,
+  'selective composition admission preserves its explicit non-truth consumption contract',
+);
 assert.match(exporter, /--advance-imported-steps/, 'exporter advances imported state by an explicit caller-owned step count');
 assert.match(
   exporter,
@@ -43,6 +51,12 @@ assert.match(exporter, /canvas-clip-offscreen/, 'witness rejects an offscreen ca
 assert.match(exporter, /initialFieldImport/, 'export manifest preserves effective import identity');
 assert.match(exporter, /importedAdvance/, 'export manifest preserves before/after receiver step identity');
 assert.match(core, /requestedSteps === 0[\s\S]*imported-receiver-held-state-v0/, 'zero-step imports identify a held control');
+assert.match(
+  core,
+  /SELECTIVE_COMPOSITION_AUTHORITY[\s\S]*requestedSteps > 0[\s\S]*selective-composition-held-only/,
+  'learned selective compositions cannot be advanced as physical receiver state',
+);
+assert.match(core, /learned-selective-composition-held-render-v0/, 'held learned composition has an authority-specific render identity');
 assert.match(core, /requestedSteps === 1[\s\S]*ordinary-receiver-single-simulation-step-v0/, 'one-step imports identify the ordinary receiver assay');
 assert.match(core, /imported-receiver-multi-step-sequence-v0/, 'multi-step imports cannot impersonate the one-step assay');
 assert.match(core, /receipt\.importedAdvance[\s\S]*already-advanced/, 'an imported receiver session cannot be advanced twice under a fresh one-step identity');

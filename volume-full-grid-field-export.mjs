@@ -6,6 +6,13 @@ import { spawn } from 'node:child_process';
 
 const MANIFEST_SCHEMA = 'kaminos.volume.full-grid-field-export.v0';
 const EXPORT_IDENTITY = 'full-grid-fluid-front-boundary-sidecars-v0';
+const COARSE_RECEIVER_SCHEMA = 'kaminos.volume.coarse-receiver-initial.v0';
+const COARSE_RECEIVER_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
+const COARSE_RECEIVER_FILTER = 'volume-overlap-box-filter-high-to-receiver-v0';
+const SELECTIVE_COMPOSITION_SCHEMA = 'kaminos.volume.exact-basin-selective-composition.v0';
+const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
+const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0';
+const FIELD_LAYOUT_IDENTITY = 'x-fastest-zyx-c-interleaved-v0';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -64,19 +71,30 @@ function resolveInitialFieldManifest() {
   }
   const raw = readFileSync(initialFieldManifestPath, 'utf8');
   const manifest = JSON.parse(raw);
-  if (manifest.schema !== 'kaminos.volume.coarse-receiver-initial.v0' || manifest.status !== 'captured') {
+  if (manifest.status !== 'captured') throw new Error(`unsupported initial field status: ${manifest.status || '(missing)'}`);
+  if (manifest.failurePhase !== null) throw new Error('initial field manifest carries a failure phase');
+  const isCoarseReceiver = manifest.schema === COARSE_RECEIVER_SCHEMA;
+  const isSelectiveComposition = manifest.schema === SELECTIVE_COMPOSITION_SCHEMA;
+  if (!isCoarseReceiver && !isSelectiveComposition) {
     throw new Error(`unsupported initial field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
   }
-  if (manifest.failurePhase !== null) throw new Error('initial field manifest carries a failure phase');
-  if (manifest.initializationAuthority !== 'receiver-initialized-from-filtered-high-t-v0') {
+  if (isCoarseReceiver && manifest.initializationAuthority !== COARSE_RECEIVER_AUTHORITY) {
     throw new Error(`unsupported initialization authority: ${manifest.initializationAuthority || '(missing)'}`);
   }
-  if (manifest.filterIdentity !== 'volume-overlap-box-filter-high-to-receiver-v0') {
+  if (isCoarseReceiver && manifest.filterIdentity !== COARSE_RECEIVER_FILTER) {
     throw new Error(`unsupported receiver filter: ${manifest.filterIdentity || '(missing)'}`);
   }
-  if (manifest.layoutIdentity !== 'x-fastest-zyx-c-interleaved-v0') {
-    throw new Error(`unsupported receiver layout: ${manifest.layoutIdentity || '(missing)'}`);
+  if (isSelectiveComposition) {
+    if (manifest.compositionAuthority !== SELECTIVE_COMPOSITION_AUTHORITY || manifest.runtimeTruthAvailable !== false) {
+      throw new Error('selective composition authority or runtime truth contract mismatch');
+    }
+    if (manifest.consumptionContract?.requiresExplicitSchemaAdmission !== true
+      || !String(manifest.consumptionContract?.mustNotBeAcceptedAs || '').includes('coarse-receiver-initial')) {
+      throw new Error('selective composition mustNotBeAcceptedAs filtered-high receiver state');
+    }
   }
+  const layoutIdentity = isCoarseReceiver ? manifest.layoutIdentity : FIELD_LAYOUT_IDENTITY;
+  if (layoutIdentity !== FIELD_LAYOUT_IDENTITY) throw new Error(`unsupported receiver layout: ${layoutIdentity || '(missing)'}`);
   const grid = Number(manifest.receiver?.grid);
   const fluid = manifest.receiver?.fluid;
   const front = manifest.receiver?.front;
@@ -99,6 +117,12 @@ function resolveInitialFieldManifest() {
     manifestPath: initialFieldManifestPath,
     manifestSha256: sha256(raw),
     grid,
+    initializationAuthority: isSelectiveComposition ? SELECTIVE_COMPOSITION_AUTHORITY : COARSE_RECEIVER_AUTHORITY,
+    filterIdentity: isSelectiveComposition ? SELECTIVE_COMPOSITION_APPLICATION : COARSE_RECEIVER_FILTER,
+    layoutIdentity,
+    source: manifest.source || null,
+    receiverInitialSimStepCount: Number(manifest.receiver?.initialSimStepCount || 0),
+    heldOnly: isSelectiveComposition,
     fluid: validateArtifact(fluid, 'initial fluid', [grid, grid, grid, 16], fluidChannels),
     front: validateArtifact(front, 'initial front', [grid, grid, grid, 1], ['frontTopology']),
   };
@@ -360,6 +384,9 @@ async function main() {
     if (initialField && !args.has('--advance-imported-steps')) {
       throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
     }
+    if (initialField?.heldOnly && advanceImportedSteps > 0) {
+      throw new Error('selective-composition-held-only: --advance-imported-steps must be 0');
+    }
     if (renderPngPath && !initialField) throw new Error('--render-png requires --initial-field-manifest');
     const resolved = resolveSourceCapture();
     url = resolved.url;
@@ -424,13 +451,13 @@ async function main() {
         ws,
         `window.__kaminosVolumePrototype.beginDebugFullFieldImport(${JSON.stringify({
           grid: initialField.grid,
-          initializationAuthority: initialField.manifest.initializationAuthority,
-          filterIdentity: initialField.manifest.filterIdentity,
-          layoutIdentity: initialField.manifest.layoutIdentity,
+          initializationAuthority: initialField.initializationAuthority,
+          filterIdentity: initialField.filterIdentity,
+          layoutIdentity: initialField.layoutIdentity,
           sourceManifestPath: initialField.manifestPath,
           sourceManifestSha256: initialField.manifestSha256,
-          source: initialField.manifest.source,
-          receiverInitialSimStepCount: initialField.manifest.receiver.initialSimStepCount,
+          source: initialField.source,
+          receiverInitialSimStepCount: initialField.receiverInitialSimStepCount,
           fluid: initialField.fluid,
           front: initialField.front,
         })})`,
