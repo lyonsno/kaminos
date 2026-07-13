@@ -5,6 +5,7 @@ import {
   classifySam31MemoryAttentionAdapter,
   evaluateSam31MemoryAttentionEvidence,
   runSam31MemoryAttentionPhaseProgramRoute,
+  verifySam31PacketFloat32Bytes,
 } from '../src/index.js';
 
 const params = new URLSearchParams(location.search);
@@ -25,10 +26,10 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function fetchFloat32(file) {
-  const response = await fetch(`/oracle/${file}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error(`fetch /oracle/${file} failed ${response.status}`);
-  return new Float32Array(await response.arrayBuffer());
+async function fetchFloat32(entry) {
+  const response = await fetch(`/oracle/${entry.file}`, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`fetch /oracle/${entry.file} failed ${response.status}`);
+  return verifySam31PacketFloat32Bytes(entry, await response.arrayBuffer());
 }
 
 function maxAbsDiff(actual, expected) {
@@ -69,8 +70,8 @@ async function run() {
   if (manifest.schema !== 'kaminos.sam31-memory-attention-meta-packet.v0') throw new Error(`unsupported manifest schema ${manifest.schema}`);
   const tensorsByRole = Object.fromEntries(manifest.tensors.map(entry => [entry.role, entry]));
   const weightsByRole = Object.fromEntries(manifest.weights.map(entry => [entry.role, entry]));
-  const tensor = role => fetchFloat32(tensorsByRole[role].file);
-  const weight = role => fetchFloat32(weightsByRole[role].file);
+  const tensor = role => fetchFloat32(tensorsByRole[role]);
+  const weight = role => fetchFloat32(weightsByRole[role]);
   const projection = async (prefix, inChannels, outChannels) => ({
     weight: await weight(`${prefix}-weight`),
     bias: await weight(`${prefix}-bias`),
@@ -80,6 +81,7 @@ async function run() {
   const norm = async prefix => ({ weight: await weight(`${prefix}-weight`), bias: await weight(`${prefix}-bias`), epsilon: 1e-5 });
 
   updateStatus('running', 'request-adapter', {
+    packetManifest: manifest,
     manifest: {
       schema: manifest.schema,
       boundary: manifest.boundary,

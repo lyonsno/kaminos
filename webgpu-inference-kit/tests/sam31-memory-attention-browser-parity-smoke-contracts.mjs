@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 const evidenceUrl = new URL('../src/sam31-memory-attention-evidence.js', import.meta.url);
 const smokeHtmlUrl = new URL('../smokes/sam31-memory-attention-parity.html', import.meta.url);
 const smokeJsUrl = new URL('../smokes/sam31-memory-attention-parity.js', import.meta.url);
+const packetArtifactUrl = new URL('../src/sam31-packet-artifact.js', import.meta.url);
 const runnerUrl = new URL('../tools/sam31-memory-attention-browser-parity-smoke.mjs', import.meta.url);
 for (const [url, label] of [
   [evidenceUrl, 'attention evidence evaluator'],
@@ -15,7 +16,11 @@ for (const [url, label] of [
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 assert.match(packageJson.scripts['test:live:sam31-memory-attention-webgpu'] || '', /sam31-memory-attention-browser-parity-smoke\.mjs/);
 const smokeSource = readFileSync(smokeJsUrl, 'utf8');
+const packetArtifactSource = readFileSync(packetArtifactUrl, 'utf8');
+const smokeHtmlSource = readFileSync(smokeHtmlUrl, 'utf8');
 const runnerSource = readFileSync(runnerUrl, 'utf8');
+assert.doesNotMatch(smokeHtmlSource, /place-items:\s*center/, 'long evidence must start in the viewport instead of centering beyond it');
+assert.match(smokeHtmlSource, /overflow-wrap:\s*anywhere/, 'long receipt identities must wrap inside the evidence viewport');
 assert.match(smokeSource, /runSam31MemoryAttentionPhaseProgramRoute/);
 assert.match(smokeSource, /typeof adapter\.isFallbackAdapter === 'boolean'/);
 assert.doesNotMatch(smokeSource, /Boolean\(adapter\.isFallbackAdapter\)/);
@@ -26,8 +31,16 @@ assert.match(smokeSource, /mappedTensorCount/);
 assert.match(smokeSource, /layerMaxAbsDiffs/, 'browser witness must preserve the four-layer error curve');
 assert.match(smokeSource, /layerStageMaxAbsDiffs/, 'browser witness must preserve the self, cross, and MLP sublayer error curve');
 assert.match(smokeSource, /crossAttentionInputMaxAbsDiffs/, 'browser witness must localize cross query, key, value, and attention output divergence');
+assert.match(smokeSource, /verifySam31PacketFloat32Bytes/, 'browser witness must authenticate fetched tensor bytes');
+assert.match(packetArtifactSource, /crypto\.subtle\.digest/, 'packet verifier must hash fetched tensor bytes');
+assert.match(packetArtifactSource, /tensor byte hash mismatch/, 'packet verifier must reject fetched bytes that disagree with the manifest');
+assert.match(smokeSource, /packetManifest: manifest/, 'browser state must preserve the complete packet manifest');
 assert.match(runnerSource, /screenshotPixelCheck/, 'runner must preserve decoded screenshot pixel evidence');
+assert.match(runnerSource, /viewportLayout/, 'runner must preserve viewport geometry evidence');
+assert.match(runnerSource, /layoutPassed/, 'runner must reject receipt surfaces clipped outside the viewport');
+assert.match(runnerSource, /borderSignalFraction/, 'screenshot pixels must place the pass border at the DOM-reported status edge');
 assert.match(runnerSource, /nonBlackFraction/, 'runner must reject blank screenshots before claiming primary output');
+assert.match(runnerSource, /packetManifest: lastState\?\.packetManifest/, 'durable report must preserve the complete packet manifest');
 
 const { classifySam31MemoryAttentionAdapter, evaluateSam31MemoryAttentionEvidence } = await import(evidenceUrl.href);
 assert.deepEqual(classifySam31MemoryAttentionAdapter({ vendor: 'apple', architecture: 'metal-3' }), {

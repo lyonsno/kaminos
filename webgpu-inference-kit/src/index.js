@@ -295,6 +295,19 @@ export {
 } from './route-schema-contract.js';
 
 export {
+  verifySam31PacketFloat32Bytes,
+} from './sam31-packet-artifact.js';
+
+export {
+  SAM31_TEMPORAL_MEMORY_BANK_PHASE_PROGRAM_ROUTE_ID,
+  createSam31TemporalMemoryBankCpuOracle,
+  createSam31TemporalMemoryBankPhaseProgramRouteDefinition,
+  createSam31TemporalMemoryBankPlan,
+  getSam31TemporalPointerPositionEncoding,
+  runSam31TemporalMemoryBankPhaseProgramRoute,
+} from './sam31-temporal-memory-bank-phase-program.js';
+
+export {
   SAM3_BROWSER_INVOCATION_SCHEMA,
   SAM3_BROWSER_MODEL_PACKAGE_SCHEMA,
   SAM3_BROWSER_VERIFICATION_SCHEMA,

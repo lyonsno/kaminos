@@ -5,15 +5,15 @@ import { dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 
-const REPORT_SCHEMA = 'kaminos.sam31-memory-attention.browser-parity-smoke.v0';
+const REPORT_SCHEMA = 'kaminos.sam31-temporal-memory-attention.browser-parity-smoke.v0';
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
 const packageRoot = resolve(new URL('..', import.meta.url).pathname);
-const packetDir = resolve(args.get('--packet-dir') || mkdtempSync(join(tmpdir(), 'kaminos-sam31-attention-packet-')));
-const reportPath = resolve(args.get('--report') || '/tmp/kaminos-sam31-memory-attention-webgpu.json');
-const screenshotPath = resolve(args.get('--screenshot') || '/tmp/kaminos-sam31-memory-attention-webgpu.png');
-const debugPort = Number(args.get('--debug-port') || 9562);
-const serverPort = Number(args.get('--server-port') || 18562);
+const packetDir = resolve(args.get('--packet-dir') || mkdtempSync(join(tmpdir(), 'kaminos-sam31-temporal-packet-')));
+const reportPath = resolve(args.get('--report') || '/tmp/kaminos-sam31-temporal-memory-attention-webgpu.json');
+const screenshotPath = resolve(args.get('--screenshot') || '/tmp/kaminos-sam31-temporal-memory-attention-webgpu.png');
+const debugPort = Number(args.get('--debug-port') || 9563);
+const serverPort = Number(args.get('--server-port') || 18563);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || 180000);
 const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || 180000);
 const settleMs = Number(args.get('--settle-ms') || 300);
@@ -21,9 +21,9 @@ const headless = args.get('--headless') !== '0';
 const reusePacket = args.get('--reuse-packet') === '1';
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const torchPython = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
-const packetTool = resolve(packageRoot, 'tools/sam31-memory-attention-meta-packet.py');
-const userDataDir = resolve(args.get('--user-data-dir') || mkdtempSync(join(tmpdir(), `kaminos-sam31-attention-chrome-${process.pid}-`)));
-const requestedUrl = `http://127.0.0.1:${serverPort}/smokes/sam31-memory-attention-parity.html?manifest=/oracle/tensor-manifest.json`;
+const packetTool = resolve(packageRoot, 'tools/sam31-temporal-memory-bank-meta-packet.py');
+const userDataDir = resolve(args.get('--user-data-dir') || mkdtempSync(join(tmpdir(), `kaminos-sam31-temporal-chrome-${process.pid}-`)));
+const requestedUrl = `http://127.0.0.1:${serverPort}/smokes/sam31-temporal-memory-attention-parity.html?manifest=/oracle/tensor-manifest.json`;
 
 let phase = 'initializing';
 let server = null;
@@ -72,10 +72,13 @@ function writeReport(extra = {}) {
     consoleEvents,
     lastState,
     packetManifest: lastState?.packetManifest || null,
-    requestedRouteId: lastState?.requestedRouteId || null,
-    effectiveRouteId: lastState?.effectiveRouteId || null,
+    requestedTemporalRouteId: lastState?.requestedTemporalRouteId || null,
+    effectiveTemporalRouteId: lastState?.effectiveTemporalRouteId || null,
+    requestedAttentionRouteId: lastState?.requestedAttentionRouteId || null,
+    effectiveAttentionRouteId: lastState?.effectiveAttentionRouteId || null,
     adapterInfo: lastState?.adapterInfo || null,
-    receipt: lastState?.receipt || null,
+    temporalReceipt: lastState?.temporalReceipt || null,
+    attentionReceipt: lastState?.attentionReceipt || null,
     parity: lastState?.parity || null,
     packet: lastState?.packet || null,
     evidence: lastState?.evidence || null,
@@ -100,8 +103,10 @@ function terminalSummary(report) {
     viewportLayout: report.viewportLayout,
     browser: report.browserVersion?.Browser || null,
     adapterInfo: report.adapterInfo,
-    requestedRouteId: report.requestedRouteId,
-    effectiveRouteId: report.effectiveRouteId,
+    requestedTemporalRouteId: report.requestedTemporalRouteId,
+    effectiveTemporalRouteId: report.effectiveTemporalRouteId,
+    requestedAttentionRouteId: report.requestedAttentionRouteId,
+    effectiveAttentionRouteId: report.effectiveAttentionRouteId,
     parity: report.parity,
     packet: report.packet,
     evidence: report.evidence,
@@ -129,7 +134,7 @@ function startServer() {
       const isPacket = url.pathname.startsWith('/oracle/');
       const root = isPacket ? packetDir : packageRoot;
       const relative = isPacket ? url.pathname.slice('/oracle/'.length) : url.pathname.slice(1);
-      const filePath = resolve(root, relative || 'smokes/sam31-memory-attention-parity.html');
+      const filePath = resolve(root, relative || 'smokes/sam31-temporal-memory-attention-parity.html');
       if (filePath !== root && !filePath.startsWith(`${root}/`)) {
         response.writeHead(403);
         response.end('forbidden');
@@ -282,7 +287,7 @@ async function main() {
     browserVersion = await Promise.race([waitForCdp(), spawnError]);
     phase = 'connect_cdp';
     const pages = await cdpFetch('/json/list');
-    const page = pages.find(candidate => candidate.type === 'page' && candidate.url.includes('sam31-memory-attention-parity.html')) || pages[0];
+    const page = pages.find(candidate => candidate.type === 'page' && candidate.url.includes('sam31-temporal-memory-attention-parity.html')) || pages[0];
     if (!page?.webSocketDebuggerUrl) throw new Error('Chrome page target missing debugger URL');
     webSocket = new WebSocket(page.webSocketDebuggerUrl);
     await waitForWebSocketOpen(webSocket);
@@ -292,7 +297,7 @@ async function main() {
     const deadline = Date.now() + hookWaitMs;
     while (Date.now() < deadline) {
       lastState = await evaluate(webSocket, `(() => {
-        const read = window.sam31MemoryAttentionParitySmokeState;
+        const read = window.sam31TemporalMemoryAttentionParitySmokeState;
         return typeof read === 'function' ? read() : null;
       })()`, Math.min(cdpTimeoutMs, Math.max(1, deadline - Date.now())));
       if (lastState?.status === 'passed' || lastState?.status === 'failed') break;

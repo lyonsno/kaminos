@@ -74,6 +74,10 @@ assert.deepEqual(classifySam31PropagationMemoryAdapter({ vendor: '', architectur
   isFallbackAdapter: null,
   fallbackEvidenceSource: null,
 });
+assert.deepEqual(classifySam31PropagationMemoryAdapter({ explicitFallback: false, vendor: 'SwiftShader', architecture: 'software' }), {
+  isFallbackAdapter: true,
+  fallbackEvidenceSource: 'software-adapter-info',
+}, 'known software identity must override a contradictory explicit non-fallback boolean');
 assert.equal(evaluateSam31PropagationMemoryEvidence(validBrowserEvidence).passed, true);
 assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, adapterInfo: {} }).passed, false, 'missing fallback-adapter evidence must fail passage');
 assert.equal(evaluateSam31PropagationMemoryEvidence({ ...validBrowserEvidence, adapterInfo: { isFallbackAdapter: true } }).passed, false, 'fallback adapter must fail passage');
