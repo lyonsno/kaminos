@@ -4,8 +4,11 @@ import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const BOUNDARY_SPLAT_BENCHMARK_SCHEMA = 'kaminos.boundary-splat.serial-benchmark.v0';
-const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
+const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
 const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
+const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-deterministic-gpu-hash-thinning-v0';
+const BUDGETS = [6400, 3200, 1600, 800];
+const INSTANCE_COUNTS = [1, 16, 64, 100];
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -29,11 +32,14 @@ const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = String(args.get('--window-size') || '1280,960');
 const userDataDir = String(args.get('--user-data-dir') || `/tmp/kaminos-boundary-splat-benchmark-profile-${process.pid}`);
 
-const CASES = [
-  { id: 'res096-rs050', resolution: 96, renderScale: 0.5, viewport: windowSize },
-  { id: 'res128-rs075', resolution: 128, renderScale: 0.75, viewport: windowSize },
-  { id: 'res160-rs100', resolution: 160, renderScale: 1, viewport: windowSize },
-];
+const CASES = INSTANCE_COUNTS.flatMap(instances => BUDGETS.map(budget => ({
+  id: `instances-${instances}-budget-${budget}`,
+  instances,
+  budget,
+  resolution: 160,
+  renderScale: 1,
+  viewport: windowSize,
+})));
 
 function benchmarkRoute(testCase) {
   const url = new URL('/', origin);
@@ -42,7 +48,11 @@ function benchmarkRoute(testCase) {
   url.searchParams.set('volume_tall_preset', 'rgb_upscale_basin_0711');
   url.searchParams.set('volume_resolution', String(testCase.resolution));
   url.searchParams.set('volume_boundary_sidecar_source', 'baked');
-  url.searchParams.set('volume_boundary_splat_mode', 'analytic');
+  url.searchParams.set('volume_boundary_splat_mode', 'learned');
+  url.searchParams.set('volume_boundary_splat_instances', String(testCase.instances));
+  url.searchParams.set('volume_boundary_splat_candidate_budget', String(testCase.budget));
+  url.searchParams.set('volume_boundary_splat_composition', 'field');
+  url.searchParams.set('volume_boundary_splat_phase_mode', 'offset-history');
   url.searchParams.set('volume_render_scale', String(testCase.renderScale));
   return url.toString();
 }
@@ -69,6 +79,10 @@ function initialFalseClosureChecks() {
     requestedEffectiveRendererDisagreement: false,
     missingTimestampSupport: false,
     staleOrDefaultConfig: false,
+    staleOrDefaultBudget: false,
+    selectorPolicyDisagreement: false,
+    selectorCostMissing: false,
+    selectedCountMismatch: false,
     mismatchedRaymarchQuality: false,
     blankOrPartialReport: false,
     multipleParallelBrowsers: false,
@@ -94,16 +108,26 @@ function summarizeRun(testCase, reportPath, screenshotPath, report) {
   const copyDisposition = report.boundarySplatCopyDisposition || {};
   const litPixels = Number(report.litPixels ?? report.mainRendererMetrics?.litPixels ?? 0);
   const meanLuma = Number(report.meanLuma ?? report.mainRendererMetrics?.meanLuma ?? 0);
+  const sourceCandidateCount = Number(report.boundarySplatSourceCandidateCount ?? report.boundarySplatCandidateCount);
+  const requestedInstanceCount = Number(report.boundarySplatRequestedInstanceCount ?? report.controls?.boundarySplatInstances);
   const falseClosureChecks = initialFalseClosureChecks();
   falseClosureChecks.fallbackRoute = report.boundarySplatFallbackReason != null;
-  falseClosureChecks.requestedEffectiveRendererDisagreement = report.boundarySplatMode !== 'analytic'
+  falseClosureChecks.requestedEffectiveRendererDisagreement = report.boundarySplatMode !== 'learned'
     || report.volumeReconstructionStyle !== BOUNDARY_SPLAT_RENDERER_IDENTITY
     || report.boundarySplatRendererIdentity !== BOUNDARY_SPLAT_RENDERER_IDENTITY
     || report.boundarySplatSourceAuthority !== BOUNDARY_SPLAT_SOURCE_AUTHORITY;
   falseClosureChecks.missingTimestampSupport = profile.timestampStatus !== 'available' || !profileHasStageTimes(profile);
   falseClosureChecks.staleOrDefaultConfig = Number(report.simGrid) !== testCase.resolution
     || Math.abs(Number(report.renderScale) - testCase.renderScale) > 0.02
-    || report.expectedTallPlumePreset !== 'rgb_upscale_basin_0711';
+    || report.expectedTallPlumePreset !== 'rgb_upscale_basin_0711'
+    || requestedInstanceCount !== testCase.instances;
+  falseClosureChecks.staleOrDefaultBudget = Number(report.boundarySplatRequestedCandidateBudget) !== testCase.budget
+    || Number(report.boundarySplatEffectiveCandidateBudget) !== Math.min(sourceCandidateCount, testCase.budget);
+  falseClosureChecks.selectorPolicyDisagreement = report.boundarySplatSelectorPolicyIdentity !== BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY;
+  falseClosureChecks.selectorCostMissing = report.boundarySplatSelectorCostProfile?.selectorGpuMs == null
+    || !Number.isFinite(Number(report.boundarySplatSelectorCostProfile?.selectorGpuMs));
+  falseClosureChecks.selectedCountMismatch = Number(report.boundarySplatSelectedCandidateCount) !== Number(report.boundarySplatEffectiveCandidateBudget)
+    || Number(report.boundarySplatInstanceCount) !== Number(report.boundarySplatSelectedCandidateCount) * testCase.instances;
   falseClosureChecks.mismatchedRaymarchQuality = !profile?.stages?.matchedRaymarchRaster;
   falseClosureChecks.blankOrPartialReport = !Number.isFinite(litPixels)
     || litPixels <= 0
@@ -116,6 +140,8 @@ function summarizeRun(testCase, reportPath, screenshotPath, report) {
     witnessReportPath: reportPath,
     screenshotPath,
     resolution: testCase.resolution,
+    requestedInstances: testCase.instances,
+    requestedCandidateBudget: testCase.budget,
     simGrid: report.simGrid,
     renderScale: testCase.renderScale,
     viewport: testCase.viewport,
@@ -129,7 +155,13 @@ function summarizeRun(testCase, reportPath, screenshotPath, report) {
     boundarySplatRendererIdentity: report.boundarySplatRendererIdentity,
     boundarySplatSourceAuthority: report.boundarySplatSourceAuthority,
     boundarySplatCapacity: report.boundarySplatCapacity,
+    boundarySplatSelectorPolicyIdentity: report.boundarySplatSelectorPolicyIdentity,
+    boundarySplatRequestedCandidateBudget: report.boundarySplatRequestedCandidateBudget,
+    boundarySplatEffectiveCandidateBudget: report.boundarySplatEffectiveCandidateBudget,
+    boundarySplatSelectedCandidateCount: report.boundarySplatSelectedCandidateCount,
+    boundarySplatSelectorCostProfile: report.boundarySplatSelectorCostProfile,
     boundarySplatCandidateCount: report.boundarySplatCandidateCount,
+    boundarySplatSourceCandidateCount: sourceCandidateCount,
     boundarySplatInstanceCount: report.boundarySplatInstanceCount,
     boundarySplatOverflowCount: report.boundarySplatOverflowCount,
     boundarySplatCountAuthority: report.boundarySplatCountAuthority,
@@ -137,6 +169,7 @@ function summarizeRun(testCase, reportPath, screenshotPath, report) {
     boundarySplatGpuProfile: profile,
     boundarySplatCopyDisposition: copyDisposition,
     boundarySplatCopyBytesThisFrame: report.boundarySplatCopyBytesThisFrame,
+    selectorPlusRasterMs: Number(report.boundarySplatSelectorCostProfile?.selectorGpuMs || 0) + Number(profile?.stages?.splatRaster?.ms || 0),
     litPixels,
     meanLuma,
     falseClosureChecks,
@@ -166,8 +199,18 @@ function runWitness(testCase, index) {
     maxBuffer: 1024 * 1024,
   });
   if (result.status !== 0) {
+    let failedReport = null;
+    try {
+      failedReport = JSON.parse(readFileSync(reportPath, 'utf8'));
+    } catch {
+      failedReport = null;
+    }
+    const summarizedFailure = failedReport
+      ? summarizeRun(testCase, reportPath, screenshotPath, failedReport)
+      : null;
     return {
       ok: false,
+      serialIndex: index,
       id: testCase.id,
       phase: 'witness',
       requestedRoute: benchmarkRoute(testCase),
@@ -177,9 +220,11 @@ function runWitness(testCase, index) {
       stderr: result.stderr,
       reportPath,
       screenshotPath,
+      ...(summarizedFailure || {}),
+      witnessReportAvailable: Boolean(failedReport),
       optimizationClaimAllowed: false,
       falseClosureChecks: {
-        ...initialFalseClosureChecks(),
+        ...(summarizedFailure?.falseClosureChecks || initialFalseClosureChecks()),
         blankOrPartialReport: true,
       },
     };
@@ -238,7 +283,6 @@ async function main() {
         falseClosureChecks: initialFalseClosureChecks(),
         optimizationClaimAllowed: false,
       });
-      if (!run.ok) break;
     }
   } catch (error) {
     runs.push({
@@ -270,19 +314,31 @@ async function main() {
   const status = optimizationClaimAllowed ? 'valid-optimization-evidence' : 'invalid-for-optimization-claim';
 
   const candidateScaling = runs
-    .filter(run => run.ok)
+    .filter(run => Number.isFinite(Number(run.boundarySplatEffectiveCandidateBudget))
+      && Number.isFinite(Number(run.boundarySplatSelectedCandidateCount))
+      && run.boundarySplatGpuProfile)
     .map(run => ({
       id: run.id,
       resolution: run.resolution,
       renderScale: run.renderScale,
       viewport: run.viewport,
+      requestedInstances: run.requestedInstances,
+      requestedCandidateBudget: run.requestedCandidateBudget,
       renderPixels: Number(run.renderWidth || 0) * Number(run.renderHeight || 0),
       boundarySplatCandidateCount: run.boundarySplatCandidateCount,
+      boundarySplatSourceCandidateCount: run.boundarySplatSourceCandidateCount,
+      boundarySplatEffectiveCandidateBudget: run.boundarySplatEffectiveCandidateBudget,
+      boundarySplatSelectedCandidateCount: run.boundarySplatSelectedCandidateCount,
+      selectorPolicyIdentity: run.boundarySplatSelectorPolicyIdentity,
       boundarySplatOverflowCount: run.boundarySplatOverflowCount,
       candidateCopyBytes: run.boundarySplatCopyBytesThisFrame,
       timestampStatus: run.boundarySplatGpuProfile?.timestampStatus || null,
+      selectorGpuMs: run.boundarySplatSelectorCostProfile?.selectorGpuMs ?? null,
       splatRasterMs: run.boundarySplatGpuProfile?.stages?.splatRaster?.ms ?? null,
+      selectorPlusRasterMs: run.selectorPlusRasterMs ?? null,
       matchedRaymarchRasterMs: run.boundarySplatGpuProfile?.stages?.matchedRaymarchRaster?.ms ?? null,
+      visualEvidenceAccepted: Boolean(run.ok),
+      optimizationClaimAllowed: Boolean(run.optimizationClaimAllowed),
     }));
 
   writeReport({
@@ -300,7 +356,7 @@ async function main() {
   });
 
   console.log(JSON.stringify({ status, out, browserClose, falseClosureChecks, optimizationClaimAllowed }, null, 2));
-  if (runs.some(run => !run.ok)) process.exitCode = 1;
+  if (runs.some(run => !run.ok && !run.witnessReportAvailable)) process.exitCode = 1;
 }
 
 main().catch(async error => {

@@ -20,6 +20,9 @@ const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
 const BOUNDARY_SPLAT_FIELD_COMPOSITION_IDENTITY = 'boundary-splat-composed-field-v0';
+const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-deterministic-gpu-hash-thinning-v0';
+const BOUNDARY_SPLAT_SELECTOR_POLICY_CODE = 1;
+const BOUNDARY_SPLAT_SELECTOR_BUDGETS = [6400, 3200, 1600, 800];
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_STRIDE_BYTES = 32;
@@ -199,6 +202,12 @@ function normalizeBoundarySplatInstanceCount(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return 1;
   return Math.max(1, Math.min(BOUNDARY_SPLAT_MAX_INSTANCES, requested));
+}
+
+function normalizeBoundarySplatCandidateBudget(value) {
+  const requested = Math.round(Number(value));
+  if (!Number.isFinite(requested) || requested <= 0) return BOUNDARY_SPLAT_SELECTOR_BUDGETS[0];
+  return BOUNDARY_SPLAT_SELECTOR_BUDGETS.includes(requested) ? requested : BOUNDARY_SPLAT_SELECTOR_BUDGETS[0];
 }
 
 function normalizeBoundarySplatComposition(value) {
@@ -4908,6 +4917,10 @@ struct BoundarySplatDraw {
   phaseSourceCount: u32,
   historyWriteSlot: u32,
   historySlotCount: u32,
+  selectorPolicyId: u32,
+  requestedCandidateBudget: u32,
+  effectiveCandidateBudget: u32,
+  selectedCandidateCount: u32,
 };
 
 struct BoundarySplatCamera {
@@ -4956,6 +4969,22 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
+}
+
+fn boundarySplatDeterministicHash(value: u32) -> u32 {
+  var x = value + 0x9e3779b9u;
+  x = (x ^ (x >> 16u)) * 0x7feb352du;
+  x = (x ^ (x >> 15u)) * 0x846ca68bu;
+  return x ^ (x >> 16u);
+}
+
+fn boundarySplatSelectedSourceIndex(rank: u32, sourceCount: u32, selectedCount: u32) -> u32 {
+  if (selectedCount == 0u || sourceCount == 0u) { return 0u; }
+  if (selectedCount >= sourceCount) { return min(rank, sourceCount - 1u); }
+  let binStart = (rank * sourceCount) / selectedCount;
+  let binEnd = min(sourceCount, ((rank + 1u) * sourceCount) / selectedCount);
+  let binWidth = max(1u, binEnd - binStart);
+  return min(sourceCount - 1u, binStart + (boundarySplatDeterministicHash(rank) % binWidth));
 }
 
 fn boundarySplatAttributeFeatures(
@@ -5046,8 +5075,11 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
 @compute @workgroup_size(1)
 fn finalizeBoundarySplats() {
   let candidateCount = min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity);
+  let effectiveBudget = min(candidateCount, boundarySplatDraw.requestedCandidateBudget);
   boundarySplatDraw.sourceCandidateCount = candidateCount;
-  atomicStore(&boundarySplatDraw.instanceCount, candidateCount * boundarySplatDraw.requestedInstanceCount);
+  boundarySplatDraw.effectiveCandidateBudget = effectiveBudget;
+  boundarySplatDraw.selectedCandidateCount = effectiveBudget;
+  atomicStore(&boundarySplatDraw.instanceCount, effectiveBudget * boundarySplatDraw.requestedInstanceCount);
 }
 
 @compute @workgroup_size(64)
@@ -5055,8 +5087,9 @@ fn archiveBoundarySplatHistory(@builtin(global_invocation_id) gid: vec3<u32>) {
   let candidateIndex = gid.x;
   if (candidateIndex >= boundarySplatDraw.capacity) { return; }
   let targetIndex = boundarySplatDraw.historyWriteSlot * boundarySplatDraw.capacity + candidateIndex;
-  if (candidateIndex < boundarySplatDraw.sourceCandidateCount) {
-    boundarySplatHistory[targetIndex] = boundarySplats[candidateIndex];
+  if (candidateIndex < boundarySplatDraw.selectedCandidateCount) {
+    let selectedSourceCandidateIndex = boundarySplatSelectedSourceIndex(candidateIndex, boundarySplatDraw.sourceCandidateCount, boundarySplatDraw.selectedCandidateCount);
+    boundarySplatHistory[targetIndex] = boundarySplats[selectedSourceCandidateIndex];
     return;
   }
   boundarySplatHistory[targetIndex].positionSupport = vec4<f32>(0.0);
@@ -5306,6 +5339,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatLayoutBounds: null,
     boundarySplatRequestedInstanceCount: normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances),
     boundarySplatSourceCandidateCount: null,
+    boundarySplatSelectorPolicyIdentity: BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY,
+    boundarySplatSelectorPolicyId: BOUNDARY_SPLAT_SELECTOR_POLICY_CODE,
+    boundarySplatRequestedCandidateBudget: normalizeBoundarySplatCandidateBudget(controlsSnapshot.boundarySplatCandidateBudget),
+    boundarySplatEffectiveCandidateBudget: null,
+    boundarySplatSelectedCandidateCount: null,
+    boundarySplatSelectorCostProfile: {
+      identity: 'boundary-splat-selector-cost-profile-v0',
+      selectorPolicyIdentity: BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY,
+      selectorGpuMs: 0,
+      selectorDispatches: 0,
+      accounting: 'selector-fused-into-finalize-and-archive-indexing',
+    },
     boundarySplatPhaseSourceCount: 1,
     boundarySplatPhaseSourceIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
     boundarySplatHistoryRingIdentity: 'boundary-splat-live-history-ring-v0',
@@ -6418,7 +6463,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatDrawBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} indirect draw state`,
-      size: 48,
+      size: 64,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     boundarySplatIndirectBuffer = device.createBuffer({
@@ -6443,7 +6488,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatReadbackBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} asynchronous count readback`,
-      size: 48,
+      size: 64,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     const featureCaptureRequested = normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
@@ -8624,6 +8669,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     stages = null,
     candidateCopyBytes = 0,
     rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY,
+    selectorCostProfile = null,
   } = {}) {
     const stageStatus = timestampStatus === 'available' ? 'not-sampled' : timestampStatus;
     const stageMap = stages ?? {
@@ -8649,6 +8695,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       timeUnit: 'ms',
       candidateCopyBytes,
       boundarySplatCopyBytesThisFrame: candidateCopyBytes,
+      selectorPolicyIdentity: BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY,
+      selectorCostProfile: selectorCostProfile ?? {
+        identity: 'boundary-splat-selector-cost-profile-v0',
+        selectorPolicyIdentity: BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY,
+        selectorGpuMs: 0,
+        selectorDispatches: 0,
+        accounting: 'selector-fused-into-finalize-and-archive-indexing',
+      },
       stages: stageMap,
     };
   }
@@ -8691,14 +8745,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return false;
     }
     const requestedInstanceCount = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances);
+    const requestedCandidateBudget = normalizeBoundarySplatCandidateBudget(controlsSnapshot.boundarySplatCandidateBudget);
     const historyDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
     const historyFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
     const historyWriteSlot = Math.floor(state.frameCount / historyFrameStride) % historyDepth;
     const phaseSourceCount = Math.max(1, Math.min(historyDepth, state.boundarySplatPhaseSourceCount || 1));
+    state.boundarySplatSelectorPolicyIdentity = BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY;
+    state.boundarySplatSelectorPolicyId = BOUNDARY_SPLAT_SELECTOR_POLICY_CODE;
+    state.boundarySplatRequestedCandidateBudget = requestedCandidateBudget;
+    state.boundarySplatEffectiveCandidateBudget = null;
+    state.boundarySplatSelectedCandidateCount = null;
+    state.boundarySplatSelectorCostProfile = {
+      identity: 'boundary-splat-selector-cost-profile-v0',
+      selectorPolicyIdentity: BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY,
+      selectorGpuMs: 0,
+      selectorDispatches: 0,
+      accounting: 'selector-fused-into-finalize-and-archive-indexing',
+      requestedCandidateBudget,
+    };
+    const boundarySplatSelectorPolicyCode = BOUNDARY_SPLAT_SELECTOR_POLICY_CODE;
+    const boundarySplatDrawInitializer = {
+      selectorPolicyId: boundarySplatSelectorPolicyCode,
+      requestedCandidateBudget,
+    };
     device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([
       6, 0, 0, 0,
       0, 0, boundarySplatCapacity, requestedInstanceCount,
       0, phaseSourceCount, historyWriteSlot, historyDepth,
+      boundarySplatDrawInitializer.selectorPolicyId, boundarySplatDrawInitializer.requestedCandidateBudget, 0, 0,
     ]));
     const compactPass = encoder.beginComputePass({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass`,
@@ -8763,7 +8837,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatDrawBuffer
       || !boundarySplatReadbackBuffer
     ) return;
-    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatReadbackBuffer, 0, 48);
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatReadbackBuffer, 0, 64);
     boundarySplatTelemetryCopyPending = true;
   }
 
@@ -8955,6 +9029,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatPhaseSourceCount = drawState[9];
       state.boundarySplatHistoryWriteSlot = drawState[10];
       state.boundarySplatHistorySlots = drawState[11];
+      state.boundarySplatSelectorPolicyId = drawState[12];
+      state.boundarySplatSelectorPolicyIdentity = drawState[12] === BOUNDARY_SPLAT_SELECTOR_POLICY_CODE
+        ? BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY
+        : 'boundary-splat-selector-policy-unknown';
+      state.boundarySplatRequestedCandidateBudget = drawState[13];
+      state.boundarySplatEffectiveCandidateBudget = drawState[14];
+      state.boundarySplatSelectedCandidateCount = drawState[15];
       state.boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
       state.boundarySplatPhaseModeIdentity = boundarySplatPhaseModeIdentity(state.boundarySplatPhaseMode);
       state.boundarySplatPhaseStride = normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride);
@@ -8978,11 +9059,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     const readback = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness draw-state readback`,
-      size: 48,
+      size: 64,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness draw-state encoder` });
-    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, readback, 0, 48);
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, readback, 0, 64);
     device.queue.submit([encoder.finish()]);
     await readback.mapAsync(GPUMapMode.READ);
     const drawState = new Uint32Array(readback.getMappedRange());
@@ -8995,6 +9076,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       phaseSourceCount: drawState[9],
       historyWriteSlot: drawState[10],
       historySlots: drawState[11],
+      selectorPolicyId: drawState[12],
+      selectorPolicyIdentity: drawState[12] === BOUNDARY_SPLAT_SELECTOR_POLICY_CODE
+        ? BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY
+        : 'boundary-splat-selector-policy-unknown',
+      requestedCandidateBudget: drawState[13],
+      effectiveCandidateBudget: drawState[14],
+      selectedCandidateCount: drawState[15],
       phaseMode: normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode),
       phaseStride: normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride),
       historyDepth: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
@@ -9012,6 +9100,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatRequestedInstanceCount = result.requestedInstanceCount;
     state.boundarySplatSourceCandidateCount = result.sourceCandidateCount;
     state.boundarySplatPhaseSourceCount = result.phaseSourceCount;
+    state.boundarySplatSelectorPolicyId = result.selectorPolicyId;
+    state.boundarySplatSelectorPolicyIdentity = result.selectorPolicyIdentity;
+    state.boundarySplatRequestedCandidateBudget = result.requestedCandidateBudget;
+    state.boundarySplatEffectiveCandidateBudget = result.effectiveCandidateBudget;
+    state.boundarySplatSelectedCandidateCount = result.selectedCandidateCount;
     state.boundarySplatHistoryWriteSlot = result.historyWriteSlot;
     state.boundarySplatHistorySlots = result.historySlots;
     state.boundarySplatPhaseMode = result.phaseMode;
@@ -11140,6 +11233,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatInstanceDescriptorIdentity: state.boundarySplatInstanceDescriptorIdentity,
       boundarySplatRequestedInstanceCount: boundarySplatSample?.requestedInstanceCount ?? state.boundarySplatRequestedInstanceCount,
       boundarySplatSourceCandidateCount: boundarySplatSample?.sourceCandidateCount ?? state.boundarySplatSourceCandidateCount,
+      boundarySplatSelectorPolicyIdentity: boundarySplatSample?.selectorPolicyIdentity ?? state.boundarySplatSelectorPolicyIdentity,
+      boundarySplatSelectorPolicyId: boundarySplatSample?.selectorPolicyId ?? state.boundarySplatSelectorPolicyId,
+      boundarySplatRequestedCandidateBudget: boundarySplatSample?.requestedCandidateBudget ?? state.boundarySplatRequestedCandidateBudget,
+      boundarySplatEffectiveCandidateBudget: boundarySplatSample?.effectiveCandidateBudget ?? state.boundarySplatEffectiveCandidateBudget,
+      boundarySplatSelectedCandidateCount: boundarySplatSample?.selectedCandidateCount ?? state.boundarySplatSelectedCandidateCount,
+      boundarySplatSelectorCostProfile: state.boundarySplatSelectorCostProfile,
       boundarySplatPhaseMode: boundarySplatSample?.phaseMode ?? state.boundarySplatPhaseMode,
       boundarySplatPhaseModeIdentity: boundarySplatSample?.phaseModeIdentity ?? state.boundarySplatPhaseModeIdentity,
       boundarySplatPhaseStride: boundarySplatSample?.phaseStride ?? state.boundarySplatPhaseStride,

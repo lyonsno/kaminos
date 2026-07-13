@@ -1164,6 +1164,11 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-splat-instances-val">1</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Splat budget</span>
+        <input type="range" id="volume-boundary-splat-candidate-budget" min="800" max="6400" step="800" value="6400">
+        <span class="slider-val" id="volume-boundary-splat-candidate-budget-val">6400</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Splat phase</span>
         <select id="volume-boundary-splat-phase-mode" class="select-input">
           <option value="shared-current">shared current</option>
@@ -11864,6 +11869,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 5, decimals: 2 },
   { key: 'boundarySplatInstances', id: 'volume-boundary-splat-instances', param: 'volume_boundary_splat_instances', min: 1, max: 128, decimals: 0 },
+  { key: 'boundarySplatCandidateBudget', id: 'volume-boundary-splat-candidate-budget', param: 'volume_boundary_splat_candidate_budget', min: 800, max: 6400, decimals: 0 },
   { key: 'boundarySplatPhaseStride', id: 'volume-boundary-splat-phase-stride', param: 'volume_boundary_splat_phase_stride', min: 1, max: 15, decimals: 0 },
   { key: 'boundarySplatHistoryDepth', id: 'volume-boundary-splat-history-depth', param: 'volume_boundary_splat_history_depth', min: 4, max: 16, decimals: 0 },
   { key: 'boundarySplatHistoryFrameStride', id: 'volume-boundary-splat-history-frame-stride', param: 'volume_boundary_splat_history_frame_stride', min: 1, max: 16, decimals: 0 },
@@ -11900,6 +11906,7 @@ const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 const BOUNDARY_SPLAT_PHASE_MODE_VALUES = new Set(['shared-current', 'same-history-slot', 'offset-history', 'age-sweep']);
+const BOUNDARY_SPLAT_SELECTOR_BUDGETS = [6400, 3200, 1600, 800];
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -11924,6 +11931,11 @@ function normalizeBoundarySplatMode(value) {
 function normalizeBoundarySplatPhaseMode(value) {
   const mode = String(value || 'offset-history').toLowerCase().replace(/_/g, '-');
   return BOUNDARY_SPLAT_PHASE_MODE_VALUES.has(mode) ? mode : 'offset-history';
+}
+
+function normalizeBoundarySplatCandidateBudget(value) {
+  const requested = Math.round(Number(value));
+  return BOUNDARY_SPLAT_SELECTOR_BUDGETS.includes(requested) ? requested : 6400;
 }
 
 function clampVolumeControlValue(value, field) {
@@ -16506,6 +16518,7 @@ function readVolumeControls() {
     boundarySplatComposition,
     boundarySplatFeatureCapture,
     boundarySplatInstances: parseFloat(document.getElementById('volume-boundary-splat-instances').value),
+    boundarySplatCandidateBudget: normalizeBoundarySplatCandidateBudget(document.getElementById('volume-boundary-splat-candidate-budget').value),
     boundarySplatPhaseStride: parseFloat(document.getElementById('volume-boundary-splat-phase-stride').value),
     boundarySplatHistoryDepth: parseFloat(document.getElementById('volume-boundary-splat-history-depth').value),
     boundarySplatHistoryFrameStride: parseFloat(document.getElementById('volume-boundary-splat-history-frame-stride').value),
