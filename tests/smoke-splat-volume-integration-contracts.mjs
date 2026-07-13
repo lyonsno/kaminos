@@ -13,8 +13,16 @@ assert.match(
   /export function applySmokeSplatPhaseResolutionState/,
   'runtime phase-authority transitions are an executable reusable contract',
 );
+assert.match(
+  core,
+  /export function makeSmokeSplatFailureReport/,
+  'all reportful and reportless runtime failures share one identity-enrichment contract',
+);
 
-const { applySmokeSplatPhaseResolutionState } = await import(new URL('../volume-core.js', import.meta.url));
+const {
+  applySmokeSplatPhaseResolutionState,
+  makeSmokeSplatFailureReport,
+} = await import(new URL('../volume-core.js', import.meta.url));
 const phaseState = {
   hybridSmokePhaseAuthority: 'shared-current-single-simulator-no-instance-smoke-history',
   smokeSplatSlotResolveReport: null,
@@ -30,6 +38,26 @@ assert.equal(
   phaseState.hybridSmokePhaseAuthority,
   'smoke-splat-slot-resolution-failed',
   'a later failure demotes previously successful phase authority',
+);
+const retainedRingError = new Error('retained ring epoch was overwritten');
+retainedRingError.report = {
+  identity: 'smoke-splat-slot-failure-report-v0',
+  status: 'failed',
+  failurePhase: 'phase-retention-validation',
+  historySlot: 0,
+  historyDepth: 4,
+};
+const enrichedFailure = makeSmokeSplatFailureReport(retainedRingError);
+assert.equal(enrichedFailure.failurePhase, 'phase-retention-validation');
+assert.equal(enrichedFailure.historySlot, 0);
+assert.equal(enrichedFailure.historyDepth, 4);
+assert.equal(enrichedFailure.requestedProducerAuthority, 'deterministic-reference-smoke-splat-producer-v0');
+assert.equal(enrichedFailure.effectiveProducerAuthority, null);
+assert.equal(enrichedFailure.message, retainedRingError.message);
+assert.match(
+  core,
+  /const failureReport = makeSmokeSplatFailureReport\([\s\S]*applySmokeSplatPhaseResolutionState\(state, failureReport\)[\s\S]*smokeSplatSlotResolveReport: failureReport/,
+  'the resolver enriches reportful failures before state demotion and status emission',
 );
 assert.match(
   core,

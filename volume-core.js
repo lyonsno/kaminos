@@ -99,6 +99,18 @@ export function applySmokeSplatPhaseResolutionState(state, report) {
   return state;
 }
 
+export function makeSmokeSplatFailureReport(error, requestedProducerAuthority = SMOKE_SPLAT_PRODUCER_AUTHORITY) {
+  const sourceReport = error?.report && typeof error.report === 'object' ? error.report : {};
+  return {
+    identity: sourceReport.identity ?? 'smoke-splat-slot-failure-report-v0',
+    ...sourceReport,
+    status: 'failed',
+    requestedProducerAuthority: sourceReport.requestedProducerAuthority ?? requestedProducerAuthority,
+    effectiveProducerAuthority: sourceReport.effectiveProducerAuthority ?? null,
+    message: sourceReport.message ?? error?.message ?? String(error),
+  };
+}
+
 function normalizeGridSize(value) {
   const requested = Number(value);
   if (SUPPORTED_GRID_SIZES.includes(requested)) return requested;
@@ -9047,14 +9059,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       });
       return report;
     } catch (error) {
-      const failureReport = error?.report ?? {
-        identity: 'smoke-splat-slot-failure-report-v0',
-        status: 'failed',
-        failurePhase: 'volume-runtime-slot-resolution',
-        requestedProducerAuthority: options.requestedProducerAuthority ?? SMOKE_SPLAT_PRODUCER_AUTHORITY,
-        effectiveProducerAuthority: null,
-        message: error?.message ?? String(error),
-      };
+      const failureReport = makeSmokeSplatFailureReport(
+        error,
+        options.requestedProducerAuthority ?? SMOKE_SPLAT_PRODUCER_AUTHORITY,
+      );
+      if (!failureReport.failurePhase) failureReport.failurePhase = 'volume-runtime-slot-resolution';
       applySmokeSplatPhaseResolutionState(state, failureReport);
       emitStatus({
         phase: 'smoke-splat-phase-slots-failed',
