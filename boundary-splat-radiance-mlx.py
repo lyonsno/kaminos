@@ -67,6 +67,52 @@ def finite_vector(value, length, label):
     return array
 
 
+def parse_frame_indices(value, frame_count, label):
+    parts = [part.strip() for part in value.split(",")]
+    if not parts or any(not part for part in parts):
+        raise ValueError(f"{label} must be a comma-separated list of frame indices")
+    try:
+        indices = [int(part) for part in parts]
+    except ValueError as error:
+        raise ValueError(f"{label} must contain only integer frame indices") from error
+    if len(indices) != len(set(indices)):
+        raise ValueError(f"{label} contains a duplicate frame index")
+    if any(index < 0 or index >= frame_count for index in indices):
+        raise ValueError(f"{label} contains an out of range frame index for {frame_count} corpus frames")
+    return indices
+
+
+def resolve_frame_splits(frame_ids, train_value, evaluation_value):
+    frame_count = len(frame_ids)
+    if frame_count <= 0:
+        raise ValueError("frame split requires at least one corpus frame")
+    if (train_value is None and evaluation_value is None) or (train_value == "all" and evaluation_value == "all"):
+        indices = list(range(frame_count))
+        return {
+            "authority": "all-frames-train-and-evaluate-v0",
+            "trainIndices": indices,
+            "evaluationIndices": indices,
+            "trainFrameIds": list(frame_ids),
+            "evaluationFrameIds": list(frame_ids),
+        }
+    if train_value is None or evaluation_value is None:
+        raise ValueError("explicit frame custody requires both train-frame-indices and eval-frame-indices")
+    train_indices = parse_frame_indices(train_value, frame_count, "train-frame-indices")
+    evaluation_indices = parse_frame_indices(evaluation_value, frame_count, "eval-frame-indices")
+    if not train_indices or not evaluation_indices:
+        raise ValueError("explicit training and evaluation frame sets must both be nonempty")
+    overlap = sorted(set(train_indices).intersection(evaluation_indices))
+    if overlap:
+        raise ValueError(f"training and evaluation frame indices must not overlap: {overlap}")
+    return {
+        "authority": "explicit-disjoint-frame-holdout-v0",
+        "trainIndices": train_indices,
+        "evaluationIndices": evaluation_indices,
+        "trainFrameIds": [frame_ids[index] for index in train_indices],
+        "evaluationFrameIds": [frame_ids[index] for index in evaluation_indices],
+    }
+
+
 def load_corpus(manifest_value):
     manifest_path = Path(manifest_value).resolve()
     manifest_bytes = manifest_path.read_bytes()
@@ -637,6 +683,36 @@ def save_preview(path, image):
     Image.fromarray(pixels, mode="RGB").save(path)
 
 
+def evaluate_frame_set(model, geometries, frames, indices, lower, span, depth_bins, edge_weight, output_dir, stage):
+    rows = []
+    for frame_index in indices:
+        geometry = geometries[frame_index]
+        prediction, _ = render_frame(model, geometry, lower, span, depth_bins)
+        mx.eval(prediction)
+        preview_path = output_dir / f"preview-{stage}-frame-{frame_index:03d}.png"
+        target_path = output_dir / f"preview-target-frame-{frame_index:03d}.png"
+        save_preview(preview_path, prediction)
+        if not target_path.exists():
+            save_preview(target_path, geometry["target"])
+        pixel_value = float(pixel_loss(prediction, geometry["target"]).item())
+        edge_value = float(edge_loss(prediction, geometry["target"]).item())
+        rows.append({
+            "frameIndex": frame_index,
+            "frameId": frames[frame_index]["id"],
+            "sameStateCaptureId": frames[frame_index]["sameStateCaptureId"],
+            "preview": str(preview_path),
+            "targetPreview": str(target_path),
+            "pixelLoss": pixel_value,
+            "edgeLoss": edge_value,
+            "loss": pixel_value + edge_value * edge_weight,
+        })
+    return rows
+
+
+def mean_metric(rows, key):
+    return sum(row[key] for row in rows) / len(rows)
+
+
 def serialize_model(model, artifact_template, output_path):
     payload = {
         "schema": MODEL_SCHEMA,
@@ -769,6 +845,8 @@ def parse_args():
     parser.add_argument("--spatial-mixing", choices=["none", "six-neighbor-hidden-residual"], default="none")
     parser.add_argument("--message-size", type=int, default=0)
     parser.add_argument("--freeze-base", type=int, choices=[0, 1], default=0)
+    parser.add_argument("--train-frame-indices")
+    parser.add_argument("--eval-frame-indices")
     parser.add_argument("--candidate-table-oracle", action="store_true")
     parser.add_argument("--probe-only", action="store_true")
     return parser.parse_args()
@@ -795,6 +873,11 @@ def main():
         feature_names = context_feature_names(args.context_mode, frequencies)
         phase = "corpus"
         corpus = load_corpus(args.corpus)
+        frame_split = resolve_frame_splits(
+            [frame["id"] for frame in corpus["frames"]],
+            args.train_frame_indices,
+            args.eval_frame_indices,
+        )
         phase = "warm-start"
         base_model, warm_artifact, output_ranges, warm_receipt, warm_schema, warm_context_mode, warm_frequencies, warm_spatial_mixing = load_warm_start(
             args.warm_start,
@@ -847,16 +930,28 @@ def main():
             for frame in corpus["frames"]
         ]
         initial_radius = [mx.array(attributes[:, 4:6]) for attributes in initial_attributes]
+        training_geometries = [geometries[index] for index in frame_split["trainIndices"]]
+        training_initial_radius = [initial_radius[index] for index in frame_split["trainIndices"]]
         phase = "initial-preview"
-        initial_prediction, _ = render_frame(model, geometries[0], lower, span, args.depth_bins)
-        mx.eval(initial_prediction)
+        initial_evaluation_rows = evaluate_frame_set(
+            model,
+            geometries,
+            corpus["frames"],
+            frame_split["evaluationIndices"],
+            lower,
+            span,
+            args.depth_bins,
+            args.edge_weight,
+            output_dir,
+            "initial",
+        )
         initial_preview_path = output_dir / "preview-initial.png"
         target_preview_path = output_dir / "preview-target.png"
-        save_preview(initial_preview_path, initial_prediction)
-        save_preview(target_preview_path, geometries[0]["target"])
-        initial_pixel_loss = float(pixel_loss(initial_prediction, geometries[0]["target"]).item())
-        initial_edge_loss = float(edge_loss(initial_prediction, geometries[0]["target"]).item())
-        initial_loss = initial_pixel_loss + initial_edge_loss * args.edge_weight
+        shutil.copyfile(initial_evaluation_rows[0]["preview"], initial_preview_path)
+        shutil.copyfile(initial_evaluation_rows[0]["targetPreview"], target_preview_path)
+        initial_pixel_loss = mean_metric(initial_evaluation_rows, "pixelLoss")
+        initial_edge_loss = mean_metric(initial_evaluation_rows, "edgeLoss")
+        initial_loss = mean_metric(initial_evaluation_rows, "loss")
         losses = [{"step": 0, "loss": initial_loss}]
         if not args.probe_only and args.steps > 0:
             phase = "training"
@@ -864,11 +959,11 @@ def main():
 
             def loss_fn(active_model):
                 total = mx.array(0.0)
-                for geometry, initial_radius_values in zip(geometries, initial_radius):
+                for geometry, initial_radius_values in zip(training_geometries, training_initial_radius):
                     prediction, attributes = render_frame(active_model, geometry, lower, span, args.depth_bins)
                     total = total + image_loss(prediction, geometry["target"], args.edge_weight)
                     total = total + mx.mean(mx.square(attributes[:, 4:6] - initial_radius_values)) * args.radius_preservation
-                return total / len(geometries)
+                return total / len(training_geometries)
 
             loss_and_grad = nn.value_and_grad(model, loss_fn)
             for step in range(args.steps):
@@ -878,13 +973,39 @@ def main():
                 if step == 0 or (step + 1) % 20 == 0 or step + 1 == args.steps:
                     losses.append({"step": step + 1, "loss": float(loss.item())})
         phase = "trained-preview"
-        trained_prediction, _ = render_frame(model, geometries[0], lower, span, args.depth_bins)
-        mx.eval(trained_prediction)
+        trained_evaluation_rows = evaluate_frame_set(
+            model,
+            geometries,
+            corpus["frames"],
+            frame_split["evaluationIndices"],
+            lower,
+            span,
+            args.depth_bins,
+            args.edge_weight,
+            output_dir,
+            "trained",
+        )
         trained_preview_path = output_dir / "preview-trained.png"
-        save_preview(trained_preview_path, trained_prediction)
-        trained_pixel_loss = float(pixel_loss(trained_prediction, geometries[0]["target"]).item())
-        trained_edge_loss = float(edge_loss(trained_prediction, geometries[0]["target"]).item())
-        trained_loss = trained_pixel_loss + trained_edge_loss * args.edge_weight
+        shutil.copyfile(trained_evaluation_rows[0]["preview"], trained_preview_path)
+        trained_pixel_loss = mean_metric(trained_evaluation_rows, "pixelLoss")
+        trained_edge_loss = mean_metric(trained_evaluation_rows, "edgeLoss")
+        trained_loss = mean_metric(trained_evaluation_rows, "loss")
+        evaluation_frames = []
+        for initial_row, trained_row in zip(initial_evaluation_rows, trained_evaluation_rows):
+            evaluation_frames.append({
+                "frameIndex": initial_row["frameIndex"],
+                "frameId": initial_row["frameId"],
+                "sameStateCaptureId": initial_row["sameStateCaptureId"],
+                "targetPreview": initial_row["targetPreview"],
+                "initialPreview": initial_row["preview"],
+                "trainedPreview": trained_row["preview"],
+                "initialLoss": initial_row["loss"],
+                "trainedLoss": trained_row["loss"],
+                "initialPixelLoss": initial_row["pixelLoss"],
+                "trainedPixelLoss": trained_row["pixelLoss"],
+                "initialEdgeLoss": initial_row["edgeLoss"],
+                "trainedEdgeLoss": trained_row["edgeLoss"],
+            })
         phase = "model-artifact"
         if args.candidate_table_oracle:
             model_path = output_dir / "candidate-attributes.f32"
@@ -904,7 +1025,7 @@ def main():
             model_path = output_dir / "model-artifact.json"
             serialize_model(model, warm_artifact, model_path)
             phase = "compile"
-            compiled_receipt = compile_model(output_dir, model_path, model, corpus["frames"][0], lower_np, span_np)
+            compiled_receipt = compile_model(output_dir, model_path, model, corpus["frames"][frame_split["trainIndices"][0]], lower_np, span_np)
             model_receipt = {
                 "path": str(model_path),
                 "schema": MODEL_SCHEMA,
@@ -963,6 +1084,11 @@ def main():
                 "spatialMixing": args.spatial_mixing,
                 "messageSize": message_size,
                 "basePathFrozen": bool(args.freeze_base),
+                "frameSplitAuthority": frame_split["authority"],
+                "trainFrameIndices": frame_split["trainIndices"],
+                "trainFrameIds": frame_split["trainFrameIds"],
+                "evaluationFrameIndices": frame_split["evaluationIndices"],
+                "evaluationFrameIds": frame_split["evaluationFrameIds"],
                 "spatialMixingExpansionAuthority": "zero-delta-active-six-neighbor-hidden-residual-v0" if warm_spatial_mixing == "none" and args.spatial_mixing == "six-neighbor-hidden-residual" else None,
                 "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood") else [],
                 "inputChannels": len(feature_names),
@@ -977,7 +1103,13 @@ def main():
                 "trainedEdgeLoss": trained_edge_loss,
                 "lossTrace": losses,
             },
-            "previews": {"initial": str(initial_preview_path), "target": str(target_preview_path), "trained": str(trained_preview_path)},
+            "evaluationFrames": evaluation_frames,
+            "previews": {
+                "initial": str(initial_preview_path),
+                "target": str(target_preview_path),
+                "trained": str(trained_preview_path),
+                "frames": evaluation_frames,
+            },
             "modelArtifact": model_receipt,
         })
     except BaseException as error:

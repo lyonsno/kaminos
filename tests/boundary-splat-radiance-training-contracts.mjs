@@ -38,6 +38,12 @@ assert.match(script, /prediction\[:,\s*1:,\s*:\]\s*-\s*prediction\[:,\s*:-1,\s*:
 assert.match(script, /prediction\[1:,\s*:,\s*:\]\s*-\s*prediction\[:-1,\s*:,\s*:\]/, 'radiance trainer differentiates vertical image structure');
 assert.match(script, /"initialPixelLoss"/, 'radiance receipts preserve pixel loss independently from the edge-aware objective');
 assert.match(script, /"trainedEdgeLoss"/, 'radiance receipts report final target-gradient mismatch');
+assert.match(script, /--train-frame-indices/, 'radiance trainer exposes explicit training-frame custody');
+assert.match(script, /--eval-frame-indices/, 'radiance trainer exposes explicit evaluation-frame custody');
+assert.match(script, /explicit-disjoint-frame-holdout-v0/, 'radiance receipts distinguish honest temporal holdout from train-frame evaluation');
+assert.match(script, /"trainFrameIds"/, 'training receipts preserve the exact optimized frame identities');
+assert.match(script, /"evaluationFrameIds"/, 'training receipts preserve the exact held-out frame identities');
+assert.match(script, /"evaluationFrames"/, 'radiance receipts preserve per-frame held-out optical metrics and previews');
 assert.match(script, /--candidate-table-oracle/, 'radiance trainer exposes a non-deployable per-candidate representational oracle');
 assert.match(script, /class\s+CandidateAttributeTable\(nn\.Module\)/, 'candidate oracle owns independently trainable attributes per splat');
 assert.match(script, /per-candidate-free-attribute-oracle-v0/, 'candidate oracle receipts distinguish diagnostic authority from deployable MLP authority');
