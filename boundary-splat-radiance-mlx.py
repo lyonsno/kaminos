@@ -149,29 +149,57 @@ class CandidateAttributeTable(nn.Module):
         return mx.sigmoid(self.logits)
 
 
-def load_warm_start(path_value):
+def load_warm_start(path_value, requested_context_mode, requested_frequencies):
     path = Path(path_value).resolve()
     artifact_bytes = path.read_bytes()
     artifact = json.loads(artifact_bytes)
-    if artifact.get("schema") != MODEL_SCHEMA or artifact.get("architecture") != "dense-relu-dense":
-        raise ValueError("warm start is not a browser-compatible boundary splat attribute MLP")
-    if artifact.get("features") != FEATURES or artifact.get("outputs") != OUTPUTS:
-        raise ValueError("warm start feature/output order does not match the live renderer")
+    schema = artifact.get("schema")
+    if artifact.get("architecture") != "dense-relu-dense":
+        raise ValueError("warm start architecture must be dense-relu-dense")
+    if schema == MODEL_SCHEMA:
+        warm_context_mode = "none"
+        warm_frequencies = []
+        expected_features = FEATURES
+    elif artifact.get("schema") == SPATIAL_MODEL_SCHEMA:
+        warm_context_mode = artifact.get("contextMode")
+        warm_frequencies = [float(value) for value in artifact.get("fourierFrequencies", [])]
+        if warm_context_mode != requested_context_mode:
+            raise ValueError(
+                f"warm start context mode {warm_context_mode!r} does not match requested context mode {requested_context_mode!r}"
+            )
+        if warm_context_mode == "world-fourier" and warm_frequencies != requested_frequencies:
+            raise ValueError(
+                f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
+            )
+        expected_features = context_feature_names(warm_context_mode, warm_frequencies)
+    else:
+        raise ValueError("warm start is not a recognized boundary splat attribute MLP")
+    if artifact.get("features") != expected_features or artifact.get("outputs") != OUTPUTS:
+        raise ValueError("warm start feature/output order does not match its declared context contract")
     hidden_size = int(artifact["hiddenSize"])
-    model = AttributeMlp(hidden_size)
+    model = AttributeMlp(hidden_size, len(expected_features))
+    layers = artifact.get("layers") or []
+    if len(layers) != 2:
+        raise ValueError("warm start must contain exactly two dense layers")
     weights = []
-    for name, layer in zip(("hidden", "output"), artifact["layers"]):
+    for name, layer in zip(("hidden", "output"), layers):
         matrix = mx.array(layer["weights"]).reshape(layer["outputSize"], layer["inputSize"])
         bias = mx.array(layer["bias"])
         weights.extend([(f"{name}.weight", matrix), (f"{name}.bias", bias)])
     model.load_weights(weights)
     mx.eval(model.parameters())
     output_ranges = np.asarray(artifact["outputRanges"], dtype=np.float32)
+    if output_ranges.shape != (len(OUTPUTS), 2) or not np.all(np.isfinite(output_ranges)) or np.any(output_ranges[:, 1] <= output_ranges[:, 0]):
+        raise ValueError("warm start output ranges must contain one finite increasing range per output")
     return model, artifact, output_ranges, {
         "path": str(path),
         "bytes": len(artifact_bytes),
         "sha256": sha256_bytes(artifact_bytes),
-    }
+        "schema": schema,
+        "contextMode": warm_context_mode,
+        "fourierFrequencies": warm_frequencies,
+        "continuation": schema == SPATIAL_MODEL_SCHEMA,
+    }, schema, warm_context_mode, warm_frequencies
 
 
 def parse_fourier_frequencies(value):
@@ -478,20 +506,28 @@ def main():
         frequencies = parse_fourier_frequencies(args.fourier_frequencies)
         if args.candidate_table_oracle and args.context_mode != "none":
             raise ValueError("candidate table oracle cannot be combined with spatial conditioning")
+        feature_names = context_feature_names(args.context_mode, frequencies)
         phase = "corpus"
         corpus = load_corpus(args.corpus)
         phase = "warm-start"
-        base_model, warm_artifact, output_ranges, warm_receipt = load_warm_start(args.warm_start)
+        base_model, warm_artifact, output_ranges, warm_receipt, warm_schema, warm_context_mode, warm_frequencies = load_warm_start(
+            args.warm_start,
+            args.context_mode,
+            frequencies,
+        )
         lower_np = output_ranges[:, 0]
         span_np = output_ranges[:, 1] - output_ranges[:, 0]
         lower = mx.array(lower_np)
         span = mx.array(span_np)
         initial_attributes = [
-            predict_numpy(base_model, frame["candidates"][:, 3:], output_ranges)
+            predict_numpy(
+                base_model,
+                np.asarray(encode_candidate_inputs(frame["candidates"], warm_context_mode, warm_frequencies)),
+                output_ranges,
+            )
             for frame in corpus["frames"]
         ]
-        feature_names = context_feature_names(args.context_mode, frequencies)
-        model = base_model if args.context_mode == "none" else expand_warm_start_with_context(base_model, len(feature_names))
+        model = base_model if warm_schema == SPATIAL_MODEL_SCHEMA or args.context_mode == "none" else expand_warm_start_with_context(base_model, len(feature_names))
         if args.candidate_table_oracle:
             if len(corpus["frames"]) != 1:
                 raise ValueError("candidate oracle requires exactly one corpus frame")

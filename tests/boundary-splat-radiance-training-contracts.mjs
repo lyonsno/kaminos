@@ -50,5 +50,30 @@ assert.match(script, /expanded_weight\[:,\s*len\(FEATURES\):\]\s*=\s*0\.0/, 'new
 assert.match(script, /shared-position-conditioned-feature-mlp-v0/, 'spatial receipts distinguish the experimental model authority');
 assert.match(script, /"deployable":\s*False/, 'spatial artifacts cannot masquerade as browser-deployable models');
 assert.match(script, /"contextMode"/, 'training receipts preserve the effective context mode');
+assert.match(
+  script,
+  /artifact\.get\("schema"\)\s*==\s*SPATIAL_MODEL_SCHEMA/,
+  'radiance trainer accepts its own experimental spatial artifact as an explicit continuation checkpoint',
+);
+assert.match(
+  script,
+  /warm start context mode[^\n]+does not match requested context mode/,
+  'spatial continuation rejects context-mode drift instead of silently changing the model input contract',
+);
+assert.match(
+  script,
+  /warm start Fourier frequencies[^\n]+do not match requested Fourier frequencies/,
+  'spatial continuation rejects Fourier-ladder drift instead of loading semantically incompatible weights',
+);
+assert.match(
+  script,
+  /initial_attributes\s*=\s*\[[\s\S]*encode_candidate_inputs\([\s\S]*warm_context_mode[\s\S]*warm_frequencies/,
+  'radius preservation and continuation receipts derive their initial attributes from the actual resumed spatial model inputs',
+);
+assert.match(
+  script,
+  /"continuation"\s*:\s*schema\s*==\s*SPATIAL_MODEL_SCHEMA/,
+  'training receipts say explicitly when optimization continued from an experimental spatial checkpoint',
+);
 
 console.log('boundary splat radiance training contracts passed');
