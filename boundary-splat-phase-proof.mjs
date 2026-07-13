@@ -7,6 +7,7 @@ import {
   BOUNDARY_SPLAT_TEMPORAL_ALIGNMENT_SCHEMA,
   validateBoundarySplatSupervisionCorpus,
 } from './boundary-splat-supervision-corpus.mjs';
+import { alignBoundarySplatRowsByWorldPosition } from './boundary-splat-phase-render-witness.mjs';
 
 export const BOUNDARY_SPLAT_PHASE_PROOF_SCHEMA = 'kaminos-boundary-splat-phase-proof-v0';
 export const BOUNDARY_SPLAT_PHASE_CORPUS_SCHEMA = 'kaminos-boundary-splat-phase-candidate-corpus-v0';
@@ -143,9 +144,24 @@ async function validatePhaseCandidateCorpus(manifest, manifestPath, manifestByte
     if (bytes.byteLength !== frame.candidates.bytes) throw new Error(`${label} candidate bytes mismatch`);
     const digest = sha256(bytes);
     if (digest !== frame.candidates.sha256) throw new Error(`${label} candidate sha256 mismatch`);
-    frames.push({ id: frame.id, candidatePath: path, candidateCount: frame.candidates.count, featureOnly: true });
+    let splatPath = null;
+    if (frame.splats != null) {
+      if (!frame.splats || typeof frame.splats !== 'object' || frame.splats.dtype !== 'float32-le' || frame.splats.strideFloats !== 12) {
+        throw new Error(`${label} splats must be float32-le stride-12 rows`);
+      }
+      if (frame.splats.authority !== 'intercepted-live-boundary-splat-buffer-post-compaction-v0') throw new Error(`${label} splat authority mismatch`);
+      if (frame.splats.count !== frame.candidates.count) throw new Error(`${label} splat count must match candidate count`);
+      splatPath = resolve(dirname(manifestPath), frame.splats.path);
+      const splatBytes = await readFile(splatPath);
+      if (splatBytes.byteLength !== frame.splats.bytes) throw new Error(`${label} splat bytes mismatch`);
+      if (sha256(splatBytes) !== frame.splats.sha256) throw new Error(`${label} splat sha256 mismatch`);
+    }
+    frames.push({ id: frame.id, candidatePath: path, candidateCount: frame.candidates.count, featureOnly: true, splatPath });
   }
   const temporalAlignment = validateSharedTemporalAlignment(manifest.temporalAlignment, frameIds);
+  if (temporalAlignment.identityKey === 'world-position-stable-key' && frames.some(frame => !frame.splatPath)) {
+    throw new Error('world-position-stable-key phase corpus requires splat rows for every frame');
+  }
   return {
     schema: BOUNDARY_SPLAT_PHASE_CORPUS_SCHEMA,
     corpusIdentity: `sha256:${sha256(manifestBytes)}`,
@@ -236,10 +252,17 @@ async function evaluateBoundarySplatPhaseProof(manifestFile, options = {}) {
   }
   const frameById = new Map(validation.frames.map(frame => [frame.id, frame]));
   const candidateRows = new Map();
+  const splatRows = new Map();
   for (const frame of validation.frames) {
     const bytes = await readFile(frame.candidatePath);
     const stride = frame.featureOnly ? FEATURE_COUNT : CANDIDATE_STRIDE_FLOATS;
     candidateRows.set(frame.id, readFloat32Rows(bytes, frame.candidateCount, stride, `frame ${frame.id} candidates`));
+    if (frame.splatPath) {
+      const splatBytes = await readFile(frame.splatPath);
+      splatRows.set(frame.id, new Float32Array(
+        splatBytes.buffer.slice(splatBytes.byteOffset, splatBytes.byteOffset + splatBytes.byteLength),
+      ));
+    }
   }
   const maxOffset = Math.max(...validation.temporalAlignment.offsetSteps.map(offset => Math.abs(offset)));
   const samples = [];
@@ -249,13 +272,20 @@ async function evaluateBoundarySplatPhaseProof(manifestFile, options = {}) {
     if (!sourceFrame || !targetFrame) throw new Error(`temporal pair ${pairIndex} references missing frames`);
     const sourceRows = candidateRows.get(pair.sourceFrameId);
     const targetRows = candidateRows.get(pair.targetFrameId);
-    for (let slot = 0; slot < pair.matchedSlots; slot += 1) {
-      const source = sourceFrame.featureOnly ? sourceRows[slot] : featureSlice(sourceRows[slot]);
-      const target = targetFrame.featureOnly ? targetRows[slot] : featureSlice(targetRows[slot]);
+    const alignedRows = validation.temporalAlignment.identityKey === 'world-position-stable-key'
+      ? alignBoundarySplatRowsByWorldPosition(splatRows.get(pair.sourceFrameId), splatRows.get(pair.targetFrameId)).matched
+      : Array.from({ length: pair.matchedSlots }, (_, slot) => ({ sourceIndex: slot, targetIndex: slot }));
+    if (alignedRows.length !== pair.matchedSlots) {
+      throw new Error(`temporal pair ${pairIndex} declared ${pair.matchedSlots} matches but world-position alignment found ${alignedRows.length}`);
+    }
+    for (const aligned of alignedRows) {
+      const source = sourceFrame.featureOnly ? sourceRows[aligned.sourceIndex] : featureSlice(sourceRows[aligned.sourceIndex]);
+      const target = targetFrame.featureOnly ? targetRows[aligned.targetIndex] : featureSlice(targetRows[aligned.targetIndex]);
       samples.push({
         pairIndex,
         offsetSteps: pair.offsetSteps,
-        slot,
+        slot: aligned.sourceIndex,
+        targetSlot: aligned.targetIndex,
         source,
         target,
         input: modelInput(source, pair.offsetSteps, maxOffset),
@@ -315,6 +345,7 @@ async function evaluateBoundarySplatPhaseProof(manifestFile, options = {}) {
     alignment: validation.temporalAlignment,
     model: {
       family: 'ridge-linear-offset-conditioned-v0',
+      sampleAlignment: validation.temporalAlignment.identityKey,
       inputFeatures: ['bias', 'offsetSteps/maxAbsOffset', 'source[16]'],
       outputFeatures: 'target[16]',
       ridgeLambda: Number(options.ridgeLambda ?? 1e-3),

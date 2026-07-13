@@ -10,6 +10,7 @@ import {
   computeBoundarySplatPhaseProof,
   writeBoundarySplatPhaseProofPreview,
 } from './boundary-splat-phase-proof.mjs';
+import { alignBoundarySplatRowsByWorldPosition } from './boundary-splat-phase-render-witness.mjs';
 
 const SCHEMA = 'kaminos.boundary-splat-phase-corpus-witness.v0';
 const FEATURE_ORDER = [
@@ -64,13 +65,16 @@ try {
   if (!inputUrl) throw new Error('missing --url');
   mkdirSync(outDir, { recursive: true });
   const requestedRoute = phaseUrl(inputUrl);
-  browser = await launchBrowser(requestedRoute);
+  browser = await launchBrowser('about:blank');
   failurePhase = 'cdp-connect';
   await waitForCdp();
   const page = await findPage();
   ws = new WebSocket(page.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);
   await wsRequest('Runtime.enable');
+  await wsRequest('Page.enable');
+  failurePhase = 'splat-buffer-interceptor-install';
+  lastTrustworthyEvidence.splatBufferInterceptor = await installBoundarySplatBufferInterceptor(requestedRoute);
   await waitForPrototype();
   let replayedCaptureControls = null;
   let replayedCaptureCamera = null;
@@ -367,6 +371,279 @@ async function launchBrowser(url) {
   return { process: proc };
 }
 
+function boundarySplatBufferInterceptorSource() {
+  return `(() => {
+    const CAPTURE_AUTHORITY = 'intercepted-live-boundary-splat-buffer-post-compaction-v0';
+    const state = {
+      device: null,
+      splatBuffer: null,
+      splatDescriptor: null,
+      cameraBuffer: null,
+      cameraDescriptor: null,
+      cameraValues: null,
+      drawBuffer: null,
+      featureBuffer: null,
+      pendingSameEncoderCaptures: [],
+      createdBufferCount: 0,
+      bufferDescriptors: new WeakMap(),
+      encoderDescriptors: new WeakMap(),
+    };
+    const originalCreateBuffer = globalThis.GPUDevice?.prototype?.createBuffer;
+    if (!originalCreateBuffer) {
+      window.__kaminosBoundarySplatInterceptor = {
+        installed: false,
+        reason: 'GPUDevice.prototype.createBuffer unavailable',
+      };
+      return;
+    }
+    if (!originalCreateBuffer.__kaminosBoundarySplatInterceptorOriginal) {
+      const interceptedCreateBuffer = function(descriptor) {
+        const buffer = originalCreateBuffer.call(this, descriptor);
+        const label = String(descriptor?.label || '');
+        state.createdBufferCount += 1;
+        state.bufferDescriptors.set(buffer, { label, size: Number(descriptor?.size || 0) });
+        if (label.includes('live-boundary-sidecar-analytic-splats-v0 candidates')) {
+          state.device = this;
+          state.splatBuffer = buffer;
+          state.splatDescriptor = { label, size: Number(descriptor.size) };
+        }
+        if (label.includes('live-boundary-sidecar-analytic-splats-v0 camera')) {
+          state.device = this;
+          state.cameraBuffer = buffer;
+          state.cameraDescriptor = { label, size: Number(descriptor.size) };
+        }
+        return buffer;
+      };
+      Object.defineProperty(interceptedCreateBuffer, '__kaminosBoundarySplatInterceptorOriginal', {
+        value: originalCreateBuffer,
+      });
+      globalThis.GPUDevice.prototype.createBuffer = interceptedCreateBuffer;
+    }
+    const originalCreateBindGroup = globalThis.GPUDevice?.prototype?.createBindGroup;
+    if (originalCreateBindGroup && !originalCreateBindGroup.__kaminosBoundarySplatInterceptorOriginal) {
+      const interceptedCreateBindGroup = function(descriptor) {
+        const bindGroup = originalCreateBindGroup.call(this, descriptor);
+        const label = String(descriptor?.label || '');
+        if (label.includes('live-boundary-sidecar-analytic-splats-v0 compute bind group')) {
+          const splatEntry = descriptor.entries?.find(entry => entry.binding === 2);
+          const drawEntry = descriptor.entries?.find(entry => entry.binding === 3);
+          const cameraEntry = descriptor.entries?.find(entry => entry.binding === 4);
+          const featureEntry = descriptor.entries?.find(entry => entry.binding === 6);
+          if (splatEntry?.resource?.buffer) {
+            state.device = this;
+            state.splatBuffer = splatEntry.resource.buffer;
+            state.splatDescriptor = state.bufferDescriptors.get(state.splatBuffer) || { label: 'compute-bind-group-binding-2', size: 0 };
+          }
+          if (drawEntry?.resource?.buffer) state.drawBuffer = drawEntry.resource.buffer;
+          if (cameraEntry?.resource?.buffer) {
+            state.cameraBuffer = cameraEntry.resource.buffer;
+            state.cameraDescriptor = state.bufferDescriptors.get(state.cameraBuffer) || { label: 'compute-bind-group-binding-4', size: 112 };
+          }
+          if (featureEntry?.resource?.buffer) state.featureBuffer = featureEntry.resource.buffer;
+        }
+        if (label.includes('live-boundary-sidecar-analytic-splats-v0 render bind group')) {
+          const splatEntry = descriptor.entries?.find(entry => entry.binding === 5);
+          const cameraEntry = descriptor.entries?.find(entry => entry.binding === 4);
+          if (splatEntry?.resource?.buffer) {
+            state.device = this;
+            state.splatBuffer = splatEntry.resource.buffer;
+            state.splatDescriptor = state.bufferDescriptors.get(state.splatBuffer) || { label: 'render-bind-group-binding-5', size: 0 };
+          }
+          if (cameraEntry?.resource?.buffer) {
+            state.device = this;
+            state.cameraBuffer = cameraEntry.resource.buffer;
+            state.cameraDescriptor = state.bufferDescriptors.get(state.cameraBuffer) || { label: 'render-bind-group-binding-4', size: 112 };
+          }
+        }
+        return bindGroup;
+      };
+      Object.defineProperty(interceptedCreateBindGroup, '__kaminosBoundarySplatInterceptorOriginal', {
+        value: originalCreateBindGroup,
+      });
+      globalThis.GPUDevice.prototype.createBindGroup = interceptedCreateBindGroup;
+    }
+    const originalCreateCommandEncoder = globalThis.GPUDevice?.prototype?.createCommandEncoder;
+    if (originalCreateCommandEncoder && !originalCreateCommandEncoder.__kaminosBoundarySplatInterceptorOriginal) {
+      const interceptedCreateCommandEncoder = function(descriptor = {}) {
+        const encoder = originalCreateCommandEncoder.call(this, descriptor);
+        state.encoderDescriptors.set(encoder, { label: String(descriptor?.label || '') });
+        return encoder;
+      };
+      Object.defineProperty(interceptedCreateCommandEncoder, '__kaminosBoundarySplatInterceptorOriginal', {
+        value: originalCreateCommandEncoder,
+      });
+      globalThis.GPUDevice.prototype.createCommandEncoder = interceptedCreateCommandEncoder;
+    }
+    const originalWriteBuffer = globalThis.GPUQueue?.prototype?.writeBuffer;
+    if (originalWriteBuffer && !originalWriteBuffer.__kaminosBoundarySplatInterceptorOriginal) {
+      const interceptedWriteBuffer = function(buffer, bufferOffset, data, dataOffset = 0, size) {
+        const result = originalWriteBuffer.call(this, buffer, bufferOffset, data, dataOffset, size);
+        if (buffer === state.cameraBuffer && Number(bufferOffset) === 0) {
+          const sourceBytes = ArrayBuffer.isView(data)
+            ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+            : new Uint8Array(data);
+          const start = Math.max(0, Number(dataOffset) || 0);
+          const byteLength = size == null ? sourceBytes.byteLength - start : Number(size);
+          const copied = sourceBytes.slice(start, start + byteLength);
+          if (copied.byteLength >= 112) {
+            state.cameraValues = Array.from(new Float32Array(copied.buffer, copied.byteOffset, 28));
+          }
+        }
+        return result;
+      };
+      Object.defineProperty(interceptedWriteBuffer, '__kaminosBoundarySplatInterceptorOriginal', {
+        value: originalWriteBuffer,
+      });
+      globalThis.GPUQueue.prototype.writeBuffer = interceptedWriteBuffer;
+    }
+    const originalCopyBufferToBuffer = globalThis.GPUCommandEncoder?.prototype?.copyBufferToBuffer;
+    if (originalCopyBufferToBuffer && !originalCopyBufferToBuffer.__kaminosBoundarySplatInterceptorOriginal) {
+      const interceptedCopyBufferToBuffer = function(source, sourceOffset, destination, destinationOffset, size) {
+        const result = originalCopyBufferToBuffer.call(this, source, sourceOffset, destination, destinationOffset, size);
+        const encoderLabel = state.encoderDescriptors.get(this)?.label || '';
+        if (
+          source === state.featureBuffer
+          && state.splatBuffer
+          && state.drawBuffer
+          && state.cameraValues
+          && encoderLabel.includes('boundary-splat-selected-candidate-features-v0 witness encoder')
+        ) {
+          const featureBytes = Number(size);
+          const rowCount = featureBytes / (16 * 4);
+          if (Number.isInteger(rowCount) && rowCount > 0) {
+            const splatBytes = rowCount * 12 * 4;
+            const splatReadback = state.device.createBuffer({
+              label: 'kaminos phase witness same-encoder splat readback',
+              size: splatBytes,
+              usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+            });
+            const drawReadback = state.device.createBuffer({
+              label: 'kaminos phase witness same-encoder draw-state readback',
+              size: 32,
+              usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+            });
+            originalCopyBufferToBuffer.call(this, state.splatBuffer, 0, splatReadback, 0, splatBytes);
+            originalCopyBufferToBuffer.call(this, state.drawBuffer, 0, drawReadback, 0, 32);
+            state.pendingSameEncoderCaptures.push({
+              authority: 'same-encoder-feature-splat-count-v0',
+              rowCount,
+              splatBytes,
+              splatReadback,
+              drawReadback,
+              cameraValues: state.cameraValues.slice(),
+            });
+          }
+        }
+        return result;
+      };
+      Object.defineProperty(interceptedCopyBufferToBuffer, '__kaminosBoundarySplatInterceptorOriginal', {
+        value: originalCopyBufferToBuffer,
+      });
+      globalThis.GPUCommandEncoder.prototype.copyBufferToBuffer = interceptedCopyBufferToBuffer;
+    }
+    const bytesToBase64 = (bytes) => {
+      const chunks = [];
+      for (let start = 0; start < bytes.length; start += 0x8000) {
+        chunks.push(String.fromCharCode(...bytes.subarray(start, Math.min(start + 0x8000, bytes.length))));
+      }
+      return btoa(chunks.join(''));
+    };
+    window.__kaminosBoundarySplatInterceptor = {
+      installed: true,
+      authority: CAPTURE_AUTHORITY,
+      status() {
+        return {
+          installed: true,
+          authority: CAPTURE_AUTHORITY,
+          createdBufferCount: state.createdBufferCount,
+          splatDescriptor: state.splatDescriptor,
+          cameraDescriptor: state.cameraDescriptor,
+          sameEncoderCaptureCount: state.pendingSameEncoderCaptures.length,
+        };
+      },
+      async capture(token, instanceCount) {
+        if (!state.device || !state.splatBuffer || !state.cameraBuffer || !state.cameraValues || !state.drawBuffer || !state.featureBuffer) {
+          throw new Error('boundary splat interceptor has not observed splat, feature, draw, and camera state');
+        }
+        if (!Number.isInteger(instanceCount) || instanceCount <= 0) {
+          throw new Error('boundary splat interceptor requires a positive instance count');
+        }
+        const pending = state.pendingSameEncoderCaptures.pop();
+        if (!pending) throw new Error('boundary splat interceptor has no same-encoder feature/splat capture');
+        while (state.pendingSameEncoderCaptures.length) {
+          const stale = state.pendingSameEncoderCaptures.shift();
+          stale.splatReadback.destroy();
+          stale.drawReadback.destroy();
+        }
+        const splatBytes = pending.splatBytes;
+        if (splatBytes > Number(state.splatDescriptor?.size || 0)) {
+          throw new Error('boundary splat capture exceeds intercepted candidate buffer');
+        }
+        let validationScopeOpen = false;
+        try {
+          state.device.pushErrorScope('validation');
+          validationScopeOpen = true;
+          await Promise.all([
+            pending.splatReadback.mapAsync(GPUMapMode.READ),
+            pending.drawReadback.mapAsync(GPUMapMode.READ),
+          ]);
+          const validationError = await state.device.popErrorScope();
+          validationScopeOpen = false;
+          if (validationError) throw new Error('intercepted boundary splat copy validation failed: ' + validationError.message);
+          const drawState = new Uint32Array(pending.drawReadback.getMappedRange());
+          const capturedInstanceCount = drawState[1];
+          if (capturedInstanceCount !== pending.rowCount || capturedInstanceCount !== instanceCount) {
+            throw new Error('same-encoder splat count mismatch: expected ' + instanceCount + ', features ' + pending.rowCount + ', draw ' + capturedInstanceCount);
+          }
+          const splatPayload = new Uint8Array(pending.splatReadback.getMappedRange()).slice();
+          const cameraValues = pending.cameraValues;
+          pending.splatReadback.unmap();
+          pending.drawReadback.unmap();
+          window.__kaminosPhaseSplatCaptureStore = window.__kaminosPhaseSplatCaptureStore || {};
+          window.__kaminosPhaseSplatCaptureStore[token] = {
+            packedFloat32Base64: bytesToBase64(splatPayload),
+            meta: {
+              status: 'captured',
+              authority: CAPTURE_AUTHORITY,
+              alignmentAuthority: pending.authority,
+              rowCount: capturedInstanceCount,
+              strideFloats: 12,
+              packedEncoding: 'float32-le-base64',
+              camera: {
+                viewProjection: cameraValues.slice(0, 16),
+                right: cameraValues.slice(16, 19),
+                up: cameraValues.slice(20, 23),
+                controls: cameraValues.slice(24, 28),
+              },
+              splatDescriptor: state.splatDescriptor,
+              cameraDescriptor: state.cameraDescriptor,
+            },
+          };
+          return window.__kaminosPhaseSplatCaptureStore[token].meta;
+        } finally {
+          if (validationScopeOpen) {
+            try { await state.device.popErrorScope(); } catch {}
+          }
+          pending.splatReadback.destroy();
+          pending.drawReadback.destroy();
+        }
+      },
+    };
+  })();`;
+}
+
+async function installBoundarySplatBufferInterceptor(requestedRoute) {
+  const script = await wsRequest('Page.addScriptToEvaluateOnNewDocument', {
+    source: boundarySplatBufferInterceptorSource(),
+  });
+  await wsRequest('Page.navigate', { url: requestedRoute });
+  return {
+    identity: 'boundary-splat-buffer-pre-navigation-interceptor-v0',
+    scriptIdentifier: script.identifier || null,
+    requestedRoute,
+  };
+}
+
 async function cdpFetch(path) {
   const response = await fetch(`http://127.0.0.1:${port}${path}`);
   if (!response.ok) throw new Error(`CDP ${path} failed with ${response.status}`);
@@ -411,6 +688,10 @@ function wsRequest(method, params = {}) {
       if (message.id !== id) return;
       cleanup();
       if (message.error) rejectReq(new Error(`${method}: ${message.error.message}`));
+      else if (message.result?.exceptionDetails) {
+        const details = message.result.exceptionDetails;
+        rejectReq(new Error(`${method}: ${details.exception?.description || details.text || 'browser-side exception'}`));
+      }
       else resolveReq(message.result);
     };
     const onClose = () => {
@@ -497,6 +778,13 @@ async function captureBrowserSideFeatureFrame(options) {
           strideFloats: capture?.strideFloats ?? null,
         },
       };
+      const splatCapture = await window.__kaminosBoundarySplatInterceptor?.capture?.(
+        token,
+        Number(sample?.boundarySplatInstanceCount || 0),
+      );
+      if (!splatCapture || splatCapture.status !== 'captured') {
+        throw new Error('intercepted boundary splat capture did not complete');
+      }
       return {
         token,
         frame: {
@@ -523,6 +811,7 @@ async function captureBrowserSideFeatureFrame(options) {
           boundarySplatCountAuthority: sample.boundarySplatCountAuthority ?? null,
         } : null,
         capture: window.__kaminosPhaseFeatureCaptureStore[token].meta,
+        splatCapture,
       };
     })()`,
     awaitPromise: true,
@@ -585,6 +874,69 @@ async function materializeBrowserSideFeatureCapture(token, outputPath) {
   };
 }
 
+async function materializeBrowserSideSplatCapture(token, outputPath) {
+  const metaResult = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const entry = window.__kaminosPhaseSplatCaptureStore?.[${JSON.stringify(token)}];
+      if (!entry) return { status: 'missing-store-entry' };
+      return {
+        ...entry.meta,
+        base64Chars: entry.packedFloat32Base64.length,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  const capture = metaResult.result.value;
+  if (!capture || capture.status !== 'captured') throw new Error(`splat capture status was ${capture?.status || 'missing'}`);
+  if (capture.authority !== 'intercepted-live-boundary-splat-buffer-post-compaction-v0') throw new Error('splat capture authority mismatch');
+  if (capture.packedEncoding !== 'float32-le-base64') throw new Error('splat capture omitted packed float32 payload');
+  const expectedBytes = Number(capture.rowCount) * Number(capture.strideFloats) * Float32Array.BYTES_PER_ELEMENT;
+  if (capture.strideFloats !== 12 || !Number.isFinite(expectedBytes) || expectedBytes <= 0) {
+    throw new Error(`splat capture metadata was invalid: ${JSON.stringify(capture)}`);
+  }
+  const chunks = [];
+  for (let start = 0; start < Number(capture.base64Chars); start += featureChunkChars) {
+    const end = Math.min(start + featureChunkChars, Number(capture.base64Chars));
+    const chunkResult = await wsRequest('Runtime.evaluate', {
+      expression: `(() => {
+        const entry = window.__kaminosPhaseSplatCaptureStore?.[${JSON.stringify(token)}];
+        if (!entry) throw new Error('missing staged splat capture ${token}');
+        return entry.packedFloat32Base64.slice(${start}, ${end});
+      })()`,
+      returnByValue: true,
+    });
+    chunks.push(Buffer.from(chunkResult.result.value || '', 'base64'));
+  }
+  const bytes = Buffer.concat(chunks);
+  if (bytes.byteLength !== expectedBytes) {
+    throw new Error(`splat capture byte length ${bytes.byteLength} did not equal expected ${expectedBytes}`);
+  }
+  const values = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
+  if (!values.some(value => Number.isFinite(value) && value !== 0)) {
+    throw new Error(`splat capture payload was all-zero: ${JSON.stringify({
+      splatDescriptor: capture.splatDescriptor,
+      cameraDescriptor: capture.cameraDescriptor,
+    })}`);
+  }
+  writeFileSync(outputPath, bytes);
+  return {
+    path: outputPath,
+    bytes: bytes.byteLength,
+    sha256: sha256(bytes),
+    count: Number(capture.rowCount),
+    strideFloats: Number(capture.strideFloats),
+    dtype: 'float32-le',
+    authority: capture.authority,
+    camera: capture.camera,
+    transport: {
+      identity: 'browser-side-splat-capture-chunked-cdp-v0',
+      chunkChars: featureChunkChars,
+      chunkCount: chunks.length,
+      base64Chars: Number(capture.base64Chars),
+    },
+  };
+}
+
 async function clearBrowserSideFeatureCapture(token) {
   if (!token) return { cleared: false, reason: 'missing-token' };
   const result = await wsRequest('Runtime.evaluate', {
@@ -592,10 +944,14 @@ async function clearBrowserSideFeatureCapture(token) {
       const store = window.__kaminosPhaseFeatureCaptureStore;
       const existed = Boolean(store?.[${JSON.stringify(token)}]);
       if (store) delete store[${JSON.stringify(token)}];
+      const splatStore = window.__kaminosPhaseSplatCaptureStore;
+      const splatExisted = Boolean(splatStore?.[${JSON.stringify(token)}]);
+      if (splatStore) delete splatStore[${JSON.stringify(token)}];
       return {
         identity: 'browser-side-feature-capture-clear-v0',
         token: ${JSON.stringify(token)},
         cleared: existed,
+        splatCleared: splatExisted,
       };
     })()`,
     returnByValue: true,
@@ -632,6 +988,9 @@ async function captureFeatureFrames(requestedRoute) {
       if (sample?.ok !== true) throw new Error(`frame ${frameIndex} did not return a valid scale sample`);
       const candidatePath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.features.f32`);
       const candidates = await materializeBrowserSideFeatureCapture(staged.token, candidatePath);
+      const splatPath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.splats.f32`);
+      const splats = await materializeBrowserSideSplatCapture(staged.token, splatPath);
+      if (splats.count !== candidates.count) throw new Error(`frame ${frameIndex} feature/splat row count mismatch`);
       const fallbackReason = sample.boundarySplatFallbackReason ?? null;
       captured.push({
         id: `frame-${frameIndex}`,
@@ -652,6 +1011,11 @@ async function captureFeatureFrames(requestedRoute) {
         boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
         boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
         candidates,
+        camera: splats.camera,
+        splats: {
+          ...splats,
+          camera: undefined,
+        },
       });
       lastTrustworthyEvidence[`frame-${frameIndex}`] = {
         rowCount: candidates.count,
@@ -659,6 +1023,7 @@ async function captureFeatureFrames(requestedRoute) {
         rendererIdentity: sample.boundarySplatRendererIdentity,
         fallbackReason,
         transport: candidates.transport,
+        splatTransport: splats.transport,
       };
       logProgress({
         phase: 'frame-captured',
@@ -667,6 +1032,7 @@ async function captureFeatureFrames(requestedRoute) {
         rowCount: candidates.count,
         bytes: candidates.bytes,
         chunkCount: candidates.transport.chunkCount,
+        splatChunkCount: splats.transport.chunkCount,
         simStepCount: sample.simStepCount,
         rendererIdentity: sample.boundarySplatRendererIdentity,
         fallbackReason,
@@ -702,6 +1068,9 @@ async function captureLiveSampleFeatureFrames(requestedRoute) {
       if (sample?.ok !== true) throw new Error(`live sample frame ${frameIndex} did not return a valid scale sample`);
       const candidatePath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.features.f32`);
       const candidates = await materializeBrowserSideFeatureCapture(staged.token, candidatePath);
+      const splatPath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.splats.f32`);
+      const splats = await materializeBrowserSideSplatCapture(staged.token, splatPath);
+      if (splats.count !== candidates.count) throw new Error(`live sample frame ${frameIndex} feature/splat row count mismatch`);
       const fallbackReason = sample.boundarySplatFallbackReason ?? null;
       captured.push({
         id: `frame-${frameIndex}`,
@@ -723,6 +1092,11 @@ async function captureLiveSampleFeatureFrames(requestedRoute) {
         boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
         boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
         candidates,
+        camera: splats.camera,
+        splats: {
+          ...splats,
+          camera: undefined,
+        },
       });
       lastTrustworthyEvidence[`frame-${frameIndex}`] = {
         sequenceAuthority: 'live-running-sample-sequence-v0',
@@ -732,6 +1106,7 @@ async function captureLiveSampleFeatureFrames(requestedRoute) {
         rendererIdentity: sample.boundarySplatRendererIdentity,
         fallbackReason,
         transport: candidates.transport,
+        splatTransport: splats.transport,
       };
       logProgress({
         phase: 'live-sample-captured',
@@ -740,6 +1115,7 @@ async function captureLiveSampleFeatureFrames(requestedRoute) {
         rowCount: candidates.count,
         bytes: candidates.bytes,
         chunkCount: candidates.transport.chunkCount,
+        splatChunkCount: splats.transport.chunkCount,
         simStepCount: sample.simStepCount,
         frameCount: sample.frameCount,
         rendererIdentity: sample.boundarySplatRendererIdentity,
@@ -755,33 +1131,39 @@ async function captureLiveSampleFeatureFrames(requestedRoute) {
 function buildTemporalAlignment(capturedFrames) {
   const center = Math.floor(capturedFrames.length / 2);
   const source = capturedFrames[center];
+  const sourceBytes = readFileSync(source.splats.path);
+  if (sha256(sourceBytes) !== source.splats.sha256) throw new Error(`source splat artifact sha256 mismatch for ${source.id}`);
+  const sourceSplats = new Float32Array(sourceBytes.buffer, sourceBytes.byteOffset, sourceBytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
   const offsets = requestedOffsets.slice().sort((a, b) => a - b);
   const pairs = offsets.map(offset => {
     const targetIndex = center + offset;
     if (targetIndex < 0 || targetIndex >= capturedFrames.length) throw new Error(`offset ${offset} is outside ${capturedFrames.length} captured frames`);
     const target = capturedFrames[targetIndex];
-    const matchedSlots = Math.min(source.candidates.count, target.candidates.count);
+    const targetBytes = readFileSync(target.splats.path);
+    if (sha256(targetBytes) !== target.splats.sha256) throw new Error(`target splat artifact sha256 mismatch for ${target.id}`);
+    const targetSplats = new Float32Array(targetBytes.buffer, targetBytes.byteOffset, targetBytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
+    const alignment = alignBoundarySplatRowsByWorldPosition(sourceSplats, targetSplats, { countsOnly: true });
     return {
       sourceFrameId: source.id,
       targetFrameId: target.id,
       offsetSteps: offset,
       sourceCount: source.candidates.count,
       targetCount: target.candidates.count,
-      matchedSlots,
-      births: Math.max(0, target.candidates.count - matchedSlots),
-      deaths: Math.max(0, source.candidates.count - matchedSlots),
-      stableSupportCount: matchedSlots,
+      matchedSlots: alignment.matchedCount,
+      births: alignment.birthCount,
+      deaths: alignment.deathCount,
+      stableSupportCount: alignment.matchedCount,
     };
   });
   return {
     schema: 'kaminos-boundary-splat-temporal-alignment-v0',
-    identityKey: 'grid-cell-slot',
-    alignmentMethod: 'grid-cell-slot',
+    identityKey: 'world-position-stable-key',
+    alignmentMethod: 'world-position-stable-key',
     offsetSteps: offsets,
     supportSemantics: {
-      matched: 'same compacted selected-candidate slot is present in source and target',
-      birth: 'target selected-candidate slot exists beyond matched source support',
-      death: 'source selected-candidate slot exists beyond matched target support',
+      matched: 'same quantized live splat world position is present in source and target',
+      birth: 'target live splat world position is absent from source support',
+      death: 'source live splat world position is absent from target support',
     },
     pairs,
   };

@@ -134,8 +134,68 @@ try {
   assert.equal(phaseProof.schema, BOUNDARY_SPLAT_PHASE_PROOF_SCHEMA);
   assert.equal(phaseProof.alignment.totalBirths, 2);
   assert.equal(phaseProof.advantage.beatsIdentity, true);
+
+  const worldFrames = [];
+  for (let frameIndex = 0; frameIndex < 7; frameIndex += 1) {
+    const fullRows = new Float32Array(candidateRows(frameIndex, 9).buffer);
+    const semanticOrder = frameIndex % 2 === 0
+      ? Array.from({ length: 9 }, (_, index) => index)
+      : Array.from({ length: 9 }, (_, index) => 8 - index);
+    const features = new Float32Array(9 * 16);
+    const splats = new Float32Array(9 * 12);
+    for (const [compactIndex, semanticIndex] of semanticOrder.entries()) {
+      features.set(fullRows.slice(semanticIndex * 19 + 3, semanticIndex * 19 + 19), compactIndex * 16);
+      splats.set([
+        (semanticIndex % 3) * 0.1, Math.floor(semanticIndex / 3) * 0.1, 0, 1,
+        1, 0.5, 0.1, 0.02,
+        0.04, 0.05, 0.5, 1,
+      ], compactIndex * 12);
+    }
+    const featureBytes = Buffer.from(features.buffer);
+    const splatBytes = Buffer.from(splats.buffer);
+    const featurePath = join(root, `world-frame-${frameIndex}.features.f32`);
+    const splatPath = join(root, `world-frame-${frameIndex}.splats.f32`);
+    await writeFile(featurePath, featureBytes);
+    await writeFile(splatPath, splatBytes);
+    worldFrames.push({
+      ...phaseFrames[frameIndex],
+      candidates: { path: featurePath, bytes: featureBytes.length, sha256: hash(featureBytes), count: 9, strideFloats: 16, dtype: 'float32-le' },
+      splats: {
+        path: splatPath,
+        bytes: splatBytes.length,
+        sha256: hash(splatBytes),
+        count: 9,
+        strideFloats: 12,
+        dtype: 'float32-le',
+        authority: 'intercepted-live-boundary-splat-buffer-post-compaction-v0',
+      },
+    });
+  }
+  const worldManifest = {
+    ...phaseManifest,
+    frames: worldFrames,
+    temporalAlignment: {
+      ...manifest.temporalAlignment,
+      identityKey: 'world-position-stable-key',
+      alignmentMethod: 'world-position-stable-key',
+      pairs: manifest.temporalAlignment.pairs.map(pair => ({
+        ...pair,
+        matchedSlots: 9,
+        births: 0,
+        deaths: 0,
+        stableSupportCount: 9,
+      })),
+    },
+  };
+  await writeFile(manifestPath, JSON.stringify(worldManifest));
+  const worldProof = await computeBoundarySplatPhaseProof(manifestPath, { holdoutModulo: 3 });
+  assert.equal(worldProof.alignment.identityKey, 'world-position-stable-key');
+  assert.equal(worldProof.model.sampleAlignment, 'world-position-stable-key', 'proof must record the actual sample alignment used by the model');
+  assert.ok(worldProof.phaseConditionedModel.mse < worldProof.identityBaseline.mse * 0.25, 'world-position proof must survive compacted candidate reordering');
+
   const previewPath = join(root, 'phase-preview.png');
   const previewReportPath = join(root, 'phase-preview.json');
+  await writeFile(manifestPath, JSON.stringify(phaseManifest));
   const preview = await writeBoundarySplatPhaseProofPreview(manifestPath, {
     out: previewPath,
     report: previewReportPath,
@@ -171,6 +231,18 @@ try {
   assert.match(witnessSource, /materializeBrowserSideFeatureCapture/, 'dense phase corpus witness must retrieve staged feature payloads without one giant Runtime.evaluate result');
   assert.match(witnessSource, /clearBrowserSideFeatureCapture/, 'dense phase corpus witness must release staged feature payloads after each frame');
   assert.match(witnessSource, /chunkCount/, 'chunked feature transport must report chunk count for evidence and false-closure checks');
+  assert.match(witnessSource, /installBoundarySplatBufferInterceptor/, 'phase corpus witness must intercept live splat rows without editing the renderer');
+  assert.match(witnessSource, /materializeBrowserSideSplatCapture/, 'phase corpus witness must persist world-position splat rows for honest temporal alignment');
+  assert.match(witnessSource, /intercepted-live-boundary-splat-buffer-post-compaction-v0/, 'captured splat rows must carry explicit live-buffer authority');
+  assert.match(witnessSource, /exceptionDetails/, 'CDP runtime exceptions must fail with their browser-side cause instead of undefined frame evidence');
+  assert.match(witnessSource, /live-boundary-sidecar-analytic-splats-v0 candidates/, 'interceptor must match the physical splat buffer label, independent of learned attribute routing');
+  assert.match(witnessSource, /splat capture payload was all-zero/, 'blank intercepted geometry must fail before it can become world-position evidence');
+  assert.match(witnessSource, /render bind group/, 'interceptor must recover the candidate buffer from the actual render bind group, not buffer-label recency alone');
+  assert.match(witnessSource, /pushErrorScope\('validation'\)/, 'intercepted GPU copies must surface WebGPU validation errors');
+  assert.match(witnessSource, /GPUQueue.*writeBuffer/, 'camera uniforms must be captured from their CPU write because the uniform buffer lacks COPY_SRC');
+  assert.match(witnessSource, /GPUCommandEncoder.*copyBufferToBuffer/, 'splat capture must intercept the feature witness encoder instead of copying a later profiled state');
+  assert.match(witnessSource, /same-encoder-feature-splat-count-v0/, 'captured geometry must name its same-encoder alignment authority');
+  assert.match(witnessSource, /drawState\[1\]/, 'same-encoder capture must use the GPU indirect instance count rather than stale sampled state');
 } finally {
   await rm(root, { recursive: true, force: true });
 }

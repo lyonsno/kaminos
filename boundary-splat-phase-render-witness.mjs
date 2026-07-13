@@ -1,0 +1,721 @@
+#!/usr/bin/env node
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { deflateSync } from 'node:zlib';
+
+import {
+  compileBoundarySplatAttributeModel,
+  evaluateBoundarySplatAttributeModel,
+} from './boundary-splat-attribute-model.mjs';
+
+export const BOUNDARY_SPLAT_PHASE_RENDER_SCHEMA = 'kaminos-boundary-splat-phase-render-witness-v0';
+export const BOUNDARY_SPLAT_CAPTURE_AUTHORITY = 'intercepted-live-boundary-splat-buffer-post-compaction-v0';
+const SPLAT_STRIDE_FLOATS = 12;
+const BACKGROUND = [0.004, 0.005, 0.006];
+
+function finiteArray(values, length, label) {
+  if (!Array.isArray(values) || values.length !== length || values.some(value => !Number.isFinite(value))) {
+    throw new Error(`${label} must contain ${length} finite numbers`);
+  }
+  return values;
+}
+
+function normalizeSplatRows(rows, label = 'splat rows') {
+  if (ArrayBuffer.isView(rows)) {
+    if (rows.length % SPLAT_STRIDE_FLOATS !== 0) throw new Error(`${label} length must be divisible by ${SPLAT_STRIDE_FLOATS}`);
+    return Array.from({ length: rows.length / SPLAT_STRIDE_FLOATS }, (_, index) => (
+      Array.from(rows.slice(index * SPLAT_STRIDE_FLOATS, (index + 1) * SPLAT_STRIDE_FLOATS))
+    ));
+  }
+  if (!Array.isArray(rows)) throw new Error(`${label} must be an array or typed array`);
+  return rows.map((row, index) => finiteArray(Array.from(row), SPLAT_STRIDE_FLOATS, `${label} ${index}`));
+}
+
+export function worldPositionStableKey(row, precision = 6) {
+  const splat = finiteArray(Array.from(row), SPLAT_STRIDE_FLOATS, 'splat row');
+  return splat.slice(0, 3).map(value => value.toFixed(precision)).join(',');
+}
+
+export function alignBoundarySplatRowsByWorldPosition(sourceRows, targetRows, options = {}) {
+  const source = ArrayBuffer.isView(sourceRows) ? sourceRows : normalizeSplatRows(sourceRows, 'source splat rows');
+  const target = ArrayBuffer.isView(targetRows) ? targetRows : normalizeSplatRows(targetRows, 'target splat rows');
+  if (ArrayBuffer.isView(source) && source.length % SPLAT_STRIDE_FLOATS !== 0) throw new Error('source splat rows length must be divisible by 12');
+  if (ArrayBuffer.isView(target) && target.length % SPLAT_STRIDE_FLOATS !== 0) throw new Error('target splat rows length must be divisible by 12');
+  const sourceCount = ArrayBuffer.isView(source) ? source.length / SPLAT_STRIDE_FLOATS : source.length;
+  const targetCount = ArrayBuffer.isView(target) ? target.length / SPLAT_STRIDE_FLOATS : target.length;
+  const sourceRow = index => ArrayBuffer.isView(source)
+    ? source.subarray(index * SPLAT_STRIDE_FLOATS, (index + 1) * SPLAT_STRIDE_FLOATS)
+    : source[index];
+  const targetRow = index => ArrayBuffer.isView(target)
+    ? target.subarray(index * SPLAT_STRIDE_FLOATS, (index + 1) * SPLAT_STRIDE_FLOATS)
+    : target[index];
+  const precision = Math.max(0, Math.floor(Number(options.precision ?? 6)));
+  const countsOnly = options.countsOnly === true;
+  const sourceByKey = new Map();
+  const targetByKey = new Map();
+  for (let index = 0; index < sourceCount; index += 1) {
+    const key = worldPositionStableKey(sourceRow(index), precision);
+    if (sourceByKey.has(key)) throw new Error(`duplicate source world-position key ${key}`);
+    sourceByKey.set(key, index);
+  }
+  for (let index = 0; index < targetCount; index += 1) {
+    const key = worldPositionStableKey(targetRow(index), precision);
+    if (targetByKey.has(key)) throw new Error(`duplicate target world-position key ${key}`);
+    targetByKey.set(key, index);
+  }
+  const matched = [];
+  const deaths = [];
+  const births = [];
+  let matchedCount = 0;
+  let birthCount = 0;
+  let deathCount = 0;
+  for (const [key, sourceIndex] of sourceByKey) {
+    const targetIndex = targetByKey.get(key);
+    if (targetIndex == null) {
+      deathCount += 1;
+      if (!countsOnly) deaths.push({ key, sourceIndex });
+    } else {
+      matchedCount += 1;
+      if (!countsOnly) matched.push({ key, sourceIndex, targetIndex });
+    }
+  }
+  for (const [key, targetIndex] of targetByKey) {
+    if (!sourceByKey.has(key)) {
+      birthCount += 1;
+      if (!countsOnly) births.push({ key, targetIndex });
+    }
+  }
+  return {
+    identityKey: 'world-position-stable-key',
+    alignmentMethod: 'world-position-stable-key',
+    precision,
+    sourceCount,
+    targetCount,
+    matchedCount,
+    birthCount,
+    deathCount,
+    matched,
+    births,
+    deaths,
+  };
+}
+
+export function validateBoundarySplatPhaseRenderFrame(frame) {
+  if (!frame || typeof frame !== 'object' || Array.isArray(frame)) throw new Error('render frame must be an object');
+  if (typeof frame.id !== 'string' || !frame.id) throw new Error('render frame id must be nonblank');
+  if (typeof frame.requestedRoute !== 'string' || !frame.requestedRoute) throw new Error('render frame requested route must be nonblank');
+  if (typeof frame.effectiveRoute !== 'string' || !frame.effectiveRoute) throw new Error('render frame effective route must be nonblank');
+  if (frame.rendererIdentity !== 'live-boundary-sidecar-learned-attribute-splats-v0') {
+    throw new Error('render frame must use the learned boundary splat renderer');
+  }
+  if (typeof frame.modelIdentity !== 'string' || !frame.modelIdentity) throw new Error('render frame model identity must be nonblank');
+  if (frame.sourceAuthority !== 'live-baked-sidecar-plus-fluid-material-v0') throw new Error('render frame source authority mismatch');
+  if (frame.fallbackReason != null) throw new Error(`render frame contains fallback evidence: ${frame.fallbackReason}`);
+  if (!frame.camera || typeof frame.camera !== 'object') throw new Error('render frame camera is missing');
+  finiteArray(frame.camera.viewProjection, 16, 'render frame camera viewProjection');
+  finiteArray(frame.camera.right, 3, 'render frame camera right');
+  finiteArray(frame.camera.up, 3, 'render frame camera up');
+  if (!frame.splats || typeof frame.splats !== 'object') throw new Error('render frame splats artifact is missing');
+  if (!Number.isInteger(frame.splats.count) || frame.splats.count <= 0) throw new Error('render frame splats must be positive-count');
+  if (frame.splats.strideFloats !== SPLAT_STRIDE_FLOATS || frame.splats.dtype !== 'float32-le') {
+    throw new Error('render frame splats must be float32-le stride-12 rows');
+  }
+  if (frame.splats.authority !== BOUNDARY_SPLAT_CAPTURE_AUTHORITY) throw new Error('render frame splat capture authority mismatch');
+  return frame;
+}
+
+function transformPoint(matrix, point) {
+  const [x, y, z] = point;
+  const cx = matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12];
+  const cy = matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13];
+  const cz = matrix[2] * x + matrix[6] * y + matrix[10] * z + matrix[14];
+  const cw = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
+  if (!Number.isFinite(cw) || Math.abs(cw) < 1e-9) return null;
+  return [cx / cw, cy / cw, cz / cw];
+}
+
+function addScaled(point, axis, scale) {
+  return [point[0] + axis[0] * scale, point[1] + axis[1] * scale, point[2] + axis[2] * scale];
+}
+
+function screenPoint(ndc, width, height) {
+  return [(ndc[0] * 0.5 + 0.5) * width, (0.5 - ndc[1] * 0.5) * height];
+}
+
+export function renderBoundarySplatRowsPng(rows, camera, options = {}) {
+  const splats = normalizeSplatRows(rows);
+  const width = Math.max(1, Math.floor(Number(options.width || 640)));
+  const height = Math.max(1, Math.floor(Number(options.height || 480)));
+  const radiusMultiplier = Math.max(0.01, Number(options.radiusMultiplier ?? 1));
+  const kernelSharpness = Math.max(1, Math.min(12, Number(options.kernelSharpness ?? 6.5)));
+  const viewProjection = finiteArray(camera?.viewProjection, 16, 'camera viewProjection');
+  const right = finiteArray(camera?.right, 3, 'camera right');
+  const up = finiteArray(camera?.up, 3, 'camera up');
+  const rgb = new Float32Array(width * height * 3);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    rgb[pixel * 3] = BACKGROUND[0];
+    rgb[pixel * 3 + 1] = BACKGROUND[1];
+    rgb[pixel * 3 + 2] = BACKGROUND[2];
+  }
+  const energyRatio = (kernelSharpness / 3.4) / Math.max(radiusMultiplier * radiusMultiplier, 0.1225);
+  const energyCompensation = Math.max(0.5, Math.min(2.5, Math.sqrt(energyRatio)));
+  let projectedSplatCount = 0;
+  for (const row of splats) {
+    const centerWorld = row.slice(0, 3);
+    const centerNdc = transformPoint(viewProjection, centerWorld);
+    const rightNdc = transformPoint(viewProjection, addScaled(centerWorld, right, row[8] * radiusMultiplier));
+    const upNdc = transformPoint(viewProjection, addScaled(centerWorld, up, row[9] * radiusMultiplier));
+    if (!centerNdc || !rightNdc || !upNdc || centerNdc[2] < -1.5 || centerNdc[2] > 1.5) continue;
+    const center = screenPoint(centerNdc, width, height);
+    const rightPoint = screenPoint(rightNdc, width, height);
+    const upPoint = screenPoint(upNdc, width, height);
+    const axisX = [rightPoint[0] - center[0], rightPoint[1] - center[1]];
+    const axisY = [upPoint[0] - center[0], upPoint[1] - center[1]];
+    const determinant = axisX[0] * axisY[1] - axisX[1] * axisY[0];
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-7) continue;
+    const extentX = Math.abs(axisX[0]) + Math.abs(axisY[0]);
+    const extentY = Math.abs(axisX[1]) + Math.abs(axisY[1]);
+    const minX = Math.max(0, Math.floor(center[0] - extentX));
+    const maxX = Math.min(width - 1, Math.ceil(center[0] + extentX));
+    const minY = Math.max(0, Math.floor(center[1] - extentY));
+    const maxY = Math.min(height - 1, Math.ceil(center[1] + extentY));
+    if (minX > maxX || minY > maxY) continue;
+    projectedSplatCount += 1;
+    for (let y = minY; y <= maxY; y += 1) {
+      for (let x = minX; x <= maxX; x += 1) {
+        const dx = x + 0.5 - center[0];
+        const dy = y + 0.5 - center[1];
+        const localX = (dx * axisY[1] - dy * axisY[0]) / determinant;
+        const localY = (axisX[0] * dy - axisX[1] * dx) / determinant;
+        const radius2 = localX * localX + localY * localY;
+        if (radius2 > 1) continue;
+        const alpha = Math.max(0, row[7]) * Math.exp(-radius2 * kernelSharpness) * energyCompensation;
+        const pixel = (y * width + x) * 3;
+        rgb[pixel] += Math.max(0, row[4]) * alpha;
+        rgb[pixel + 1] += Math.max(0, row[5]) * alpha;
+        rgb[pixel + 2] += Math.max(0, row[6]) * alpha;
+      }
+    }
+  }
+  const rgba = Buffer.alloc(width * height * 4);
+  let nonBackgroundPixelCount = 0;
+  let maxLuminance = 0;
+  const backgroundLuminance = BACKGROUND[0] * 0.2126 + BACKGROUND[1] * 0.7152 + BACKGROUND[2] * 0.0722;
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const r = Math.max(0, Math.min(1, rgb[pixel * 3]));
+    const g = Math.max(0, Math.min(1, rgb[pixel * 3 + 1]));
+    const b = Math.max(0, Math.min(1, rgb[pixel * 3 + 2]));
+    const luminance = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    if (luminance > backgroundLuminance + 1e-5) nonBackgroundPixelCount += 1;
+    maxLuminance = Math.max(maxLuminance, luminance);
+    rgba[pixel * 4] = Math.round(r * 255);
+    rgba[pixel * 4 + 1] = Math.round(g * 255);
+    rgba[pixel * 4 + 2] = Math.round(b * 255);
+    rgba[pixel * 4 + 3] = 255;
+  }
+  return {
+    authority: 'isolated-cpu-projected-boundary-splat-raster-v0',
+    png: writeRgbaPng(width, height, rgba),
+    width,
+    height,
+    inputSplatCount: splats.length,
+    projectedSplatCount,
+    nonBackgroundPixelCount,
+    maxLuminance,
+    backgroundLuminance,
+    radiusMultiplier,
+    kernelSharpness,
+    rgba,
+  };
+}
+
+function sha256(bytes) {
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+async function readFloatArtifact(artifact, strideFloats, baseDir, label) {
+  if (!artifact || typeof artifact !== 'object') throw new Error(`${label} artifact is missing`);
+  if (artifact.dtype !== 'float32-le' || artifact.strideFloats !== strideFloats || !Number.isInteger(artifact.count) || artifact.count <= 0) {
+    throw new Error(`${label} artifact must be positive-count float32-le stride-${strideFloats}`);
+  }
+  const path = resolve(baseDir, artifact.path);
+  const bytes = await readFile(path);
+  const expectedBytes = artifact.count * strideFloats * Float32Array.BYTES_PER_ELEMENT;
+  if (bytes.byteLength !== expectedBytes || bytes.byteLength !== artifact.bytes) throw new Error(`${label} artifact byte length mismatch`);
+  if (sha256(bytes) !== artifact.sha256) throw new Error(`${label} artifact sha256 mismatch`);
+  return {
+    path,
+    bytes,
+    values: new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
+    count: artifact.count,
+  };
+}
+
+function featureRow(values, index) {
+  return values.subarray(index * 16, (index + 1) * 16);
+}
+
+function solveLinearSystem(matrix, vector) {
+  const size = vector.length;
+  const augmented = Array.from({ length: size }, (_, row) => [...matrix[row], vector[row]]);
+  for (let pivot = 0; pivot < size; pivot += 1) {
+    let best = pivot;
+    for (let row = pivot + 1; row < size; row += 1) {
+      if (Math.abs(augmented[row][pivot]) > Math.abs(augmented[best][pivot])) best = row;
+    }
+    if (Math.abs(augmented[best][pivot]) < 1e-12) throw new Error('phase render model normal equations are singular');
+    if (best !== pivot) [augmented[pivot], augmented[best]] = [augmented[best], augmented[pivot]];
+    const divisor = augmented[pivot][pivot];
+    for (let column = pivot; column <= size; column += 1) augmented[pivot][column] /= divisor;
+    for (let row = 0; row < size; row += 1) {
+      if (row === pivot) continue;
+      const factor = augmented[row][pivot];
+      for (let column = pivot; column <= size; column += 1) augmented[row][column] -= factor * augmented[pivot][column];
+    }
+  }
+  return augmented.map(row => row[size]);
+}
+
+function makeStreamingRidge(inputSize, outputSize) {
+  return {
+    inputSize,
+    outputSize,
+    sampleCount: 0,
+    xtx: Array.from({ length: inputSize }, () => new Float64Array(inputSize)),
+    xty: Array.from({ length: outputSize }, () => new Float64Array(inputSize)),
+  };
+}
+
+function addStreamingRidgeSample(accumulator, input, target) {
+  accumulator.sampleCount += 1;
+  for (let row = 0; row < accumulator.inputSize; row += 1) {
+    for (let column = row; column < accumulator.inputSize; column += 1) {
+      accumulator.xtx[row][column] += input[row] * input[column];
+    }
+    for (let output = 0; output < accumulator.outputSize; output += 1) {
+      accumulator.xty[output][row] += input[row] * target[output];
+    }
+  }
+}
+
+function finishStreamingRidge(accumulator, lambda) {
+  const matrix = Array.from({ length: accumulator.inputSize }, (_, row) => (
+    Array.from({ length: accumulator.inputSize }, (_, column) => {
+      const value = row <= column ? accumulator.xtx[row][column] : accumulator.xtx[column][row];
+      return value + (row === column ? lambda : 0);
+    })
+  ));
+  const weights = accumulator.xty.map(vector => solveLinearSystem(matrix, Array.from(vector)));
+  return {
+    sampleCount: accumulator.sampleCount,
+    weights,
+    predict(input) {
+      return weights.map(row => row.reduce((sum, weight, index) => sum + weight * input[index], 0));
+    },
+  };
+}
+
+function phaseInput(features, offset, maxAbsOffset) {
+  return [1, offset / maxAbsOffset, ...features];
+}
+
+function predictedSplatRow(sourceSplat, predictedFeatures, attributes, gridSize, applyVisibility = true) {
+  const fireSignal = predictedFeatures[8] * 1.25
+    + predictedFeatures[10] * 0.52
+    + predictedFeatures[11] * 0.86
+    + predictedFeatures[14] * 0.72
+    + predictedFeatures[5] * 0.24;
+  const smoothstep = (low, high, value) => {
+    const t = Math.max(0, Math.min(1, (value - low) / (high - low)));
+    return t * t * (3 - 2 * t);
+  };
+  const structuralSignal = predictedFeatures[2]
+    * smoothstep(0.055, 0.32, predictedFeatures[1])
+    * smoothstep(0.018, 0.16, fireSignal);
+  const radius = (2 / gridSize) * (0.60 + predictedFeatures[3] * 2.65 + predictedFeatures[2] * 0.48);
+  const visible = structuralSignal >= 0.11 ? 1 : 0;
+  return [
+    sourceSplat[0], sourceSplat[1], sourceSplat[2], structuralSignal,
+    attributes[0], attributes[1], attributes[2], attributes[3] * (applyVisibility ? visible : 1),
+    radius * attributes[4], radius * attributes[5], predictedFeatures[2], fireSignal,
+  ];
+}
+
+function calibratePredictedSplatRow(sourceSplat, predictedSplat, scales) {
+  const calibrated = Array.from(predictedSplat);
+  for (let channel = 3; channel < SPLAT_STRIDE_FLOATS; channel += 1) {
+    calibrated[channel] = sourceSplat[channel] + scales[channel - 3] * (predictedSplat[channel] - sourceSplat[channel]);
+  }
+  if (calibrated[3] < 0.11) calibrated[7] = 0;
+  return calibrated;
+}
+
+function imageMse(left, right) {
+  if (left.length !== right.length) throw new Error('render comparison dimensions differ');
+  let total = 0;
+  let count = 0;
+  for (let index = 0; index < left.length; index += 4) {
+    for (let channel = 0; channel < 3; channel += 1) {
+      const delta = (left[index + channel] - right[index + channel]) / 255;
+      total += delta * delta;
+      count += 1;
+    }
+  }
+  return total / Math.max(1, count);
+}
+
+function composeHorizontal(rendered) {
+  const gap = 4;
+  const width = rendered.reduce((sum, item) => sum + item.width, 0) + gap * (rendered.length - 1);
+  const height = Math.max(...rendered.map(item => item.height));
+  const rgba = Buffer.alloc(width * height * 4, 255);
+  let offsetX = 0;
+  for (const [itemIndex, item] of rendered.entries()) {
+    for (let y = 0; y < item.height; y += 1) {
+      item.rgba.copy(rgba, (y * width + offsetX) * 4, y * item.width * 4, (y + 1) * item.width * 4);
+    }
+    offsetX += item.width;
+    if (itemIndex < rendered.length - 1) {
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < gap; x += 1) {
+          const pixel = (y * width + offsetX + x) * 4;
+          rgba[pixel] = 42;
+          rgba[pixel + 1] = 44;
+          rgba[pixel + 2] = 48;
+          rgba[pixel + 3] = 255;
+        }
+      }
+      offsetX += gap;
+    }
+  }
+  return { width, height, rgba, png: writeRgbaPng(width, height, rgba) };
+}
+
+async function writeRenderArtifact(path, rendered) {
+  await writeFile(path, rendered.png);
+  return {
+    path,
+    bytes: rendered.png.byteLength,
+    sha256: sha256(rendered.png),
+    width: rendered.width,
+    height: rendered.height,
+    authority: rendered.authority || 'isolated-phase-render-comparison-strip-v0',
+  };
+}
+
+export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options = {}) {
+  const manifestPath = resolve(String(manifestFile));
+  const outDir = resolve(String(options.outDir || dirname(manifestPath)));
+  const reportPath = resolve(String(options.report || `${outDir}/phase-render-witness.json`));
+  let failurePhase = 'manifest-read';
+  const lastTrustworthyEvidence = { manifestPath };
+  try {
+    await mkdir(outDir, { recursive: true });
+    const manifestBytes = await readFile(manifestPath);
+    const manifest = JSON.parse(manifestBytes.toString('utf8'));
+    if (manifest.schema !== 'kaminos-boundary-splat-phase-candidate-corpus-v0') throw new Error('phase render witness requires the phase candidate corpus schema');
+    if (manifest.temporalAlignment?.identityKey !== 'world-position-stable-key') throw new Error('phase render witness requires world-position-stable-key alignment');
+    const offset = Number(options.offset ?? 3);
+    if (!Number.isInteger(offset) || offset === 0) throw new Error('phase render witness offset must be a nonzero integer');
+    const heldOutPair = manifest.temporalAlignment.pairs.find(pair => pair.offsetSteps === offset);
+    if (!heldOutPair) throw new Error(`phase render witness offset ${offset} is not present in the corpus`);
+    const frameById = new Map(manifest.frames.map(frame => [frame.id, frame]));
+    for (const frame of manifest.frames) validateBoundarySplatPhaseRenderFrame(frame);
+    const baseDir = dirname(manifestPath);
+    failurePhase = 'artifact-validation';
+    const loadedFrames = new Map();
+    for (const frame of manifest.frames) {
+      const candidates = await readFloatArtifact(frame.candidates, 16, baseDir, `${frame.id} candidates`);
+      const splats = await readFloatArtifact(frame.splats, 12, baseDir, `${frame.id} splats`);
+      if (candidates.count !== splats.count) throw new Error(`${frame.id} candidate/splat counts differ`);
+      loadedFrames.set(frame.id, { frame, candidates, splats });
+    }
+    lastTrustworthyEvidence.validatedFrameCount = loadedFrames.size;
+    const modelPath = resolve(String(options.model || 'models/boundary-splat-attribute/live-support-h64-v0/model-artifact.json'));
+    const modelBytes = await readFile(modelPath);
+    const attributeModel = JSON.parse(modelBytes.toString('utf8'));
+    const compiledAttributeModel = compileBoundarySplatAttributeModel(attributeModel);
+    const modelIdentities = new Set(manifest.frames.map(frame => frame.modelIdentity));
+    if (modelIdentities.size !== 1 || !modelIdentities.has(compiledAttributeModel.identity)) {
+      throw new Error(`deployed attribute model identity mismatch: corpus=${Array.from(modelIdentities).join(',')} loaded=${compiledAttributeModel.identity}`);
+    }
+    failurePhase = 'phase-model-fit';
+    const maxAbsOffset = Math.max(...manifest.temporalAlignment.offsetSteps.map(value => Math.abs(value)));
+    const accumulator = makeStreamingRidge(18, 16);
+    const trainingOffsets = [];
+    const trainingPairs = [];
+    for (const pair of manifest.temporalAlignment.pairs) {
+      if (pair.offsetSteps === offset) continue;
+      trainingOffsets.push(pair.offsetSteps);
+      trainingPairs.push(pair);
+      const source = loadedFrames.get(pair.sourceFrameId);
+      const target = loadedFrames.get(pair.targetFrameId);
+      const alignment = alignBoundarySplatRowsByWorldPosition(source.splats.values, target.splats.values);
+      if (alignment.matchedCount !== pair.matchedSlots) throw new Error(`training offset ${pair.offsetSteps} world-position match count drift`);
+      for (const match of alignment.matched) {
+        addStreamingRidgeSample(
+          accumulator,
+          phaseInput(featureRow(source.candidates.values, match.sourceIndex), pair.offsetSteps, maxAbsOffset),
+          featureRow(target.candidates.values, match.targetIndex),
+        );
+      }
+    }
+    const ridgeLambda = Number(options.ridgeLambda ?? 1e-3);
+    const phaseModel = finishStreamingRidge(accumulator, ridgeLambda);
+    const source = loadedFrames.get(heldOutPair.sourceFrameId);
+    const target = loadedFrames.get(heldOutPair.targetFrameId);
+    const holdoutAlignment = alignBoundarySplatRowsByWorldPosition(source.splats.values, target.splats.values);
+    if (holdoutAlignment.matchedCount !== heldOutPair.matchedSlots) throw new Error('held-out world-position match count drift');
+    failurePhase = 'held-out-prediction';
+    const predictedFeatures = new Float32Array(source.candidates.count * 16);
+    for (let sourceIndex = 0; sourceIndex < source.candidates.count; sourceIndex += 1) {
+      const prediction = phaseModel.predict(phaseInput(featureRow(source.candidates.values, sourceIndex), offset, maxAbsOffset));
+      predictedFeatures.set(prediction, sourceIndex * 16);
+    }
+    let identityFeatureSquaredError = 0;
+    let predictionFeatureSquaredError = 0;
+    for (const match of holdoutAlignment.matched) {
+      const sourceFeatures = featureRow(source.candidates.values, match.sourceIndex);
+      const exactFeatures = featureRow(target.candidates.values, match.targetIndex);
+      const prediction = featureRow(predictedFeatures, match.sourceIndex);
+      for (let feature = 0; feature < 16; feature += 1) {
+        identityFeatureSquaredError += (sourceFeatures[feature] - exactFeatures[feature]) ** 2;
+        predictionFeatureSquaredError += (prediction[feature] - exactFeatures[feature]) ** 2;
+      }
+    }
+    const errorDenominator = Math.max(1, holdoutAlignment.matchedCount * 16);
+    const effectiveUrl = new URL(source.frame.effectiveRoute, 'http://127.0.0.1/');
+    const gridSize = Number(options.gridSize || effectiveUrl.searchParams.get('volume_resolution') || 160);
+    failurePhase = 'phase-step-calibration';
+    const calibrationNumerator = new Float64Array(9);
+    const calibrationDenominator = new Float64Array(9);
+    let calibrationSampleCount = 0;
+    const inferenceChunkRows = 8192;
+    for (const pair of trainingPairs) {
+      const calibrationSource = loadedFrames.get(pair.sourceFrameId);
+      const calibrationTarget = loadedFrames.get(pair.targetFrameId);
+      const calibrationAlignment = alignBoundarySplatRowsByWorldPosition(calibrationSource.splats.values, calibrationTarget.splats.values);
+      for (let start = 0; start < calibrationAlignment.matchedCount; start += inferenceChunkRows) {
+        const end = Math.min(start + inferenceChunkRows, calibrationAlignment.matchedCount);
+        const batchFeatures = [];
+        for (let index = start; index < end; index += 1) {
+          const sourceIndex = calibrationAlignment.matched[index].sourceIndex;
+          batchFeatures.push(phaseModel.predict(phaseInput(featureRow(calibrationSource.candidates.values, sourceIndex), pair.offsetSteps, maxAbsOffset)));
+        }
+        const attributes = evaluateBoundarySplatAttributeModel(attributeModel, batchFeatures);
+        for (let index = start; index < end; index += 1) {
+          const match = calibrationAlignment.matched[index];
+          const sourceSplat = calibrationSource.splats.values.subarray(match.sourceIndex * 12, (match.sourceIndex + 1) * 12);
+          const targetSplat = calibrationTarget.splats.values.subarray(match.targetIndex * 12, (match.targetIndex + 1) * 12);
+          const rawPrediction = predictedSplatRow(sourceSplat, batchFeatures[index - start], attributes[index - start], gridSize, false);
+          for (let channel = 3; channel < SPLAT_STRIDE_FLOATS; channel += 1) {
+            const predictedDelta = rawPrediction[channel] - sourceSplat[channel];
+            calibrationNumerator[channel - 3] += predictedDelta * (targetSplat[channel] - sourceSplat[channel]);
+            calibrationDenominator[channel - 3] += predictedDelta * predictedDelta;
+          }
+          calibrationSampleCount += 1;
+        }
+      }
+    }
+    const calibrationScales = Array.from(calibrationNumerator, (numerator, index) => (
+      Math.max(0, Math.min(1, numerator / Math.max(1e-12, calibrationDenominator[index])))
+    ));
+    const predictedSplats = new Float32Array(source.splats.count * 12);
+    for (let start = 0; start < source.splats.count; start += inferenceChunkRows) {
+      const end = Math.min(start + inferenceChunkRows, source.splats.count);
+      const batch = Array.from({ length: end - start }, (_, index) => Array.from(featureRow(predictedFeatures, start + index)));
+      const attributes = evaluateBoundarySplatAttributeModel(attributeModel, batch);
+      for (let index = start; index < end; index += 1) {
+        const sourceSplat = source.splats.values.subarray(index * 12, (index + 1) * 12);
+        const rawPrediction = predictedSplatRow(sourceSplat, featureRow(predictedFeatures, index), attributes[index - start], gridSize, false);
+        predictedSplats.set(calibratePredictedSplatRow(sourceSplat, rawPrediction, calibrationScales), index * 12);
+      }
+    }
+    failurePhase = 'isolated-raster';
+    const width = Math.max(1, Math.floor(Number(options.width || 640)));
+    const height = Math.max(1, Math.floor(Number(options.height || 480)));
+    const radiusMultiplier = Number(options.radiusMultiplier ?? source.frame.camera.controls?.[0] ?? 1);
+    const kernelSharpness = Number(options.kernelSharpness ?? source.frame.camera.controls?.[3] ?? 6.5);
+    const renderOptions = { width, height, radiusMultiplier, kernelSharpness };
+    const identityRender = renderBoundarySplatRowsPng(source.splats.values, source.frame.camera, renderOptions);
+    const predictionRender = renderBoundarySplatRowsPng(predictedSplats, source.frame.camera, renderOptions);
+    const exactRender = renderBoundarySplatRowsPng(target.splats.values, target.frame.camera, renderOptions);
+    const comparisonRender = composeHorizontal([identityRender, predictionRender, exactRender]);
+    const offsetLabel = offset > 0 ? `p${offset}` : `m${Math.abs(offset)}`;
+    const artifacts = {
+      identity: await writeRenderArtifact(resolve(outDir, `phase-render-identity-${offsetLabel}.png`), identityRender),
+      phasePrediction: await writeRenderArtifact(resolve(outDir, `phase-render-prediction-${offsetLabel}.png`), predictionRender),
+      exactTarget: await writeRenderArtifact(resolve(outDir, `phase-render-exact-${offsetLabel}.png`), exactRender),
+      comparison: await writeRenderArtifact(resolve(outDir, `phase-render-comparison-${offsetLabel}.png`), comparisonRender),
+    };
+    failurePhase = 'report-write';
+    const identityPixelMse = imageMse(identityRender.rgba, exactRender.rgba);
+    const predictionPixelMse = imageMse(predictionRender.rgba, exactRender.rgba);
+    const report = {
+      schema: BOUNDARY_SPLAT_PHASE_RENDER_SCHEMA,
+      status: 'completed',
+      manifest: { path: manifestPath, bytes: manifestBytes.byteLength, sha256: sha256(manifestBytes) },
+      route: {
+        requested: source.frame.requestedRoute,
+        effective: source.frame.effectiveRoute,
+        rendererIdentity: source.frame.rendererIdentity,
+        sourceAuthority: source.frame.sourceAuthority,
+        fallbackReason: source.frame.fallbackReason,
+      },
+      attributeModel: { path: modelPath, sha256: sha256(modelBytes), identity: compiledAttributeModel.identity },
+      phaseModel: {
+        family: 'ridge-linear-offset-conditioned-v0',
+        holdoutAuthority: 'entire-offset-pair-held-out-v0',
+        heldOutOffset: offset,
+        trainingOffsets: trainingOffsets.sort((a, b) => a - b),
+        trainSampleCount: phaseModel.sampleCount,
+        holdoutSampleCount: holdoutAlignment.matchedCount,
+        ridgeLambda,
+        calibration: {
+          authority: 'training-offset-captured-splat-residual-calibration-v0',
+          offsets: trainingOffsets.slice().sort((a, b) => a - b),
+          sampleCount: calibrationSampleCount,
+          channels: ['support', 'color.r', 'color.g', 'color.b', 'opacity', 'shape.x', 'shape.y', 'ridge', 'fireSignal'],
+          scales: calibrationScales,
+          range: [0, 1],
+        },
+      },
+      alignment: {
+        identityKey: 'world-position-stable-key',
+        matched: holdoutAlignment.matchedCount,
+        births: holdoutAlignment.birthCount,
+        deaths: holdoutAlignment.deathCount,
+        birthSynthesis: 'unsupported-in-v0',
+        deathHandling: 'predicted-structural-support-threshold',
+      },
+      featureMetrics: {
+        identityMse: identityFeatureSquaredError / errorDenominator,
+        phasePredictionMse: predictionFeatureSquaredError / errorDenominator,
+        beatsIdentity: predictionFeatureSquaredError < identityFeatureSquaredError,
+        modelToIdentityRatio: predictionFeatureSquaredError / Math.max(1e-12, identityFeatureSquaredError),
+      },
+      pixelMetrics: {
+        identityToExactMse: identityPixelMse,
+        phasePredictionToExactMse: predictionPixelMse,
+        beatsIdentity: predictionPixelMse < identityPixelMse,
+        modelToIdentityRatio: predictionPixelMse / Math.max(1e-12, identityPixelMse),
+      },
+      renders: {
+        authority: 'isolated-cpu-projected-boundary-splat-raster-v0',
+        blocks: ['identity', 'phasePrediction', 'exactTarget'],
+        width,
+        height,
+        radiusMultiplier,
+        kernelSharpness,
+        artifacts,
+        inputSplats: {
+          identity: source.splats.count,
+          phasePrediction: source.splats.count,
+          exactTarget: target.splats.count,
+        },
+        visibleSupport: {
+          identity: identityRender.nonBackgroundPixelCount,
+          phasePrediction: predictionRender.nonBackgroundPixelCount,
+          exactTarget: exactRender.nonBackgroundPixelCount,
+        },
+      },
+      claimBoundary: 'isolated captured-splat raster; predicted attributes use source world positions, births are not synthesized, and live runtime instancing is unchanged',
+    };
+    await writeFile(reportPath, JSON.stringify(report, null, 2));
+    return report;
+  } catch (error) {
+    await mkdir(dirname(reportPath), { recursive: true });
+    const failure = {
+      schema: BOUNDARY_SPLAT_PHASE_RENDER_SCHEMA,
+      status: 'failed',
+      failurePhase,
+      error: error?.stack || error?.message || String(error),
+      lastTrustworthyEvidence,
+    };
+    await writeFile(reportPath, JSON.stringify(failure, null, 2));
+    throw error;
+  }
+}
+
+function writeRgbaPng(width, height, rgba) {
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    raw[y * (width * 4 + 1)] = 0;
+    rgba.copy(raw, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+function pngChunk(type, data) {
+  const typeBytes = Buffer.from(type, 'ascii');
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length, 0);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBytes, data])), 0);
+  return Buffer.concat([length, typeBytes, data, crc]);
+}
+
+const CRC32_TABLE = Array.from({ length: 256 }, (_, index) => {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  return value >>> 0;
+});
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function parseArgs(argv) {
+  const parsed = new Map();
+  for (let index = 0; index < argv.length; index += 1) {
+    const item = argv[index];
+    if (!item.startsWith('--')) continue;
+    const next = argv[index + 1];
+    if (!next || next.startsWith('--')) parsed.set(item, '1');
+    else {
+      parsed.set(item, next);
+      index += 1;
+    }
+  }
+  return parsed;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  const args = parseArgs(process.argv.slice(2));
+  const manifest = args.get('--manifest');
+  if (!manifest) {
+    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--out-dir <dir>] [--report <json>]');
+    process.exitCode = 2;
+  } else {
+    try {
+      const report = await writeBoundarySplatPhaseRenderWitness(manifest, {
+        model: args.get('--model'),
+        offset: args.get('--offset'),
+        outDir: args.get('--out-dir'),
+        report: args.get('--report'),
+        width: args.get('--width'),
+        height: args.get('--height'),
+        gridSize: args.get('--grid-size'),
+        ridgeLambda: args.get('--ridge-lambda'),
+      });
+      console.log(JSON.stringify(report, null, 2));
+    } catch (error) {
+      console.error(error?.stack || error?.message || String(error));
+      process.exitCode = 1;
+    }
+  }
+}
