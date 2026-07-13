@@ -13,10 +13,9 @@ import {
   HYBRID_SMOKE_LAYER_IDENTITY,
   HYBRID_SPLAT_SMOKE_APPROXIMATION,
   HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
-  HYBRID_SMOKE_FRONT_OPACITY_CEILING,
 } from './hybrid-splat-smoke-compositor.mjs';
 
-// V0 orders whole layers by one representative depth: single-representative-depth-no-interpenetration-split.
+// Hybrid smoke is split during the raymarch around the transformed splat depth.
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -251,6 +250,20 @@ function boundarySplatPhaseModeIdentity(mode) {
   if (normalized === 'same-history-slot') return 'same-history-slot-control';
   if (normalized === 'age-sweep') return 'age-sweep-history';
   return 'live-history-offset';
+}
+
+export function effectiveBoundarySplatPhaseSourceIdentity(descriptors = []) {
+  const identities = [...new Set(
+    descriptors
+      .map(descriptor => String(descriptor?.phaseSourceIdentity || ''))
+      .filter(Boolean),
+  )];
+  if (identities.length === 0) return 'unresolved-no-effective-descriptors';
+  if (identities.length === 1) return identities[0];
+  if (identities.includes('shared-current-control') && identities.includes('live-history-offset')) {
+    return 'mixed-current-and-live-history-offset';
+  }
+  return 'mixed-effective-phase-sources';
 }
 
 function boundarySplatEffectiveRendererIdentity(mode) {
@@ -1016,6 +1029,8 @@ struct ExternalEmitterInfluence {
 @group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
 @group(0) @binding(9) var<storage, read> oracleActivityCue: array<f32>;
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
+@group(1) @binding(1) var hybridSplatDepthMoments: texture_2d<f32>;
+@group(1) @binding(2) var hybridSplatDepthSampler: sampler;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
@@ -3678,8 +3693,10 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
 struct RaymarchResult {
   color: vec4<f32>,
   residualFeature: vec4<f32>,
-  hybridSmokeColorOpacity: vec4<f32>,
-  hybridSmokeMoments: vec4<f32>,
+  hybridSmokeFrontColor: vec4<f32>,
+  hybridSmokeFrontInterval: vec4<f32>,
+  hybridSmokeBackColor: vec4<f32>,
+  hybridSmokeBackInterval: vec4<f32>,
 };
 
 struct ResidualSourceOutput {
@@ -3688,25 +3705,31 @@ struct ResidualSourceOutput {
 };
 
 struct HybridSmokeOutput {
-  @location(0) colorOpacity: vec4<f32>,
-  @location(1) moments: vec4<f32>,
+  @location(0) frontColor: vec4<f32>,
+  @location(1) frontInterval: vec4<f32>,
+  @location(2) backColor: vec4<f32>,
+  @location(3) backInterval: vec4<f32>,
 };
 
 fn makeRaymarchResult(
   color: vec4<f32>,
   residualFeature: vec4<f32>,
-  hybridSmokeColorOpacity: vec4<f32>,
-  hybridSmokeMoments: vec4<f32>,
+  hybridSmokeFrontColor: vec4<f32>,
+  hybridSmokeFrontInterval: vec4<f32>,
+  hybridSmokeBackColor: vec4<f32>,
+  hybridSmokeBackInterval: vec4<f32>,
 ) -> RaymarchResult {
   var result: RaymarchResult;
   result.color = color;
   result.residualFeature = residualFeature;
-  result.hybridSmokeColorOpacity = hybridSmokeColorOpacity;
-  result.hybridSmokeMoments = hybridSmokeMoments;
+  result.hybridSmokeFrontColor = hybridSmokeFrontColor;
+  result.hybridSmokeFrontInterval = hybridSmokeFrontInterval;
+  result.hybridSmokeBackColor = hybridSmokeBackColor;
+  result.hybridSmokeBackInterval = hybridSmokeBackInterval;
   return result;
 }
 
-fn raymarchVolume(in: VSOut) -> RaymarchResult {
+fn raymarchVolume(in: VSOut, hybridSplatDepth: f32, hybridSplatPresent: bool) -> RaymarchResult {
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
@@ -3718,12 +3741,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
   if (hit.y <= max(hit.x, 0.0)) {
-    return makeRaymarchResult(
-      vec4<f32>(0.004, 0.005, 0.006, 1.0),
-      vec4<f32>(0.0),
-      vec4<f32>(0.0),
-      vec4<f32>(0.0),
-    );
+    return makeRaymarchResult(vec4<f32>(0.004, 0.005, 0.006, 1.0), vec4<f32>(0.0), vec4<f32>(0.0), vec4<f32>(0.0), vec4<f32>(0.0), vec4<f32>(0.0));
   }
 
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
@@ -3851,11 +3869,18 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   var t = startT + jitter + bonfireSpatialRayDephase;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
-  var hybridSmokeColor = vec3<f32>(0.0);
-  var hybridSmokeTrans = 1.0;
-  var hybridSmokeDepthMoment = 0.0;
-  var hybridSmokeDepthWeight = 0.0;
-  var hybridSmokeDepthSquaredMoment = 0.0;
+  var hybridSmokeFrontColor = vec3<f32>(0.0);
+  var hybridSmokeFrontTrans = 1.0;
+  var hybridSmokeFrontDepthMoment = 0.0;
+  var hybridSmokeFrontDepthWeight = 0.0;
+  var hybridSmokeFrontNearDepth = 1e9;
+  var hybridSmokeFrontFarDepth = 0.0;
+  var hybridSmokeBackColor = vec3<f32>(0.0);
+  var hybridSmokeBackTrans = 1.0;
+  var hybridSmokeBackDepthMoment = 0.0;
+  var hybridSmokeBackDepthWeight = 0.0;
+  var hybridSmokeBackNearDepth = 1e9;
+  var hybridSmokeBackFarDepth = 0.0;
   var residualRadianceAuthority = 0.0;
   var residualFireAuthority = 0.0;
   var residualInterfaceAuthority = 0.0;
@@ -4762,13 +4787,29 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
     let hybridSmokeExtinctionStep = clamp(smokeAlpha * (0.46 + extinction * 0.16), 0.0, 0.34);
     let hybridSmokeStepOpacity = 1.0 - exp(-hybridSmokeExtinctionStep);
-    let hybridSmokeWeight = hybridSmokeTrans * hybridSmokeStepOpacity;
     let hybridSmokeDepth = length(p - ro);
-    hybridSmokeColor = hybridSmokeColor + hybridSmokeWeight * smokeCol;
-    hybridSmokeDepthMoment = hybridSmokeDepthMoment + hybridSmokeWeight * hybridSmokeDepth;
-    hybridSmokeDepthWeight = hybridSmokeDepthWeight + hybridSmokeWeight;
-    hybridSmokeDepthSquaredMoment = hybridSmokeDepthSquaredMoment + hybridSmokeWeight * hybridSmokeDepth * hybridSmokeDepth;
-    hybridSmokeTrans = hybridSmokeTrans * exp(-hybridSmokeExtinctionStep);
+    let hybridSmokeIsBack = hybridSplatPresent && hybridSmokeDepth > hybridSplatDepth;
+    if (hybridSmokeIsBack) {
+      let hybridSmokeWeight = hybridSmokeBackTrans * hybridSmokeStepOpacity;
+      hybridSmokeBackColor = hybridSmokeBackColor + hybridSmokeWeight * smokeCol;
+      hybridSmokeBackDepthMoment = hybridSmokeBackDepthMoment + hybridSmokeWeight * hybridSmokeDepth;
+      hybridSmokeBackDepthWeight = hybridSmokeBackDepthWeight + hybridSmokeWeight;
+      if (hybridSmokeWeight > 0.000001) {
+        hybridSmokeBackNearDepth = min(hybridSmokeBackNearDepth, hybridSmokeDepth);
+        hybridSmokeBackFarDepth = max(hybridSmokeBackFarDepth, hybridSmokeDepth);
+      }
+      hybridSmokeBackTrans = hybridSmokeBackTrans * exp(-hybridSmokeExtinctionStep);
+    } else {
+      let hybridSmokeWeight = hybridSmokeFrontTrans * hybridSmokeStepOpacity;
+      hybridSmokeFrontColor = hybridSmokeFrontColor + hybridSmokeWeight * smokeCol;
+      hybridSmokeFrontDepthMoment = hybridSmokeFrontDepthMoment + hybridSmokeWeight * hybridSmokeDepth;
+      hybridSmokeFrontDepthWeight = hybridSmokeFrontDepthWeight + hybridSmokeWeight;
+      if (hybridSmokeWeight > 0.000001) {
+        hybridSmokeFrontNearDepth = min(hybridSmokeFrontNearDepth, hybridSmokeDepth);
+        hybridSmokeFrontFarDepth = max(hybridSmokeFrontFarDepth, hybridSmokeDepth);
+      }
+      hybridSmokeFrontTrans = hybridSmokeFrontTrans * exp(-hybridSmokeExtinctionStep);
+    }
     color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + shellSmokeBacklight + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
     let residualFeatureWeight = trans * rayStepOpacity;
     let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
@@ -4803,20 +4844,22 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   return makeRaymarchResult(
     vec4<f32>(resolvedColor, 1.0),
     residualFeature,
-    vec4<f32>(hybridSmokeColor, clamp(1.0 - hybridSmokeTrans, 0.0, 1.0)),
-    vec4<f32>(hybridSmokeDepthMoment, hybridSmokeDepthWeight, hybridSmokeDepthSquaredMoment, 0.0),
+    vec4<f32>(hybridSmokeFrontColor, clamp(1.0 - hybridSmokeFrontTrans, 0.0, 1.0)),
+    vec4<f32>(hybridSmokeFrontDepthMoment, hybridSmokeFrontDepthWeight, select(hybridSmokeFrontNearDepth, 0.0, hybridSmokeFrontDepthWeight <= 0.000001), hybridSmokeFrontFarDepth),
+    vec4<f32>(hybridSmokeBackColor, clamp(1.0 - hybridSmokeBackTrans, 0.0, 1.0)),
+    vec4<f32>(hybridSmokeBackDepthMoment, hybridSmokeBackDepthWeight, select(hybridSmokeBackNearDepth, 0.0, hybridSmokeBackDepthWeight <= 0.000001), hybridSmokeBackFarDepth),
   );
 }
 
 @fragment
 fn fs(in: VSOut) -> @location(0) vec4<f32> {
-  let result = raymarchVolume(in);
+  let result = raymarchVolume(in, 1e9, false);
   return result.color;
 }
 
 @fragment
 fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
-  let result = raymarchVolume(in);
+  let result = raymarchVolume(in, 1e9, false);
   var out: ResidualSourceOutput;
   out.color = result.color;
   out.residualFeature = result.residualFeature;
@@ -4825,10 +4868,16 @@ fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
 
 @fragment
 fn fsHybridSmoke(in: VSOut) -> HybridSmokeOutput {
-  let result = raymarchVolume(in);
+  let hybridLayerUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let splatDepthMoments = textureSampleLevel(hybridSplatDepthMoments, hybridSplatDepthSampler, hybridLayerUv, 0.0);
+  let splatPresent = splatDepthMoments.y > 0.000001;
+  let splatDepth = splatDepthMoments.x / max(splatDepthMoments.y, 0.000001);
+  let result = raymarchVolume(in, splatDepth, splatPresent);
   var out: HybridSmokeOutput;
-  out.colorOpacity = result.hybridSmokeColorOpacity;
-  out.moments = result.hybridSmokeMoments;
+  out.frontColor = result.hybridSmokeFrontColor;
+  out.frontInterval = result.hybridSmokeFrontInterval;
+  out.backColor = result.hybridSmokeBackColor;
+  out.backInterval = result.hybridSmokeBackInterval;
   return out;
 }
 `;
@@ -5192,9 +5241,10 @@ fn boundarySplatHybridFs(in: BoundarySplatVertexOut) -> BoundarySplatHybridOutpu
   let radius2 = dot(in.local, in.local);
   if (radius2 > 1.0) { discard; }
   let alpha = boundarySplatFragmentAlpha(in);
+  let momentWeightScale = 1.0 / 1024.0;
   var out: BoundarySplatHybridOutput;
   out.colorOpacity = vec4<f32>(in.colorOpacity.rgb, alpha);
-  out.moments = vec4<f32>(in.linearDepth, 1.0, in.linearDepth * in.linearDepth, alpha);
+  out.moments = vec4<f32>(in.linearDepth * momentWeightScale, momentWeightScale, in.linearDepth * in.linearDepth * momentWeightScale, alpha);
   return out;
 }
 `;
@@ -5221,9 +5271,11 @@ fn vs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
 
 @group(0) @binding(0) var splatColorOpacity: texture_2d<f32>;
 @group(0) @binding(1) var splatMoments: texture_2d<f32>;
-@group(0) @binding(2) var smokeColorOpacity: texture_2d<f32>;
-@group(0) @binding(3) var smokeMoments: texture_2d<f32>;
-@group(0) @binding(4) var layerSampler: sampler;
+@group(0) @binding(2) var smokeFrontColor: texture_2d<f32>;
+@group(0) @binding(3) var smokeFrontInterval: texture_2d<f32>;
+@group(0) @binding(4) var smokeBackColor: texture_2d<f32>;
+@group(0) @binding(5) var smokeBackInterval: texture_2d<f32>;
+@group(0) @binding(6) var layerSampler: sampler;
 
 fn compositePremultiplied(front: vec4<f32>, back: vec4<f32>) -> vec4<f32> {
   let visibility = 1.0 - clamp(front.a, 0.0, 1.0);
@@ -5232,21 +5284,24 @@ fn compositePremultiplied(front: vec4<f32>, back: vec4<f32>) -> vec4<f32> {
 
 @fragment
 fn fs(in: VertexOut) -> @location(0) vec4<f32> {
-  let splat = textureSampleLevel(splatColorOpacity, layerSampler, in.uv, 0.0);
-  let splatDepthMoments = textureSampleLevel(splatMoments, layerSampler, in.uv, 0.0);
-  var smoke = textureSampleLevel(smokeColorOpacity, layerSampler, in.uv, 0.0);
-  let smokeDepthMoments = textureSampleLevel(smokeMoments, layerSampler, in.uv, 0.0);
+  let hybridLayerUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let splat = textureSampleLevel(splatColorOpacity, layerSampler, hybridLayerUv, 0.0);
+  let splatDepthMoments = textureSampleLevel(splatMoments, layerSampler, hybridLayerUv, 0.0);
+  let smokeFront = textureSampleLevel(smokeFrontColor, layerSampler, hybridLayerUv, 0.0);
+  let smokeFrontDepthInterval = textureSampleLevel(smokeFrontInterval, layerSampler, hybridLayerUv, 0.0);
+  let smokeBack = textureSampleLevel(smokeBackColor, layerSampler, hybridLayerUv, 0.0);
+  let smokeBackDepthInterval = textureSampleLevel(smokeBackInterval, layerSampler, hybridLayerUv, 0.0);
   let splatPresent = splat.a > 0.000001 && splatDepthMoments.y > 0.000001;
-  let smokePresent = smoke.a > 0.000001 && smokeDepthMoments.y > 0.000001;
+  let smokeFrontPresent = smokeFront.a > 0.000001 && smokeFrontDepthInterval.y > 0.000001;
+  let smokeBackPresent = smokeBack.a > 0.000001 && smokeBackDepthInterval.y > 0.000001;
   let splatDepth = splatDepthMoments.x / max(splatDepthMoments.y, 0.000001);
-  let smokeDepth = smokeDepthMoments.x / max(smokeDepthMoments.y, 0.000001);
-  let splatFront = splatPresent && (!smokePresent || splatDepth <= smokeDepth);
-  if (splatPresent && smokePresent && !splatFront && smoke.a > ${HYBRID_SMOKE_FRONT_OPACITY_CEILING.toFixed(6)}) {
-    let opacityScale = ${HYBRID_SMOKE_FRONT_OPACITY_CEILING.toFixed(6)} / smoke.a;
-    smoke = vec4<f32>(smoke.rgb * opacityScale, ${HYBRID_SMOKE_FRONT_OPACITY_CEILING.toFixed(6)});
-  }
-  var composed = select(compositePremultiplied(smoke, splat), compositePremultiplied(splat, smoke), splatFront);
-  if (!splatPresent && !smokePresent) { composed = vec4<f32>(0.0); }
+  let depthIntervalTolerance = max(0.02, splatDepth * 0.002);
+  let smokeFrontIntervalValid = !smokeFrontPresent || !splatPresent || smokeFrontDepthInterval.w <= splatDepth + depthIntervalTolerance;
+  let smokeBackIntervalValid = !smokeBackPresent || !splatPresent || smokeBackDepthInterval.z >= splatDepth - depthIntervalTolerance;
+  if (!smokeFrontIntervalValid) { return vec4<f32>(1.0, 0.0, 0.0, 1.0); }
+  if (!smokeBackIntervalValid) { return vec4<f32>(0.0, 0.75, 1.0, 1.0); }
+  var composed = compositePremultiplied(smokeFront, compositePremultiplied(splat, smokeBack));
+  if (!splatPresent && !smokeFrontPresent && !smokeBackPresent) { composed = vec4<f32>(0.0); }
   let background = vec3<f32>(0.004, 0.005, 0.006);
   let hdr = composed.rgb + background * (1.0 - clamp(composed.a, 0.0, 1.0));
   return vec4<f32>(hdr, 1.0);
@@ -5438,7 +5493,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatCompositionFallbackReason: null,
     hybridSplatSmokeCompositorIdentity: HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
     hybridSplatSmokeApproximation: HYBRID_SPLAT_SMOKE_APPROXIMATION,
-    hybridSmokeFrontOpacityCeiling: HYBRID_SMOKE_FRONT_OPACITY_CEILING,
+    splatDepthConditionedSmokeSplit: 'per-pixel-transformed-splat-depth-raymarch-split-v1',
+    hybridSmokePhaseAuthority: 'shared-current-single-simulator-no-instance-smoke-history',
     hybridSplatLayer: {
       identity: HYBRID_SPLAT_LAYER_IDENTITY,
       format: 'rgba16float',
@@ -5452,7 +5508,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       format: 'rgba16float',
       radiance: 'premultiplied-smoke-only',
       opacity: 'one-minus-smoke-transmittance',
-      depth: 'linear-camera-distance-first-second-moments',
+      intervals: ['front-of-splat-depth', 'back-of-splat-depth'],
+      depth: 'weighted-linear-depth-plus-near-far-interval',
+      opticalComposition: 'front-smoke>splat>back-smoke',
       excludedAuthority: 'raymarched-flame-interface-emission',
     },
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
@@ -5471,7 +5529,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatRequestedInstanceCount: normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances),
     boundarySplatSourceCandidateCount: null,
     boundarySplatPhaseSourceCount: 1,
-    boundarySplatPhaseSourceIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
+    boundarySplatPhaseSourceIdentity: 'unresolved-no-effective-descriptors',
     boundarySplatHistoryRingIdentity: 'boundary-splat-live-history-ring-v0',
     boundarySplatHistorySlots: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
     boundarySplatHistoryWriteSlot: 0,
@@ -5843,6 +5901,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
+  let hybridSmokeSplitBindGroup = null;
   let hybridCompositorBindGroup = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
@@ -5851,6 +5910,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarWriteBindGroupLayout = null;
   let boundarySplatComputeBindGroupLayout = null;
   let boundarySplatRenderBindGroupLayout = null;
+  let hybridSmokeSplitBindGroupLayout = null;
   let hybridCompositorBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
@@ -5861,6 +5921,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarPipelineLayout = null;
   let boundarySplatComputePipelineLayout = null;
   let boundarySplatRenderPipelineLayout = null;
+  let hybridSmokePipelineLayout = null;
   let hybridCompositorPipelineLayout = null;
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
@@ -5897,8 +5958,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let frameTextureSize = '';
   let hybridSplatColorTexture = null;
   let hybridSplatMomentsTexture = null;
-  let hybridSmokeColorTexture = null;
-  let hybridSmokeMomentsTexture = null;
+  let hybridSmokeFrontColorTexture = null;
+  let hybridSmokeFrontIntervalTexture = null;
+  let hybridSmokeBackColorTexture = null;
+  let hybridSmokeBackIntervalTexture = null;
   let hybridLayerTextureSize = '';
   let hybridCompositorSampler = null;
   let browserResidualFeatureTexture = null;
@@ -6848,13 +6911,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     hybridSmokePipeline = device.createRenderPipeline({
       label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} ${gridSize}^3`,
-      layout: pipelineLayout,
+      layout: hybridSmokePipelineLayout,
       vertex: { module: shader, entryPoint: 'vs' },
       fragment: {
         module: shader,
         entryPoint: 'fsHybridSmoke',
         constants: renderPipelineConstants,
-        targets: [{ format: 'rgba16float' }, { format: 'rgba16float' }],
+        targets: [0, 1, 2, 3].map(() => ({ format: 'rgba16float' })),
       },
       primitive: { topology: 'triangle-list' },
     });
@@ -7160,8 +7223,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     hybridCompositorSampler = device.createSampler({
       label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} layer sampler`,
-      magFilter: 'linear',
-      minFilter: 'linear',
+      magFilter: 'nearest',
+      minFilter: 'nearest',
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
@@ -7426,14 +7489,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    hybridSmokeSplitBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} splat-depth split bind group layout`,
+      entries: [{
+        binding: 1,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'float' },
+      }, {
+        binding: 2,
+        visibility: GPUShaderStage.FRAGMENT,
+        sampler: { type: 'filtering' },
+      }],
+    });
     hybridCompositorBindGroupLayout = device.createBindGroupLayout({
       label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} bind group layout`,
-      entries: [0, 1, 2, 3].map(binding => ({
+      entries: [0, 1, 2, 3, 4, 5].map(binding => ({
         binding,
         visibility: GPUShaderStage.FRAGMENT,
         texture: { sampleType: 'float' },
       })).concat([{
-        binding: 4,
+        binding: 6,
         visibility: GPUShaderStage.FRAGMENT,
         sampler: { type: 'filtering' },
       }]),
@@ -7445,6 +7520,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     browserResidualPipelineLayout = device.createPipelineLayout({
       label: 'kaminos browser direct residual pipeline layout',
       bindGroupLayouts: [browserResidualBindGroupLayout],
+    });
+    hybridSmokePipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} splat-depth split pipeline layout`,
+      bindGroupLayouts: [bindGroupLayout, hybridSmokeSplitBindGroupLayout],
     });
     hybridCompositorPipelineLayout = device.createPipelineLayout({
       label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} pipeline layout`,
@@ -7561,20 +7640,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function destroyHybridLayerTextures() {
     hybridSplatColorTexture?.destroy();
     hybridSplatMomentsTexture?.destroy();
-    hybridSmokeColorTexture?.destroy();
-    hybridSmokeMomentsTexture?.destroy();
+    hybridSmokeFrontColorTexture?.destroy();
+    hybridSmokeFrontIntervalTexture?.destroy();
+    hybridSmokeBackColorTexture?.destroy();
+    hybridSmokeBackIntervalTexture?.destroy();
     hybridSplatColorTexture = null;
     hybridSplatMomentsTexture = null;
-    hybridSmokeColorTexture = null;
-    hybridSmokeMomentsTexture = null;
+    hybridSmokeFrontColorTexture = null;
+    hybridSmokeFrontIntervalTexture = null;
+    hybridSmokeBackColorTexture = null;
+    hybridSmokeBackIntervalTexture = null;
     hybridLayerTextureSize = '';
+    hybridSmokeSplitBindGroup = null;
     hybridCompositorBindGroup = null;
   }
 
   function ensureHybridLayerTextures() {
     const key = `${state.width}x${state.height}`;
     if (hybridCompositorBindGroup && hybridLayerTextureSize === key) return true;
-    if (!hybridCompositorBindGroupLayout || !hybridCompositorSampler) return false;
+    if (!hybridSmokeSplitBindGroupLayout || !hybridCompositorBindGroupLayout || !hybridCompositorSampler) return false;
     destroyHybridLayerTextures();
     const makeLayerTexture = label => device.createTexture({
       label,
@@ -7584,17 +7668,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     hybridSplatColorTexture = makeLayerTexture(`kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} color-opacity`);
     hybridSplatMomentsTexture = makeLayerTexture(`kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} moments`);
-    hybridSmokeColorTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} color-opacity`);
-    hybridSmokeMomentsTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} moments`);
+    hybridSmokeFrontColorTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} front color-opacity`);
+    hybridSmokeFrontIntervalTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} front depth interval`);
+    hybridSmokeBackColorTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} back color-opacity`);
+    hybridSmokeBackIntervalTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} back depth interval`);
+    hybridSmokeSplitBindGroup = device.createBindGroup({
+      label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} transformed-splat-depth split bind group`,
+      layout: hybridSmokeSplitBindGroupLayout,
+      entries: [
+        { binding: 1, resource: hybridSplatMomentsTexture.createView() },
+        { binding: 2, resource: hybridCompositorSampler },
+      ],
+    });
     hybridCompositorBindGroup = device.createBindGroup({
       label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} bind group`,
       layout: hybridCompositorBindGroupLayout,
       entries: [
         { binding: 0, resource: hybridSplatColorTexture.createView() },
         { binding: 1, resource: hybridSplatMomentsTexture.createView() },
-        { binding: 2, resource: hybridSmokeColorTexture.createView() },
-        { binding: 3, resource: hybridSmokeMomentsTexture.createView() },
-        { binding: 4, resource: hybridCompositorSampler },
+        { binding: 2, resource: hybridSmokeFrontColorTexture.createView() },
+        { binding: 3, resource: hybridSmokeFrontIntervalTexture.createView() },
+        { binding: 4, resource: hybridSmokeBackColorTexture.createView() },
+        { binding: 5, resource: hybridSmokeBackIntervalTexture.createView() },
+        { binding: 6, resource: hybridCompositorSampler },
       ],
     });
     hybridLayerTextureSize = key;
@@ -8809,6 +8905,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function boundarySplatInstanceLayout(requestedInstanceCount, fieldLayout = normalizeBoundarySplatFieldLayout(controlsSnapshot.boundarySplatFieldLayout)) {
+    if (requestedInstanceCount === 1) return [[0, 0, 0, 1]];
     const fourFlameProofLayout = [
       [-1.35, 0, -0.18, 0.72],
       [-0.45, 0, 0.16, 0.72],
@@ -8937,7 +9034,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatHistoryWriteSlot = state.boundarySplatHistoryWriteTick % state.boundarySplatHistoryDepth;
     state.boundarySplatEffectiveHistoryWindowFrames = (state.boundarySplatHistoryDepth - 1) * state.boundarySplatHistoryFrameStride;
     state.boundarySplatPhaseSourceCount = new Set(descriptors.map(descriptor => descriptor.phaseHistorySlot)).size;
-    state.boundarySplatPhaseSourceIdentity = state.boundarySplatPhaseModeIdentity;
+    state.boundarySplatPhaseSourceIdentity = effectiveBoundarySplatPhaseSourceIdentity(descriptors);
     state.boundarySplatPhaseSources = descriptors.map(descriptor => ({
         index: descriptor.index,
         phaseMode: descriptor.phaseMode,
@@ -9130,6 +9227,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatRenderBindGroup
       || bindGroups.length !== 2
       || !ensureHybridLayerTextures()
+      || !hybridSmokeSplitBindGroup
     ) {
       state.boundarySplatCompositionEffective = 'raymarch-fallback';
       state.boundarySplatCompositionFallbackReason = state.boundarySplatFallbackReason
@@ -9153,7 +9251,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
     const smokePass = encoder.beginRenderPass({
       label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} pass`,
-      colorAttachments: [hybridSmokeColorTexture, hybridSmokeMomentsTexture].map(texture => ({
+      colorAttachments: [
+        hybridSmokeFrontColorTexture,
+        hybridSmokeFrontIntervalTexture,
+        hybridSmokeBackColorTexture,
+        hybridSmokeBackIntervalTexture,
+      ].map(texture => ({
         view: texture.createView(),
         clearValue: { r: 0, g: 0, b: 0, a: 0 },
         loadOp: 'clear',
@@ -9162,6 +9265,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     smokePass.setPipeline(hybridSmokePipeline);
     smokePass.setBindGroup(0, bindGroups[currentFluid]);
+    smokePass.setBindGroup(1, hybridSmokeSplitBindGroup);
     smokePass.draw(3);
     smokePass.end();
 
@@ -9394,7 +9498,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatHistoryDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
       state.boundarySplatHistoryFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
       state.boundarySplatEffectiveHistoryWindowFrames = (state.boundarySplatHistoryDepth - 1) * state.boundarySplatHistoryFrameStride;
-      state.boundarySplatPhaseSourceIdentity = state.boundarySplatPhaseModeIdentity;
+      state.boundarySplatPhaseSourceIdentity = effectiveBoundarySplatPhaseSourceIdentity(state.boundarySplatInstanceDescriptors);
       boundarySplatReadbackBuffer.unmap();
       if (overflowCount > 0) growBoundarySplatCapacity(candidateCount);
     } catch (error) {
@@ -9434,7 +9538,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       historyFrameStride: normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride),
       effectiveHistoryWindowFrames: (normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth) - 1) * normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride),
       phaseModeIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
-      phaseSourceIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
+      phaseSourceIdentity: effectiveBoundarySplatPhaseSourceIdentity(state.boundarySplatInstanceDescriptors),
       authority: 'gpu-indirect-post-submit-witness-readback',
     };
     readback.unmap();
@@ -11195,7 +11299,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatCompositionFallbackReason: state.boundarySplatCompositionFallbackReason,
         hybridSplatSmokeCompositorIdentity: state.hybridSplatSmokeCompositorIdentity,
         hybridSplatSmokeApproximation: state.hybridSplatSmokeApproximation,
-        hybridSmokeFrontOpacityCeiling: state.hybridSmokeFrontOpacityCeiling,
+        splatDepthConditionedSmokeSplit: state.splatDepthConditionedSmokeSplit,
+        hybridSmokePhaseAuthority: state.hybridSmokePhaseAuthority,
         hybridSplatLayer: { ...state.hybridSplatLayer },
         hybridSmokeLayer: { ...state.hybridSmokeLayer },
         boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
@@ -11591,7 +11696,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatCompositionFallbackReason: state.boundarySplatCompositionFallbackReason,
       hybridSplatSmokeCompositorIdentity: state.hybridSplatSmokeCompositorIdentity,
       hybridSplatSmokeApproximation: state.hybridSplatSmokeApproximation,
-      hybridSmokeFrontOpacityCeiling: state.hybridSmokeFrontOpacityCeiling,
+      splatDepthConditionedSmokeSplit: state.splatDepthConditionedSmokeSplit,
+      hybridSmokePhaseAuthority: state.hybridSmokePhaseAuthority,
       hybridSplatLayer: { ...state.hybridSplatLayer },
       hybridSmokeLayer: { ...state.hybridSmokeLayer },
       boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
