@@ -13,6 +13,10 @@ const MODEL = 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f26
 const SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const COMPOSITION = 'boundary-splat-composed-field-v0';
 const CAMERA = 'boundary-splat-composed-field-camera-v0';
+const BROWSER_CONTINUITY_MODES = new Set([
+  'continuous-existing',
+  'reseated-after-original-process-disappeared',
+]);
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRoute = String(args.get('--url') || '');
@@ -23,6 +27,7 @@ const port = Math.max(1, Math.floor(Number(args.get('--chrome-port') || 19431)))
 const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const warmupSamples = Math.max(0, Math.floor(Number(args.get('--warmup-samples') || 3)));
 const steadySamples = Math.max(1, Math.floor(Number(args.get('--steady-samples') || 12)));
+const browserContinuity = String(args.get('--browser-continuity') || 'unverified-existing');
 const runStartedAt = new Date().toISOString();
 
 let ws = null;
@@ -31,6 +36,9 @@ const lastTrustworthyEvidence = {};
 
 try {
   if (!requestedRoute) throw new Error('missing --url');
+  if (!BROWSER_CONTINUITY_MODES.has(browserContinuity)) {
+    throw new Error(`invalid --browser-continuity ${JSON.stringify(browserContinuity)}`);
+  }
   mkdirSync(outDir, { recursive: true });
   failurePhase = 'connect-existing-browser';
   const version = await cdpFetch('/json/version');
@@ -108,6 +116,8 @@ try {
       version: version.Browser,
       pageId: page.id,
       pageUrl: effectivePageUrl,
+      browserContinuity,
+      sameBrowserAuthority: 'measurement-run-only',
       disposition: 'preserved-open',
     },
     authority: {
@@ -152,7 +162,7 @@ try {
       overflow: false,
       candidateCopy: false,
       blankOrPartialNativeCapture: false,
-      browserClosedOrReplaced: false,
+      browserClosedDuringWitness: false,
     },
     claimBoundary: 'GPU-exclusive serial scaling and one native composed frame from one live simulator. This does not claim independent per-instance simulation, learned prediction, PBR integration, or 1000-instance feasibility.',
   };
@@ -170,6 +180,8 @@ try {
       identity: 'boundary-splat-scale-single-cdp-browser-v0',
       mode: 'connected-existing',
       port,
+      browserContinuity,
+      sameBrowserAuthority: 'measurement-run-only',
       disposition: 'preserved-open',
     },
     error: error?.stack || error?.message || String(error),
