@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
+from mlx.utils import tree_flatten
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +94,16 @@ message_model.load_weights([
 with_neighbor = np.asarray(message_model(paired_inputs, paired_rows))[0]
 without_neighbor = np.asarray(message_model(paired_inputs, MODULE.mx.array([[-1] * 6, [-1] * 6])))[0]
 assert not np.allclose(with_neighbor, without_neighbor), "opened message branch must depend on neighbor state"
+
+frozen_message_model = MODULE.GridMessageAttributeMlp.from_base(base_model, message_size=3)
+MODULE.freeze_grid_message_base(frozen_message_model)
+trainable_names = {name for name, _ in tree_flatten(frozen_message_model.trainable_parameters())}
+assert trainable_names == {
+    "message_hidden.weight",
+    "message_hidden.bias",
+    "message_output.weight",
+    "message_output.bias",
+}
 
 with tempfile.TemporaryDirectory() as temporary_directory:
     artifact_path = Path(temporary_directory) / "spatial-model-artifact.json"

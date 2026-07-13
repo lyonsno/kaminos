@@ -47,6 +47,8 @@ assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-gri
 assert.match(script, /--fourier-frequencies/, 'Fourier conditioning exposes its exact frequency ladder');
 assert.match(script, /--hidden-size/, 'spatial trainer exposes an explicit hidden-width experiment control');
 assert.match(script, /--spatial-mixing/, 'spatial trainer exposes an explicit learned mixing family instead of conflating it with handcrafted context');
+assert.match(script, /--freeze-base/, 'message ablations can prevent the pointwise path from absorbing the spatial gradient');
+assert.match(script, /"basePathFrozen"/, 'training receipts preserve whether only the message path was trainable');
 assert.match(script, /six-neighbor-hidden-residual/, 'learned spatial mixing has a stable model-family identity');
 assert.match(script, /zero-delta-active-six-neighbor-hidden-residual-v0/, 'learned mixing starts as an exact no-op while retaining trainable internal features');
 assert.match(script, /mx\.sin\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes signed sine phase channels');

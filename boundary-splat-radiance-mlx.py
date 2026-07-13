@@ -183,6 +183,14 @@ class GridMessageAttributeMlp(nn.Module):
         return mx.sigmoid(self.output(hidden) + message_logits)
 
 
+def freeze_grid_message_base(model):
+    if not isinstance(model, GridMessageAttributeMlp):
+        raise ValueError("base-path freezing requires a grid-message model")
+    model.hidden.freeze()
+    model.output.freeze()
+    return model
+
+
 class CandidateAttributeTable(nn.Module):
     def __init__(self, normalized_attributes):
         super().__init__()
@@ -760,6 +768,7 @@ def parse_args():
     parser.add_argument("--hidden-size", type=int, default=0)
     parser.add_argument("--spatial-mixing", choices=["none", "six-neighbor-hidden-residual"], default="none")
     parser.add_argument("--message-size", type=int, default=0)
+    parser.add_argument("--freeze-base", type=int, choices=[0, 1], default=0)
     parser.add_argument("--candidate-table-oracle", action="store_true")
     parser.add_argument("--probe-only", action="store_true")
     return parser.parse_args()
@@ -781,6 +790,8 @@ def main():
             raise ValueError("candidate table oracle cannot be combined with spatial conditioning")
         if args.spatial_mixing != "none" and args.context_mode != "world-grid-neighborhood":
             raise ValueError("learned spatial mixing requires world-grid-neighborhood context")
+        if args.freeze_base and args.spatial_mixing != "six-neighbor-hidden-residual":
+            raise ValueError("base-path freezing requires six-neighbor-hidden-residual mixing")
         feature_names = context_feature_names(args.context_mode, frequencies)
         phase = "corpus"
         corpus = load_corpus(args.corpus)
@@ -823,6 +834,8 @@ def main():
             model = GridMessageAttributeMlp.from_base(model, message_size)
         elif isinstance(model, GridMessageAttributeMlp) and args.message_size not in (0, message_size):
             raise ValueError(f"requested message size {args.message_size} does not match warm message size {message_size}")
+        if args.freeze_base:
+            freeze_grid_message_base(model)
         if args.candidate_table_oracle:
             if len(corpus["frames"]) != 1:
                 raise ValueError("candidate oracle requires exactly one corpus frame")
@@ -949,6 +962,7 @@ def main():
                 "contextMode": args.context_mode,
                 "spatialMixing": args.spatial_mixing,
                 "messageSize": message_size,
+                "basePathFrozen": bool(args.freeze_base),
                 "spatialMixingExpansionAuthority": "zero-delta-active-six-neighbor-hidden-residual-v0" if warm_spatial_mixing == "none" and args.spatial_mixing == "six-neighbor-hidden-residual" else None,
                 "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood") else [],
                 "inputChannels": len(feature_names),
