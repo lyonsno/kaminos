@@ -129,6 +129,13 @@ async function evaluate(ws, expression, timeoutMs = 20000) {
   return result.result?.value;
 }
 
+function validateVolumeReleaseEvidence({ volumeReleased, volumeReleaseConfirmed }) {
+  const failures = [];
+  if (volumeReleased !== true) failures.push('furnace-release-not-attempted');
+  if (volumeReleaseConfirmed !== true) failures.push('furnace-release-unconfirmed');
+  return failures;
+}
+
 function validateRequestedFirePresentation({ requestedPresentation, firingId, expected, effective }) {
   if (requestedPresentation !== 'hybrid-smoke-preview') return [];
   const failures = [];
@@ -627,7 +634,10 @@ try {
       throw new Error(`Friendly firing retains uninstrumented frame-starvation gaps: ${JSON.stringify(state.fullRoute.uninstrumentedGapsAtOrAbove50Ms)}`);
     }
     if (!state.fullRoute.output?.sha256 || state.fullRoute.output.status !== 'real') throw new Error('Friendly firing did not preserve a real hashed output');
-    if (!state.fullRoute.volumeReleased) throw new Error('Friendly firing completed without releasing the furnace volume');
+    const volumeReleaseFailures = validateVolumeReleaseEvidence(state.fullRoute);
+    if (volumeReleaseFailures.length) {
+      throw new Error(`Friendly firing did not confirm furnace release: ${volumeReleaseFailures.join(', ')}`);
+    }
     phase = 'returning-to-completed-crucible';
     await evaluate(ws, openGenerateTabExpression);
     await sleep(900);

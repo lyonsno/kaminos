@@ -3,6 +3,29 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
+const releaseValidatorSource = witness.match(
+  /function validateVolumeReleaseEvidence\([\s\S]*?\n}\n(?=\nfunction validateRequestedFirePresentation)/,
+);
+assert.ok(
+  releaseValidatorSource,
+  'witness must expose a testable attempted-versus-confirmed release validator',
+);
+const validateVolumeReleaseEvidence = vm.runInNewContext(`(${releaseValidatorSource[0]})`);
+assert.deepEqual(
+  Array.from(validateVolumeReleaseEvidence({ volumeReleased: true, volumeReleaseConfirmed: true })),
+  [],
+);
+assert.ok(
+  validateVolumeReleaseEvidence({ volumeReleased: true, volumeReleaseConfirmed: false })
+    .includes('furnace-release-unconfirmed'),
+  'an attempted but unconfirmed furnace release must fail the witness',
+);
+assert.ok(
+  validateVolumeReleaseEvidence({ volumeReleased: false, volumeReleaseConfirmed: false })
+    .includes('furnace-release-not-attempted'),
+  'a missing furnace release must retain its distinct failure identity',
+);
+
 const projectorSource = witness.match(
   /function projectFriendlyFiringEvidence\([\s\S]*?\n}\n(?=\ntry \{)/,
 );
@@ -125,6 +148,8 @@ for (const [pattern, message] of [
   [/inferenceWindow/, 'Full-route witness mode must fail if the measured inference window is absent'],
   [/worstFrameGaps/, 'Full-route witness mode must fail if scoped gap rows are absent'],
   [/volumeReleased/, 'Full-route witness mode must verify the furnace releases after the cast lands'],
+  [/volumeReleaseConfirmed/, 'Full-route witness mode must separately verify confirmed furnace release'],
+  [/lastTrustworthyEvidence = \{ \.\.\.lastTrustworthyEvidence, fullRoute: state\.fullRoute \}[\s\S]*validateVolumeReleaseEvidence/, 'Release failure must retain attempted and confirmed state in last trustworthy evidence before validation'],
   [/cpuChunkItems/, 'Full-route witness must verify the effective cooperative CPU chunk size'],
   [/routeTailYieldMs/, 'Full-route witness must verify the effective route-tail yield'],
   [/routeTailCheckpointEvents/, 'Full-route witness must require observed prep and Gaussian compose checkpoints'],
