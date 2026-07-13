@@ -418,6 +418,109 @@ function dot(weights, input) {
   return total;
 }
 
+function finiteRecordNumber(record, field, label) {
+  const value = Number(record?.[field]);
+  if (!Number.isFinite(value)) throw new Error(`${label}.${field} must be finite`);
+  return value;
+}
+
+function compileSharedMlxPhaseChurnModel(artifact, context) {
+  if (artifact?.schema !== 'kaminos-phase-churn-shared-mlx-model-v0' || artifact.status !== 'completed') {
+    throw new Error('shared MLX phase churn model requires completed kaminos-phase-churn-shared-mlx-model-v0 artifact');
+  }
+  if (artifact.route?.backend !== 'mlx' || !artifact.route?.device || artifact.route?.fallbackReason !== null) {
+    throw new Error('shared MLX phase churn model requires effective MLX device identity and null fallback');
+  }
+  if (artifact.manifest?.sha256 !== context.manifestSha256) {
+    throw new Error(`shared MLX phase churn corpus mismatch: expected ${context.manifestSha256}, received ${artifact.manifest?.sha256}`);
+  }
+  if (Number(artifact.holdout?.offset) !== context.offset || artifact.holdout?.targetFrameId !== context.targetFrameId) {
+    throw new Error('shared MLX phase churn holdout identity mismatch');
+  }
+  const artifactTrainingOffsets = Array.from(artifact.holdout?.trainingOffsets ?? []).map(Number).sort((a, b) => a - b);
+  const expectedTrainingOffsets = context.trainingOffsets.slice().sort((a, b) => a - b);
+  if (artifactTrainingOffsets.length !== expectedTrainingOffsets.length
+    || artifactTrainingOffsets.some((value, index) => value !== expectedTrainingOffsets[index])) {
+    throw new Error('shared MLX phase churn training offsets mismatch');
+  }
+  if (artifact.input?.authority !== 'exact-local-grid-42-feature-contract-v0'
+    || artifact.input?.candidateFeatureCount !== 16
+    || artifact.input?.featureCount !== context.inputSize) {
+    throw new Error('shared MLX phase churn input contract mismatch');
+  }
+  const inputMean = finiteArray(artifact.input.mean, context.inputSize, 'shared MLX input mean');
+  const inputScale = finiteArray(artifact.input.scale, context.inputSize, 'shared MLX input scale');
+  if (inputScale.some(value => value <= 0)) throw new Error('shared MLX input scale must be positive');
+  if (artifact.architecture?.authority !== 'dense-relu-shared-trunk-three-conditional-logit-heads-v0') {
+    throw new Error('shared MLX phase churn architecture authority mismatch');
+  }
+  if (artifact.architecture?.outputOrder?.join(',') !== 'survival,birth,death') {
+    throw new Error('shared MLX phase churn output order mismatch');
+  }
+  const hiddenSize = Math.floor(Number(artifact.architecture.hiddenSize));
+  if (!Number.isInteger(hiddenSize) || hiddenSize <= 0) throw new Error('shared MLX phase churn hidden size must be positive');
+  const [trunk, heads] = artifact.architecture.layers ?? [];
+  if (trunk?.role !== 'shared-trunk' || trunk.inputSize !== context.inputSize || trunk.outputSize !== hiddenSize || trunk.activation !== 'relu') {
+    throw new Error('shared MLX phase churn trunk layer contract mismatch');
+  }
+  if (heads?.role !== 'conditional-heads' || heads.inputSize !== hiddenSize || heads.outputSize !== 3 || heads.activation !== 'sigmoid') {
+    throw new Error('shared MLX phase churn conditional-head layer contract mismatch');
+  }
+  const trunkWeights = finiteArray(trunk.weights, context.inputSize * hiddenSize, 'shared MLX trunk weights');
+  const trunkBias = finiteArray(trunk.bias, hiddenSize, 'shared MLX trunk bias');
+  const headWeights = finiteArray(heads.weights, hiddenSize * 3, 'shared MLX head weights');
+  const headBias = finiteArray(heads.bias, 3, 'shared MLX head bias');
+  const objectives = artifact.objectives;
+  if (objectives?.conditionalBce?.authority !== 'masked-asymmetric-conditional-bce-v0'
+    || objectives?.withinPairRanking?.authority !== 'within-training-pair-positive-negative-margin-ranking-v0'
+    || objectives?.adjacentOffsetConsistency?.authority !== 'same-site-adjacent-offset-label-agreement-consistency-v0') {
+    throw new Error('shared MLX phase churn objective authority mismatch');
+  }
+  if (finiteRecordNumber(objectives.withinPairRanking, 'evaluatedPairCount', 'within-pair ranking') <= 0
+    || finiteRecordNumber(objectives.adjacentOffsetConsistency, 'evaluatedPairCount', 'adjacent-offset consistency') <= 0) {
+    throw new Error('shared MLX phase churn ranking and consistency objectives require evaluated pairs');
+  }
+  const calibration = {};
+  for (const headName of artifact.architecture.outputOrder) {
+    const row = artifact.calibration?.[headName];
+    calibration[headName] = {
+      threshold: finiteRecordNumber(row, 'threshold', `${headName} calibration`),
+      precision: finiteRecordNumber(row, 'precision', `${headName} calibration`),
+      recall: finiteRecordNumber(row, 'recall', `${headName} calibration`),
+      fScore: finiteRecordNumber(row, 'fScore', `${headName} calibration`),
+      truePositive: finiteRecordNumber(row, 'truePositive', `${headName} calibration`),
+      falsePositive: finiteRecordNumber(row, 'falsePositive', `${headName} calibration`),
+      falseNegative: finiteRecordNumber(row, 'falseNegative', `${headName} calibration`),
+      sampleCount: finiteRecordNumber(row, 'sampleCount', `${headName} calibration`),
+    };
+  }
+  return {
+    artifact,
+    hiddenSize,
+    calibration,
+    predict(input) {
+      finiteArray(input, context.inputSize, 'shared MLX phase churn input');
+      const hidden = new Float64Array(hiddenSize);
+      for (let output = 0; output < hiddenSize; output += 1) {
+        let value = trunkBias[output];
+        const row = output * context.inputSize;
+        for (let feature = 0; feature < context.inputSize; feature += 1) {
+          value += trunkWeights[row + feature] * ((input[feature] - inputMean[feature]) / inputScale[feature]);
+        }
+        hidden[output] = Math.max(0, value);
+      }
+      const probabilities = {};
+      for (let output = 0; output < 3; output += 1) {
+        let logit = headBias[output];
+        const row = output * hiddenSize;
+        for (let feature = 0; feature < hiddenSize; feature += 1) logit += headWeights[row + feature] * hidden[feature];
+        probabilities[artifact.architecture.outputOrder[output]] = sigmoid(logit);
+      }
+      return probabilities;
+    },
+  };
+}
+
 function forEachLocalGridTrainingSample(trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, callback, options = {}) {
   for (const pair of trainingPairs) {
     if (heldOutFrameIds.has(pair.sourceFrameId) || heldOutFrameIds.has(pair.targetFrameId)) continue;
@@ -1002,6 +1105,54 @@ function renderSupportChurnOverlay(sourceRows, targetRows, predictionSites, pred
   };
 }
 
+function renderSupportFlowDebugMix(beauty, sourceRows, activeRows, camera, renderOptions, gridStep, gain) {
+  const keys = new Set([...sourceRows.keys(), ...activeRows.keys()]);
+  const diagnosticRows = [];
+  const counts = { survivor: 0, birth: 0, death: 0 };
+  for (const key of keys) {
+    const sourceRow = sourceRows.get(key);
+    const activeRow = activeRows.get(key);
+    let color;
+    let opacity;
+    if (sourceRow && activeRow) {
+      counts.survivor += 1;
+      color = [0.08, 0.32, 1.0];
+      opacity = 0.22;
+    } else if (activeRow) {
+      counts.birth += 1;
+      color = [0.0, 1.0, 0.92];
+      opacity = 0.9;
+    } else {
+      counts.death += 1;
+      color = [1.0, 0.05, 0.42];
+      opacity = 0.9;
+    }
+    const row = activeRow?.splat || sourceRow?.splat;
+    const position = activeRow?.position || sourceRow?.position || keyToWorldPosition(key);
+    diagnosticRows.push(makeDiagnosticSplat(position, color, diagnosticPrototypeRadius(row, gridStep), opacity));
+  }
+  const debug = renderBoundarySplatRowsPng(diagnosticRows, camera, renderOptions);
+  const rgba = Buffer.alloc(beauty.rgba.length);
+  const backgroundBytes = BACKGROUND.map(value => Math.round(value * 255));
+  for (let pixel = 0; pixel < beauty.width * beauty.height; pixel += 1) {
+    for (let channel = 0; channel < 3; channel += 1) {
+      const index = pixel * 4 + channel;
+      const additive = Math.max(0, debug.rgba[index] - backgroundBytes[channel]);
+      rgba[index] = Math.max(0, Math.min(255, Math.round(beauty.rgba[index] + additive * gain)));
+    }
+    rgba[pixel * 4 + 3] = 255;
+  }
+  return {
+    authority: 'display-only-support-flow-debug-mix-v0',
+    png: writeRgbaPng(beauty.width, beauty.height, rgba),
+    width: beauty.width,
+    height: beauty.height,
+    rgba,
+    gain,
+    counts,
+  };
+}
+
 function composeHorizontal(rendered) {
   const gap = 4;
   const width = rendered.reduce((sum, item) => sum + item.width, 0) + gap * (rendered.length - 1);
@@ -1320,8 +1471,10 @@ async function runLocalGridOccupancyRenderWitness(context) {
   const requestedFamily = String(options.phaseModelFamily || options.modelFamily || 'local-grid-occupancy-classifier-v0');
   const budgetedSupport = requestedFamily === 'dense-negative-budgeted-local-grid-occupancy-v0';
   const quotaRankedSupport = requestedFamily === 'quota-ranked-survival-birth-death-local-grid-v0';
+  const sharedMlxSupport = requestedFamily === 'shared-mlx-survival-birth-death-local-grid-v0';
+  const rankedSupportHeads = quotaRankedSupport || sharedMlxSupport;
   const splitSupportHeads = requestedFamily === 'split-survival-birth-death-local-grid-v0'
-    || quotaRankedSupport;
+    || rankedSupportHeads;
   const usesSupportBudget = budgetedSupport || splitSupportHeads;
   const classifierOptions = usesSupportBudget
     ? { ...options, includePredictionSiteNegatives: true }
@@ -1348,14 +1501,56 @@ async function runLocalGridOccupancyRenderWitness(context) {
     }
   }
   const gridStep = Number(options.gridStep ?? (2 / gridSize));
+  let sharedMlxModelPath = null;
+  let sharedMlxModelBytes = null;
+  let sharedMlxModel = null;
+  if (sharedMlxSupport) {
+    if (!options.phaseModelArtifact) throw new Error('shared MLX phase churn family requires --phase-model-artifact');
+    sharedMlxModelPath = resolve(String(options.phaseModelArtifact));
+    sharedMlxModelBytes = await readFile(sharedMlxModelPath);
+    const sharedMlxArtifact = JSON.parse(sharedMlxModelBytes.toString('utf8'));
+    const localGridInputSize = makeLocalGridOccupancyInput([0, 0, 0], new Map(), siteStats, 1, 1, gridStep).length;
+    sharedMlxModel = compileSharedMlxPhaseChurnModel(sharedMlxArtifact, {
+      manifestSha256: sha256(manifestBytes),
+      offset,
+      targetFrameId: heldOutPair.targetFrameId,
+      trainingOffsets,
+      inputSize: localGridInputSize,
+    });
+  }
   const classifier = splitSupportHeads
     ? null
     : trainLocalGridLogisticClassifier(trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, classifierOptions);
   const calibratedThreshold = splitSupportHeads
     ? null
     : chooseLocalGridThreshold(classifier, trainingPairs, loadedFrames, heldOutFrameIds, siteStats, maxAbsOffset, gridStep, classifierOptions);
-  const conditionalHeads = splitSupportHeads
+  const conditionalHeads = sharedMlxSupport
     ? Object.fromEntries(Object.keys(SPLIT_SUPPORT_HEADS).map(headName => {
+      const counts = sharedMlxModel.artifact.training?.headSampleCounts?.[headName];
+      if (!counts || !Number.isFinite(counts.sampleCount) || counts.sampleCount <= 0) {
+        throw new Error(`shared MLX phase churn ${headName} head requires positive training sample counts`);
+      }
+      return [headName, {
+        head: {
+          headName,
+          inputSize: sharedMlxModel.artifact.input.featureCount,
+          sampleCount: counts.sampleCount,
+          positiveCount: counts.positiveCount,
+          negativeCount: counts.negativeCount,
+          epochs: null,
+          learningRate: null,
+          l2: null,
+          trainingUniverse: SPLIT_SUPPORT_HEADS[headName].trainingUniverse,
+          loss: sharedMlxModel.artifact.objectives.conditionalBce,
+          predict(input) {
+            return sharedMlxModel.predict(input)[headName];
+          },
+        },
+        calibration: sharedMlxModel.calibration[headName],
+      }];
+    }))
+    : (splitSupportHeads
+      ? Object.fromEntries(Object.keys(SPLIT_SUPPORT_HEADS).map(headName => {
       const head = trainConditionalSupportHead(
         headName,
         trainingPairs,
@@ -1377,8 +1572,8 @@ async function runLocalGridOccupancyRenderWitness(context) {
         classifierOptions,
       );
       return [headName, { head, calibration }];
-    }))
-    : null;
+      }))
+      : null);
   const featureInputSize = makeSpatialOccupancyInput([0, 0, 0], new Map([[
     '0.000000,0.000000,0.000000',
     { position: [0, 0, 0], candidate: new Float32Array(16) },
@@ -1409,7 +1604,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
     : null;
   const occupancyThreshold = calibratedThreshold?.threshold ?? null;
   if (supportBudget) {
-    if (quotaRankedSupport) {
+    if (rankedSupportHeads) {
       supportBudget.birthPrecisionBudgetScale = 1;
       supportBudget.effectiveSourceSurvivalBudget = Math.max(
         0,
@@ -1445,20 +1640,21 @@ async function runLocalGridOccupancyRenderWitness(context) {
       let probability;
       let decisionEligible = true;
       if (splitSupportHeads) {
+        const sharedProbabilities = sharedMlxSupport ? sharedMlxModel.predict(input) : null;
         if (site.sourceOccupied) {
-          const survival = conditionalHeads.survival.head.predict(input);
-          const death = conditionalHeads.death.head.predict(input);
+          const survival = sharedProbabilities?.survival ?? conditionalHeads.survival.head.predict(input);
+          const death = sharedProbabilities?.death ?? conditionalHeads.death.head.predict(input);
           supportHeadProbabilityByKey.set(key, { survival, birth: null, death });
           const survivalMargin = survival - conditionalHeads.survival.calibration.threshold;
           const deathMargin = death - conditionalHeads.death.calibration.threshold;
-          probability = quotaRankedSupport
+          probability = rankedSupportHeads
             ? survivalMargin - deathMargin
             : survival * (1 - death);
-          decisionEligible = quotaRankedSupport
+          decisionEligible = rankedSupportHeads
             || (survivalMargin >= 0 && survivalMargin >= deathMargin);
         } else {
-          const birth = conditionalHeads.birth.head.predict(input);
-          const birthDecision = quotaRankedSupport
+          const birth = sharedProbabilities?.birth ?? conditionalHeads.birth.head.predict(input);
+          const birthDecision = rankedSupportHeads
             ? quotaRankedBirthDecision(
               birth,
               conditionalHeads.birth.calibration.threshold,
@@ -1466,8 +1662,8 @@ async function runLocalGridOccupancyRenderWitness(context) {
             )
             : null;
           supportHeadProbabilityByKey.set(key, { survival: null, birth, death: null, birthDecision });
-          probability = quotaRankedSupport ? birthDecision.rankingScore : birth;
-          decisionEligible = quotaRankedSupport
+          probability = rankedSupportHeads ? birthDecision.rankingScore : birth;
+          decisionEligible = rankedSupportHeads
             || birth >= conditionalHeads.birth.calibration.threshold;
         }
       } else {
@@ -1495,6 +1691,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
       .forEach(row => selectedKeys.add(row.key));
   }
   const predictedRows = [];
+  const predictedRowsByKey = new Map();
   const predictedFeatureByKey = new Map();
   const birthOpacityByKey = new Map();
   let predictedDeaths = 0;
@@ -1523,16 +1720,17 @@ async function runLocalGridOccupancyRenderWitness(context) {
       ? conditionalHeads.birth.calibration.precision
       : calibratedThreshold.birth.precision;
     if (!sourceRow) {
-      const rawBirthProbability = quotaRankedSupport
+      const rawBirthProbability = rankedSupportHeads
         ? supportHeadProbabilityByKey.get(key).birth
         : probability;
-      const appliedScale = quotaRankedSupport
+      const appliedScale = rankedSupportHeads
         ? supportHeadProbabilityByKey.get(key).birthDecision.opacityScale
         : quotaRankedBirthOpacityScale(rawBirthProbability, birthPrecision);
       birthOpacityByKey.set(key, { rawBirthProbability, appliedScale });
       row[7] *= appliedScale;
     }
     predictedRows.push(row);
+    predictedRowsByKey.set(key, { key, position: site.position, splat: row });
   }
   if (!predictedRows.length) {
     const splitDiagnostics = splitSupportHeads
@@ -1670,6 +1868,20 @@ async function runLocalGridOccupancyRenderWitness(context) {
   const advectionRender = renderBoundarySplatRowsPng(source.splats.values, source.frame.camera, renderOptions);
   const predictionRender = renderBoundarySplatRowsPng(predictedSplats, source.frame.camera, renderOptions);
   const exactRender = renderBoundarySplatRowsPng(target.splats.values, target.frame.camera, renderOptions);
+  let partialFlowDebug = null;
+  if (sharedMlxSupport) {
+    const requestedGain = Number(options.partialFlowDebugGain ?? 0.625);
+    if (!Number.isFinite(requestedGain) || requestedGain < 0.5 || requestedGain > 0.75) {
+      throw new Error('partial flow-debug gain must be finite and within [0.50, 0.75]');
+    }
+    partialFlowDebug = {
+      requestedGain,
+      effectiveGain: requestedGain,
+      reference: renderSupportFlowDebugMix(exactRender, sourceRows, targetRows, source.frame.camera, renderOptions, gridStep, requestedGain),
+      control: renderSupportFlowDebugMix(identityRender, sourceRows, sourceRows, source.frame.camera, renderOptions, gridStep, requestedGain),
+      predicted: renderSupportFlowDebugMix(predictionRender, sourceRows, predictedRowsByKey, source.frame.camera, renderOptions, gridStep, requestedGain),
+    };
+  }
   const exactMinusIdentityRender = renderResidualMapPng(exactRender, identityRender);
   const exactMinusPredictionRender = renderResidualMapPng(exactRender, predictionRender);
   const predictionMinusIdentityRender = renderResidualMapPng(predictionRender, identityRender);
@@ -1711,11 +1923,18 @@ async function runLocalGridOccupancyRenderWitness(context) {
     trueDeath: await writeRenderArtifact(resolve(outDir, `phase-render-support-churn-true-death-${offsetLabel}.png`), churnOverlay.categoryRenders.trueDeath),
     contextSheet: await writeRenderArtifact(resolve(outDir, `phase-render-diagnostic-context-${offsetLabel}.png`), diagnosticContextRender),
   };
+  const partialFlowDebugArtifacts = partialFlowDebug
+    ? {
+      reference: await writeRenderArtifact(resolve(outDir, `phase-render-reference-partial-flow-debug-${offsetLabel}.png`), partialFlowDebug.reference),
+      control: await writeRenderArtifact(resolve(outDir, `phase-render-control-partial-flow-debug-${offsetLabel}.png`), partialFlowDebug.control),
+      predicted: await writeRenderArtifact(resolve(outDir, `phase-render-predicted-partial-flow-debug-${offsetLabel}.png`), partialFlowDebug.predicted),
+    }
+    : null;
   const identityPixelMse = imageMse(identityRender.rgba, exactRender.rgba);
   const priorPixelMse = imageMse(priorRender.rgba, exactRender.rgba);
   const advectionPixelMse = imageMse(advectionRender.rgba, exactRender.rgba);
   const predictionPixelMse = imageMse(predictionRender.rgba, exactRender.rgba);
-  const quotaBirthOpacity = quotaRankedSupport
+  const quotaBirthOpacity = rankedSupportHeads
     ? (() => {
       const selectedBirthOpacity = Array.from(selectedKeys)
         .filter(key => !sourceRows.has(key))
@@ -1763,7 +1982,9 @@ async function runLocalGridOccupancyRenderWitness(context) {
     : null;
   const supportHeadReport = splitSupportHeads
     ? Object.fromEntries(Object.entries(conditionalHeads).map(([headName, { head, calibration }]) => [headName, {
-      authority: `conditional-local-grid-${headName}-logistic-head-v0`,
+      authority: sharedMlxSupport
+        ? `shared-mlx-local-grid-${headName}-conditional-head-v0`
+        : `conditional-local-grid-${headName}-logistic-head-v0`,
       trainingUniverse: head.trainingUniverse,
       trainSampleCount: head.sampleCount,
       positiveTrainSampleCount: head.positiveCount,
@@ -1773,7 +1994,9 @@ async function runLocalGridOccupancyRenderWitness(context) {
       l2: head.l2,
       loss: head.loss,
       calibration: {
-        authority: 'training-pair-conditional-pr-threshold-calibration-v0',
+        authority: sharedMlxSupport
+          ? sharedMlxModel.artifact.calibration.authority
+          : 'training-pair-conditional-pr-threshold-calibration-v0',
         threshold: calibration.threshold,
         beta: calibration.beta,
         precision: calibration.precision,
@@ -1836,26 +2059,48 @@ async function runLocalGridOccupancyRenderWitness(context) {
         predictedDeaths,
       } } : {
         supportHeads: {
-          authority: 'conditional-local-grid-survival-birth-death-heads-v0',
+          authority: sharedMlxSupport
+            ? 'shared-mlx-local-grid-survival-birth-death-trunk-v0'
+            : 'conditional-local-grid-survival-birth-death-heads-v0',
           ...supportHeadReport,
         },
+        ...(sharedMlxSupport ? {
+          sharedTrunk: {
+            authority: 'shared-mlx-local-grid-phase-churn-model-artifact-v0',
+            path: sharedMlxModelPath,
+            sha256: sha256(sharedMlxModelBytes),
+            identity: sharedMlxModel.artifact.identity,
+            architectureAuthority: sharedMlxModel.artifact.architecture.authority,
+            hiddenSize: sharedMlxModel.hiddenSize,
+            backend: sharedMlxModel.artifact.route.backend,
+            device: sharedMlxModel.artifact.route.device,
+            effectiveRunner: sharedMlxModel.artifact.route.effectiveRunner,
+            fallbackReason: sharedMlxModel.artifact.route.fallbackReason,
+            inputAuthority: sharedMlxModel.artifact.input.authority,
+            candidateFeatureCount: sharedMlxModel.artifact.input.candidateFeatureCount,
+            training: sharedMlxModel.artifact.training,
+          },
+          objectives: sharedMlxModel.artifact.objectives,
+        } : {}),
         supportDecision: {
-          authority: quotaRankedSupport
-            ? 'quota-ranked-split-head-support-budget-v0'
-            : 'split-head-threshold-gated-support-budget-v0',
-          thresholdRole: quotaRankedSupport ? 'diagnostic-only' : 'eligibility-gate',
-          sourceScore: quotaRankedSupport
+          authority: sharedMlxSupport
+            ? 'shared-trunk-ranked-support-budget-v0'
+            : (quotaRankedSupport
+              ? 'quota-ranked-split-head-support-budget-v0'
+              : 'split-head-threshold-gated-support-budget-v0'),
+          thresholdRole: rankedSupportHeads ? 'diagnostic-only' : 'eligibility-gate',
+          sourceScore: rankedSupportHeads
             ? 'calibrated-survival-margin-minus-calibrated-death-margin'
             : 'survival-probability-times-one-minus-death-probability',
-          birthScore: quotaRankedSupport ? 'calibrated-birth-margin' : 'birth-probability',
-          ...(quotaRankedSupport ? {
+          birthScore: rankedSupportHeads ? 'calibrated-birth-margin' : 'birth-probability',
+          ...(rankedSupportHeads ? {
             birthDecisionAuthority: 'calibrated-margin-ranking-plus-raw-probability-opacity-v0',
           } : {}),
-          ...(quotaRankedSupport ? { birthOpacity: quotaBirthOpacity } : {}),
-          sourceRule: quotaRankedSupport
+          ...(rankedSupportHeads ? { birthOpacity: quotaBirthOpacity } : {}),
+          sourceRule: rankedSupportHeads
             ? 'rank-all-source-sites-and-fill-learned-source-survival-quota'
             : 'survival-positive-and-calibrated-margin-not-weaker-than-death-then-budget-ranked',
-          birthRule: quotaRankedSupport
+          birthRule: rankedSupportHeads
             ? 'rank-all-birth-sites-and-fill-learned-birth-quota-within-target-budget'
             : 'birth-positive-then-budget-ranked',
           sourceCandidateCount: Array.from(predictionSites.values()).filter(site => site.sourceOccupied).length,
@@ -1880,8 +2125,10 @@ async function runLocalGridOccupancyRenderWitness(context) {
       birthSynthesis: 'local-grid-classifier-training-site-synthesis-v0',
       synthesizedBirths: synthesizedBirthKeys.length,
       deathHandling: splitSupportHeads
-        ? (quotaRankedSupport
-          ? 'quota-ranked-calibrated-survival-versus-death-margin-v0'
+        ? (rankedSupportHeads
+          ? (sharedMlxSupport
+            ? 'shared-trunk-calibrated-survival-versus-death-margin-v0'
+            : 'quota-ranked-calibrated-survival-versus-death-margin-v0')
           : 'split-calibrated-survival-versus-death-margin-v0')
         : 'local-grid-classifier-occupancy-threshold',
       predictedDeaths,
@@ -1943,6 +2190,45 @@ async function runLocalGridOccupancyRenderWitness(context) {
         },
         note: 'Raw PNG has no embedded text labels; report block order and artifact names carry panel identity.',
       },
+      ...(partialFlowDebug ? {
+        partialFlowDebug: {
+          authority: 'display-only-support-flow-debug-mix-v0',
+          debugIdentity: 'stable-world-position-survival-birth-death-display-v0',
+          requestedGain: partialFlowDebug.requestedGain,
+          effectiveGain: partialFlowDebug.effectiveGain,
+          changesRendererState: false,
+          changesApplicationState: false,
+          changesSimulationState: false,
+          renderBackend: 'isolated-cpu-projected-boundary-splat-raster-v0',
+          sameFrameCameraCrop: true,
+          frameCustody: {
+            sourceFrameId: heldOutPair.sourceFrameId,
+            targetFrameId: heldOutPair.targetFrameId,
+            offsetSteps: offset,
+          },
+          roles: {
+            reference: {
+              semanticRole: 'reference',
+              beauty: artifacts.exactTarget,
+              partial: partialFlowDebugArtifacts.reference,
+              supportChangeCounts: partialFlowDebug.reference.counts,
+            },
+            control: {
+              semanticRole: 'control',
+              beauty: artifacts.identity,
+              partial: partialFlowDebugArtifacts.control,
+              supportChangeCounts: partialFlowDebug.control.counts,
+            },
+            predicted: {
+              semanticRole: 'predicted',
+              beauty: artifacts.phasePrediction,
+              partial: partialFlowDebugArtifacts.predicted,
+              supportChangeCounts: partialFlowDebug.predicted.counts,
+            },
+          },
+          interpretation: 'Blue marks retained source support, cyan marks source-absent active support, and magenta marks source support absent from the role. The mix is additive to each role beauty image and does not claim vector-flow authority.',
+        },
+      } : {}),
     },
     featureMetrics: {
       identityMse: identityFeatureSquaredError / Math.max(1, predictedFeatureCount),
@@ -2001,7 +2287,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
         exactTarget: exactRender.nonBackgroundPixelCount,
       },
     },
-    claimBoundary: 'isolated captured-splat raster; local-grid classifier uses training-observed world sites and zero-velocity advection baseline; live runtime instancing is unchanged',
+    claimBoundary: 'isolated captured-splat raster; local-grid support models use training-observed world sites and zero-velocity advection baseline; partial flow-debug is a display-only stable-support diagnostic rather than vector flow; live runtime instancing is unchanged',
   };
   await writeFile(reportPath, JSON.stringify(report, null, 2));
   return report;
@@ -2143,7 +2429,7 @@ export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options
     const renderOptions = { width, height, radiusMultiplier, kernelSharpness };
     const phaseModelFamily = String(options.phaseModelFamily || options.modelFamily || 'ridge-linear-offset-conditioned-v0');
     if (phaseModelFamily === 'spatial-occupancy-ridge-v0') {
-      return runSpatialOccupancyRenderWitness({
+      return await runSpatialOccupancyRenderWitness({
         manifestBytes,
         manifestPath,
         outDir,
@@ -2170,8 +2456,16 @@ export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options
     if (phaseModelFamily === 'local-grid-occupancy-classifier-v0'
       || phaseModelFamily === 'dense-negative-budgeted-local-grid-occupancy-v0'
       || phaseModelFamily === 'split-survival-birth-death-local-grid-v0'
-      || phaseModelFamily === 'quota-ranked-survival-birth-death-local-grid-v0') {
-      return runLocalGridOccupancyRenderWitness({
+      || phaseModelFamily === 'quota-ranked-survival-birth-death-local-grid-v0'
+      || phaseModelFamily === 'shared-mlx-survival-birth-death-local-grid-v0') {
+      if (phaseModelFamily === 'shared-mlx-survival-birth-death-local-grid-v0') {
+        failurePhase = 'phase-model-artifact-validation';
+        lastTrustworthyEvidence.requestedPhaseModelFamily = phaseModelFamily;
+        lastTrustworthyEvidence.phaseModelArtifactPath = options.phaseModelArtifact
+          ? resolve(String(options.phaseModelArtifact))
+          : null;
+      }
+      return await runLocalGridOccupancyRenderWitness({
         manifestBytes,
         manifestPath,
         outDir,
@@ -2357,7 +2651,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const args = parseArgs(process.argv.slice(2));
   const manifest = args.get('--manifest');
   if (!manifest) {
-    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--phase-model-family ridge-linear-offset-conditioned-v0|spatial-occupancy-ridge-v0|local-grid-occupancy-classifier-v0|dense-negative-budgeted-local-grid-occupancy-v0|split-survival-birth-death-local-grid-v0|quota-ranked-survival-birth-death-local-grid-v0] [--out-dir <dir>] [--report <json>]');
+    console.error('Usage: node boundary-splat-phase-render-witness.mjs --manifest <phase-corpus.json> [--model <model-artifact.json>] [--offset 3] [--phase-model-family ridge-linear-offset-conditioned-v0|spatial-occupancy-ridge-v0|local-grid-occupancy-classifier-v0|dense-negative-budgeted-local-grid-occupancy-v0|split-survival-birth-death-local-grid-v0|quota-ranked-survival-birth-death-local-grid-v0|shared-mlx-survival-birth-death-local-grid-v0] [--phase-model-artifact <phase-model.json>] [--partial-flow-debug-gain 0.625] [--out-dir <dir>] [--report <json>]');
     process.exitCode = 2;
   } else {
     try {
@@ -2371,6 +2665,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         gridSize: args.get('--grid-size'),
         ridgeLambda: args.get('--ridge-lambda'),
         phaseModelFamily: args.get('--phase-model-family'),
+        phaseModelArtifact: args.get('--phase-model-artifact'),
+        partialFlowDebugGain: args.get('--partial-flow-debug-gain'),
         occupancyThreshold: args.get('--occupancy-threshold'),
         localGridEpochs: args.get('--local-grid-epochs'),
         localGridLearningRate: args.get('--local-grid-learning-rate'),

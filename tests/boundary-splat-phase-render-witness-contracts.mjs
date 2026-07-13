@@ -496,6 +496,208 @@ try {
       <= quotaRankedReport.phaseModel.supportBudget.targetSupportBudget,
     'quota-ranked prediction must remain inside the learned target support budget',
   );
+
+  const sharedTrunkModelPath = join(root, 'shared-mlx-phase-churn-model.json');
+  const sharedTrunkModel = {
+    schema: 'kaminos-phase-churn-shared-mlx-model-v0',
+    identity: 'sha256:fixture-shared-mlx-phase-churn-model',
+    status: 'completed',
+    route: {
+      backend: 'mlx',
+      device: 'gpu',
+      effectiveRunner: '/private/tmp/kaminos-mlx-residual-venv/bin/python',
+      fallbackReason: null,
+    },
+    manifest: {
+      sha256: hash(await readFile(manifestPath)),
+    },
+    holdout: {
+      offset: 3,
+      targetFrameId: 'spatial-frame-6',
+      trainingOffsets: [-3, -2, -1, 1, 2],
+    },
+    input: {
+      authority: 'exact-local-grid-42-feature-contract-v0',
+      featureCount: 42,
+      candidateFeatureCount: 16,
+      mean: Array(42).fill(0),
+      scale: Array(42).fill(1),
+    },
+    architecture: {
+      authority: 'dense-relu-shared-trunk-three-conditional-logit-heads-v0',
+      hiddenSize: 1,
+      outputOrder: ['survival', 'birth', 'death'],
+      layers: [
+        {
+          role: 'shared-trunk',
+          inputSize: 42,
+          outputSize: 1,
+          activation: 'relu',
+          weights: Array(42).fill(0),
+          bias: [1],
+        },
+        {
+          role: 'conditional-heads',
+          inputSize: 1,
+          outputSize: 3,
+          activation: 'sigmoid',
+          weights: [0, 0, 0],
+          bias: [2, 1, -2],
+        },
+      ],
+    },
+    objectives: {
+      conditionalBce: {
+        authority: 'masked-asymmetric-conditional-bce-v0',
+        evaluatedSampleCount: 24,
+      },
+      withinPairRanking: {
+        authority: 'within-training-pair-positive-negative-margin-ranking-v0',
+        margin: 0.2,
+        weight: 0.25,
+        evaluatedPairCount: 8,
+      },
+      adjacentOffsetConsistency: {
+        authority: 'same-site-adjacent-offset-label-agreement-consistency-v0',
+        weight: 0.08,
+        evaluatedPairCount: 6,
+      },
+    },
+    calibration: {
+      authority: 'training-pair-conditional-pr-threshold-calibration-v0',
+      survival: { threshold: 0.5, precision: 0.8, recall: 0.75, fScore: 0.77, truePositive: 9, falsePositive: 2, falseNegative: 3, sampleCount: 14 },
+      birth: { threshold: 0.5, precision: 0.7, recall: 0.6, fScore: 0.64, truePositive: 6, falsePositive: 2, falseNegative: 4, sampleCount: 12 },
+      death: { threshold: 0.5, precision: 0.75, recall: 0.7, fScore: 0.72, truePositive: 7, falsePositive: 2, falseNegative: 3, sampleCount: 14 },
+    },
+    training: {
+      authority: 'full-corpus-mini-batch-mlx-adam-v0',
+      sampleCount: 24,
+      hiddenSampleCap: null,
+      headSampleCounts: {
+        survival: { sampleCount: 14, positiveCount: 9, negativeCount: 5 },
+        birth: { sampleCount: 12, positiveCount: 6, negativeCount: 6 },
+        death: { sampleCount: 14, positiveCount: 5, negativeCount: 9 },
+      },
+      steps: 4,
+      batchSize: 8,
+      seed: 713,
+    },
+  };
+  await writeFile(sharedTrunkModelPath, JSON.stringify(sharedTrunkModel));
+  const sharedTrunkReportPath = join(root, 'shared-mlx-support-heads-render-report.json');
+  const sharedTrunkReport = await writeBoundarySplatPhaseRenderWitness(manifestPath, {
+    model: modelPath,
+    phaseModelArtifact: sharedTrunkModelPath,
+    offset: 3,
+    outDir: root,
+    report: sharedTrunkReportPath,
+    width: 96,
+    height: 96,
+    phaseModelFamily: 'shared-mlx-survival-birth-death-local-grid-v0',
+    partialFlowDebugGain: 0.625,
+  });
+  assert.equal(sharedTrunkReport.phaseModel.family, 'shared-mlx-survival-birth-death-local-grid-v0');
+  assert.equal(
+    sharedTrunkReport.phaseModel.supportHeads.authority,
+    'shared-mlx-local-grid-survival-birth-death-trunk-v0',
+  );
+  assert.equal(
+    sharedTrunkReport.phaseModel.sharedTrunk.architectureAuthority,
+    'dense-relu-shared-trunk-three-conditional-logit-heads-v0',
+  );
+  assert.equal(sharedTrunkReport.phaseModel.sharedTrunk.backend, 'mlx');
+  assert.equal(sharedTrunkReport.phaseModel.sharedTrunk.fallbackReason, null);
+  assert.equal(sharedTrunkReport.phaseModel.sharedTrunk.training.hiddenSampleCap, null);
+  assert.equal(
+    sharedTrunkReport.phaseModel.objectives.withinPairRanking.authority,
+    'within-training-pair-positive-negative-margin-ranking-v0',
+  );
+  assert.ok(
+    sharedTrunkReport.phaseModel.objectives.withinPairRanking.evaluatedPairCount > 0,
+    'shared trunk must prove that within-pair ranking participated in training',
+  );
+  assert.equal(
+    sharedTrunkReport.phaseModel.objectives.adjacentOffsetConsistency.authority,
+    'same-site-adjacent-offset-label-agreement-consistency-v0',
+  );
+  assert.ok(
+    sharedTrunkReport.phaseModel.objectives.adjacentOffsetConsistency.evaluatedPairCount > 0,
+    'shared trunk must prove that adjacent-offset consistency participated in training',
+  );
+  assert.equal(
+    sharedTrunkReport.phaseModel.supportDecision.authority,
+    'shared-trunk-ranked-support-budget-v0',
+  );
+  assert.equal(
+    sharedTrunkReport.diagnostics.partialFlowDebug.authority,
+    'display-only-support-flow-debug-mix-v0',
+  );
+  assert.equal(sharedTrunkReport.diagnostics.partialFlowDebug.requestedGain, 0.625);
+  assert.equal(sharedTrunkReport.diagnostics.partialFlowDebug.effectiveGain, 0.625);
+  assert.equal(sharedTrunkReport.diagnostics.partialFlowDebug.changesSimulationState, false);
+  assert.deepEqual(
+    Object.keys(sharedTrunkReport.diagnostics.partialFlowDebug.roles),
+    ['reference', 'control', 'predicted'],
+  );
+  for (const [roleName, role] of Object.entries(sharedTrunkReport.diagnostics.partialFlowDebug.roles)) {
+    assert.equal(role.semanticRole, roleName);
+    for (const artifact of [role.beauty, role.partial]) {
+      const bytes = await readFile(artifact.path);
+      assert.equal(bytes.readUInt32BE(0), 0x89504e47);
+      assert.equal(hash(bytes), artifact.sha256);
+    }
+    assert.notEqual(role.partial.sha256, role.beauty.sha256, `${roleName} partial-debug view must remain additive to beauty`);
+  }
+
+  const fallbackModelPath = join(root, 'fallback-shared-mlx-phase-churn-model.json');
+  await writeFile(fallbackModelPath, JSON.stringify({
+    ...sharedTrunkModel,
+    route: { ...sharedTrunkModel.route, fallbackReason: 'cpu-fallback' },
+  }));
+  const fallbackReportPath = join(root, 'fallback-shared-mlx-phase-churn-report.json');
+  await assert.rejects(
+    writeBoundarySplatPhaseRenderWitness(manifestPath, {
+      model: modelPath,
+      phaseModelArtifact: fallbackModelPath,
+      offset: 3,
+      outDir: root,
+      report: fallbackReportPath,
+      width: 96,
+      height: 96,
+      phaseModelFamily: 'shared-mlx-survival-birth-death-local-grid-v0',
+    }),
+    /effective MLX device identity and null fallback/,
+    'shared-trunk witness must reject a fallback-trained model artifact',
+  );
+  const fallbackFailure = JSON.parse(await readFile(fallbackReportPath, 'utf8'));
+  assert.equal(fallbackFailure.status, 'failed');
+  assert.equal(fallbackFailure.failurePhase, 'phase-model-artifact-validation');
+  assert.equal(fallbackFailure.lastTrustworthyEvidence.requestedPhaseModelFamily, 'shared-mlx-survival-birth-death-local-grid-v0');
+
+  const staleCorpusModelPath = join(root, 'stale-corpus-shared-mlx-phase-churn-model.json');
+  await writeFile(staleCorpusModelPath, JSON.stringify({
+    ...sharedTrunkModel,
+    manifest: { sha256: 'stale-corpus-sha256' },
+  }));
+  const staleCorpusReportPath = join(root, 'stale-corpus-shared-mlx-phase-churn-report.json');
+  await assert.rejects(
+    writeBoundarySplatPhaseRenderWitness(manifestPath, {
+      model: modelPath,
+      phaseModelArtifact: staleCorpusModelPath,
+      offset: 3,
+      outDir: root,
+      report: staleCorpusReportPath,
+      width: 96,
+      height: 96,
+      phaseModelFamily: 'shared-mlx-survival-birth-death-local-grid-v0',
+    }),
+    /corpus mismatch/,
+    'shared-trunk witness must reject a model trained against a stale corpus',
+  );
+  const staleCorpusFailure = JSON.parse(await readFile(staleCorpusReportPath, 'utf8'));
+  assert.equal(staleCorpusFailure.status, 'failed');
+  assert.equal(staleCorpusFailure.failurePhase, 'phase-model-artifact-validation');
+  assert.equal(staleCorpusFailure.lastTrustworthyEvidence.phaseModelArtifactPath, staleCorpusModelPath);
   assert.equal(
     budgetedReport.diagnostics.residuals.authority,
     'phase-render-raster-residual-maps-v0',
