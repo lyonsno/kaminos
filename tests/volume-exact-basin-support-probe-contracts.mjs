@@ -23,6 +23,8 @@ const composerSource = readFileSync(composerPath, 'utf8');
 assert.match(composerSource, /kaminos\.volume\.exact-basin-selective-composition\.v0/, 'composer emits a stable manifest schema');
 assert.match(composerSource, /dense-ungated-residual-v0/, 'composer names the dense topology policy');
 assert.match(composerSource, /sparse-hard-support-gated-residual-v0/, 'composer names the sparse carrier policy');
+assert.match(composerSource, /--support-threshold/, 'composer accepts an explicit calibration-assay support threshold');
+assert.match(composerSource, /caller-specified-calibration-assay-v0/, 'threshold overrides carry explicit non-checkpoint authority');
 assert.match(composerSource, /failurePhase/, 'composer writes durable failure-phase reports');
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-exact-basin-support-probe-'));
@@ -240,6 +242,20 @@ assert.deepEqual(composition.receiver.front.shape, [highGrid, highGrid, highGrid
 assert.deepEqual(composition.support.probability.shape, [highGrid, highGrid, highGrid, 1]);
 assert.deepEqual(composition.support.hardMask.shape, [highGrid, highGrid, highGrid, 1]);
 assert.ok(composition.support.predictedPositiveCount > 0, 'composition retains predicted sparse support');
+
+const thresholdCompositionDir = join(fixtureRoot, 'composition-threshold-override');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', pairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', thresholdCompositionDir,
+  '--batch-cells', '256',
+  '--support-threshold', '0.99',
+], { stdio: 'pipe' });
+const thresholdComposition = JSON.parse(readFileSync(join(thresholdCompositionDir, 'manifest.json'), 'utf8'));
+assert.equal(thresholdComposition.support.threshold, 0.99);
+assert.equal(thresholdComposition.support.thresholdAuthority, 'caller-specified-calibration-assay-v0');
+assert.equal(thresholdComposition.support.checkpointThreshold, composition.support.threshold);
 
 function readF32(path) {
   const bytes = readFileSync(path);
