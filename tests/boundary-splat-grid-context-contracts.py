@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import importlib.util
+import json
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -45,5 +47,33 @@ offset += len(MODULE.FEATURES)
 np.testing.assert_allclose(encoded[0, offset], 4.0 / 6.0 - 2.0)
 offset += len(MODULE.FEATURES)
 np.testing.assert_allclose(encoded[0, offset], 1.0)
+
+base_model = MODULE.AttributeMlp(2, 3)
+base_model.load_weights([
+    ("hidden.weight", MODULE.mx.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])),
+    ("hidden.bias", MODULE.mx.array([0.2, -0.1])),
+    ("output.weight", MODULE.mx.array([[0.1, 0.2]] * len(MODULE.OUTPUTS))),
+    ("output.bias", MODULE.mx.array([0.05] * len(MODULE.OUTPUTS))),
+])
+sample_inputs = MODULE.mx.array([[0.5, -0.25, 0.75]])
+base_predictions = np.asarray(base_model(sample_inputs))
+wide_model = MODULE.expand_hidden_size(base_model, 4)
+np.testing.assert_allclose(np.asarray(wide_model(sample_inputs)), base_predictions, rtol=0, atol=1e-7)
+assert wide_model.hidden.weight.shape == (4, 3)
+assert wide_model.output.weight.shape == (len(MODULE.OUTPUTS), 4)
+
+with tempfile.TemporaryDirectory() as temporary_directory:
+    artifact_path = Path(temporary_directory) / "spatial-model-artifact.json"
+    MODULE.serialize_spatial_model(
+        wide_model,
+        np.asarray([[0.0, 1.0]] * len(MODULE.OUTPUTS), dtype=np.float32),
+        names,
+        "world-grid-neighborhood",
+        [1.0],
+        artifact_path,
+    )
+    artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+    assert artifact["fourierFrequencies"] == [1.0]
+    assert artifact["hiddenSize"] == 4
 
 print("boundary splat grid context contracts passed")

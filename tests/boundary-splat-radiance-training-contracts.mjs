@@ -45,6 +45,7 @@ assert.match(script, /candidate oracle requires exactly one corpus frame/, 'cand
 assert.match(script, /--context-mode/, 'radiance trainer exposes explicit spatial conditioning rather than silently changing the live feature contract');
 assert.match(script, /choices=\["none", "world-xyz", "world-fourier", "world-grid-neighborhood"\]/, 'spatial conditioning distinguishes pointwise position from explicit local-grid neighborhood context');
 assert.match(script, /--fourier-frequencies/, 'Fourier conditioning exposes its exact frequency ladder');
+assert.match(script, /--hidden-size/, 'spatial trainer exposes an explicit hidden-width experiment control');
 assert.match(script, /mx\.sin\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes signed sine phase channels');
 assert.match(script, /mx\.cos\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes cosine phase channels');
 assert.match(script, /expanded_weight\[:,\s*:base_input_size\]\s*=\s*np\.asarray\(base_model\.hidden\.weight\)/, 'spatial model preserves every proven input weight exactly across successive context expansions');
@@ -81,6 +82,7 @@ assert.match(
 assert.match(script, /world-grid-neighborhood/, 'radiance trainer exposes local-grid optical context as a distinct experimental family');
 assert.match(script, /neighbor\.occupancy\.x-/, 'local-grid context records missing and present six-neighbor support explicitly');
 assert.match(script, /zero-delta-local-grid-context-expansion-v0/, 'local-grid context starts as an exact zero-delta extension of the proven Fourier head');
+assert.match(script, /zero-delta-hidden-width-expansion-v0/, 'wider spatial heads begin as exact zero-delta extensions of their warm checkpoint');
 assert.match(script, /args\.context_mode in \("world-fourier", "world-grid-neighborhood"\)/, 'local-grid receipts preserve the Fourier frequency contract used by their encoder');
 
 console.log('boundary splat radiance training contracts passed');

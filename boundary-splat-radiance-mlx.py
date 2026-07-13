@@ -335,6 +335,28 @@ def expand_warm_start_with_context(base_model, input_size):
     return model
 
 
+def expand_hidden_size(base_model, hidden_size):
+    base_hidden_size = int(base_model.hidden.weight.shape[0])
+    input_size = int(base_model.hidden.weight.shape[1])
+    if hidden_size <= base_hidden_size:
+        raise ValueError("hidden-size expansion must add at least one hidden unit")
+    model = AttributeMlp(hidden_size, input_size)
+    hidden_weight = np.zeros((hidden_size, input_size), dtype=np.float32)
+    hidden_weight[:base_hidden_size] = np.asarray(base_model.hidden.weight)
+    hidden_bias = np.zeros(hidden_size, dtype=np.float32)
+    hidden_bias[:base_hidden_size] = np.asarray(base_model.hidden.bias)
+    output_weight = np.zeros((len(OUTPUTS), hidden_size), dtype=np.float32)
+    output_weight[:, :base_hidden_size] = np.asarray(base_model.output.weight)
+    model.load_weights([
+        ("hidden.weight", mx.array(hidden_weight)),
+        ("hidden.bias", mx.array(hidden_bias)),
+        ("output.weight", mx.array(output_weight)),
+        ("output.bias", base_model.output.bias),
+    ])
+    mx.eval(model.parameters())
+    return model
+
+
 def predict_numpy(model, features, output_ranges):
     normalized = np.asarray(model(mx.array(features.astype(np.float32))))
     return output_ranges[:, 0] + normalized * (output_ranges[:, 1] - output_ranges[:, 0])
@@ -515,7 +537,7 @@ def serialize_spatial_model(model, output_ranges, feature_names, context_mode, f
         "hiddenSize": int(model.hidden.weight.shape[0]),
         "outputRanges": output_ranges.astype(float).tolist(),
         "contextMode": context_mode,
-        "fourierFrequencies": frequencies if context_mode == "world-fourier" else [],
+        "fourierFrequencies": frequencies if context_mode in ("world-fourier", "world-grid-neighborhood") else [],
         "deployable": False,
         "layers": [
             {
@@ -572,6 +594,7 @@ def parse_args():
     parser.add_argument("--edge-weight", type=float, default=0.0)
     parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier", "world-grid-neighborhood"], default="none")
     parser.add_argument("--fourier-frequencies", default="1,2,4,8")
+    parser.add_argument("--hidden-size", type=int, default=0)
     parser.add_argument("--candidate-table-oracle", action="store_true")
     parser.add_argument("--probe-only", action="store_true")
     return parser.parse_args()
@@ -586,8 +609,8 @@ def main():
     report = {"schema": SCHEMA, "status": "running", "failurePhase": None, "startedAt": started_at}
     phase = "arguments"
     try:
-        if args.steps < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0:
-            raise ValueError("steps and edge-weight must be non-negative; render-width, learning-rate, and depth-bins must be positive")
+        if args.steps < 0 or args.hidden_size < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0:
+            raise ValueError("steps, hidden-size, and edge-weight must be non-negative; render-width, learning-rate, and depth-bins must be positive")
         frequencies = parse_fourier_frequencies(args.fourier_frequencies)
         if args.candidate_table_oracle and args.context_mode != "none":
             raise ValueError("candidate table oracle cannot be combined with spatial conditioning")
@@ -614,6 +637,13 @@ def main():
         ]
         exact_spatial_continuation = warm_schema == SPATIAL_MODEL_SCHEMA and warm_context_mode == args.context_mode
         model = base_model if exact_spatial_continuation or args.context_mode == "none" else expand_warm_start_with_context(base_model, len(feature_names))
+        warm_hidden_size = int(model.hidden.weight.shape[0])
+        requested_hidden_size = args.hidden_size or warm_hidden_size
+        if requested_hidden_size < warm_hidden_size:
+            raise ValueError(f"requested hidden size {requested_hidden_size} cannot shrink warm hidden size {warm_hidden_size}")
+        hidden_width_expansion = requested_hidden_size > warm_hidden_size
+        if hidden_width_expansion:
+            model = expand_hidden_size(model, requested_hidden_size)
         if args.candidate_table_oracle:
             if len(corpus["frames"]) != 1:
                 raise ValueError("candidate oracle requires exactly one corpus frame")
@@ -729,6 +759,9 @@ def main():
                 "contextMode": args.context_mode,
                 "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood") else [],
                 "inputChannels": len(feature_names),
+                "warmHiddenSize": warm_hidden_size,
+                "hiddenSize": requested_hidden_size,
+                "hiddenWidthExpansionAuthority": "zero-delta-hidden-width-expansion-v0" if hidden_width_expansion else None,
                 "initialLoss": initial_loss,
                 "trainedLoss": trained_loss,
                 "initialPixelLoss": initial_pixel_loss,
