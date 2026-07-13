@@ -14,6 +14,12 @@ import {
   HYBRID_SPLAT_SMOKE_APPROXIMATION,
   HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
 } from './hybrid-splat-smoke-compositor.mjs';
+import {
+  SMOKE_SPLAT_PRODUCER_AUTHORITY,
+  createSmokeSplatSlotCache,
+  decodeReferenceSmokeHierarchy,
+  makeSmokeSplatPhaseInstances,
+} from './smoke-splat-slot-cache.mjs';
 
 // Hybrid smoke is split during the raymarch around the transformed splat depth.
 
@@ -5335,6 +5341,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameId: null,
     uploadedAtMs: null,
   };
+  const smokeSplatSlotCache = createSmokeSplatSlotCache({
+    decodeSlot: decodeReferenceSmokeHierarchy,
+  });
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
     routeIdentity: ROUTE_IDENTITY,
@@ -5495,6 +5504,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     hybridSplatSmokeApproximation: HYBRID_SPLAT_SMOKE_APPROXIMATION,
     splatDepthConditionedSmokeSplit: 'per-pixel-transformed-splat-depth-raymarch-split-v1',
     hybridSmokePhaseAuthority: 'shared-current-single-simulator-no-instance-smoke-history',
+    smokeSplatProducerAuthority: SMOKE_SPLAT_PRODUCER_AUTHORITY,
+    smokeSplatProducerKind: 'deterministic-reference',
+    smokeSplatSlotResolveReport: null,
     hybridSplatLayer: {
       identity: HYBRID_SPLAT_LAYER_IDENTITY,
       format: 'rgba16float',
@@ -8996,6 +9008,43 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return active;
   }
 
+  function resolveSmokeSplatPhaseSlots(options = {}) {
+    try {
+      const descriptors = options.instances ?? state.boundarySplatInstanceDescriptors;
+      const phaseInstances = makeSmokeSplatPhaseInstances({
+        instances: descriptors,
+        historyWriteTick: state.boundarySplatHistoryWriteTick,
+      });
+      const report = smokeSplatSlotCache.resolve({
+        instances: phaseInstances,
+        payloadForSlot: options.payloadForSlot,
+        simulatorGeneration: state.fluidStateResetCount,
+        modelIdentity: options.modelIdentity,
+        requestedProducerAuthority: options.requestedProducerAuthority,
+        sparseDensityThreshold: options.sparseDensityThreshold,
+        coarseCellSize: options.coarseCellSize,
+        fineMassFraction: options.fineMassFraction,
+        capacity: options.capacity,
+        capacityForSlot: options.capacityForSlot,
+      });
+      state.smokeSplatSlotResolveReport = report;
+      state.hybridSmokePhaseAuthority = 'phase-matched-hierarchical-smoke-splat-slot-products-v0';
+      emitStatus({ phase: 'smoke-splat-phase-slots-resolved', smokeSplatSlotResolveReport: report });
+      return report;
+    } catch (error) {
+      state.smokeSplatSlotResolveReport = error?.report ?? {
+        identity: 'smoke-splat-slot-failure-report-v0',
+        status: 'failed',
+        failurePhase: 'volume-runtime-slot-resolution',
+        requestedProducerAuthority: options.requestedProducerAuthority ?? SMOKE_SPLAT_PRODUCER_AUTHORITY,
+        effectiveProducerAuthority: null,
+        message: error?.message ?? String(error),
+      };
+      emitStatus({ phase: 'smoke-splat-phase-slots-failed', smokeSplatSlotResolveReport: state.smokeSplatSlotResolveReport });
+      throw error;
+    }
+  }
+
   function writeBoundarySplatInstanceDescriptors() {
     if (!device || !boundarySplatInstanceDescriptorBuffer) return [];
     const requestedInstanceCount = normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances);
@@ -12373,6 +12422,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    resolveSmokeSplatPhaseSlots,
     primeBoundarySplatLiveHistory,
     sampleBoundarySplatInstanceCostLadder,
     sampleRenderScaleSet,
@@ -12390,6 +12440,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       destroyTemporalHistory();
       destroyFluidState();
       destroyMajorantState();
+      smokeSplatSlotCache.clear();
       canvas.remove();
     },
   };
