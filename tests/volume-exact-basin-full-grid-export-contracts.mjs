@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+
+const root = resolve(import.meta.dirname, '..');
+const corePath = join(root, 'volume-core.js');
+const exporterPath = join(root, 'volume-full-grid-field-export.mjs');
+
+assert.ok(existsSync(exporterPath), 'full-grid field export harness exists on the learned-splat integration branch');
+
+const core = readFileSync(corePath, 'utf8');
+const exporter = readFileSync(exporterPath, 'utf8');
+
+assert.match(core, /beginDebugFullFieldExport/, 'volume prototype exposes full-field export begin custody');
+assert.match(core, /readDebugFullFieldExportChunk/, 'volume prototype exposes uncapped chunked full-field export reads');
+assert.match(core, /releaseDebugFullFieldExport/, 'volume prototype exposes explicit full-field export release custody');
+assert.match(core, /boundaryDescriptor/, 'full-field export includes the live boundary sidecar');
+assert.match(core, /materializeFullFieldDerivedBuffersForDebugExport/, 'full-field export rebuilds derived sidecar and splat buffers from the frozen field');
+assert.match(core, /boundarySplatDescriptor/, 'full-field export includes the effective compact learned-splat output');
+assert.match(
+  core,
+  /deterministicReplay:\s*replaySample\s*\?\s*\{[\s\S]*identity:\s*replaySample\.identity[\s\S]*completedSteps:\s*replaySample\.completedSteps/,
+  'full-field export records the effective top-level deterministic replay receipt rather than a nonexistent nested field',
+);
+
+assert.match(exporter, /--source-capture/, 'exporter accepts an operator exact-tab source capture');
+assert.match(exporter, /--target-origin/, 'exporter can rebind the captured route to a caller-owned server origin');
+assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
+assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
+assert.match(exporter, /deterministicReplay/, 'exporter preserves deterministic replay identity');
+assert.match(exporter, /boundarySidecar/, 'exporter drains the active boundary-sidecar field authority');
+assert.match(exporter, /boundary-splats\.f32/, 'exporter drains the effective compact learned-splat output');
+assert.match(exporter, /failurePhase/, 'exporter writes a durable failure phase');
+
+const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-exact-basin-export-contract-'));
+const capturePath = join(fixtureRoot, 'corrupt-capture.json');
+const outDir = join(fixtureRoot, 'out');
+writeFileSync(capturePath, `${JSON.stringify({
+  schema: 'kaminos.operator-exact-live-splat-basin-capture.v1',
+  identity: 'corrupt-capture-fixture',
+  replayRoute: 'http://127.0.0.1:9/?kaminos_volume_smoke=1',
+  controls: {},
+  payloadSha256: '0'.repeat(64),
+  hashAuthority: 'fixture-intentionally-corrupt',
+}, null, 2)}\n`);
+
+assert.throws(() => execFileSync(process.execPath, [
+  exporterPath,
+  '--source-capture', capturePath,
+  '--target-origin', 'http://127.0.0.1:9',
+  '--out-dir', outDir,
+], { stdio: 'pipe' }), /Command failed/, 'exporter refuses a corrupt exact-tab source capture before browser launch');
+
+const failed = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
+assert.equal(failed.status, 'failed', 'corrupt source capture writes a failed manifest');
+assert.equal(failed.failurePhase, 'source-capture-validation', 'corrupt source capture fails during source-capture validation');
+assert.match(failed.error, /payload SHA-256 mismatch/, 'failure report names the source payload hash mismatch');
+
+console.log('exact-basin full-grid export contracts passed');

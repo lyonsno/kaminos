@@ -11,6 +11,7 @@ import {
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
+const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
@@ -34,6 +35,38 @@ const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
+const FULL_FIELD_CHANNELS = [
+  'velocityX',
+  'velocityY',
+  'velocityZ',
+  'densityCarrier',
+  'smokeDensity',
+  'heat',
+  'fuel',
+  'detail',
+  'flame',
+  'ember',
+  'visibleFireCarrier',
+  'combustionFront',
+  'microdetail',
+  'interfaceShred',
+  'fireLick',
+  'emberFleck',
+];
+const BOUNDARY_SPLAT_CHANNELS = [
+  'positionX',
+  'positionY',
+  'positionZ',
+  'support',
+  'colorR',
+  'colorG',
+  'colorB',
+  'opacity',
+  'radiusX',
+  'radiusY',
+  'ridge',
+  'fireSignal',
+];
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
@@ -5272,6 +5305,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureDivergencePasses: 0,
     pressureJacobiInlineDivergencePasses: 0,
     fullGridPassBreakdown: null,
+    fullFieldExportSession: null,
     frontFieldIdentity: FRONT_FIELD_IDENTITY,
     frontFieldBytes: frontFieldBufferBytes(gridSize),
     frontFieldReadIndex: 0,
@@ -8793,6 +8827,402 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     render(performance.now());
   }
 
+  let debugFullFieldExportSession = null;
+
+  async function materializeFullFieldDerivedBuffersForDebugExport(nowMs = performance.now()) {
+    updateUniforms(nowMs);
+    const encoder = device.createCommandEncoder({ label: 'kaminos full-field derived-buffer materialization' });
+    encodeBoundarySidecar(encoder);
+    const boundarySplatsEncoded = encodeBoundarySplats(encoder);
+    device.queue.submit([encoder.finish()]);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    return {
+      identity: 'frozen-field-derived-buffer-materialization-v0',
+      nowMs,
+      boundarySidecarBuilt: state.boundarySidecarBuiltThisFrame,
+      boundarySidecarAuthority: state.boundarySidecarAuthority,
+      boundarySplatsEncoded,
+      boundarySplatMode: state.boundarySplatMode,
+      boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+      boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+      boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+    };
+  }
+
+  async function copyFullFieldBuffersForDebugExport(derivedBuffers) {
+    const fluidBytes = fluidBufferBytes(gridSize);
+    const frontBytes = frontFieldBufferBytes(gridSize);
+    const boundaryBytes = boundarySidecarBufferBytes(gridSize);
+    const fluidReadback = device.createBuffer({
+      label: 'kaminos full-field fluid export readback',
+      size: fluidBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const frontReadback = device.createBuffer({
+      label: `kaminos ${FRONT_FIELD_IDENTITY} full-field export readback`,
+      size: frontBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const boundaryReadback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} full-field export readback`,
+      size: boundaryBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const boundarySplatDrawReadback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} full-field draw-state readback`,
+      size: 32,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos full-field export readback encoder' });
+    encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, fluidReadback, 0, fluidBytes);
+    encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontReadback, 0, frontBytes);
+    encoder.copyBufferToBuffer(boundarySidecarBuffer, 0, boundaryReadback, 0, boundaryBytes);
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatDrawReadback, 0, 32);
+    device.queue.submit([encoder.finish()]);
+    await Promise.all([
+      fluidReadback.mapAsync(GPUMapMode.READ),
+      frontReadback.mapAsync(GPUMapMode.READ),
+      boundaryReadback.mapAsync(GPUMapMode.READ),
+      boundarySplatDrawReadback.mapAsync(GPUMapMode.READ),
+    ]);
+    const fluid = new Float32Array(fluidReadback.getMappedRange()).slice();
+    const front = new Float32Array(frontReadback.getMappedRange()).slice();
+    const boundary = new Float32Array(boundaryReadback.getMappedRange()).slice();
+    const boundarySplatDraw = new Uint32Array(boundarySplatDrawReadback.getMappedRange()).slice();
+    fluidReadback.unmap();
+    fluidReadback.destroy();
+    frontReadback.unmap();
+    frontReadback.destroy();
+    boundaryReadback.unmap();
+    boundaryReadback.destroy();
+    boundarySplatDrawReadback.unmap();
+    boundarySplatDrawReadback.destroy();
+
+    const instanceCount = derivedBuffers?.boundarySplatsEncoded === true ? boundarySplatDraw[1] : 0;
+    const candidateCount = derivedBuffers?.boundarySplatsEncoded === true ? boundarySplatDraw[4] : 0;
+    const overflowCount = derivedBuffers?.boundarySplatsEncoded === true ? boundarySplatDraw[5] : 0;
+    const capacity = boundarySplatDraw[6] || boundarySplatCapacity;
+    const boundarySplatBytes = instanceCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+    let boundarySplats = new Float32Array(0);
+    if (boundarySplatBytes > 0) {
+      const boundarySplatReadback = device.createBuffer({
+        label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} effective-output readback`,
+        size: boundarySplatBytes,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      const splatEncoder = device.createCommandEncoder({ label: 'kaminos effective boundary-splat export readback encoder' });
+      splatEncoder.copyBufferToBuffer(boundarySplatBuffer, 0, boundarySplatReadback, 0, boundarySplatBytes);
+      device.queue.submit([splatEncoder.finish()]);
+      await boundarySplatReadback.mapAsync(GPUMapMode.READ);
+      boundarySplats = new Float32Array(boundarySplatReadback.getMappedRange()).slice();
+      boundarySplatReadback.unmap();
+      boundarySplatReadback.destroy();
+    }
+    return {
+      fluid,
+      front,
+      boundary,
+      boundarySplats,
+      fluidBytes,
+      frontBytes,
+      boundaryBytes,
+      boundarySplatBytes,
+      boundarySplatDraw: { instanceCount, candidateCount, overflowCount, capacity },
+    };
+  }
+
+  function fullFieldExportDescriptorFor(values, kind, byteLength) {
+    const isBoundary = kind === 'boundary';
+    const isBoundarySplat = kind === 'boundarySplat';
+    return {
+      kind,
+      dtype: 'float32',
+      byteOrder: 'little-endian',
+      floatCount: values.length,
+      byteLength,
+      shape: isBoundarySplat
+        ? [values.length / BOUNDARY_SPLAT_CHANNELS.length, BOUNDARY_SPLAT_CHANNELS.length]
+        : kind === 'fluid'
+        ? [gridSize, gridSize, gridSize, FLUID_COMPONENTS]
+        : isBoundary
+          ? [gridSize, gridSize, gridSize, 4]
+          : [gridSize, gridSize, gridSize, 1],
+      channelOrder: isBoundarySplat
+        ? BOUNDARY_SPLAT_CHANNELS
+        : kind === 'fluid'
+        ? FULL_FIELD_CHANNELS
+        : isBoundary
+          ? ['support', 'coverage', 'ridge', 'footprint']
+          : ['frontTopology'],
+    };
+  }
+
+  function fullFieldExportPublicSession(session) {
+    if (!session) return null;
+    return {
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+      authority: 'debug-full-grid-webgpu-copy-buffer-readback',
+      status: session.status,
+      sessionId: session.sessionId,
+      createdAtMs: session.createdAtMs,
+      grid: session.grid,
+      cellCount: session.cellCount,
+      completeFieldCoverage: true,
+      routeIdentity: ROUTE_IDENTITY,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      simGridLabel: state.simGridLabel,
+      frontFieldIdentity: state.frontFieldIdentity,
+      deterministicReplay: session.deterministicReplay,
+      fluidComponents: FLUID_COMPONENTS,
+      fluidChannelOrder: FULL_FIELD_CHANNELS,
+      frontChannelOrder: ['frontTopology'],
+      fluid: session.fluidDescriptor,
+      front: session.frontDescriptor,
+      boundarySidecar: {
+        schema: 'kaminos.volume.boundary-sidecar-export.v0',
+        identity: BOUNDARY_SIDECAR_IDENTITY,
+        authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+        routeIdentity: ROUTE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        backend: state.backend,
+        grid: session.grid,
+        cellCount: session.cellCount,
+        channelOrder: ['support', 'coverage', 'ridge', 'footprint'],
+        boundarySidecarDebug: boundarySidecarDebug('baked'),
+        sidecars: {
+          boundary: session.boundaryDescriptor,
+        },
+      },
+      boundarySplats: {
+        schema: 'kaminos.volume.boundary-splat-effective-output.v0',
+        identity: session.derivedBuffers.boundarySplatRendererIdentity,
+        attributeModelIdentity: session.derivedBuffers.boundarySplatAttributeModelIdentity,
+        sourceAuthority: session.derivedBuffers.boundarySplatSourceAuthority,
+        materialization: session.derivedBuffers,
+        draw: session.boundarySplatDraw,
+        sidecars: {
+          boundarySplats: session.boundarySplatDescriptor,
+        },
+      },
+    };
+  }
+
+  function encodeFloat32ChunkBase64(values, startFloat, floatCount) {
+    const byteStart = startFloat * Float32Array.BYTES_PER_ELEMENT;
+    const byteLength = floatCount * Float32Array.BYTES_PER_ELEMENT;
+    const bytes = new Uint8Array(values.buffer, values.byteOffset + byteStart, byteLength);
+    let binary = '';
+    const batch = 0x8000;
+    for (let i = 0; i < bytes.length; i += batch) {
+      binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + batch)));
+    }
+    return btoa(binary);
+  }
+
+  async function beginDebugFullFieldExport(options = {}) {
+    if (!device) {
+      const failed = {
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+        status: 'failed',
+        failurePhase: 'inactive',
+        reason: 'inactive',
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+      };
+      state.fullFieldExportSession = failed;
+      return { ok: false, ...failed };
+    }
+    const wasActiveBeforeExport = state.active;
+    if (debugFullFieldExportSession) {
+      debugFullFieldExportSession.status = 'released';
+      debugFullFieldExportSession = null;
+    }
+    const deterministicOptions = options.deterministicReplay || (
+      Number.isFinite(Number(options.steps)) || Number.isFinite(Number(options.replaySteps))
+        ? options
+        : null
+    );
+    let replaySample = null;
+    const controlsBeforeReplay = controlsSnapshot;
+    if (deterministicOptions) {
+      replaySample = await sampleDeterministicReplayFrame({
+        ...deterministicOptions,
+        fieldTileExport: null,
+      });
+      controlsSnapshot = controlsBeforeReplay;
+      if (replaySample?.ok !== true) {
+        const failed = {
+          schema: FULL_FIELD_EXPORT_IDENTITY,
+          identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+          status: 'failed',
+          failurePhase: 'deterministic-replay',
+          reason: replaySample?.reason || 'sample-failed',
+          deterministicReplay: replaySample?.deterministicReplay || null,
+          routeIdentity: ROUTE_IDENTITY,
+          prototypeIdentity: PROTOTYPE_IDENTITY,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+        };
+        state.fullFieldExportSession = failed;
+        return { ok: false, ...failed };
+      }
+    }
+    const deterministicReplay = replaySample ? {
+      identity: replaySample.identity,
+      authority: replaySample.authority,
+      resetReason: replaySample.resetReason,
+      requestedSteps: replaySample.requestedSteps,
+      completedSteps: replaySample.completedSteps,
+      timeStepMs: replaySample.timeStepMs,
+      startTimeMs: replaySample.startTimeMs,
+      finalTimeMs: replaySample.finalTimeMs,
+      controlsSignature: replaySample.controlsSignature,
+      frameCount: replaySample.frameCount,
+      simStepCount: replaySample.simStepCount,
+      grid: replaySample.grid,
+      majorantGrid: replaySample.majorantGrid,
+      effectiveRoute: replaySample.effectiveRoute,
+      prototypeIdentity: replaySample.prototypeIdentity,
+      backend: replaySample.backend,
+    } : null;
+    const derivedBuffers = await materializeFullFieldDerivedBuffersForDebugExport(
+      deterministicReplay?.finalTimeMs ?? performance.now(),
+    );
+    if (state.active) {
+      state.active = false;
+      canvas.classList.remove('active');
+      cancelAnimationFrame(raf);
+    }
+    let captured = null;
+    try {
+      captured = await copyFullFieldBuffersForDebugExport(derivedBuffers);
+    } finally {
+      if (wasActiveBeforeExport) {
+        state.active = true;
+        canvas.classList.add('active');
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+    const session = {
+      status: 'captured',
+      sessionId: `full-field-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      createdAtMs: performance.now(),
+      grid: gridSize,
+      cellCount: gridCellCount(gridSize),
+      deterministicReplay: replaySample ? {
+        identity: replaySample.identity,
+        completedSteps: replaySample.completedSteps,
+        ...deterministicReplay,
+      } : (state.deterministicReplay ? { ...state.deterministicReplay } : null),
+      derivedBuffers,
+      fluid: captured.fluid,
+      front: captured.front,
+      boundary: captured.boundary,
+      boundarySplats: captured.boundarySplats,
+      boundarySplatDraw: captured.boundarySplatDraw,
+      fluidDescriptor: fullFieldExportDescriptorFor(captured.fluid, 'fluid', captured.fluidBytes),
+      frontDescriptor: fullFieldExportDescriptorFor(captured.front, 'front', captured.frontBytes),
+      boundaryDescriptor: fullFieldExportDescriptorFor(captured.boundary, 'boundary', captured.boundaryBytes),
+      boundarySplatDescriptor: fullFieldExportDescriptorFor(captured.boundarySplats, 'boundarySplat', captured.boundarySplatBytes),
+    };
+    debugFullFieldExportSession = session;
+    state.fullFieldExportSession = fullFieldExportPublicSession(session);
+    return { ok: true, ...state.fullFieldExportSession };
+  }
+
+  function readDebugFullFieldExportChunk(options = {}) {
+    const session = debugFullFieldExportSession;
+    if (!session || session.status !== 'captured') {
+      return {
+        ok: false,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'no-active-full-field-export-session',
+      };
+    }
+    const requestedSessionId = String(options.sessionId || '');
+    if (requestedSessionId && requestedSessionId !== session.sessionId) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'session-id-mismatch',
+        sessionId: session.sessionId,
+        requestedSessionId,
+      };
+    }
+    const requestedKind = String(options.kind || 'fluid');
+    const kind = requestedKind === 'front'
+      ? 'front'
+      : requestedKind === 'boundary'
+        ? 'boundary'
+        : requestedKind === 'boundarySplat'
+          ? 'boundarySplat'
+          : 'fluid';
+    const values = kind === 'front'
+      ? session.front
+      : kind === 'boundary'
+        ? session.boundary
+        : kind === 'boundarySplat'
+          ? session.boundarySplats
+          : session.fluid;
+    const startFloat = Math.max(0, Math.min(values.length, Math.floor(Number(options.startFloat) || 0)));
+    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, values.length - startFloat));
+    const floatCount = Math.max(0, Math.min(values.length - startFloat, requestedFloatCount));
+    return {
+      ok: true,
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+      sessionId: session.sessionId,
+      kind,
+      dtype: 'float32',
+      startFloat,
+      floatCount,
+      byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
+      byteLength: floatCount * Float32Array.BYTES_PER_ELEMENT,
+      isFinal: startFloat + floatCount >= values.length,
+      base64: encodeFloat32ChunkBase64(values, startFloat, floatCount),
+    };
+  }
+
+  function releaseDebugFullFieldExport(options = {}) {
+    const session = debugFullFieldExportSession;
+    const requestedSessionId = String(options.sessionId || '');
+    if (session && (!requestedSessionId || requestedSessionId === session.sessionId)) {
+      session.status = 'released';
+      state.fullFieldExportSession = {
+        ...fullFieldExportPublicSession(session),
+        status: 'released',
+      };
+      debugFullFieldExportSession = null;
+      return {
+        ok: true,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+        status: 'released',
+        sessionId: requestedSessionId || session.sessionId,
+      };
+    }
+    return {
+      ok: true,
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+      status: 'already-released',
+      sessionId: requestedSessionId || null,
+    };
+  }
+
   async function sampleSimReadback() {
     const readback = device.createBuffer({
       label: 'kaminos fluid simReadback',
@@ -11361,6 +11791,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     sampleFrame,
     sampleDeterministicReplayFrame,
+    beginDebugFullFieldExport,
+    readDebugFullFieldExportChunk,
+    releaseDebugFullFieldExport,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
