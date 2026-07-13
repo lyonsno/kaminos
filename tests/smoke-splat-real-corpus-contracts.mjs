@@ -23,8 +23,11 @@ function makeFrame(directory, step, mutate = {}) {
   const values = new Float32Array(grid ** 3 * channels.length);
   for (let index = 0; index < grid ** 3; index += 1) {
     const offset = index * channels.length;
+    const x = index % grid;
+    const z = Math.floor(index / (grid * grid));
+    const plume = x < grid / 2 && z < grid / 2;
     values[offset + 1] = 0.4;
-    values[offset + 4] = index % 5 === 0 ? 0.5 + step * 0.001 : 0.03;
+    values[offset + 4] = plume ? 0.5 + step * 0.001 : 0.00025;
     values[offset + 5] = 0.2;
     values[offset + 7] = index % 3 === 0 ? 0.7 : 0.05;
     values[offset + 12] = index % 2 === 0 ? 0.6 : 0.02;
@@ -93,6 +96,7 @@ execFileSync(process.execPath, [
   '--coarse-block-size', '2',
   '--fine-block-size', '1',
   '--articulation-threshold', '0.05',
+  '--coarse-anchor-mass-ratio', '0.08',
   '--instance-count', '100',
   '--phase-slot-count', '4',
 ], { cwd: root.pathname, stdio: 'pipe' });
@@ -107,6 +111,15 @@ assert.deepEqual(report.frameSplit.evaluationFrameIds, ['sim-step-97']);
 assert.equal(report.frameSplit.authority, 'explicit-adjacent-step-holdout-v0');
 assert.equal(report.frames.every(frame => frame.accounting.rejectedExtinctionMass === 0), true);
 assert.equal(report.frames.every(frame => frame.capacity.outputWasTruncated === false), true);
+assert.equal(report.requestedConfig.coarseAnchorMassRatio, 0.08);
+assert.equal(report.frames.every(frame => frame.coarseConsolidation.identity === 'mass-preserving-anchor-voronoi-v1'), true);
+assert.equal(report.frames.every(frame => frame.coarseConsolidation.enabled === true), true);
+assert.equal(report.frames.every(frame => frame.coarseConsolidation.mergedSourceBinCount > 0), true);
+assert.equal(
+  report.frames.every(frame => frame.coarseConsolidation.spatialMomentAuthority === 'anchor-bin-only-tail-optical-transfer-v0'),
+  true,
+);
+assert.equal(report.learnedSelector.heldOutProduct.coarseConsolidation.anchorMassRatio, 0.08);
 assert.equal(report.temporalComparison.stepDelta, 1);
 assert.ok(report.temporalComparison.sharedCoarseSpatialKeys > 0);
 assert.ok(report.modelDataset.train.rowCount > 0);

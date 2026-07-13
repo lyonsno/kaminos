@@ -156,6 +156,16 @@ export function parsePackedSmokeSplatProduct(buffer, product) {
   if (coarse !== product.hierarchyCounts.coarse || fine !== product.hierarchyCounts.fine) {
     throw new Error(`packed hierarchy count mismatch: ${coarse}/${fine}`);
   }
+  const representedExtinctionMass = requireNonNegative(
+    requireObject(product.accounting, 'product accounting').representedExtinctionMass,
+    'product represented extinction mass',
+  );
+  const extinctionTolerance = Math.max(1e-7, representedExtinctionMass * 5e-6);
+  if (Math.abs(extinctionMass - representedExtinctionMass) > extinctionTolerance) {
+    throw new Error(
+      `packed extinction mass mismatch: ${extinctionMass} != ${representedExtinctionMass}`,
+    );
+  }
   return {
     ...product,
     packed: values,

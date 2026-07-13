@@ -95,10 +95,20 @@ const packed = new Float32Array([
 const parsed = parsePackedSmokeSplatProduct(packed.buffer, {
   artifact: { byteLength: packed.byteLength, shape: [2, 16] },
   hierarchyCounts: { coarse: 1, fine: 1, total: 2 },
+  accounting: { representedExtinctionMass: 0.7 },
 });
 assert.equal(parsed.splats.length, 2);
 assert.equal(parsed.splats[0].hierarchyRoleCode, 0);
 assert.equal(parsed.splats[1].hierarchyRoleCode, 1);
+assert.throws(
+  () => parsePackedSmokeSplatProduct(packed.buffer, {
+    artifact: { byteLength: packed.byteLength, shape: [2, 16] },
+    hierarchyCounts: { coarse: 1, fine: 1, total: 2 },
+    accounting: { representedExtinctionMass: 0.9 },
+  }),
+  /packed extinction mass mismatch/i,
+  'packed optical mass cannot silently disagree with the evidence manifest',
+);
 
 assert.throws(
   () => validateSmokeSplatMotionManifest({ ...manifest, effectiveRoute: 'fallback-canvas-v0' }),
