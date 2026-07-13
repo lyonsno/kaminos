@@ -1,0 +1,20 @@
+{
+  "name": "hammer-square-white",
+  "job_type": "sf3d",
+  "job_id": "20e3dfb7f43b",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-white.png",
+  "input_name": "hammer-square-white.png",
+  "params": {
+    "texture_resolution": "1024",
+    "remesh": "none",
+    "dtype": "float16",
+    "foreground_ratio": "0.85"
+  },
+  "output_files": [
+    "input.png",
+    "output.glb",
+    "receipt.json"
+  ],
+  "created_at": 1783977200.55789,
+  "duration_s": 207.8
+}

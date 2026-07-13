@@ -1,0 +1,16 @@
+{
+  "schema": "kaminos.titan-hammer-glb-viewer-witness-failure.v0",
+  "created_at": "2026-07-13T21:05:00Z",
+  "status": "failed",
+  "requested_route": {
+    "url": "http://127.0.0.1:8096/",
+    "asset_url": "/artifacts/titan-hammer-source-cleanup-2026-07-13/provisional-glb/hammer-trellis-geometry-only.glb",
+    "viewer_function": "window.showGLB",
+    "debug_function": "window.kaminosSceneObjectDebugState"
+  },
+  "effective_url": "http://127.0.0.1:8096/",
+  "failure_phase": "loading-glb",
+  "error": "showGLB unavailable",
+  "resolution": "Added window.kaminosImportGLBSceneObject(url, fileName, display) backed by the existing Greenroom GLB import path, then reran the witness successfully.",
+  "truth_boundary": "Preserved route-hook miss. This file is not a mesh failure and not a visual witness."
+}

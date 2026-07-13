@@ -1,0 +1,95 @@
+{
+  "schema": "kaminos.titan-hammer-source-cleanup.v0",
+  "created_at": "2026-07-13T20:53:02Z",
+  "source_cutout": "artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-00.png",
+  "source_mask": "artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-00.png",
+  "source_image": "artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+  "alpha_bbox": [
+    336,
+    313,
+    588,
+    1136
+  ],
+  "crop_box_with_padding": [
+    288,
+    265,
+    636,
+    1184
+  ],
+  "padding_px": 48,
+  "original_size": [
+    1796,
+    1594
+  ],
+  "padded_size": [
+    348,
+    919
+  ],
+  "square_size": [
+    919,
+    919
+  ],
+  "outputs": {
+    "hammer-tight-rgba.png": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-tight-rgba.png",
+      "sha256": "91171d7f1b4fda2265e19ebb9258a72d95a692ad6bac35190c306fccd16f2011",
+      "size": [
+        252,
+        823
+      ]
+    },
+    "hammer-padded-rgba.png": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-padded-rgba.png",
+      "sha256": "60942643963a0cb74e51443d964385c54e05d1457f1101fbf075415597cb4057",
+      "size": [
+        348,
+        919
+      ]
+    },
+    "hammer-square-rgba.png": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-rgba.png",
+      "sha256": "7cae9145051c2e2a31e4b65315b94d4cb95622179735273397b36cbe0f7ffd02",
+      "size": [
+        919,
+        919
+      ]
+    },
+    "hammer-square-white.png": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-white.png",
+      "sha256": "ca57c0768182efcb1a19fa63cefb287a0973fdb17360c6b0b766bdec64a20360",
+      "size": [
+        919,
+        919
+      ]
+    },
+    "hammer-square-gray.png": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-gray.png",
+      "sha256": "f60ab0b86b099db75215e882c07f7d9cff9c0720e1bd344f3fbd9c38c319c0d0",
+      "size": [
+        919,
+        919
+      ]
+    },
+    "hammer-mask-square.png": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-mask-square.png",
+      "sha256": "4fb7bb9f4cbdb2da8d94c3b88b4dd7aec806285e8cf0d6ec8604760945628797",
+      "size": [
+        919,
+        919
+      ]
+    },
+    "hammer-edge-debug.png": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-edge-debug.png",
+      "sha256": "5bfedd3a7372ca4e317d6e78f6a427599c92ae0173589574ce67c1e1bbc356d7",
+      "size": [
+        919,
+        919
+      ]
+    }
+  },
+  "contact_sheet": {
+    "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/titan-hammer-source-cleanup-contact-sheet.png",
+    "sha256": "1cff54dbf2ee6b6478f6fc09bcd0631dd723f5e1d51e336b734b9f3fdabc7fc8"
+  },
+  "truth_boundary": "Deterministic alpha/mask crop and background normalization from SAM3.1 primary hammer detection. This is source preparation, not AI repair, not new geometry, and not proof of orbitability."
+}

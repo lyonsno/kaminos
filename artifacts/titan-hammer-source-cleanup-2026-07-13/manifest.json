@@ -1,0 +1,174 @@
+{
+  "schema": "kaminos.titan-hammer-source-cleanup-manifest.v0",
+  "created_at": "2026-07-13T21:14:00Z",
+  "source_family": "crucible-bench-observed-splat",
+  "candidate": "titan-hammer",
+  "source_refs": {
+    "authoritative_image": "artifacts/crucible-bench-shards-2026-07-13/source/observed-bench-splat.png",
+    "sam31_cutout": "artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/cutout-00.png",
+    "sam31_mask": "artifacts/crucible-bench-shards-2026-07-13/masks/ball-peen-hammer-sam31/mask-00.png",
+    "trellis_raw_ply": "artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh_geometry_only.ply"
+  },
+  "source_cleanup": {
+    "receipt": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup-receipt.json",
+    "contact_sheet": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/titan-hammer-source-cleanup-contact-sheet.png",
+      "sha256": "1cff54dbf2ee6b6478f6fc09bcd0631dd723f5e1d51e336b734b9f3fdabc7fc8",
+      "inspected": true
+    },
+    "variants": [
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-tight-rgba.png",
+        "sha256": "91171d7f1b4fda2265e19ebb9258a72d95a692ad6bac35190c306fccd16f2011"
+      },
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-padded-rgba.png",
+        "sha256": "60942643963a0cb74e51443d964385c54e05d1457f1101fbf075415597cb4057"
+      },
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-rgba.png",
+        "sha256": "7cae9145051c2e2a31e4b65315b94d4cb95622179735273397b36cbe0f7ffd02"
+      },
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-white.png",
+        "sha256": "ca57c0768182efcb1a19fa63cefb287a0973fdb17360c6b0b766bdec64a20360",
+        "route_use": "sf3d input"
+      },
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-gray.png",
+        "sha256": "f60ab0b86b099db75215e882c07f7d9cff9c0720e1bd344f3fbd9c38c319c0d0"
+      },
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-mask-square.png",
+        "sha256": "4fb7bb9f4cbdb2da8d94c3b88b4dd7aec806285e8cf0d6ec8604760945628797"
+      },
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-edge-debug.png",
+        "sha256": "5bfedd3a7372ca4e317d6e78f6a427599c92ae0173589574ce67c1e1bbc356d7"
+      }
+    ],
+    "truth_boundary": "Deterministic crop and background normalization only; not AI repair and not reconstruction proof."
+  },
+  "provisional_glb": {
+    "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/provisional-glb/hammer-trellis-geometry-only.glb",
+    "sha256": "319df2c62047abc4e8853303bd27273ba747e482be4737fbd155f34ff8532f11",
+    "receipt": "artifacts/titan-hammer-source-cleanup-2026-07-13/provisional-glb/hammer-trellis-geometry-only.glb.receipt.json",
+    "route": "cpu conversion from existing Trellis geometry-only PLY",
+    "vertices": 86249,
+    "triangles": 172980,
+    "visual_status": "coherent hammer silhouette from front and oblique viewer captures",
+    "truth_boundary": "No texture, no topology repair, no reconstruction improvement, no collision approval."
+  },
+  "viewer_witness": {
+    "app_hook": "window.kaminosImportGLBSceneObject",
+    "requested_route": {
+      "url": "http://127.0.0.1:8096/",
+      "asset_url": "/artifacts/titan-hammer-source-cleanup-2026-07-13/provisional-glb/hammer-trellis-geometry-only.glb"
+    },
+    "effective_route": {
+      "url": "http://127.0.0.1:8096/",
+      "viewer_function": "window.kaminosImportGLBSceneObject",
+      "debug_function": "window.kaminosSceneObjectDebugState",
+      "scene_object_type": "glb",
+      "scene_object_source": "/artifacts/titan-hammer-source-cleanup-2026-07-13/provisional-glb/hammer-trellis-geometry-only.glb"
+    },
+    "status": "passed",
+    "script": "artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-glb-viewer-witness.mjs",
+    "receipt": "artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-provisional-glb-kaminos-witness.json",
+    "captures": [
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-provisional-glb-front.png",
+        "sha256": "22b74940f1663e1b048ed6bcd577846ccf2d98d85abed32a491286d05354f55d",
+        "visual_inspection": "front view shows coherent head and long handle"
+      },
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-provisional-glb-oblique.png",
+        "sha256": "3d5b9d07375e67e0aeedce3a7702f8d919b452ee87e013297a0d2b329aa49e4a",
+        "visual_inspection": "oblique view remains hammer-readable; rough untextured surface is visible"
+      }
+    ],
+    "truth_boundary": "Viewer load, scene registration, and two camera captures only."
+  },
+  "preserved_misses": [
+    {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-provisional-glb-prehook-failure.json",
+      "requested_route": "window.showGLB",
+      "failure_phase": "loading-glb",
+      "lesson": "The app needed an explicit agent-facing GLB import hook; raw private script functions are not route receipts."
+    }
+  ],
+  "gpu_route": {
+    "requested_route": "sf3d",
+    "job_id": "20e3dfb7f43b",
+    "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-white.png",
+    "output_dir": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-cleanup-2026-07-13/mesh-firings/sf3d-white",
+    "params": {
+      "texture_resolution": "1024",
+      "remesh": "none",
+      "dtype": "float16",
+      "foreground_ratio": "0.85"
+    },
+    "status_at_manifest": "done",
+    "exit_code": 0,
+    "effective_route": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-white.png --output-dir /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-cleanup-2026-07-13/mesh-firings/sf3d-white --texture-resolution 1024 --remesh none --dtype float16",
+    "backend_receipt": "artifacts/titan-hammer-source-cleanup-2026-07-13/mesh-firings/sf3d-white/receipt.json",
+    "metadata": "artifacts/titan-hammer-source-cleanup-2026-07-13/mesh-firings/sf3d-white/metadata.json",
+    "output_glb": {
+      "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/mesh-firings/sf3d-white/output.glb",
+      "sha256": "8b8c4f0b4381d822d60eec7347cc95dcbf723de1abd59d9744c257512486ffa9",
+      "size_mb": 0.27
+    },
+    "timings_s": {
+      "load": 64.24,
+      "inference": 60.95,
+      "backend_total": 163.78,
+      "greenroom_duration": 207.8
+    },
+    "warnings": [
+      "volatile_output"
+    ],
+    "cancelled_prior_job": {
+      "job_id": "3f29fb3df1bf",
+      "reason": "relative input/output paths produced volatile output warning before execution"
+    }
+  },
+  "sf3d_viewer_witness": {
+    "app_hook": "window.kaminosImportGLBSceneObject",
+    "requested_route": {
+      "url": "http://127.0.0.1:8096/",
+      "asset_url": "/artifacts/titan-hammer-source-cleanup-2026-07-13/mesh-firings/sf3d-white/output.glb"
+    },
+    "effective_route": {
+      "url": "http://127.0.0.1:8096/",
+      "viewer_function": "window.kaminosImportGLBSceneObject",
+      "debug_function": "window.kaminosSceneObjectDebugState",
+      "scene_object_type": "glb",
+      "scene_object_source": "/artifacts/titan-hammer-source-cleanup-2026-07-13/mesh-firings/sf3d-white/output.glb"
+    },
+    "status": "passed",
+    "receipt": "artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-sf3d-white-kaminos-witness.json",
+    "captures": [
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-sf3d-white-front.png",
+        "sha256": "d3d5808abab3504d8f9d8b1dae2aea5b21bfd602c6b48e852074a0cfd6cccc85",
+        "visual_inspection": "coherent hammer/T-tool silhouette with complete handle and cross-head"
+      },
+      {
+        "path": "artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-sf3d-white-oblique.png",
+        "sha256": "ac7c01bcd198b0fe86b63dc4564d1b5e3d22b6d1555e82b6489863b8100b7e75",
+        "visual_inspection": "form remains recognizable from oblique view; texture striping remains visible"
+      }
+    ],
+    "truth_boundary": "Kaminos GLB load, scene registration, and two camera captures only; not collision-approved or final."
+  },
+  "promoted_inventory": [
+    "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-source-square-white.png",
+    "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-mask-square.png",
+    "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-sf3d-white.glb",
+    "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-trellis-geometry-only.glb",
+    "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-sf3d-white-front.png",
+    "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-sf3d-white-oblique.png"
+  ],
+  "promotion_status": "SF3D output is the current best cast candidate with explicit texture/source-shadow limitations.",
+  "next_decision_boundary": "Repair the source image to remove baked dark striping and tray-shadow artifacts, then rerun a mesh backend and compare against the SF3D promoted GLB through the same viewer route."
+}

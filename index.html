@@ -19053,6 +19053,12 @@ async function greenroomImportSplat(url, fileName, display, options = {}) {
 
 window.greenroomImportSplat = greenroomImportSplat;
 
+window.kaminosImportGLBSceneObject = async function(url, fileName = 'scene-object.glb', display = {}) {
+  const resolvedDisplay = typeof display === 'string' ? { title: display, raw_name: fileName } : display;
+  await greenroomImportMesh(url, fileName, resolvedDisplay || {});
+  return window.kaminosSceneObjectDebugState().find(record => record.type === 'glb' && record.source === url) || null;
+};
+
 async function importGreenroomPreviewToScene() {
   if (!greenroomPreviewState?.previewObject) {
     setInfo('Greenroom preview is still loading');

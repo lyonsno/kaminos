@@ -1,0 +1,23 @@
+{
+  "schema": "kaminos.titan-hammer-ply-to-glb-conversion.v0",
+  "created_at": "2026-07-13T20:59:54Z",
+  "source_ply": "artifacts/crucible-bench-shards-2026-07-13/mesh-firings/hammer-trellis-official-512-seed42/raw_mesh_geometry_only.ply",
+  "output_glb": "artifacts/titan-hammer-source-cleanup-2026-07-13/provisional-glb/hammer-trellis-geometry-only.glb",
+  "source_sha256": "ea90a02695f829d4a4f934655532188fb0cc5f558ed0a29fb9783e2c8d4ce637",
+  "output_sha256": "319df2c62047abc4e8853303bd27273ba747e482be4737fbd155f34ff8532f11",
+  "vertices": 86249,
+  "source_faces": 172980,
+  "output_triangles": 172980,
+  "non_triangular_faces_fan_triangulated_or_skipped": 0,
+  "bounds_min": [
+    -0.5000225,
+    -0.1259805,
+    -0.0353567
+  ],
+  "bounds_max": [
+    0.4994864,
+    0.1345164,
+    0.0454067
+  ],
+  "truth_boundary": "CPU-only format conversion from existing Trellis geometry-only PLY. No texture, no topology repair, no reconstruction improvement, no collision approval. Viewer smoke can prove GLB load/registration only."
+}
