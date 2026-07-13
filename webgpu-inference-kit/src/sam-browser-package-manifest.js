@@ -33,6 +33,19 @@ const VERIFICATION_FIELDS = [
   'tensors',
 ];
 
+export const SAM3_BROWSER_PACKAGE_CONTRACT = Object.freeze({
+  modelPackageSchema: SAM3_BROWSER_MODEL_PACKAGE_SCHEMA,
+  invocationSchema: SAM3_BROWSER_INVOCATION_SCHEMA,
+  verificationSchema: SAM3_BROWSER_VERIFICATION_SCHEMA,
+  modelPackagePrefix: 'sam3-model-package:',
+  invocationPrefix: 'sam3-invocation:',
+  verificationPrefix: 'sam3-verification:',
+  evidenceSchema: 'kaminos.sam3-browser-package-invocation-evidence.v0',
+  modelPackageFields: Object.freeze(MODEL_PACKAGE_FIELDS),
+  invocationFields: Object.freeze(INVOCATION_FIELDS),
+  verificationFields: Object.freeze(VERIFICATION_FIELDS),
+});
+
 function requireNonEmptyString(value, label) {
   if (typeof value !== 'string' || value.length === 0) throw new Error(`${label} must be a non-empty string`);
   return value;
@@ -259,10 +272,10 @@ function requireObject(value, label) {
   return value;
 }
 
-function validateRootAuthority(root) {
-  for (const field of [...MODEL_PACKAGE_FIELDS, ...INVOCATION_FIELDS, ...VERIFICATION_FIELDS]) {
+function validateRootAuthority(root, contract) {
+  for (const field of [...contract.modelPackageFields, ...contract.invocationFields, ...contract.verificationFields]) {
     if (Object.hasOwn(root, field)) {
-      const owner = MODEL_PACKAGE_FIELDS.includes(field) ? 'model package' : INVOCATION_FIELDS.includes(field) ? 'invocation' : 'verification';
+      const owner = contract.modelPackageFields.includes(field) ? 'model package' : contract.invocationFields.includes(field) ? 'invocation' : 'verification';
       throw new Error(`root manifest duplicates ${owner}-owned field ${field}`);
     }
   }
@@ -353,18 +366,18 @@ export function resolveSam3BrowserArtifactUrl(file, manifestUrl, pageUrl) {
   return resolved.toString();
 }
 
-function composeResolution(root, modelPackage, invocation, verification, effectiveHashes) {
+function composeResolution(root, modelPackage, invocation, verification, effectiveHashes, contract) {
   if (!modelPackage.packageId) throw new Error('model package missing packageId');
   if (!invocation.invocationId) throw new Error('invocation missing invocationId');
   const manifest = {
     ...root,
-    ...fieldsFrom(modelPackage, MODEL_PACKAGE_FIELDS),
-    ...fieldsFrom(invocation, INVOCATION_FIELDS),
-    ...(verification ? fieldsFrom(verification, VERIFICATION_FIELDS) : {}),
+    ...fieldsFrom(modelPackage, contract.modelPackageFields),
+    ...fieldsFrom(invocation, contract.invocationFields),
+    ...(verification ? fieldsFrom(verification, contract.verificationFields) : {}),
     schema: root.schema,
   };
   const evidence = {
-    schema: 'kaminos.sam3-browser-package-invocation-evidence.v0',
+    schema: contract.evidenceSchema,
     packageId: modelPackage.packageId,
     invocationId: invocation.invocationId,
     modelPackage: { ...root.modelPackage, effectiveSha256: effectiveHashes.modelPackage },
@@ -380,88 +393,88 @@ function isSplitManifest(root) {
   return Boolean(root?.modelPackage || root?.invocation || root?.verification);
 }
 
-export async function resolveSam3BrowserPackageManifest(rootManifest, { readArtifactText, sha256Text }) {
+export async function resolveSam3BrowserPackageManifest(rootManifest, { readArtifactText, sha256Text, contract = SAM3_BROWSER_PACKAGE_CONTRACT }) {
   const root = requireObject(rootManifest, 'root manifest');
   if (!isSplitManifest(root)) return { manifest: root, evidence: null };
-  validateRootAuthority(root);
-  validateArtifactRef(root.modelPackage, SAM3_BROWSER_MODEL_PACKAGE_SCHEMA, 'model package');
-  validateArtifactRef(root.invocation, SAM3_BROWSER_INVOCATION_SCHEMA, 'invocation');
-  if (root.verification) validateArtifactRef(root.verification, SAM3_BROWSER_VERIFICATION_SCHEMA, 'verification');
+  validateRootAuthority(root, contract);
+  validateArtifactRef(root.modelPackage, contract.modelPackageSchema, 'model package');
+  validateArtifactRef(root.invocation, contract.invocationSchema, 'invocation');
+  if (root.verification) validateArtifactRef(root.verification, contract.verificationSchema, 'verification');
   const load = async (ref, schema, label) => {
     const text = await readArtifactText(ref.file);
     return parseArtifact(text, ref, schema, label, await sha256Text(text));
   };
   const [modelPackage, invocation, verification] = await Promise.all([
-    load(root.modelPackage, SAM3_BROWSER_MODEL_PACKAGE_SCHEMA, 'model package'),
-    load(root.invocation, SAM3_BROWSER_INVOCATION_SCHEMA, 'invocation'),
-    root.verification ? load(root.verification, SAM3_BROWSER_VERIFICATION_SCHEMA, 'verification') : null,
+    load(root.modelPackage, contract.modelPackageSchema, 'model package'),
+    load(root.invocation, contract.invocationSchema, 'invocation'),
+    root.verification ? load(root.verification, contract.verificationSchema, 'verification') : null,
   ]);
   assertIdentity(
     'model package',
     modelPackage.packageId,
-    'sam3-model-package:',
-    await sha256Text(canonicalSam3IdentityJson(identityContract(modelPackage, MODEL_PACKAGE_FIELDS, 'packageId'))),
+    contract.modelPackagePrefix,
+    await sha256Text(canonicalSam3IdentityJson(identityContract(modelPackage, contract.modelPackageFields, 'packageId'))),
   );
   assertIdentity(
     'invocation',
     invocation.invocationId,
-    'sam3-invocation:',
-    await sha256Text(canonicalSam3IdentityJson(identityContract(invocation, INVOCATION_FIELDS, 'invocationId'))),
+    contract.invocationPrefix,
+    await sha256Text(canonicalSam3IdentityJson(identityContract(invocation, contract.invocationFields, 'invocationId'))),
   );
   if (verification) {
     assertVerificationBinding(verification, modelPackage, invocation);
     assertIdentity(
       'verification',
       verification.verificationId,
-      'sam3-verification:',
-      await sha256Text(canonicalSam3IdentityJson(identityContract(verification, VERIFICATION_FIELDS, 'verificationId'))),
+      contract.verificationPrefix,
+      await sha256Text(canonicalSam3IdentityJson(identityContract(verification, contract.verificationFields, 'verificationId'))),
     );
   }
   return composeResolution(root, modelPackage, invocation, verification, {
     modelPackage: root.modelPackage.sha256,
     invocation: root.invocation.sha256,
     verification: root.verification?.sha256 || null,
-  });
+  }, contract);
 }
 
-export function resolveSam3BrowserPackageManifestSync(rootManifest, { readArtifactText, sha256Text }) {
+export function resolveSam3BrowserPackageManifestSync(rootManifest, { readArtifactText, sha256Text, contract = SAM3_BROWSER_PACKAGE_CONTRACT }) {
   const root = requireObject(rootManifest, 'root manifest');
   if (!isSplitManifest(root)) return { manifest: root, evidence: null };
-  validateRootAuthority(root);
-  validateArtifactRef(root.modelPackage, SAM3_BROWSER_MODEL_PACKAGE_SCHEMA, 'model package');
-  validateArtifactRef(root.invocation, SAM3_BROWSER_INVOCATION_SCHEMA, 'invocation');
-  if (root.verification) validateArtifactRef(root.verification, SAM3_BROWSER_VERIFICATION_SCHEMA, 'verification');
+  validateRootAuthority(root, contract);
+  validateArtifactRef(root.modelPackage, contract.modelPackageSchema, 'model package');
+  validateArtifactRef(root.invocation, contract.invocationSchema, 'invocation');
+  if (root.verification) validateArtifactRef(root.verification, contract.verificationSchema, 'verification');
   const load = (ref, schema, label) => {
     const text = readArtifactText(ref.file);
     return parseArtifact(text, ref, schema, label, sha256Text(text));
   };
-  const modelPackage = load(root.modelPackage, SAM3_BROWSER_MODEL_PACKAGE_SCHEMA, 'model package');
-  const invocation = load(root.invocation, SAM3_BROWSER_INVOCATION_SCHEMA, 'invocation');
-  const verification = root.verification ? load(root.verification, SAM3_BROWSER_VERIFICATION_SCHEMA, 'verification') : null;
+  const modelPackage = load(root.modelPackage, contract.modelPackageSchema, 'model package');
+  const invocation = load(root.invocation, contract.invocationSchema, 'invocation');
+  const verification = root.verification ? load(root.verification, contract.verificationSchema, 'verification') : null;
   assertIdentity(
     'model package',
     modelPackage.packageId,
-    'sam3-model-package:',
-    sha256Text(canonicalSam3IdentityJson(identityContract(modelPackage, MODEL_PACKAGE_FIELDS, 'packageId'))),
+    contract.modelPackagePrefix,
+    sha256Text(canonicalSam3IdentityJson(identityContract(modelPackage, contract.modelPackageFields, 'packageId'))),
   );
   assertIdentity(
     'invocation',
     invocation.invocationId,
-    'sam3-invocation:',
-    sha256Text(canonicalSam3IdentityJson(identityContract(invocation, INVOCATION_FIELDS, 'invocationId'))),
+    contract.invocationPrefix,
+    sha256Text(canonicalSam3IdentityJson(identityContract(invocation, contract.invocationFields, 'invocationId'))),
   );
   if (verification) {
     assertVerificationBinding(verification, modelPackage, invocation);
     assertIdentity(
       'verification',
       verification.verificationId,
-      'sam3-verification:',
-      sha256Text(canonicalSam3IdentityJson(identityContract(verification, VERIFICATION_FIELDS, 'verificationId'))),
+      contract.verificationPrefix,
+      sha256Text(canonicalSam3IdentityJson(identityContract(verification, contract.verificationFields, 'verificationId'))),
     );
   }
   return composeResolution(root, modelPackage, invocation, verification, {
     modelPackage: root.modelPackage.sha256,
     invocation: root.invocation.sha256,
     verification: root.verification?.sha256 || null,
-  });
+  }, contract);
 }

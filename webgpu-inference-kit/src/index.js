@@ -320,6 +320,15 @@ export {
 } from './sam31-packet-artifact.js';
 
 export {
+  SAM31_BROWSER_TRACKER_INVOCATION_SCHEMA,
+  SAM31_BROWSER_TRACKER_MODEL_PACKAGE_SCHEMA,
+  SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
+  SAM31_BROWSER_TRACKER_ROOT_SCHEMA,
+  SAM31_BROWSER_TRACKER_VERIFICATION_SCHEMA,
+  createSam31BrowserTrackerPackageProjection,
+} from './sam31-browser-tracker-package.js';
+
+export {
   SAM31_TEMPORAL_MEMORY_BANK_PHASE_PROGRAM_ROUTE_ID,
   createSam31TemporalMemoryBankCpuOracle,
   createSam31TemporalMemoryBankPhaseProgramRouteDefinition,
@@ -361,6 +370,7 @@ export {
 export {
   SAM3_BROWSER_INVOCATION_SCHEMA,
   SAM3_BROWSER_MODEL_PACKAGE_SCHEMA,
+  SAM3_BROWSER_PACKAGE_CONTRACT,
   SAM3_BROWSER_VERIFICATION_SCHEMA,
   createSam3BrowserStaticArtifactCache,
   createSam3DualInvocationEvidence,
