@@ -14,6 +14,7 @@ const out = resolve(args.get('--out') || '/tmp/kaminos-volume-shell-lab.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const expectedMode = (args.get('--expected-mode') || new URL(url).searchParams.get('volume_fire_render_mode') || 'shell').replace(/-/g, '_');
 const expectedInspect = (args.get('--expected-inspect') || new URL(url).searchParams.get('volume_shell_inspect') || 'shell').replace(/-/g, '_');
+const expectedDomainInspect = (args.get('--expected-domain-inspect') || new URL(url).searchParams.get('volume_smoke_domain_inspect') || 'near-render').toLowerCase();
 const minFrames = Number(args.get('--min-frames') || 4);
 const settleMs = Number(args.get('--settle-ms') || 2200);
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -38,6 +39,7 @@ function writeReport(report = {}) {
     requestedRoute: url,
     expectedMode,
     expectedInspect,
+    expectedDomainInspect,
     minFrames,
     settleMs,
     debugPort: port,
@@ -217,7 +219,11 @@ async function main() {
     phase = 'state';
     for (let i = 0; i < 80; i += 1) {
       lastDebugState = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState?.()');
-      if (lastDebugState?.frameCount >= minFrames) break;
+      const farInspectSettled = expectedDomainInspect !== 'far-only' || (
+        (lastDebugState?.smokeDomainFarAdvectedActiveCells || 0) > 0
+        && lastDebugState?.smokeDomainTransferLastReadbackFrame >= minFrames
+      );
+      if (lastDebugState?.frameCount >= minFrames && farInspectSettled) break;
       await delay(250);
     }
     assert.ok(lastDebugState, 'missing volume debug state');
@@ -227,6 +233,15 @@ async function main() {
     assert.ok(lastDebugState.frameCount >= minFrames, `volume route rendered ${lastDebugState.frameCount || 0} frames`);
     assert.equal(lastDebugState.fireRenderMode, expectedMode, 'shell render mode did not match route');
     assert.equal(lastDebugState.shellInspectMode, expectedInspect, 'shell inspect mode did not match route');
+    if (expectedDomainInspect === 'far-only') {
+      assert.equal(lastDebugState.smokeDomainInspectMode, 'far-only', 'far-only domain inspect request did not apply');
+      assert.equal(lastDebugState.smokeDomainInspectIdentity, 'far-smoke-only-max-projection-v0', 'far-only inspect effective identity is wrong');
+      assert.ok(lastDebugState.smokeDomainFarAdvectedActiveCells > 0, 'far-smoke field has no occupied cells beyond the injection band');
+      assert.ok(lastDebugState.smokeDomainFarHighestActiveLayer > 0, 'far-smoke field did not report an occupied layer above its base');
+      assert.ok(lastDebugState.smokeDomainTransferLastReadbackFrame >= minFrames, 'far-smoke counters are stale relative to the requested frame floor');
+      const farCellCount = lastDebugState.smokeDomainFarGrid ** 3;
+      assert.ok(lastDebugState.smokeDomainFarInputActiveCells < farCellCount, 'far-smoke field saturated every cell instead of preserving empty support');
+    }
     assert.equal(
       lastDebugState.pyroMaterialRendererCoupling?.carrierDebug?.topologyShellIdentity,
       'topology-lab-thin-reaction-shell-v0',
@@ -255,6 +270,10 @@ async function main() {
       fireLikePixels: sample.fireLikePixels,
       emissiveLikePixels: sample.emissiveLikePixels,
       smokeLikePixels: sample.smokeLikePixels,
+      domainInspect: lastDebugState.smokeDomainInspectMode,
+      domainInspectIdentity: lastDebugState.smokeDomainInspectIdentity,
+      farAdvectedActiveCells: lastDebugState.smokeDomainFarAdvectedActiveCells,
+      farHighestActiveLayer: lastDebugState.smokeDomainFarHighestActiveLayer,
       topologyShellControls: lastDebugState.topologyShellControls,
     };
     assert.ok(sample.litPixels > 0 || expectedMode === 'off', 'sampleFrame produced no visible volume signal');
