@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--prompt", required=True)
-    parser.add_argument("--model", default="mlx-community/sam3-image")
+    parser.add_argument("--model", default="mlx-community/sam3-bf16")
     parser.add_argument("--resolution", type=int, default=224)
     return parser.parse_args()
 
@@ -57,7 +57,7 @@ def main():
     args = parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    model, model_path, weights_path, weights_sha = encoder_tool.load_model(args.model)
+    model, model_path, weights_path, weights_sha, model_load_audit = encoder_tool.load_model(args.model)
     image_path = Path(args.image).resolve()
     image = Image.open(image_path).convert("RGB")
     source_path = out_dir / "source-image.png"
@@ -89,6 +89,7 @@ def main():
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "reference": {"model": {"id": args.model, "snapshot": encoder_tool.snapshot_id(model_path), "role": "mlx-reference-upstream"}, "weights": {"file": "model.safetensors", "path": str(weights_path), "sha256": weights_sha}, "framework": {"name": "mlx-vlm", "root": str(Path(os.environ.get("KAMINOS_MLX_VLM_ROOT", Path.cwd())).resolve()), "execution": "uv-run"}},
         "model": {"id": args.model, "role": "mlx-reference-upstream"},
+        "modelLoad": model_load_audit,
         "prompt": {"text": args.prompt, "sha256": encoder_tool.sha256_bytes(args.prompt.encode("utf-8"))},
         "sourceImage": {"artifactId": f"image:{image_path.name}:sam3-reference-source", "file": "source-image.png", "path": str(source_path), "sha256": encoder_tool.sha256_file(source_path), "originalPath": str(image_path), "resolution": [args.resolution, args.resolution]},
         "staticWeights": {"artifactId": f"sam3-weights:{args.model}:scoring-reference-upstream", "sha256": weights_sha, "role": "reference-upstream", "reason": "weights exported for browser SAM3 dot-product scoring phase-program execution"},

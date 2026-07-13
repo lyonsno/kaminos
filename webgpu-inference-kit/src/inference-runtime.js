@@ -371,6 +371,8 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     now,
   });
   const kernel = normalizeKernel(input.kernel);
+  const ownedBuffers = new Map();
+  let disposalReport = null;
 
   const runtime = {
     schema: WEBGPU_INFERENCE_RUNTIME_SCHEMA,
@@ -393,7 +395,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     },
 
     createBuffer(descriptor) {
-      return createBuffer(device, descriptor);
+      if (disposalReport) throw new Error('runtime is disposed');
+      const buffer = createBuffer(device, descriptor);
+      ownedBuffers.set(buffer, { label: descriptor.label, size: descriptor.size });
+      return buffer;
     },
 
     writeBuffer(buffer, data, offset = 0, dataOffset = 0, size = undefined) {
@@ -544,6 +549,28 @@ export async function createWebGpuInferenceRuntime(input = {}) {
         evidence: options.evidence || input.evidence || { mode: 'live', source: 'browser-webgpu-runtime' },
         createdAt: options.createdAt,
       });
+    },
+
+    dispose() {
+      if (disposalReport) return disposalReport;
+      let destroyedBufferCount = 0;
+      let ownedBufferBytes = 0;
+      for (const [buffer, metadata] of ownedBuffers) {
+        ownedBufferBytes += metadata.size;
+        if (typeof buffer.destroy === 'function') {
+          buffer.destroy();
+          destroyedBufferCount += 1;
+        }
+      }
+      disposalReport = {
+        disposed: true,
+        ownedBufferCount: ownedBuffers.size,
+        ownedBufferBytes,
+        destroyedBufferCount,
+      };
+      ownedBuffers.clear();
+      resourceCaches.clear();
+      return disposalReport;
     },
   };
 

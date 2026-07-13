@@ -22,12 +22,19 @@ assert.match(routeSource, /vit-block-stack-rope-attention/, 'image ViT block-sta
 assert.match(routeSource, /vit-block-stack-layer-range/, 'image ViT block-stack route must preserve layer range identity');
 assert.match(routeSource, /firstGlobalLayerIndex/, 'image ViT block-stack route must record first global layer identity');
 assert.match(routeSource, /global_attn_indexes/, 'image ViT block-stack route must name the reference global-attention boundary');
+assert.match(routeSource, /if \(x < -10\.0\) \{ return 0\.0; \}/, 'ViT MLP GELU shader must saturate its negative tail before cubic overflow can produce NaN');
+assert.match(routeSource, /if \(x > 10\.0\) \{ return x; \}/, 'ViT MLP GELU shader must saturate its positive tail before cubic overflow');
+assert.match(routeSource, /fn mlx_erf\(x: f32\)/, 'ViT MLP GELU shader must port the MLX Metal erf implementation used by the reference backend');
+assert.match(routeSource, /fn mlx_expm1f\(x: f32\)/, 'ViT MLP GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
+assert.match(routeSource, /0\.927734375/, 'ViT MLP GELU shader must preserve the MLX Metal erf branch boundary');
+assert.doesNotMatch(routeSource, /0\.044715/, 'ViT block-stack GPU and CPU GELU paths must not retain the tanh approximation');
 
 assert.match(stackExporter, /--image-vit-block-stack-ingress/, 'detector-stack packet must expose image ViT block-stack ingress CLI flag');
 assert.match(stackExporter, /--image-vit-full-backbone-ingress/, 'detector-stack packet must expose image ViT full-backbone ingress CLI flag');
 assert.match(stackExporter, /expected-vit-block-stack-hidden-states/, 'detector-stack packet must export expected SAM3 ViT block-stack hidden states');
 assert.match(stackExporter, /expected-vit-backbone-hidden-states/, 'detector-stack packet must export expected SAM3 full ViT backbone hidden states');
 assert.match(stackExporter, /expected-vit-first-global-hidden-states/, 'detector-stack packet must export expected first-global checkpoint tensor');
+assert.match(stackExporter, /expected-vit-layer-\{layer_index\}-hidden-states/, 'detector-stack packet must export an authenticated MLX checkpoint for every ViT layer');
 assert.match(stackExporter, /vit-block-stack-layer7-q-proj-weight/, 'detector-stack packet must export first global layer projection weights');
 assert.match(stackExporter, /vit-block-stack-layer31-q-proj-weight/, 'detector-stack packet must export final full-backbone layer projection weights');
 assert.match(stackExporter, /mlx-detector-stack-vit-block-stack-export/, 'detector-stack packet must expose the ViT block-stack ingress mode');
@@ -50,13 +57,67 @@ assert.match(smokeJs, /imageVitBlockStackEvidence/, 'browser smoke state must pr
 assert.match(smokeJs, /vitBlockStackHiddenStatesOutput/, 'browser smoke must preserve block-stack output identity as an ingress edge');
 assert.match(smokeJs, /firstGlobalLayerIndex/, 'browser smoke must preserve first global-attention boundary identity');
 assert.match(smokeJs, /fullBackbone/, 'browser smoke must preserve full-backbone range identity');
+assert.match(smokeJs, /validateFiniteCheckpoints:\s*true/, 'grounded browser smoke must fail at the first non-finite ViT layer checkpoint');
+assert.match(smokeJs, /validateFinitePhaseLayerIndex:\s*vitFinitePhaseLayerIndex/, 'browser smoke must pass an invocation-scoped ViT phase diagnostic target');
+assert.match(smokeJs, /expectedVitLayerCheckpoints/, 'browser smoke must load and pass authenticated per-layer MLX checkpoints');
+assert.match(smokeJs, /expectedLayerCheckpoints:\s*expectedVitLayerCheckpoints/, 'browser smoke must bind loaded ViT checkpoints into the route input by the exact lexical owner name');
+assert.match(smokeJs, /vitLayerParityCheckpoints:\s*imageVitBlockStackResult\?\.finiteCheckpoints/, 'composition debug evidence must preserve route-level ViT layer parity checkpoints');
+assert.match(smokeJs, /layerParityCheckpoints:\s*result\.debugReadback\.vitLayerParityCheckpoints/, 'final browser state must preserve the authenticated layer parity curve');
+assert.match(witness, /--vit-finite-phase-layer/, 'browser witness must expose a targeted ViT phase diagnostic without mutating the package');
 
 const {
   SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
   createSam3ImageVitBlockStackPhaseProgramCpuOracle,
   createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
+  summarizeSam3FiniteValues,
+  summarizeSam3FinitePhaseOutputs,
+  summarizeSam3LayerParityCheckpoint,
+  stableSam3Gelu,
   validateRouteDefinition,
 } = await import('../src/index.js');
+
+assert.deepEqual(
+  summarizeSam3LayerParityCheckpoint(3, true, new Float32Array([1, -2, 4]), new Float32Array([1.25, -2.125, 4])),
+  { layerIndex: 3, isGlobal: true, elementCount: 3, maxAbsDiff: 0.25 },
+  'layer parity checkpoint must preserve layer identity and the maximum absolute MLX/WebGPU error',
+);
+assert.throws(
+  () => summarizeSam3LayerParityCheckpoint(3, true, new Float32Array([1]), new Float32Array([1, 2])),
+  /length mismatch/,
+  'layer parity checkpoint must reject partial expected tensors',
+);
+
+assert.equal(stableSam3Gelu(-Number.MAX_VALUE), 0, 'stable GELU must saturate extreme negative finite inputs to zero');
+assert.equal(stableSam3Gelu(Number.MAX_VALUE), Number.MAX_VALUE, 'stable GELU must preserve extreme positive finite inputs');
+assert.equal(Number.isFinite(stableSam3Gelu(-1e20)), true, 'stable GELU negative tail must remain finite');
+for (const [input, expected] of [[-3, -0.0040495991706848145], [-1, -0.1586553156375885], [0, 0], [1, 0.8413447141647339], [3, 2.99595046043396], [1.1875, 1.0479505062103271]]) {
+  assert.ok(Math.abs(stableSam3Gelu(input) - expected) <= 2.5e-7, `stable GELU must track MLX Metal exact GELU at ${input}`);
+}
+
+assert.deepEqual(
+  summarizeSam3FiniteValues(new Float32Array([1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -2])),
+  {
+    elementCount: 5,
+    finiteCount: 2,
+    nonFiniteCount: 3,
+    nanCount: 1,
+    positiveInfinityCount: 1,
+    negativeInfinityCount: 1,
+    firstNonFinite: { index: 1, kind: 'nan' },
+  },
+  'finite checkpoint summaries must preserve non-finite type and first index without JSON-null laundering',
+);
+assert.deepEqual(
+  summarizeSam3FinitePhaseOutputs({
+    layerNorm1: new Float32Array([1, 2]).buffer,
+    attention: new Float32Array([3, Number.NaN]).buffer,
+  }),
+  [
+    { phase: 'layerNorm1', elementCount: 2, finiteCount: 2, nonFiniteCount: 0, nanCount: 0, positiveInfinityCount: 0, negativeInfinityCount: 0, firstNonFinite: null },
+    { phase: 'attention', elementCount: 2, finiteCount: 1, nonFiniteCount: 1, nanCount: 1, positiveInfinityCount: 0, negativeInfinityCount: 0, firstNonFinite: { index: 1, kind: 'nan' } },
+  ],
+  'phase checkpoint summaries must preserve ordered first-corruption evidence',
+);
 
 const route = createSam3ImageVitBlockStackPhaseProgramRouteDefinition({
   kernel: { profile: 'sam3-image-vit-block-stack-phase-program-v0', commit: 'abc1234' },

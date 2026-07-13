@@ -23,7 +23,7 @@ Options:
   --source-image-artifact-id <id>    Source image artifact id.
   --source-image-sha256 <sha256>     Source image hash.
   --prompt <text>                    Prompt text for receipt identity.
-  --model <id>                       Oracle model id. Default: mlx-community/sam3-image.
+  --model <id>                       Oracle model id. Default: mlx-community/sam3-bf16.
 `;
 }
 
@@ -34,7 +34,7 @@ function parseArgs(argv) {
     channels: 2,
     height: 2,
     width: 2,
-    model: 'mlx-community/sam3-image',
+    model: 'mlx-community/sam3-bf16',
     prompt: '',
     sourceImageArtifactId: null,
     sourceImageSha256: null,

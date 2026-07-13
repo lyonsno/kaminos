@@ -569,5 +569,6 @@ export async function runSam3PromptFpnPhaseProgramRoute(input = {}) {
       promptFpnFeature: Array.from(new Float32Array(promptFpnFeature)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

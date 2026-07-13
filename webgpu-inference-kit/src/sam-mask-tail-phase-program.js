@@ -522,5 +522,6 @@ export async function runSam3MaskTailPhaseProgramRoute(input = {}) {
       binaryMask: Array.from(new Uint32Array(binaryMask)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

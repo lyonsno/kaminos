@@ -23,6 +23,12 @@ assert.match(routeSource, /vit-block-output-projection/, 'image ViT first-block 
 assert.match(routeSource, /vit-block-window-unpartition/, 'image ViT first-block route must expose crop\/unpartition metadata');
 assert.match(routeSource, /vit-block-layernorm2/, 'image ViT first-block route must expose layer_norm2 stage metadata');
 assert.match(routeSource, /vit-block-gelu-mlp/, 'image ViT first-block route must expose GELU MLP metadata');
+assert.match(routeSource, /if \(x < -10\.0\) \{ return 0\.0; \}/, 'first-block GELU shader must saturate its negative tail before cubic overflow can produce NaN');
+assert.match(routeSource, /if \(x > 10\.0\) \{ return x; \}/, 'first-block GELU shader must saturate its positive tail before cubic overflow');
+assert.match(routeSource, /fn mlx_erf\(x: f32\)/, 'first-block GELU shader must port the MLX Metal erf implementation used by the reference backend');
+assert.match(routeSource, /fn mlx_expm1f\(x: f32\)/, 'first-block GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
+assert.match(routeSource, /0\.927734375/, 'first-block GELU shader must preserve the MLX Metal erf branch boundary');
+assert.doesNotMatch(routeSource, /0\.044715/, 'first-block GPU and CPU GELU paths must not retain the tanh approximation');
 assert.match(routeSource, /readback-vit-first-block-hidden-states/, 'image ViT first-block route must expose readback identity');
 assert.match(routeSource, /window partition\/pad\/crop/, 'image ViT first-block route must document the MLX window partition boundary');
 assert.match(routeSource, /pairwise RoPE/, 'image ViT first-block route must document the SAM3 pairwise RoPE boundary');

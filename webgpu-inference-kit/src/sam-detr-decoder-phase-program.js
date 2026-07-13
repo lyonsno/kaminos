@@ -1567,6 +1567,7 @@ export async function runSam3DetrDecoderPhaseProgramRoute(input = {}) {
       authoritative.debugReadback.intermediate.rpbLayer0Prefix = Array.from(new Float32Array(run.outputs.rpbLayer0Prefix));
     }
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }
 

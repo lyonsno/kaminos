@@ -24,7 +24,7 @@ const run = spawnSync('uv', [
   '--out-dir', outDir,
   '--image', fixtureImage,
   '--prompt', 'truck',
-  '--model', 'mlx-community/sam3-image',
+  '--model', 'mlx-community/sam3-bf16',
   '--resolution', '224',
 ], {
   cwd: mlxVlmRoot,

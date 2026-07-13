@@ -17,7 +17,7 @@ const proc = spawnSync('uv', [
   '--out-dir', outDir,
   '--image', sourceImage,
   '--prompt', 'truck',
-  '--model', 'mlx-community/sam3-image',
+  '--model', 'mlx-community/sam3-bf16',
   '--resolution', '224',
 ], {
   cwd: new URL('..', import.meta.url),

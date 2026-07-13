@@ -2,8 +2,10 @@
 import argparse
 import importlib.util
 import json
+import math
 import os
 import shutil
+import struct
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -34,9 +36,39 @@ DETECTOR_STACK_VIT_BACKBONE_SCHEMA = "kaminos.sam3-detector-stack-image-vit-back
 DETECTOR_STACK_VIT_BACKBONE_BOUNDARY = "sam3-browser-local-image-preprocess-patch-embed-vit-prefix-full-backbone-detector-stack-phase-program"
 DETECTOR_STACK_IMAGE_FPN_NECK_SCHEMA = "kaminos.sam3-detector-stack-image-fpn-neck-real-boundary-packet.v0"
 DETECTOR_STACK_IMAGE_FPN_NECK_BOUNDARY = "sam3-browser-local-image-preprocess-patch-embed-vit-prefix-full-backbone-fpn-neck-detector-stack-phase-program"
+SAM3_BROWSER_MODEL_PACKAGE_SCHEMA = "kaminos.sam3-browser-model-package.v0"
+SAM3_BROWSER_INVOCATION_SCHEMA = "kaminos.sam3-browser-invocation.v0"
+SAM3_BROWSER_VERIFICATION_SCHEMA = "kaminos.sam3-browser-verification.v0"
 DETECTOR_STACK_VIT_BLOCK_STACK_FIRST_GLOBAL_Q_WEIGHT_ROLE = "vit-block-stack-layer7-q-proj-weight"
 DETECTOR_STACK_VIT_BACKBONE_FINAL_Q_WEIGHT_ROLE = "vit-block-stack-layer31-q-proj-weight"
 FPN_NECK_FEATURE_ROLES = ["expected-fpn-neck-feature-0", "expected-fpn-neck-feature-1", "expected-fpn-neck-feature-2", "expected-fpn-neck-feature-3"]
+
+
+def canonical_identity_json(value) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("identity contract contains non-finite number")
+        return json.dumps(f"f64:{struct.pack('>d', number).hex()}", ensure_ascii=False)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(canonical_identity_json(item) for item in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ",".join(
+            f"{json.dumps(str(key), ensure_ascii=False)}:{canonical_identity_json(value[key])}"
+            for key in sorted(value)
+        ) + "}"
+    raise TypeError(f"unsupported identity contract value: {type(value).__name__}")
+
+
+def write_json_artifact(path: Path, payload: dict) -> dict:
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return {"file": path.name, "sha256": encoder_tool.sha256_file(path), "schema": payload["schema"]}
 
 
 def load_tool_module(filename: str, name: str):
@@ -57,7 +89,7 @@ def parse_args():
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--prompt", required=True)
-    parser.add_argument("--model", default="mlx-community/sam3-image")
+    parser.add_argument("--model", default="mlx-community/sam3-bf16")
     parser.add_argument("--resolution", type=int, default=224)
     parser.add_argument("--include-scoring", action="store_true", help="Also export SAM3 dot-product scoring tensors and weights for composed browser execution.")
     parser.add_argument("--include-selection", action="store_true", help="Also export SAM3 score threshold/object-selection postprocess expectations.")
@@ -292,7 +324,7 @@ def main():
     args = parse_args()
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    model, model_path, weights_path, weights_sha = encoder_tool.load_model(args.model)
+    model, model_path, weights_path, weights_sha, model_load_audit = encoder_tool.load_model(args.model)
     image_path = Path(args.image).resolve()
     encoded_image = Image.open(image_path)
     encoded_resolution = [int(encoded_image.width), int(encoded_image.height)]
@@ -379,6 +411,8 @@ def main():
     if include_image_vit_first_block:
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-first-block-hidden-states", "expected-vit-first-block-hidden-states.f32.bin", ref["vit_first_block_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
     if include_image_vit_block_stack:
+        for layer_index in range(shape["vitBlockStackStartLayerIndex"], shape["vitBlockStackEndLayerIndex"] + 1):
+            encoder_tool.add_tensor(tensor_entries, out_dir, f"expected-vit-layer-{layer_index}-hidden-states", f"expected-vit-layer-{layer_index}-hidden-states.f32.bin", ref["vit_layer_hidden_states"][layer_index], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-pre-first-global-hidden-states", "expected-vit-pre-first-global-hidden-states.f32.bin", ref["vit_pre_first_global_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
         encoder_tool.add_tensor(tensor_entries, out_dir, "expected-vit-first-global-hidden-states", "expected-vit-first-global-hidden-states.f32.bin", ref["vit_first_global_hidden_states"], [shape["batch"], shape["patchHeight"], shape["patchWidth"], shape["visionHiddenSize"]], "B,H,W,C")
         block_stack_expected = ref["vit_backbone_hidden_states"] if include_image_vit_full_backbone else ref["vit_block_stack_hidden_states"]
@@ -500,23 +534,42 @@ def main():
         "cpuOracleBinaryMismatchCount": 8,
         "binaryMismatchCount": 8,
     }
-    gate_n_image_fpn_tolerances = {
+    gate_u_image_fpn_tolerances = {
         **legacy_detector_stack_tolerances,
+        "imagePatchEmbedCpuMaxAbsDiff": 0.000012,
         "encoderSrcMaxAbsDiff": 0.02,
         "encoderHiddenStatesMaxAbsDiff": 0.001,
         "promptFpnMaxAbsDiff": 0.001,
         "promptTextMaxAbsDiff": 0.001,
         "promptMaskMaxAbsDiff": 0,
         "pixelEmbedMaxAbsDiff": 0.0015,
+        "lastHsMaxAbsDiff": 0.003,
+        "decoderHiddenStatesMaxAbsDiff": 0.003,
         "selectedScoreMaxAbsDiff": 0.00002,
         "selectedBoxMaxAbsDiff": 0.004,
         "selectionScoresMaxAbsDiff": 0.00002,
-        "selectionBoxesMaxAbsDiff": 0.006,
-        "cpuOracleBinaryMismatchCount": 96,
-        "binaryMismatchCount": 96,
+        "selectionBoxesMaxAbsDiff": 0.065,
+        "webGpuLogitsMaxAbsDiff": 0.03,
+        "cpuOracleBinaryMismatchCount": 8,
+        "binaryMismatchCount": 8,
     }
-    detector_stack_tolerances = gate_n_image_fpn_tolerances if include_image_fpn_neck else legacy_detector_stack_tolerances
-    tolerance_budget_source = "browser-fpn-prompt-text-pixel-detector-stack" if include_image_fpn_neck else "legacy-mlx-image-ingress"
+    tolerance_calibration = None
+    if include_image_fpn_neck:
+        calibration_path = Path(__file__).with_name("sam-gate-u-tolerance-calibration.json")
+        tolerance_calibration_source = json.loads(calibration_path.read_text(encoding="utf-8"))
+        expected_calibrated_budget = {
+            key: gate_u_image_fpn_tolerances[key]
+            for key in tolerance_calibration_source["acceptanceBudget"]
+        }
+        if expected_calibrated_budget != tolerance_calibration_source["acceptanceBudget"]:
+            raise ValueError("Gate U tolerance calibration does not match exporter acceptance budget")
+        tolerance_calibration = {
+            **tolerance_calibration_source,
+            "sourceFile": calibration_path.name,
+            "sourceSha256": encoder_tool.sha256_file(calibration_path),
+        }
+    detector_stack_tolerances = gate_u_image_fpn_tolerances if include_image_fpn_neck else legacy_detector_stack_tolerances
+    tolerance_budget_source = "gate-u-mlx-metal-erf-two-prompt-grounded-browser-fpn-detector-stack-2026-07-13" if include_image_fpn_neck else "legacy-mlx-image-ingress"
     prompt_tokenizer = export_prompt_tokenizer_assets(out_dir, shape["promptTokens"]) if include_image_fpn_neck else None
     manifest = {
         "schema": DETECTOR_STACK_IMAGE_FPN_NECK_SCHEMA if include_image_fpn_neck else DETECTOR_STACK_VIT_BACKBONE_SCHEMA if include_image_vit_full_backbone else DETECTOR_STACK_VIT_BLOCK_STACK_SCHEMA if include_image_vit_block_stack else DETECTOR_STACK_VIT_FIRST_BLOCK_SCHEMA if include_image_vit_first_block else DETECTOR_STACK_VIT_PREFIX_SCHEMA if include_image_vit_prefix else DETECTOR_STACK_PATCH_EMBED_SCHEMA if include_image_patch_embed else DETECTOR_STACK_PREPROCESS_SCHEMA if args.image_preprocess_ingress else DETECTOR_STACK_SCHEMA if args.detector_stack else SELECTION_SCHEMA if include_selection else SCORING_SCHEMA if include_scoring else SCHEMA,
@@ -526,6 +579,7 @@ def main():
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "reference": reference,
         "model": {"id": args.model, "role": "mlx-reference-upstream"},
+        "modelLoad": model_load_audit,
         "prompt": {"text": args.prompt, "sha256": encoder_tool.sha256_bytes(args.prompt.encode("utf-8"))},
         "promptTokenizer": prompt_tokenizer,
         "sourceImage": {
@@ -557,6 +611,7 @@ def main():
         ] if (args.detector_stack or include_image_preprocess) else None,
         "postprocess": {"scoreThreshold": args.score_threshold, "nms": True, "nmsIouThreshold": args.nms_iou_threshold, "nmsKind": "mlx-vlm-greedy-box-nms"} if include_selection else None,
         "toleranceBudgetSource": tolerance_budget_source,
+        "toleranceCalibration": tolerance_calibration,
         "imagePreprocess": {
             "boundary": "sam3-source-image-to-normalized-pixel-values-phase-program",
             "source": "browser-original-encoded-image-decode-resize",
@@ -626,8 +681,50 @@ def main():
         "tensors": tensor_entries,
         "weights": weight_entries,
     }
-    (out_dir / "tensor-manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    print(json.dumps({"manifest": str(out_dir / "tensor-manifest.json"), "routeId": manifest["routeId"], "schema": manifest["schema"]}, indent=2))
+    if include_image_fpn_neck:
+        package_contract = {
+            key: manifest[key] for key in [
+                "model", "modelLoad", "staticWeights", "shape", "claims", "promptTokenizer", "imagePreprocess",
+                "imagePatchEmbed", "imageVitPrefix", "imageVitFirstBlock", "imageVitBlockStack",
+                "imageFpnNeck", "promptTextIngress", "weights",
+            ]
+        }
+        package_digest = encoder_tool.sha256_bytes(canonical_identity_json(package_contract).encode("utf-8"))
+        model_package = {
+            "schema": SAM3_BROWSER_MODEL_PACKAGE_SCHEMA,
+            "packageId": f"sam3-model-package:{package_digest}",
+            **package_contract,
+        }
+        if tolerance_calibration["modelPackageId"] != model_package["packageId"]:
+            raise ValueError("Gate U tolerance calibration model package identity drift")
+        invocation_contract = {
+            "prompt": manifest["prompt"],
+            "sourceImage": manifest["sourceImage"],
+            "postprocess": manifest["postprocess"],
+        }
+        invocation_digest = encoder_tool.sha256_bytes(canonical_identity_json(invocation_contract).encode("utf-8"))
+        invocation = {
+            "schema": SAM3_BROWSER_INVOCATION_SCHEMA,
+            "invocationId": f"sam3-invocation:{invocation_digest}",
+            **invocation_contract,
+        }
+        verification = {
+            "schema": SAM3_BROWSER_VERIFICATION_SCHEMA,
+            **{key: manifest[key] for key in [
+                "reference", "upstreamBoundaries", "toleranceBudgetSource", "toleranceCalibration", "tolerances",
+                "visualization", "tensors",
+            ]},
+        }
+        root_manifest = {
+            **{key: manifest[key] for key in ["schema", "routeId", "mode", "boundary", "createdAt"]},
+            "modelPackage": write_json_artifact(out_dir / "sam3-model-package.json", model_package),
+            "invocation": write_json_artifact(out_dir / "sam3-invocation.json", invocation),
+            "verification": write_json_artifact(out_dir / "sam3-verification.json", verification),
+        }
+    else:
+        root_manifest = manifest
+    (out_dir / "tensor-manifest.json").write_text(json.dumps(root_manifest, indent=2), encoding="utf-8")
+    print(json.dumps({"manifest": str(out_dir / "tensor-manifest.json"), "routeId": root_manifest["routeId"], "schema": root_manifest["schema"]}, indent=2))
 
 
 if __name__ == "__main__":

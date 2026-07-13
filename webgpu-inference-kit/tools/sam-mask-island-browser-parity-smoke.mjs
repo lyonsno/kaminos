@@ -1,8 +1,13 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import {
+  createSam3DualInvocationEvidence,
+  resolveSam3BrowserPackageManifestSync,
+} from '../src/sam-browser-package-manifest.js';
 
 const REPORT_SCHEMA = 'kaminos.sam3-mask-island.browser-parity-smoke.v0';
 const MASK_DECODER_ISLAND_ROUTE_ID = 'sam3.mask-decoder-island.webgpu-local.v0';
@@ -45,6 +50,8 @@ const serverPort = Number(args.get('--server-port') || 18527);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-sam-mask-island-profile-${debugPort}-${process.pid}`;
 const oracleDir = resolve(args.get('--oracle-dir') || `/tmp/kaminos-sam-mask-island-oracle-${process.pid}`);
+const secondOracleDir = args.get('--second-oracle-dir') ? resolve(args.get('--second-oracle-dir')) : null;
+const diagnosticDir = args.get('--diagnostic-dir') ? resolve(args.get('--diagnostic-dir')) : null;
 const packetMode = args.get('--packet-mode') || 'synthetic';
 const packetTool = resolve(args.get('--packet-tool') || (
   packetMode === 'mlx-prompt-fpn-export'
@@ -117,7 +124,8 @@ const requestedRouteId = args.get('--route-id') || (
     : MASK_DECODER_ISLAND_ROUTE_ID
 );
 const prompt = args.get('--prompt') || (packetMode.startsWith('mlx-') ? 'truck' : 'synthetic mask island parity');
-const model = args.get('--model') || 'mlx-community/sam3-image';
+const secondPrompt = args.get('--second-prompt') || 'vehicle';
+const model = args.get('--model') || 'mlx-community/sam3-bf16';
 const resolution = Number(args.get('--resolution') || 224);
 const scoreThreshold = args.get('--score-threshold');
 const viewportWidth = Number(args.get('--viewport-width') || 1000);
@@ -127,6 +135,14 @@ const hookWaitMs = Number(args.get('--hook-wait-ms') || fullStackTimeoutMs);
 const cdpTimeoutMs = Number(args.get('--cdp-timeout-ms') || fullStackTimeoutMs);
 const settleMs = Number(args.get('--settle-ms') || 400);
 const headless = args.get('--headless') !== '0';
+const reuseOraclePacket = args.get('--reuse-oracle-packet') === '1';
+const oraclePacketSource = reuseOraclePacket ? 'caller-provided-existing' : 'generated';
+const vitFinitePhaseLayerArg = args.get('--vit-finite-phase-layer');
+const vitFinitePhaseLayer = vitFinitePhaseLayerArg == null ? null : Number(vitFinitePhaseLayerArg);
+if (vitFinitePhaseLayer != null && (!Number.isInteger(vitFinitePhaseLayer) || vitFinitePhaseLayer < 0)) {
+  throw new Error(`--vit-finite-phase-layer must be a non-negative integer, got ${vitFinitePhaseLayerArg}`);
+}
+const smokePageUrl = `http://127.0.0.1:${serverPort}/smokes/sam-mask-island-parity.html?manifest=/oracle/tensor-manifest.json${vitFinitePhaseLayer == null ? '' : `&vitFinitePhaseLayer=${vitFinitePhaseLayer}`}${diagnosticDir ? '&diagnosticReadback=1' : ''}`;
 
 let phase = 'initializing';
 let stderr = '';
@@ -134,6 +150,25 @@ let browserVersion = null;
 let primaryOutputWritten = false;
 let lastState = null;
 let packetManifest = null;
+let packageInvocationEvidence = null;
+let secondPacketManifest = null;
+let secondPackageInvocationEvidence = null;
+let firstInvocationState = null;
+let dualInvocationEvidence = null;
+const diagnosticReadbackEvidence = [];
+const requiredDiagnosticTensorNames = [
+  'encoderHiddenStates',
+  'encoderPos',
+  'promptFeatures',
+  'promptMask',
+  'pixelEmbed',
+  'decoderHiddenStates',
+  'lastHs',
+  'referenceBoxes',
+  'presenceLogits',
+  'maskLogits',
+];
+const diagnosticBase64ChunkCharacters = 262144;
 let server = null;
 let chromeProcess = null;
 const consoleEvents = [];
@@ -144,6 +179,18 @@ function manifestTolerance(name, fallback) {
 
 function effectiveToleranceBudgetSource() {
   return packetManifest?.toleranceBudgetSource || null;
+}
+
+function resolvePacketManifest(rootManifest, packetRoot = oracleDir) {
+  const oracleRoot = resolve(packetRoot);
+  return resolveSam3BrowserPackageManifestSync(rootManifest, {
+    readArtifactText: file => {
+      const artifactPath = resolve(oracleRoot, file);
+      if (artifactPath !== oracleRoot && !artifactPath.startsWith(`${oracleRoot}/`)) throw new Error(`package artifact escapes oracle directory: ${file}`);
+      return readFileSync(artifactPath, 'utf8');
+    },
+    sha256Text: text => `sha256:${createHash('sha256').update(text).digest('hex')}`,
+  });
 }
 
 function detectorStackReport(state) {
@@ -421,7 +468,7 @@ function assertImagePatchEmbedEvidence(state) {
   if (report.receipt?.effectiveRouteId !== IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID) throw new Error('imagePatchEmbed route receipt identity mismatch');
   if (!Array.isArray(report.receiptChain) || report.receiptChain.length !== 7 || report.receiptChain[0] !== IMAGE_PREPROCESS_PHASE_PROGRAM_ROUTE_ID || report.receiptChain[1] !== IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID) throw new Error('imagePatchEmbed composition receipt chain mismatch');
   if (!report.patchEmbeddingsTensorSha256 || !report.patchEmbeddingsOutput?.sha256 || !report.patchEmbeddingsOutput?.artifactId || !report.patchProjectionWeightSha256) throw new Error('imagePatchEmbed edge identity missing');
-  if (report.parity?.patchEmbeddingsMaxAbsDiff > 0.0005 || report.parity?.imagePatchEmbedCpuMaxAbsDiff > 0.000002) throw new Error('imagePatchEmbed parity mismatch');
+  if (report.parity?.patchEmbeddingsMaxAbsDiff > 0.0005 || report.parity?.imagePatchEmbedCpuMaxAbsDiff > manifestTolerance('imagePatchEmbedCpuMaxAbsDiff', 0.000002)) throw new Error('imagePatchEmbed parity mismatch');
   if (report.nonClaims?.originalImageResize !== true || report.nonClaims?.browserLocalViTBlocks !== true || report.nonClaims?.browserLocalFpnNeck !== true || report.nonClaims?.browserLocalTextEncoder !== true || report.nonClaims?.fullSam3BrowserExecution !== true) throw new Error('imagePatchEmbed bounded non-claims missing');
   return report;
 }
@@ -496,7 +543,7 @@ function assertImageFpnNeckEvidence(state) {
   if (!tokenizer || tokenizer.runtimeOwner !== 'browser' || !tokenizer.inputIdsSha256 || !tokenizer.attentionMaskSha256 || !tokenizer.vocab?.sha256 || !tokenizer.merges?.sha256 || tokenizer.effectiveVocabSha256 !== tokenizer.vocab.sha256 || tokenizer.effectiveMergesSha256 !== tokenizer.merges.sha256) throw new Error('imageFpnNeck browser prompt tokenizer evidence missing or asset identity mismatched');
   if (tokenizer.promptTokenIdMismatchCount !== 0 || tokenizer.promptAttentionMaskMismatchCount !== 0) throw new Error('imageFpnNeck browser prompt tokenizer parity mismatch');
   if (ingress?.nonClaims?.browserTokenizer === true || ingress?.edge?.nonClaims?.browserTokenizer === true) throw new Error('imageFpnNeck text ingress evidence still non-claims browser tokenizer');
-  if (effectiveToleranceBudgetSource() !== 'browser-fpn-prompt-text-pixel-detector-stack') throw new Error('imageFpnNeck tolerance budget source mismatch');
+  if (effectiveToleranceBudgetSource() !== 'gate-u-mlx-metal-erf-two-prompt-grounded-browser-fpn-detector-stack-2026-07-13') throw new Error('imageFpnNeck tolerance budget source mismatch');
   const promptText = browserPromptTextReport(state);
   if (!promptText?.promptTextTensorSha256 || !promptText.promptTextWeightsSha256 || !promptText.promptFeaturesOutput?.sha256 || !promptText.promptMaskOutput?.sha256) throw new Error('imageFpnNeck browser prompt/text evidence missing');
   if (promptText.receipt?.effectiveRouteId !== PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID) throw new Error('imageFpnNeck prompt/text ingress receipt identity mismatch');
@@ -531,6 +578,89 @@ function reportSourceImageIdentity() {
   return { sourceImage: null, sourceImageIdentitySource: null };
 }
 
+function writeDiagnosticReadback(payload) {
+  if (!diagnosticDir) return null;
+  if (!payload || payload.schema !== 'kaminos.sam3-browser-diagnostic-readback.v0') {
+    throw new Error('browser diagnostic readback missing or malformed');
+  }
+  if (!payload.packageId || !payload.invocationId) throw new Error('browser diagnostic readback identity missing');
+  const expectedPackageId = lastState?.packageInvocationEvidence?.packageId;
+  const expectedInvocationId = lastState?.packageInvocationEvidence?.invocationId;
+  if (payload.packageId !== expectedPackageId || payload.invocationId !== expectedInvocationId) {
+    throw new Error('browser diagnostic readback identity does not match terminal invocation state');
+  }
+  const invocationSlug = payload.invocationId.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(-80);
+  const invocationDir = join(diagnosticDir, invocationSlug);
+  mkdirSync(invocationDir, { recursive: true });
+  const tensors = {};
+  for (const name of requiredDiagnosticTensorNames) {
+    const tensor = payload.tensors?.[name];
+    if (!tensor || tensor.dtype !== 'float32-le' || !Number.isInteger(tensor.elementCount) || tensor.elementCount < 1 || !Number.isInteger(tensor.byteLength) || tensor.byteLength !== tensor.elementCount * 4 || typeof tensor.base64 !== 'string' || tensor.base64.length === 0) {
+      throw new Error(`browser diagnostic tensor ${name} missing or malformed`);
+    }
+    const bytes = Buffer.from(tensor.base64, 'base64');
+    if (bytes.byteLength !== tensor.byteLength) throw new Error(`browser diagnostic tensor ${name} byte length mismatch`);
+    const path = join(invocationDir, `${name}.f32.bin`);
+    writeFileSync(path, bytes);
+    tensors[name] = {
+      path,
+      dtype: tensor.dtype,
+      elementCount: tensor.elementCount,
+      byteLength: tensor.byteLength,
+      sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+    };
+  }
+  const evidence = {
+    schema: 'kaminos.sam3-browser-diagnostic-readback-evidence.v0',
+    packageId: payload.packageId,
+    invocationId: payload.invocationId,
+    directory: invocationDir,
+    tensors,
+  };
+  diagnosticReadbackEvidence.push(evidence);
+  return evidence;
+}
+
+async function persistCurrentDiagnosticReadback(ws) {
+  if (!diagnosticDir) return null;
+  let payload = null;
+  for (const tensorName of requiredDiagnosticTensorNames) {
+    let base64Offset = 0;
+    let tensorMetadata = null;
+    const base64Chunks = [];
+    do {
+      const fragment = await evaluate(ws, `(() => {
+        const read = window.samMaskIslandDiagnosticReadback;
+        return typeof read === 'function' ? read({
+          tensorName: ${JSON.stringify(tensorName)},
+          base64Offset: ${base64Offset},
+          base64Length: ${diagnosticBase64ChunkCharacters},
+        }) : null;
+      })()`);
+      if (!fragment) throw new Error(`browser diagnostic readback missing for ${tensorName}`);
+      if (!payload) payload = { ...fragment, tensors: {} };
+      if (fragment.packageId !== payload.packageId || fragment.invocationId !== payload.invocationId) {
+        throw new Error(`browser diagnostic identity changed while reading ${tensorName}`);
+      }
+      const tensor = fragment.tensors?.[tensorName];
+      if (!tensor || tensor.base64Offset !== base64Offset || !Number.isInteger(tensor.base64TotalLength) || tensor.base64TotalLength < 1 || typeof tensor.base64 !== 'string' || tensor.base64.length < 1) {
+        throw new Error(`browser diagnostic chunk ${tensorName}@${base64Offset} missing or malformed`);
+      }
+      if (!tensorMetadata) tensorMetadata = { ...tensor, base64: undefined };
+      if (tensor.base64TotalLength !== tensorMetadata.base64TotalLength || tensor.byteLength !== tensorMetadata.byteLength || tensor.elementCount !== tensorMetadata.elementCount) {
+        throw new Error(`browser diagnostic metadata changed while reading ${tensorName}`);
+      }
+      base64Chunks.push(tensor.base64);
+      base64Offset += tensor.base64.length;
+    } while (base64Offset < tensorMetadata.base64TotalLength);
+    if (base64Offset !== tensorMetadata.base64TotalLength) {
+      throw new Error(`browser diagnostic ${tensorName} base64 ranges exceeded total length`);
+    }
+    payload.tensors[tensorName] = { ...tensorMetadata, base64: base64Chunks.join('') };
+  }
+  return writeDiagnosticReadback(payload);
+}
+
 function writeReport(extra = {}) {
   const { sourceImage: reportSourceImage, sourceImageIdentitySource } = reportSourceImageIdentity();
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -538,11 +668,14 @@ function writeReport(extra = {}) {
     schema: REPORT_SCHEMA,
     requestedRouteId,
     effectiveRouteId: lastState?.effectiveRouteId || null,
-    requestedUrl: `http://127.0.0.1:${serverPort}/smokes/sam-mask-island-parity.html?manifest=/oracle/tensor-manifest.json`,
+    requestedUrl: smokePageUrl,
     packageRoot,
     oracleDir,
+    secondOracleDir,
+    diagnosticDir,
     packetMode,
     packetTool,
+    oraclePacketSource,
     mlxVlmRoot,
     sourceImage: reportSourceImage,
     sourceImageIdentitySource,
@@ -574,6 +707,11 @@ function writeReport(extra = {}) {
     browserPromptTokenizerEvidence: lastState?.browserPromptTokenizerEvidence || null,
     browserPromptTextEvidence: lastState?.browserPromptTextEvidence || null,
     browserPromptFpnPixelEvidence: lastState?.browserPromptFpnPixelEvidence || null,
+    packageInvocationEvidence: lastState?.packageInvocationEvidence || packageInvocationEvidence,
+    firstInvocationState,
+    dualInvocationEvidence,
+    diagnosticReadbackEvidence,
+    preDecoderCheckpointEvidence: lastState?.preDecoderCheckpointEvidence || null,
     parity: lastState?.parity || null,
     tolerances: packetManifest?.tolerances || null,
     effectiveToleranceBudgetSource: effectiveToleranceBudgetSource(),
@@ -613,12 +751,21 @@ function startServer() {
   server = createServer((request, response) => {
     try {
       const url = new URL(request.url, `http://127.0.0.1:${serverPort}`);
-      const root = url.pathname.startsWith('/oracle/') ? oracleDir : packageRoot;
-      const relative = url.pathname.startsWith('/oracle/')
+      const isSecondOracle = url.pathname.startsWith('/oracle2/');
+      const isPrimaryOracle = url.pathname.startsWith('/oracle/');
+      const root = isSecondOracle ? secondOracleDir : isPrimaryOracle ? oracleDir : packageRoot;
+      const relative = isSecondOracle
+        ? url.pathname.slice('/oracle2/'.length)
+        : isPrimaryOracle
         ? url.pathname.slice('/oracle/'.length)
         : url.pathname.slice(1);
+      if (!root) {
+        response.writeHead(404);
+        response.end(`missing route root ${url.pathname}`);
+        return;
+      }
       const filePath = resolve(root, relative || 'smokes/sam-mask-island-parity.html');
-      if (!filePath.startsWith(root)) {
+      if (filePath !== root && !filePath.startsWith(`${root}/`)) {
         response.writeHead(403);
         response.end('forbidden');
         return;
@@ -646,8 +793,13 @@ function startServer() {
   });
 }
 
-function generateOraclePacket() {
-  mkdirSync(oracleDir, { recursive: true });
+function generateOraclePacket(packetDir = oracleDir, packetPrompt = prompt) {
+  if (reuseOraclePacket) {
+    const rootManifestPath = join(packetDir, 'tensor-manifest.json');
+    if (!existsSync(rootManifestPath)) throw new Error(`reused oracle packet manifest missing: ${rootManifestPath}`);
+    return;
+  }
+  mkdirSync(packetDir, { recursive: true });
   const isPython = packetTool.endsWith('.py');
   const command = isPython ? 'uv' : process.execPath;
   const packetArgs = isPython
@@ -656,15 +808,15 @@ function generateOraclePacket() {
         '--project', mlxVlmRoot,
         'python',
         packetTool,
-        '--out-dir', oracleDir,
+        '--out-dir', packetDir,
         '--image', sourceImage,
-        '--prompt', prompt,
+        '--prompt', packetPrompt,
         '--model', model,
         '--resolution', String(resolution),
       ]
     : [
         packetTool,
-        '--out-dir', oracleDir,
+        '--out-dir', packetDir,
         '--batch', '1',
         '--mask-tokens', '1',
         '--channels', '2',
@@ -672,7 +824,7 @@ function generateOraclePacket() {
         '--width', '8',
         '--source-image-artifact-id', 'image:synthetic-sam-browser-parity',
         '--source-image-sha256', 'sha256:synthetic-browser-parity-image',
-        '--prompt', prompt,
+        '--prompt', packetPrompt,
         '--model', model,
       ];
   if (isPython && packetMode === 'mlx-detr-stack-scoring-export') packetArgs.push('--include-scoring');
@@ -720,14 +872,14 @@ function waitForWebSocketOpen(ws) {
   });
 }
 
-function wsRequest(ws, method, params = {}) {
+function wsRequest(ws, method, params = {}, timeoutMs = cdpTimeoutMs) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveReq, rejectReq) => {
     const timer = setTimeout(() => {
       ws.removeEventListener('message', onMessage);
-      rejectReq(new Error(`${method}: CDP request timed out`));
-    }, cdpTimeoutMs);
+      rejectReq(new Error(`${method}: CDP request timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
     const onMessage = event => {
       const msg = JSON.parse(String(event.data));
       if (msg.method === 'Runtime.consoleAPICalled') {
@@ -754,28 +906,59 @@ function wsRequest(ws, method, params = {}) {
   });
 }
 
-async function evaluate(ws, expression) {
+async function evaluate(ws, expression, timeoutMs = cdpTimeoutMs) {
   const result = await wsRequest(ws, 'Runtime.evaluate', {
     awaitPromise: true,
     returnByValue: true,
     expression,
-  });
+  }, timeoutMs);
   if (result.exceptionDetails) {
     throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'Runtime.evaluate failed');
   }
   return result.result.value;
 }
 
+function invocationSummaryFromState(invocationState) {
+  const evidence = invocationState?.packageInvocationEvidence;
+  return {
+    packageId: evidence?.packageId || null,
+    invocationId: evidence?.invocationId || null,
+    verificationSha256: evidence?.verification?.effectiveSha256 || null,
+    requestIds: invocationState?.invocationRequestIds || [],
+    outputIdentity: invocationState?.invocationOutputIdentity || null,
+    effectiveRouteId: invocationState?.effectiveRouteId || null,
+    terminalOutputs: invocationState?.downstreamRouteReceipt?.outputs || [],
+    parity: invocationState?.parity || null,
+    staticArtifactCacheEvidence: invocationState?.staticArtifactCacheEvidence || null,
+  };
+}
+
 async function main() {
   try {
     phase = 'generate_oracle_packet';
     generateOraclePacket();
-    packetManifest = JSON.parse(readFileSync(join(oracleDir, 'tensor-manifest.json'), 'utf8'));
+    if (secondOracleDir) generateOraclePacket(secondOracleDir, secondPrompt);
+    const rootManifest = JSON.parse(readFileSync(join(oracleDir, 'tensor-manifest.json'), 'utf8'));
+    ({ manifest: packetManifest, evidence: packageInvocationEvidence } = resolvePacketManifest(rootManifest));
+    if (secondOracleDir) {
+      const secondRootManifest = JSON.parse(readFileSync(join(secondOracleDir, 'tensor-manifest.json'), 'utf8'));
+      ({ manifest: secondPacketManifest, evidence: secondPackageInvocationEvidence } = resolvePacketManifest(secondRootManifest, secondOracleDir));
+      if (packageInvocationEvidence?.packageId !== secondPackageInvocationEvidence?.packageId) {
+        throw new Error('second invocation changed model package identity');
+      }
+      if (packageInvocationEvidence?.invocationId === secondPackageInvocationEvidence?.invocationId) {
+        throw new Error('second invocation reused invocation identity');
+      }
+      if (packageInvocationEvidence?.verification?.effectiveSha256 === secondPackageInvocationEvidence?.verification?.effectiveSha256) {
+        throw new Error('second invocation reused verification identity');
+      }
+      if (secondPacketManifest.routeId !== packetManifest.routeId) throw new Error('second invocation changed route identity');
+    }
 
     phase = 'start_server';
     await startServer();
 
-    const url = `http://127.0.0.1:${serverPort}/smokes/sam-mask-island-parity.html?manifest=/oracle/tensor-manifest.json`;
+    const url = smokePageUrl;
     phase = 'launch_chrome';
     const chromeArgs = [
       `--remote-debugging-port=${debugPort}`,
@@ -818,14 +1001,18 @@ async function main() {
     phase = 'wait_parity_state';
     const deadline = Date.now() + hookWaitMs;
     while (Date.now() < deadline) {
+      const remainingHookWaitMs = Math.max(1, deadline - Date.now());
       lastState = await evaluate(ws, `(() => {
         const read = window.samMaskIslandParitySmokeState;
         return typeof read === 'function' ? read() : null;
-      })()`);
+      })()`, Math.min(cdpTimeoutMs, remainingHookWaitMs));
       if (lastState?.status === 'passed' || lastState?.status === 'failed') break;
       await delay(250);
     }
     if (!lastState) throw new Error('missing samMaskIslandParitySmokeState');
+    phase = 'write_diagnostic_readback';
+    await persistCurrentDiagnosticReadback(ws);
+    phase = 'validate_parity_state';
     if (lastState.status !== 'passed') {
       throw new Error(`SAM browser parity did not pass: ${JSON.stringify(lastState)}`);
     }
@@ -1250,6 +1437,75 @@ async function main() {
     }
     if (lastState.parity?.maskLogitsMaxAbsDiff > manifestTolerance('webGpuLogitsMaxAbsDiff', 0.0001)) throw new Error('mask logits parity exceeds tolerance');
     if (lastState.claims?.fullSam3BrowserExecution !== false) throw new Error('smoke overclaimed full SAM3 browser execution');
+
+    if (secondOracleDir) {
+      firstInvocationState = JSON.parse(JSON.stringify(lastState));
+      phase = 'start_second_invocation';
+      await evaluate(ws, `(() => {
+        const run = window.runSam3Invocation;
+        if (typeof run !== 'function') throw new Error('window.runSam3Invocation missing');
+        void run('/oracle2/tensor-manifest.json').catch(() => {});
+        return true;
+      })()`);
+      phase = 'wait_second_parity_state';
+      const secondDeadline = Date.now() + hookWaitMs;
+      while (Date.now() < secondDeadline) {
+        const remainingHookWaitMs = Math.max(1, secondDeadline - Date.now());
+        lastState = await evaluate(ws, `(() => {
+          const read = window.samMaskIslandParitySmokeState;
+          return typeof read === 'function' ? read() : null;
+        })()`, Math.min(cdpTimeoutMs, remainingHookWaitMs));
+        if (lastState?.status === 'passed' || lastState?.status === 'failed') break;
+        await delay(250);
+      }
+      phase = 'write_second_diagnostic_readback';
+      await persistCurrentDiagnosticReadback(ws);
+      phase = 'validate_second_parity_state';
+      if (!lastState || lastState.status !== 'passed') {
+        throw new Error(`second SAM browser invocation did not pass: ${JSON.stringify(lastState)}`);
+      }
+      if (lastState.requestedRouteId !== requestedRouteId || lastState.effectiveRouteId !== requestedRouteId) {
+        throw new Error(`second invocation route identity mismatch: ${lastState.requestedRouteId} -> ${lastState.effectiveRouteId}`);
+      }
+      if (lastState.claims?.fullSam3BrowserExecution !== false) throw new Error('second invocation overclaimed full SAM3 browser execution');
+      dualInvocationEvidence = createSam3DualInvocationEvidence(
+        invocationSummaryFromState(firstInvocationState),
+        invocationSummaryFromState(lastState),
+      );
+      const firstCache = firstInvocationState.staticArtifactCacheEvidence;
+      const secondCache = lastState.staticArtifactCacheEvidence;
+      if (!firstCache || !secondCache) throw new Error('dual invocation static artifact cache evidence missing');
+      if (firstCache.staticHashVerificationFailureCount !== 0 || secondCache.staticHashVerificationFailureCount !== 0) {
+        throw new Error('dual invocation static package payload authentication failed');
+      }
+      if (firstCache.dynamicHashVerificationFailureCount !== 0 || secondCache.dynamicHashVerificationFailureCount !== 0) {
+        throw new Error('dual invocation verification tensor payload authentication failed');
+      }
+      if (firstCache.dynamicHashVerificationCount === 0 || secondCache.dynamicHashVerificationCount <= firstCache.dynamicHashVerificationCount) {
+        throw new Error('dual invocation did not freshly authenticate verification tensor payloads');
+      }
+      if (firstCache.staticHashVerificationCount !== firstCache.staticNetworkLoadCount) {
+        throw new Error('first invocation did not authenticate every static network payload');
+      }
+      if (secondCache.staticHashVerificationCount !== firstCache.staticHashVerificationCount) {
+        throw new Error('second invocation changed static package authentication count');
+      }
+      if (firstCache.staticNetworkLoadCount !== secondCache.staticNetworkLoadCount) {
+        throw new Error('second invocation reloaded static model package artifacts');
+      }
+      if (secondCache.configurationCount !== 2) throw new Error('static model package was not configured for exactly two invocations');
+      if (secondCache.staticCacheHitCount <= firstCache.staticCacheHitCount) {
+        throw new Error('second invocation did not reuse static model package artifacts');
+      }
+      dualInvocationEvidence.staticArtifactCache = {
+        first: firstCache,
+        second: secondCache,
+        staticNetworkLoadsUnchanged: true,
+        cacheHitsIncreased: true,
+        staticPayloadsAuthenticated: true,
+        dynamicVerificationPayloadsAuthenticated: true,
+      };
+    }
 
     phase = 'capture_screenshot';
     await delay(settleMs);

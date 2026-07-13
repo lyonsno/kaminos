@@ -217,8 +217,66 @@ struct LinearDims {
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 
-fn gelu_tanh(x: f32) -> f32 {
-  return 0.5 * x * (1.0 + tanh(0.7978845608028654 * (x + 0.044715 * x * x * x)));
+fn mlx_expm1f(x: f32) -> f32 {
+  var j = fma(1.442695, x, 12582912.0);
+  j = j - 12582912.0;
+  let exponent = i32(j);
+  let reduced = fma(j, -6.93145752e-1, x);
+  var squared = reduced * reduced;
+  if (x == 0.0) { squared = x; }
+  var polynomial = 1.97350979e-4;
+  polynomial = fma(polynomial, reduced, 1.39309070e-3);
+  polynomial = fma(polynomial, reduced, 8.33343994e-3);
+  polynomial = fma(polynomial, reduced, 4.16668020e-2);
+  polynomial = fma(polynomial, reduced, 1.66666716e-1);
+  polynomial = fma(polynomial, reduced, 4.99999970e-1);
+  let base = select(reduced, reduced + 0.5, j == 1.0);
+  let approximation = fma(polynomial, squared, base);
+  let half = 0.5;
+  let scaled = ldexp(half, exponent);
+  let high = scaled - half;
+  let low = (scaled - high) - half;
+  var result = fma(approximation, scaled, low) + high;
+  result = result + result;
+  if (j == 0.0) { result = approximation; }
+  if (j == 1.0) { result = approximation + approximation; }
+  if (abs(x - 1.0) > 88.0) {
+    let power = exp2(x);
+    result = fma(power, power, -1.0);
+  }
+  return result;
+}
+
+fn mlx_erf(x: f32) -> f32 {
+  let magnitude = abs(x);
+  let squared = x * x;
+  var result: f32;
+  if (magnitude > 0.927734375) {
+    result = fma(-1.72853470e-5, magnitude, 3.83197126e-4);
+    let companion = fma(-3.88396438e-3, magnitude, 2.42546219e-2);
+    result = fma(result, squared, companion);
+    result = fma(result, magnitude, -1.06777877e-1);
+    result = fma(result, magnitude, -6.34846687e-1);
+    result = fma(result, magnitude, -1.28717512e-1);
+    result = fma(result, magnitude, -magnitude);
+    result = -mlx_expm1f(result);
+    result = select(-abs(result), abs(result), x >= 0.0);
+  } else {
+    result = -5.96761703e-4;
+    result = fma(result, squared, 4.99119423e-3);
+    result = fma(result, squared, -2.67681349e-2);
+    result = fma(result, squared, 1.12819925e-1);
+    result = fma(result, squared, -3.76125336e-1);
+    result = fma(result, squared, 1.28379166e-1);
+    result = fma(result, x, x);
+  }
+  return result;
+}
+
+fn gelu_exact_approx(x: f32) -> f32 {
+  if (x < -10.0) { return 0.0; }
+  if (x > 10.0) { return x; }
+  return 0.5 * x * (1.0 + mlx_erf(x * 0.7071067811865476));
 }
 
 @compute @workgroup_size(64)
@@ -233,7 +291,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   for (var c = 0u; c < dims.input_channels; c = c + 1u) {
     sum = sum + input_values[input_base + c] * weight[weight_base + c];
   }
-  output_values[index] = gelu_tanh(sum);
+  output_values[index] = gelu_exact_approx(sum);
 }
 `;
 
@@ -517,7 +575,7 @@ function validateImageVitBlockStackInputs(input = {}) {
 }
 
 function gelu(value) {
-  return 0.5 * value * (1 + Math.tanh(Math.sqrt(2 / Math.PI) * (value + 0.044715 * value * value * value)));
+  return stableSam3Gelu(value);
 }
 
 function layerNorm(input, weight, bias, tokenCount, channels, eps) {
@@ -781,6 +839,96 @@ function workgroups(total) {
   return Math.max(1, Math.ceil(total / 64));
 }
 
+export function summarizeSam3FiniteValues(values) {
+  if (!Array.isArray(values) && !ArrayBuffer.isView(values)) {
+    throw new Error('finite checkpoint values must be an array or typed array');
+  }
+  let finiteCount = 0;
+  let nanCount = 0;
+  let positiveInfinityCount = 0;
+  let negativeInfinityCount = 0;
+  let firstNonFinite = null;
+  for (let index = 0; index < values.length; index += 1) {
+    const value = Number(values[index]);
+    let kind = null;
+    if (Number.isNaN(value)) kind = 'nan';
+    else if (value === Number.POSITIVE_INFINITY) kind = 'positive-infinity';
+    else if (value === Number.NEGATIVE_INFINITY) kind = 'negative-infinity';
+    else if (Number.isFinite(value)) {
+      finiteCount += 1;
+      continue;
+    } else kind = 'non-finite';
+
+    if (firstNonFinite === null) firstNonFinite = { index, kind };
+    if (kind === 'nan') nanCount += 1;
+    else if (kind === 'positive-infinity') positiveInfinityCount += 1;
+    else if (kind === 'negative-infinity') negativeInfinityCount += 1;
+  }
+  return {
+    elementCount: values.length,
+    finiteCount,
+    nonFiniteCount: values.length - finiteCount,
+    nanCount,
+    positiveInfinityCount,
+    negativeInfinityCount,
+    firstNonFinite,
+  };
+}
+
+export function stableSam3Gelu(value) {
+  if (value < -10) return 0;
+  if (value > 10) return value;
+  return 0.5 * value * (1 + mlxMetalErf(value * 0.7071067811865476));
+}
+
+function mlxMetalErf(value) {
+  const magnitude = Math.abs(value);
+  const squared = value * value;
+  let result;
+  if (magnitude > 0.927734375) {
+    result = -1.72853470e-5 * magnitude + 3.83197126e-4;
+    const companion = -3.88396438e-3 * magnitude + 2.42546219e-2;
+    result = result * squared + companion;
+    result = result * magnitude - 1.06777877e-1;
+    result = result * magnitude - 6.34846687e-1;
+    result = result * magnitude - 1.28717512e-1;
+    result = result * magnitude - magnitude;
+    result = -Math.expm1(result);
+    return value < 0 ? -Math.abs(result) : Math.abs(result);
+  }
+  result = -5.96761703e-4;
+  result = result * squared + 4.99119423e-3;
+  result = result * squared - 2.67681349e-2;
+  result = result * squared + 1.12819925e-1;
+  result = result * squared - 3.76125336e-1;
+  result = result * squared + 1.28379166e-1;
+  return result * value + value;
+}
+
+export function summarizeSam3LayerParityCheckpoint(layerIndex, isGlobal, expected, actual) {
+  if (!(expected instanceof Float32Array) || !(actual instanceof Float32Array)) {
+    throw new Error('layer parity expected and actual values must be Float32Array instances');
+  }
+  if (expected.length !== actual.length) {
+    throw new Error(`layer parity length mismatch: expected ${expected.length}, received ${actual.length}`);
+  }
+  let maxAbsDiff = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    maxAbsDiff = Math.max(maxAbsDiff, Math.abs(expected[index] - actual[index]));
+  }
+  return { layerIndex, isGlobal, elementCount: actual.length, maxAbsDiff };
+}
+
+export function summarizeSam3FinitePhaseOutputs(outputs) {
+  if (!outputs || typeof outputs !== 'object' || Array.isArray(outputs)) {
+    throw new Error('finite phase outputs must be an object');
+  }
+  return Object.entries(outputs).map(([phase, bytes]) => ({
+    phase,
+    ...summarizeSam3FiniteValues(new Float32Array(bytes)),
+  }));
+}
+
 export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || createSam3ImageVitBlockStackPhaseProgramRouteDefinition({ kernel: input.kernel });
@@ -788,6 +936,12 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
   const hiddenStatesArtifact = roleArtifact(input.request.inputs, 'vit-prefix-hidden-states');
   const weightsArtifact = roleArtifact(input.request.inputs, 'sam3-image-vit-block-stack-weights');
   const { shape, hiddenStates, weights } = validateImageVitBlockStackInputs(input.tensors || {});
+  const expectedLayerCheckpoints = input.expectedLayerCheckpoints == null
+    ? null
+    : new Map(input.expectedLayerCheckpoints.map(checkpoint => [checkpoint.layerIndex, checkpoint.hiddenStates]));
+  if (expectedLayerCheckpoints && expectedLayerCheckpoints.size !== weights.layers.length) {
+    throw new Error(`expectedLayerCheckpoints must cover all ${weights.layers.length} executed ViT layers`);
+  }
 
   const runtime = await createWebGpuInferenceRuntime({
     routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
@@ -916,7 +1070,50 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
 
   const bindTensor = (resource, access = 'read-only-storage') => ({ name: resource.replace(/^tensor:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, access });
   const bindUniform = resource => ({ name: resource.replace(/^uniform:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' });
-  const createLayerProgram = ({ layerShape, inputTensorName, outputTensorName }) => runtime.defineProgram({
+  const createLayerProgram = ({ layerShape, inputTensorName, outputTensorName }) => {
+    const phases = [
+      { name: 'vit-block-stack-layernorm1', kernel: 'layerNorm1', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-window-partition', kernel: 'windowPartition', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'qProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'kProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'vProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-rope-attention', kernel: 'qRope', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-rope-attention', kernel: 'kRope', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: layerShape.isGlobal ? 'vit-block-stack-global-attention' : 'vit-block-stack-rope-attention', kernel: 'attention', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-output-projection', kernel: 'outputProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-window-unpartition', kernel: 'windowUnpartition', dispatch: [workgroups(shape.totalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-layernorm2', kernel: 'layerNorm2', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc1', dispatch: [workgroups(shape.tokenCount * shape.intermediateSize)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: [workgroups(shape.totalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: [workgroups(shape.totalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+    ];
+    const phaseTensorNames = {
+      layerNorm1: 'layerNorm1',
+      windowPartition: 'windows',
+      qProjection: 'q',
+      kProjection: 'k',
+      vProjection: 'v',
+      qRope: 'qRope',
+      kRope: 'kRope',
+      attention: 'attention',
+      outputProjection: 'projected',
+      windowUnpartition: 'attentionResidual',
+      layerNorm2: 'layerNorm2',
+      mlpFc1: 'mlpHidden',
+      mlpFc2: 'mlpOut',
+      residualMlp: outputTensorName,
+    };
+    const instrumentedPhases = input.validateFinitePhaseLayerIndex === layerShape.layerIndex
+      ? phases.flatMap(phase => [
+          phase,
+          {
+            name: `validate-vit-block-stack-layer-${layerShape.layerIndex}-${phase.kernel}-finite`,
+            readback: { name: phase.kernel, tensor: `tensor:${phaseTensorNames[phase.kernel]}` },
+            metadata: { layerIndex: layerShape.layerIndex, kernel: phase.kernel, diagnostic: 'finite-phase-checkpoint' },
+          },
+        ])
+      : phases;
+    return runtime.defineProgram({
     name: `sam3.image-vit-block-stack-layer-${layerShape.layerIndex}-phase-program`,
     tensors,
     uniforms: { blockDims: tensors.blockDims, lnDims: tensors.lnDims, windowLinearDims: tensors.windowLinearDims, fc1Dims: tensors.fc1Dims, fc2Dims: tensors.fc2Dims },
@@ -936,24 +1133,10 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
       mlpFc2: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
       residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor(`tensor:${outputTensorName}`, 'storage')] },
     },
-    phases: [
-      { name: 'vit-block-stack-layernorm1', kernel: 'layerNorm1', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-window-partition', kernel: 'windowPartition', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'qProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'kProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'vProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-rope-attention', kernel: 'qRope', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-rope-attention', kernel: 'kRope', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: layerShape.isGlobal ? 'vit-block-stack-global-attention' : 'vit-block-stack-rope-attention', kernel: 'attention', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-output-projection', kernel: 'outputProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-window-unpartition', kernel: 'windowUnpartition', dispatch: [workgroups(shape.totalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-layernorm2', kernel: 'layerNorm2', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc1', dispatch: [workgroups(shape.tokenCount * shape.intermediateSize)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: [workgroups(shape.totalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: [workgroups(shape.totalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-    ],
+    phases: instrumentedPhases,
     metadata: { routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', referenceBoundary: shape.fullBackbone ? 'SAM3 image ViT contiguous full backbone' : 'SAM3 image ViT contiguous block stack through first global attention' },
   });
+  };
 
   await runtime.runStage('vit-block-stack-layer-range', async stage => {
     await stage.yieldToBrowser({ reason: 'sam3-image-vit-block-stack-layer-range-established', metadata: { startLayerIndex: shape.startLayerIndex, endLayerIndex: shape.endLayerIndex, firstGlobalLayerIndex: shape.firstGlobalLayerIndex, finalLayerIndex: shape.finalLayerIndex, fullBackbone: shape.fullBackbone } });
@@ -961,6 +1144,8 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
 
   let inputTensorName = 'hiddenA';
   let outputTensorName = 'hiddenB';
+  const finiteCheckpoints = [];
+  const finitePhaseCheckpoints = [];
   for (const layer of weights.layers) {
     const layerShape = blockShapeForLayer(shape, layer);
     await runtime.runStage('vit-block-stack-layer-range', async stage => {
@@ -970,7 +1155,40 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
       await stage.yieldToBrowser({ reason: 'sam3-image-vit-block-stack-layer-upload', metadata: { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, windowSize: layerShape.windowSize } });
     }, { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, windowSize: layerShape.windowSize, windowTokens: layerShape.windowTokens });
     const program = createLayerProgram({ layerShape, inputTensorName, outputTensorName });
-    await runtime.runProgram(program);
+    const programRun = await runtime.runProgram(program);
+    if (input.validateFinitePhaseLayerIndex === layer.layerIndex) {
+      const phaseEvidence = summarizeSam3FinitePhaseOutputs(programRun.outputs);
+      finitePhaseCheckpoints.push({ layerIndex: layer.layerIndex, phases: phaseEvidence });
+      const firstNonFinitePhase = phaseEvidence.find(checkpoint => checkpoint.nonFiniteCount > 0);
+      if (firstNonFinitePhase) {
+        runtime.dispose();
+        throw new Error(`SAM3 ViT block layer ${layer.layerIndex} first non-finite phase: ${JSON.stringify(firstNonFinitePhase)}; phase checkpoints: ${JSON.stringify(phaseEvidence)}`);
+      }
+    }
+    if (input.validateFiniteCheckpoints === true) {
+      const checkpointBytes = await runtime.runStage(
+        `validate-vit-block-stack-layer-${layer.layerIndex}-finite`,
+        stage => stage.readTensor(tensors[outputTensorName]),
+        { layerIndex: layer.layerIndex, isGlobal: layerShape.isGlobal, outputTensor: outputTensorName },
+      );
+      const checkpointValues = new Float32Array(checkpointBytes);
+      const checkpoint = {
+        layerIndex: layer.layerIndex,
+        isGlobal: layerShape.isGlobal,
+        ...summarizeSam3FiniteValues(checkpointValues),
+        ...(expectedLayerCheckpoints ? summarizeSam3LayerParityCheckpoint(
+          layer.layerIndex,
+          layerShape.isGlobal,
+          expectedLayerCheckpoints.get(layer.layerIndex),
+          checkpointValues,
+        ) : {}),
+      };
+      finiteCheckpoints.push(checkpoint);
+      if (checkpoint.nonFiniteCount > 0) {
+        runtime.dispose();
+        throw new Error(`SAM3 ViT block layer ${layer.layerIndex} produced non-finite checkpoint: ${JSON.stringify(checkpoint)}`);
+      }
+    }
     [inputTensorName, outputTensorName] = [outputTensorName, inputTensorName];
   }
 
@@ -992,11 +1210,14 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
   });
   const result = createRouteWorkerResult(route, { request: input.request, receipt });
   const authoritative = assertAuthoritativeRouteWorkerResult(result, route);
+  authoritative.finiteCheckpoints = finiteCheckpoints;
+  authoritative.finitePhaseCheckpoints = finitePhaseCheckpoints;
   if (input.includeReadback === true) {
     authoritative.debugReadback = {
       mode: 'explicit-debug-evidence',
       vitBlockStackHiddenStates: Array.from(new Float32Array(readback.vitBlockStackHiddenStates)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

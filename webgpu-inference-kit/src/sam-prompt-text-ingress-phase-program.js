@@ -950,5 +950,6 @@ export async function runSam3PromptTextIngressPhaseProgramRoute(input = {}) {
       promptMask: Array.from(new Float32Array(run.outputs.promptMask)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

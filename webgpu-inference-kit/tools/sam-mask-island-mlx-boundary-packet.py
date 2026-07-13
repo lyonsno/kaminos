@@ -10,10 +10,9 @@ import mlx.core as mx
 import numpy as np
 from PIL import Image
 
-from mlx_vlm.models.sam3.config import ModelConfig
 from mlx_vlm.models.sam3.processing_sam3 import Sam3Processor
 from mlx_vlm.models.sam3.sam3 import Model
-from mlx_vlm.utils import get_model_path
+from sam_mlx_model_loader import load_sam3_model
 
 
 ROUTE_ID = "sam3.mask-decoder-island.webgpu-local.v0"
@@ -40,7 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--prompt", required=True)
-    parser.add_argument("--model", default="mlx-community/sam3-image")
+    parser.add_argument("--model", default="mlx-community/sam3-bf16")
     parser.add_argument("--resolution", type=int, default=224)
     return parser.parse_args()
 
@@ -66,15 +65,9 @@ def snapshot_id(model_path: Path) -> str:
     return model_path.name
 
 
-def load_model(model_id: str) -> tuple[Model, Path, Path, str]:
-    model_path = Path(get_model_path(model_id))
-    weights_path = model_path / "model.safetensors"
-    if not weights_path.exists():
-        raise FileNotFoundError(f"model weights not found: {weights_path}")
-    weights = mx.load(str(weights_path))
-    model = Model(ModelConfig())
-    model.load_weights(list(weights.items()), strict=False)
-    return model, model_path, weights_path, sha256_file(weights_path)
+def load_model(model_id: str) -> tuple[Model, Path, Path, str, dict]:
+    model, model_path, weights_path, checkpoint_audit = load_sam3_model(model_id)
+    return model, model_path, weights_path, sha256_file(weights_path), checkpoint_audit
 
 
 def export_boundary_tensors(model: Model, image: Image.Image, prompt: str, resolution: int) -> dict:
@@ -155,7 +148,7 @@ def main() -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    model, model_path, weights_path, weights_sha = load_model(args.model)
+    model, model_path, weights_path, weights_sha, model_load_audit = load_model(args.model)
     image_path = Path(args.image).resolve()
     image = Image.open(image_path).convert("RGB")
     source_image = image.resize((args.resolution, args.resolution), Image.BILINEAR)
@@ -190,6 +183,7 @@ def main() -> None:
             "snapshot": snapshot_id(model_path),
             "role": "mlx-reference-upstream",
         },
+        "modelLoad": model_load_audit,
         "weights": {
             "file": "model.safetensors",
             "path": str(weights_path),

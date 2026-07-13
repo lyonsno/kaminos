@@ -286,5 +286,6 @@ export async function runSam3ImagePreprocessPhaseProgramRoute(input = {}) {
       pixelValues: Array.from(new Float32Array(run.outputs.pixelValues)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

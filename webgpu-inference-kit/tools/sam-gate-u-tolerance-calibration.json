@@ -1,0 +1,77 @@
+{
+  "schema": "kaminos.sam3-gate-u-tolerance-calibration.v0",
+  "createdAt": "2026-07-13T11:49:49Z",
+  "modelPackageId": "sam3-model-package:sha256:db43a2fba3e297e1331e744e21e9a3be9b7b15397e04f19089e4aec9a0c13def",
+  "method": {
+    "browserBackend": "Chrome WebGPU on Apple GPU",
+    "referenceBackend": "MLX float32 with MLX Metal erf/expm1 GELU semantics",
+    "route": "browser original image -> preprocess -> patch embed -> 32-layer ViT -> FPN neck -> text ingress -> DETR encoder/decoder -> scoring/selection -> pixel/mask tail",
+    "sampling": "two independently authenticated prompt invocations against one immutable model package",
+    "causalCheck": "authenticated browser pre-decoder tensors replayed through the unmodified MLX decoder and mask tail"
+  },
+  "samples": [
+    {
+      "promptSha256": "sha256:24611dec0a0a3ae6f9f3a63c27323a5615c029c22a8e472e2bc6ae3ca65a6293",
+      "invocationId": "sam3-invocation:sha256:86f721de1682f80e39d2c489281c02b78985f634c386c77c7653cfce6036ddd8",
+      "verificationSha256": "sha256:9f0e22e13730906fc1d6c62dbd87a3ccbdf9917c9d3ef2c396142dbbca751ef8",
+      "reportSha256": "sha256:aea3db1d895df561bfc45e15e19256c54c2e6f6dab6c8d148d3a18564e581a3b",
+      "observed": {
+        "imagePatchEmbedCpuMaxAbsDiff": 0.0000095367431640625,
+        "decoderHiddenStatesMaxAbsDiff": 0.0024722814559936523,
+        "lastHsMaxAbsDiff": 0.0024722814559936523,
+        "maskLogitsMaxAbsDiff": 0.023479461669921875,
+        "selectionBoxesMaxAbsDiff": 0.0527496337890625,
+        "binaryMismatchCount": 2,
+        "binaryElementCount": 819200
+      }
+    },
+    {
+      "promptSha256": "sha256:b404ed3c370c8c264e53b1867929db93e94012bb618bb263f514e32fd9e5bc29",
+      "invocationId": "sam3-invocation:sha256:6a1336d1f1113e53c75cd89cb8e600a9ed661c7279b2ad1996b99be0ef6efdaf",
+      "verificationSha256": "sha256:6987883a5d55e5b11ee4167b5d18427d5dafba5ace92aa0fe14fed1f147179c4",
+      "reportSha256": "sha256:2728b8d0aa8fb782c42d4a6b49bc00be3c92e29c9a085260a0ecbd6a85ac3e9d",
+      "observed": {
+        "imagePatchEmbedCpuMaxAbsDiff": 0.0000095367431640625,
+        "decoderHiddenStatesMaxAbsDiff": 0.0012650489807128906,
+        "lastHsMaxAbsDiff": 0.000985860824584961,
+        "maskLogitsMaxAbsDiff": 0.00646209716796875,
+        "selectionBoxesMaxAbsDiff": 0.017425537109375,
+        "binaryMismatchCount": 1,
+        "binaryElementCount": 819200
+      }
+    }
+  ],
+  "causalReplay": {
+    "status": "passed",
+    "sourceInvocationId": "sam3-invocation:sha256:86f721de1682f80e39d2c489281c02b78985f634c386c77c7653cfce6036ddd8",
+    "reportSha256": "sha256:7934e4277b6e0230c7f36c57e4fb12272334bac8390b84a8b9add709973aeef9",
+    "mlxReplayVsCanonical": {
+      "decoderHiddenStatesMaxAbsDiff": 0.0023940205574035645,
+      "lastHsMaxAbsDiff": 0.0023940205574035645,
+      "maskLogitsMaxAbsDiff": 0.0225372314453125,
+      "binaryMismatchCount": 2,
+      "binaryElementCount": 819200
+    }
+  },
+  "observedMaxima": {
+    "imagePatchEmbedCpuMaxAbsDiff": 0.0000095367431640625,
+    "decoderHiddenStatesMaxAbsDiff": 0.0024722814559936523,
+    "lastHsMaxAbsDiff": 0.0024722814559936523,
+    "maskLogitsMaxAbsDiff": 0.023479461669921875,
+    "selectionBoxesMaxAbsDiff": 0.0527496337890625,
+    "binaryMismatchCount": 2
+  },
+  "acceptanceBudget": {
+    "imagePatchEmbedCpuMaxAbsDiff": 0.000012,
+    "decoderHiddenStatesMaxAbsDiff": 0.003,
+    "lastHsMaxAbsDiff": 0.003,
+    "webGpuLogitsMaxAbsDiff": 0.03,
+    "selectionBoxesMaxAbsDiff": 0.065,
+    "binaryMismatchCount": 8
+  },
+  "nonClaims": {
+    "distributionWideNumericalCertification": true,
+    "bitExactCrossBackendExecution": true,
+    "semanticAccuracyEvaluation": true
+  }
+}

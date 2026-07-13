@@ -13,6 +13,7 @@ const calls = {
   buffers: [],
   writes: [],
   reads: [],
+  destroyedBuffers: [],
   submittedWorkDone: 0,
 };
 
@@ -57,6 +58,9 @@ const device = {
         return new Uint8Array([1, 2, 3, 4]).buffer;
       },
       unmap() {},
+      destroy() {
+        calls.destroyedBuffers.push(descriptor.label);
+      },
     };
     calls.buffers.push(descriptor);
     return buffer;
@@ -159,6 +163,21 @@ assert.equal(profile.profile.stages[0].metadata.yields.length, 1);
 assert.equal(profile.profile.stages[0].metadata.yields[0].reason, 'between-encoder-tiles');
 assert.equal(profile.profile.timingSource, 'host-stage-timer');
 assert.equal(profile.kernel.profile, 'sam3-mask-decoder-minimal');
+
+const disposal = runtime.dispose();
+assert.deepEqual(disposal, {
+  disposed: true,
+  ownedBufferCount: 1,
+  ownedBufferBytes: 16,
+  destroyedBufferCount: 1,
+});
+assert.deepEqual(calls.destroyedBuffers, ['sam3-mask-decoder.weights']);
+assert.deepEqual(runtime.dispose(), disposal, 'runtime disposal must be idempotent');
+assert.throws(
+  () => runtime.createBuffer({ label: 'after-dispose', size: 4, usage: 0x80 }),
+  /runtime is disposed/,
+  'disposed runtimes must not silently allocate new buffers',
+);
 
 await assert.rejects(
   () => createWebGpuInferenceRuntime({

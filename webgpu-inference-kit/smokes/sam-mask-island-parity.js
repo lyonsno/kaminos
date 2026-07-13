@@ -14,6 +14,8 @@ import {
   SAM3_IMAGE_VIT_FIRST_BLOCK_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3BrowserStaticArtifactCache,
+  resolveSam3BrowserPackageManifest,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
   createSam3MaskProjectionCpuOracle,
@@ -83,7 +85,7 @@ const SUPPORTED_ROUTE_IDS = new Set([
 const PIXEL_DECODER_WEIGHT_ROLE_EXAMPLES = ['pixel-decoder-stage-0-conv-weight'];
 const SAM3_PILLOW_12_FIXED_POINT_BILINEAR_RESIZE = 'pillow-12-fixed-point-bilinear-v0';
 
-const state = {
+const initialState = {
   schema: 'kaminos.sam3-mask-island.browser-parity-state.v0',
   status: 'loading',
   requestedRouteId: null,
@@ -108,8 +110,14 @@ const state = {
   imageVitBlockStackEvidence: null,
   imageFpnNeckEvidence: null,
   browserPromptTextEvidence: null,
+  browserPromptFpnPixelEvidence: null,
   browserPromptTokenizerEvidence: null,
   browserOriginalImageIngressEvidence: null,
+  packageInvocationEvidence: null,
+  staticArtifactCacheEvidence: null,
+  invocationRequestIds: null,
+  invocationOutputIdentity: null,
+  preDecoderCheckpointEvidence: null,
   browserFpnDetrIngressEvidence: null,
   parity: null,
   binaryThresholdMismatchEvidence: null,
@@ -118,16 +126,76 @@ const state = {
   selectedMaskIndex: null,
   error: null,
 };
+const state = JSON.parse(JSON.stringify(initialState));
+let diagnosticReadback = null;
+let diagnosticReadbackEncoded = new Map();
+
+function resetInvocationState() {
+  for (const key of Object.keys(state)) delete state[key];
+  Object.assign(state, JSON.parse(JSON.stringify(initialState)));
+  diagnosticReadback = null;
+  diagnosticReadbackEncoded = new Map();
+}
 
 window.samMaskIslandParitySmokeState = () => JSON.parse(JSON.stringify(state));
 
 const params = new URLSearchParams(window.location.search);
-const manifestUrl = params.get('manifest') || '/oracle/tensor-manifest.json';
+const initialManifestUrl = params.get('manifest') || '/oracle/tensor-manifest.json';
+let activeManifestUrl = initialManifestUrl;
+const diagnosticReadbackEnabled = params.get('diagnosticReadback') === '1';
+const vitFinitePhaseLayerParam = params.get('vitFinitePhaseLayer');
+const vitFinitePhaseLayerIndex = vitFinitePhaseLayerParam == null ? null : Number(vitFinitePhaseLayerParam);
+if (vitFinitePhaseLayerIndex != null && (!Number.isInteger(vitFinitePhaseLayerIndex) || vitFinitePhaseLayerIndex < 0)) {
+  throw new Error(`invalid vitFinitePhaseLayer ${vitFinitePhaseLayerParam}`);
+}
 const statusEl = document.getElementById('status');
 const summaryEl = document.getElementById('summary');
 const reportEl = document.getElementById('report');
 const canvas = document.getElementById('sam-mask-parity-canvas');
 const sourceImageEl = document.getElementById('sam-source-image');
+
+function encodeFloat32Diagnostic(values) {
+  const typed = new Float32Array(values);
+  const bytes = new Uint8Array(typed.buffer, typed.byteOffset, typed.byteLength);
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 32768) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + 32768)));
+  }
+  return {
+    dtype: 'float32-le',
+    elementCount: typed.length,
+    byteLength: typed.byteLength,
+    base64: btoa(binary),
+  };
+}
+
+window.samMaskIslandDiagnosticReadback = ({ tensorName = null, base64Offset = 0, base64Length = null } = {}) => {
+  if (!diagnosticReadbackEnabled || !diagnosticReadback) return null;
+  if (!Number.isInteger(base64Offset) || base64Offset < 0) throw new Error(`invalid diagnostic base64Offset ${base64Offset}`);
+  if (base64Length !== null && (!Number.isInteger(base64Length) || base64Length < 1)) throw new Error(`invalid diagnostic base64Length ${base64Length}`);
+  const tensors = {};
+  for (const [name, values] of Object.entries(diagnosticReadback.tensors)) {
+    if (tensorName !== null && name !== tensorName) continue;
+    if (!values) continue;
+    if (!diagnosticReadbackEncoded.has(name)) diagnosticReadbackEncoded.set(name, encodeFloat32Diagnostic(values));
+    const encoded = diagnosticReadbackEncoded.get(name);
+    const base64TotalLength = encoded.base64.length;
+    const end = base64Length === null ? base64TotalLength : Math.min(base64TotalLength, base64Offset + base64Length);
+    tensors[name] = {
+      ...encoded,
+      base64: encoded.base64.slice(base64Offset, end),
+      base64Offset,
+      base64TotalLength,
+    };
+  }
+  if (tensorName !== null && !tensors[tensorName]) throw new Error(`diagnostic tensor ${tensorName} unavailable`);
+  return {
+    schema: 'kaminos.sam3-browser-diagnostic-readback.v0',
+    packageId: diagnosticReadback.packageId,
+    invocationId: diagnosticReadback.invocationId,
+    tensors,
+  };
+};
 
 function setStatus(status, message = status) {
   state.status = status;
@@ -151,20 +219,66 @@ async function fetchJson(url) {
   return response.json();
 }
 
-async function fetchArray(url, Type) {
+async function fetchArrayBufferRaw(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
-  return new Type(await response.arrayBuffer());
+  return response.arrayBuffer();
 }
 
-async function fetchText(url) {
+async function fetchTextRaw(url) {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
   return response.text();
 }
 
+const staticArtifactCache = createSam3BrowserStaticArtifactCache({
+  fetchArrayBuffer: fetchArrayBufferRaw,
+  fetchText: fetchTextRaw,
+});
+
+async function fetchArray(url, Type) {
+  return staticArtifactCache.fetchArray(url, Type);
+}
+
+async function fetchText(url) {
+  return staticArtifactCache.fetchText(url);
+}
+
+function configureStaticModelPackage(manifest) {
+  const artifacts = (manifest.weights || []).map(weight => ({
+    url: resolveManifestFile(weight.file),
+    kind: 'array-buffer',
+    sha256: weight.sha256,
+  }));
+  for (const tokenizerArtifact of [manifest.promptTokenizer?.vocab, manifest.promptTokenizer?.merges]) {
+    if (!tokenizerArtifact?.file || !tokenizerArtifact?.sha256) continue;
+    artifacts.push({
+      url: resolveManifestFile(tokenizerArtifact.file),
+      kind: 'text',
+      sha256: tokenizerArtifact.sha256,
+    });
+  }
+  staticArtifactCache.configure({ packageId: manifest.packageId, artifacts });
+  staticArtifactCache.configureInvocation({
+    invocationId: manifest.invocationId,
+    artifacts: (manifest.tensors || []).map(tensor => ({
+      url: resolveManifestFile(tensor.file),
+      kind: 'array-buffer',
+      sha256: tensor.sha256,
+    })),
+  });
+  state.staticArtifactCacheEvidence = staticArtifactCache.evidence();
+}
+
+async function resolveBrowserManifest(rootManifest) {
+  return resolveSam3BrowserPackageManifest(rootManifest, {
+    readArtifactText: file => fetchText(resolveManifestFile(file)),
+    sha256Text,
+  });
+}
+
 function resolveManifestFile(file) {
-  return new URL(file, new URL(manifestUrl, window.location.href)).toString();
+  return new URL(file, new URL(activeManifestUrl, window.location.href)).toString();
 }
 
 function tensorByRole(manifest, role) {
@@ -1170,6 +1284,15 @@ async function loadDetrStackPayload(manifest) {
   const expectedVitFirstGlobalTensor = includeImageVitBlockStack ? tensorByRole(manifest, 'expected-vit-first-global-hidden-states') : null;
   const expectedVitBlockStackTensor = includeImageVitBlockStack ? tensorByRole(manifest, 'expected-vit-block-stack-hidden-states') : null;
   const expectedVitBackboneTensor = includeImageVitFullBackbone ? tensorByRole(manifest, 'expected-vit-backbone-hidden-states') : null;
+  const expectedVitLayerTensors = includeImageVitBlockStack
+    ? manifest.tensors
+      .map(tensor => {
+        const match = /^expected-vit-layer-(\d+)-hidden-states$/.exec(tensor.role);
+        return match ? { layerIndex: Number(match[1]), tensor } : null;
+      })
+      .filter(Boolean)
+      .sort((left, right) => left.layerIndex - right.layerIndex)
+    : [];
   const expectedFpnNeckFeature0Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-0') : null;
   const expectedFpnNeckFeature1Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-1') : null;
   const expectedFpnNeckFeature2Tensor = includeImageFpnNeck ? tensorByRole(manifest, 'expected-fpn-neck-feature-2') : null;
@@ -1331,6 +1454,20 @@ async function loadDetrStackPayload(manifest) {
   const expectedVitFirstGlobalHiddenStates = expectedVitFirstGlobalTensor ? await fetchArray(resolveManifestFile(expectedVitFirstGlobalTensor.file), Float32Array) : null;
   const expectedVitBlockStackHiddenStates = expectedVitBlockStackTensor ? await fetchArray(resolveManifestFile(expectedVitBlockStackTensor.file), Float32Array) : null;
   const expectedVitBackboneHiddenStates = expectedVitBackboneTensor ? await fetchArray(resolveManifestFile(expectedVitBackboneTensor.file), Float32Array) : null;
+  const expectedVitLayerCheckpoints = await Promise.all(expectedVitLayerTensors.map(async ({ layerIndex, tensor }) => ({
+    layerIndex,
+    hiddenStates: await fetchArray(resolveManifestFile(tensor.file), Float32Array),
+  })));
+  if (includeImageVitBlockStack) {
+    const expectedLayerIndexes = Array.from(
+      { length: manifest.shape.vitBlockStackEndLayerIndex - manifest.shape.vitBlockStackStartLayerIndex + 1 },
+      (_, offset) => manifest.shape.vitBlockStackStartLayerIndex + offset,
+    );
+    if (expectedVitLayerCheckpoints.length !== expectedLayerIndexes.length
+      || expectedVitLayerCheckpoints.some((checkpoint, offset) => checkpoint.layerIndex !== expectedLayerIndexes[offset])) {
+      throw new Error(`authenticated ViT layer checkpoint coverage mismatch: expected ${expectedLayerIndexes.join(',')}, received ${expectedVitLayerCheckpoints.map(checkpoint => checkpoint.layerIndex).join(',')}`);
+    }
+  }
   const expectedFpnNeckFeature0 = expectedFpnNeckFeature0Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature0Tensor.file), Float32Array) : null;
   const expectedFpnNeckFeature1 = expectedFpnNeckFeature1Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature1Tensor.file), Float32Array) : null;
   const expectedFpnNeckFeature2 = expectedFpnNeckFeature2Tensor ? await fetchArray(resolveManifestFile(expectedFpnNeckFeature2Tensor.file), Float32Array) : null;
@@ -1700,6 +1837,7 @@ async function loadDetrStackPayload(manifest) {
       expectedVitFirstGlobalHiddenStates,
       expectedVitBlockStackHiddenStates,
       expectedVitBackboneHiddenStates,
+      expectedVitLayerCheckpoints,
     expectedFpnNeckFeature0,
     expectedFpnNeckFeature1,
     expectedFpnNeckFeature2,
@@ -2022,7 +2160,7 @@ async function loadDetrStackPayload(manifest) {
           },
           routeConfig: { upstream: manifest.claims?.upstream || 'mlx-reference-detr-stack', imageVitBlockStack: manifest.imageVitBlockStack || null, composedFrom: imageVitPrefixResult.receipt?.effectiveRouteId, vitPrefixHiddenStatesOutput, firstGlobalLayerIndex: vitBlockStackShape.firstGlobalLayerIndex },
         });
-        imageVitBlockStackResult = await runSam3ImageVitBlockStackPhaseProgramRoute({ request: imageVitBlockStackRequest, route: imageVitBlockStackRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageVitBlockStackRoute.kernel, model: { revision: imageVitBlockStackRoute.model.revision, weightsHash: imageVitBlockStackRequest.inputs.find(input => input.role === 'sam3-image-vit-block-stack-weights')?.sha256, dtype: 'fp32' }, tensors: { hiddenStates: gpuVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape }, includeReadback: true });
+        imageVitBlockStackResult = await runSam3ImageVitBlockStackPhaseProgramRoute({ request: imageVitBlockStackRequest, route: imageVitBlockStackRoute, device, queue: device.queue, adapterName: adapter.info?.description || adapter.info?.device || 'browser-webgpu-adapter', browser: navigator.userAgent, kernel: imageVitBlockStackRoute.kernel, model: { revision: imageVitBlockStackRoute.model.revision, weightsHash: imageVitBlockStackRequest.inputs.find(input => input.role === 'sam3-image-vit-block-stack-weights')?.sha256, dtype: 'fp32' }, tensors: { hiddenStates: gpuVitPrefixHiddenStates, weights: vitBlockStackWeights, shape: vitBlockStackShape }, expectedLayerCheckpoints: expectedVitLayerCheckpoints, includeReadback: true, validateFiniteCheckpoints: true, validateFinitePhaseLayerIndex: vitFinitePhaseLayerIndex });
         gpuVitBlockStackHiddenStates = new Float32Array(imageVitBlockStackResult.debugReadback.vitBlockStackHiddenStates);
         vitBlockStackHiddenStatesOutput = imageVitBlockStackResult.receipt.outputs.find(output => output.role === 'vit-block-stack-hidden-states');
         if (!vitBlockStackHiddenStatesOutput?.sha256 || !vitBlockStackHiddenStatesOutput?.artifactId) throw new Error('SAM3 image ViT block-stack output identity missing');
@@ -2224,6 +2362,41 @@ async function loadDetrStackPayload(manifest) {
         { role: 'prompt-features', artifactId: effectivePromptFeaturesOutput.artifactId, sha256: effectivePromptFeaturesOutput.sha256, shape: effectivePromptFeaturesOutput.shape },
         { role: 'prompt-mask', artifactId: effectivePromptMaskOutput.artifactId, sha256: effectivePromptMaskOutput.sha256, shape: effectivePromptMaskOutput.shape },
       ]);
+      state.preDecoderCheckpointEvidence = {
+        schema: 'kaminos.sam3-browser-pre-decoder-checkpoint-evidence.v0',
+        checkpoint: 'pre-detr-decoder',
+        packageId: state.packageInvocationEvidence?.packageId || null,
+        invocationId: state.packageInvocationEvidence?.invocationId || null,
+        effectiveRouteIds: [
+          imagePreprocessResult?.receipt?.effectiveRouteId,
+          imagePatchEmbedResult?.receipt?.effectiveRouteId,
+          imageVitPrefixResult?.receipt?.effectiveRouteId,
+          imageVitFirstBlockResult?.receipt?.effectiveRouteId,
+          imageVitBlockStackResult?.receipt?.effectiveRouteId,
+          imageFpnNeckResult?.receipt?.effectiveRouteId,
+          promptTextResult?.receipt?.effectiveRouteId,
+          encoderResult?.receipt?.effectiveRouteId,
+          promptResult?.receipt?.effectiveRouteId,
+          pixelResult?.receipt?.effectiveRouteId,
+        ].filter(Boolean),
+        parity: {
+          pixelValuesMaxAbsDiff: expectedPixelValues && gpuPixelValues ? maxAbsDiff(expectedPixelValues, gpuPixelValues) : undefined,
+          patchEmbeddingsMaxAbsDiff: expectedPatchEmbeddings && gpuPatchEmbeddings ? maxAbsDiff(expectedPatchEmbeddings, gpuPatchEmbeddings) : undefined,
+          vitPrefixHiddenStatesMaxAbsDiff: expectedVitPrefixHiddenStates && gpuVitPrefixHiddenStates ? maxAbsDiff(expectedVitPrefixHiddenStates, gpuVitPrefixHiddenStates) : undefined,
+          vitFirstBlockHiddenStatesMaxAbsDiff: expectedVitFirstBlockHiddenStates && gpuVitFirstBlockHiddenStates ? maxAbsDiff(expectedVitFirstBlockHiddenStates, gpuVitFirstBlockHiddenStates) : undefined,
+          vitBlockStackHiddenStatesMaxAbsDiff: expectedVitBlockStackHiddenStates && gpuVitBlockStackHiddenStates ? maxAbsDiff(expectedVitBlockStackHiddenStates, gpuVitBlockStackHiddenStates) : undefined,
+          vitBackboneHiddenStatesMaxAbsDiff: expectedVitBackboneHiddenStates && gpuVitBlockStackHiddenStates ? maxAbsDiff(expectedVitBackboneHiddenStates, gpuVitBlockStackHiddenStates) : undefined,
+          fpnNeckFeature0MaxAbsDiff: expectedFpnNeckFeature0 && gpuFpnNeckFeature0 ? maxAbsDiff(expectedFpnNeckFeature0, gpuFpnNeckFeature0) : undefined,
+          fpnNeckFeature1MaxAbsDiff: expectedFpnNeckFeature1 && gpuFpnNeckFeature1 ? maxAbsDiff(expectedFpnNeckFeature1, gpuFpnNeckFeature1) : undefined,
+          fpnNeckFeature2MaxAbsDiff: expectedFpnNeckFeature2 && gpuFpnNeckFeature2 ? maxAbsDiff(expectedFpnNeckFeature2, gpuFpnNeckFeature2) : undefined,
+          fpnNeckFeature3MaxAbsDiff: expectedFpnNeckFeature3 && gpuFpnNeckFeature3 ? maxAbsDiff(expectedFpnNeckFeature3, gpuFpnNeckFeature3) : undefined,
+          promptFeaturesMaxAbsDiff: expectedPromptFeatures && effectivePromptFeatures ? maxAbsDiff(expectedPromptFeatures, effectivePromptFeatures) : undefined,
+          promptMaskMaxAbsDiff: expectedPromptMask && effectivePromptMask ? maxAbsDiff(expectedPromptMask, effectivePromptMask) : undefined,
+          encoderHiddenStatesMaxAbsDiff: maxAbsDiff(expectedEncoderHiddenStates, gpuEncoderHiddenStates),
+          promptFpnMaxAbsDiff: expectedPromptFpnFeature && gpuPromptFpnFeature ? maxAbsDiff(expectedPromptFpnFeature, gpuPromptFpnFeature) : undefined,
+          pixelEmbedMaxAbsDiff: effectiveExpectedPixelEmbed && gpuPixelEmbed ? maxAbsDiff(effectiveExpectedPixelEmbed, gpuPixelEmbed) : undefined,
+        },
+      };
       const decoderRoute = createSam3DetrDecoderPhaseProgramRouteDefinition({ model: { revision: manifest.model?.id || 'mlx-reference-detr-decoder', dtype: 'fp32' }, kernel: { profile: 'sam3-detr-decoder-phase-program-v0', commit: params.get('commit') || null }, shape: manifest.shape });
       setStatus('run-detr-decoder');
       const decoderRequest = createRouteInvocationRequest(decoderRoute, {
@@ -2355,6 +2528,22 @@ async function loadDetrStackPayload(manifest) {
         midstreamRouteReceipt: decoderResult.receipt,
         downstreamRouteReceipt: tailResult.receipt,
         compositionRouteReceipts: includeImageFpnNeck ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, imageFpnNeckResult.receipt, promptTextResult.receipt, encoderResult.receipt, promptResult.receipt, pixelResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitBlockStack ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitBlockStackResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitFirstBlock ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, imageVitFirstBlockResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImageVitPrefix ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, imageVitPrefixResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePatchEmbed ? [imagePreprocessResult.receipt, imagePatchEmbedResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeImagePreprocess ? [imagePreprocessResult.receipt, encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackSelection ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, selectionResult.receipt, tailResult.receipt] : includeStackScoring ? [encoderResult.receipt, decoderResult.receipt, scoringResult.receipt, tailResult.receipt] : [encoderResult.receipt, decoderResult.receipt, tailResult.receipt],
+        compositionRequestIds: [
+          imagePreprocessResult,
+          imagePatchEmbedResult,
+          imageVitPrefixResult,
+          imageVitFirstBlockResult,
+          imageVitBlockStackResult,
+          imageFpnNeckResult,
+          promptTextResult,
+          encoderResult,
+          promptResult,
+          pixelResult,
+          decoderResult,
+          scoringResult,
+          selectionResult,
+          tailResult,
+        ].filter(Boolean).map(routeResult => routeResult.requestId),
         backend: tailResult.backend,
         debugReadback: {
           pixelValues: gpuPixelValues ? Array.from(gpuPixelValues) : undefined,
@@ -2366,6 +2555,7 @@ async function loadDetrStackPayload(manifest) {
           vitFirstBlockHiddenStates: gpuVitFirstBlockHiddenStates ? Array.from(gpuVitFirstBlockHiddenStates) : undefined,
           imageVitFirstBlockCpuMaxAbsDiff,
           vitBlockStackHiddenStates: gpuVitBlockStackHiddenStates ? Array.from(gpuVitBlockStackHiddenStates) : undefined,
+          vitLayerParityCheckpoints: imageVitBlockStackResult?.finiteCheckpoints,
           imageVitBlockStackCpuMaxAbsDiff,
           vitFirstGlobalHiddenStatesMaxAbsDiff,
           fpnNeckFeature0: gpuFpnNeckFeature0 ? Array.from(gpuFpnNeckFeature0) : undefined,
@@ -3262,10 +3452,14 @@ async function loadPromptFpnPayload(manifest) {
   };
 }
 
-async function main() {
+async function main(manifestUrl = initialManifestUrl) {
   try {
+    activeManifestUrl = manifestUrl;
     setStatus('load-oracle-packet');
-    const manifest = await fetchJson(manifestUrl);
+    const rootManifest = await fetchJson(manifestUrl);
+    const { manifest, evidence: packageInvocationEvidence } = await resolveBrowserManifest(rootManifest);
+    state.packageInvocationEvidence = packageInvocationEvidence;
+    if (packageInvocationEvidence) configureStaticModelPackage(manifest);
     if (!SUPPORTED_ROUTE_IDS.has(manifest.routeId)) {
       throw new Error(`unsupported manifest route: ${manifest.routeId}`);
     }
@@ -3579,6 +3773,29 @@ async function main() {
 
     setStatus('run-webgpu-route');
     const result = await payload.run({ device, adapter, route, request, sourceImage });
+    if (diagnosticReadbackEnabled) {
+      diagnosticReadback = {
+        packageId: state.packageInvocationEvidence?.packageId || null,
+        invocationId: state.packageInvocationEvidence?.invocationId || null,
+        tensors: {
+          encoderHiddenStates: result.debugReadback.encoderHiddenStates,
+          encoderPos: result.debugReadback.encoderPos,
+          promptFeatures: result.debugReadback.promptFeatures,
+          promptMask: result.debugReadback.promptMask,
+          pixelEmbed: result.debugReadback.pixelEmbed,
+          decoderHiddenStates: result.debugReadback.decoderHiddenStates,
+          lastHs: result.debugReadback.lastHs,
+          referenceBoxes: result.debugReadback.referenceBoxes,
+          presenceLogits: result.debugReadback.presenceLogits,
+          maskLogits: result.debugReadback.maskLogits,
+        },
+      };
+    }
+    state.invocationRequestIds = result.compositionRequestIds || [result.requestId].filter(Boolean);
+    const terminalOutputs = result.downstreamRouteReceipt?.outputs || result.outputs || [];
+    state.invocationOutputIdentity = terminalOutputs.length > 0
+      ? await aggregateTensorBundleSha256('sam3-browser-invocation-terminal-outputs', terminalOutputs)
+      : null;
 
     const gpuLogits = result.debugReadback.maskLogits ? new Float32Array(result.debugReadback.maskLogits) : null;
     const gpuBinary = result.debugReadback.binaryMask ? new Uint32Array(result.debugReadback.binaryMask) : null;
@@ -3790,6 +4007,7 @@ async function main() {
       vitBlockStackHiddenStatesOutput: result.compositionEdge?.vitBlockStackHiddenStatesOutput || null,
       blockStackWeightsSha256: result.compositionEdge?.blockStackWeightsSha256 || null,
       firstGlobalLayerIndex: result.compositionEdge?.firstGlobalLayerIndex ?? payload.imageVitBlockStackEvidence.firstGlobalLayerIndex,
+      layerParityCheckpoints: result.debugReadback.vitLayerParityCheckpoints,
       parity: {
         vitBlockStackHiddenStatesMaxAbsDiff: parity.vitBlockStackHiddenStatesMaxAbsDiff,
         imageVitBlockStackCpuMaxAbsDiff: parity.imageVitBlockStackCpuMaxAbsDiff,
@@ -4007,6 +4225,7 @@ async function main() {
     } : null;
     state.debugReadbackSamples = debugReadbackSamples;
     state.parity = parity;
+    state.staticArtifactCacheEvidence = staticArtifactCache.evidence();
     renderSummary({
       status: state.status,
       route: state.effectiveRouteId,
@@ -4020,9 +4239,23 @@ async function main() {
   } catch (error) {
     state.status = 'failed';
     state.error = String(error?.stack || error?.message || error);
+    state.staticArtifactCacheEvidence = staticArtifactCache.evidence();
     setStatus('failed', state.error);
     throw error;
   }
 }
 
-main();
+let invocationPromise = null;
+window.runSam3Invocation = manifestUrl => {
+  if (invocationPromise) throw new Error('SAM3 browser invocation already in flight');
+  resetInvocationState();
+  const run = main(manifestUrl);
+  invocationPromise = run;
+  const clearInvocation = () => {
+    if (invocationPromise === run) invocationPromise = null;
+  };
+  run.then(clearInvocation, clearInvocation);
+  return run;
+};
+
+window.runSam3Invocation(initialManifestUrl);

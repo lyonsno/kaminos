@@ -564,5 +564,6 @@ export async function runSam3PixelDecoderPhaseProgramRoute(input = {}) {
       pixelEmbed: Array.from(new Float32Array(pixelEmbed)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

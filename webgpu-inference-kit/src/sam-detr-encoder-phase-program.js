@@ -822,6 +822,7 @@ export async function runSam3DetrEncoderPhaseProgramRoute(input = {}) {
       encoderHiddenStates: Array.from(new Float32Array(encoderHiddenStates)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }
 

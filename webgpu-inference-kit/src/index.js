@@ -175,6 +175,10 @@ export {
   createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
   createSam3ImageVitBlockStackPhaseProgramRouteReceipt,
   runSam3ImageVitBlockStackPhaseProgramRoute,
+  summarizeSam3FinitePhaseOutputs,
+  summarizeSam3FiniteValues,
+  summarizeSam3LayerParityCheckpoint,
+  stableSam3Gelu,
 } from './sam-image-vit-block-stack-phase-program.js';
 
 export {
@@ -255,6 +259,16 @@ export {
 export {
   createWebGpuRouteSchemaContract,
 } from './route-schema-contract.js';
+
+export {
+  SAM3_BROWSER_INVOCATION_SCHEMA,
+  SAM3_BROWSER_MODEL_PACKAGE_SCHEMA,
+  SAM3_BROWSER_VERIFICATION_SCHEMA,
+  createSam3BrowserStaticArtifactCache,
+  createSam3DualInvocationEvidence,
+  resolveSam3BrowserPackageManifest,
+  resolveSam3BrowserPackageManifestSync,
+} from './sam-browser-package-manifest.js';
 
 export {
   createRouteReceiptArtifacts,

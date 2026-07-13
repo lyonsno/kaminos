@@ -90,7 +90,7 @@ assert.match(exporterSource, /expected-prompt-features/, 'detector-stack exporte
 assert.match(exporterSource, /expected-prompt-mask/, 'detector-stack exporter must keep reference prompt mask separate from browser-owned prompt output');
 assert.match(exporterSource, /browser-derived-from-prompt-text-ingress/, 'detector-stack ownership metadata must mark prompt features as browser-derived in image-FPN mode');
 assert.match(exporterSource, /browser-copied-from-prompt-attention-mask/, 'detector-stack ownership metadata must mark prompt mask as browser-derived in image-FPN mode');
-assert.match(exporterSource, /browser-fpn-prompt-text-pixel-detector-stack/, 'detector-stack tolerance source must distinguish prompt/text ingress ownership');
+assert.match(exporterSource, /gate-u-mlx-metal-erf-two-prompt-grounded-browser-fpn-detector-stack-2026-07-13/, 'detector-stack tolerance source must distinguish grounded prompt/text ingress ownership');
 
 const browserSmokeSource = readFileSync(browserSmokeUrl, 'utf8');
 assert.match(browserSmokeSource, /SAM3_PROMPT_TEXT_INGRESS_PHASE_PROGRAM_ROUTE_ID/, 'browser smoke must import prompt/text ingress route identity');
@@ -113,6 +113,6 @@ assert.match(witnessSource, /promptTextMaxAbsDiff/, 'witness must gate prompt/te
 assert.match(witnessSource, /text ingress evidence still non-claims browser-local text encoder/, 'witness must reject browser prompt/text ownership paired with a stale text-encoder non-claim');
 assert.match(witnessSource, /prompt-FPN\/pixel evidence still non-claims browser-local text encoder/, 'witness must reject browser prompt-FPN ownership paired with a stale text-encoder non-claim');
 assert.match(witnessSource, /compositionRouteReceipts\.length !== 13/, 'image-FPN prompt/text composition must require thirteen route receipts');
-assert.match(witnessSource, /browser-fpn-prompt-text-pixel-detector-stack/, 'witness must require the prompt/text ingress tolerance source');
+assert.match(witnessSource, /gate-u-mlx-metal-erf-two-prompt-grounded-browser-fpn-detector-stack-2026-07-13/, 'witness must require the grounded Gate U prompt/text ingress tolerance source');
 
 console.log('sam prompt/text ingress phase-program contracts passed');

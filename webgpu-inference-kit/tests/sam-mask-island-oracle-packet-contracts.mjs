@@ -28,7 +28,7 @@ const run = spawnSync(process.execPath, [
   '--source-image-artifact-id', 'image:evil-orb',
   '--source-image-sha256', 'sha256:source-image',
   '--prompt', 'orb',
-  '--model', 'mlx-community/sam3-image',
+  '--model', 'mlx-community/sam3-bf16',
 ], {
   cwd: new URL('..', import.meta.url),
   encoding: 'utf8',
@@ -42,7 +42,7 @@ const receipt = JSON.parse(await readFile(join(outDir, 'oracle-receipt.json'), '
 assert.equal(manifest.schema, 'kaminos.sam3-mask-island-oracle-packet.v0');
 assert.equal(manifest.routeId, SAM3_MASK_DECODER_ISLAND_ROUTE_ID);
 assert.equal(manifest.mode, 'synthetic');
-assert.equal(manifest.model.id, 'mlx-community/sam3-image');
+assert.equal(manifest.model.id, 'mlx-community/sam3-bf16');
 assert.equal(manifest.boundary, 'sam3-mask-projection-threshold');
 assert.deepEqual(manifest.staticWeights, {
   artifactId: 'sam3-weights:none-mask-projection-oracle-boundary',

@@ -600,5 +600,6 @@ export async function runSam3SelectionPostprocessPhaseProgramRoute(input = {}) {
       selectedBox: Array.from(new Float32Array(run.outputs.selectedBox)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

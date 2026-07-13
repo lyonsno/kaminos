@@ -43,7 +43,7 @@ const run = spawnSync('uv', [
   '--out-dir', outDir,
   '--image', fixtureImage,
   '--prompt', 'truck',
-  '--model', 'mlx-community/sam3-image',
+  '--model', 'mlx-community/sam3-bf16',
   '--resolution', '224',
 ], {
   cwd: mlxVlmRoot,
@@ -63,7 +63,7 @@ assert.equal(manifest.boundary, 'sam3-detector-mask-projection-threshold');
 assert.equal(manifest.claims.fullSam3BrowserExecution, false);
 assert.equal(manifest.claims.upstream, 'mlx-vlm-sam3-detector-reference');
 assert.deepEqual(manifest.claims.browserExecutedStages, ['decode-mask', 'threshold-mask']);
-assert.equal(manifest.reference.model.id, 'mlx-community/sam3-image');
+assert.equal(manifest.reference.model.id, 'mlx-community/sam3-bf16');
 assert.match(manifest.reference.model.snapshot, /^[0-9a-f]{40}$/);
 assert.match(manifest.reference.weights.sha256, /^sha256:[0-9a-f]{64}$/);
 assert.equal(manifest.reference.framework.name, 'mlx-vlm');

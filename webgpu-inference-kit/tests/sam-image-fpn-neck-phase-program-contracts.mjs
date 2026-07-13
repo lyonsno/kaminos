@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -6,15 +7,26 @@ const routeSourceUrl = new URL('../src/sam-image-fpn-neck-phase-program.js', imp
 const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const stackExporter = readFileSync(new URL('../tools/sam-detr-stack-mlx-packet.py', import.meta.url), 'utf8');
+const encoderExporter = readFileSync(new URL('../tools/sam-detr-encoder-mlx-packet.py', import.meta.url), 'utf8');
+const modelLoader = readFileSync(new URL('../tools/sam_mlx_model_loader.py', import.meta.url), 'utf8');
+const gateUToleranceCalibration = JSON.parse(readFileSync(new URL('../tools/sam-gate-u-tolerance-calibration.json', import.meta.url), 'utf8'));
+const packageResolverUrl = new URL('../src/sam-browser-package-manifest.js', import.meta.url);
 
 assert.match(packageJson.scripts.test, /sam-image-fpn-neck-phase-program-contracts\.mjs/, 'default test must include portable SAM3 image FPN-neck contracts');
 assert.equal(existsSync(routeSourceUrl), true, 'SAM3 image FPN-neck route source must exist');
+assert.equal(existsSync(packageResolverUrl), true, 'SAM3 browser package/invocation resolver source must exist');
 
 const routeSource = existsSync(routeSourceUrl) ? readFileSync(routeSourceUrl, 'utf8') : '';
 assert.match(routeSource, /SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID/, 'image FPN-neck route must export stable route identity');
 assert.match(routeSource, /sam3\.image-fpn-neck\.phase-program\.webgpu-local\.v0/, 'image FPN-neck route must name the WebGPU-local route id');
 assert.match(routeSource, /defineProgram/, 'image FPN-neck route must use the phase-program runtime');
 assert.match(routeSource, /runProgram/, 'image FPN-neck route must execute through runProgram');
+assert.match(routeSource, /if \(x < -10\.0\) \{ return 0\.0; \}/, 'FPN GELU shader must saturate its negative tail before cubic overflow can produce NaN');
+assert.match(routeSource, /if \(x > 10\.0\) \{ return x; \}/, 'FPN GELU shader must saturate its positive tail before cubic overflow');
+assert.match(routeSource, /fn mlx_erf\(x: f32\)/, 'FPN GELU shader must port the MLX Metal erf implementation used by the reference backend');
+assert.match(routeSource, /fn mlx_expm1f\(x: f32\)/, 'FPN GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
+assert.match(routeSource, /0\.927734375/, 'FPN GELU shader must preserve the MLX Metal erf branch boundary');
+assert.doesNotMatch(routeSource, /0\.044715/, 'FPN GPU and CPU GELU paths must not retain the tanh approximation');
 assert.match(routeSource, /fpn-neck-transpose-conv-0-scale0/, 'image FPN-neck route must expose level-0 first transpose-conv stage metadata');
 assert.match(routeSource, /fpn-neck-transpose-conv-0-scale1/, 'image FPN-neck route must expose level-0 second transpose-conv stage metadata');
 assert.match(routeSource, /fpn-neck-transpose-conv-1/, 'image FPN-neck route must expose level-1 transpose-conv stage metadata');
@@ -43,14 +55,45 @@ assert.match(stackExporter, /browser-position-embedding-sine-from-fpn-level-2-sh
 assert.match(stackExporter, /encoderSrcMaxAbsDiff/, 'detector-stack packet tolerances must include FPN-derived encoder source parity');
 assert.match(stackExporter, /encoderPosMaxAbsDiff/, 'detector-stack packet tolerances must include browser position parity');
 assert.match(stackExporter, /legacy_detector_stack_tolerances/, 'detector-stack packet must keep a separate tight legacy tolerance budget');
-assert.match(stackExporter, /gate_n_image_fpn_tolerances/, 'detector-stack packet must keep a separate Gate N image-FPN tolerance budget');
+assert.match(stackExporter, /gate_u_image_fpn_tolerances/, 'detector-stack packet must keep a separate grounded Gate U image-FPN tolerance budget');
 assert.match(stackExporter, /"binaryMismatchCount": 8/, 'legacy detector-stack packet budget must keep binary mismatch tolerance at 8');
 assert.match(stackExporter, /"selectionBoxesMaxAbsDiff": 0\.0002/, 'legacy detector-stack packet budget must keep tight selection-box tolerance');
-assert.match(stackExporter, /"binaryMismatchCount": 96/, 'image-FPN packet budget must carry the measured Gate Q binary mismatch tolerance');
-assert.match(stackExporter, /"selectionBoxesMaxAbsDiff": 0\.006/, 'image-FPN packet budget must carry the measured Gate N selection-box tolerance');
+assert.match(stackExporter, /"lastHsMaxAbsDiff": 0\.003/, 'image-FPN packet budget must carry the grounded Gate U decoder tolerance');
+assert.match(stackExporter, /"decoderHiddenStatesMaxAbsDiff": 0\.003/, 'image-FPN packet budget must carry the grounded Gate U full decoder tolerance');
+assert.match(stackExporter, /"webGpuLogitsMaxAbsDiff": 0\.03/, 'image-FPN packet budget must carry the grounded Gate U mask-logit tolerance');
+assert.match(stackExporter, /"binaryMismatchCount": 8/, 'image-FPN packet budget must tighten binary mismatch tolerance to the grounded Gate U envelope');
+assert.match(stackExporter, /"selectionBoxesMaxAbsDiff": 0\.065/, 'image-FPN packet budget must carry the grounded Gate U selection-box tolerance');
 assert.match(stackExporter, /"promptFpnMaxAbsDiff": 0\.001/, 'image-FPN packet budget must carry the measured browser prompt-FPN tolerance');
 assert.match(stackExporter, /"pixelEmbedMaxAbsDiff": 0\.0015/, 'image-FPN packet budget must carry the measured browser pixel-decoder tolerance');
 assert.match(stackExporter, /"toleranceBudgetSource": tolerance_budget_source/, 'detector-stack packet must surface the effective tolerance budget source');
+assert.match(stackExporter, /"toleranceCalibration": tolerance_calibration/, 'split verification must embed the calibration receipt and its source hash');
+assert.equal(gateUToleranceCalibration.schema, 'kaminos.sam3-gate-u-tolerance-calibration.v0');
+assert.equal(gateUToleranceCalibration.samples.length, 2, 'Gate U calibration must retain both independently authenticated prompt samples');
+assert.equal(gateUToleranceCalibration.causalReplay.status, 'passed', 'Gate U calibration must retain the MLX-on-browser-intermediates causal replay');
+assert.ok(gateUToleranceCalibration.observedMaxima.lastHsMaxAbsDiff < gateUToleranceCalibration.acceptanceBudget.lastHsMaxAbsDiff);
+assert.ok(gateUToleranceCalibration.observedMaxima.maskLogitsMaxAbsDiff < gateUToleranceCalibration.acceptanceBudget.webGpuLogitsMaxAbsDiff);
+assert.ok(gateUToleranceCalibration.observedMaxima.selectionBoxesMaxAbsDiff < gateUToleranceCalibration.acceptanceBudget.selectionBoxesMaxAbsDiff);
+assert.ok(gateUToleranceCalibration.observedMaxima.binaryMismatchCount < gateUToleranceCalibration.acceptanceBudget.binaryMismatchCount);
+assert.match(modelLoader, /load_model as load_mlx_vlm_model/, 'SAM3 reference loader must use the config-aware MLX-VLM model loader');
+assert.match(modelLoader, /checkpointParameterAudit/, 'SAM3 reference loader must expose checkpoint-to-model parameter audit evidence');
+assert.match(modelLoader, /model\.set_dtype\(mx\.float32\)/, 'SAM3 reference loader must promote audited checkpoint parameters to the browser FP32 compute contract');
+assert.match(modelLoader, /effectiveComputeDtype/, 'SAM3 checkpoint audit must expose the effective reference compute dtype');
+assert.match(modelLoader, /model config not found/, 'SAM3 reference loader must reject weight-only repositories before model initialization');
+assert.doesNotMatch(modelLoader, /strict=False/, 'SAM3 reference loader must not silently accept zero checkpoint matches');
+assert.match(encoderExporter, /load_sam3_model/, 'DETR exporter must route model loading through the audited shared SAM3 loader');
+assert.match(stackExporter, /"modelLoad": model_load_audit/, 'detector-stack verification must preserve the effective checkpoint-load audit');
+assert.match(stackExporter, /default="mlx-community\/sam3-bf16"/, 'detector-stack packet must default to the config-bearing converted SAM3 checkpoint');
+assert.doesNotMatch(stackExporter, /default="mlx-community\/sam3-image"/, 'detector-stack packet must not default to the stale weight-only SAM3 artifact');
+assert.match(stackExporter, /kaminos\.sam3-browser-model-package\.v0/, 'image-FPN exporter must emit a reusable model package');
+assert.match(stackExporter, /kaminos\.sam3-browser-invocation\.v0/, 'image-FPN exporter must emit a per-run invocation');
+assert.match(stackExporter, /kaminos\.sam3-browser-verification\.v0/, 'image-FPN exporter must emit a separate verification attachment');
+assert.match(stackExporter, /sam3-model-package\.json/, 'image-FPN exporter must write the reusable model package separately');
+assert.match(stackExporter, /sam3-invocation\.json/, 'image-FPN exporter must write invocation state separately');
+assert.match(stackExporter, /sam3-verification\.json/, 'image-FPN exporter must write oracle verification state separately');
+assert.match(stackExporter, /package_contract\s*=\s*\{/, 'model package identity must be derived from the exported runtime package contract');
+assert.match(stackExporter, /package_digest\s*=\s*encoder_tool\.sha256_bytes\(canonical_identity_json\(package_contract\)\.encode\("utf-8"\)\)/, 'model package identity must hash a cross-language canonical package contract');
+assert.match(stackExporter, /struct\.pack\(['"]>d['"], number\)\.hex\(\)/, 'Python package identity must encode numbers by binary64 bytes rather than language-specific JSON formatting');
+assert.doesNotMatch(stackExporter, /"packageId": f"sam3-model-package:\{weights_sha\}"/, 'model package identity must not collapse to the source checkpoint hash');
 
 assert.match(witness, /mlx-detector-stack-image-fpn-neck-export/, 'witness must allow detector-stack packet mode with browser-local image FPN-neck ingress');
 assert.match(witness, /IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID/, 'witness must preserve SAM3 image FPN-neck route identity');
@@ -69,11 +112,13 @@ assert.match(witness, /promptFpnReceipt,\s*\n\s*pixelDecoderReceipt,\s*\n\s*deco
 assert.match(witness, /promptFpnOutput\?\.artifactId !== compositionEdge\?\.promptFpnOutput\?\.artifactId/, 'witness terminal detector-stack guard must bind prompt-FPN receipt output to the composition edge');
 assert.match(witness, /pixelDecoderOutput\?\.artifactId !== compositionEdge\?\.pixelEmbedOutput\?\.artifactId/, 'witness terminal detector-stack guard must bind pixel-decoder receipt output to the composition edge');
 assert.match(witness, /effectiveToleranceBudgetSource/, 'witness report must preserve the effective tolerance budget source');
-assert.match(witness, /browser-fpn-prompt-text-pixel-detector-stack/, 'witness must recognize the image-FPN prompt/text prompt/pixel tolerance budget source');
+assert.match(witness, /gate-u-mlx-metal-erf-two-prompt-grounded-browser-fpn-detector-stack-2026-07-13/, 'witness must recognize the grounded Gate U image-FPN tolerance budget source');
 assert.match(witness, /sam3-detr-encoder-tensors/, 'witness must inspect the DETR encoder tensor input receipt');
 assert.match(witness, /detrEncoderInput\?\.artifactId !== 'sam3-detr-encoder-tensors:browser-fpn-image-ingress-composition'/, 'witness must assert the DETR encoder input artifact comes from browser FPN image ingress composition');
 assert.match(witness, /detrEncoderInput\?\.sha256 !== ingress\.detrImageIngressTensorSha256/, 'witness must assert the DETR encoder input hash equals the browser FPN ingress aggregate');
 assert.match(witness, /browserPromptFpnPixelEvidence/, 'witness report must preserve browser prompt-FPN and pixel-decoder evidence at top level');
+assert.match(witness, /resolveSam3BrowserPackageManifestSync/, 'terminal witness must resolve the hash-bound package/invocation split before browser launch');
+assert.match(witness, /packageInvocationEvidence/, 'terminal witness must preserve effective package and invocation identity even on pre-browser failure');
 assert.match(witness, /PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID/, 'witness must assert image-FPN detector-stack prompt-FPN route receipt identity');
 assert.match(witness, /PIXEL_DECODER_PHASE_PROGRAM_ROUTE_ID/, 'witness must assert image-FPN detector-stack pixel-decoder route receipt identity');
 
@@ -94,6 +139,127 @@ assert.match(smokeJs, /sam3-prompt-fpn-tensors:browser-image-fpn-detector-stack-
 assert.match(smokeJs, /sam3-pixel-decoder-tensors:browser-image-fpn-detector-stack-composition/, 'browser smoke must receipt-bind browser FPN and prompt-FPN outputs into pixel decoder for image-FPN detector-stack mode');
 assert.match(smokeJs, /sam3-pixel-embed:browser-image-fpn-detector-stack-composition/, 'browser smoke must expose browser-produced pixel embed before mask-tail in image-FPN detector-stack mode');
 assert.match(smokeJs, /browserPromptFpnPixelEvidence/, 'browser smoke state must expose browser prompt-FPN and pixel-decoder evidence');
+assert.match(smokeJs, /resolveSam3BrowserPackageManifest/, 'browser smoke must resolve the hash-bound package/invocation split at runtime');
+assert.match(smokeJs, /packageInvocationEvidence/, 'browser smoke must expose effective package and invocation identity');
+
+if (existsSync(packageResolverUrl)) {
+  const {
+    canonicalSam3IdentityJson,
+    resolveSam3BrowserPackageManifest,
+    resolveSam3BrowserPackageManifestSync,
+  } = await import('../src/sam-browser-package-manifest.js');
+
+  const encode = value => JSON.stringify(value, null, 2);
+  const sha256 = text => createHash('sha256').update(text).digest('hex');
+  assert.equal(
+    canonicalSam3IdentityJson({ whole: 1, epsilon: 0.000001, negativeZero: -0 }),
+    '{"epsilon":"f64:3eb0c6f7a0b5ed8d","negativeZero":"f64:8000000000000000","whole":"f64:3ff0000000000000"}',
+    'identity canonicalization must preserve language-independent binary64 number identity',
+  );
+  assert.throws(
+    () => canonicalSam3IdentityJson({ invalid: Number.NaN }),
+    /non-finite number/,
+    'identity canonicalization must reject non-finite metadata instead of laundering it through JSON null',
+  );
+  const identityDigest = (value, excluded) => sha256(canonicalSam3IdentityJson(Object.fromEntries(Object.entries(value).filter(([key]) => !excluded.includes(key)))));
+  const artifacts = new Map();
+  const addArtifact = (file, value) => {
+    const text = encode(value);
+    artifacts.set(file, text);
+    return { file, sha256: sha256(text), schema: value.schema };
+  };
+  const modelPackage = {
+    schema: 'kaminos.sam3-browser-model-package.v0',
+    packageId: 'sam3-model-package:test',
+    model: { id: 'test-model' },
+    staticWeights: { artifactId: 'weights:test', sha256: 'weights-sha', role: 'reference-upstream' },
+    shape: { batch: 1 },
+    claims: { fullSam3BrowserExecution: false },
+    weights: [{ role: 'test-weight' }],
+  };
+  const invocation = {
+    schema: 'kaminos.sam3-browser-invocation.v0',
+    invocationId: 'sam3-invocation:test-a',
+    prompt: { text: 'truck', sha256: 'prompt-a' },
+    sourceImage: { file: 'truck.png', sha256: 'image-a' },
+    postprocess: { scoreThreshold: 0.1 },
+  };
+  modelPackage.packageId = `sam3-model-package:${identityDigest(modelPackage, ['schema', 'packageId'])}`;
+  invocation.invocationId = `sam3-invocation:${identityDigest(invocation, ['schema', 'invocationId'])}`;
+  const verification = {
+    schema: 'kaminos.sam3-browser-verification.v0',
+    reference: { owner: 'mlx' },
+    toleranceBudgetSource: 'test-budget',
+    toleranceCalibration: { schema: 'test-calibration', sourceSha256: 'calibration-sha' },
+    tolerances: { binaryMismatchCount: 96 },
+    tensors: [{ role: 'expected-mask' }],
+  };
+  const root = {
+    schema: 'kaminos.sam3-detector-stack.image-fpn-neck-packet.v0',
+    routeId: 'sam3.mask-decoder-island.webgpu-local.v0',
+    mode: 'mlx-detector-stack-image-fpn-neck-export',
+    modelPackage: addArtifact('sam3-model-package.json', modelPackage),
+    invocation: addArtifact('sam3-invocation.json', invocation),
+    verification: addArtifact('sam3-verification.json', verification),
+  };
+  const readArtifactTextSync = file => {
+    if (!artifacts.has(file)) throw new Error(`missing fixture ${file}`);
+    return artifacts.get(file);
+  };
+  const readArtifactText = async file => readArtifactTextSync(file);
+  const asyncResolution = await resolveSam3BrowserPackageManifest(root, { readArtifactText, sha256Text: async text => sha256(text) });
+  const syncResolution = resolveSam3BrowserPackageManifestSync(root, { readArtifactText: readArtifactTextSync, sha256Text: sha256 });
+  for (const resolution of [asyncResolution, syncResolution]) {
+    assert.equal(resolution.manifest.model.id, 'test-model');
+    assert.equal(resolution.manifest.prompt.text, 'truck');
+    assert.equal(resolution.manifest.tolerances.binaryMismatchCount, 96);
+    assert.equal(resolution.manifest.toleranceCalibration.sourceSha256, 'calibration-sha', 'verification calibration receipt must survive package composition');
+    assert.equal(resolution.evidence.packageId, modelPackage.packageId);
+    assert.equal(resolution.evidence.invocationId, invocation.invocationId);
+    assert.equal(resolution.evidence.verification.attached, true);
+    assert.equal(resolution.manifest.schema, root.schema, 'composition must preserve the root packet schema');
+  }
+  const noVerificationRoot = { ...root };
+  delete noVerificationRoot.verification;
+  const noVerification = resolveSam3BrowserPackageManifestSync(noVerificationRoot, { readArtifactText: readArtifactTextSync, sha256Text: sha256 });
+  assert.equal(noVerification.evidence.verification.attached, false, 'verification must remain optional at runtime');
+  assert.equal(noVerification.manifest.tensors, undefined, 'verification-free invocation must not acquire oracle tensors');
+
+  assert.throws(
+    () => resolveSam3BrowserPackageManifestSync({ ...root, prompt: invocation.prompt }, { readArtifactText: readArtifactTextSync, sha256Text: sha256 }),
+    /root manifest duplicates invocation-owned field prompt/,
+    'mixed root/invocation authority must fail loud',
+  );
+  assert.throws(
+    () => resolveSam3BrowserPackageManifestSync({ ...root, modelPackage: { ...root.modelPackage, sha256: 'wrong' } }, { readArtifactText: readArtifactTextSync, sha256Text: sha256 }),
+    /model package hash mismatch/,
+    'stale or substituted model packages must fail before execution',
+  );
+  const relabeledModelPackage = { ...modelPackage, packageId: 'sam3-model-package:relabeled' };
+  artifacts.set('sam3-model-package-relabeled.json', encode(relabeledModelPackage));
+  const relabeledModelPackageRef = {
+    file: 'sam3-model-package-relabeled.json',
+    sha256: sha256(encode(relabeledModelPackage)),
+    schema: relabeledModelPackage.schema,
+  };
+  assert.throws(
+    () => resolveSam3BrowserPackageManifestSync({ ...root, modelPackage: relabeledModelPackageRef }, { readArtifactText: readArtifactTextSync, sha256Text: sha256 }),
+    /model package identity mismatch/,
+    'a consistently rehashed root must not authorize a false embedded package identity',
+  );
+  const relabeledInvocation = { ...invocation, invocationId: 'sam3-invocation:relabeled' };
+  artifacts.set('sam3-invocation-relabeled.json', encode(relabeledInvocation));
+  const relabeledInvocationRef = {
+    file: 'sam3-invocation-relabeled.json',
+    sha256: sha256(encode(relabeledInvocation)),
+    schema: relabeledInvocation.schema,
+  };
+  assert.throws(
+    () => resolveSam3BrowserPackageManifestSync({ ...root, invocation: relabeledInvocationRef }, { readArtifactText: readArtifactTextSync, sha256Text: sha256 }),
+    /invocation identity mismatch/,
+    'a consistently rehashed root must not authorize a false embedded invocation identity',
+  );
+}
 
 const {
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,

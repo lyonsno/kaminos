@@ -534,5 +534,6 @@ export async function runSam3ScoringPhaseProgramRoute(input = {}) {
       predLogits: Array.from(new Float32Array(predLogits)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

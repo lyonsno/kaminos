@@ -429,5 +429,6 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
       vitPrefixHiddenStates: Array.from(new Float32Array(run.outputs.vitPrefixHiddenStates)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }

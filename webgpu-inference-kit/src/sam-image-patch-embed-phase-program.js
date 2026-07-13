@@ -344,5 +344,6 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
       patchEmbeddings: Array.from(new Float32Array(run.outputs.patchEmbeddings)),
     };
   }
+  authoritative.resourceDisposal = runtime.dispose();
   return authoritative;
 }
