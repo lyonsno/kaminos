@@ -44,6 +44,8 @@ const stepMs = Math.max(1, Number(args.get('--step-ms') || 2000));
 const wallStepMs = Math.max(0, Number(args.get('--wall-step-ms') || 0));
 const keepBrowserOpen = args.has('--keep-browser-open');
 const userDataDir = resolve(String(args.get('--user-data-dir') || mkdtempSync(`${tmpdir()}/kaminos-splat-motion-chrome-`)));
+const requestedPhaseStride = Math.max(1, Math.floor(Number(args.get('--phase-stride') || 1)));
+const requestedHistoryDepth = Math.max(4, Math.floor(Number(args.get('--history-depth') || 4)));
 const operatorPrettySubstratePath = args.get('--operator-pretty-substrate')
   ? resolve(String(args.get('--operator-pretty-substrate')))
   : null;
@@ -413,6 +415,8 @@ async function captureSequence(config) {
           requestedRenderer: `analytic-splat-phase-${phaseMode}`,
           boundarySplatMode: 'analytic',
           boundarySplatPhaseMode: phaseMode,
+          boundarySplatPhaseStride: requestedPhaseStride,
+          boundarySplatHistoryDepth: requestedHistoryDepth,
         }));
         phaseLabCaptures.push(await captureRenderer({
           frameDir,
@@ -422,6 +426,8 @@ async function captureSequence(config) {
           requestedRenderer: `learned-splat-phase-${phaseMode}`,
           boundarySplatMode: 'learned',
           boundarySplatPhaseMode: phaseMode,
+          boundarySplatPhaseStride: requestedPhaseStride,
+          boundarySplatHistoryDepth: requestedHistoryDepth,
         }));
       }
     }
@@ -466,7 +472,21 @@ async function captureSequence(config) {
   return sequence;
 }
 
-async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, requestedRenderer, boundarySplatMode, boundarySplatPhaseMode = null }) {
+async function captureRenderer({
+  frameDir,
+  frameIndex,
+  scaleSet,
+  camera,
+  requestedRenderer,
+  boundarySplatMode,
+  boundarySplatPhaseMode = null,
+  boundarySplatPhaseStride = null,
+  boundarySplatHistoryDepth = null,
+}) {
+  const controlOverrides = { boundarySplatMode };
+  if (boundarySplatPhaseMode) controlOverrides.boundarySplatPhaseMode = boundarySplatPhaseMode;
+  if (boundarySplatPhaseStride) controlOverrides.boundarySplatPhaseStride = boundarySplatPhaseStride;
+  if (boundarySplatHistoryDepth) controlOverrides.boundarySplatHistoryDepth = boundarySplatHistoryDepth;
   const canvasEval = await wsRequest('Runtime.evaluate', {
     expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
       renderScale: 1,
@@ -474,7 +494,7 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
       sameStateCaptureId: scaleSet.sameStateCaptureId,
       baseFrameCount: scaleSet.baseFrameCount,
       baseSimStepCount: scaleSet.baseSimStepCount,
-      controlOverrides: boundarySplatPhaseMode ? { boundarySplatMode, boundarySplatPhaseMode } : { boundarySplatMode },
+      controlOverrides,
       restoreControls: true,
       resumeRenderLoop: false,
     })})`,
@@ -515,6 +535,8 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
     boundarySplatPhaseSourceCount: isSplat ? canvasCapture.boundarySplatPhaseSourceCount ?? postState?.boundarySplatPhaseSourceCount ?? null : null,
     phaseMode: isSplat ? canvasCapture.boundarySplatPhaseMode ?? postState?.boundarySplatPhaseMode ?? null : null,
     phaseModeIdentity: isSplat ? canvasCapture.boundarySplatPhaseModeIdentity ?? postState?.boundarySplatPhaseModeIdentity ?? null : null,
+    boundarySplatPhaseStride: isSplat ? canvasCapture.boundarySplatPhaseStride ?? postState?.boundarySplatPhaseStride ?? null : null,
+    boundarySplatHistoryDepth: isSplat ? canvasCapture.boundarySplatHistoryDepth ?? postState?.boundarySplatHistoryDepth ?? null : null,
     phaseSourceIdentity: isSplat ? canvasCapture.boundarySplatPhaseSourceIdentity ?? postState?.boundarySplatPhaseSourceIdentity ?? null : null,
     phaseSources: isSplat ? canvasCapture.boundarySplatPhaseSources ?? postState?.boundarySplatPhaseSources ?? null : null,
     instanceDescriptors: isSplat ? canvasCapture.boundarySplatInstanceDescriptors ?? postState?.boundarySplatInstanceDescriptors ?? null : null,
@@ -559,6 +581,8 @@ async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, request
       boundarySplatPhaseSourceCount: canvasCapture.boundarySplatPhaseSourceCount,
       phaseMode: canvasCapture.boundarySplatPhaseMode,
       phaseModeIdentity: canvasCapture.boundarySplatPhaseModeIdentity,
+      boundarySplatPhaseStride: canvasCapture.boundarySplatPhaseStride,
+      boundarySplatHistoryDepth: canvasCapture.boundarySplatHistoryDepth,
       phaseSourceIdentity: canvasCapture.boundarySplatPhaseSourceIdentity,
       incrementalInstanceCost: canvasCapture.boundarySplatIncrementalInstanceCost,
     },
@@ -725,20 +749,25 @@ function summarizeDuplicateMotionWitness(frames) {
     : null;
   const sharedCurrentControl = phaseSourceIdentities.includes(SHARED_CURRENT_PHASE_SOURCE);
   const liveHistoryOffset = phaseSourceIdentities.includes(LIVE_HISTORY_PHASE_SOURCE);
-  const motionCorrelation = sharedCurrentControl && !liveHistoryOffset ? 1 : null;
+  const ageSweepHistory = phaseSourceIdentities.includes(AGE_SWEEP_PHASE_SOURCE);
+  const sameHistorySlot = phaseSourceIdentities.includes(SAME_HISTORY_SLOT_PHASE_SOURCE);
+  const temporalDiversityActive = liveHistoryOffset || ageSweepHistory;
+  const motionCorrelation = sharedCurrentControl && !temporalDiversityActive ? 1 : null;
   const incrementalInstanceCost = captures.at(-1)?.incrementalInstanceCost ?? null;
   return {
     identity: 'duplicateMotionWitness',
     authority: 'renderer-phase-source-identity-and-draw-telemetry-v0',
-    status: liveHistoryOffset ? 'offset-motion-source-active' : 'synchronized-control',
+    status: temporalDiversityActive ? 'offset-motion-source-active' : 'synchronized-control',
     requestedInstanceCount,
     descriptorIdentities,
     phaseSourceIdentities,
     sharedCurrentControl,
     liveHistoryOffset,
+    ageSweepHistory,
+    sameHistorySlot,
     motionCorrelation,
     incrementalInstanceCost,
-    claimBoundary: liveHistoryOffset
+    claimBoundary: temporalDiversityActive
       ? 'Motion diversity comes from the reported live-history phase source.'
       : 'Four transformed fires are spatially distinct but intentionally share current candidate phase; this is a synchronization control, not phase diversity.',
   };
@@ -757,6 +786,8 @@ function summarizePhaseLabWitness(frames) {
       captureCount: modeCaptures.length,
       phaseModeIdentity: latest?.phaseModeIdentity ?? null,
       phaseSourceIdentity: latest?.phaseSourceIdentity ?? null,
+      phaseStride: latest?.boundarySplatPhaseStride ?? null,
+      historyDepth: latest?.boundarySplatHistoryDepth ?? null,
       phaseSources: latest?.phaseSources ?? null,
       requestedInstanceCount: latest?.boundarySplatRequestedInstanceCount ?? null,
       sourceCandidateCount: latest?.boundarySplatSourceCandidateCount ?? null,
@@ -788,6 +819,8 @@ function loadOperatorPrettySubstrate(path) {
       routeParams: parsed.routeParams || null,
       model: parsed.kaminosDebugState?.boundarySplatAttributeModelIdentity ?? null,
       phaseMode: parsed.kaminosDebugState?.boundarySplatPhaseMode ?? null,
+      phaseStride: parsed.kaminosDebugState?.boundarySplatPhaseStride ?? null,
+      historyDepth: parsed.kaminosDebugState?.boundarySplatHistoryDepth ?? null,
       phaseSourceIdentity: parsed.kaminosDebugState?.boundarySplatPhaseSourceIdentity ?? null,
       requestedInstanceCount: parsed.kaminosDebugState?.boundarySplatRequestedInstanceCount ?? null,
       sourceCandidateCount: parsed.kaminosDebugState?.boundarySplatSourceCandidateCount ?? null,
@@ -1015,6 +1048,8 @@ function compactState(state) {
     boundarySplatPhaseSourceCount: state.boundarySplatPhaseSourceCount,
     phaseMode: state.boundarySplatPhaseMode,
     phaseModeIdentity: state.boundarySplatPhaseModeIdentity,
+    boundarySplatPhaseStride: state.boundarySplatPhaseStride,
+    boundarySplatHistoryDepth: state.boundarySplatHistoryDepth,
     phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
     phaseSources: state.boundarySplatPhaseSources,
     incrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,
