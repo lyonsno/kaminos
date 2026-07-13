@@ -19,6 +19,7 @@ CORPUS_SCHEMA = "kaminos-boundary-splat-supervision-corpus-v0"
 CORPUS_AUTHORITY = "live-simulator-frozen-state-candidate-raymarch-v0"
 TARGET_DECOMPOSITION = "candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0"
 MODEL_SCHEMA = "kaminos-boundary-splat-attribute-mlp-v0"
+SPATIAL_MODEL_SCHEMA = "kaminos-boundary-splat-spatial-attribute-mlp-v0"
 BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER = [
     "position.x", "position.y", "position.z",
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
@@ -128,9 +129,9 @@ def load_corpus(manifest_value):
 
 
 class AttributeMlp(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, input_size=len(FEATURES)):
         super().__init__()
-        self.hidden = nn.Linear(len(FEATURES), hidden_size)
+        self.hidden = nn.Linear(input_size, hidden_size)
         self.output = nn.Linear(hidden_size, len(OUTPUTS))
 
     def __call__(self, inputs):
@@ -173,6 +174,54 @@ def load_warm_start(path_value):
     }
 
 
+def parse_fourier_frequencies(value):
+    frequencies = [float(item.strip()) for item in value.split(",") if item.strip()]
+    if not frequencies or not all(np.isfinite(item) and item > 0 for item in frequencies):
+        raise ValueError("fourier frequencies must contain positive finite values")
+    return frequencies
+
+
+def context_feature_names(context_mode, frequencies):
+    names = list(FEATURES)
+    if context_mode in ("world-xyz", "world-fourier"):
+        names.extend(["position.x", "position.y", "position.z"])
+    if context_mode == "world-fourier":
+        for frequency in frequencies:
+            label = format(frequency, "g")
+            names.extend([f"position.sin.{axis}.{label}" for axis in "xyz"])
+            names.extend([f"position.cos.{axis}.{label}" for axis in "xyz"])
+    return names
+
+
+def encode_candidate_inputs(candidates, context_mode, frequencies):
+    features = mx.array(candidates[:, 3:].astype(np.float32))
+    if context_mode == "none":
+        return features
+    positions = mx.array(candidates[:, :3].astype(np.float32))
+    channels = [features, positions]
+    if context_mode == "world-fourier":
+        for frequency in frequencies:
+            channels.append(mx.sin(positions * frequency * 2.0 * np.pi))
+            channels.append(mx.cos(positions * frequency * 2.0 * np.pi))
+    return mx.concatenate(channels, axis=1)
+
+
+def expand_warm_start_with_context(base_model, input_size):
+    hidden_size = int(base_model.hidden.weight.shape[0])
+    model = AttributeMlp(hidden_size, input_size)
+    expanded_weight = np.zeros((hidden_size, input_size), dtype=np.float32)
+    expanded_weight[:, :len(FEATURES)] = np.asarray(base_model.hidden.weight)
+    expanded_weight[:, len(FEATURES):] = 0.0
+    model.load_weights([
+        ("hidden.weight", mx.array(expanded_weight)),
+        ("hidden.bias", mx.array(np.asarray(base_model.hidden.bias))),
+        ("output.weight", mx.array(np.asarray(base_model.output.weight))),
+        ("output.bias", mx.array(np.asarray(base_model.output.bias))),
+    ])
+    mx.eval(model.parameters())
+    return model
+
+
 def predict_numpy(model, features, output_ranges):
     normalized = np.asarray(model(mx.array(features.astype(np.float32))))
     return output_ranges[:, 0] + normalized * (output_ranges[:, 1] - output_ranges[:, 0])
@@ -190,7 +239,7 @@ def project_points(points, view_projection, width, height):
     return screen.astype(np.float32), valid, clip[:, 3].astype(np.float32)
 
 
-def build_sparse_geometry(frame, render_width, depth_bins, max_radius):
+def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_mode, frequencies):
     source_width, source_height = frame["viewport"]
     render_height = max(1, round(render_width * source_height / source_width))
     positions = frame["candidates"][:, :3]
@@ -256,6 +305,7 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius):
         "width": render_width,
         "height": render_height,
         "features": mx.array(features.astype(np.float32)),
+        "inputs": encode_candidate_inputs(frame["candidates"], context_mode, frequencies),
         "pixelIndices": mx.array(np.concatenate(pixel_parts)),
         "splatIndices": mx.array(np.concatenate(splat_parts)),
         "depthBinIndices": mx.array(np.concatenate(depth_bin_parts)),
@@ -269,7 +319,7 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius):
 
 
 def render_frame(model, geometry, lower, span, depth_bins):
-    normalized = model(geometry["features"])
+    normalized = model(geometry["inputs"])
     attributes = lower + normalized * span
     splat_indices = geometry["splatIndices"]
     pixel_indices = geometry["pixelIndices"]
@@ -343,6 +393,38 @@ def serialize_model(model, artifact_template, output_path):
     return payload
 
 
+def serialize_spatial_model(model, output_ranges, feature_names, context_mode, frequencies, output_path):
+    payload = {
+        "schema": SPATIAL_MODEL_SCHEMA,
+        "architecture": "dense-relu-dense",
+        "features": feature_names,
+        "outputs": OUTPUTS,
+        "hiddenSize": int(model.hidden.weight.shape[0]),
+        "outputRanges": output_ranges.astype(float).tolist(),
+        "contextMode": context_mode,
+        "fourierFrequencies": frequencies if context_mode == "world-fourier" else [],
+        "deployable": False,
+        "layers": [
+            {
+                "inputSize": int(model.hidden.weight.shape[1]),
+                "outputSize": int(model.hidden.weight.shape[0]),
+                "activation": "relu",
+                "weights": np.asarray(model.hidden.weight).reshape(-1).astype(float).tolist(),
+                "bias": np.asarray(model.hidden.bias).reshape(-1).astype(float).tolist(),
+            },
+            {
+                "inputSize": int(model.output.weight.shape[1]),
+                "outputSize": int(model.output.weight.shape[0]),
+                "activation": "sigmoid",
+                "weights": np.asarray(model.output.weight).reshape(-1).astype(float).tolist(),
+                "bias": np.asarray(model.output.bias).reshape(-1).astype(float).tolist(),
+            },
+        ],
+    }
+    write_json(output_path, payload)
+    return payload
+
+
 def compile_model(output_dir, model_path, model, frame, lower, span):
     parity_features = frame["candidates"][:64, 3:].astype(np.float32)
     parity_outputs = lower + np.asarray(model(mx.array(parity_features))) * span
@@ -375,6 +457,8 @@ def parse_args():
     parser.add_argument("--radius-preservation", type=float, default=0.18)
     parser.add_argument("--depth-bins", type=int, default=1)
     parser.add_argument("--edge-weight", type=float, default=0.0)
+    parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier"], default="none")
+    parser.add_argument("--fourier-frequencies", default="1,2,4,8")
     parser.add_argument("--candidate-table-oracle", action="store_true")
     parser.add_argument("--probe-only", action="store_true")
     return parser.parse_args()
@@ -391,18 +475,23 @@ def main():
     try:
         if args.steps < 0 or args.render_width <= 0 or args.learning_rate <= 0 or args.depth_bins <= 0 or args.edge_weight < 0:
             raise ValueError("steps and edge-weight must be non-negative; render-width, learning-rate, and depth-bins must be positive")
+        frequencies = parse_fourier_frequencies(args.fourier_frequencies)
+        if args.candidate_table_oracle and args.context_mode != "none":
+            raise ValueError("candidate table oracle cannot be combined with spatial conditioning")
         phase = "corpus"
         corpus = load_corpus(args.corpus)
         phase = "warm-start"
-        model, warm_artifact, output_ranges, warm_receipt = load_warm_start(args.warm_start)
+        base_model, warm_artifact, output_ranges, warm_receipt = load_warm_start(args.warm_start)
         lower_np = output_ranges[:, 0]
         span_np = output_ranges[:, 1] - output_ranges[:, 0]
         lower = mx.array(lower_np)
         span = mx.array(span_np)
         initial_attributes = [
-            predict_numpy(model, frame["candidates"][:, 3:], output_ranges)
+            predict_numpy(base_model, frame["candidates"][:, 3:], output_ranges)
             for frame in corpus["frames"]
         ]
+        feature_names = context_feature_names(args.context_mode, frequencies)
+        model = base_model if args.context_mode == "none" else expand_warm_start_with_context(base_model, len(feature_names))
         if args.candidate_table_oracle:
             if len(corpus["frames"]) != 1:
                 raise ValueError("candidate oracle requires exactly one corpus frame")
@@ -410,7 +499,7 @@ def main():
             model = CandidateAttributeTable(normalized_attributes)
         phase = "geometry"
         geometries = [
-            build_sparse_geometry(frame, args.render_width, args.depth_bins, output_ranges[4:6, 1])
+            build_sparse_geometry(frame, args.render_width, args.depth_bins, output_ranges[4:6, 1], args.context_mode, frequencies)
             for frame in corpus["frames"]
         ]
         initial_radius = [mx.array(attributes[:, 4:6]) for attributes in initial_attributes]
@@ -455,7 +544,7 @@ def main():
         phase = "model-artifact"
         if args.candidate_table_oracle:
             model_path = output_dir / "candidate-attributes.f32"
-            candidate_attributes = np.asarray(lower + model(geometries[0]["features"]) * span).astype("<f4")
+            candidate_attributes = np.asarray(lower + model(geometries[0]["inputs"]) * span).astype("<f4")
             model_bytes = candidate_attributes.tobytes()
             model_path.write_bytes(model_bytes)
             model_receipt = {
@@ -467,7 +556,7 @@ def main():
                 "authority": "per-candidate-free-attribute-oracle-v0",
                 "deployable": False,
             }
-        else:
+        elif args.context_mode == "none":
             model_path = output_dir / "model-artifact.json"
             serialize_model(model, warm_artifact, model_path)
             phase = "compile"
@@ -479,6 +568,17 @@ def main():
                 "identity": compiled_receipt["identity"],
                 "authority": "shared-pointwise-feature-mlp-v0",
                 "deployable": True,
+            }
+        else:
+            model_path = output_dir / "spatial-model-artifact.json"
+            serialize_spatial_model(model, output_ranges, feature_names, args.context_mode, frequencies, model_path)
+            model_bytes = model_path.read_bytes()
+            model_receipt = {
+                "path": str(model_path),
+                "schema": SPATIAL_MODEL_SCHEMA,
+                "identity": f"sha256:{sha256_bytes(model_bytes)}",
+                "authority": "shared-position-conditioned-feature-mlp-v0",
+                "deployable": False,
             }
         report.update({
             "status": "probe-only" if args.probe_only else "trained",
@@ -500,6 +600,9 @@ def main():
                 "learningRate": args.learning_rate,
                 "edgeWeight": args.edge_weight,
                 "modelAuthority": model_receipt["authority"],
+                "contextMode": args.context_mode,
+                "fourierFrequencies": frequencies if args.context_mode == "world-fourier" else [],
+                "inputChannels": len(feature_names),
                 "initialLoss": initial_loss,
                 "trainedLoss": trained_loss,
                 "initialPixelLoss": initial_pixel_loss,

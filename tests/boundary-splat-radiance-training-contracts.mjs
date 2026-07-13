@@ -40,5 +40,15 @@ assert.match(script, /--candidate-table-oracle/, 'radiance trainer exposes a non
 assert.match(script, /class\s+CandidateAttributeTable\(nn\.Module\)/, 'candidate oracle owns independently trainable attributes per splat');
 assert.match(script, /per-candidate-free-attribute-oracle-v0/, 'candidate oracle receipts distinguish diagnostic authority from deployable MLP authority');
 assert.match(script, /candidate oracle requires exactly one corpus frame/, 'candidate oracle rejects ambiguous cross-frame candidate identity');
+assert.match(script, /--context-mode/, 'radiance trainer exposes explicit spatial conditioning rather than silently changing the live feature contract');
+assert.match(script, /choices=\["none", "world-xyz", "world-fourier"\]/, 'spatial conditioning distinguishes the baseline, raw world position, and Fourier position');
+assert.match(script, /--fourier-frequencies/, 'Fourier conditioning exposes its exact frequency ladder');
+assert.match(script, /mx\.sin\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes signed sine phase channels');
+assert.match(script, /mx\.cos\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes cosine phase channels');
+assert.match(script, /expanded_weight\[:,\s*:len\(FEATURES\)\]\s*=\s*np\.asarray\(base_model\.hidden\.weight\)/, 'spatial model preserves every proven live-feature weight exactly');
+assert.match(script, /expanded_weight\[:,\s*len\(FEATURES\):\]\s*=\s*0\.0/, 'new spatial channels begin as an exact zero-delta extension of the live head');
+assert.match(script, /shared-position-conditioned-feature-mlp-v0/, 'spatial receipts distinguish the experimental model authority');
+assert.match(script, /"deployable":\s*False/, 'spatial artifacts cannot masquerade as browser-deployable models');
+assert.match(script, /"contextMode"/, 'training receipts preserve the effective context mode');
 
 console.log('boundary splat radiance training contracts passed');
