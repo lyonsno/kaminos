@@ -1,7 +1,40 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
+const projectorSource = witness.match(
+  /function projectFriendlyFiringEvidence\([\s\S]*?\n}\n(?=\ntry \{)/,
+);
+assert.ok(projectorSource, 'witness must expose a testable Node-side firing evidence projector');
+const projectFriendlyFiringEvidence = vm.runInNewContext(`(${projectorSource[0]})`);
+const projectedEvidence = projectFriendlyFiringEvidence({
+  browserFiringEvidence: {
+    status: 'complete',
+    reportPath: '/tmp/pipeline-witness.json',
+    foregroundKilnHeartbeat: { schema: 'kaminos.foreground-kiln-heartbeat.v0', sampleRetention: 'uncapped' },
+    sharpDutyCorrelation: { schema: 'kaminos.foreground-sharp-duty-correlation.v0', status: 'verified' },
+    volumeReleased: true,
+    volumeReleaseConfirmed: true,
+    autoOpenedTab: 'assets',
+  },
+  pipelineReport: {
+    requestedPipelineId: 'sharp-image-to-splat-live-v0',
+    effectiveRouteConfig: { routeId: 'adapter.sharp-image-to-splat-live.v0' },
+    artifacts: { splat: { path: '/tmp/output.ply', bytes: 64, sha256: 'abc', status: 'real' } },
+    stages: [{ effectiveRoute: { adapterReport: {
+      revision: 'sharp-revision',
+      breathingRoom: { requestedScheduler: { mode: 'cooperative' }, effectiveScheduler: { mode: 'cooperative' }, telemetry: { events: [] } },
+      backgroundHeartbeat: { schema: 'sharp-webgpu.background-heartbeat.v0', worstFrameGaps: [], gpuDutyIntervals: { intervals: [] } },
+    } } }],
+  },
+});
+assert.equal(projectedEvidence.reportPath, '/tmp/pipeline-witness.json');
+assert.equal(projectedEvidence.effectiveSharpRevision, 'sharp-revision');
+assert.equal(projectedEvidence.output.sha256, 'abc');
+assert.equal(projectedEvidence.foregroundKilnHeartbeat.sampleRetention, 'uncapped');
+assert.equal(projectedEvidence.sharpDutyCorrelation.status, 'verified');
+assert.equal(projectedEvidence.volumeReleased, true);
 
 for (const [pattern, message] of [
   [/crucible-viewport-witness\.v0/, 'Witness must name the Crucible viewport contract it emits'],
@@ -66,7 +99,10 @@ for (const [pattern, message] of [
   [/Runtime\.exceptionThrown/, 'Witness must fail loud on browser runtime exceptions'],
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],
   [/lastTrustworthyEvidence/, 'Witness failures after inference must preserve the last trustworthy route and heartbeat evidence'],
-  [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)[\s\S]*state\.fullRoute = await evaluate\(ws,[\s\S]*fireTimeoutMs\)/, 'Post-firing evidence collection must inherit the explicit firing budget instead of timing out while the completed cast binds'],
+  [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)[\s\S]*const browserFiringEvidence = await evaluate\(ws,[\s\S]*fireTimeoutMs\)/, 'Post-firing browser evidence collection must inherit the explicit firing budget instead of timing out while the completed cast binds'],
+  [/const browserFiringEvidence = await evaluate\(ws,[\s\S]*reportPath:\s*routeState\.result\?\.report\?\.path/, 'Browser evidence read must return the durable report path instead of projecting the backend report in the busy page'],
+  [/JSON\.parse\(readFileSync\(browserFiringEvidence\.reportPath, 'utf8'\)\)/, 'Node witness must read the backend report from its durable filesystem path'],
+  [/projectFriendlyFiringEvidence\(\{[\s\S]*browserFiringEvidence,[\s\S]*pipelineReport/, 'Node witness must join browser-owned firing evidence with filesystem-owned backend evidence outside CDP'],
 ]) {
   assert.match(witness, pattern, message);
 }
@@ -75,4 +111,9 @@ assert.doesNotMatch(
   witness,
   /\n\s*backgroundHeartbeat,\n\s*foregroundKilnHeartbeat,/,
   'CDP witness must not return the raw multi-megabyte background heartbeat shorthand',
+);
+assert.doesNotMatch(
+  witness,
+  /state\.fullRoute = await evaluate\(ws,[\s\S]*const report = routeState\.result\?\.report\?\.document/,
+  'CDP witness must not traverse the multi-megabyte backend report inside the busy browser page',
 );

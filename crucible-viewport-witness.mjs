@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -120,6 +120,124 @@ async function evaluate(ws, expression, timeoutMs = 20000) {
     throw new Error(`evaluation failed during ${phase}: ${result.exceptionDetails.text || 'exception'}`);
   }
   return result.result?.value;
+}
+
+function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }) {
+  const report = pipelineReport || {};
+  const stage = (report.stages || [])[0] || {};
+  const adapter = stage.effectiveRoute?.adapterReport || {};
+  const backgroundHeartbeat = adapter.backgroundHeartbeat || null;
+  const schedulerEvents = adapter.breathingRoom?.telemetry?.events || [];
+  const routeTailEvents = schedulerEvents.filter(event => event?.phase === 'route-tail');
+  const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
+  const prepEvents = routeTailEvents.filter(event => prepSteps.has(event?.step) && event?.role === 'cpu-materialization-chunk');
+  const composePreparationIntervals = routeTailEvents
+    .filter(event => prepSteps.has(event?.step) && event?.kind === 'duty-interval')
+    .map(event => ({
+      phase: event.phase,
+      boundary: event.boundary,
+      stage: event.stage,
+      step: event.step,
+      role: event.role,
+      intervalStartMs: event.intervalStartMs,
+      intervalEndMs: event.intervalEndMs,
+      durationMs: event.durationMs,
+    }));
+  const gaussianEvents = routeTailEvents.filter(event => event?.step === 'gaussian-compose' && event?.role === 'cpu-materialization-chunk');
+  const gaussianCpuDutyIntervals = routeTailEvents
+    .filter(event => event?.step === 'gaussian-compose' && event?.kind === 'duty-interval' && event?.granularity === 'row-batched')
+    .map(event => ({
+      phase: event.phase,
+      boundary: event.boundary,
+      stage: event.stage,
+      step: event.step,
+      role: event.role,
+      granularity: event.granularity,
+      checkpointItems: event.checkpointItems,
+      segmentStartProcessedItems: event.segmentStartProcessedItems,
+      segmentEndProcessedItems: event.segmentEndProcessedItems,
+      intervalStartMs: event.intervalStartMs,
+      intervalEndMs: event.intervalEndMs,
+      durationMs: event.durationMs,
+    }));
+  const maxGaussianDutyMs = Math.max(...gaussianCpuDutyIntervals.map(interval => interval.durationMs).filter(Number.isFinite), 0);
+  const preGaussianSetupSteps = new Set(['ply-data-allocation', 'gaussian-activation-setup']);
+  const preGaussianSetupIntervals = routeTailEvents
+    .filter(event => preGaussianSetupSteps.has(event?.step) && event?.kind === 'duty-interval')
+    .map(event => ({
+      phase: event.phase,
+      boundary: event.boundary,
+      stage: event.stage,
+      step: event.step,
+      role: event.role,
+      intervalStartMs: event.intervalStartMs,
+      intervalEndMs: event.intervalEndMs,
+      durationMs: event.durationMs,
+      bytes: event.bytes,
+    }));
+  const lateTailSteps = new Set(['ply-blob-assembly', 'object-url-create', 'output-bind']);
+  const lateTailBlockingIntervals = routeTailEvents
+    .filter(event => lateTailSteps.has(event?.step) && event?.kind === 'duty-interval')
+    .map(event => ({
+      phase: event.phase,
+      boundary: event.boundary,
+      stage: event.stage,
+      step: event.step,
+      role: event.role,
+      intervalStartMs: event.intervalStartMs,
+      intervalEndMs: event.intervalEndMs,
+      durationMs: event.durationMs,
+      bytes: event.bytes,
+    }));
+  const inferenceWindowFinalizeInterval = routeTailEvents.find(event =>
+    event?.step === 'inference-window-finalize' && event?.kind === 'duty-interval' && event?.role === 'localization-envelope'
+  ) || null;
+  const uninstrumentedGapsAtOrAbove50Ms = (backgroundHeartbeat?.worstFrameGaps || []).filter(gap =>
+    gap?.overlapClassification === 'uninstrumented-gap' && gap?.durationMs >= 50
+  );
+  const splat = report.artifacts?.splat || null;
+  return {
+    status: browserFiringEvidence.status || null,
+    message: browserFiringEvidence.message || null,
+    reportPath: browserFiringEvidence.reportPath || null,
+    requestedPipelineId: report.requestedPipelineId || null,
+    effectiveRouteId: report.effectiveRouteConfig?.routeId || null,
+    effectiveSharpRevision: adapter.revision || adapter.backend?.revision || null,
+    requestedScheduler: adapter.breathingRoom?.requestedScheduler || null,
+    effectiveScheduler: adapter.breathingRoom?.effectiveScheduler || null,
+    routeTailCheckpointEvents: {
+      total: routeTailEvents.length,
+      prep: prepEvents.length,
+      gaussian: gaussianEvents.length,
+      prepSteps: [...new Set(prepEvents.map(event => event.step))].sort(),
+      gaussianProcessedItems: [...new Set(gaussianEvents.map(event => event.processedItems).filter(Number.isFinite))].sort((a, b) => a - b),
+    },
+    composePreparationIntervals,
+    preGaussianSetupIntervals,
+    gaussianCpuDutyIntervals,
+    maxGaussianDutyMs,
+    lateTailBlockingIntervals,
+    inferenceWindowFinalizeInterval,
+    uninstrumentedGapsAtOrAbove50Ms,
+    output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
+    backgroundHeartbeat: backgroundHeartbeat ? {
+      schema: backgroundHeartbeat.schema,
+      status: backgroundHeartbeat.status,
+      evidenceSource: backgroundHeartbeat.evidenceSource,
+      disclaimer: backgroundHeartbeat.disclaimer,
+      requestedScheduler: backgroundHeartbeat.requestedScheduler,
+      effectiveScheduler: backgroundHeartbeat.effectiveScheduler,
+      inferenceWindow: backgroundHeartbeat.inferenceWindow,
+      crossPageClock: backgroundHeartbeat.crossPageClock,
+      gpuDutyIntervals: backgroundHeartbeat.gpuDutyIntervals,
+      worstFrameGaps: backgroundHeartbeat.worstFrameGaps,
+    } : null,
+    foregroundKilnHeartbeat: browserFiringEvidence.foregroundKilnHeartbeat || null,
+    sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation || null,
+    volumeReleased: Boolean(browserFiringEvidence.volumeReleased),
+    volumeReleaseConfirmed: Boolean(browserFiringEvidence.volumeReleaseConfirmed),
+    autoOpenedTab: browserFiringEvidence.autoOpenedTab || null,
+  };
 }
 
 try {
@@ -271,83 +389,10 @@ try {
       throw new Error(`Friendly firing did not finish within ${fireTimeoutMs}ms: ${JSON.stringify(routeState)}`);
     }
     phase = 'reading-friendly-firing-evidence';
-    state.fullRoute = await evaluate(ws, `(() => {
+    const browserFiringEvidence = await evaluate(ws, `(() => {
       const routeState = window.__kaminosKilnRouteBenchState || {};
-      const report = routeState.result?.report?.document || {};
-      const stage = (report.stages || [])[0] || {};
-      const adapter = stage.effectiveRoute?.adapterReport || {};
-      const backgroundHeartbeat = adapter.backgroundHeartbeat || null;
       const foregroundKilnHeartbeat = routeState.result?.foregroundKilnHeartbeat || null;
       const sharpDutyCorrelation = foregroundKilnHeartbeat?.sharpDutyCorrelation || null;
-      const schedulerEvents = adapter.breathingRoom?.telemetry?.events || [];
-      const routeTailEvents = schedulerEvents.filter(event => event?.phase === 'route-tail');
-      const prepSteps = new Set(['depth-normalize', 'depth-min', 'depth-rescale', 'base-disparity', 'base-grid', 'base-color']);
-      const prepEvents = routeTailEvents.filter(event => prepSteps.has(event?.step) && event?.role === 'cpu-materialization-chunk');
-      const composePreparationIntervals = routeTailEvents
-        .filter(event => prepSteps.has(event?.step) && event?.kind === 'duty-interval')
-        .map(event => ({
-          phase: event.phase,
-          boundary: event.boundary,
-          stage: event.stage,
-          step: event.step,
-          role: event.role,
-          intervalStartMs: event.intervalStartMs,
-          intervalEndMs: event.intervalEndMs,
-          durationMs: event.durationMs,
-        }));
-      const gaussianEvents = routeTailEvents.filter(event => event?.step === 'gaussian-compose' && event?.role === 'cpu-materialization-chunk');
-      const gaussianCpuDutyIntervals = routeTailEvents
-        .filter(event => event?.step === 'gaussian-compose' && event?.kind === 'duty-interval' && event?.granularity === 'row-batched')
-        .map(event => ({
-          phase: event.phase,
-          boundary: event.boundary,
-          stage: event.stage,
-          step: event.step,
-          role: event.role,
-          granularity: event.granularity,
-          checkpointItems: event.checkpointItems,
-          segmentStartProcessedItems: event.segmentStartProcessedItems,
-          segmentEndProcessedItems: event.segmentEndProcessedItems,
-          intervalStartMs: event.intervalStartMs,
-          intervalEndMs: event.intervalEndMs,
-          durationMs: event.durationMs,
-        }));
-      const maxGaussianDutyMs = Math.max(...gaussianCpuDutyIntervals.map(interval => interval.durationMs).filter(Number.isFinite), 0);
-      const preGaussianSetupSteps = new Set(['ply-data-allocation', 'gaussian-activation-setup']);
-      const preGaussianSetupIntervals = routeTailEvents
-        .filter(event => preGaussianSetupSteps.has(event?.step) && event?.kind === 'duty-interval')
-        .map(event => ({
-          phase: event.phase,
-          boundary: event.boundary,
-          stage: event.stage,
-          step: event.step,
-          role: event.role,
-          intervalStartMs: event.intervalStartMs,
-          intervalEndMs: event.intervalEndMs,
-          durationMs: event.durationMs,
-          bytes: event.bytes,
-        }));
-      const lateTailSteps = new Set(['ply-blob-assembly', 'object-url-create', 'output-bind']);
-      const lateTailBlockingIntervals = routeTailEvents
-        .filter(event => lateTailSteps.has(event?.step) && event?.kind === 'duty-interval')
-        .map(event => ({
-          phase: event.phase,
-          boundary: event.boundary,
-          stage: event.stage,
-          step: event.step,
-          role: event.role,
-          intervalStartMs: event.intervalStartMs,
-          intervalEndMs: event.intervalEndMs,
-          durationMs: event.durationMs,
-          bytes: event.bytes,
-        }));
-      const inferenceWindowFinalizeInterval = routeTailEvents.find(event =>
-        event?.step === 'inference-window-finalize' && event?.kind === 'duty-interval' && event?.role === 'localization-envelope'
-      ) || null;
-      const uninstrumentedGapsAtOrAbove50Ms = (backgroundHeartbeat?.worstFrameGaps || []).filter(gap =>
-        gap?.overlapClassification === 'uninstrumented-gap' && gap?.durationMs >= 50
-      );
-      const splat = report.artifacts?.splat || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
       const foregroundKilnHeartbeatWitness = foregroundKilnHeartbeat
         ? { ...foregroundKilnHeartbeat, sharpDutyCorrelation: undefined }
@@ -355,38 +400,7 @@ try {
       return {
         status: routeState.status || null,
         message: routeState.message || null,
-        requestedPipelineId: report.requestedPipelineId || null,
-        effectiveRouteId: report.effectiveRouteConfig?.routeId || null,
-        effectiveSharpRevision: adapter.revision || adapter.backend?.revision || null,
-        requestedScheduler: adapter.breathingRoom?.requestedScheduler || null,
-        effectiveScheduler: adapter.breathingRoom?.effectiveScheduler || null,
-        routeTailCheckpointEvents: {
-          total: routeTailEvents.length,
-          prep: prepEvents.length,
-          gaussian: gaussianEvents.length,
-          prepSteps: [...new Set(prepEvents.map(event => event.step))].sort(),
-          gaussianProcessedItems: [...new Set(gaussianEvents.map(event => event.processedItems).filter(Number.isFinite))].sort((a, b) => a - b),
-        },
-        composePreparationIntervals,
-        preGaussianSetupIntervals,
-        gaussianCpuDutyIntervals,
-        maxGaussianDutyMs,
-        lateTailBlockingIntervals,
-        inferenceWindowFinalizeInterval,
-        uninstrumentedGapsAtOrAbove50Ms,
-        output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
-        backgroundHeartbeat: backgroundHeartbeat ? {
-          schema: backgroundHeartbeat.schema,
-          status: backgroundHeartbeat.status,
-          evidenceSource: backgroundHeartbeat.evidenceSource,
-          disclaimer: backgroundHeartbeat.disclaimer,
-          requestedScheduler: backgroundHeartbeat.requestedScheduler,
-          effectiveScheduler: backgroundHeartbeat.effectiveScheduler,
-          inferenceWindow: backgroundHeartbeat.inferenceWindow,
-          crossPageClock: backgroundHeartbeat.crossPageClock,
-          gpuDutyIntervals: backgroundHeartbeat.gpuDutyIntervals,
-          worstFrameGaps: backgroundHeartbeat.worstFrameGaps,
-        } : null,
+        reportPath: routeState.result?.report?.path || null,
         foregroundKilnHeartbeat: foregroundKilnHeartbeatWitness,
         sharpDutyCorrelation,
         volumeReleased: Boolean(fire?.volumeReleased),
@@ -394,6 +408,12 @@ try {
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
       };
     })()`, fireTimeoutMs);
+    if (!browserFiringEvidence.reportPath) throw new Error('Friendly firing did not expose its durable pipeline report path');
+    const pipelineReport = JSON.parse(readFileSync(browserFiringEvidence.reportPath, 'utf8'));
+    state.fullRoute = projectFriendlyFiringEvidence({
+      browserFiringEvidence,
+      pipelineReport,
+    });
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
     if (state.fullRoute.status !== 'complete') throw new Error(`Friendly firing failed: ${state.fullRoute.message || state.fullRoute.status}`);
     if (expectedSharpRevision && state.fullRoute.effectiveSharpRevision !== expectedSharpRevision) {
