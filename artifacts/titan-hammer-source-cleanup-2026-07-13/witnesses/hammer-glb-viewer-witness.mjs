@@ -13,6 +13,8 @@ const url = args.get('--url') || 'http://127.0.0.1:8096/';
 const assetUrl = args.get('--asset-url') || '/artifacts/titan-hammer-source-cleanup-2026-07-13/provisional-glb/hammer-trellis-geometry-only.glb';
 const assetFileName = args.get('--asset-file-name') || assetUrl.split('/').pop() || 'scene-object.glb';
 const assetLabel = args.get('--asset-label') || 'Titan Hammer provisional GLB';
+const reportSchema = args.get('--schema') || 'kaminos.titan-hammer-glb-viewer-witness.v0';
+const truthBoundary = args.get('--truth-boundary') || 'Kaminos viewer route, GLB load, scene registration, and two camera captures only. This does not prove texture quality, topology repair, collision suitability, or free-orbit production usability.';
 const outA = resolve(args.get('--out-a') || 'artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-provisional-glb-front.png');
 const outB = resolve(args.get('--out-b') || 'artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-provisional-glb-oblique.png');
 const reportPath = resolve(args.get('--report') || 'artifacts/titan-hammer-source-cleanup-2026-07-13/witnesses/hammer-provisional-glb-kaminos-witness.json');
@@ -34,7 +36,7 @@ function delay(ms) {
 function writeReport(report) {
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, JSON.stringify({
-    schema: 'kaminos.titan-hammer-glb-viewer-witness.v0',
+    schema: reportSchema,
     requestedRoute: {
       url,
       assetUrl,
@@ -50,7 +52,7 @@ function writeReport(report) {
     phase,
     browserVersion,
     stderrTail: stderr.slice(-2000),
-    truthBoundary: 'Kaminos viewer route, GLB load, scene registration, and two camera captures only. This does not prove texture quality, topology repair, collision suitability, or free-orbit production usability.',
+    truthBoundary,
     ...report,
   }, null, 2));
 }

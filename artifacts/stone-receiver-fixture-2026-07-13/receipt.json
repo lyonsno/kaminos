@@ -1,0 +1,37 @@
+{
+  "schema": "kaminos.receiver-fixture-build-receipt.v0",
+  "created_at": "2026-07-13T23:43:33Z",
+  "builder": "artifacts/stone-receiver-fixture-2026-07-13/tools/build_receiver_fixture.py",
+  "outputs": {
+    "visual_glb": {
+      "path": "artifacts/stone-receiver-fixture-2026-07-13/visual/matte-stone-corner-receiver.glb",
+      "sha256": "5d830518df615380a4669231d8ce0b6fa0444a17faa0df48b9985140d30ca20b",
+      "nodes": [
+        "receiver_floor",
+        "receiver_back_wall",
+        "receiver_side_wall",
+        "stone_seam_floor_left",
+        "stone_seam_floor_right",
+        "stone_seam_back_mid",
+        "non_receiver_rubble_block_a",
+        "non_receiver_rubble_block_b"
+      ],
+      "triangles": 96
+    },
+    "proxy_glb": {
+      "path": "artifacts/stone-receiver-fixture-2026-07-13/proxy/matte-stone-corner-receiver-proxy.glb",
+      "sha256": "f76725acf9ed2dcf822e0a44e4a116e24fdde8057e74d8bd9dcb26b72b518f0b",
+      "nodes": [
+        "proxy_receiver_floor",
+        "proxy_receiver_back_wall",
+        "proxy_receiver_side_wall"
+      ],
+      "triangles": 6
+    },
+    "receiver_descriptor": {
+      "path": "artifacts/stone-receiver-fixture-2026-07-13/receiver-descriptor.json",
+      "sha256": "0409f89d8f22f0ab06ff20eb77c8876e059bb1f77d82867bdaaa8cbadf6971f4"
+    }
+  },
+  "truth_boundary": "Procedural fixture for receiver-buffer anchoring. Not a photoreal stone asset; it is meant to give Beaming stable opted-in receiver surfaces, proxy identity, bounds, and material hints."
+}

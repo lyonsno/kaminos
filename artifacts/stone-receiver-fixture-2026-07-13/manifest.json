@@ -1,0 +1,67 @@
+{
+  "schema": "kaminos.stone-receiver-fixture-manifest.v0",
+  "created_at": "2026-07-13T23:43:33Z",
+  "purpose": "Positive receiver fixture for replacing hardcoded wall/floor receiver planes with asset-authored receiver geometry.",
+  "helps_lane": "beaming-frustum-fluffer",
+  "scoreboard_point": 2,
+  "receipt": "artifacts/stone-receiver-fixture-2026-07-13/receipt.json",
+  "receiver_descriptor": "artifacts/stone-receiver-fixture-2026-07-13/receiver-descriptor.json",
+  "visual_glb": "artifacts/stone-receiver-fixture-2026-07-13/visual/matte-stone-corner-receiver.glb",
+  "proxy_glb": "artifacts/stone-receiver-fixture-2026-07-13/proxy/matte-stone-corner-receiver-proxy.glb",
+  "visual_witness": {
+    "status": "passed",
+    "receipt": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-visual-kaminos-witness.json",
+    "captures": [
+      {
+        "path": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-visual-front.png",
+        "sha256": "2cf4916a1f1f292562af3dcf07419eb2f16c48540bb6e55cbdc70679fd7dfa7a",
+        "inspection": "front view shows clean wall face"
+      },
+      {
+        "path": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-visual-oblique.png",
+        "sha256": "3ce8a29140eba81bc2799f04413bbe2a7b5e5da2486663be728761be812c52e3",
+        "inspection": "oblique view shows floor/wall/side-wall corner and non-receiver rubble blocks"
+      }
+    ],
+    "truth_boundary": "Kaminos viewer load/registration and two-angle visual inspection only; not Beaming receiver-buffer consumption."
+  },
+  "proxy_witness": {
+    "status": "passed",
+    "receipt": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-proxy-kaminos-witness.json",
+    "captures": [
+      {
+        "path": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-proxy-front.png",
+        "sha256": "8233953aeddbdc46a8d9b6c540b160ee9049555ce34b8ff9f649a909f9a0379b",
+        "inspection": "front view shows warm receiver-mask plane clearly"
+      },
+      {
+        "path": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-proxy-oblique.png",
+        "sha256": "39743129c883eadecd02504052b228957b84fc3875b7967afddb7e6d01450704",
+        "inspection": "oblique view shows proxy corner; one face remains darker under generic viewer lighting"
+      }
+    ],
+    "truth_boundary": "Warm proxy material is a witness/mask visualization, not final stone material."
+  },
+  "preserved_misses": [
+    {
+      "kind": "single-sided proxy too dark",
+      "receipt": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-proxy-dark-single-sided-kaminos-witness.json"
+    },
+    {
+      "kind": "two-sided proxy still too dark",
+      "receipt": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-proxy-dark-two-sided-kaminos-witness.json"
+    },
+    {
+      "kind": "low-emissive proxy still too muted",
+      "receipt": "artifacts/stone-receiver-fixture-2026-07-13/witnesses/stone-receiver-proxy-low-emissive-kaminos-witness.json"
+    }
+  ],
+  "promoted_inventory": [
+    "artifacts/stone-receiver-fixture-2026-07-13/promoted/matte-stone-corner-receiver.glb",
+    "artifacts/stone-receiver-fixture-2026-07-13/promoted/matte-stone-corner-receiver-proxy.glb",
+    "artifacts/stone-receiver-fixture-2026-07-13/promoted/receiver-descriptor.json",
+    "artifacts/stone-receiver-fixture-2026-07-13/promoted/stone-receiver-visual-oblique.png",
+    "artifacts/stone-receiver-fixture-2026-07-13/promoted/stone-receiver-proxy-front.png"
+  ],
+  "promotion_status": "asset-side positive receiver fixture complete; Beaming receiver-buffer consumption still pending."
+}
