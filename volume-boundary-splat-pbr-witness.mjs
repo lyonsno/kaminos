@@ -35,6 +35,7 @@ const port = Math.max(1, Math.floor(Number(args.get('--chrome-port') || 19431)))
 const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const warmupSamples = Math.max(0, Math.floor(Number(args.get('--warmup-samples') || 3)));
 const steadySamples = Math.max(1, Math.floor(Number(args.get('--steady-samples') || 12)));
+const cadenceMs = Math.max(1, Math.floor(Number(args.get('--cadence-ms') || 12000)));
 const browserContinuity = String(args.get('--browser-continuity') || 'unverified-existing');
 const requestedBrowserProfilePath = String(args.get('--browser-profile') || '');
 const runStartedAt = new Date().toISOString();
@@ -78,12 +79,13 @@ try {
 
   failurePhase = 'route-load';
   await wsRequest('Page.navigate', { url: requestedRoute });
+  await wsRequest('Page.bringToFront');
   await waitForPrototype();
   await delay(settleMs);
   await hideHud();
 
   failurePhase = 'stale-or-default-config';
-  const initialState = await debugState();
+  const initialState = await waitForBoundarySplatTelemetry();
   const cameraState = await evaluate('window.kaminosBoundarySplatCompositionDebugState?.()');
   const effectivePageUrl = await evaluate('location.href');
   browserPageUrl = effectivePageUrl;
@@ -106,6 +108,19 @@ try {
   })})`, true);
   lastTrustworthyEvidence.ladder = ladder;
   validateLadder(ladder);
+
+  failurePhase = 'live-cadence';
+  await wsRequest('Page.bringToFront');
+  const cadenceVisibilityState = await evaluate('document.visibilityState');
+  if (cadenceVisibilityState !== 'visible') {
+    throw new Error(`background-cadence-page:${JSON.stringify(cadenceVisibilityState)}`);
+  }
+  const liveCadence = await evaluate(`window.__kaminosVolumePrototype.sampleBoundarySplatLiveCadence(${JSON.stringify({
+    durationMs: cadenceMs,
+    sampleEveryFrames: 6,
+  })})`, true);
+  validateCadence(liveCadence, initialState, cadenceMs);
+  lastTrustworthyEvidence.liveCadence = liveCadence;
 
   failurePhase = 'native-100-flame-capture';
   const capture = await evaluate(`window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
@@ -226,6 +241,9 @@ try {
     frameCount: capture.frameCount,
     simStepCount: capture.simStepCount,
     requestedInstanceCount: capture.boundarySplatRequestedInstanceCount,
+    requestedCandidateBudget: capture.boundarySplatRequestedCandidateBudget,
+    effectiveCandidateBudget: capture.boundarySplatEffectiveCandidateBudget,
+    selectedCandidateCount: capture.boundarySplatSelectedCandidateCount,
     sourceCandidateCount: capture.boundarySplatSourceCandidateCount,
     phaseSourceCount: capture.boundarySplatPhaseSourceCount,
   };
@@ -279,6 +297,7 @@ try {
     },
     historyPrime,
     ladder,
+    liveCadence,
     composedCapture: {
       ...composedCaptureEvidence,
       clip: clipFromCanvas(capture.canvasCssRect),
@@ -308,8 +327,12 @@ try {
       cameraSweepSimulatorAdvanced: false,
       cameraSweepIncomplete: cameraSweep.length !== 3,
       browserClosedDuringWitness: !finalTargetReachable,
+      incompleteCadenceDuration: false,
+      staleOrDefaultCadenceBudget: false,
+      cadenceSelectedCountMismatch: false,
+      cadenceFallbackOrOverflow: false,
     },
-    claimBoundary: 'Same-device PBR color/depth plus learned splats and a frozen 0/1/4/16/100 cost ladder from one live simulator. This does not claim independent per-instance simulation, learned prediction, per-flame proxy lighting, or final product beauty.',
+    claimBoundary: 'Same-device PBR color/depth plus learned splats, a frozen 0/1/4/16/100 cost ladder, and a bounded live-cadence sequence from one live simulator. RAF gaps and queue completion are browser cadence proxies, not GPU-exclusive present latency. This does not claim independent per-instance simulation, learned prediction, per-flame proxy lighting, or final product beauty.',
   };
   writeReport(report);
   console.log(JSON.stringify(report, null, 2));
@@ -379,6 +402,11 @@ function classifyFalseClosure(phase, error) {
     'duplicated-simulation-authority',
     'camera-sweep-simulator-advanced',
     'blank-or-partial-native-capture',
+    'incomplete-cadence-duration',
+    'stale-or-default-cadence-budget',
+    'cadence-selected-count-mismatch',
+    'cadence-fallback-or-overflow',
+    'background-cadence-page',
   ]) {
     if (message.includes(className)) return className;
   }
@@ -474,6 +502,24 @@ async function waitForPrototype() {
   throw new Error('volume prototype did not become active with composed-field runtime');
 }
 
+async function waitForBoundarySplatTelemetry() {
+  for (let attempt = 0; attempt < 240; attempt += 1) {
+    const state = await debugState();
+    if (
+      Number(state?.boundarySplatSourceCandidateCount) > 0
+      && Number.isFinite(Number(state?.boundarySplatEffectiveCandidateBudget))
+      && state?.boundarySplatEffectiveCandidateBudget != null
+      && Number.isFinite(Number(state?.boundarySplatSelectedCandidateCount))
+      && state?.boundarySplatSelectedCandidateCount != null
+      && Number.isFinite(Number(state?.boundarySplatInstanceCount))
+      && state?.boundarySplatInstanceCount != null
+      && Number(state?.boundarySplatTelemetryRequestedCandidateBudget) === Number(state?.boundarySplatRequestedCandidateBudget)
+    ) return state;
+    await delay(125);
+  }
+  throw new Error('boundary-splat-selector-telemetry-did-not-settle');
+}
+
 async function debugState() {
   return evaluate('window.__kaminosVolumePrototype?.debugState?.()');
 }
@@ -488,6 +534,10 @@ async function hideHud() {
 
 function validateEffectiveState(state, cameraState, pageUrl) {
   const params = new URL(pageUrl).searchParams;
+  const requestedCandidateBudget = Number(params.get('volume_boundary_splat_candidate_budget') || 0);
+  const expectedSelectedCandidateCount = requestedCandidateBudget > 0
+    ? Math.min(Number(state?.boundarySplatSourceCandidateCount), requestedCandidateBudget)
+    : Number(state?.boundarySplatSourceCandidateCount);
   const mismatches = [];
   if (state?.boundarySplatFallbackReason != null) {
     throw new Error(`fallback-route: ${JSON.stringify(state.boundarySplatFallbackReason)}`);
@@ -503,6 +553,9 @@ function validateEffectiveState(state, cameraState, pageUrl) {
   if (state?.boundarySplatFallbackReason != null) mismatches.push(['fallback', null, state?.boundarySplatFallbackReason]);
   if (Number(state?.boundarySplatOverflowCount || 0) !== 0) mismatches.push(['overflow', 0, state?.boundarySplatOverflowCount]);
   if (Number(state?.boundarySplatCopyBytesThisFrame) !== 0) mismatches.push(['copyBytes', 0, state?.boundarySplatCopyBytesThisFrame]);
+  if (Number(state?.boundarySplatRequestedCandidateBudget) !== requestedCandidateBudget) mismatches.push(['requestedCandidateBudget', requestedCandidateBudget, state?.boundarySplatRequestedCandidateBudget]);
+  if (Number(state?.boundarySplatEffectiveCandidateBudget) !== expectedSelectedCandidateCount) mismatches.push(['effectiveCandidateBudget', expectedSelectedCandidateCount, state?.boundarySplatEffectiveCandidateBudget]);
+  if (Number(state?.boundarySplatSelectedCandidateCount) !== expectedSelectedCandidateCount) mismatches.push(['selectedCandidateCount', expectedSelectedCandidateCount, state?.boundarySplatSelectedCandidateCount]);
   if (cameraState?.identity !== CAMERA) mismatches.push(['camera', CAMERA, cameraState?.identity]);
   if (cameraState?.authority !== 'url-owned-effective-camera-pose') mismatches.push(['cameraAuthority', 'url-owned-effective-camera-pose', cameraState?.authority]);
   if (cameraState?.requestedEffectiveAgreement !== true) mismatches.push(['cameraAgreement', true, cameraState?.requestedEffectiveAgreement]);
@@ -521,6 +574,64 @@ function validateEffectiveState(state, cameraState, pageUrl) {
   }
 }
 
+function validateCadence(cadence, initialState, requestedDurationMs) {
+  if (
+    cadence?.identity !== 'boundary-splat-live-cadence-v0'
+    || cadence?.ok !== true
+    || !Array.isArray(cadence?.frameGapsMs)
+    || !Array.isArray(cadence?.samples)
+    || cadence.frameGapsMs.length < 2
+    || cadence.samples.length < 2
+    || Number(cadence?.durationMs) < requestedDurationMs
+  ) {
+    throw new Error(`incomplete-cadence-duration:${JSON.stringify({
+      requestedDurationMs,
+      durationMs: cadence?.durationMs,
+      frameGaps: cadence?.frameGapsMs?.length,
+      samples: cadence?.samples?.length,
+      ok: cadence?.ok,
+    })}`);
+  }
+  const requestedCandidateBudget = Number(initialState?.boundarySplatRequestedCandidateBudget);
+  if (
+    cadence?.effectiveRoute !== EFFECTIVE_ROUTE
+    || cadence?.rendererIdentity !== RENDERER
+    || cadence?.modelIdentity !== MODEL
+    || cadence?.sourceAuthority !== SOURCE_AUTHORITY
+    || cadence?.compositionIdentity !== COMPOSITION
+    || Number(cadence?.requestedCandidateBudget) !== requestedCandidateBudget
+    || cadence.samples.some(sample => Number(sample?.requestedCandidateBudget) !== requestedCandidateBudget)
+  ) {
+    throw new Error(`stale-or-default-cadence-budget:${JSON.stringify({
+      effectiveRoute: cadence?.effectiveRoute,
+      rendererIdentity: cadence?.rendererIdentity,
+      modelIdentity: cadence?.modelIdentity,
+      sourceAuthority: cadence?.sourceAuthority,
+      compositionIdentity: cadence?.compositionIdentity,
+      requestedCandidateBudget,
+      effectiveRequestedCandidateBudget: cadence?.requestedCandidateBudget,
+    })}`);
+  }
+  for (const sample of cadence.samples) {
+    const sourceCandidateCount = Number(sample?.sourceCandidateCount);
+    const expectedSelectedCandidateCount = requestedCandidateBudget > 0
+      ? Math.min(sourceCandidateCount, requestedCandidateBudget)
+      : sourceCandidateCount;
+    if (
+      !Number.isFinite(sourceCandidateCount)
+      || sourceCandidateCount <= 0
+      || Number(sample?.effectiveCandidateBudget) !== expectedSelectedCandidateCount
+      || Number(sample?.selectedCandidateCount) !== expectedSelectedCandidateCount
+      || Number(sample?.renderedInstanceCount) !== expectedSelectedCandidateCount * Number(sample?.requestedInstanceCount)
+    ) {
+      throw new Error(`cadence-selected-count-mismatch:${JSON.stringify(sample)}`);
+    }
+  }
+  if (cadence.samples.some(sample => sample?.fallbackReason != null || Number(sample?.overflowCount || 0) !== 0)) {
+    throw new Error('cadence-fallback-or-overflow');
+  }
+}
+
 function validateLadder(ladder) {
   assert.equal(ladder?.identity, 'boundary-splat-pbr-cost-ladder-v0', 'wrong ladder identity');
   assert.deepEqual(ladder?.counts, COUNTS, 'wrong cost ladder counts');
@@ -528,6 +639,7 @@ function validateLadder(ladder) {
   assert.equal(ladder?.simulatorPreserved, true, 'cost ladder changed simulator state');
   assert.equal(ladder?.simStepCountBefore, ladder?.simStepCountAfter, 'sim step count changed during ladder');
   assert.equal(ladder?.rows?.length, COUNTS.length, 'partial cost ladder');
+  assert.ok([0, 6400, 3200, 1600, 800].includes(ladder?.requestedCandidateBudget), 'unsupported or missing ladder budget');
   for (const [index, row] of ladder.rows.entries()) {
     assert.equal(row.requestedInstanceCount, COUNTS[index], 'cost ladder order changed');
     assert.equal(row.effectiveInstanceCount, COUNTS[index], 'hidden instance cap or stale count');
@@ -538,7 +650,13 @@ function validateLadder(ladder) {
       continue;
     }
     assert.ok(row.sourceCandidateCount > 0, 'missing source candidate count');
-    assert.equal(row.renderedInstanceCount, row.sourceCandidateCount * COUNTS[index], 'rendered instance accounting mismatch');
+    const expectedSelectedCandidateCount = row.requestedCandidateBudget > 0
+      ? Math.min(row.sourceCandidateCount, row.requestedCandidateBudget)
+      : row.sourceCandidateCount;
+    assert.equal(row.selectorPolicyIdentity, 'boundary-splat-deterministic-gpu-hash-thinning-v0', 'selector identity changed');
+    assert.equal(row.effectiveCandidateBudget, expectedSelectedCandidateCount, 'effective candidate budget mismatch');
+    assert.equal(row.selectedCandidateCount, expectedSelectedCandidateCount, 'selected candidate count mismatch');
+    assert.equal(row.renderedInstanceCount, row.selectedCandidateCount * COUNTS[index], 'rendered instance accounting mismatch');
     assert.equal(row.overflowCount, 0, 'candidate overflow in cost ladder');
     assert.equal(row.candidateCopyBytes, 0, 'candidate copy returned in cost ladder');
     assert.equal(row.fallbackReason, null, 'fallback route in cost ladder');
@@ -668,6 +786,12 @@ function compactState(state) {
     addedSimulationPasses: state?.boundarySplatPbrAddedSimulationPasses,
     layoutBounds: state?.boundarySplatLayoutBounds,
     requestedInstanceCount: state?.boundarySplatRequestedInstanceCount,
+    selectorPolicyIdentity: state?.boundarySplatSelectorPolicyIdentity,
+    requestedCandidateBudget: state?.boundarySplatRequestedCandidateBudget,
+    telemetryRequestedCandidateBudget: state?.boundarySplatTelemetryRequestedCandidateBudget,
+    selectorTelemetryFrameCount: state?.boundarySplatSelectorTelemetryFrameCount,
+    effectiveCandidateBudget: state?.boundarySplatEffectiveCandidateBudget,
+    selectedCandidateCount: state?.boundarySplatSelectedCandidateCount,
     sourceCandidateCount: state?.boundarySplatSourceCandidateCount,
     renderedInstanceCount: state?.boundarySplatInstanceCount,
     phaseModeIdentity: state?.boundarySplatPhaseModeIdentity,
