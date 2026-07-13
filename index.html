@@ -1159,6 +1159,11 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-splat-mode-val">raymarch</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">Splat fires</span>
+        <input type="range" id="volume-boundary-splat-instances" min="1" max="4" step="1" value="1">
+        <span class="slider-val" id="volume-boundary-splat-instances-val">1</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Splat radius</span>
         <input type="range" id="volume-boundary-splat-radius" min="0.35" max="1.5" step="0.01" value="1.00">
         <span class="slider-val" id="volume-boundary-splat-radius-val">1.00</span>
@@ -11795,6 +11800,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryFireYellow', id: 'volume-reaction-boundary-fire-yellow', param: 'volume_reaction_boundary_fire_yellow', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 5, decimals: 2 },
+  { key: 'boundarySplatInstances', id: 'volume-boundary-splat-instances', param: 'volume_boundary_splat_instances', min: 1, max: 4, decimals: 0 },
   { key: 'boundarySidecarBlur', id: 'volume-boundary-sidecar-blur', param: 'volume_boundary_sidecar_blur', min: 0, max: 1, decimals: 2 },
   { key: 'boundarySidecarWidth', id: 'volume-boundary-sidecar-width', param: 'volume_boundary_sidecar_width', min: 0, max: 2, decimals: 2 },
   { key: 'boundarySidecarRidge', id: 'volume-boundary-sidecar-ridge', param: 'volume_boundary_sidecar_ridge', min: 0, max: 2, decimals: 2 },
@@ -16419,6 +16425,7 @@ function readVolumeControls() {
     boundarySidecarView,
     boundarySplatMode,
     boundarySplatFeatureCapture,
+    boundarySplatInstances: parseFloat(document.getElementById('volume-boundary-splat-instances').value),
     boundarySplatRadius: parseFloat(document.getElementById('volume-boundary-splat-radius').value),
     boundarySplatSharpness: parseFloat(document.getElementById('volume-boundary-splat-sharpness').value),
     boundarySidecarControls: {
