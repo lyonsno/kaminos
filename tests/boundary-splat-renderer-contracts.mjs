@@ -30,7 +30,7 @@ assert.match(core, /min\(atomicLoad\(&boundarySplatDraw\.candidateCount\),\s*bou
 assert.doesNotMatch(core, /const BOUNDARY_SPLAT_CAPACITY:\s*u32/, 'the shader must not compile a fixed first-N spatial truncation capacity');
 assert.match(core, /function nextBoundarySplatCapacity\([\s\S]*Math\.min\(gridCellCount\(gridSize\),[\s\S]*nextPowerOfTwo/, 'capacity growth is bounded by physical grid cells and otherwise rounds up to avoid repeated reallocations');
 assert.match(core, /async function resolveBoundarySplatTelemetry[\s\S]*overflowCount\s*>\s*0[\s\S]*growBoundarySplatCapacity\(candidateCount\)/, 'asynchronous GPU overflow evidence triggers buffer growth instead of leaving a bisected volume');
-assert.match(core, /new Uint32Array\(\[6,\s*0,\s*0,\s*0,\s*0,\s*0,\s*boundarySplatCapacity,\s*0\]\)/, 'each compaction pass publishes the effective runtime capacity to WGSL');
+assert.match(core, /const historyDepth = normalizeBoundarySplatHistoryDepth\(controlsSnapshot\.boundarySplatHistoryDepth\)[\s\S]*const phaseSourceCount = Math\.max\(1, Math\.min\(historyDepth, state\.boundarySplatPhaseSourceCount \|\| 1\)\)[\s\S]*new Uint32Array\(\[\s*6,\s*0,\s*0,\s*0,\s*0,\s*0,\s*boundarySplatCapacity,\s*requestedInstanceCount,\s*0,\s*phaseSourceCount,\s*historyWriteSlot,\s*historyDepth,\s*\]\)/, 'each compaction pass publishes effective capacity, requested instance count, descriptor-derived phase-source count, and requested history depth to WGSL');
 assert.match(core, /fn boundarySplatAttributeFeatures[\s\S]*features\[0\]\s*=\s*sidecar\.x[\s\S]*features\[15\]\s*=\s*micro\.w/, 'WGSL builds the ordered 16-channel learned-attribute feature vector');
 assert.match(core, /fn applyBoundarySplatAttributeHook[\s\S]*analyticColorOpacity[\s\S]*analyticRadiusScale[\s\S]*BoundarySplatAttributeHookOutput/, 'WGSL exposes a no-op learned-attribute output hook before model integration');
 assert.match(core, /applyBoundarySplatAttributeHook[\s\S]*boundarySplats\[candidateIndex\]\.colorOpacity\s*=\s*attributeOutput\.colorOpacity[\s\S]*radius \* attributeOutput\.radiusScale\.x[\s\S]*radius \* attributeOutput\.radiusScale\.y/, 'splat color opacity and radius scale flow through the hook without changing candidate selection');
@@ -80,8 +80,8 @@ assert.match(core, /boundarySplatTimestampStatus:\s*'(?:unsupported|available)'/
 assert.match(core, /timestamp-query/, 'splat timing explicitly requests WebGPU timestamp-query support when available');
 assert.match(core, /timestampWrites:\s*\{[\s\S]*querySet[\s\S]*endOfPassWriteIndex/, 'splat timing uses current pass-descriptor timestamp writes');
 assert.doesNotMatch(core, /encoder\.writeTimestamp/, 'splat timing does not depend on the removed command-encoder timestamp API');
-assert.match(core, /timestamps\.some\(value\s*=>\s*value\s*===\s*0n\)/, 'splat timing rejects incomplete timestamp query writes');
-assert.match(core, /timestamps\[index\]\s*<\s*timestamps\[index\s*-\s*1\]/, 'splat timing rejects nonmonotonic timestamp results');
+assert.match(core, /requiredTimestamps\.some\(value\s*=>\s*value\s*===\s*0n\)/, 'splat timing rejects incomplete writes for every timestamp backed by an executed pass');
+assert.match(core, /requiredTimestamps\[index\]\s*<\s*requiredTimestamps\[index\s*-\s*1\]/, 'splat timing rejects nonmonotonic results across executed pass timestamps');
 assert.match(core, /boundarySplatGpuProfile[\s\S]*simulation[\s\S]*sidecar[\s\S]*compaction[\s\S]*candidateCopy[\s\S]*indirectSetup[\s\S]*splatRaster[\s\S]*matchedRaymarchRaster[\s\S]*total/, 'splat profile names every required timing stage');
 assert.match(core, /boundarySplatCopyDisposition[\s\S]*removed-full-capacity-copy/, 'splat state records the full-capacity candidate-copy disposition');
 assert.match(core, /candidateCopyBytes[\s\S]*boundarySplatCopyBytesThisFrame/, 'splat profile records effective candidate-copy bytes');

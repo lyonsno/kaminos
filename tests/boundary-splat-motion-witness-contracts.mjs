@@ -14,6 +14,10 @@ assert.match(witness, /live-baked-sidecar-plus-fluid-material-v0/, 'motion witne
 assert.match(witness, /sameBrowserSessionId/, 'motion witness must preserve same-browser session identity');
 assert.match(witness, /requestedRoute/, 'motion witness must record requested route');
 assert.match(witness, /effectiveRoute/, 'motion witness must record effective route');
+assert.match(witness, /navigateToRequestedRoute/, 'motion witness must actively navigate reused CDP pages to the requested route');
+assert.match(witness, /Page\.navigate/, 'motion witness must not trust a stale browser page URL when a new route is requested');
+assert.match(witness, /validateRequestedEffectiveConfig/, 'motion witness must validate effective controls against requested route parameters before capture');
+assert.match(witness, /stale\/default config mismatch/, 'motion witness must fail loudly when stale/default config shadows requested inputs');
 assert.match(witness, /requestedRenderer/, 'motion witness must distinguish requested renderer from effective renderer');
 assert.match(witness, /effectiveRenderer/, 'motion witness must record effective renderer per captured view');
 assert.match(witness, /fallbackReason/, 'motion witness must record and reject fallback reasons');
