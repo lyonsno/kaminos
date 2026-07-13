@@ -1,0 +1,60 @@
+{
+  "schema": "kaminos-real-smoke-splat-threshold-sweep-v0",
+  "status": "passed",
+  "sourceFrames": [
+    "sim-step-96",
+    "sim-step-97"
+  ],
+  "sourceGrid": 160,
+  "coarseBlockSize": 8,
+  "fineBlockSize": 4,
+  "fineMassFraction": 0.5,
+  "rows": [
+    {
+      "articulationThreshold": 0.28,
+      "heldOutTargetSplats": 30510,
+      "heldOutLearnedSplatsBeforeCalibration": 33342,
+      "heldOutF1BeforeCalibration": 0.9176058101677936
+    },
+    {
+      "articulationThreshold": 0.4,
+      "heldOutTargetSplats": 16643,
+      "heldOutLearnedSplats": 16558,
+      "heldOutPrecision": 0.9180442374854482,
+      "heldOutRecall": 0.9090489913544668,
+      "heldOutF1": 0.9135244714740804
+    },
+    {
+      "articulationThreshold": 0.5,
+      "heldOutTargetSplats": 11416,
+      "heldOutLearnedSplats": 11371,
+      "heldOutPrecision": 0.8918601234205114,
+      "heldOutRecall": 0.8802204176334106,
+      "heldOutF1": 0.8860020434972997,
+      "selectedOperatingPoint": true
+    },
+    {
+      "articulationThreshold": 0.6,
+      "heldOutTargetSplats": 8803,
+      "heldOutLearnedSplats": 8895,
+      "heldOutPrecision": 0.7421790722761596,
+      "heldOutRecall": 0.8239520958083832,
+      "heldOutF1": 0.7809307604994324
+    },
+    {
+      "articulationThreshold": 0.7,
+      "heldOutTargetSplats": 8000,
+      "heldOutLearnedSplatsBeforeCalibration": 9964,
+      "heldOutF1BeforeCalibration": 0.031558185404339245
+    }
+  ],
+  "selection": {
+    "articulationThreshold": 0.5,
+    "reason": "The selected point keeps the learned held-out product near 11.4k splats while retaining 0.886 F1; the 0.6 point saves about 2.5k splats but loses materially more articulation classification quality.",
+    "massPolicy": "All unselected fine extinction remains in deterministic coarse transport splats; no threshold row truncates or rejects smoke mass."
+  },
+  "limitations": [
+    "The sweep is one exact tall-plume basin over adjacent deterministic steps 96 and 97.",
+    "Counts do not prove GPU raster cost or visual equivalence."
+  ]
+}
