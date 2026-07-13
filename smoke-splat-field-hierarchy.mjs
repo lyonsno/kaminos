@@ -151,6 +151,37 @@ function mergeAggregate(target, source, retainGeometry) {
   }
 }
 
+function supportWitness(bins) {
+  if (bins.length === 0) {
+    return {
+      count: 0,
+      extinctionMass: 0,
+      bounds: { minimum: [0, 0, 0], maximum: [0, 0, 0] },
+      massWeightedCentroid: [0, 0, 0],
+    };
+  }
+  const minimum = [Infinity, Infinity, Infinity];
+  const maximum = [-Infinity, -Infinity, -Infinity];
+  const positionMass = [0, 0, 0];
+  let extinctionMass = 0;
+  for (const bin of bins) {
+    const mass = bin.extinctionMass;
+    const position = aggregateWitness(bin).position;
+    extinctionMass += mass;
+    for (let axis = 0; axis < 3; axis += 1) {
+      minimum[axis] = Math.min(minimum[axis], position[axis]);
+      maximum[axis] = Math.max(maximum[axis], position[axis]);
+      positionMass[axis] += position[axis] * mass;
+    }
+  }
+  return {
+    count: bins.length,
+    extinctionMass,
+    bounds: { minimum, maximum },
+    massWeightedCentroid: positionMass.map(component => component / extinctionMass),
+  };
+}
+
 function normalizedAxis(velocity) {
   const speed = Math.hypot(...velocity);
   return speed > 1e-9 ? velocity.map(component => component / speed) : [0, 1, 0];
@@ -276,20 +307,30 @@ function makeSplat(bin, role, blockSize, cellWidth, slotIdentity, spatialKey, ex
   };
 }
 
-function consolidateCoarseBins(coarseBins, anchorMassRatio) {
+function consolidateCoarseBins(coarseBins, anchorMassRatio, coarseStratumSize) {
   const sourceBins = [...coarseBins.values()]
     .filter(bin => bin.extinctionMass > 0)
     .sort((left, right) => left.key.localeCompare(right.key));
+  const stratified = coarseStratumSize > 0;
+  const identity = stratified ? 'mass-preserving-spatial-strata-v2' : 'mass-preserving-anchor-voronoi-v1';
+  const stratumAuthority = stratified ? 'fixed-coarse-bin-cubes-local-anchor-transfer-v0' : null;
   if (sourceBins.length === 0) {
     return {
       bins: [],
       report: {
-        identity: 'mass-preserving-anchor-voronoi-v1',
+        identity,
         spatialMomentAuthority: 'anchor-bin-only-tail-optical-transfer-v0',
+        stratumAuthority,
         enabled: anchorMassRatio > 0,
         anchorMassRatio,
+        coarseStratumSize,
         anchorMassThreshold: 0,
         maximumSourceBinMass: 0,
+        minimumStratumAnchorMassThreshold: 0,
+        maximumStratumAnchorMassThreshold: 0,
+        occupiedStratumCount: 0,
+        minimumAnchorsPerOccupiedStratum: 0,
+        maximumAnchorsPerOccupiedStratum: 0,
         sourceCoarseBinCount: 0,
         consolidatedCoarseBinCount: 0,
         mergedSourceBinCount: 0,
@@ -297,32 +338,61 @@ function consolidateCoarseBins(coarseBins, anchorMassRatio) {
         anchorSourceExtinctionMass: 0,
         transferredTailExtinctionMass: 0,
         representedCoarseExtinctionMass: 0,
+        sourceSupport: supportWitness([]),
+        representedSupport: supportWitness([]),
       },
     };
   }
-  const maximumSourceBinMass = Math.max(...sourceBins.map(bin => bin.extinctionMass));
+  let maximumSourceBinMass = 0;
+  for (const source of sourceBins) maximumSourceBinMass = Math.max(maximumSourceBinMass, source.extinctionMass);
   const anchorMassThreshold = maximumSourceBinMass * anchorMassRatio;
-  const anchors = anchorMassRatio > 0
-    ? sourceBins.filter(bin => bin.extinctionMass >= anchorMassThreshold)
-    : sourceBins;
-  const targets = new Map(anchors.map(anchor => [anchor.key, makeAggregate(anchor.key, [...anchor.coordinates])]));
-  for (const anchor of anchors) mergeAggregate(targets.get(anchor.key), anchor, true);
-  const anchorKeys = new Set(anchors.map(anchor => anchor.key));
+  const strata = new Map();
   for (const source of sourceBins) {
-    if (anchorKeys.has(source.key)) continue;
-    let owner = anchors[0];
-    let ownerDistance = Infinity;
+    const stratumCoordinates = stratified
+      ? source.coordinates.map(component => Math.floor(component / coarseStratumSize))
+      : [0, 0, 0];
+    const stratumKey = stratumCoordinates.join(':');
+    if (!strata.has(stratumKey)) strata.set(stratumKey, []);
+    strata.get(stratumKey).push(source);
+  }
+  const targets = new Map();
+  let minimumStratumAnchorMassThreshold = Infinity;
+  let maximumStratumAnchorMassThreshold = 0;
+  let minimumAnchorsPerOccupiedStratum = Infinity;
+  let maximumAnchorsPerOccupiedStratum = 0;
+  for (const stratumBins of strata.values()) {
+    let stratumMaximumMass = 0;
+    for (const source of stratumBins) stratumMaximumMass = Math.max(stratumMaximumMass, source.extinctionMass);
+    const stratumThreshold = stratumMaximumMass * anchorMassRatio;
+    minimumStratumAnchorMassThreshold = Math.min(minimumStratumAnchorMassThreshold, stratumThreshold);
+    maximumStratumAnchorMassThreshold = Math.max(maximumStratumAnchorMassThreshold, stratumThreshold);
+    const anchors = anchorMassRatio > 0
+      ? stratumBins.filter(bin => bin.extinctionMass >= stratumThreshold)
+      : stratumBins;
+    minimumAnchorsPerOccupiedStratum = Math.min(minimumAnchorsPerOccupiedStratum, anchors.length);
+    maximumAnchorsPerOccupiedStratum = Math.max(maximumAnchorsPerOccupiedStratum, anchors.length);
     for (const anchor of anchors) {
-      const distance = source.coordinates.reduce((sum, component, axis) => {
-        const delta = component - anchor.coordinates[axis];
-        return sum + delta * delta;
-      }, 0);
-      if (distance < ownerDistance || (distance === ownerDistance && anchor.key.localeCompare(owner.key) < 0)) {
-        owner = anchor;
-        ownerDistance = distance;
-      }
+      const target = makeAggregate(anchor.key, [...anchor.coordinates]);
+      targets.set(anchor.key, target);
+      mergeAggregate(target, anchor, true);
     }
-    mergeAggregate(targets.get(owner.key), source, false);
+    const anchorKeys = new Set(anchors.map(anchor => anchor.key));
+    for (const source of stratumBins) {
+      if (anchorKeys.has(source.key)) continue;
+      let owner = anchors[0];
+      let ownerDistance = Infinity;
+      for (const anchor of anchors) {
+        const distance = source.coordinates.reduce((sum, component, axis) => {
+          const delta = component - anchor.coordinates[axis];
+          return sum + delta * delta;
+        }, 0);
+        if (distance < ownerDistance || (distance === ownerDistance && anchor.key.localeCompare(owner.key) < 0)) {
+          owner = anchor;
+          ownerDistance = distance;
+        }
+      }
+      mergeAggregate(targets.get(owner.key), source, false);
+    }
   }
   const bins = [...targets.values()].sort((left, right) => left.key.localeCompare(right.key));
   const anchorSourceExtinctionMass = bins.reduce((sum, bin) => sum + bin.anchorExtinctionMass, 0);
@@ -330,12 +400,19 @@ function consolidateCoarseBins(coarseBins, anchorMassRatio) {
   return {
     bins,
     report: {
-      identity: 'mass-preserving-anchor-voronoi-v1',
+      identity,
       spatialMomentAuthority: 'anchor-bin-only-tail-optical-transfer-v0',
+      stratumAuthority,
       enabled: anchorMassRatio > 0,
       anchorMassRatio,
+      coarseStratumSize,
       anchorMassThreshold,
       maximumSourceBinMass,
+      minimumStratumAnchorMassThreshold,
+      maximumStratumAnchorMassThreshold,
+      occupiedStratumCount: strata.size,
+      minimumAnchorsPerOccupiedStratum,
+      maximumAnchorsPerOccupiedStratum,
       sourceCoarseBinCount: sourceBins.length,
       consolidatedCoarseBinCount: bins.length,
       mergedSourceBinCount: sourceBins.length - bins.length,
@@ -343,6 +420,8 @@ function consolidateCoarseBins(coarseBins, anchorMassRatio) {
       anchorSourceExtinctionMass,
       transferredTailExtinctionMass,
       representedCoarseExtinctionMass: anchorSourceExtinctionMass + transferredTailExtinctionMass,
+      sourceSupport: supportWitness(sourceBins),
+      representedSupport: supportWitness(bins),
     },
   };
 }
@@ -355,6 +434,7 @@ function configIdentity(config) {
     Number(config.fineMassFraction).toPrecision(12),
     Number(config.articulationThreshold).toPrecision(12),
     Number(config.coarseAnchorMassRatio).toPrecision(12),
+    config.coarseStratumSize,
     Number(config.fineOccupancyMassRatio).toPrecision(12),
     config.capacity === null ? 'uncapped' : config.capacity,
   ].join('|');
@@ -386,6 +466,10 @@ export function compileSmokeFieldHierarchy(request = {}) {
   const articulationThreshold = nonNegative(request.articulationThreshold ?? 0.5, 'articulationThreshold');
   const coarseAnchorMassRatio = nonNegative(request.coarseAnchorMassRatio ?? 0, 'coarseAnchorMassRatio');
   if (coarseAnchorMassRatio > 1) throw new RangeError('coarseAnchorMassRatio must not exceed 1');
+  const coarseBinsPerAxis = grid / coarseBlockSize;
+  const coarseStratumSize = request.coarseStratumSize === undefined || Number(request.coarseStratumSize) === 0
+    ? 0
+    : integerBlockSize(request.coarseStratumSize, coarseBinsPerAxis, 'coarseStratumSize');
   const fineOccupancyMassRatio = nonNegative(request.fineOccupancyMassRatio ?? 0, 'fineOccupancyMassRatio');
   if (fineOccupancyMassRatio > 1) throw new RangeError('fineOccupancyMassRatio must not exceed 1');
   const capacity = request.capacity === undefined || request.capacity === null
@@ -496,7 +580,7 @@ export function compileSmokeFieldHierarchy(request = {}) {
       ));
     }
   }
-  const consolidatedCoarse = consolidateCoarseBins(coarseBins, coarseAnchorMassRatio);
+  const consolidatedCoarse = consolidateCoarseBins(coarseBins, coarseAnchorMassRatio, coarseStratumSize);
   const coarseSplats = [];
   for (const coarse of consolidatedCoarse.bins) {
     if (coarse.extinctionMass <= 0) continue;
@@ -526,6 +610,7 @@ export function compileSmokeFieldHierarchy(request = {}) {
     fineMassFraction,
     articulationThreshold,
     coarseAnchorMassRatio,
+    coarseStratumSize,
     fineOccupancyMassRatio,
     capacity,
   };

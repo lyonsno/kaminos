@@ -1,0 +1,339 @@
+{
+  "schema": "kaminos.smoke-splat-motion-source.v0",
+  "status": "passed",
+  "requestedRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "effectiveRoute": "webgpu-real-field-hierarchical-smoke-motion-v0",
+  "fallbackReason": null,
+  "temporalAuthority": "velocity-carried-short-horizon-extrapolation-v0",
+  "producerAuthority": "real-field-hierarchical-smoke-splat-producer-v0",
+  "sourceReport": {
+    "path": "report.json",
+    "sha256": "d374219c9bf104dcfae67795ad6fce26acf3273631b8f01c4330d3ae22334a50",
+    "schema": "kaminos-real-smoke-splat-corpus-report-v0"
+  },
+  "sourceRoute": {
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "controlsSignature": "6.0000|1.9000|0.0000|1.6000|0.0000|2.8000|3.2000|2.5000|5.0000|5.0000|1.5000|3.3500|88.0000|1.0000|1.0000|0.0000|1.0000|1.0000|1.0000|1.3000|0.4500|2.2000|1.2500|-65.0000|-0.8000|1.0000|1.0000|1.0000|1.0000|1.0000|1.0000|1.0000|0.0000|none|0.0000|0.0000|0.5300|1.0000|160.0000|24.0000|0.0000|0.0000|1.0000|0.0000|0.0000|0.0000|0.0000|0.0000|base|global|0.6100|0.0000|0.3400|tall_plume|"
+  },
+  "products": [
+    {
+      "frameId": "sim-step-96",
+      "step": 96,
+      "sourceManifest": "/private/tmp/kaminos-splat-good-basin-full-grid-160-replay96-v1/manifest.json",
+      "sourceManifestIdentity": "sha256:bc31e8412b31c3cf4117fe40c3e0987a3e627248463b782849041f46f5df721c",
+      "sourceFluid": "/private/tmp/kaminos-splat-good-basin-full-grid-160-replay96-v1/fluid.f32",
+      "sourceFluidIdentity": "sha256:d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+      "identity": "smoke-splat-product:sha256%3Ad58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1:smoke-sparse-residual-target%3Av0:1:0:96:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7C4%7C0.400000000000%7Cuncapped",
+      "schema": "kaminos-hierarchical-smoke-splats-v0",
+      "producerAuthority": "real-field-hierarchical-smoke-splat-producer-v0",
+      "producerKind": "authoritative-articulation-target",
+      "slotIdentity": {
+        "historySlot": 0,
+        "slotWriteTick": 96,
+        "simulatorGeneration": 1,
+        "modelIdentity": "smoke-sparse-residual-target:v0"
+      },
+      "payloadIdentity": "sha256:d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1",
+      "decoderConfigIdentity": "8|4|1.35000000000|0.500000000000|0.500000000000|0.800000000000|4|0.400000000000|uncapped",
+      "hierarchyCounts": {
+        "coarse": 1645,
+        "fine": 773,
+        "total": 2418
+      },
+      "coarseConsolidation": {
+        "identity": "mass-preserving-spatial-strata-v2",
+        "spatialMomentAuthority": "anchor-bin-only-tail-optical-transfer-v0",
+        "stratumAuthority": "fixed-coarse-bin-cubes-local-anchor-transfer-v0",
+        "enabled": true,
+        "anchorMassRatio": 0.8,
+        "coarseStratumSize": 4,
+        "anchorMassThreshold": 0.0014680263262242083,
+        "maximumSourceBinMass": 0.0018350329077802604,
+        "minimumStratumAnchorMassThreshold": 0.00000850899272147217,
+        "maximumStratumAnchorMassThreshold": 0.0014680263262242083,
+        "occupiedStratumCount": 125,
+        "minimumAnchorsPerOccupiedStratum": 1,
+        "maximumAnchorsPerOccupiedStratum": 51,
+        "sourceCoarseBinCount": 7964,
+        "consolidatedCoarseBinCount": 1645,
+        "mergedSourceBinCount": 6319,
+        "occupancyReductionFraction": 0.7934455047714717,
+        "anchorSourceExtinctionMass": 1.6583169833642368,
+        "transferredTailExtinctionMass": 1.7254893572855903,
+        "representedCoarseExtinctionMass": 3.3838063406498273,
+        "sourceSupport": {
+          "count": 7964,
+          "extinctionMass": 3.3838063406498247,
+          "bounds": {
+            "minimum": [
+              -0.943885963036405,
+              -0.9242847972410374,
+              -0.9433721588626309
+            ],
+            "maximum": [
+              0.9432936128305816,
+              0.9242167230416243,
+              0.9441522639796182
+            ]
+          },
+          "massWeightedCentroid": [
+            0.14156059287440342,
+            0.32572550576211134,
+            -0.031225796717819203
+          ]
+        },
+        "representedSupport": {
+          "count": 1645,
+          "extinctionMass": 3.38380634064982,
+          "bounds": {
+            "minimum": [
+              -0.7515492731105635,
+              -0.7512330531782485,
+              -0.8504571392044736
+            ],
+            "maximum": [
+              0.850677786235164,
+              0.8515898022524298,
+              0.8509609330571428
+            ]
+          },
+          "massWeightedCentroid": [
+            0.1352446315632164,
+            0.3566024615260254,
+            -0.030713390416554416
+          ]
+        }
+      },
+      "fineOccupancy": {
+        "identity": "mass-relative-fine-occupancy-v0",
+        "enabled": true,
+        "massRatio": 0.4,
+        "massThreshold": 0.00009417622248642147,
+        "maximumFineBinMass": 0.00023544055621605367,
+        "sourceOccupiedFineBinCount": 63404,
+        "selectorSelectedFineBinCount": 3474,
+        "occupancyAcceptedSelectedFineBinCount": 773,
+        "emittedFineBinCount": 773,
+        "occupancyTransferredFineBinCount": 2701,
+        "selectorSelectedSourceExtinctionMass": 0.2628593058952506,
+        "emittedFineSourceExtinctionMass": 0.09160866739353327,
+        "occupancyTransferredSourceExtinctionMass": 0.17125063850171665,
+        "emittedFineExtinctionMass": 0.04580433369676663,
+        "occupancyTransferredFineAllocationMass": 0.08562531925085833
+      },
+      "accounting": {
+        "identity": "smoke-splat-extinction-accounting-v0",
+        "sourceExtinctionMass": 3.4296106743467547,
+        "representedExtinctionMass": 3.4296106743465757,
+        "rejectedExtinctionMass": 0,
+        "retentionRatio": 0.9999999999999478
+      },
+      "sourceStatistics": {
+        "sourceCellCount": 4096000,
+        "occupiedFineBinCount": 63404,
+        "sourceCoarseBinCount": 7964,
+        "articulationTargetCount": 3474,
+        "articulationTargetFraction": 0.054791495804681095
+      },
+      "capacity": {
+        "requested": null,
+        "status": "within-capacity",
+        "overflowCount": 0,
+        "outputWasTruncated": false
+      },
+      "diagnostics": [],
+      "artifact": {
+        "path": "sim-step-96-target.splats.f32",
+        "sha256": "0357fcaa68945e1f6d0ff7d11aeae24d035356f184d21959c8ff09a658aae81a",
+        "byteLength": 154752,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          2418,
+          16
+        ],
+        "channelOrder": [
+          "positionX",
+          "positionY",
+          "positionZ",
+          "principalAxisX",
+          "principalAxisY",
+          "principalAxisZ",
+          "radiusX",
+          "radiusY",
+          "radiusZ",
+          "extinctionMass",
+          "densityWitness",
+          "temperatureWitness",
+          "velocityX",
+          "velocityY",
+          "velocityZ",
+          "hierarchyRoleCode"
+        ]
+      },
+      "sourceProducerKind": "real-field-hierarchical-target",
+      "phaseIndex": 0
+    },
+    {
+      "identity": "smoke-splat-product:sha256%3A749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:1:1:97:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7C4%7C0.400000000000%7Cuncapped",
+      "schema": "kaminos-hierarchical-smoke-splats-v0",
+      "producerAuthority": "real-field-hierarchical-smoke-splat-producer-v0",
+      "producerKind": "learned-heldout-residual-selector",
+      "slotIdentity": {
+        "historySlot": 1,
+        "slotWriteTick": 97,
+        "simulatorGeneration": 1,
+        "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3"
+      },
+      "payloadIdentity": "sha256:749c52d5c71c24527b837093d3bbef24e792bc13bd7bed23dc0133d7645fc385",
+      "decoderConfigIdentity": "8|4|1.35000000000|0.500000000000|0.500000000000|0.800000000000|4|0.400000000000|uncapped",
+      "hierarchyCounts": {
+        "coarse": 1657,
+        "fine": 642,
+        "total": 2299
+      },
+      "coarseConsolidation": {
+        "identity": "mass-preserving-spatial-strata-v2",
+        "spatialMomentAuthority": "anchor-bin-only-tail-optical-transfer-v0",
+        "stratumAuthority": "fixed-coarse-bin-cubes-local-anchor-transfer-v0",
+        "enabled": true,
+        "anchorMassRatio": 0.8,
+        "coarseStratumSize": 4,
+        "anchorMassThreshold": 0.001469299443941564,
+        "maximumSourceBinMass": 0.0018366243049269548,
+        "minimumStratumAnchorMassThreshold": 0.000008570747004828267,
+        "maximumStratumAnchorMassThreshold": 0.001469299443941564,
+        "occupiedStratumCount": 125,
+        "minimumAnchorsPerOccupiedStratum": 1,
+        "maximumAnchorsPerOccupiedStratum": 53,
+        "sourceCoarseBinCount": 7968,
+        "consolidatedCoarseBinCount": 1657,
+        "mergedSourceBinCount": 6311,
+        "occupancyReductionFraction": 0.7920431726907631,
+        "anchorSourceExtinctionMass": 1.6780666614985327,
+        "transferredTailExtinctionMass": 1.719872566678001,
+        "representedCoarseExtinctionMass": 3.3979392281765337,
+        "sourceSupport": {
+          "count": 7968,
+          "extinctionMass": 3.397939228176533,
+          "bounds": {
+            "minimum": [
+              -0.9438737138417839,
+              -0.9242853197912327,
+              -0.9433722797414791
+            ],
+            "maximum": [
+              0.9432886963221853,
+              0.9243320230442533,
+              0.9441589994040066
+            ]
+          },
+          "massWeightedCentroid": [
+            0.1417204705489852,
+            0.3276539115416923,
+            -0.02963060073414174
+          ]
+        },
+        "representedSupport": {
+          "count": 1657,
+          "extinctionMass": 3.397939228176538,
+          "bounds": {
+            "minimum": [
+              -0.751546464664088,
+              -0.750977007794548,
+              -0.8504194625988098
+            ],
+            "maximum": [
+              0.8507432426669876,
+              0.8536407531396606,
+              0.8509023701895397
+            ]
+          },
+          "massWeightedCentroid": [
+            0.13541159922060447,
+            0.35879419784042565,
+            -0.02858124572519981
+          ]
+        }
+      },
+      "fineOccupancy": {
+        "identity": "mass-relative-fine-occupancy-v0",
+        "enabled": true,
+        "massRatio": 0.4,
+        "massThreshold": 0.00009429643984884029,
+        "maximumFineBinMass": 0.0002357410996221007,
+        "sourceOccupiedFineBinCount": 63447,
+        "selectorSelectedFineBinCount": 3403,
+        "occupancyAcceptedSelectedFineBinCount": 642,
+        "emittedFineBinCount": 642,
+        "occupancyTransferredFineBinCount": 2761,
+        "selectorSelectedSourceExtinctionMass": 0.24436991710026218,
+        "emittedFineSourceExtinctionMass": 0.07072764589686784,
+        "occupancyTransferredSourceExtinctionMass": 0.1736422712033941,
+        "emittedFineExtinctionMass": 0.03536382294843392,
+        "occupancyTransferredFineAllocationMass": 0.08682113560169705
+      },
+      "accounting": {
+        "identity": "smoke-splat-extinction-accounting-v0",
+        "sourceExtinctionMass": 3.4333030511244917,
+        "representedExtinctionMass": 3.43330305112497,
+        "rejectedExtinctionMass": 0,
+        "retentionRatio": 1.0000000000001392
+      },
+      "sourceStatistics": {
+        "sourceCellCount": 4096000,
+        "occupiedFineBinCount": 63447,
+        "sourceCoarseBinCount": 7968,
+        "articulationTargetCount": 3448,
+        "articulationTargetFraction": 0.05434457105930934
+      },
+      "capacity": {
+        "requested": null,
+        "status": "within-capacity",
+        "overflowCount": 0,
+        "outputWasTruncated": false
+      },
+      "diagnostics": [],
+      "artifact": {
+        "path": "sim-step-97-learned.splats.f32",
+        "sha256": "f76d942935847d4f7f20d8c4ae5791df0b3612c3490b39fd11fb4ee96d780029",
+        "byteLength": 147136,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          2299,
+          16
+        ],
+        "channelOrder": [
+          "positionX",
+          "positionY",
+          "positionZ",
+          "principalAxisX",
+          "principalAxisY",
+          "principalAxisZ",
+          "radiusX",
+          "radiusY",
+          "radiusZ",
+          "extinctionMass",
+          "densityWitness",
+          "temperatureWitness",
+          "velocityX",
+          "velocityY",
+          "velocityZ",
+          "hierarchyRoleCode"
+        ]
+      },
+      "sourceProducerKind": "learned-sparse-residual-plus-conserved-coarse",
+      "phaseIndex": 1,
+      "frameId": "sim-step-97",
+      "step": 97
+    }
+  ],
+  "limitations": [
+    "The authoritative target and held-out learned selector are adjacent phase products, not a recurrent neural smoke decode.",
+    "Motion is short-horizon velocity extrapolation from exact compiled products.",
+    "This manifest is standalone smoke representation evidence and does not prove final flame-smoke depth composition."
+  ]
+}

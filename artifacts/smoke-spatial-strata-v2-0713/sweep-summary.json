@@ -1,0 +1,80 @@
+{
+  "schema": "kaminos.smoke-spatial-strata-sweep.v0",
+  "status": "passed",
+  "requestedConfiguration": {
+    "coarseAnchorMassRatio": 0.8,
+    "fineOccupancyMassRatio": 0.4,
+    "candidateCoarseStratumSizes": [2, 4, 5],
+    "capacity": null
+  },
+  "candidates": [
+    {
+      "coarseStratumSize": 2,
+      "step96": {
+        "sourceCoarseBinCount": 7964,
+        "consolidatedCoarseBinCount": 3480,
+        "occupiedStratumCount": 1000,
+        "representedSupportY": [-0.8453760939228065, 0.8530581591956198],
+        "sourceMassWeightedY": 0.32572550576211134,
+        "representedMassWeightedY": 0.3267985863543445
+      },
+      "step97CoarseCount": 3474,
+      "sharedAdjacentCoarseKeys": 3438,
+      "fourInstanceCoarseDrawInvocationCount": 13956,
+      "routeEvidence": {
+        "status": "passed",
+        "uniqueFrameDigestCount": 6,
+        "fallbackReason": null
+      },
+      "visualDisposition": "Broad support is strongest, but dense vertical striping makes this the high-fidelity control rather than the selected operating point."
+    },
+    {
+      "coarseStratumSize": 4,
+      "step96": {
+        "sourceCoarseBinCount": 7964,
+        "consolidatedCoarseBinCount": 1645,
+        "occupiedStratumCount": 125,
+        "representedSupportY": [-0.7512330531782485, 0.8515898022524298],
+        "sourceMassWeightedY": 0.32572550576211134,
+        "representedMassWeightedY": 0.3566024615260254
+      },
+      "step97CoarseCount": 1652,
+      "sharedAdjacentCoarseKeys": 1619,
+      "fourInstanceCoarseDrawInvocationCount": 6628,
+      "routeEvidence": {
+        "status": "passed",
+        "uniqueFrameDigestCount": 6,
+        "fallbackReason": null
+      },
+      "visualDisposition": "Selected: preserves a tapered broad plume and responds well to area-normalized coverage 1.8 without returning to the global-transfer upper blobs."
+    },
+    {
+      "coarseStratumSize": 5,
+      "step96": {
+        "sourceCoarseBinCount": 7964,
+        "consolidatedCoarseBinCount": 1177,
+        "occupiedStratumCount": 64,
+        "representedSupportY": [-0.6477540056819738, 0.8515898022524298],
+        "sourceMassWeightedY": 0.32572550576211134,
+        "representedMassWeightedY": 0.3745060732123838
+      },
+      "step97CoarseCount": 1180,
+      "sharedAdjacentCoarseKeys": 1151,
+      "fourInstanceCoarseDrawInvocationCount": 4780,
+      "routeEvidence": {
+        "status": "passed",
+        "uniqueFrameDigestCount": 6,
+        "fallbackReason": null
+      },
+      "visualDisposition": "Cheaper challenger, but lower support is already clipped and the plume remains visibly perforated at both tested coverage values."
+    }
+  ],
+  "selected": {
+    "coarseStratumSize": 4,
+    "coarseCoverageScale": 1.8,
+    "footprintAuthority": "axisymmetric-projected-covariance-v1",
+    "fineLodFraction": 1,
+    "selectionAuthority": "direct-inspection-plus-exact-route-support-accounting-v0"
+  },
+  "claimBoundary": "Representation and standalone WebGPU motion evidence only; no claim of recurrent decode, final shading/composition, or isolated GPU duration."
+}
