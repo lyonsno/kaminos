@@ -194,6 +194,7 @@ for (const [pattern, message] of [
   [/sharpDutyCorrelation\.foregroundGaps = await readBrowserArrayInChunks/, 'Witness must reconstruct every correlated foreground gap outside the browser payload'],
   [/samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined/, 'Initial CDP summary must omit duplicated large heartbeat evidence'],
   [/lastTrustworthyEvidence = \{[\s\S]*postFiringSummary:[\s\S]*reportPath: browserFiringEvidence\.reportPath[\s\S]*readBrowserArrayInChunks/, 'Chunk failures must preserve the compact post-firing identity and declared-count evidence'],
+  [/lastTrustworthyEvidence = \{[\s\S]*postFiringSummary:[\s\S]*status: browserFiringEvidence\.status,[\s\S]*message: browserFiringEvidence\.message,[\s\S]*volumeReleased: browserFiringEvidence\.volumeReleased,[\s\S]*volumeReleaseConfirmed: browserFiringEvidence\.volumeReleaseConfirmed,[\s\S]*\};\n\s*if \(!browserFiringEvidence\.reportPath\)/, 'Missing backend reports must preserve the terminal route status, message, presentation, and furnace release truth before failing'],
 ]) {
   assert.match(witness, pattern, message);
 }

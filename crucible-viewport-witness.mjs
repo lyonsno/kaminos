@@ -485,6 +485,37 @@ try {
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
       };
     })()`, fireTimeoutMs);
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      postFiringSummary: {
+        status: browserFiringEvidence.status,
+        message: browserFiringEvidence.message,
+        reportPath: browserFiringEvidence.reportPath,
+        requestedFirePresentation: browserFiringEvidence.requestedFirePresentation,
+        selectedFirePresentation: browserFiringEvidence.selectedFirePresentation,
+        volumeReleased: browserFiringEvidence.volumeReleased,
+        volumeReleaseConfirmed: browserFiringEvidence.volumeReleaseConfirmed,
+        snapshotIdentity: browserFiringEvidence.snapshotIdentity,
+        foregroundHeartbeat: browserFiringEvidence.foregroundKilnHeartbeat
+          ? {
+              schema: browserFiringEvidence.foregroundKilnHeartbeat.schema,
+              status: browserFiringEvidence.foregroundKilnHeartbeat.status,
+              firingId: browserFiringEvidence.foregroundKilnHeartbeat.firingId,
+              sampleRetention: browserFiringEvidence.foregroundKilnHeartbeat.sampleRetention,
+              sampleCount: browserFiringEvidence.foregroundKilnHeartbeat.sampleCount,
+            }
+          : null,
+        sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation
+          ? {
+              schema: browserFiringEvidence.sharpDutyCorrelation.schema,
+              status: browserFiringEvidence.sharpDutyCorrelation.status,
+              firingId: browserFiringEvidence.sharpDutyCorrelation.firingId,
+              runId: browserFiringEvidence.sharpDutyCorrelation.runId,
+              foregroundGapCount: browserFiringEvidence.sharpDutyCorrelation.foregroundGapCount,
+            }
+          : null,
+      },
+    };
     if (!browserFiringEvidence.reportPath) throw new Error('Friendly firing did not expose its durable pipeline report path');
     if (!browserFiringEvidence.foregroundKilnHeartbeat) throw new Error('Friendly firing did not expose its foreground heartbeat summary');
     if (!browserFiringEvidence.sharpDutyCorrelation) throw new Error('Friendly firing did not expose its SHARP duty correlation summary');
@@ -503,26 +534,8 @@ try {
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       postFiringSummary: {
-        status: browserFiringEvidence.status,
-        reportPath: browserFiringEvidence.reportPath,
-        requestedFirePresentation: browserFiringEvidence.requestedFirePresentation,
-        selectedFirePresentation: browserFiringEvidence.selectedFirePresentation,
+        ...lastTrustworthyEvidence.postFiringSummary,
         firePresentationFailures: browserFiringEvidence.firePresentationFailures,
-        snapshotIdentity: browserFiringEvidence.snapshotIdentity,
-        foregroundHeartbeat: {
-          schema: browserFiringEvidence.foregroundKilnHeartbeat.schema,
-          status: browserFiringEvidence.foregroundKilnHeartbeat.status,
-          firingId: browserFiringEvidence.foregroundKilnHeartbeat.firingId,
-          sampleRetention: browserFiringEvidence.foregroundKilnHeartbeat.sampleRetention,
-          sampleCount: browserFiringEvidence.foregroundKilnHeartbeat.sampleCount,
-        },
-        sharpDutyCorrelation: {
-          schema: browserFiringEvidence.sharpDutyCorrelation.schema,
-          status: browserFiringEvidence.sharpDutyCorrelation.status,
-          firingId: browserFiringEvidence.sharpDutyCorrelation.firingId,
-          runId: browserFiringEvidence.sharpDutyCorrelation.runId,
-          foregroundGapCount: browserFiringEvidence.sharpDutyCorrelation.foregroundGapCount,
-        },
       },
     };
     browserFiringEvidence.foregroundKilnHeartbeat.samples = await readBrowserArrayInChunks({

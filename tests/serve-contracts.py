@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import serve
@@ -673,6 +674,75 @@ def test_pipeline_run_writes_failure_report_when_child_exits_before_report():
         assert "synthetic child import failure before report" in result["report"]["document"]["stderrTail"]
 
 
+def test_pipeline_wrapper_has_no_implicit_timeout():
+    assert serve.pipeline_witness_timeout_seconds({}) is None
+    assert serve.pipeline_witness_timeout_seconds({"KAMINOS_PIPELINE_WITNESS_TIMEOUT": ""}) is None
+
+
+def test_pipeline_stream_explicit_timeout_kills_process_group_and_writes_report():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        root = Path(tmp)
+        source_root = root / "images"
+        source_root.mkdir()
+        source = source_root / "source.png"
+        source.write_bytes(b"\x89PNG\r\n\x1a\n")
+        out_dir = root / "pipeline-run"
+        child_pid_path = root / "child.pid"
+        fake_node = root / "fake-node"
+        fake_node.write_text(
+            "#!/bin/sh\n"
+            "sleep 30 &\n"
+            f"echo $! > {child_pid_path!s}\n"
+            "wait\n"
+        )
+        fake_node.chmod(0o755)
+
+        class StreamHandler:
+            wfile = BytesIO()
+
+        previous_browse = dict(BROWSE_ROOTS)
+        previous_node = os.environ.get("KAMINOS_NODE")
+        previous_timeout = os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT")
+        BROWSE_ROOTS["pipeline-test-images"] = source_root
+        os.environ["KAMINOS_NODE"] = str(fake_node)
+        os.environ["KAMINOS_PIPELINE_WITNESS_TIMEOUT"] = "0.25"
+        try:
+            result = serve.run_pipeline_witness_stream(StreamHandler(), {
+                "pipelineId": "sharp-image-to-splat-live-v0",
+                "source": "/api/read?root=pipeline-test-images&path=source.png",
+                "outDir": str(out_dir),
+            })
+        finally:
+            BROWSE_ROOTS.clear()
+            BROWSE_ROOTS.update(previous_browse)
+            if previous_node is None:
+                os.environ.pop("KAMINOS_NODE", None)
+            else:
+                os.environ["KAMINOS_NODE"] = previous_node
+            if previous_timeout is None:
+                os.environ.pop("KAMINOS_PIPELINE_WITNESS_TIMEOUT", None)
+            else:
+                os.environ["KAMINOS_PIPELINE_WITNESS_TIMEOUT"] = previous_timeout
+
+        report_path = out_dir / "pipeline-witness.json"
+        assert result["ok"] is False
+        assert result["report"]["path"] == str(report_path)
+        assert report_path.exists(), "an explicit wrapper timeout must still leave a durable report"
+        report = json.loads(report_path.read_text())
+        assert report["phase"] == "pipeline-witness-wrapper-timeout"
+        assert report["lastTrustworthyEvidence"]["wrapperTimeoutSeconds"] == 0.25
+        assert child_pid_path.exists(), "fixture must prove that the timed-out witness spawned a descendant"
+        child_pid = int(child_pid_path.read_text())
+        for _ in range(50):
+            try:
+                os.kill(child_pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.02)
+        else:
+            raise AssertionError("explicit wrapper timeout left the witness descendant alive")
+
+
 def test_pipeline_run_rejects_sources_outside_declared_roots():
     with TemporaryDirectory(dir="/tmp") as tmp:
         outside = Path(tmp) / "outside.ply"
@@ -730,5 +800,8 @@ if __name__ == "__main__":
     test_pipeline_manifest_endpoint_payload_is_route_identified()
     test_image_asset_index_declares_local_image_roots()
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()
+    test_pipeline_run_writes_failure_report_when_child_exits_before_report()
+    test_pipeline_wrapper_has_no_implicit_timeout()
+    test_pipeline_stream_explicit_timeout_kills_process_group_and_writes_report()
     test_pipeline_run_rejects_sources_outside_declared_roots()
     test_pipeline_run_rejects_excluded_api_read_roots()

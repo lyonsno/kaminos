@@ -3,9 +3,11 @@
 
 import http.server
 import json
+import math
 import os
 import queue
 import re
+import signal
 import subprocess
 import sys
 import threading
@@ -378,6 +380,7 @@ def write_pipeline_subprocess_failure_report(
     stderr_tail="",
     scheduler_profile=None,
     phase="subprocess-exit-before-report",
+    wrapper_timeout_seconds=None,
 ):
     report_path = Path(report_path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -420,6 +423,7 @@ def write_pipeline_subprocess_failure_report(
             "command": command,
             "exitCode": exit_code,
             "schedulerProfileId": scheduler_profile.get("id") if isinstance(scheduler_profile, dict) else None,
+            "wrapperTimeoutSeconds": wrapper_timeout_seconds,
         },
         "command": command,
         "exitCode": exit_code,
@@ -428,6 +432,37 @@ def write_pipeline_subprocess_failure_report(
     }
     report_path.write_text(json.dumps(report, indent=2))
     return report
+
+
+def pipeline_witness_timeout_seconds(env=None):
+    environment = os.environ if env is None else env
+    raw = str(environment.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT") or "").strip()
+    if not raw:
+        return None
+    try:
+        timeout = float(raw)
+    except ValueError as error:
+        raise ValueError("KAMINOS_PIPELINE_WITNESS_TIMEOUT must be a positive number of seconds") from error
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise ValueError("KAMINOS_PIPELINE_WITNESS_TIMEOUT must be a positive number of seconds")
+    return timeout
+
+
+def terminate_pipeline_process_group(proc, grace_seconds=1.0):
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        proc.wait(timeout=grace_seconds)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+        proc.wait()
 
 
 def resolve_sharp_scheduler_profile(profile_id):
@@ -466,18 +501,46 @@ def run_pipeline_witness(payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
-    timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
-    proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout, env={**os.environ, **env_patch})
-    report = json.loads(report_path.read_text()) if report_path.exists() else None
-    if report is None and proc.returncode != 0:
+    timeout = pipeline_witness_timeout_seconds()
+    proc = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env={**os.environ, **env_patch},
+        start_new_session=True,
+    )
+    timed_out = False
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        terminate_pipeline_process_group(proc)
+        stdout, stderr = proc.communicate()
+    report = json.loads(report_path.read_text()) if report_path.exists() and not timed_out else None
+    if timed_out:
         report = write_pipeline_subprocess_failure_report(
             report_path=report_path,
             pipeline_id=pipeline_id,
             source=source,
             command=command,
             exit_code=proc.returncode,
-            stdout_tail=proc.stdout[-4000:],
-            stderr_tail=proc.stderr[-4000:],
+            stdout_tail=stdout[-4000:],
+            stderr_tail=f"pipeline witness wrapper timed out after {timeout} seconds\n{stderr}"[-4000:],
+            scheduler_profile=scheduler_profile,
+            phase="pipeline-witness-wrapper-timeout",
+            wrapper_timeout_seconds=timeout,
+        )
+    elif report is None and proc.returncode != 0:
+        report = write_pipeline_subprocess_failure_report(
+            report_path=report_path,
+            pipeline_id=pipeline_id,
+            source=source,
+            command=command,
+            exit_code=proc.returncode,
+            stdout_tail=stdout[-4000:],
+            stderr_tail=stderr[-4000:],
             scheduler_profile=scheduler_profile,
         )
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
@@ -490,8 +553,8 @@ def run_pipeline_witness(payload):
         "source": source,
         "command": command,
         "exitCode": proc.returncode,
-        "stdoutTail": proc.stdout[-4000:],
-        "stderrTail": proc.stderr[-4000:],
+        "stdoutTail": stdout[-4000:],
+        "stderrTail": stderr[-4000:],
         "report": {
             "path": str(report_path),
             "document": report,
@@ -546,7 +609,7 @@ def run_pipeline_witness_stream(handler, payload):
         "--out-dir", str(out_dir),
         "--report", str(report_path),
     ]
-    timeout = int(os.environ.get("KAMINOS_PIPELINE_WITNESS_TIMEOUT", "360"))
+    timeout = pipeline_witness_timeout_seconds()
     proc = subprocess.Popen(
         command,
         cwd=ROOT,
@@ -555,6 +618,7 @@ def run_pipeline_witness_stream(handler, payload):
         text=True,
         bufsize=1,
         env={**os.environ, **env_patch, "KAMINOS_PIPELINE_PROGRESS_STREAM": "1"},
+        start_new_session=True,
     )
     events = queue.Queue()
     stdout_chunks = []
@@ -577,10 +641,12 @@ def run_pipeline_witness_stream(handler, payload):
     for thread in threads:
         thread.start()
     started = time.monotonic()
+    timed_out = False
     while proc.poll() is None:
-        if time.monotonic() - started > timeout:
-            proc.kill()
-            raise subprocess.TimeoutExpired(command, timeout)
+        if timeout is not None and time.monotonic() - started > timeout:
+            timed_out = True
+            terminate_pipeline_process_group(proc)
+            break
         try:
             _write_pipeline_stream_event(handler, events.get(timeout=0.05))
         except queue.Empty:
@@ -593,16 +659,31 @@ def run_pipeline_witness_stream(handler, payload):
         except queue.Empty:
             break
 
-    report = json.loads(report_path.read_text()) if report_path.exists() else None
-    if report is None and proc.returncode != 0:
+    stdout_tail = "".join(stdout_chunks)[-4000:]
+    stderr_tail = "".join(stderr_chunks)[-4000:]
+    report = json.loads(report_path.read_text()) if report_path.exists() and not timed_out else None
+    if timed_out:
         report = write_pipeline_subprocess_failure_report(
             report_path=report_path,
             pipeline_id=pipeline_id,
             source=source,
             command=command,
             exit_code=proc.returncode,
-            stdout_tail="".join(stdout_chunks)[-4000:],
-            stderr_tail="".join(stderr_chunks)[-4000:],
+            stdout_tail=stdout_tail,
+            stderr_tail=f"pipeline witness wrapper timed out after {timeout} seconds\n{stderr_tail}"[-4000:],
+            scheduler_profile=scheduler_profile,
+            phase="pipeline-witness-wrapper-timeout",
+            wrapper_timeout_seconds=timeout,
+        )
+    elif report is None and proc.returncode != 0:
+        report = write_pipeline_subprocess_failure_report(
+            report_path=report_path,
+            pipeline_id=pipeline_id,
+            source=source,
+            command=command,
+            exit_code=proc.returncode,
+            stdout_tail=stdout_tail,
+            stderr_tail=stderr_tail,
             scheduler_profile=scheduler_profile,
         )
     bundle_path = Path(report["bundleIndex"]["path"]) if report and report.get("bundleIndex") else None
@@ -616,8 +697,8 @@ def run_pipeline_witness_stream(handler, payload):
         "source": source,
         "command": command,
         "exitCode": proc.returncode,
-        "stdoutTail": "".join(stdout_chunks)[-4000:],
-        "stderrTail": "".join(stderr_chunks)[-4000:],
+        "stdoutTail": stdout_tail,
+        "stderrTail": stderr_tail,
         "report": {
             "path": str(report_path),
             "document": report,
