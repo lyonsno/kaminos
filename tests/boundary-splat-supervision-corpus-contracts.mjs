@@ -8,7 +8,11 @@ const moduleUrl = new URL('../boundary-splat-supervision-corpus.mjs', import.met
 const source = await readFile(moduleUrl, 'utf8').catch(() => '');
 assert.match(source, /validateBoundarySplatSupervisionCorpus/, 'supervision corpus validator must be explicit');
 
-const { BOUNDARY_SPLAT_SUPERVISION_SCHEMA, validateBoundarySplatSupervisionCorpus } = await import(moduleUrl);
+const {
+  BOUNDARY_SPLAT_SUPERVISION_SCHEMA,
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+  validateBoundarySplatSupervisionCorpus,
+} = await import(moduleUrl);
 const root = await mkdtemp(join(tmpdir(), 'kaminos-splat-supervision-'));
 try {
   const candidates = new Float32Array(19 * 2).fill(0.25);
@@ -23,6 +27,7 @@ try {
   const manifest = {
     schema: BOUNDARY_SPLAT_SUPERVISION_SCHEMA,
     authority: 'live-simulator-frozen-state-candidate-raymarch-v0',
+    candidateOrder: BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
     featureOrder: [
       'sidecar.support', 'sidecar.coverage', 'sidecar.ridge', 'sidecar.footprint',
       'material.density', 'material.heat', 'material.fuel', 'material.detail',
@@ -39,9 +44,15 @@ try {
       rendererIdentity: 'live-boundary-sidecar-analytic-splats-v0',
       sourceAuthority: 'live-baked-sidecar-plus-fluid-material-v0',
       fallbackReason: null,
-      camera: { viewProjection: Array(16).fill(0).map((_, index) => index % 5 === 0 ? 1 : 0), viewport: [640, 480] },
+      camera: {
+        viewProjection: Array(16).fill(0).map((_, index) => index % 5 === 0 ? 1 : 0),
+        cameraRight: [1, 0, 0],
+        cameraUp: [0, 1, 0],
+        viewport: [640, 480],
+      },
+      splatControls: { radius: 0.8, sharpness: 6.5 },
       candidates: { path: candidatePath, bytes: candidateBytes.length, sha256: hash(candidateBytes), count: 2, strideFloats: 19, dtype: 'float32-le' },
-      target: { path: targetPath, bytes: targetBytes.length, sha256: hash(targetBytes), authority: 'gpu-rgba8-raymarch-readback-frozen-sim-state', rendererIdentity: 'native-3d-compute-fluid-raymarch-v0' },
+      target: { path: targetPath, bytes: targetBytes.length, sha256: hash(targetBytes), authority: 'gpu-rgba8-raymarch-readback-frozen-sim-state', rendererIdentity: 'native-3d-compute-fluid-raymarch-v0', decomposition: 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0' },
     }],
   };
   await writeFile(manifestPath, JSON.stringify(manifest));
@@ -64,6 +75,21 @@ try {
   wrongStride.frames[0].candidates.count = 3;
   await writeFile(manifestPath, JSON.stringify(wrongStride));
   await assert.rejects(() => validateBoundarySplatSupervisionCorpus(manifestPath), /candidate.*bytes/i);
+
+  const wrongCandidateOrder = structuredClone(manifest);
+  wrongCandidateOrder.candidateOrder = [...BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER].reverse();
+  await writeFile(manifestPath, JSON.stringify(wrongCandidateOrder));
+  await assert.rejects(() => validateBoundarySplatSupervisionCorpus(manifestPath), /candidate order/i);
+
+  const missingCameraBasis = structuredClone(manifest);
+  delete missingCameraBasis.frames[0].camera.cameraRight;
+  await writeFile(manifestPath, JSON.stringify(missingCameraBasis));
+  await assert.rejects(() => validateBoundarySplatSupervisionCorpus(manifestPath), /camera right/i);
+
+  const missingSplatControls = structuredClone(manifest);
+  delete missingSplatControls.frames[0].splatControls;
+  await writeFile(manifestPath, JSON.stringify(missingSplatControls));
+  await assert.rejects(() => validateBoundarySplatSupervisionCorpus(manifestPath), /splat controls/i);
 } finally {
   await rm(root, { recursive: true, force: true });
 }

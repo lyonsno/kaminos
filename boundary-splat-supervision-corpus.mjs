@@ -3,6 +3,15 @@ import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 
 import { BOUNDARY_SPLAT_ATTRIBUTE_FEATURES } from './boundary-splat-attribute-model.mjs';
+import {
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS,
+} from './boundary-splat-feature-capture.mjs';
+
+export {
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS,
+};
 
 export const BOUNDARY_SPLAT_SUPERVISION_SCHEMA = 'kaminos-boundary-splat-supervision-corpus-v0';
 
@@ -45,6 +54,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
   if (manifest.schema !== BOUNDARY_SPLAT_SUPERVISION_SCHEMA) throw new Error(`corpus schema must be ${BOUNDARY_SPLAT_SUPERVISION_SCHEMA}`);
   if (manifest.authority !== 'live-simulator-frozen-state-candidate-raymarch-v0') throw new Error('corpus authority must preserve live frozen simulator state');
+  exactArray(manifest.candidateOrder, BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER, 'candidate');
   exactArray(manifest.featureOrder, BOUNDARY_SPLAT_ATTRIBUTE_FEATURES, 'feature');
   if (!Array.isArray(manifest.frames) || manifest.frames.length === 0) throw new Error('corpus must contain at least one frame');
 
@@ -66,12 +76,19 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
     if (frame.sourceAuthority !== 'live-baked-sidecar-plus-fluid-material-v0') throw new Error(`${label} source authority is not live baked sidecar plus fluid material`);
     if (frame.fallbackReason != null) throw new Error(`${label} contains fallback evidence: ${frame.fallbackReason}`);
     finiteArray(frame.camera?.viewProjection, 16, `${label} camera viewProjection`);
+    finiteArray(frame.camera?.cameraRight, 3, `${label} camera right`);
+    finiteArray(frame.camera?.cameraUp, 3, `${label} camera up`);
     finiteArray(frame.camera?.viewport, 2, `${label} camera viewport`);
     if (frame.camera.viewport.some(value => value <= 0)) throw new Error(`${label} camera viewport must be positive`);
+    if (!frame.splatControls || typeof frame.splatControls !== 'object'
+      || typeof frame.splatControls.radius !== 'number' || !Number.isFinite(frame.splatControls.radius) || frame.splatControls.radius <= 0
+      || typeof frame.splatControls.sharpness !== 'number' || !Number.isFinite(frame.splatControls.sharpness) || frame.splatControls.sharpness <= 0) {
+      throw new Error(`${label} splat controls must carry positive finite radius and sharpness`);
+    }
 
     const candidateArtifact = await validateArtifact(manifestPath, frame.candidates, `${label} candidate`);
-    if (frame.candidates.dtype !== 'float32-le' || frame.candidates.strideFloats !== 19 || !Number.isInteger(frame.candidates.count) || frame.candidates.count <= 0) {
-      throw new Error(`${label} candidate layout must be positive-count float32-le with stride 19`);
+    if (frame.candidates.dtype !== 'float32-le' || frame.candidates.strideFloats !== BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS || !Number.isInteger(frame.candidates.count) || frame.candidates.count <= 0) {
+      throw new Error(`${label} candidate layout must be positive-count float32-le with stride ${BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS}`);
     }
     const expectedCandidateBytes = frame.candidates.count * frame.candidates.strideFloats * 4;
     if (candidateArtifact.bytes.length !== expectedCandidateBytes) {
@@ -85,6 +102,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
     const targetArtifact = await validateArtifact(manifestPath, frame.target, `${label} target`);
     if (frame.target.authority !== 'gpu-rgba8-raymarch-readback-frozen-sim-state') throw new Error(`${label} target authority is not frozen GPU raymarch readback`);
     if (frame.target.rendererIdentity !== 'native-3d-compute-fluid-raymarch-v0') throw new Error(`${label} target renderer identity is not the native raymarch`);
+    if (frame.target.decomposition !== 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0') throw new Error(`${label} target decomposition is not exact candidate-support-gated intrinsic unit-gain native raymarch emission`);
     candidateCount += frame.candidates.count;
     frames.push({
       id: frame.id,

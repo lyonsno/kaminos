@@ -2,9 +2,17 @@
 import assert from 'node:assert/strict';
 import { deflateSync, inflateSync as zlibInflateSync } from 'node:zlib';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
+import { BOUNDARY_SPLAT_ATTRIBUTE_FEATURES } from './boundary-splat-attribute-model.mjs';
+import {
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+  BOUNDARY_SPLAT_SUPERVISION_SCHEMA,
+  validateBoundarySplatSupervisionCorpus,
+} from './boundary-splat-supervision-corpus.mjs';
+
+const BOUNDARY_SPLAT_SUPERVISION_TARGET_DECOMPOSITION = 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -127,8 +135,14 @@ function scaleSlug(value) {
   return `rs${String(Math.round(clampRenderScale(value) * 100)).padStart(3, '0')}`;
 }
 
+const boundarySplatSupervisionDirArg = args.get('--boundary-splat-supervision-dir');
+const boundarySplatSupervisionDir = typeof boundarySplatSupervisionDirArg === 'string'
+  ? resolve(boundarySplatSupervisionDirArg)
+  : null;
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
-const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
+const reportPath = resolve(args.get('--report') || (boundarySplatSupervisionDir
+  ? join(boundarySplatSupervisionDir, 'report.json')
+  : out.replace(/\.png$/i, '.json')));
 const boundarySplatFeatureOutArg = args.get('--boundary-splat-feature-out');
 const boundarySplatFeatureOut = resolve(
   typeof boundarySplatFeatureOutArg === 'string'
@@ -2073,6 +2087,7 @@ function measureScreenshot(buffer) {
     height: png.height,
     meanLuma: totalLum / Math.max(1, samples),
     litPixels: lit,
+    litFraction: lit / Math.max(1, samples),
     fireLikePixels: fireLike,
     smokeLikePixels: smokeLike,
   };
@@ -2255,6 +2270,212 @@ async function recoverIdentityFrameState(ws, state) {
   };
 }
 
+async function readCachedBrowserBytes(ws, cacheName, expectedLength, label) {
+  assert.ok(Number.isInteger(expectedLength) && expectedLength > 0, `${label} expected length must be positive`);
+  const transportChunkBytes = 256 * 1024;
+  const chunks = [];
+  for (let offset = 0; offset < expectedLength; offset += transportChunkBytes) {
+    const length = Math.min(transportChunkBytes, expectedLength - offset);
+    const chunkEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: `(() => {
+        const bytes = window[${JSON.stringify(cacheName)}];
+        if (!(bytes instanceof Uint8Array) || bytes.length !== ${expectedLength}) {
+          throw new Error(${JSON.stringify(`${label} transport cache missing or partial`)});
+        }
+        let binary = '';
+        const end = ${offset + length};
+        for (let index = ${offset}; index < end; index += 32768) {
+          binary += String.fromCharCode(...bytes.subarray(index, Math.min(end, index + 32768)));
+        }
+        return btoa(binary);
+      })()`,
+      returnByValue: true,
+    });
+    if (chunkEval.exceptionDetails || typeof chunkEval.result.value !== 'string') {
+      throw new Error(`${label} transport chunk failed at ${offset}/${expectedLength}`);
+    }
+    const chunk = Buffer.from(chunkEval.result.value, 'base64');
+    if (chunk.length !== length) {
+      throw new Error(`${label} transport chunk was partial at ${offset}: ${chunk.length}/${length}`);
+    }
+    chunks.push(chunk);
+  }
+  const bytes = Buffer.concat(chunks);
+  if (bytes.length !== expectedLength) throw new Error(`${label} transport was partial: ${bytes.length}/${expectedLength}`);
+  return { bytes, chunkBytes: transportChunkBytes, chunkCount: chunks.length };
+}
+
+async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedCamera = null) {
+  mkdirSync(outputDir, { recursive: true });
+  const supervisionReportPath = join(outputDir, 'report.json');
+  let supervisionPhase = 'invoke-live-capture';
+  try {
+    const captureEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: `(async () => {
+        const capture = await window.__kaminosVolumePrototype?.captureBoundarySplatSupervisionFrame?.({
+          renderScale: 1,
+          resumeRenderLoop: false,
+        });
+        if (!capture?.ok) throw new Error('fixed-candidate supervision capture failed: ' + JSON.stringify(capture));
+        const candidatePayload = capture.candidates?.packedFloat32Base64;
+        if (capture.candidates?.packedEncoding !== 'float32-le-base64' || typeof candidatePayload !== 'string') {
+          throw new Error('fixed-candidate supervision capture omitted packed float32 candidates');
+        }
+        const binary = atob(candidatePayload);
+        window.__kaminosBoundarySplatSupervisionCandidates = Uint8Array.from(binary, character => character.charCodeAt(0));
+        const targetRgba = capture.target?.image?.rgba;
+        if (!Array.isArray(targetRgba)) throw new Error('fixed-candidate supervision capture omitted target RGBA');
+        window.__kaminosBoundarySplatSupervisionTarget = Uint8Array.from(targetRgba);
+        const { packedFloat32Base64, ...candidateMetadata } = capture.candidates;
+        const { image, ...targetMetadata } = capture.target;
+        return {
+          ...capture,
+          candidates: {
+            ...candidateMetadata,
+            expectedLength: window.__kaminosBoundarySplatSupervisionCandidates.length,
+          },
+          target: {
+            ...targetMetadata,
+            width: image.width,
+            height: image.height,
+            expectedLength: window.__kaminosBoundarySplatSupervisionTarget.length,
+          },
+        };
+      })()`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    if (captureEval.exceptionDetails) {
+      throw new Error(`fixed-candidate supervision runtime failed: ${captureEval.exceptionDetails.text || 'runtime exception'}`);
+    }
+    const capture = captureEval.result.value;
+    assert.equal(capture?.authority, 'live-simulator-frozen-state-candidate-raymarch-v0', 'wrong supervision capture authority');
+    assert.equal(capture?.candidates?.rendererIdentity, 'live-boundary-sidecar-analytic-splats-v0', 'wrong supervision candidate renderer');
+    assert.equal(capture?.target?.rendererIdentity, 'native-3d-compute-fluid-raymarch-v0', 'wrong supervision target renderer');
+
+    supervisionPhase = 'transport-candidates';
+    const candidateTransport = await readCachedBrowserBytes(
+      ws,
+      '__kaminosBoundarySplatSupervisionCandidates',
+      Number(capture.candidates.expectedLength),
+      'fixed-candidate supervision candidates',
+    );
+    supervisionPhase = 'transport-target';
+    const targetTransport = await readCachedBrowserBytes(
+      ws,
+      '__kaminosBoundarySplatSupervisionTarget',
+      Number(capture.target.expectedLength),
+      'fixed-candidate supervision target',
+    );
+
+    const candidatePath = join(outputDir, 'frame-000.candidates.f32');
+    const targetPath = join(outputDir, 'frame-000.raymarch.png');
+    writeFileSync(candidatePath, candidateTransport.bytes);
+    writeRgbaPng(targetPath, capture.target.width, capture.target.height, targetTransport.bytes);
+    const targetBytes = readFileSync(targetPath);
+    supervisionPhase = 'validate-target-visual';
+    const targetVisualMetrics = measureScreenshot(targetBytes);
+    if (capture.target.decomposition !== BOUNDARY_SPLAT_SUPERVISION_TARGET_DECOMPOSITION) {
+      throw new Error(`fixed-candidate supervision target decomposition mismatch: ${capture.target.decomposition || 'missing'}`);
+    }
+    if (targetVisualMetrics.meanLuma < 1.5) {
+      throw new Error(`fixed-candidate supervision target is blank or nearly blank: meanLuma=${targetVisualMetrics.meanLuma.toFixed(3)}`);
+    }
+    if (targetVisualMetrics.litPixels < 80) {
+      throw new Error(`fixed-candidate supervision target has no usable lit flame support: litPixels=${targetVisualMetrics.litPixels}`);
+    }
+    if (targetVisualMetrics.litFraction > 0.72) {
+      throw new Error(`fixed-candidate supervision target is an overbroad slab: litFraction=${targetVisualMetrics.litFraction.toFixed(3)}`);
+    }
+    if (targetVisualMetrics.meanLuma > 180) {
+      throw new Error(`fixed-candidate supervision target is globally blown out: meanLuma=${targetVisualMetrics.meanLuma.toFixed(3)}`);
+    }
+    const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+    const manifestPath = join(outputDir, 'corpus.json');
+    const manifest = {
+      schema: BOUNDARY_SPLAT_SUPERVISION_SCHEMA,
+      authority: 'live-simulator-frozen-state-candidate-raymarch-v0',
+      candidateOrder: BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+      featureOrder: BOUNDARY_SPLAT_ATTRIBUTE_FEATURES,
+      frames: [{
+        id: 'frame-000',
+        sameStateCaptureId: capture.sameStateCaptureId,
+        simStepCount: capture.baseSimStepCount,
+        grid: capture.grid,
+        requestedRoute: capture.requestedRoute,
+        effectiveRoute: capture.effectiveRoute,
+        rendererIdentity: capture.candidates.rendererIdentity,
+        sourceAuthority: capture.candidates.sourceAuthority,
+        fallbackReason: capture.candidates.fallbackReason,
+        camera: capture.camera,
+        replayedCamera,
+        splatControls: capture.splatControls,
+        candidates: {
+          path: candidatePath,
+          bytes: candidateTransport.bytes.length,
+          sha256: hash(candidateTransport.bytes),
+          count: capture.candidates.rowCount,
+          strideFloats: capture.candidates.strideFloats,
+          dtype: 'float32-le',
+        },
+        target: {
+          path: targetPath,
+          bytes: targetBytes.length,
+          sha256: hash(targetBytes),
+          authority: capture.target.authority,
+          rendererIdentity: capture.target.rendererIdentity,
+          decomposition: capture.target.decomposition,
+          width: capture.target.width,
+          height: capture.target.height,
+          visualMetrics: targetVisualMetrics,
+        },
+      }],
+    };
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    supervisionPhase = 'validate-corpus';
+    const validation = await validateBoundarySplatSupervisionCorpus(manifestPath);
+    const report = {
+      ok: true,
+      phase: 'complete',
+      authority: manifest.authority,
+      requestedRoute: capture.requestedRoute,
+      effectiveRoute: capture.effectiveRoute,
+      backend: capture.backend,
+      sameStateCaptureId: capture.sameStateCaptureId,
+      baseFrameCount: capture.baseFrameCount,
+      baseSimStepCount: capture.baseSimStepCount,
+      replayedCamera,
+      targetVisualMetrics,
+      candidateTransport: {
+        bytes: candidateTransport.bytes.length,
+        chunkBytes: candidateTransport.chunkBytes,
+        chunkCount: candidateTransport.chunkCount,
+      },
+      targetTransport: {
+        bytes: targetTransport.bytes.length,
+        chunkBytes: targetTransport.chunkBytes,
+        chunkCount: targetTransport.chunkCount,
+      },
+      manifestPath,
+      candidatePath,
+      targetPath,
+      validation,
+    };
+    writeFileSync(supervisionReportPath, JSON.stringify(report, null, 2));
+    return report;
+  } catch (error) {
+    const failure = {
+      ok: false,
+      phase: supervisionPhase,
+      requestedRoute: url,
+      error: error?.message || String(error),
+    };
+    writeFileSync(supervisionReportPath, JSON.stringify(failure, null, 2));
+    error.supervisionPhase = supervisionPhase;
+    throw error;
+  }
+}
+
 async function main() {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
@@ -2287,6 +2508,9 @@ async function main() {
       replayedCaptureCamera = await replayCaptureCamera(ws, captureReplay.capture);
     }
     await delay(settleMs);
+    if (captureReplay?.capture?.camera && replayedCaptureCamera?.applied !== true) {
+      replayedCaptureCamera = await replayCaptureCamera(ws, captureReplay.capture);
+    }
     if (expectedExternalEmitterMode === 'synthetic_hand_trails') {
       await wsRequest(ws, 'Runtime.evaluate', {
         expression: `(() => {
@@ -2345,6 +2569,17 @@ async function main() {
       state.frameCount > 5,
       `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
     );
+    if (boundarySplatSupervisionDir) {
+      phase = 'boundary-splat-supervision';
+      if (captureReplay?.capture?.camera && replayedCaptureCamera?.applied !== true) {
+        throw new Error(`fixed-candidate supervision camera replay failed: ${replayedCaptureCamera?.reason || 'unknown'}`);
+      }
+      const report = await captureBoundarySplatSupervisionArtifacts(ws, boundarySplatSupervisionDir, replayedCaptureCamera);
+      ws.close();
+      closeBrowserSession(browserSession);
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
     if (isCaptureReplay) {
       assertCaptureReplayControls({
         captureReplay,
@@ -4452,7 +4687,7 @@ async function main() {
       windowSize,
       evidenceMode,
       visualEvidenceMode,
-      phase,
+      phase: err?.supervisionPhase || phase,
       error: err?.message || String(err),
       state,
       screenshot: out,

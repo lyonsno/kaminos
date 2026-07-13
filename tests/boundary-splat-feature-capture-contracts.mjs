@@ -4,7 +4,11 @@ import {
   BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
   BOUNDARY_SPLAT_FEATURE_ORDER,
   BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS,
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_IDENTITY,
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+  BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS,
   decodeBoundarySplatFeatureCapture,
+  packBoundarySplatSupervisionCandidates,
   packBoundarySplatFeatureCapture,
 } from '../boundary-splat-feature-capture.mjs';
 
@@ -50,6 +54,28 @@ assert.equal(packed.packedByteLength, values.byteLength);
 const packedBytes = Buffer.from(packed.packedFloat32Base64, 'base64');
 assert.deepEqual(new Float32Array(packedBytes.buffer, packedBytes.byteOffset, values.length), values);
 
+assert.equal(BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_IDENTITY, 'boundary-splat-fixed-candidate-supervision-v0');
+assert.equal(BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS, 19);
+assert.deepEqual(BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER, [
+  'position.x', 'position.y', 'position.z',
+  ...BOUNDARY_SPLAT_FEATURE_ORDER,
+]);
+const candidateValues = new Float32Array([
+  0.1, 0.2, 0.3, 9, 1, 2, 3, 4, 5, 6, 7, 8,
+  -0.4, -0.5, -0.6, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+]);
+const supervision = packBoundarySplatSupervisionCandidates(candidateValues, values, 2, 131072);
+assert.equal(supervision.identity, BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_IDENTITY);
+assert.equal(supervision.rowCount, 2);
+assert.equal(supervision.strideFloats, 19);
+assert.deepEqual(supervision.candidateOrder, BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER);
+const supervisionBytes = Buffer.from(supervision.packedFloat32Base64, 'base64');
+const supervisionValues = new Float32Array(supervisionBytes.buffer, supervisionBytes.byteOffset, 38);
+assert.deepEqual(Array.from(supervisionValues.slice(0, 19)), Array.from(new Float32Array([0.1, 0.2, 0.3, ...values.slice(0, 16)])));
+assert.deepEqual(Array.from(supervisionValues.slice(19, 38)), Array.from(new Float32Array([-0.4, -0.5, -0.6, ...values.slice(16, 32)])));
+assert.throws(() => packBoundarySplatSupervisionCandidates(new Float32Array(11), new Float32Array(16), 1, 131072), /candidate values.*12/);
+assert.throws(() => packBoundarySplatSupervisionCandidates(new Float32Array(12), new Float32Array(15), 1, 131072), /feature values.*16/);
+
 assert.throws(() => decodeBoundarySplatFeatureCapture(new Float32Array(16), 0, 131072), /positive integer/);
 assert.throws(() => decodeBoundarySplatFeatureCapture(new Float32Array(15), 1, 131072), /exactly 16/);
 assert.throws(() => decodeBoundarySplatFeatureCapture(new Float32Array(32), 2, 1), /exceeds capacity/);
@@ -63,6 +89,7 @@ assert.match(core, /boundarySplatFeatureCaptureEffective/, 'runtime reports effe
 assert.match(core, /boundarySplatFeatureBuffer/, 'runtime owns a dedicated feature buffer');
 assert.match(core, /boundarySplatFeatureRows\[candidateIndex\]/, 'compaction writes exact selected-candidate rows at the accepted candidate slot');
 assert.match(core, /sampleBoundarySplatFeatureCapture\(boundarySplatSample\.instanceCount\)/, 'witness readback uses the exact accepted instance count without a hidden row cap');
+assert.match(core, /sampleBoundarySplatSupervisionCapture\(boundarySplatSample\.instanceCount\)/, 'supervision readback preserves exact accepted candidate positions and feature rows');
 assert.match(witness, /const boundarySplatFeatureCapture\s*=\s*sample\.boundarySplatFeatureCaptureRequested[\s\S]*materializeBoundarySplatFeatureCapture/, 'witness materializes the full requested feature capture object');
 assert.match(witness, /--boundary-splat-feature-out/, 'witness exposes a direct feature artifact output path');
 assert.match(witness, /packedFloat32Base64[\s\S]*writeFileSync/, 'witness materializes every packed feature row without terminal transcription');

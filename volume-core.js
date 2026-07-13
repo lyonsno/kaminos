@@ -6,6 +6,7 @@ import {
   BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
   BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS,
   packBoundarySplatFeatureCapture,
+  packBoundarySplatSupervisionCandidates,
 } from './boundary-splat-feature-capture.mjs';
 import {
   SELECTIVE_HEAD_LIVE_FEATURE_AUTHORITY,
@@ -3910,6 +3911,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 5.0);
   let selectiveRaymarchSmokeOnlyPartition = clamp(u.selective_live_render_controls.x, 0.0, 1.0);
   let selectiveRaymarchFireAuthority = 1.0 - selectiveRaymarchSmokeOnlyPartition;
+  let supervisionFireOnlyTarget = clamp(u.boundary_fire_display.y, 0.0, 1.0);
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -4123,6 +4125,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let quenchedEmberFleck = emberFleck * (1.0 - quenchCoreCollapse * 0.32);
     let vaporAlpha = clamp((vaporCarrier + quenchCoreCollapse * 0.52) * rayStepOpacity * (0.22 + absorptionGain * 0.070), 0.0, 0.22);
     smokeAlpha = clamp(smokeAlpha + vaporAlpha, 0.0, 0.28);
+    smokeAlpha = smokeAlpha * (1.0 - supervisionFireOnlyTarget);
     let fireSnuffDamping = 1.0 - clamp(max(vaporCarrier * 1.18, quenchCoreCollapse * 0.92), 0.0, 0.985);
     let stockFireAlpha = mix(
       clamp(visibleFlameAlphaCarrier * tallPlumeTransitionAlphaStagger * canonicalFireRenderContent * rayStepOpacity * fireGain * (0.58 + radianceGain * 0.18) * bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper * fireSnuffDamping * flameBodyAuthority, 0.0, fireAlphaMax),
@@ -4363,6 +4366,26 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
       * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
       * flameBodyAuthority;
+    let directFlameUnitEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, 1.0, 0.0)
+      * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
+      * flameBodyAuthority;
+    var directFlameCandidateSidecar = vec4<f32>(0.0);
+    var directFlameCandidateFireSignal = 0.0;
+    var directFlameCandidateStructuralSignal = 0.0;
+    var directFlameCandidateSupport = 0.0;
+    if (supervisionFireOnlyTarget > 0.5) {
+      directFlameCandidateSidecar = sampleWorldBoundarySidecar(p);
+      directFlameCandidateFireSignal = flame * 1.25
+        + flameDetail * 0.52
+        + combustionFront * 0.86
+        + fireLick * 0.72
+        + heat * 0.24;
+      directFlameCandidateStructuralSignal = directFlameCandidateSidecar.z
+        * smoothstep(0.055, 0.32, directFlameCandidateSidecar.y)
+        * smoothstep(0.018, 0.16, directFlameCandidateFireSignal);
+      directFlameCandidateSupport = directFlameCandidateStructuralSignal * step(0.11, directFlameCandidateStructuralSignal);
+    }
+    let directFlameCandidateAlpha = clamp(directFlameCandidateSupport * rayStepOpacity * 0.55, 0.0, 0.28);
     let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
     let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
     let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
@@ -4827,14 +4850,22 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority + shellSmokeBacklight * selectiveRaymarchFireAuthority + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
+    let standardRadianceContribution = alpha * local
+      + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene)
+      + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority
+      + shellSmokeBacklight * selectiveRaymarchFireAuthority
+      + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight);
+    let directFlameSupervisionContribution = stockRenderMode * directFlameCandidateAlpha * directFlameUnitEmission;
+    color = color + trans * mix(standardRadianceContribution, directFlameSupervisionContribution, supervisionFireOnlyTarget);
     let residualFeatureWeight = trans * rayStepOpacity;
     let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
     residualRadianceAuthority = residualRadianceAuthority + residualFeatureWeight * clamp(residualRadianceLuma * 0.30 + pyroRadianceBoost * 0.75 + pyroFireRadianceEvent * 0.40, 0.0, 4.0);
     residualFireAuthority = residualFireAuthority + residualFeatureWeight * clamp(pyroRawCurrentFire * 1.05 + fireMix * 0.90 + pyroFireEventCarrier * 0.55, 0.0, 3.5);
     residualInterfaceAuthority = residualInterfaceAuthority + residualFeatureWeight * clamp(pyroInterfaceSignal * 0.85 + pyroBiteAlphaBoost * 0.36 + flameDetail * 0.18 + fireLick * 0.16, 0.0, 3.5);
     residualSmokeAuthority = residualSmokeAuthority + residualFeatureWeight * clamp(smoke * 0.55 + rawExtinction * 0.38 + microSmoke * 0.32 + pyroFoldExtinctionBoost * 0.18, 0.0, 3.0);
-    let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    let standardExtinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
+    let directFlameSupervisionExtinction = clamp(directFlameCandidateAlpha * 0.54, 0.0, 0.34);
+    let extinctionStep = mix(standardExtinctionStep, directFlameSupervisionExtinction, supervisionFireOnlyTarget);
     trans = trans * exp(-extinctionStep);
     t = t + localDt;
   }
@@ -5761,6 +5792,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatFeatureBufferCapacity = 0;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
+  let boundarySplatSupervisionCaptureActive = false;
+  let boundarySplatSupervisionFireOnlyTargetActive = false;
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -6745,6 +6778,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ],
     });
     rebuildSelectiveHeadLiveBindGroups();
+  }
+
+  function configureBoundarySplatFeatureCaptureBuffer(requested) {
+    if (!device || !boundarySplatBuffer) return;
+    const normalizedRequested = normalizeBoundarySplatFeatureCapture(requested);
+    const nextCapacity = normalizedRequested ? boundarySplatCapacity : 1;
+    if (boundarySplatFeatureBuffer && boundarySplatFeatureBufferCapacity === nextCapacity) {
+      state.boundarySplatFeatureCaptureRequested = normalizedRequested;
+      state.boundarySplatFeatureCaptureEffective = normalizedRequested && nextCapacity === boundarySplatCapacity;
+      return;
+    }
+    const previousFeatureBuffer = boundarySplatFeatureBuffer;
+    boundarySplatFeatureBufferCapacity = nextCapacity;
+    boundarySplatFeatureBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY} ${normalizedRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
+      size: nextCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    rebuildBoundarySplatBindGroups();
+    previousFeatureBuffer?.destroy();
+    state.boundarySplatFeatureCaptureRequested = normalizedRequested;
+    state.boundarySplatFeatureCaptureEffective = normalizedRequested && nextCapacity === boundarySplatCapacity;
   }
 
   function growBoundarySplatCapacity(candidateCount) {
@@ -7966,7 +8021,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[302] = boundaryFireUniforms.sootYellowing;
     uniforms[303] = boundaryFireUniforms.thermalWarmth;
     uniforms[304] = boundaryFireUniforms.fireLuma;
-    uniforms[305] = 0;
+    uniforms[305] = boundarySplatSupervisionFireOnlyTargetActive ? 1 : 0;
     uniforms[306] = 0;
     uniforms[307] = 0;
     uniforms[308] = boundarySidecarSourceValue(boundarySidecarSourceName);
@@ -9056,6 +9111,58 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  async function sampleBoundarySplatSupervisionCapture(instanceCount) {
+    if (!state.boundarySplatFeatureCaptureRequested) return null;
+    if (!state.boundarySplatFeatureCaptureEffective || !boundarySplatFeatureBuffer || !boundarySplatBuffer) {
+      throw new Error('boundary-splat-supervision-capture-requested-but-unavailable');
+    }
+    if (!Number.isInteger(instanceCount) || instanceCount <= 0) {
+      throw new Error(`boundary-splat-supervision-capture-blank-instance-count:${instanceCount}`);
+    }
+    if (instanceCount > boundarySplatCapacity) {
+      throw new Error(`boundary-splat-supervision-capture-instance-count-exceeds-capacity:${instanceCount}`);
+    }
+    const candidateBytes = instanceCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+    const featureBytes = instanceCount * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+    const candidateReadback = device.createBuffer({
+      label: 'kaminos boundary splat supervision candidate readback',
+      size: candidateBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const featureReadback = device.createBuffer({
+      label: 'kaminos boundary splat supervision feature readback',
+      size: featureBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat supervision readback encoder' });
+      encoder.copyBufferToBuffer(boundarySplatBuffer, 0, candidateReadback, 0, candidateBytes);
+      encoder.copyBufferToBuffer(boundarySplatFeatureBuffer, 0, featureReadback, 0, featureBytes);
+      device.queue.submit([encoder.finish()]);
+      await Promise.all([
+        candidateReadback.mapAsync(GPUMapMode.READ),
+        featureReadback.mapAsync(GPUMapMode.READ),
+      ]);
+      const candidateValues = new Float32Array(candidateReadback.getMappedRange()).slice();
+      const featureValues = new Float32Array(featureReadback.getMappedRange()).slice();
+      candidateReadback.unmap();
+      featureReadback.unmap();
+      return {
+        ...packBoundarySplatSupervisionCandidates(candidateValues, featureValues, instanceCount, boundarySplatCapacity),
+        status: 'captured',
+        requested: true,
+        effective: true,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+        sourceAuthority: state.boundarySplatSourceAuthority,
+        modelIdentity: state.boundarySplatAttributeModelIdentity,
+        countAuthority: 'gpu-indirect-post-submit-witness-readback',
+      };
+    } finally {
+      candidateReadback.destroy();
+      featureReadback.destroy();
+    }
+  }
+
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     const pass = encoder.beginRenderPass({
       label,
@@ -9157,7 +9264,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function render(now) {
-    if (!state.active) return;
+    if (!state.active || boundarySplatSupervisionCaptureActive) return;
     if (selectiveHeadLiveCapturePaused) {
       raf = 0;
       return;
@@ -11549,8 +11656,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     }
     const boundarySplatSample = boundarySplatRequested() ? await sampleBoundarySplatDrawState() : null;
-    const boundarySplatFeatureCapture = state.boundarySplatFeatureCaptureRequested && boundarySplatSample
+    const boundarySplatFeatureCapture = state.boundarySplatFeatureCaptureRequested && boundarySplatSample && options.includeBoundarySplatSupervision !== true
       ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.instanceCount)
+      : null;
+    const boundarySplatSupervisionCapture = options.includeBoundarySplatSupervision === true && boundarySplatSample
+      ? await sampleBoundarySplatSupervisionCapture(boundarySplatSample.instanceCount)
       : null;
     state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
     const boundarySplatGpuProfile = boundarySplatRequested() ? await sampleBoundarySplatGpuProfile() : state.boundarySplatGpuProfile;
@@ -11898,6 +12008,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
       boundarySplatFeatureCaptureEffective: state.boundarySplatFeatureCaptureEffective,
       boundarySplatFeatureCapture,
+      boundarySplatSupervisionCapture,
       boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
       boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
       boundarySplatCapacity: state.boundarySplatCapacity,
@@ -11965,6 +12076,158 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       image: null,
       simReadback,
     };
+  }
+
+  async function captureBoundarySplatSupervisionFrame(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    boundarySplatSupervisionCaptureActive = true;
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    cancelAnimationFrame(raf);
+    const controlsBefore = { ...controlsSnapshot };
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId
+      ? String(options.sameStateCaptureId)
+      : `fixed-candidate-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
+    const renderScale = normalizeRenderScale(options.renderScale ?? 1);
+    try {
+      controlsSnapshot = applyRuntimeQualityControls({
+        ...controlsSnapshot,
+        boundarySplatMode: 'analytic',
+        boundarySplatFeatureCapture: true,
+        volumeResidualMode: 'off',
+        renderScale,
+      });
+      configureBoundarySplatFeatureCaptureBuffer(true);
+      resetTemporalHistory('fixed-candidate-supervision-candidates');
+      let candidateSample = await sampleFrame({
+        advanceSim: false,
+        includeRgba: false,
+        includeBoundarySplatSupervision: true,
+        now: fixedNow,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+      });
+      if (!candidateSample.ok) throw new Error(`fixed-candidate-supervision-candidate-failed:${candidateSample.reason || 'unknown'}`);
+      if (candidateSample.boundarySplatOverflowCount > 0) {
+        if (!growBoundarySplatCapacity(candidateSample.boundarySplatCandidateCount)) {
+          throw new Error(`fixed-candidate-supervision-capacity-growth-failed:${candidateSample.boundarySplatCandidateCount}:${candidateSample.boundarySplatOverflowCount}`);
+        }
+        resetTemporalHistory('fixed-candidate-supervision-candidates-after-capacity-growth');
+        candidateSample = await sampleFrame({
+          advanceSim: false,
+          includeRgba: false,
+          includeBoundarySplatSupervision: true,
+          now: fixedNow,
+          sameStateCaptureId,
+          baseFrameCount,
+          baseSimStepCount,
+        });
+        if (!candidateSample.ok) throw new Error(`fixed-candidate-supervision-candidate-retry-failed:${candidateSample.reason || 'unknown'}`);
+      }
+      if (candidateSample.boundarySplatRendererIdentity !== BOUNDARY_SPLAT_RENDERER_IDENTITY) {
+        throw new Error(`fixed-candidate-supervision-renderer-substitution:${candidateSample.boundarySplatRendererIdentity || 'missing'}`);
+      }
+      if (candidateSample.boundarySplatFallbackReason != null) {
+        throw new Error(`fixed-candidate-supervision-fallback:${candidateSample.boundarySplatFallbackReason}`);
+      }
+      if (!candidateSample.boundarySplatSupervisionCapture) {
+        throw new Error('fixed-candidate-supervision-candidate-capture-missing');
+      }
+      if (candidateSample.boundarySplatCandidateCount !== candidateSample.boundarySplatSupervisionCapture.rowCount) {
+        throw new Error(`fixed-candidate-supervision-partial-rows:${candidateSample.boundarySplatCandidateCount}:${candidateSample.boundarySplatSupervisionCapture.rowCount}`);
+      }
+      if (candidateSample.boundarySplatOverflowCount !== 0) {
+        throw new Error(`fixed-candidate-supervision-overflow:${candidateSample.boundarySplatOverflowCount}`);
+      }
+
+      controlsSnapshot = applyRuntimeQualityControls({
+        ...controlsSnapshot,
+        boundarySplatMode: 'off',
+        boundarySplatFeatureCapture: false,
+        volumeResidualMode: 'off',
+        fireRenderMode: 'stock',
+        shellInspectMode: 'boundary_fire',
+        renderScale,
+      });
+      boundarySplatSupervisionFireOnlyTargetActive = true;
+      resetTemporalHistory('fixed-candidate-supervision-raymarch');
+      const targetSample = await sampleFrame({
+        advanceSim: false,
+        includeRgba: true,
+        now: fixedNow,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+      });
+      if (!targetSample.ok) throw new Error(`fixed-candidate-supervision-target-failed:${targetSample.reason || 'unknown'}`);
+      if (targetSample.volumeReconstructionStyle === BOUNDARY_SPLAT_RENDERER_IDENTITY) {
+        throw new Error('fixed-candidate-supervision-target-is-splat-substitution');
+      }
+      if (targetSample.volumeReconstructionStyle !== 'native-resolution') {
+        throw new Error(`fixed-candidate-supervision-target-is-not-native-raymarch:${targetSample.volumeReconstructionStyle || 'missing'}`);
+      }
+      if (!targetSample.image?.rgba?.length) throw new Error('fixed-candidate-supervision-target-image-missing');
+      if (candidateSample.simStepCount !== targetSample.simStepCount) {
+        throw new Error(`fixed-candidate-supervision-state-drift:${baseSimStepCount}:${candidateSample.simStepCount}:${targetSample.simStepCount}`);
+      }
+      const capturedBaseFrameCount = candidateSample.frameCount;
+      const capturedBaseSimStepCount = candidateSample.simStepCount;
+
+      return {
+        ok: true,
+        authority: 'live-simulator-frozen-state-candidate-raymarch-v0',
+        sameStateCaptureId,
+        baseFrameCount: capturedBaseFrameCount,
+        baseSimStepCount: capturedBaseSimStepCount,
+        provisionalBaseFrameCount: baseFrameCount,
+        provisionalBaseSimStepCount: baseSimStepCount,
+        fixedNowMs: fixedNow,
+        grid: state.simGrid,
+        requestedRoute: state.requestedRoute,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+        camera: {
+          viewProjection: Array.from(viewProj.elements),
+          cameraRight: Array.from(camera.matrixWorld.elements.slice(0, 3)),
+          cameraUp: Array.from(camera.matrixWorld.elements.slice(4, 7)),
+          viewport: [targetSample.width, targetSample.height],
+        },
+        splatControls: {
+          radius: normalizeBoundarySplatRadius(controlsBefore.boundarySplatRadius),
+          sharpness: normalizeBoundarySplatSharpness(controlsBefore.boundarySplatSharpness),
+        },
+        candidates: {
+          ...candidateSample.boundarySplatSupervisionCapture,
+          rendererIdentity: candidateSample.boundarySplatRendererIdentity,
+          sourceAuthority: candidateSample.boundarySplatSourceAuthority,
+          fallbackReason: candidateSample.boundarySplatFallbackReason,
+          candidateCount: candidateSample.boundarySplatCandidateCount,
+          instanceCount: candidateSample.boundarySplatInstanceCount,
+          overflowCount: candidateSample.boundarySplatOverflowCount,
+        },
+        target: {
+          authority: 'gpu-rgba8-raymarch-readback-frozen-sim-state',
+          rendererIdentity: ROUTE_IDENTITY,
+          decomposition: 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0',
+          image: targetSample.image,
+        },
+      };
+    } finally {
+      boundarySplatSupervisionFireOnlyTargetActive = false;
+      controlsSnapshot = controlsBefore;
+      configureBoundarySplatFeatureCaptureBuffer(controlsBefore.boundarySplatFeatureCapture);
+      resetTemporalHistory('fixed-candidate-supervision-restore');
+      boundarySplatSupervisionCaptureActive = false;
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
   }
 
   async function sampleRenderScaleSet(options = {}) {
@@ -13164,6 +13427,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
+    captureBoundarySplatSupervisionFrame,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
