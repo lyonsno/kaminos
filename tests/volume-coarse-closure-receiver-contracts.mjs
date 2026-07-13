@@ -44,6 +44,12 @@ assert.match(
 );
 assert.match(exporter, /advanceDebugImportedFieldSteps/, 'exporter uses the atomic imported-state step API');
 assert.match(exporter, /--render-png/, 'exporter can preserve an operator-facing imported-state render');
+assert.match(exporter, /--render-only/, 'held visual assays can skip redundant full-field export');
+assert.match(
+  exporter,
+  /kaminos\.volume\.held-field-render\.v0[\s\S]*fieldExportSkipped[\s\S]*caller-requested-render-only-v0/,
+  'render-only manifests fail loud about omitted field coverage instead of impersonating a full export',
+);
 assert.match(exporter, /Page\.captureScreenshot/, 'imported render is captured from the effective browser canvas');
 assert.match(exporter, /importedRender/, 'manifest preserves imported render route and state identity');
 assert.match(exporter, /witness-mounted-imported-canvas-v0/, 'witness explicitly mounts the renderer canvas into a visible capture surface');

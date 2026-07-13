@@ -32,6 +32,7 @@ const requestedUrl = String(args.get('--url') || 'http://127.0.0.1:8095/?kaminos
 const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get('--source-capture'))) : null;
 const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
+const renderOnly = args.has('--render-only');
 const targetOrigin = args.has('--target-origin') ? String(args.get('--target-origin')) : null;
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -388,6 +389,9 @@ async function main() {
       throw new Error('selective-composition-held-only: --advance-imported-steps must be 0');
     }
     if (renderPngPath && !initialField) throw new Error('--render-png requires --initial-field-manifest');
+    if (renderOnly && (!initialField || !renderPngPath)) {
+      throw new Error('--render-only requires --initial-field-manifest and --render-png');
+    }
     const resolved = resolveSourceCapture();
     url = resolved.url;
     sourceCapture = resolved.sourceCapture;
@@ -584,6 +588,42 @@ async function main() {
           importedAdvanceCompletedSteps: importedAdvance.completedSteps,
         };
       }
+    }
+
+    if (renderOnly) {
+      const manifest = {
+        schema: 'kaminos.volume.held-field-render.v0',
+        identity: 'held-imported-field-neural-splat-render-v0',
+        status: 'captured',
+        failurePhase: null,
+        completeFieldCoverage: false,
+        fieldExportSkipped: {
+          identity: 'caller-requested-render-only-v0',
+          skipped: true,
+          reason: 'visual assay does not require duplicating the imported full-grid field',
+        },
+        url,
+        sourceCapture,
+        browserSession: browserReceipt(browserSession),
+        lastDebugState,
+        pageDiagnostics,
+        runtimeEvents,
+        initialFieldImport,
+        importedAdvance,
+        importedRender,
+        routeIdentity: importedRender?.routeIdentity || initialFieldImport?.effective?.routeIdentity || null,
+        effectiveRoute: importedRender?.effectiveRoute || initialFieldImport?.effective?.effectiveRoute || null,
+        prototypeIdentity: initialFieldImport?.effective?.prototypeIdentity || null,
+        backend: importedRender?.backend || initialFieldImport?.effective?.backend || null,
+      };
+      writeManifest(manifest);
+      console.log(JSON.stringify({
+        ok: true,
+        manifest: manifestPath,
+        render: importedRender,
+        fieldExportSkipped: manifest.fieldExportSkipped,
+      }, null, 2));
+      return;
     }
 
     phase = 'begin-full-grid-export';
