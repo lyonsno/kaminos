@@ -15,7 +15,46 @@ const budget = {
   adaptiveRays: 1,
 };
 
-function episodeHarness({ effectiveBudget = budget, routeIdentity = 'native-3d-compute-fluid-raymarch-v0' } = {}) {
+const learnedHybridPresentation = {
+  schema: 'kaminos.kiln-fire-presentation.v0',
+  requestedMode: 'auto',
+  effectiveMode: 'learned-splat-flame-raymarched-smoke',
+  simulatorAuthority: 'live-fluid-simulation-v0',
+  flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+  smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+  sourceSidecarIdentity: 'baked-boundary-sidecar-v1',
+  sourceSidecarAuthority: 'live-baked-sidecar-plus-fluid-material-v0',
+  learnedModelIdentity: 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472',
+  candidateCount: 111898,
+  candidateCapacity: 262144,
+  candidateOverflow: 0,
+  candidateCopyBytes: 0,
+  fallbackReason: null,
+  raster: {
+    radius: 0.8,
+    sharpness: 6.5,
+    energyCompensation: 'sqrt-integrated-energy-v0',
+  },
+  timing: {
+    authority: 'gpu-pass-descriptor-timestamp-query-v0',
+    compactionMs: 2.49,
+    decodeMs: null,
+    decodeResolution: 'below-timer-quantization',
+  },
+  fireEpisodeHooks: {
+    identity: 'foreground-kiln-fire-episode-hooks-v0',
+    disclaimer: 'not-gpu-exclusive-or-present-latency',
+    firingId: 'firing-0713-a',
+    rawRafGapSamplesMs: [16, 17, 52],
+  },
+};
+
+function episodeHarness({
+  effectiveBudget = budget,
+  routeIdentity = 'native-3d-compute-fluid-raymarch-v0',
+  firePresentation = null,
+  expectedFirePresentation = null,
+} = {}) {
   let nowMs = 100;
   let nextFrameId = 0;
   let scheduled = null;
@@ -27,6 +66,7 @@ function episodeHarness({ effectiveBudget = budget, routeIdentity = 'native-3d-c
     resolution: effectiveBudget.resolution,
     renderScale: effectiveBudget.renderScale,
     adaptiveRaymarch: effectiveBudget.adaptiveRays,
+    firePresentation,
   };
   const episode = createForegroundKilnHeartbeatEpisode({
     routeId: 'sharp-image-to-splat-live-v0',
@@ -34,6 +74,7 @@ function episodeHarness({ effectiveBudget = budget, routeIdentity = 'native-3d-c
     pipelineId: 'sharp-image-to-splat-live-v0',
     expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
     requestedFireBudget: budget,
+    expectedFirePresentation,
     readVolumeState: () => ({ ...volume }),
     now: () => nowMs,
     requestFrame: callback => {
@@ -63,6 +104,118 @@ function episodeHarness({ effectiveBudget = budget, routeIdentity = 'native-3d-c
     },
   };
 }
+
+const hybrid = episodeHarness({
+  firePresentation: learnedHybridPresentation,
+  expectedFirePresentation: {
+    effectiveMode: 'learned-splat-flame-raymarched-smoke',
+    flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+    smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    learnedModelIdentity: learnedHybridPresentation.learnedModelIdentity,
+    requireNoFallback: true,
+    requireZeroOverflow: true,
+    requireCandidateEvidence: true,
+    requireTimingAuthority: true,
+    requireFireEpisodeHooks: true,
+  },
+});
+hybrid.episode.start();
+hybrid.advance();
+const hybridReport = hybrid.episode.finish({ phase: 'complete' });
+assert.equal(hybridReport.status, 'verified');
+assert.equal(hybridReport.effectiveFirePresentation.schema, 'kaminos.kiln-fire-presentation.v0');
+assert.equal(hybridReport.effectiveFirePresentation.effectiveMode, 'learned-splat-flame-raymarched-smoke');
+assert.equal(hybridReport.effectiveFirePresentation.candidateOverflow, 0);
+assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.identity, 'foreground-kiln-fire-episode-hooks-v0');
+assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.firingId, 'firing-0713-a');
+assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.rawRafGapSamplesMs, undefined, 'per-frame presentation samples retain only the episode join, not repeated raw gap arrays');
+assert.deepEqual(hybridReport.firePresentationMismatchSamples, []);
+
+const hiddenFallback = episodeHarness({
+  firePresentation: {
+    ...learnedHybridPresentation,
+    effectiveMode: 'full-raymarch',
+    flameRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    learnedModelIdentity: null,
+    fallbackReason: null,
+  },
+  expectedFirePresentation: {
+    effectiveMode: 'learned-splat-flame-raymarched-smoke',
+    flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+    smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    learnedModelIdentity: learnedHybridPresentation.learnedModelIdentity,
+    requireNoFallback: true,
+    requireZeroOverflow: true,
+    requireCandidateEvidence: true,
+    requireTimingAuthority: true,
+    requireFireEpisodeHooks: true,
+  },
+});
+hiddenFallback.episode.start();
+hiddenFallback.advance();
+const hiddenFallbackReport = hiddenFallback.episode.finish({ phase: 'complete' });
+assert.equal(hiddenFallbackReport.status, 'invalid');
+assert.ok(hiddenFallbackReport.failures.includes('effective-fire-presentation-mismatch'));
+assert.equal(hiddenFallbackReport.firePresentationMismatchSamples[0].reasons.includes('effective-mode-mismatch'), true);
+assert.equal(hiddenFallbackReport.firePresentationMismatchSamples[0].reasons.includes('learned-model-identity-mismatch'), true);
+
+const transientRendererSubstitution = episodeHarness({
+  firePresentation: learnedHybridPresentation,
+  expectedFirePresentation: {
+    effectiveMode: 'learned-splat-flame-raymarched-smoke',
+    flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+    smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    learnedModelIdentity: learnedHybridPresentation.learnedModelIdentity,
+    requireNoFallback: true,
+    requireZeroOverflow: true,
+    requireCandidateEvidence: true,
+    requireTimingAuthority: true,
+    requireFireEpisodeHooks: true,
+  },
+});
+transientRendererSubstitution.episode.start();
+transientRendererSubstitution.setVolume({
+  firePresentation: {
+    ...learnedHybridPresentation,
+    effectiveMode: 'analytic-splat-flame-raymarched-smoke',
+    flameRendererIdentity: 'live-boundary-sidecar-analytic-splats-v0',
+    learnedModelIdentity: null,
+    fallbackReason: 'learned-model-unavailable',
+  },
+});
+transientRendererSubstitution.advance();
+transientRendererSubstitution.setVolume({ firePresentation: learnedHybridPresentation });
+transientRendererSubstitution.advance();
+const transientRendererReport = transientRendererSubstitution.episode.finish({ phase: 'complete' });
+assert.equal(transientRendererReport.status, 'invalid');
+assert.ok(transientRendererReport.failures.includes('effective-fire-presentation-mismatch'));
+assert.equal(transientRendererReport.firePresentationMismatchSamples.length, 1);
+assert.equal(transientRendererReport.firePresentationMismatchSamples[0].firePresentation.fallbackReason, 'learned-model-unavailable');
+
+const partialCandidateEvidence = episodeHarness({
+  firePresentation: {
+    ...learnedHybridPresentation,
+    candidateCount: null,
+    candidateCapacity: null,
+  },
+  expectedFirePresentation: {
+    effectiveMode: 'learned-splat-flame-raymarched-smoke',
+    flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+    smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    learnedModelIdentity: learnedHybridPresentation.learnedModelIdentity,
+    requireNoFallback: true,
+    requireZeroOverflow: true,
+    requireCandidateEvidence: true,
+    requireTimingAuthority: true,
+    requireFireEpisodeHooks: true,
+  },
+});
+partialCandidateEvidence.episode.start();
+partialCandidateEvidence.advance();
+const partialCandidateReport = partialCandidateEvidence.episode.finish({ phase: 'complete' });
+assert.equal(partialCandidateReport.status, 'invalid');
+assert.ok(partialCandidateReport.failures.includes('effective-fire-presentation-mismatch'));
+assert.equal(partialCandidateReport.firePresentationMismatchSamples[0].reasons.includes('candidate-evidence-missing'), true);
 
 const live = episodeHarness();
 live.episode.start();
