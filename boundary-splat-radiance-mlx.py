@@ -149,11 +149,34 @@ class CandidateAttributeTable(nn.Module):
         return mx.sigmoid(self.logits)
 
 
+def infer_fourier_frequencies(feature_names):
+    components_by_frequency = {}
+    frequency_order = []
+    for name in feature_names:
+        if not name.startswith(("position.sin.", "position.cos.")):
+            continue
+        parts = name.split(".")
+        if len(parts) != 4 or parts[1] not in ("sin", "cos") or parts[2] not in "xyz":
+            raise ValueError("legacy Fourier features must use position.<sin|cos>.<axis>.<frequency>")
+        frequency = float(parts[3])
+        if not np.isfinite(frequency) or frequency <= 0:
+            raise ValueError("legacy Fourier feature frequencies must be positive and finite")
+        if frequency not in components_by_frequency:
+            components_by_frequency[frequency] = set()
+            frequency_order.append(frequency)
+        components_by_frequency[frequency].add((parts[1], parts[2]))
+    expected_components = {(trig, axis) for trig in ("sin", "cos") for axis in "xyz"}
+    if any(components != expected_components for components in components_by_frequency.values()):
+        raise ValueError("legacy Fourier features must contain complete sine/cosine axis groups")
+    return frequency_order
+
+
 def load_warm_start(path_value, requested_context_mode, requested_frequencies):
     path = Path(path_value).resolve()
     artifact_bytes = path.read_bytes()
     artifact = json.loads(artifact_bytes)
     schema = artifact.get("schema")
+    recovered_frequencies = []
     if artifact.get("architecture") != "dense-relu-dense":
         raise ValueError("warm start architecture must be dense-relu-dense")
     if schema == MODEL_SCHEMA:
@@ -163,6 +186,9 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies):
     elif artifact.get("schema") == SPATIAL_MODEL_SCHEMA:
         warm_context_mode = artifact.get("contextMode")
         warm_frequencies = [float(value) for value in artifact.get("fourierFrequencies", [])]
+        if warm_context_mode in ("world-fourier", "world-grid-neighborhood") and not warm_frequencies:
+            recovered_frequencies = infer_fourier_frequencies(artifact.get("features") or [])
+            warm_frequencies = recovered_frequencies
         context_expansion = warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood"
         if warm_context_mode != requested_context_mode and not context_expansion:
             raise ValueError(
@@ -200,6 +226,7 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies):
         "contextMode": warm_context_mode,
         "fourierFrequencies": warm_frequencies,
         "continuation": schema == SPATIAL_MODEL_SCHEMA,
+        "legacyFrequencyRecoveryAuthority": "exact-complete-feature-name-groups-v0" if recovered_frequencies else None,
         "contextExpansionAuthority": "zero-delta-local-grid-context-expansion-v0" if warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood" else None,
     }, schema, warm_context_mode, warm_frequencies
 

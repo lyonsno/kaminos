@@ -23,6 +23,14 @@ candidates[2, :3] = position((2, 1, 1), grid)
 candidates[:, 3] = [2.0, 1.0, 3.0]
 
 names = MODULE.context_feature_names("world-grid-neighborhood", [1.0])
+assert MODULE.infer_fourier_frequencies(names) == [1.0]
+incomplete_names = [name for name in names if name != "position.cos.z.1"]
+try:
+    MODULE.infer_fourier_frequencies(incomplete_names)
+except ValueError as error:
+    assert "complete sine/cosine axis groups" in str(error)
+else:
+    raise AssertionError("partial Fourier feature groups must not recover legacy frequency metadata")
 encoded = np.asarray(MODULE.encode_candidate_inputs(candidates, "world-grid-neighborhood", [1.0], grid))
 
 assert encoded.shape == (3, len(names))
