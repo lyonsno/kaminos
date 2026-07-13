@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Structural Material Proxy</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0b0d12;
+      color: #f7f2df;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      background: #0b0d12;
+    }
+    header {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid #273242;
+      background: #121722;
+    }
+    button {
+      appearance: none;
+      border: 1px solid #405069;
+      border-radius: 6px;
+      background: #202a3a;
+      color: #f7f2df;
+      min-height: 34px;
+      padding: 0 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { background: #2c3a50; }
+    #stage {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+    }
+    #stage svg {
+      width: min(96vw, 1120px);
+      height: auto;
+      max-height: 82vh;
+    }
+    #readout {
+      margin-left: auto;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      color: #9fb4c7;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button id="reset">Reset</button>
+    <button id="fracture">Strike</button>
+    <button id="bind">Bind</button>
+    <div id="readout"></div>
+  </header>
+  <main id="stage" aria-label="Structural material proxy plane"></main>
+  <script type="module">
+    import {
+      applyStructuralMaterialInteraction,
+      bindStructuralMaterialConnectivity,
+      createStructuralMaterialProxyPlane,
+      renderStructuralMaterialSvg,
+      summarizeStructuralMaterialState,
+    } from './structural-material-core.js';
+
+    const stage = document.querySelector('#stage');
+    const readout = document.querySelector('#readout');
+    let material = createStructuralMaterialProxyPlane({ columns: 13, rows: 7, notch: true });
+    let pointerDown = false;
+    let lastPoint = { x: 0.94, y: 0.5 };
+
+    function render() {
+      stage.innerHTML = renderStructuralMaterialSvg(material, {
+        title: 'screen-space sympathetic effigy proxy',
+        width: 960,
+        height: 560,
+      });
+      const summary = summarizeStructuralMaterialState(material);
+      readout.textContent = `broken ${summary.brokenBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
+    }
+
+    function eventPoint(event) {
+      const rect = stage.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+        y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+      };
+    }
+
+    function applyAt(point, magnitude = 1.05) {
+      lastPoint = point;
+      material = applyStructuralMaterialInteraction(material, {
+        kind: 'screen-space-hand-drag',
+        point,
+        vector: { x: point.x > 0.5 ? 1 : -1, y: point.y - 0.5 },
+        magnitude,
+        radius: 0.24,
+      }, { steps: 1 });
+      render();
+    }
+
+    stage.addEventListener('pointerdown', (event) => {
+      pointerDown = true;
+      stage.setPointerCapture(event.pointerId);
+      applyAt(eventPoint(event), 1.35);
+    });
+    stage.addEventListener('pointermove', (event) => {
+      if (!pointerDown) return;
+      applyAt(eventPoint(event), 0.92);
+    });
+    stage.addEventListener('pointerup', (event) => {
+      pointerDown = false;
+      stage.releasePointerCapture(event.pointerId);
+    });
+    document.querySelector('#reset').addEventListener('click', () => {
+      material = createStructuralMaterialProxyPlane({ columns: 13, rows: 7, notch: true });
+      render();
+    });
+    document.querySelector('#fracture').addEventListener('click', () => applyAt(lastPoint, 1.35));
+    document.querySelector('#bind').addEventListener('click', () => {
+      material = bindStructuralMaterialConnectivity(material, {
+        point: lastPoint,
+        radius: 0.18,
+        strength: 1.2,
+      });
+      render();
+    });
+    render();
+  </script>
+</body>
+</html>

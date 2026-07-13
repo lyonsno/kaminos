@@ -1,0 +1,440 @@
+{
+  "schema": "kaminos.structural-material.sidecar.v0",
+  "requestedRoute": "kaminos.structural-material.proxy-plane-fracture.v0",
+  "effectiveRoute": "kaminos.structural-material.proxy-plane-fracture.v0",
+  "solverAuthority": "deterministic-coarse-elastic-graph-force-fracture-v0",
+  "geometryAuthority": "stress-concentration-notched-proxy-plane-v0",
+  "output": "artifacts/structural-material-witness/proxy-plane-fracture.svg",
+  "reportPath": "artifacts/structural-material-witness/proxy-plane-fracture.json",
+  "summaries": {
+    "initial": {
+      "schema": "kaminos.structural-material.sidecar.v0",
+      "route": "kaminos.structural-material.proxy-plane-fracture.v0",
+      "solverAuthority": "deterministic-coarse-elastic-graph-force-fracture-v0",
+      "geometryAuthority": "stress-concentration-notched-proxy-plane-v0",
+      "soundAuthority": "material-derived-sound-impulses-v0",
+      "nodeCount": 91,
+      "bondCount": 285,
+      "brokenBondCount": 0,
+      "repairedBondCount": 0,
+      "componentCount": 1,
+      "maxStress": 0,
+      "maxComponentSeparation": 0,
+      "crackPath": [],
+      "sound": {
+        "impulseEnergy": 0,
+        "brightness": 0,
+        "roughness": 0,
+        "signature": "material-derived-sound-impulses-v0:e0:b0:r0:c0:m0",
+        "eventCount": 0
+      }
+    },
+    "cracked": {
+      "schema": "kaminos.structural-material.sidecar.v0",
+      "route": "kaminos.structural-material.proxy-plane-fracture.v0",
+      "solverAuthority": "deterministic-coarse-elastic-graph-force-fracture-v0",
+      "geometryAuthority": "stress-concentration-notched-proxy-plane-v0",
+      "soundAuthority": "material-derived-sound-impulses-v0",
+      "nodeCount": 91,
+      "bondCount": 285,
+      "brokenBondCount": 18,
+      "repairedBondCount": 0,
+      "componentCount": 3,
+      "maxStress": 2.54458,
+      "maxComponentSeparation": 0.58334,
+      "crackPath": [
+        {
+          "bondId": "b86",
+          "a": "n26",
+          "b": "n38",
+          "midpoint": {
+            "x": 0.5,
+            "y": 0.33333
+          },
+          "stress": 1.60179,
+          "strain": 1.90689,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b107",
+          "a": "n31",
+          "b": "n32",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.33333
+          },
+          "stress": 1.48624,
+          "strain": 1.76933,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b109",
+          "a": "n31",
+          "b": "n45",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.41667
+          },
+          "stress": 1.52945,
+          "strain": 1.82078,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b110",
+          "a": "n32",
+          "b": "n44",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.41667
+          },
+          "stress": 1.40541,
+          "strain": 1.6731,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b111",
+          "a": "n32",
+          "b": "n33",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.33333
+          },
+          "stress": 1.66894,
+          "strain": 1.98683,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b113",
+          "a": "n32",
+          "b": "n46",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.41667
+          },
+          "stress": 1.71746,
+          "strain": 2.04459,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b114",
+          "a": "n33",
+          "b": "n45",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.41667
+          },
+          "stress": 1.57816,
+          "strain": 1.87876,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b136",
+          "a": "n39",
+          "b": "n51",
+          "midpoint": {
+            "x": 0.5,
+            "y": 0.5
+          },
+          "stress": 2.4488,
+          "strain": 2.91524,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b157",
+          "a": "n44",
+          "b": "n45",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.5
+          },
+          "stress": 2.26603,
+          "strain": 2.69766,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b159",
+          "a": "n44",
+          "b": "n58",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.58333
+          },
+          "stress": 1.52945,
+          "strain": 1.82078,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b160",
+          "a": "n45",
+          "b": "n57",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.58333
+          },
+          "stress": 1.40541,
+          "strain": 1.6731,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b161",
+          "a": "n45",
+          "b": "n46",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.5
+          },
+          "stress": 2.54458,
+          "strain": 3.02926,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b163",
+          "a": "n45",
+          "b": "n59",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.58333
+          },
+          "stress": 1.71746,
+          "strain": 2.04459,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b164",
+          "a": "n46",
+          "b": "n58",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.58333
+          },
+          "stress": 1.57816,
+          "strain": 1.87876,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b165",
+          "a": "n46",
+          "b": "n47",
+          "midpoint": {
+            "x": 0.625,
+            "y": 0.5
+          },
+          "stress": 1.38341,
+          "strain": 1.38341,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-shoulder"
+        },
+        {
+          "bondId": "b186",
+          "a": "n52",
+          "b": "n64",
+          "midpoint": {
+            "x": 0.5,
+            "y": 0.66667
+          },
+          "stress": 1.60179,
+          "strain": 1.90689,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b207",
+          "a": "n57",
+          "b": "n58",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.66667
+          },
+          "stress": 1.48624,
+          "strain": 1.76933,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b209",
+          "a": "n58",
+          "b": "n59",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.66667
+          },
+          "stress": 1.66894,
+          "strain": 1.98683,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        }
+      ],
+      "sound": {
+        "impulseEnergy": 5.60683,
+        "brightness": 2.01034,
+        "roughness": 0.3,
+        "signature": "material-derived-sound-impulses-v0:e5.6068:b2.0103:r0.3:c18:m0",
+        "eventCount": 18
+      }
+    },
+    "control": {
+      "schema": "kaminos.structural-material.sidecar.v0",
+      "route": "kaminos.structural-material.proxy-plane-fracture.v0",
+      "solverAuthority": "deterministic-coarse-elastic-graph-force-fracture-v0",
+      "geometryAuthority": "uniform-proxy-plane-control-v0",
+      "soundAuthority": "material-derived-sound-impulses-v0",
+      "nodeCount": 91,
+      "bondCount": 312,
+      "brokenBondCount": 0,
+      "repairedBondCount": 0,
+      "componentCount": 1,
+      "maxStress": 1.31433,
+      "maxComponentSeparation": 0,
+      "crackPath": [],
+      "sound": {
+        "impulseEnergy": 0,
+        "brightness": 0,
+        "roughness": 0,
+        "signature": "material-derived-sound-impulses-v0:e0:b0:r0:c0:m0",
+        "eventCount": 0
+      }
+    },
+    "bound": {
+      "schema": "kaminos.structural-material.sidecar.v0",
+      "route": "kaminos.structural-material.proxy-plane-fracture.v0",
+      "solverAuthority": "deterministic-coarse-elastic-graph-force-fracture-v0",
+      "geometryAuthority": "stress-concentration-notched-proxy-plane-v0",
+      "soundAuthority": "material-derived-sound-impulses-v0",
+      "nodeCount": 91,
+      "bondCount": 285,
+      "brokenBondCount": 8,
+      "repairedBondCount": 10,
+      "componentCount": 1,
+      "maxStress": 1.71746,
+      "maxComponentSeparation": 0,
+      "crackPath": [
+        {
+          "bondId": "b159",
+          "a": "n44",
+          "b": "n58",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.58333
+          },
+          "stress": 1.52945,
+          "strain": 1.82078,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b160",
+          "a": "n45",
+          "b": "n57",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.58333
+          },
+          "stress": 1.40541,
+          "strain": 1.6731,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b163",
+          "a": "n45",
+          "b": "n59",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.58333
+          },
+          "stress": 1.71746,
+          "strain": 2.04459,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b164",
+          "a": "n46",
+          "b": "n58",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.58333
+          },
+          "stress": 1.57816,
+          "strain": 1.87876,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b165",
+          "a": "n46",
+          "b": "n47",
+          "midpoint": {
+            "x": 0.625,
+            "y": 0.5
+          },
+          "stress": 1.38341,
+          "strain": 1.38341,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-shoulder"
+        },
+        {
+          "bondId": "b186",
+          "a": "n52",
+          "b": "n64",
+          "midpoint": {
+            "x": 0.5,
+            "y": 0.66667
+          },
+          "stress": 1.60179,
+          "strain": 1.90689,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b207",
+          "a": "n57",
+          "b": "n58",
+          "midpoint": {
+            "x": 0.45834,
+            "y": 0.66667
+          },
+          "stress": 1.48624,
+          "strain": 1.76933,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        },
+        {
+          "bondId": "b209",
+          "a": "n58",
+          "b": "n59",
+          "midpoint": {
+            "x": 0.54167,
+            "y": 0.66667
+          },
+          "stress": 1.66894,
+          "strain": 1.98683,
+          "cause": "stress-threshold",
+          "geometryRole": "notch-bridge"
+        }
+      ],
+      "sound": {
+        "impulseEnergy": 6.15707,
+        "brightness": 3,
+        "roughness": 0.16786,
+        "signature": "material-derived-sound-impulses-v0:e6.1571:b3:r0.1679:c8:m10",
+        "eventCount": 28
+      }
+    }
+  },
+  "claimBoundary": "deterministic coarse structural graph witness; not engineering-exact fracture prediction"
+}
