@@ -97,8 +97,8 @@ try {
     warmupSamples,
     steadySamples,
   })})`, true);
-  validateLadder(ladder);
   lastTrustworthyEvidence.ladder = ladder;
+  validateLadder(ladder);
 
   failurePhase = 'native-100-flame-capture';
   const capture = await evaluate(`window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({

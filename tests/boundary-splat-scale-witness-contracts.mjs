@@ -20,6 +20,7 @@ assert.match(witness, /finalTargetReachable/, 'scale witness must observe final 
 assert.match(witness, /pageId:\s*browserPageId/, 'failure browser evidence must preserve the selected page id');
 assert.match(witness, /lastTrustworthyEvidence\.composedCapture/, 'late browser failures must preserve completed capture evidence');
 assert.match(witness, /lastTrustworthyEvidence\.finalState/, 'late browser failures must preserve the last validated runtime state');
+assert.match(witness, /lastTrustworthyEvidence\.ladder\s*=\s*ladder;\s*validateLadder/s, 'rejected timestamp ladders must be preserved before validation');
 assert.match(witness, /preserved-open/, 'scale witness must leave the existing browser session open');
 assert.match(witness, /failed-before-primary-output/, 'scale witness must write a durable failure report before primary output exists');
 assert.match(witness, /stale-or-default-config/, 'scale witness must fail loud when requested composition or instance controls do not become effective');
@@ -31,6 +32,8 @@ assert.match(core, /minimumHistoryFrames/, 'history prime must derive a falsifia
 assert.match(core, /simStepCountBefore/, 'GPU ladder must record simulator state before serial measurements');
 assert.match(core, /simStepCountAfter/, 'GPU ladder must record simulator state after serial measurements');
 assert.match(core, /timestampStatus:\s*'available'/, 'GPU ladder must require timestamp-backed stage evidence');
+assert.match(core, /compactTimestampWrites/, 'GPU timing must bracket compaction with timestamps on the real compact pass');
+assert.match(core, /requiredTimestampIndices/, 'GPU timing must validate only timestamps backed by real passes in frozen mode');
 assert.match(page, /boundarySplatCompositionCameraPose/, 'page must own a deterministic camera pose for composed-field routes');
 assert.match(page, /boundary-splat-composed-field-camera-v0/, 'camera telemetry must publish the effective composed-field camera identity');
 

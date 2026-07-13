@@ -8699,7 +8699,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       0, 0, boundarySplatCapacity, requestedInstanceCount,
       0, phaseSourceCount, historyWriteSlot, historyDepth,
     ]));
-    const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
+    const compactPass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass`,
+      ...(hooks.compactTimestampWrites ? { timestampWrites: hooks.compactTimestampWrites } : {}),
+    });
     compactPass.setPipeline(boundarySplatCompactPipeline);
     compactPass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
     const workgroups = Math.ceil(gridSize / 4);
@@ -8800,7 +8803,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }));
     }
 
-    const queryCount = 7;
+    const queryCount = 9;
     const querySet = device.createQuerySet({
       type: 'timestamp',
       count: queryCount,
@@ -8820,30 +8823,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ensureFrameTexture();
       device.pushErrorScope('validation');
       const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
-      const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
       if (advanceSimulation) {
         encodeSim(encoder, {
           timestampWrites: {
             querySet,
             beginningOfPassWriteIndex: 0,
+            endOfPassWriteIndex: 1,
           },
         });
-        writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
         encodeBoundarySidecar(encoder, {
           timestampWrites: {
             querySet,
-            endOfPassWriteIndex: 2,
+            beginningOfPassWriteIndex: 2,
+            endOfPassWriteIndex: 3,
           },
         });
-      } else {
-        writeTimestamp(0, 'kaminos boundary splat frozen profile start');
-        writeTimestamp(1, 'kaminos boundary splat frozen simulation marker');
-        writeTimestamp(2, 'kaminos boundary splat reused sidecar marker');
       }
       const splatsEncoded = encodeBoundarySplats(encoder, {
+        compactTimestampWrites: {
+          querySet,
+          beginningOfPassWriteIndex: 4,
+        },
         finalizeTimestampWrites: {
           querySet,
-          endOfPassWriteIndex: 3,
+          endOfPassWriteIndex: 5,
         },
       });
       if (!splatsEncoded) {
@@ -8852,8 +8855,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
         timestampWrites: {
           querySet,
-          beginningOfPassWriteIndex: 4,
-          endOfPassWriteIndex: 5,
+          beginningOfPassWriteIndex: 6,
+          endOfPassWriteIndex: 7,
         },
       });
       if (!splatApplied) {
@@ -8862,7 +8865,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeDraw(encoder, frameTexture.createView(), 'kaminos boundary splat matched raymarch timestamp pass', readbackPipeline, {
         timestampWrites: {
           querySet,
-          endOfPassWriteIndex: 6,
+          endOfPassWriteIndex: 8,
         },
       });
       encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
@@ -8875,12 +8878,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (validationError) {
         throw new Error(validationError.message || String(validationError));
       }
-      if (timestamps.some(value => value === 0n)) {
-        throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
+      const requiredTimestampIndices = advanceSimulation
+        ? [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        : [4, 5, 6, 7, 8];
+      const requiredTimestamps = requiredTimestampIndices.map(index => timestamps[index]);
+      if (requiredTimestamps.some(value => value === 0n)) {
+        throw new Error(`timestamp-query-incomplete:${requiredTimestampIndices.map(index => `${index}:${timestamps[index]}`).join(',')}`);
       }
-      for (let index = 1; index < timestamps.length; index += 1) {
-        if (timestamps[index] < timestamps[index - 1]) {
-          throw new Error(`timestamp-query-nonmonotonic:${Array.from(timestamps, value => value.toString()).join(',')}`);
+      for (let index = 1; index < requiredTimestamps.length; index += 1) {
+        if (requiredTimestamps[index] < requiredTimestamps[index - 1]) {
+          throw new Error(`timestamp-query-nonmonotonic:${requiredTimestampIndices.map(queryIndex => `${queryIndex}:${timestamps[queryIndex]}`).join(',')}`);
         }
       }
       const nsToMs = (endIndex, startIndex) => Number(timestamps[endIndex] - timestamps[startIndex]) / 1_000_000;
@@ -8895,17 +8902,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             ? makeBoundarySplatStage('sampled', nsToMs(1, 0))
             : makeBoundarySplatStage('frozen-not-run', 0),
           sidecar: advanceSimulation
-            ? makeBoundarySplatStage('sampled', nsToMs(2, 1))
+            ? makeBoundarySplatStage('sampled', nsToMs(3, 2))
             : makeBoundarySplatStage('reused-live-current-state', 0),
-          compaction: makeBoundarySplatStage('sampled', nsToMs(3, 2)),
+          compaction: makeBoundarySplatStage('sampled', nsToMs(5, 4)),
           candidateCopy: makeBoundarySplatStage('sampled', 0, {
             disposition: 'removed-full-capacity-copy',
             candidateCopyBytes,
           }),
-          indirectSetup: makeBoundarySplatStage('sampled', nsToMs(4, 3)),
-          splatRaster: makeBoundarySplatStage('sampled', nsToMs(5, 4)),
-          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(6, 5)),
-          total: makeBoundarySplatStage('sampled', nsToMs(6, advanceSimulation ? 0 : 2)),
+          indirectSetup: makeBoundarySplatStage('sampled', nsToMs(6, 5)),
+          splatRaster: makeBoundarySplatStage('sampled', nsToMs(7, 6)),
+          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(8, 7)),
+          total: makeBoundarySplatStage('sampled', nsToMs(8, advanceSimulation ? 0 : 4)),
         },
       }));
     } catch (error) {

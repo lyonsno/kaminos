@@ -80,8 +80,8 @@ assert.match(core, /boundarySplatTimestampStatus:\s*'(?:unsupported|available)'/
 assert.match(core, /timestamp-query/, 'splat timing explicitly requests WebGPU timestamp-query support when available');
 assert.match(core, /timestampWrites:\s*\{[\s\S]*querySet[\s\S]*endOfPassWriteIndex/, 'splat timing uses current pass-descriptor timestamp writes');
 assert.doesNotMatch(core, /encoder\.writeTimestamp/, 'splat timing does not depend on the removed command-encoder timestamp API');
-assert.match(core, /timestamps\.some\(value\s*=>\s*value\s*===\s*0n\)/, 'splat timing rejects incomplete timestamp query writes');
-assert.match(core, /timestamps\[index\]\s*<\s*timestamps\[index\s*-\s*1\]/, 'splat timing rejects nonmonotonic timestamp results');
+assert.match(core, /requiredTimestamps\.some\(value\s*=>\s*value\s*===\s*0n\)/, 'splat timing rejects incomplete writes for every timestamp backed by an executed pass');
+assert.match(core, /requiredTimestamps\[index\]\s*<\s*requiredTimestamps\[index\s*-\s*1\]/, 'splat timing rejects nonmonotonic results across executed pass timestamps');
 assert.match(core, /boundarySplatGpuProfile[\s\S]*simulation[\s\S]*sidecar[\s\S]*compaction[\s\S]*candidateCopy[\s\S]*indirectSetup[\s\S]*splatRaster[\s\S]*matchedRaymarchRaster[\s\S]*total/, 'splat profile names every required timing stage');
 assert.match(core, /boundarySplatCopyDisposition[\s\S]*removed-full-capacity-copy/, 'splat state records the full-capacity candidate-copy disposition');
 assert.match(core, /candidateCopyBytes[\s\S]*boundarySplatCopyBytesThisFrame/, 'splat profile records effective candidate-copy bytes');
