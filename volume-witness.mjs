@@ -139,6 +139,8 @@ const boundarySplatSupervisionDirArg = args.get('--boundary-splat-supervision-di
 const boundarySplatSupervisionDir = typeof boundarySplatSupervisionDirArg === 'string'
   ? resolve(boundarySplatSupervisionDirArg)
   : null;
+const boundarySplatSupervisionFrames = Math.max(1, Math.floor(Number(args.get('--boundary-splat-supervision-frames') || 1)));
+const boundarySplatSupervisionStepDeltaMs = Math.max(0, Number(args.get('--boundary-splat-supervision-step-delta-ms') || 220));
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || (boundarySplatSupervisionDir
   ? join(boundarySplatSupervisionDir, 'report.json')
@@ -2308,97 +2310,145 @@ async function readCachedBrowserBytes(ws, cacheName, expectedLength, label) {
 async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedCamera = null) {
   mkdirSync(outputDir, { recursive: true });
   const supervisionReportPath = join(outputDir, 'report.json');
-  let supervisionPhase = 'invoke-live-capture';
+  let supervisionPhase = 'initialize-sequence';
+  let capturedFrameCount = 0;
   try {
-    const captureEval = await wsRequest(ws, 'Runtime.evaluate', {
-      expression: `(async () => {
-        const capture = await window.__kaminosVolumePrototype?.captureBoundarySplatSupervisionFrame?.({
-          renderScale: 1,
-          resumeRenderLoop: false,
-        });
-        if (!capture?.ok) throw new Error('fixed-candidate supervision capture failed: ' + JSON.stringify(capture));
-        const candidatePayload = capture.candidates?.packedFloat32Base64;
-        if (capture.candidates?.packedEncoding !== 'float32-le-base64' || typeof candidatePayload !== 'string') {
-          throw new Error('fixed-candidate supervision capture omitted packed float32 candidates');
-        }
-        const binary = atob(candidatePayload);
-        window.__kaminosBoundarySplatSupervisionCandidates = Uint8Array.from(binary, character => character.charCodeAt(0));
-        const targetRgba = capture.target?.image?.rgba;
-        if (!Array.isArray(targetRgba)) throw new Error('fixed-candidate supervision capture omitted target RGBA');
-        window.__kaminosBoundarySplatSupervisionTarget = Uint8Array.from(targetRgba);
-        const { packedFloat32Base64, ...candidateMetadata } = capture.candidates;
-        const { image, ...targetMetadata } = capture.target;
-        return {
-          ...capture,
-          candidates: {
-            ...candidateMetadata,
-            expectedLength: window.__kaminosBoundarySplatSupervisionCandidates.length,
-          },
-          target: {
-            ...targetMetadata,
-            width: image.width,
-            height: image.height,
-            expectedLength: window.__kaminosBoundarySplatSupervisionTarget.length,
-          },
-        };
-      })()`,
-      awaitPromise: true,
+    const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+    const sequenceStartEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: 'performance.now()',
       returnByValue: true,
     });
-    if (captureEval.exceptionDetails) {
-      throw new Error(`fixed-candidate supervision runtime failed: ${captureEval.exceptionDetails.text || 'runtime exception'}`);
-    }
-    const capture = captureEval.result.value;
-    assert.equal(capture?.authority, 'live-simulator-frozen-state-candidate-raymarch-v0', 'wrong supervision capture authority');
-    assert.equal(capture?.candidates?.rendererIdentity, 'live-boundary-sidecar-analytic-splats-v0', 'wrong supervision candidate renderer');
-    assert.equal(capture?.target?.rendererIdentity, 'native-3d-compute-fluid-raymarch-v0', 'wrong supervision target renderer');
+    const sequenceStartNowMs = Number(sequenceStartEval.result.value);
+    if (!Number.isFinite(sequenceStartNowMs)) throw new Error('fixed-candidate supervision sequence clock unavailable');
+    const sequenceIdentity = `same-browser-supervision-${Math.round(sequenceStartNowMs)}`;
+    const frames = [];
 
-    supervisionPhase = 'transport-candidates';
-    const candidateTransport = await readCachedBrowserBytes(
-      ws,
-      '__kaminosBoundarySplatSupervisionCandidates',
-      Number(capture.candidates.expectedLength),
-      'fixed-candidate supervision candidates',
-    );
-    supervisionPhase = 'transport-target';
-    const targetTransport = await readCachedBrowserBytes(
-      ws,
-      '__kaminosBoundarySplatSupervisionTarget',
-      Number(capture.target.expectedLength),
-      'fixed-candidate supervision target',
-    );
+    for (let frameIndex = 0; frameIndex < boundarySplatSupervisionFrames; frameIndex += 1) {
+      const frameId = `frame-${String(frameIndex).padStart(3, '0')}`;
+      const controlledNowMs = sequenceStartNowMs + frameIndex * boundarySplatSupervisionStepDeltaMs;
+      let stepReceipt = null;
+      if (frameIndex > 0) {
+        supervisionPhase = `advance-simulator-${frameId}`;
+        const stepEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `(async () => {
+            const prototype = window.__kaminosVolumePrototype;
+            const before = prototype?.debugState?.();
+            const sample = await prototype?.sampleFrame?.({
+              advanceSim: true,
+              includeRgba: false,
+              now: ${JSON.stringify(controlledNowMs)},
+              sameStateCaptureId: ${JSON.stringify(`${sequenceIdentity}-advance-${frameIndex}`)},
+            });
+            const after = prototype?.debugState?.();
+            return {
+              ok: sample?.ok === true,
+              sampleAuthority: sample?.sampleAuthority || null,
+              beforeFrameCount: before?.frameCount ?? null,
+              beforeSimStepCount: before?.simStepCount ?? null,
+              afterFrameCount: after?.frameCount ?? null,
+              afterSimStepCount: after?.simStepCount ?? null,
+            };
+          })()`,
+          awaitPromise: true,
+          returnByValue: true,
+        });
+        if (stepEval.exceptionDetails) {
+          throw new Error(`fixed-candidate supervision simulator advance failed: ${stepEval.exceptionDetails.text || 'runtime exception'}`);
+        }
+        stepReceipt = stepEval.result.value;
+        if (stepReceipt?.ok !== true || stepReceipt.sampleAuthority !== 'sim-advanced-frame-readback') {
+          throw new Error(`fixed-candidate supervision simulator advance rejected: ${JSON.stringify(stepReceipt)}`);
+        }
+        if (!(Number(stepReceipt.afterSimStepCount) > Number(stepReceipt.beforeSimStepCount))) {
+          throw new Error(`fixed-candidate supervision simulator step did not advance: ${JSON.stringify(stepReceipt)}`);
+        }
+      }
 
-    const candidatePath = join(outputDir, 'frame-000.candidates.f32');
-    const targetPath = join(outputDir, 'frame-000.raymarch.png');
-    writeFileSync(candidatePath, candidateTransport.bytes);
-    writeRgbaPng(targetPath, capture.target.width, capture.target.height, targetTransport.bytes);
-    const targetBytes = readFileSync(targetPath);
-    supervisionPhase = 'validate-target-visual';
-    const targetVisualMetrics = measureScreenshot(targetBytes);
-    if (capture.target.decomposition !== BOUNDARY_SPLAT_SUPERVISION_TARGET_DECOMPOSITION) {
-      throw new Error(`fixed-candidate supervision target decomposition mismatch: ${capture.target.decomposition || 'missing'}`);
-    }
-    if (targetVisualMetrics.meanLuma < 1.5) {
-      throw new Error(`fixed-candidate supervision target is blank or nearly blank: meanLuma=${targetVisualMetrics.meanLuma.toFixed(3)}`);
-    }
-    if (targetVisualMetrics.litPixels < 80) {
-      throw new Error(`fixed-candidate supervision target has no usable lit flame support: litPixels=${targetVisualMetrics.litPixels}`);
-    }
-    if (targetVisualMetrics.litFraction > 0.72) {
-      throw new Error(`fixed-candidate supervision target is an overbroad slab: litFraction=${targetVisualMetrics.litFraction.toFixed(3)}`);
-    }
-    if (targetVisualMetrics.meanLuma > 180) {
-      throw new Error(`fixed-candidate supervision target is globally blown out: meanLuma=${targetVisualMetrics.meanLuma.toFixed(3)}`);
-    }
-    const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-    const manifestPath = join(outputDir, 'corpus.json');
-    const manifest = {
-      schema: BOUNDARY_SPLAT_SUPERVISION_SCHEMA,
-      authority: 'live-simulator-frozen-state-candidate-raymarch-v0',
-      candidateOrder: BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
-      featureOrder: BOUNDARY_SPLAT_ATTRIBUTE_FEATURES,
-      frames: [{
-        id: 'frame-000',
+      supervisionPhase = `invoke-live-capture-${frameId}`;
+      const captureEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const capture = await window.__kaminosVolumePrototype?.captureBoundarySplatSupervisionFrame?.({
+            renderScale: 1,
+            resumeRenderLoop: false,
+            now: ${JSON.stringify(controlledNowMs)},
+            sameStateCaptureId: ${JSON.stringify(`${sequenceIdentity}-${frameId}`)},
+          });
+          if (!capture?.ok) throw new Error('fixed-candidate supervision capture failed: ' + JSON.stringify(capture));
+          const candidatePayload = capture.candidates?.packedFloat32Base64;
+          if (capture.candidates?.packedEncoding !== 'float32-le-base64' || typeof candidatePayload !== 'string') {
+            throw new Error('fixed-candidate supervision capture omitted packed float32 candidates');
+          }
+          const binary = atob(candidatePayload);
+          window.__kaminosBoundarySplatSupervisionCandidates = Uint8Array.from(binary, character => character.charCodeAt(0));
+          const targetRgba = capture.target?.image?.rgba;
+          if (!Array.isArray(targetRgba)) throw new Error('fixed-candidate supervision capture omitted target RGBA');
+          window.__kaminosBoundarySplatSupervisionTarget = Uint8Array.from(targetRgba);
+          const { packedFloat32Base64, ...candidateMetadata } = capture.candidates;
+          const { image, ...targetMetadata } = capture.target;
+          return {
+            ...capture,
+            candidates: {
+              ...candidateMetadata,
+              expectedLength: window.__kaminosBoundarySplatSupervisionCandidates.length,
+            },
+            target: {
+              ...targetMetadata,
+              width: image.width,
+              height: image.height,
+              expectedLength: window.__kaminosBoundarySplatSupervisionTarget.length,
+            },
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (captureEval.exceptionDetails) {
+        throw new Error(`fixed-candidate supervision runtime failed: ${captureEval.exceptionDetails.text || 'runtime exception'}`);
+      }
+      const capture = captureEval.result.value;
+      assert.equal(capture?.authority, 'live-simulator-frozen-state-candidate-raymarch-v0', 'wrong supervision capture authority');
+      assert.equal(capture?.candidates?.rendererIdentity, 'live-boundary-sidecar-analytic-splats-v0', 'wrong supervision candidate renderer');
+      assert.equal(capture?.target?.rendererIdentity, 'native-3d-compute-fluid-raymarch-v0', 'wrong supervision target renderer');
+
+      supervisionPhase = `transport-candidates-${frameId}`;
+      const candidateTransport = await readCachedBrowserBytes(
+        ws,
+        '__kaminosBoundarySplatSupervisionCandidates',
+        Number(capture.candidates.expectedLength),
+        `fixed-candidate supervision candidates ${frameId}`,
+      );
+      supervisionPhase = `transport-target-${frameId}`;
+      const targetTransport = await readCachedBrowserBytes(
+        ws,
+        '__kaminosBoundarySplatSupervisionTarget',
+        Number(capture.target.expectedLength),
+        `fixed-candidate supervision target ${frameId}`,
+      );
+
+      const candidatePath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.candidates.f32`);
+      const targetPath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.raymarch.png`);
+      writeFileSync(candidatePath, candidateTransport.bytes);
+      writeRgbaPng(targetPath, capture.target.width, capture.target.height, targetTransport.bytes);
+      const targetBytes = readFileSync(targetPath);
+      supervisionPhase = `validate-target-visual-${frameId}`;
+      const targetVisualMetrics = measureScreenshot(targetBytes);
+      if (capture.target.decomposition !== BOUNDARY_SPLAT_SUPERVISION_TARGET_DECOMPOSITION) {
+        throw new Error(`fixed-candidate supervision target decomposition mismatch: ${capture.target.decomposition || 'missing'}`);
+      }
+      if (targetVisualMetrics.meanLuma < 1.5) {
+        throw new Error(`fixed-candidate supervision target is blank or nearly blank: meanLuma=${targetVisualMetrics.meanLuma.toFixed(3)}`);
+      }
+      if (targetVisualMetrics.litPixels < 80) {
+        throw new Error(`fixed-candidate supervision target has no usable lit flame support: litPixels=${targetVisualMetrics.litPixels}`);
+      }
+      if (targetVisualMetrics.litFraction > 0.72) {
+        throw new Error(`fixed-candidate supervision target is an overbroad slab: litFraction=${targetVisualMetrics.litFraction.toFixed(3)}`);
+      }
+      if (targetVisualMetrics.meanLuma > 180) {
+        throw new Error(`fixed-candidate supervision target is globally blown out: meanLuma=${targetVisualMetrics.meanLuma.toFixed(3)}`);
+      }
+      frames.push({
+        id: frameId,
         sameStateCaptureId: capture.sameStateCaptureId,
         simStepCount: capture.baseSimStepCount,
         grid: capture.grid,
@@ -2410,6 +2460,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         camera: capture.camera,
         replayedCamera,
         splatControls: capture.splatControls,
+        stepReceipt,
         candidates: {
           path: candidatePath,
           bytes: candidateTransport.bytes.length,
@@ -2417,6 +2468,8 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
           count: capture.candidates.rowCount,
           strideFloats: capture.candidates.strideFloats,
           dtype: 'float32-le',
+          transportChunkBytes: candidateTransport.chunkBytes,
+          transportChunkCount: candidateTransport.chunkCount,
         },
         target: {
           path: targetPath,
@@ -2428,8 +2481,38 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
           width: capture.target.width,
           height: capture.target.height,
           visualMetrics: targetVisualMetrics,
+          transportChunkBytes: targetTransport.chunkBytes,
+          transportChunkCount: targetTransport.chunkCount,
         },
-      }],
+      });
+      capturedFrameCount = frames.length;
+    }
+
+    const captureIds = new Set(frames.map(frame => frame.sameStateCaptureId));
+    const strictlyIncreasingSteps = frames.every((frame, index) => index === 0 || frame.simStepCount > frames[index - 1].simStepCount);
+    const sameBrowserSequenceSuitable = frames.length === boundarySplatSupervisionFrames
+      && captureIds.size === frames.length
+      && (frames.length === 1 || strictlyIncreasingSteps);
+    if (!sameBrowserSequenceSuitable) {
+      throw new Error(`fixed-candidate supervision sequence identity failed: ${JSON.stringify({
+        requestedFrameCount: boundarySplatSupervisionFrames,
+        capturedFrameCount: frames.length,
+        captureIdCount: captureIds.size,
+        strictlyIncreasingSteps,
+      })}`);
+    }
+
+    const manifestPath = join(outputDir, 'corpus.json');
+    const manifest = {
+      schema: BOUNDARY_SPLAT_SUPERVISION_SCHEMA,
+      authority: 'live-simulator-frozen-state-candidate-raymarch-v0',
+      candidateOrder: BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
+      featureOrder: BOUNDARY_SPLAT_ATTRIBUTE_FEATURES,
+      sequenceAuthority: 'single-browser-controlled-step-supervision-v0',
+      requestedFrameCount: boundarySplatSupervisionFrames,
+      stepDeltaMs: boundarySplatSupervisionStepDeltaMs,
+      sameBrowserSequenceSuitable,
+      frames,
     };
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     supervisionPhase = 'validate-corpus';
@@ -2438,27 +2521,19 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       ok: true,
       phase: 'complete',
       authority: manifest.authority,
-      requestedRoute: capture.requestedRoute,
-      effectiveRoute: capture.effectiveRoute,
-      backend: capture.backend,
-      sameStateCaptureId: capture.sameStateCaptureId,
-      baseFrameCount: capture.baseFrameCount,
-      baseSimStepCount: capture.baseSimStepCount,
+      sequenceAuthority: manifest.sequenceAuthority,
+      requestedFrameCount: boundarySplatSupervisionFrames,
+      capturedFrameCount: frames.length,
+      stepDeltaMs: boundarySplatSupervisionStepDeltaMs,
+      sameBrowserSequenceSuitable,
+      requestedRoute: frames[0].requestedRoute,
+      effectiveRoute: frames[0].effectiveRoute,
       replayedCamera,
-      targetVisualMetrics,
-      candidateTransport: {
-        bytes: candidateTransport.bytes.length,
-        chunkBytes: candidateTransport.chunkBytes,
-        chunkCount: candidateTransport.chunkCount,
-      },
-      targetTransport: {
-        bytes: targetTransport.bytes.length,
-        chunkBytes: targetTransport.chunkBytes,
-        chunkCount: targetTransport.chunkCount,
-      },
+      frameIds: frames.map(frame => frame.id),
+      sameStateCaptureIds: frames.map(frame => frame.sameStateCaptureId),
+      simStepCounts: frames.map(frame => frame.simStepCount),
+      targetVisualMetrics: frames.map(frame => frame.target.visualMetrics),
       manifestPath,
-      candidatePath,
-      targetPath,
       validation,
     };
     writeFileSync(supervisionReportPath, JSON.stringify(report, null, 2));
@@ -2468,6 +2543,8 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       ok: false,
       phase: supervisionPhase,
       requestedRoute: url,
+      requestedFrameCount: boundarySplatSupervisionFrames,
+      capturedFrameCount,
       error: error?.message || String(error),
     };
     writeFileSync(supervisionReportPath, JSON.stringify(failure, null, 2));
