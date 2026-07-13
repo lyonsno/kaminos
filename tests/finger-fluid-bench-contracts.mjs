@@ -70,6 +70,7 @@ assert.match(webgpuCoreSource, /vorticityPassCount/, 'runtime evidence reports e
 assert.match(webgpuCoreSource, /vorticityUpdateInterval/, 'runtime evidence reports the effective vorticity cadence');
 assert.match(webgpuCoreSource, /isObstacle/, 'the direct renderer distinguishes shared obstacle support geometry');
 assert.match(webgpuCoreSource, /pass\.draw\(6, safeParticleCount \+ 1\)/, 'the exact solver obstacle is rendered as one additional instance');
+assert.match(webgpuCoreSource, /obstacle:\s*\{[^}]*rendered:\s*directRenderFrameCount\s*>\s*0[^}]*\}/, 'obstacle render evidence derives from an actual submitted render frame');
 
 assert.match(indexSource, /data-tab="finger-fluid-bench"/, 'Kaminos sidebar exposes a Finger Fluid bench tab');
 assert.match(indexSource, /id="tab-finger-fluid-bench"/, 'Kaminos app shell contains Finger Fluid bench content');
@@ -98,6 +99,7 @@ assert.match(benchWitnessSource, /webgpu_direct_render/, 'bench witness requires
 assert.match(benchWitnessSource, /linkedCellGridBuildCount/, 'bench witness requires linked-cell grid evidence');
 assert.match(benchWitnessSource, /densityIterationCount/, 'bench witness requires density iteration evidence');
 assert.match(benchWitnessSource, /vorticityPassCount/, 'bench witness requires vorticity execution evidence');
+assert.match(benchWitnessSource, /Number\.isSafeInteger\(lastDebugState\.runtime\?\.vorticityPassCount\)/, 'bench witness rejects missing or malformed vorticity pass counts before comparing them');
 assert.match(benchWitnessSource, /averageVorticity/, 'bench witness requires quantitative curl evidence');
 assert.match(benchWitnessSource, /shared-solver-render-obstacle-v0/, 'bench witness requires attributable obstacle geometry');
 assert.match(benchWitnessSource, /activeExtent3d/, 'bench witness requires non-flat 3D extent evidence');

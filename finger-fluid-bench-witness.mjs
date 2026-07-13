@@ -229,6 +229,7 @@ async function main() {
     if (lastDebugState.runtime?.linkedCellGridBuildCount < 20) throw new Error(`missing linked-cell grid builds: ${lastDebugState.runtime?.linkedCellGridBuildCount}`);
     if (lastDebugState.runtime?.densityIterationCount < 60) throw new Error(`missing density iterations: ${lastDebugState.runtime?.densityIterationCount}`);
     if (lastDebugState.runtime?.vorticityUpdateInterval !== 3) throw new Error(`unexpected vorticity update interval: ${lastDebugState.runtime?.vorticityUpdateInterval}`);
+    if (!Number.isSafeInteger(lastDebugState.runtime?.vorticityPassCount)) throw new Error(`missing or malformed vorticity pass count: ${lastDebugState.runtime?.vorticityPassCount}`);
     const minimumVorticityPassCount = Math.floor(lastDebugState.runtime.stepCount / lastDebugState.runtime.vorticityUpdateInterval) * 2;
     if (lastDebugState.runtime?.vorticityPassCount < minimumVorticityPassCount) throw new Error(`missing temporally scheduled two-stage vorticity passes: ${JSON.stringify({ actual: lastDebugState.runtime?.vorticityPassCount, minimum: minimumVorticityPassCount })}`);
     if (lastDebugState.runtime?.directRenderFrameCount < 20) throw new Error(`missing direct GPU render frames: ${lastDebugState.runtime?.directRenderFrameCount}`);

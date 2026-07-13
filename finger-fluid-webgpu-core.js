@@ -885,7 +885,7 @@ export async function createWebGPUFingerFluidSolver({
       densityContract: KAMINOS_FINGER_FLUID_DENSITY_CONTRACT,
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
-      obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: true },
+      obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
       renderRoute: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,
       renderShaderRoute: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE,
