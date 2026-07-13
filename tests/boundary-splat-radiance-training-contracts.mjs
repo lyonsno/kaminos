@@ -44,6 +44,8 @@ assert.match(script, /explicit-disjoint-frame-holdout-v0/, 'radiance receipts di
 assert.match(script, /"trainFrameIds"/, 'training receipts preserve the exact optimized frame identities');
 assert.match(script, /"evaluationFrameIds"/, 'training receipts preserve the exact held-out frame identities');
 assert.match(script, /"evaluationFrames"/, 'radiance receipts preserve per-frame held-out optical metrics and previews');
+assert.match(script, /"trainingLossTrace"\s*:\s*training_losses/, 'optimization traces contain only the selected training-frame objective');
+assert.match(script, /"evaluationLossAuthority"\s*:\s*"held-out-frame-mean-v0"/, 'explicit holdout receipts label evaluation loss separately from the optimizer trace');
 assert.match(script, /--candidate-table-oracle/, 'radiance trainer exposes a non-deployable per-candidate representational oracle');
 assert.match(script, /class\s+CandidateAttributeTable\(nn\.Module\)/, 'candidate oracle owns independently trainable attributes per splat');
 assert.match(script, /per-candidate-free-attribute-oracle-v0/, 'candidate oracle receipts distinguish diagnostic authority from deployable MLP authority');

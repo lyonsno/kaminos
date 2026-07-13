@@ -952,18 +952,21 @@ def main():
         initial_pixel_loss = mean_metric(initial_evaluation_rows, "pixelLoss")
         initial_edge_loss = mean_metric(initial_evaluation_rows, "edgeLoss")
         initial_loss = mean_metric(initial_evaluation_rows, "loss")
-        losses = [{"step": 0, "loss": initial_loss}]
+
+        def loss_fn(active_model):
+            total = mx.array(0.0)
+            for geometry, initial_radius_values in zip(training_geometries, training_initial_radius):
+                prediction, attributes = render_frame(active_model, geometry, lower, span, args.depth_bins)
+                total = total + image_loss(prediction, geometry["target"], args.edge_weight)
+                total = total + mx.mean(mx.square(attributes[:, 4:6] - initial_radius_values)) * args.radius_preservation
+            return total / len(training_geometries)
+
+        initial_training_loss_value = loss_fn(model)
+        mx.eval(initial_training_loss_value)
+        training_losses = [{"step": 0, "loss": float(initial_training_loss_value.item())}]
         if not args.probe_only and args.steps > 0:
             phase = "training"
             optimizer = optim.Adam(learning_rate=args.learning_rate)
-
-            def loss_fn(active_model):
-                total = mx.array(0.0)
-                for geometry, initial_radius_values in zip(training_geometries, training_initial_radius):
-                    prediction, attributes = render_frame(active_model, geometry, lower, span, args.depth_bins)
-                    total = total + image_loss(prediction, geometry["target"], args.edge_weight)
-                    total = total + mx.mean(mx.square(attributes[:, 4:6] - initial_radius_values)) * args.radius_preservation
-                return total / len(training_geometries)
 
             loss_and_grad = nn.value_and_grad(model, loss_fn)
             for step in range(args.steps):
@@ -971,7 +974,7 @@ def main():
                 optimizer.update(model, gradients)
                 mx.eval(model.parameters(), optimizer.state, loss)
                 if step == 0 or (step + 1) % 20 == 0 or step + 1 == args.steps:
-                    losses.append({"step": step + 1, "loss": float(loss.item())})
+                    training_losses.append({"step": step + 1, "loss": float(loss.item())})
         phase = "trained-preview"
         trained_evaluation_rows = evaluate_frame_set(
             model,
@@ -1085,6 +1088,7 @@ def main():
                 "messageSize": message_size,
                 "basePathFrozen": bool(args.freeze_base),
                 "frameSplitAuthority": frame_split["authority"],
+                "evaluationLossAuthority": "held-out-frame-mean-v0" if frame_split["authority"] == "explicit-disjoint-frame-holdout-v0" else "train-frame-mean-v0",
                 "trainFrameIndices": frame_split["trainIndices"],
                 "trainFrameIds": frame_split["trainFrameIds"],
                 "evaluationFrameIndices": frame_split["evaluationIndices"],
@@ -1101,7 +1105,10 @@ def main():
                 "trainedPixelLoss": trained_pixel_loss,
                 "initialEdgeLoss": initial_edge_loss,
                 "trainedEdgeLoss": trained_edge_loss,
-                "lossTrace": losses,
+                "trainingInitialLoss": training_losses[0]["loss"],
+                "trainingTrainedLoss": training_losses[-1]["loss"],
+                "trainingLossTrace": training_losses,
+                "lossTrace": training_losses,
             },
             "evaluationFrames": evaluation_frames,
             "previews": {
