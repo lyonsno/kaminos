@@ -22,6 +22,18 @@ export function quotaRankedBirthOpacityScale(rawBirthProbability, calibratedPrec
   return Math.max(0.05, Math.min(rawBirthProbability, calibratedPrecision));
 }
 
+export function quotaRankedBirthDecision(rawBirthProbability, diagnosticThreshold, calibratedPrecision) {
+  if (!Number.isFinite(diagnosticThreshold)) {
+    throw new Error('quota-ranked birth decision requires a finite diagnostic threshold');
+  }
+  return {
+    rawProbability: rawBirthProbability,
+    diagnosticThreshold,
+    rankingScore: rawBirthProbability - diagnosticThreshold,
+    opacityScale: quotaRankedBirthOpacityScale(rawBirthProbability, calibratedPrecision),
+  };
+}
+
 function finiteArray(values, length, label) {
   if (!Array.isArray(values) || values.length !== length || values.some(value => !Number.isFinite(value))) {
     throw new Error(`${label} must contain ${length} finite numbers`);
@@ -1446,10 +1458,15 @@ async function runLocalGridOccupancyRenderWitness(context) {
             || (survivalMargin >= 0 && survivalMargin >= deathMargin);
         } else {
           const birth = conditionalHeads.birth.head.predict(input);
-          supportHeadProbabilityByKey.set(key, { survival: null, birth, death: null });
-          probability = quotaRankedSupport
-            ? birth - conditionalHeads.birth.calibration.threshold
-            : birth;
+          const birthDecision = quotaRankedSupport
+            ? quotaRankedBirthDecision(
+              birth,
+              conditionalHeads.birth.calibration.threshold,
+              conditionalHeads.birth.calibration.precision,
+            )
+            : null;
+          supportHeadProbabilityByKey.set(key, { survival: null, birth, death: null, birthDecision });
+          probability = quotaRankedSupport ? birthDecision.rankingScore : birth;
           decisionEligible = quotaRankedSupport
             || birth >= conditionalHeads.birth.calibration.threshold;
         }
@@ -1509,7 +1526,9 @@ async function runLocalGridOccupancyRenderWitness(context) {
       const rawBirthProbability = quotaRankedSupport
         ? supportHeadProbabilityByKey.get(key).birth
         : probability;
-      const appliedScale = quotaRankedBirthOpacityScale(rawBirthProbability, birthPrecision);
+      const appliedScale = quotaRankedSupport
+        ? supportHeadProbabilityByKey.get(key).birthDecision.opacityScale
+        : quotaRankedBirthOpacityScale(rawBirthProbability, birthPrecision);
       birthOpacityByKey.set(key, { rawBirthProbability, appliedScale });
       row[7] *= appliedScale;
     }
@@ -1829,6 +1848,9 @@ async function runLocalGridOccupancyRenderWitness(context) {
             ? 'calibrated-survival-margin-minus-calibrated-death-margin'
             : 'survival-probability-times-one-minus-death-probability',
           birthScore: quotaRankedSupport ? 'calibrated-birth-margin' : 'birth-probability',
+          ...(quotaRankedSupport ? {
+            birthDecisionAuthority: 'calibrated-margin-ranking-plus-raw-probability-opacity-v0',
+          } : {}),
           ...(quotaRankedSupport ? { birthOpacity: quotaBirthOpacity } : {}),
           sourceRule: quotaRankedSupport
             ? 'rank-all-source-sites-and-fill-learned-source-survival-quota'

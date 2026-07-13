@@ -8,6 +8,7 @@ import { compileBoundarySplatAttributeModel } from '../boundary-splat-attribute-
 
 import {
   alignBoundarySplatRowsByWorldPosition,
+  quotaRankedBirthDecision,
   quotaRankedBirthOpacityScale,
   renderBoundarySplatRowsPng,
   validateBoundarySplatPhaseRenderFrame,
@@ -17,6 +18,16 @@ import {
 assert.equal(quotaRankedBirthOpacityScale(0.82, 0.45), 0.45);
 assert.equal(quotaRankedBirthOpacityScale(0.23, 0.45), 0.23);
 assert.equal(quotaRankedBirthOpacityScale(0.01, 0.45), 0.05);
+const belowThresholdRawBirth = 0.23;
+const belowThresholdDiagnostic = 0.8;
+const belowThresholdDecision = quotaRankedBirthDecision(
+  belowThresholdRawBirth,
+  belowThresholdDiagnostic,
+  0.45,
+);
+assert.ok(belowThresholdDecision.rankingScore < 0);
+assert.equal(belowThresholdDecision.opacityScale, belowThresholdRawBirth);
+assert.ok(belowThresholdDecision.opacityScale > 0.05);
 
 function splat(position, color, opacity = 0.75, radius = 0.18) {
   return [
@@ -416,6 +427,10 @@ try {
     'calibrated-survival-margin-minus-calibrated-death-margin',
   );
   assert.equal(quotaRankedReport.phaseModel.supportDecision.birthScore, 'calibrated-birth-margin');
+  assert.equal(
+    quotaRankedReport.phaseModel.supportDecision.birthDecisionAuthority,
+    'calibrated-margin-ranking-plus-raw-probability-opacity-v0',
+  );
   assert.equal(
     quotaRankedReport.phaseModel.supportDecision.birthOpacity.authority,
     'raw-birth-head-probability-capped-by-calibrated-precision-v0',
