@@ -167,11 +167,11 @@ def main():
     generator = torch.Generator(device="cpu").manual_seed(args.seed)
     random = lambda shape, scale: torch.randn(shape, generator=generator, dtype=torch.float32) * scale
     inputs = {
-        "image-embedding": random((1, 256, 1, 1), 0.04),
-        "image-position": random((1, 256, 1, 1), 0.02),
-        "high-resolution-s0": random((1, 32, 4, 4), 0.03),
-        "high-resolution-s1": random((1, 64, 2, 2), 0.03),
-        "extra-per-object-embedding": random((1, 16, 256), 0.025),
+        "image-embedding": random((1, 256, 2, 2), 0.04),
+        "image-position": random((1, 256, 2, 2), 0.02),
+        "high-resolution-s0": random((1, 32, 8, 8), 0.03),
+        "high-resolution-s1": random((1, 64, 4, 4), 0.03),
+        "extra-per-object-embedding": random((1, 16, 256), 1.0),
     }
     captures = {}
     hooks = []
@@ -205,7 +205,7 @@ def main():
         hook.remove()
 
     expected_shapes = {
-        "masks": (16, 3, 4, 4),
+        "masks": (16, 3, 8, 8),
         "iou": (16, 3),
         "samTokens": (16, 3, 256),
         "objectScores": (16, 1),
@@ -223,7 +223,12 @@ def main():
 
     FAILURE_PHASE = "artifact-write"
     tensors = []
-    for role, tensor in inputs.items():
+    serialized_inputs = {
+        **inputs,
+        "image-embedding": inputs["image-embedding"].permute(0, 2, 3, 1).contiguous(),
+        "image-position": inputs["image-position"].permute(0, 2, 3, 1).contiguous(),
+    }
+    for role, tensor in serialized_inputs.items():
         file_name = f"{role}.f32.bin"
         tensors.append({"role": role, **write_array(out_dir / file_name, tensor)})
     expected = {
@@ -276,15 +281,15 @@ def main():
         "attributeTokens": 32,
         "maskTokens": 48,
         "queryTokens": 80,
-        "imageHeight": 1,
-        "imageWidth": 1,
-        "imageTokens": 1,
+        "imageHeight": 2,
+        "imageWidth": 2,
+        "imageTokens": 4,
         "channels": 256,
         "heads": 8,
         "attentionChannels": 128,
         "mlpHidden": 2048,
-        "maskHeight": 4,
-        "maskWidth": 4,
+        "maskHeight": 8,
+        "maskWidth": 8,
         "layerCount": 2,
     }
     manifest = {
@@ -294,7 +299,18 @@ def main():
         "boundary": "sam31-propagation-features-to-multiplex-masks-scores-and-object-pointers",
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "reference": reference,
-        "fixture": {"seed": args.seed, "kind": "deterministic-one-token-multiplex-decoder", "sourceFeaturesSynthetic": True},
+        "fixture": {
+            "seed": args.seed,
+            "kind": "deterministic-two-by-two-mixed-object-presence-multiplex-decoder",
+            "sourceFeaturesSynthetic": True,
+            "extraPerObjectEmbeddingScale": 1.0,
+        },
+        "tensorLayouts": {
+            "image-embedding": "B,H,W,C-token-major",
+            "image-position": "B,H,W,C-token-major",
+            "high-resolution-s0": "B,C,H,W",
+            "high-resolution-s1": "B,C,H,W",
+        },
         "shape": shape,
         "configuration": {
             "useHighResolutionFeatures": True,

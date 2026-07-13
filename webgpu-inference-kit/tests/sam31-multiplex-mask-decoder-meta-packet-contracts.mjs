@@ -33,12 +33,14 @@ try {
   assert.equal(manifest.reference.model.sha256, 'sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6');
   assert.deepEqual(manifest.shape, {
     batch: 1, multiplexCount: 16, maskOutputsPerObject: 3, attributeTokens: 32,
-    maskTokens: 48, queryTokens: 80, imageHeight: 1, imageWidth: 1, imageTokens: 1,
+    maskTokens: 48, queryTokens: 80, imageHeight: 2, imageWidth: 2, imageTokens: 4,
     channels: 256, heads: 8, attentionChannels: 128, mlpHidden: 2048,
-    maskHeight: 4, maskWidth: 4, layerCount: 2,
+    maskHeight: 8, maskWidth: 8, layerCount: 2,
   });
   assert.equal(manifest.checkpointAudit.mappedTensorCount, 133);
   assert.equal(manifest.checkpointAudit.allMappedOfficialKeysPresent, true);
+  assert.ok(manifest.outputSummary.appearingObjectCount > 0, 'official fixture must exercise the projected object-pointer branch');
+  assert.ok(manifest.outputSummary.absentObjectCount > 0, 'official fixture must exercise the no-object pointer branch');
   const tensors = Object.fromEntries(manifest.tensors.map(entry => [entry.role, load(entry)]));
   const weights = {};
   for (const entry of manifest.weights) {

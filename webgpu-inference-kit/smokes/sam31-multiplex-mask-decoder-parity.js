@@ -82,8 +82,9 @@ async function run() {
     },
     outputs: {
       'sam31-multiplex-sam-output-tokens': { artifactId: 'sam31-multiplex-sam-output-tokens:webgpu', shape: [1, 16, 3, 256] },
-      'sam31-multiplex-mask-logits': { artifactId: 'sam31-multiplex-mask-logits:webgpu', shape: [16, 3, 4, 4] },
-      'sam31-multiplex-selected-masks': { artifactId: 'sam31-multiplex-selected-masks:webgpu', shape: [16, 1, 4, 4] },
+      'sam31-multiplex-mask-logits': { artifactId: 'sam31-multiplex-mask-logits:webgpu', shape: [16, 3, manifest.shape.maskHeight, manifest.shape.maskWidth] },
+      'sam31-multiplex-selected-masks': { artifactId: 'sam31-multiplex-selected-masks:webgpu', shape: [16, 1, manifest.shape.maskHeight, manifest.shape.maskWidth] },
+      'sam31-multiplex-object-scores': { artifactId: 'sam31-multiplex-object-scores:webgpu', shape: [16, 1] },
       'sam31-multiplex-object-pointers': { artifactId: 'sam31-multiplex-object-pointers:webgpu', shape: [16, 256] },
     },
   });
@@ -112,6 +113,7 @@ async function run() {
     adapterPassed: effectiveAdapter.isFallbackAdapter === false,
     routePassed: result.receipt.status === 'real' && result.receipt.fallbackReason == null && result.receipt.effectiveRouteId === route.routeId,
     checkpointPassed: manifest.checkpointAudit.mappedTensorCount === 133 && manifest.checkpointAudit.allMappedOfficialKeysPresent === true,
+    branchCoveragePassed: manifest.outputSummary.appearingObjectCount > 0 && manifest.outputSummary.absentObjectCount > 0,
     parityPassed: maximum <= manifest.tolerances.webGpuFinalMaxAbsDiff,
     errorsPassed: errors.length === 0,
   };

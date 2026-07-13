@@ -29,6 +29,7 @@ const OUTPUT_ROLES = [
   { key: 'samTokens', role: 'sam31-multiplex-sam-output-tokens', required: true },
   { key: 'maskLogits', role: 'sam31-multiplex-mask-logits', required: true },
   { key: 'selectedMasks', role: 'sam31-multiplex-selected-masks', required: true },
+  { key: 'objectScores', role: 'sam31-multiplex-object-scores', required: true },
   { key: 'objectPointers', role: 'sam31-multiplex-object-pointers', required: true },
 ];
 
@@ -82,20 +83,25 @@ function normalizeInputs(input = {}) {
   const shape = input.shape || {};
   const expectedShape = {
     batch: 1, multiplexCount: 16, maskOutputsPerObject: 3, attributeTokens: 32,
-    maskTokens: 48, queryTokens: 80, imageTokens: 1, channels: 256,
+    maskTokens: 48, queryTokens: 80, channels: 256,
     heads: 8, attentionChannels: 128, mlpHidden: 2048, layerCount: 2,
   };
   for (const [key, expected] of Object.entries(expectedShape)) {
     if (shape[key] !== expected) throw new Error(`shape.${key} must equal ${expected}`);
   }
+  for (const key of ['imageHeight', 'imageWidth', 'imageTokens', 'maskHeight', 'maskWidth']) {
+    if (!Number.isInteger(shape[key]) || shape[key] <= 0) throw new Error(`shape.${key} must be a positive integer`);
+  }
+  if (shape.imageTokens !== shape.imageHeight * shape.imageWidth) throw new Error('shape.imageTokens must equal imageHeight * imageWidth');
+  if (shape.maskHeight !== shape.imageHeight * 4 || shape.maskWidth !== shape.imageWidth * 4) throw new Error('mask dimensions must be four times the image feature dimensions');
   const tensors = input.tensors || {};
   const imageEmbedding = ensureFloat32Array(tensors.imageEmbedding, 'tensors.imageEmbedding');
   const imagePosition = ensureFloat32Array(tensors.imagePosition, 'tensors.imagePosition');
   const highResolutionS0 = ensureFloat32Array(tensors.highResolutionS0, 'tensors.highResolutionS0');
   const highResolutionS1 = ensureFloat32Array(tensors.highResolutionS1, 'tensors.highResolutionS1');
   const extraPerObjectEmbedding = ensureFloat32Array(tensors.extraPerObjectEmbedding, 'tensors.extraPerObjectEmbedding');
-  if (imageEmbedding.length !== 256 || imagePosition.length !== 256) throw new Error('image embedding and position must each contain 256 values');
-  if (highResolutionS0.length !== 32 * 4 * 4 || highResolutionS1.length !== 64 * 2 * 2) throw new Error('high-resolution decoder feature length mismatch');
+  if (imageEmbedding.length !== shape.imageTokens * 256 || imagePosition.length !== shape.imageTokens * 256) throw new Error('image embedding and position length mismatch');
+  if (highResolutionS0.length !== 32 * shape.maskHeight * shape.maskWidth || highResolutionS1.length !== 64 * shape.imageHeight * 2 * shape.imageWidth * 2) throw new Error('high-resolution decoder feature length mismatch');
   if (extraPerObjectEmbedding.length !== 16 * 256) throw new Error('extra per-object embedding length mismatch');
   if (!input.weights || typeof input.weights !== 'object') throw new Error('weights are required');
   const weights = {};
@@ -285,21 +291,33 @@ function geluExactApprox(value) {
   return 0.5 * value * (1 + erf);
 }
 
-function decoderMasksCpu(finalQueries, finalKeys, highResolutionS0, highResolutionS1, weights) {
+function tokenMajorToNchw(input, channels, height, width) {
+  const output = new Float32Array(input.length);
+  const spatial = height * width;
+  for (let position = 0; position < spatial; position += 1) {
+    for (let channel = 0; channel < channels; channel += 1) output[channel * spatial + position] = input[position * channels + channel];
+  }
+  return output;
+}
+
+function decoderMasksCpu(finalQueries, finalKeys, highResolutionS0, highResolutionS1, weights, shape) {
+  const intermediateHeight = shape.imageHeight * 2;
+  const intermediateWidth = shape.imageWidth * 2;
+  const maskSpatial = shape.maskHeight * shape.maskWidth;
   let upscaled = convTranspose2dNchw(
-    finalKeys,
-    256, 1, 1, 64,
+    tokenMajorToNchw(finalKeys, 256, shape.imageHeight, shape.imageWidth),
+    256, shape.imageHeight, shape.imageWidth, 64,
     weight(weights, 'output_upscaling.0.weight', 256 * 64 * 2 * 2),
     weight(weights, 'output_upscaling.0.bias', 64),
   );
   upscaled = add(upscaled, highResolutionS1);
-  upscaled = layerNorm2dNchw(upscaled, 64, 2, 2, weight(weights, 'output_upscaling.1.weight', 64), weight(weights, 'output_upscaling.1.bias', 64));
+  upscaled = layerNorm2dNchw(upscaled, 64, intermediateHeight, intermediateWidth, weight(weights, 'output_upscaling.1.weight', 64), weight(weights, 'output_upscaling.1.bias', 64));
   for (let index = 0; index < upscaled.length; index += 1) upscaled[index] = geluExactApprox(upscaled[index]);
-  upscaled = convTranspose2dNchw(upscaled, 64, 2, 2, 32, weight(weights, 'output_upscaling.3.weight', 64 * 32 * 2 * 2), weight(weights, 'output_upscaling.3.bias', 32));
+  upscaled = convTranspose2dNchw(upscaled, 64, intermediateHeight, intermediateWidth, 32, weight(weights, 'output_upscaling.3.weight', 64 * 32 * 2 * 2), weight(weights, 'output_upscaling.3.bias', 32));
   upscaled = add(upscaled, highResolutionS0);
   for (let index = 0; index < upscaled.length; index += 1) upscaled[index] = geluExactApprox(upscaled[index]);
 
-  const masks = new Float32Array(16 * 3 * 4 * 4);
+  const masks = new Float32Array(16 * 3 * maskSpatial);
   for (let mask = 0; mask < 3; mask += 1) {
     const tokens = new Float32Array(16 * 256);
     for (let object = 0; object < 16; object += 1) {
@@ -308,10 +326,10 @@ function decoderMasksCpu(finalQueries, finalKeys, highResolutionS0, highResoluti
     }
     const hyper = mlpCpu(tokens, 16, weights, `output_hypernetworks_mlps.${mask}`, 32);
     for (let object = 0; object < 16; object += 1) {
-      for (let spatial = 0; spatial < 16; spatial += 1) {
+      for (let spatial = 0; spatial < maskSpatial; spatial += 1) {
         let sum = 0;
-        for (let channel = 0; channel < 32; channel += 1) sum += hyper[object * 32 + channel] * upscaled[channel * 16 + spatial];
-        masks[(object * 3 + mask) * 16 + spatial] = sum;
+        for (let channel = 0; channel < 32; channel += 1) sum += hyper[object * 32 + channel] * upscaled[channel * maskSpatial + spatial];
+        masks[(object * 3 + mask) * maskSpatial + spatial] = sum;
       }
     }
   }
@@ -321,6 +339,7 @@ function decoderMasksCpu(finalQueries, finalKeys, highResolutionS0, highResoluti
 export function createSam31MultiplexMaskDecoderPhaseProgramCpuOracle(input = {}) {
   const { shape, imageEmbedding, imagePosition, highResolutionS0, highResolutionS1, extraPerObjectEmbedding, weights } = normalizeInputs(input);
   const pointEmbedding = buildPointEmbedding(weights, extraPerObjectEmbedding);
+  const maskSpatial = shape.maskHeight * shape.maskWidth;
   let queries = new Float32Array(pointEmbedding);
   let keys = new Float32Array(imageEmbedding);
   const layerQueries = [];
@@ -333,29 +352,29 @@ export function createSam31MultiplexMaskDecoderPhaseProgramCpuOracle(input = {})
       const queryWithPosition = add(queries, pointEmbedding);
       queries = layerNorm(add(queries, attentionCpu({ queryInput: queryWithPosition, keyInput: queryWithPosition, valueInput: queries, queryTokens: 80, keyTokens: 80, weights, prefix: `${base}.self_attn`, internalChannels: 256 })), norm(weights, `${base}.norm1`), 80);
     }
-    queries = layerNorm(add(queries, attentionCpu({ queryInput: add(queries, pointEmbedding), keyInput: add(keys, imagePosition), valueInput: keys, queryTokens: 80, keyTokens: 1, weights, prefix: `${base}.cross_attn_token_to_image`, internalChannels: 128 })), norm(weights, `${base}.norm2`), 80);
+    queries = layerNorm(add(queries, attentionCpu({ queryInput: add(queries, pointEmbedding), keyInput: add(keys, imagePosition), valueInput: keys, queryTokens: 80, keyTokens: shape.imageTokens, weights, prefix: `${base}.cross_attn_token_to_image`, internalChannels: 128 })), norm(weights, `${base}.norm2`), 80);
     const mlp = linear(linear(queries, projection(weights, `${base}.mlp.lin1`, 256, 2048), 80, true), projection(weights, `${base}.mlp.lin2`, 2048, 256), 80);
     queries = layerNorm(add(queries, mlp), norm(weights, `${base}.norm3`), 80);
-    keys = layerNorm(add(keys, attentionCpu({ queryInput: add(keys, imagePosition), keyInput: add(queries, pointEmbedding), valueInput: queries, queryTokens: 1, keyTokens: 80, weights, prefix: `${base}.cross_attn_image_to_token`, internalChannels: 128 })), norm(weights, `${base}.norm4`), 1);
+    keys = layerNorm(add(keys, attentionCpu({ queryInput: add(keys, imagePosition), keyInput: add(queries, pointEmbedding), valueInput: queries, queryTokens: shape.imageTokens, keyTokens: 80, weights, prefix: `${base}.cross_attn_image_to_token`, internalChannels: 128 })), norm(weights, `${base}.norm4`), shape.imageTokens);
     layerQueries.push(new Float32Array(queries));
     layerKeys.push(new Float32Array(keys));
   }
-  queries = layerNorm(add(queries, attentionCpu({ queryInput: add(queries, pointEmbedding), keyInput: add(keys, imagePosition), valueInput: keys, queryTokens: 80, keyTokens: 1, weights, prefix: 'transformer.final_attn_token_to_image', internalChannels: 128 })), norm(weights, 'transformer.norm_final_attn'), 80);
+  queries = layerNorm(add(queries, attentionCpu({ queryInput: add(queries, pointEmbedding), keyInput: add(keys, imagePosition), valueInput: keys, queryTokens: 80, keyTokens: shape.imageTokens, weights, prefix: 'transformer.final_attn_token_to_image', internalChannels: 128 })), norm(weights, 'transformer.norm_final_attn'), 80);
   const objectTokens = queries.slice(0, 16 * 256);
   const iouTokens = queries.slice(16 * 256, 32 * 256);
   const samTokens = queries.slice(32 * 256);
   const iou = mlpCpu(iouTokens, 16, weights, 'iou_prediction_head', 3);
   const objectScores = mlpCpu(objectTokens, 16, weights, 'pred_obj_score_head', 1);
-  const masks = decoderMasksCpu(queries, keys, highResolutionS0, highResolutionS1, weights);
+  const masks = decoderMasksCpu(queries, keys, highResolutionS0, highResolutionS1, weights, shape);
   const selectedTokens = new Float32Array(16 * 256);
-  const selectedMasks = new Float32Array(16 * 4 * 4);
+  const selectedMasks = new Float32Array(16 * maskSpatial);
   const bestMaskIndices = new Float32Array(16);
   for (let object = 0; object < 16; object += 1) {
     let best = 0;
     for (let mask = 1; mask < 3; mask += 1) if (iou[object * 3 + mask] > iou[object * 3 + best]) best = mask;
     bestMaskIndices[object] = best;
     selectedTokens.set(samTokens.subarray((object * 3 + best) * 256, (object * 3 + best + 1) * 256), object * 256);
-    selectedMasks.set(masks.subarray((object * 3 + best) * 16, (object * 3 + best + 1) * 16), object * 16);
+    selectedMasks.set(masks.subarray((object * 3 + best) * maskSpatial, (object * 3 + best + 1) * maskSpatial), object * maskSpatial);
   }
   const projectedPointers = mlpCpu(selectedTokens, 16, weights, 'object-pointer', 256);
   const noObjectPointers = linear(projectedPointers, projection(weights, 'no-object-pointer', 256, 256), 16);
@@ -529,8 +548,23 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
+const TOKEN_MAJOR_TO_NCHW_WGSL = `
+struct TransposeDims { channels: u32, spatial: u32, total: u32, };
+@group(0) @binding(0) var<storage, read> input_values: array<f32>;
+@group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(2) var<uniform> dims: TransposeDims;
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= dims.total) { return; }
+  let channel = index / dims.spatial;
+  let position = index % dims.spatial;
+  output_values[index] = input_values[position * dims.channels + channel];
+}
+`;
+
 const MASK_TOKEN_GATHER_WGSL = `
-struct MaskDims { mask_index: u32, };
+struct MaskDims { mask_index: u32, mask_spatial: u32, };
 @group(0) @binding(0) var<storage, read> query_values: array<f32>;
 @group(0) @binding(1) var<storage, read_write> selected_tokens: array<f32>;
 @group(0) @binding(2) var<uniform> dims: MaskDims;
@@ -546,7 +580,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 `;
 
 const MASK_DOT_WGSL = `
-struct MaskDims { mask_index: u32, };
+struct MaskDims { mask_index: u32, mask_spatial: u32, };
 @group(0) @binding(0) var<storage, read> hyper_values: array<f32>;
 @group(0) @binding(1) var<storage, read> upscaled_values: array<f32>;
 @group(0) @binding(2) var<storage, read_write> mask_values: array<f32>;
@@ -554,29 +588,31 @@ struct MaskDims { mask_index: u32, };
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
-  if (index >= 256u) { return; }
-  let object = index / 16u;
-  let spatial = index % 16u;
+  if (index >= 16u * dims.mask_spatial) { return; }
+  let object = index / dims.mask_spatial;
+  let spatial = index % dims.mask_spatial;
   var sum = 0.0;
   for (var channel = 0u; channel < 32u; channel = channel + 1u) {
-    sum += hyper_values[object * 32u + channel] * upscaled_values[channel * 16u + spatial];
+    sum += hyper_values[object * 32u + channel] * upscaled_values[channel * dims.mask_spatial + spatial];
   }
-  mask_values[(object * 3u + dims.mask_index) * 16u + spatial] = sum;
+  mask_values[(object * 3u + dims.mask_index) * dims.mask_spatial + spatial] = sum;
 }
 `;
 
 const SELECT_MASK_WGSL = `
+struct MaskDims { mask_index: u32, mask_spatial: u32, };
 @group(0) @binding(0) var<storage, read> mask_values: array<f32>;
 @group(0) @binding(1) var<storage, read> best_indices: array<f32>;
 @group(0) @binding(2) var<storage, read_write> selected_masks: array<f32>;
+@group(0) @binding(3) var<uniform> dims: MaskDims;
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
-  if (index >= 256u) { return; }
-  let object = index / 16u;
-  let spatial = index % 16u;
+  if (index >= 16u * dims.mask_spatial) { return; }
+  let object = index / dims.mask_spatial;
+  let spatial = index % dims.mask_spatial;
   let best = u32(best_indices[object]);
-  selected_masks[index] = mask_values[(object * 3u + best) * 16u + spatial];
+  selected_masks[index] = mask_values[(object * 3u + best) * dims.mask_spatial + spatial];
 }
 `;
 
@@ -634,6 +670,12 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
     requiredStages: requiredStages(), timingSource: 'queue-submit-wait', waitForSubmittedWorkDone: true, yieldMs: 0,
   });
   const pointEmbedding = buildPointEmbedding(weights, extraPerObjectEmbedding);
+  const imageValues = shape.imageTokens * 256;
+  const intermediateHeight = shape.imageHeight * 2;
+  const intermediateWidth = shape.imageWidth * 2;
+  const intermediateSpatial = intermediateHeight * intermediateWidth;
+  const maskSpatial = shape.maskHeight * shape.maskWidth;
+  const attentionStorageValues = Math.max(80, shape.imageTokens) * 256;
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
   const readonly = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
   let gpu;
@@ -641,17 +683,17 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
   await runtime.runStage('multiplex-decoder-load-tensors', async stage => {
     const create = (name, length, tensorUsage = usage) => stage.createTensor({ name: `sam31.multiplex-decoder.${name}`, shape: [length], dtype: 'f32', usage: tensorUsage });
     gpu = {
-      point: create('point-embedding', 80 * 256, readonly), image: create('image', 256, readonly), imagePosition: create('image-position', 256, readonly),
-      highResolutionS0: create('high-resolution-s0', 32 * 4 * 4, readonly), highResolutionS1: create('high-resolution-s1', 64 * 2 * 2, readonly),
-      hiddenA: create('hidden-a', 80 * 256), hiddenB: create('hidden-b', 80 * 256), keyA: create('key-a', 256), keyB: create('key-b', 256),
-      querySum: create('query-sum', 80 * 256), keySum: create('key-sum', 256), q: create('q', 80 * 256), k: create('k', 80 * 256), v: create('v', 80 * 256),
-      attention: create('attention', 80 * 256), projected: create('projected', 80 * 256), mlp: create('mlp', 80 * 2048),
+      point: create('point-embedding', 80 * 256, readonly), image: create('image', imageValues, readonly), imagePosition: create('image-position', imageValues, readonly),
+      highResolutionS0: create('high-resolution-s0', 32 * maskSpatial, readonly), highResolutionS1: create('high-resolution-s1', 64 * intermediateSpatial, readonly),
+      hiddenA: create('hidden-a', 80 * 256), hiddenB: create('hidden-b', 80 * 256), keyA: create('key-a', imageValues), keyB: create('key-b', imageValues),
+      querySum: create('query-sum', 80 * 256), keySum: create('key-sum', imageValues), q: create('q', attentionStorageValues), k: create('k', attentionStorageValues), v: create('v', attentionStorageValues),
+      attention: create('attention', attentionStorageValues), projected: create('projected', attentionStorageValues), mlp: create('mlp', 80 * 2048),
       iouHiddenA: create('iou-hidden-a', 16 * 256), iouHiddenB: create('iou-hidden-b', 16 * 256), iou: create('iou', 16 * 3),
       objectHiddenA: create('object-hidden-a', 16 * 256), objectHiddenB: create('object-hidden-b', 16 * 256), objectScores: create('object-scores', 16),
       samTokens: create('sam-tokens', 48 * 256), bestIndices: create('best-indices', 16), selectedTokens: create('selected-tokens', 16 * 256),
-      upscaled64: create('upscaled-64', 64 * 2 * 2), upscaled64Skip: create('upscaled-64-skip', 64 * 2 * 2), upscaled64Norm: create('upscaled-64-norm', 64 * 2 * 2),
-      upscaled32: create('upscaled-32', 32 * 4 * 4), upscaled32Skip: create('upscaled-32-skip', 32 * 4 * 4), upscaledFinal: create('upscaled-final', 32 * 4 * 4),
-      hyperA: create('hyper-a', 16 * 256), hyperB: create('hyper-b', 16 * 256), hyperOut: create('hyper-out', 16 * 32), masks: create('masks', 16 * 3 * 4 * 4), selectedMasks: create('selected-masks', 16 * 4 * 4),
+      maskImageNchw: create('mask-image-nchw', imageValues), upscaled64: create('upscaled-64', 64 * intermediateSpatial), upscaled64Skip: create('upscaled-64-skip', 64 * intermediateSpatial), upscaled64Norm: create('upscaled-64-norm', 64 * intermediateSpatial),
+      upscaled32: create('upscaled-32', 32 * maskSpatial), upscaled32Skip: create('upscaled-32-skip', 32 * maskSpatial), upscaledFinal: create('upscaled-final', 32 * maskSpatial),
+      hyperA: create('hyper-a', 16 * 256), hyperB: create('hyper-b', 16 * 256), hyperOut: create('hyper-out', 16 * 32), masks: create('masks', 16 * 3 * maskSpatial), selectedMasks: create('selected-masks', 16 * maskSpatial),
       pointerA: create('pointer-a', 16 * 256), pointerB: create('pointer-b', 16 * 256), projectedPointers: create('projected-pointers', 16 * 256), noObjectPointers: create('no-object-pointers', 16 * 256), objectPointers: create('object-pointers', 16 * 256),
       weights: {}, uniforms: {},
     };
@@ -677,20 +719,21 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
       { name: 'kernel_height', type: 'u32' }, { name: 'kernel_width', type: 'u32' }, { name: 'total_output', type: 'u32' },
     ];
     const norm2dSchema = [{ name: 'channels', type: 'u32' }, { name: 'height', type: 'u32' }, { name: 'width', type: 'u32' }, { name: 'total_spatial', type: 'u32' }];
-    const maskSchema = [{ name: 'mask_index', type: 'u32' }];
+    const transposeSchema = [{ name: 'channels', type: 'u32' }, { name: 'spatial', type: 'u32' }, { name: 'total', type: 'u32' }];
+    const maskSchema = [{ name: 'mask_index', type: 'u32' }, { name: 'mask_spatial', type: 'u32' }];
     gpu.uniforms = {
-      add80: uniform('add80', addSchema, { total: 80 * 256, scale: 1 }), add1: uniform('add1', addSchema, { total: 256, scale: 1 }), seed80: uniform('seed80', addSchema, { total: 80 * 256, scale: 0 }),
-      norm80: uniform('norm80', normSchema, { total_tokens: 80, channels: 256 }), norm1: uniform('norm1', normSchema, { total_tokens: 1, channels: 256 }),
+      add80: uniform('add80', addSchema, { total: 80 * 256, scale: 1 }), addImage: uniform('addImage', addSchema, { total: imageValues, scale: 1 }), seed80: uniform('seed80', addSchema, { total: 80 * 256, scale: 0 }),
+      norm80: uniform('norm80', normSchema, { total_tokens: 80, channels: 256 }), normImage: uniform('normImage', normSchema, { total_tokens: shape.imageTokens, channels: 256 }),
       linear80x256: uniform('linear80x256', linearSchema, { input_channels: 256, output_channels: 256, total_output: 80 * 256 }),
       linear80x128: uniform('linear80x128', linearSchema, { input_channels: 256, output_channels: 128, total_output: 80 * 128 }),
-      linear1x128: uniform('linear1x128', linearSchema, { input_channels: 256, output_channels: 128, total_output: 128 }),
+      linearImagex128: uniform('linearImagex128', linearSchema, { input_channels: 256, output_channels: 128, total_output: shape.imageTokens * 128 }),
       linear80From128: uniform('linear80From128', linearSchema, { input_channels: 128, output_channels: 256, total_output: 80 * 256 }),
-      linear1From128: uniform('linear1From128', linearSchema, { input_channels: 128, output_channels: 256, total_output: 256 }),
+      linearImageFrom128: uniform('linearImageFrom128', linearSchema, { input_channels: 128, output_channels: 256, total_output: imageValues }),
       mlp80In: uniform('mlp80In', linearSchema, { input_channels: 256, output_channels: 2048, total_output: 80 * 2048 }),
       mlp80Out: uniform('mlp80Out', linearSchema, { input_channels: 2048, output_channels: 256, total_output: 80 * 256 }),
       selfAttention: uniform('selfAttention', attentionSchema, { batch: 1, query_tokens: 80, key_tokens: 80, channels: 256, heads: 8, head_dim: 32 }),
-      tokenImageAttention: uniform('tokenImageAttention', attentionSchema, { batch: 1, query_tokens: 80, key_tokens: 1, channels: 128, heads: 8, head_dim: 16 }),
-      imageTokenAttention: uniform('imageTokenAttention', attentionSchema, { batch: 1, query_tokens: 1, key_tokens: 80, channels: 128, heads: 8, head_dim: 16 }),
+      tokenImageAttention: uniform('tokenImageAttention', attentionSchema, { batch: 1, query_tokens: 80, key_tokens: shape.imageTokens, channels: 128, heads: 8, head_dim: 16 }),
+      imageTokenAttention: uniform('imageTokenAttention', attentionSchema, { batch: 1, query_tokens: shape.imageTokens, key_tokens: 80, channels: 128, heads: 8, head_dim: 16 }),
       iouOffset: uniform('iouOffset', offsetSchema, { input_channels: 256, output_channels: 256, total_output: 16 * 256, input_token_offset: 16 }),
       objectOffset: uniform('objectOffset', offsetSchema, { input_channels: 256, output_channels: 256, total_output: 16 * 256, input_token_offset: 0 }),
       headHidden: uniform('headHidden', linearSchema, { input_channels: 256, output_channels: 256, total_output: 16 * 256 }),
@@ -698,11 +741,12 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
       objectOut: uniform('objectOut', linearSchema, { input_channels: 256, output_channels: 1, total_output: 16 }),
       pointer: uniform('pointer', linearSchema, { input_channels: 256, output_channels: 256, total_output: 16 * 256 }),
       hyperOut: uniform('hyperOut', linearSchema, { input_channels: 256, output_channels: 32, total_output: 16 * 32 }),
-      maskConv0: uniform('maskConv0', convSchema, { input_channels: 256, input_height: 1, input_width: 1, output_channels: 64, output_height: 2, output_width: 2, kernel_height: 2, kernel_width: 2, total_output: 64 * 2 * 2 }),
-      maskConv1: uniform('maskConv1', convSchema, { input_channels: 64, input_height: 2, input_width: 2, output_channels: 32, output_height: 4, output_width: 4, kernel_height: 2, kernel_width: 2, total_output: 32 * 4 * 4 }),
-      maskNorm: uniform('maskNorm', norm2dSchema, { channels: 64, height: 2, width: 2, total_spatial: 4 }),
-      mask0: uniform('mask0', maskSchema, { mask_index: 0 }), mask1: uniform('mask1', maskSchema, { mask_index: 1 }), mask2: uniform('mask2', maskSchema, { mask_index: 2 }),
-      add256: uniform('add256', addSchema, { total: 64 * 2 * 2, scale: 1 }), add512: uniform('add512', addSchema, { total: 32 * 4 * 4, scale: 1 }),
+      maskConv0: uniform('maskConv0', convSchema, { input_channels: 256, input_height: shape.imageHeight, input_width: shape.imageWidth, output_channels: 64, output_height: intermediateHeight, output_width: intermediateWidth, kernel_height: 2, kernel_width: 2, total_output: 64 * intermediateSpatial }),
+      maskConv1: uniform('maskConv1', convSchema, { input_channels: 64, input_height: intermediateHeight, input_width: intermediateWidth, output_channels: 32, output_height: shape.maskHeight, output_width: shape.maskWidth, kernel_height: 2, kernel_width: 2, total_output: 32 * maskSpatial }),
+      maskNorm: uniform('maskNorm', norm2dSchema, { channels: 64, height: intermediateHeight, width: intermediateWidth, total_spatial: intermediateSpatial }),
+      maskImageTranspose: uniform('maskImageTranspose', transposeSchema, { channels: 256, spatial: shape.imageTokens, total: imageValues }),
+      mask0: uniform('mask0', maskSchema, { mask_index: 0, mask_spatial: maskSpatial }), mask1: uniform('mask1', maskSchema, { mask_index: 1, mask_spatial: maskSpatial }), mask2: uniform('mask2', maskSchema, { mask_index: 2, mask_spatial: maskSpatial }),
+      addIntermediate: uniform('addIntermediate', addSchema, { total: 64 * intermediateSpatial, scale: 1 }), addMask: uniform('addMask', addSchema, { total: 32 * maskSpatial, scale: 1 }),
     };
   });
 
@@ -752,18 +796,18 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
     );
 
     addOp(`layer${layer}TokenQueryPosition`, 'hiddenA', 'point', 'querySum', 'add80');
-    addOp(`layer${layer}ImageKeyPosition`, 'keyA', 'imagePosition', 'keySum', 'add1');
+    addOp(`layer${layer}ImageKeyPosition`, 'keyA', 'imagePosition', 'keySum', 'addImage');
     const tokenQ = linearBindings('querySum', `${base}.cross_attn_token_to_image.q_proj`, 'q', 'linear80x128');
-    const imageK = linearBindings('keySum', `${base}.cross_attn_token_to_image.k_proj`, 'k', 'linear1x128');
-    const imageV = linearBindings('keyA', `${base}.cross_attn_token_to_image.v_proj`, 'v', 'linear1x128');
+    const imageK = linearBindings('keySum', `${base}.cross_attn_token_to_image.k_proj`, 'k', 'linearImagex128');
+    const imageV = linearBindings('keyA', `${base}.cross_attn_token_to_image.v_proj`, 'v', 'linearImagex128');
     attentionOp(`layer${layer}TokenImageAttention`, 'q', 'k', 'v', 'attention', 'tokenImageAttention');
     const tokenImageOut = linearBindings('attention', `${base}.cross_attn_token_to_image.out_proj`, 'projected', 'linear80From128');
     addOp(`layer${layer}TokenImageResidual`, 'hiddenA', 'projected', 'hiddenB', 'add80');
     normKernel(`layer${layer}Norm2`, 'hiddenB', `${base}.norm2`, 'hiddenA', 'norm80');
     phases.push(
       { name: `multiplex-decoder-layer-${layer}-token-query-position`, kernel: `layer${layer}TokenQueryPosition`, dispatch: [workgroups(80 * 256)] },
-      { name: `multiplex-decoder-layer-${layer}-image-key-position`, kernel: `layer${layer}ImageKeyPosition`, dispatch: [workgroups(256)] },
-      dispatchLinear(tokenQ, 80 * 128), dispatchLinear(imageK, 128), dispatchLinear(imageV, 128),
+      { name: `multiplex-decoder-layer-${layer}-image-key-position`, kernel: `layer${layer}ImageKeyPosition`, dispatch: [workgroups(imageValues)] },
+      dispatchLinear(tokenQ, 80 * 128), dispatchLinear(imageK, shape.imageTokens * 128), dispatchLinear(imageV, shape.imageTokens * 128),
       { name: `multiplex-decoder-layer-${layer}-token-to-image`, kernel: `layer${layer}TokenImageAttention`, dispatch: [80, 8, 1], yieldAfter: true },
       dispatchLinear(tokenImageOut, 80 * 256),
       { name: `multiplex-decoder-layer-${layer}-token-image-residual`, kernel: `layer${layer}TokenImageResidual`, dispatch: [workgroups(80 * 256)] },
@@ -778,61 +822,63 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
       { name: `multiplex-decoder-layer-${layer}-mlp`, kernel: `layer${layer}MlpResidual`, dispatch: [workgroups(80 * 256)], yieldAfter: true },
       { name: `multiplex-decoder-layer-${layer}-norm3`, kernel: `layer${layer}Norm3`, dispatch: [workgroups(80)] });
 
-    addOp(`layer${layer}ImageQueryPosition`, 'keyA', 'imagePosition', 'keySum', 'add1');
+    addOp(`layer${layer}ImageQueryPosition`, 'keyA', 'imagePosition', 'keySum', 'addImage');
     addOp(`layer${layer}TokenKeyPosition`, 'hiddenA', 'point', 'querySum', 'add80');
-    const imageQ = linearBindings('keySum', `${base}.cross_attn_image_to_token.q_proj`, 'q', 'linear1x128');
+    const imageQ = linearBindings('keySum', `${base}.cross_attn_image_to_token.q_proj`, 'q', 'linearImagex128');
     const tokenK = linearBindings('querySum', `${base}.cross_attn_image_to_token.k_proj`, 'k', 'linear80x128');
     const tokenV = linearBindings('hiddenA', `${base}.cross_attn_image_to_token.v_proj`, 'v', 'linear80x128');
     attentionOp(`layer${layer}ImageTokenAttention`, 'q', 'k', 'v', 'attention', 'imageTokenAttention');
-    const imageTokenOut = linearBindings('attention', `${base}.cross_attn_image_to_token.out_proj`, 'projected', 'linear1From128');
-    addOp(`layer${layer}ImageTokenResidual`, 'keyA', 'projected', 'keyB', 'add1');
-    normKernel(`layer${layer}Norm4`, 'keyB', `${base}.norm4`, 'keyA', 'norm1');
+    const imageTokenOut = linearBindings('attention', `${base}.cross_attn_image_to_token.out_proj`, 'projected', 'linearImageFrom128');
+    addOp(`layer${layer}ImageTokenResidual`, 'keyA', 'projected', 'keyB', 'addImage');
+    normKernel(`layer${layer}Norm4`, 'keyB', `${base}.norm4`, 'keyA', 'normImage');
     phases.push(
-      { name: `multiplex-decoder-layer-${layer}-image-query-position`, kernel: `layer${layer}ImageQueryPosition`, dispatch: [workgroups(256)] },
+      { name: `multiplex-decoder-layer-${layer}-image-query-position`, kernel: `layer${layer}ImageQueryPosition`, dispatch: [workgroups(imageValues)] },
       { name: `multiplex-decoder-layer-${layer}-token-key-position`, kernel: `layer${layer}TokenKeyPosition`, dispatch: [workgroups(80 * 256)] },
-      dispatchLinear(imageQ, 128), dispatchLinear(tokenK, 80 * 128), dispatchLinear(tokenV, 80 * 128),
-      { name: `multiplex-decoder-layer-${layer}-image-to-token`, kernel: `layer${layer}ImageTokenAttention`, dispatch: [1, 8, 1], yieldAfter: true },
-      dispatchLinear(imageTokenOut, 256),
-      { name: `multiplex-decoder-layer-${layer}-image-token-residual`, kernel: `layer${layer}ImageTokenResidual`, dispatch: [workgroups(256)] },
-      { name: `multiplex-decoder-layer-${layer}-norm4`, kernel: `layer${layer}Norm4`, dispatch: [workgroups(1)] },
+      dispatchLinear(imageQ, shape.imageTokens * 128), dispatchLinear(tokenK, 80 * 128), dispatchLinear(tokenV, 80 * 128),
+      { name: `multiplex-decoder-layer-${layer}-image-to-token`, kernel: `layer${layer}ImageTokenAttention`, dispatch: [shape.imageTokens, 8, 1], yieldAfter: true },
+      dispatchLinear(imageTokenOut, imageValues),
+      { name: `multiplex-decoder-layer-${layer}-image-token-residual`, kernel: `layer${layer}ImageTokenResidual`, dispatch: [workgroups(imageValues)] },
+      { name: `multiplex-decoder-layer-${layer}-norm4`, kernel: `layer${layer}Norm4`, dispatch: [workgroups(shape.imageTokens)] },
       { name: `multiplex-decoder-layer-${layer}-readback`, readbacks: [{ name: `layer${layer}Queries`, tensor: 'hiddenA' }, { name: `layer${layer}Keys`, tensor: 'keyA' }] },
     );
   }
 
   addOp('finalQueryPosition', 'hiddenA', 'point', 'querySum', 'add80');
-  addOp('finalKeyPosition', 'keyA', 'imagePosition', 'keySum', 'add1');
+  addOp('finalKeyPosition', 'keyA', 'imagePosition', 'keySum', 'addImage');
   const finalQ = linearBindings('querySum', 'transformer.final_attn_token_to_image.q_proj', 'q', 'linear80x128');
-  const finalK = linearBindings('keySum', 'transformer.final_attn_token_to_image.k_proj', 'k', 'linear1x128');
-  const finalV = linearBindings('keyA', 'transformer.final_attn_token_to_image.v_proj', 'v', 'linear1x128');
+  const finalK = linearBindings('keySum', 'transformer.final_attn_token_to_image.k_proj', 'k', 'linearImagex128');
+  const finalV = linearBindings('keyA', 'transformer.final_attn_token_to_image.v_proj', 'v', 'linearImagex128');
   attentionOp('finalTokenImageAttention', 'q', 'k', 'v', 'attention', 'tokenImageAttention');
   const finalOut = linearBindings('attention', 'transformer.final_attn_token_to_image.out_proj', 'projected', 'linear80From128');
   addOp('finalResidual', 'hiddenA', 'projected', 'hiddenB', 'add80');
   normKernel('finalNorm', 'hiddenB', 'transformer.norm_final_attn', 'hiddenA', 'norm80');
   phases.push(
     { name: 'multiplex-decoder-final-query-position', kernel: 'finalQueryPosition', dispatch: [workgroups(80 * 256)] },
-    { name: 'multiplex-decoder-final-key-position', kernel: 'finalKeyPosition', dispatch: [workgroups(256)] },
-    dispatchLinear(finalQ, 80 * 128), dispatchLinear(finalK, 128), dispatchLinear(finalV, 128),
+    { name: 'multiplex-decoder-final-key-position', kernel: 'finalKeyPosition', dispatch: [workgroups(imageValues)] },
+    dispatchLinear(finalQ, 80 * 128), dispatchLinear(finalK, shape.imageTokens * 128), dispatchLinear(finalV, shape.imageTokens * 128),
     { name: 'multiplex-decoder-final-token-to-image', kernel: 'finalTokenImageAttention', dispatch: [80, 8, 1], yieldAfter: true },
     dispatchLinear(finalOut, 80 * 256),
     { name: 'multiplex-decoder-final-residual', kernel: 'finalResidual', dispatch: [workgroups(80 * 256)] },
     { name: 'multiplex-decoder-final-norm', kernel: 'finalNorm', dispatch: [workgroups(80)] },
   );
 
-  addKernel('maskConv0', MASK_TRANSPOSE_CONV2D_NCHW_WGSL, [tb('keyA'), tb(w('output_upscaling.0.weight')), tb(w('output_upscaling.0.bias')), tb('upscaled64', 'storage'), uniformBinding('maskConv0')]);
-  addOp('maskSkipS1', 'upscaled64', 'highResolutionS1', 'upscaled64Skip', 'add256');
+  addKernel('maskImageTranspose', TOKEN_MAJOR_TO_NCHW_WGSL, [tb('keyA'), tb('maskImageNchw', 'storage'), uniformBinding('maskImageTranspose')]);
+  addKernel('maskConv0', MASK_TRANSPOSE_CONV2D_NCHW_WGSL, [tb('maskImageNchw'), tb(w('output_upscaling.0.weight')), tb(w('output_upscaling.0.bias')), tb('upscaled64', 'storage'), uniformBinding('maskConv0')]);
+  addOp('maskSkipS1', 'upscaled64', 'highResolutionS1', 'upscaled64Skip', 'addIntermediate');
   addKernel('maskNormS1', MASK_LAYERNORM2D_NCHW_WGSL, [tb('upscaled64Skip'), tb(w('output_upscaling.1.weight')), tb(w('output_upscaling.1.bias')), tb('upscaled64Norm', 'storage'), uniformBinding('maskNorm')]);
   addKernel('maskGeluS1', MASK_GELU_WGSL, [tb('upscaled64Norm'), tb('upscaled64', 'storage')]);
   addKernel('maskConv1', MASK_TRANSPOSE_CONV2D_NCHW_WGSL, [tb('upscaled64'), tb(w('output_upscaling.3.weight')), tb(w('output_upscaling.3.bias')), tb('upscaled32', 'storage'), uniformBinding('maskConv1')]);
-  addOp('maskSkipS0', 'upscaled32', 'highResolutionS0', 'upscaled32Skip', 'add512');
+  addOp('maskSkipS0', 'upscaled32', 'highResolutionS0', 'upscaled32Skip', 'addMask');
   addKernel('maskGeluS0', MASK_GELU_WGSL, [tb('upscaled32Skip'), tb('upscaledFinal', 'storage')]);
   phases.push(
-    { name: 'multiplex-decoder-mask-upscale-conv0', kernel: 'maskConv0', dispatch: [workgroups(64 * 2 * 2)] },
-    { name: 'multiplex-decoder-mask-s1-residual', kernel: 'maskSkipS1', dispatch: [workgroups(64 * 2 * 2)] },
-    { name: 'multiplex-decoder-mask-s1-norm', kernel: 'maskNormS1', dispatch: [workgroups(4)] },
-    { name: 'multiplex-decoder-mask-s1-gelu', kernel: 'maskGeluS1', dispatch: [workgroups(64 * 2 * 2)] },
-    { name: 'multiplex-decoder-mask-upscale-conv1', kernel: 'maskConv1', dispatch: [workgroups(32 * 4 * 4)] },
-    { name: 'multiplex-decoder-mask-s0-residual', kernel: 'maskSkipS0', dispatch: [workgroups(32 * 4 * 4)] },
-    { name: 'multiplex-decoder-mask-upscaling', kernel: 'maskGeluS0', dispatch: [workgroups(32 * 4 * 4)], yieldAfter: true },
+    { name: 'multiplex-decoder-mask-image-transpose', kernel: 'maskImageTranspose', dispatch: [workgroups(imageValues)] },
+    { name: 'multiplex-decoder-mask-upscale-conv0', kernel: 'maskConv0', dispatch: [workgroups(64 * intermediateSpatial)] },
+    { name: 'multiplex-decoder-mask-s1-residual', kernel: 'maskSkipS1', dispatch: [workgroups(64 * intermediateSpatial)] },
+    { name: 'multiplex-decoder-mask-s1-norm', kernel: 'maskNormS1', dispatch: [workgroups(intermediateSpatial)] },
+    { name: 'multiplex-decoder-mask-s1-gelu', kernel: 'maskGeluS1', dispatch: [workgroups(64 * intermediateSpatial)] },
+    { name: 'multiplex-decoder-mask-upscale-conv1', kernel: 'maskConv1', dispatch: [workgroups(32 * maskSpatial)] },
+    { name: 'multiplex-decoder-mask-s0-residual', kernel: 'maskSkipS0', dispatch: [workgroups(32 * maskSpatial)] },
+    { name: 'multiplex-decoder-mask-upscaling', kernel: 'maskGeluS0', dispatch: [workgroups(32 * maskSpatial)], yieldAfter: true },
   );
 
   for (let mask = 0; mask < 3; mask += 1) {
@@ -846,7 +892,7 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
     phases.push(
       { name: `multiplex-decoder-mask-${mask}-token-gather`, kernel: gather, dispatch: [workgroups(16 * 256)] },
       dispatchLinear(hyper0, 16 * 256), dispatchLinear(hyper1, 16 * 256), dispatchLinear(hyper2, 16 * 32),
-      { name: mask === 2 ? 'multiplex-decoder-mask-hypernetworks' : `multiplex-decoder-mask-${mask}-dot`, kernel: dot, dispatch: [workgroups(16 * 4 * 4)], ...(mask === 2 ? { yieldAfter: true } : {}) },
+      { name: mask === 2 ? 'multiplex-decoder-mask-hypernetworks' : `multiplex-decoder-mask-${mask}-dot`, kernel: dot, dispatch: [workgroups(16 * maskSpatial)], ...(mask === 2 ? { yieldAfter: true } : {}) },
     );
   }
 
@@ -857,7 +903,7 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
   const object1 = linearBindings('objectHiddenA', 'pred_obj_score_head.layers.1', 'objectHiddenB', 'headHidden', LINEAR_RELU_WGSL);
   const object2 = linearBindings('objectHiddenB', 'pred_obj_score_head.layers.2', 'objectScores', 'objectOut');
   addKernel('argmaxGather', ARGMAX_GATHER_WGSL, [tb('iou'), tb('hiddenA'), tb('bestIndices', 'storage'), tb('selectedTokens', 'storage')]);
-  addKernel('selectMasks', SELECT_MASK_WGSL, [tb('masks'), tb('bestIndices'), tb('selectedMasks', 'storage')]);
+  addKernel('selectMasks', SELECT_MASK_WGSL, [tb('masks'), tb('bestIndices'), tb('selectedMasks', 'storage'), uniformBinding('mask0')]);
   const pointer0 = linearBindings('selectedTokens', 'object-pointer.layers.0', 'pointerA', 'pointer', LINEAR_RELU_WGSL);
   const pointer1 = linearBindings('pointerA', 'object-pointer.layers.1', 'pointerB', 'pointer', LINEAR_RELU_WGSL);
   const pointer2 = linearBindings('pointerB', 'object-pointer.layers.2', 'projectedPointers', 'pointer');
@@ -869,7 +915,7 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
     { name: 'multiplex-decoder-object-head-0', kernel: 'objectLayer0', dispatch: [workgroups(16 * 256)] },
     dispatchLinear(object1, 16 * 256), dispatchLinear(object2, 16),
     { name: 'multiplex-decoder-attribute-heads', kernel: 'argmaxGather', dispatch: [workgroups(16 * 256)], yieldAfter: true },
-    { name: 'multiplex-decoder-mask-selection', kernel: 'selectMasks', dispatch: [workgroups(16 * 4 * 4)] },
+    { name: 'multiplex-decoder-mask-selection', kernel: 'selectMasks', dispatch: [workgroups(16 * maskSpatial)] },
     dispatchLinear(pointer0, 16 * 256), dispatchLinear(pointer1, 16 * 256), dispatchLinear(pointer2, 16 * 256), dispatchLinear(noObject, 16 * 256),
     { name: 'multiplex-decoder-object-pointer-projection', kernel: 'pointerBlend', dispatch: [workgroups(16 * 256)], yieldAfter: true },
     { name: 'multiplex-decoder-readback', readbacks: [
@@ -886,11 +932,13 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
   const samTokens = fullQueries.slice(32 * 256).buffer;
   const maskLogits = run.outputs.maskLogits;
   const selectedMasks = run.outputs.selectedMasks;
+  const objectScores = run.outputs.objectScores;
   const objectPointers = run.outputs.objectPointers;
   const outputs = {
     samTokens: { artifactId: roleArtifact(input.request.outputs, 'sam31-multiplex-sam-output-tokens').artifactId, sha256: await sha256Hex(samTokens), shape: [1, 16, 3, 256] },
-    maskLogits: { artifactId: roleArtifact(input.request.outputs, 'sam31-multiplex-mask-logits').artifactId, sha256: await sha256Hex(maskLogits), shape: [16, 3, 4, 4] },
-    selectedMasks: { artifactId: roleArtifact(input.request.outputs, 'sam31-multiplex-selected-masks').artifactId, sha256: await sha256Hex(selectedMasks), shape: [16, 1, 4, 4] },
+    maskLogits: { artifactId: roleArtifact(input.request.outputs, 'sam31-multiplex-mask-logits').artifactId, sha256: await sha256Hex(maskLogits), shape: [16, 3, shape.maskHeight, shape.maskWidth] },
+    selectedMasks: { artifactId: roleArtifact(input.request.outputs, 'sam31-multiplex-selected-masks').artifactId, sha256: await sha256Hex(selectedMasks), shape: [16, 1, shape.maskHeight, shape.maskWidth] },
+    objectScores: { artifactId: roleArtifact(input.request.outputs, 'sam31-multiplex-object-scores').artifactId, sha256: await sha256Hex(objectScores), shape: [16, 1] },
     objectPointers: { artifactId: roleArtifact(input.request.outputs, 'sam31-multiplex-object-pointers').artifactId, sha256: await sha256Hex(objectPointers), shape: [16, 256] },
   };
   const receipt = createReceipt({
