@@ -188,6 +188,16 @@ def write_array(path: Path, values: np.ndarray) -> dict[str, Any]:
     }
 
 
+def artifact_receipt(artifact: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "path": str(artifact["path"]),
+        "shape": artifact["shape"],
+        "dtype": artifact["dtype"],
+        "byteLength": artifact["byteLength"],
+        "sha256": artifact["sha256"],
+    }
+
+
 def validate_input(manifest: dict[str, Any], input_path: Path) -> dict[str, Any]:
     require(manifest.get("schema") == INPUT_SCHEMA, f"input schema mismatch: {manifest.get('schema')}")
     require(manifest.get("identity") == INPUT_IDENTITY, f"input identity mismatch: {manifest.get('identity')}")
@@ -218,23 +228,64 @@ def validate_input(manifest: dict[str, Any], input_path: Path) -> dict[str, Any]
         ordinary = pair.get("ordinaryLowT1") or {}
         require(int(high_t1.get("simStepCount", -1)) == int(high_t.get("simStepCount", -2)) + 1, f"{pair_id} high states are not consecutive")
         require(ordinary.get("initializationAuthority") == INITIALIZATION_AUTHORITY, f"{pair_id} ordinary low step was not initialized from filtered high t")
+        high_t_fluid = validate_artifact(high_t.get("fluid"), high_grid, len(EXPECTED_FLUID_CHANNELS), f"{pair_id} highT fluid")
+        high_t_front = validate_artifact(high_t.get("front"), high_grid, len(EXPECTED_FRONT_CHANNELS), f"{pair_id} highT front")
+        high_t1_fluid = validate_artifact(high_t1.get("fluid"), high_grid, len(EXPECTED_FLUID_CHANNELS), f"{pair_id} highT1 fluid")
+        high_t1_front = validate_artifact(high_t1.get("front"), high_grid, len(EXPECTED_FRONT_CHANNELS), f"{pair_id} highT1 front")
+        ordinary_fluid = validate_artifact(ordinary.get("fluid"), receiver_grid, len(EXPECTED_FLUID_CHANNELS), f"{pair_id} ordinaryLowT1 fluid")
+        ordinary_front = validate_artifact(ordinary.get("front"), receiver_grid, len(EXPECTED_FRONT_CHANNELS), f"{pair_id} ordinaryLowT1 front")
+
+        initialized_from = ordinary.get("initializedFrom") or {}
+        require(initialized_from.get("identity") == INITIALIZATION_AUTHORITY, f"{pair_id} initializedFrom identity mismatch")
+        initialized_high_t = initialized_from.get("highT") or {}
+        require(int(initialized_high_t.get("simStepCount", -1)) == int(high_t.get("simStepCount", -2)), f"{pair_id} initializedFrom highT sim step mismatch")
+        require(initialized_high_t.get("fluidSha256") == high_t_fluid["sha256"], f"{pair_id} initializedFrom highT fluid sha256 mismatch")
+        require(initialized_high_t.get("frontSha256") == high_t_front["sha256"], f"{pair_id} initializedFrom highT front sha256 mismatch")
+        require(initialized_from.get("filterIdentity") == FILTER_IDENTITY, f"{pair_id} initializedFrom filter identity mismatch")
+        require(int(initialized_from.get("receiverGrid", 0)) == receiver_grid, f"{pair_id} initializedFrom receiver grid mismatch")
+        require(initialized_from.get("layoutIdentity") == LAYOUT_IDENTITY, f"{pair_id} initializedFrom layout identity mismatch")
+        initial_sim_step = int(initialized_from.get("receiverInitialSimStepCount", -1))
+        require(int(ordinary.get("simStepCount", -1)) == initial_sim_step + 1, f"{pair_id} ordinary low state is not one step after receiver initialization")
+        receiver_initial = initialized_from.get("receiverInitialT") or {}
+        receiver_initial_fluid = validate_artifact(receiver_initial.get("fluid"), receiver_grid, len(EXPECTED_FLUID_CHANNELS), f"{pair_id} receiverInitialT fluid")
+        receiver_initial_front = validate_artifact(receiver_initial.get("front"), receiver_grid, len(EXPECTED_FRONT_CHANNELS), f"{pair_id} receiverInitialT front")
+        computed_initial_fluid = volume_filter(load_array(high_t_fluid), receiver_grid)
+        computed_initial_front = volume_filter(load_array(high_t_front), receiver_grid)
+        require(bool(np.array_equal(load_array(receiver_initial_fluid), computed_initial_fluid)), f"{pair_id} receiverInitialT fluid does not equal filtered highT")
+        require(bool(np.array_equal(load_array(receiver_initial_front), computed_initial_front)), f"{pair_id} receiverInitialT front does not equal filtered highT")
         validated_pairs.append({
             "id": pair_id,
             "highT": {
                 "simStepCount": int(high_t["simStepCount"]),
-                "fluid": validate_artifact(high_t.get("fluid"), high_grid, len(EXPECTED_FLUID_CHANNELS), f"{pair_id} highT fluid"),
-                "front": validate_artifact(high_t.get("front"), high_grid, len(EXPECTED_FRONT_CHANNELS), f"{pair_id} highT front"),
+                "fluid": high_t_fluid,
+                "front": high_t_front,
             },
             "highT1": {
                 "simStepCount": int(high_t1["simStepCount"]),
-                "fluid": validate_artifact(high_t1.get("fluid"), high_grid, len(EXPECTED_FLUID_CHANNELS), f"{pair_id} highT1 fluid"),
-                "front": validate_artifact(high_t1.get("front"), high_grid, len(EXPECTED_FRONT_CHANNELS), f"{pair_id} highT1 front"),
+                "fluid": high_t1_fluid,
+                "front": high_t1_front,
             },
             "ordinaryLowT1": {
                 "simStepCount": int(ordinary.get("simStepCount", -1)),
                 "initializationAuthority": ordinary["initializationAuthority"],
-                "fluid": validate_artifact(ordinary.get("fluid"), receiver_grid, len(EXPECTED_FLUID_CHANNELS), f"{pair_id} ordinaryLowT1 fluid"),
-                "front": validate_artifact(ordinary.get("front"), receiver_grid, len(EXPECTED_FRONT_CHANNELS), f"{pair_id} ordinaryLowT1 front"),
+                "initializedFrom": {
+                    "identity": INITIALIZATION_AUTHORITY,
+                    "highT": {
+                        "simStepCount": int(initialized_high_t["simStepCount"]),
+                        "fluidSha256": high_t_fluid["sha256"],
+                        "frontSha256": high_t_front["sha256"],
+                    },
+                    "filterIdentity": FILTER_IDENTITY,
+                    "receiverGrid": receiver_grid,
+                    "layoutIdentity": LAYOUT_IDENTITY,
+                    "receiverInitialSimStepCount": initial_sim_step,
+                    "receiverInitialT": {
+                        "fluid": receiver_initial_fluid,
+                        "front": receiver_initial_front,
+                    },
+                },
+                "fluid": ordinary_fluid,
+                "front": ordinary_front,
             },
         })
     return {
@@ -289,6 +340,7 @@ def process_pair(pair: dict[str, Any], receiver_grid: int, pair_dir: Path) -> di
     front_baseline = array_metrics(ordinary_front_t1[:, :, :, 0], filtered_front_t1[:, :, :, 0])
     front_oracle = array_metrics(oracle_front[:, :, :, 0], filtered_front_t1[:, :, :, 0])
     channels.append({"name": "frontTopology", "family": "front", "baseline": front_baseline, "oracle": front_oracle})
+    initialized_from = pair["ordinaryLowT1"]["initializedFrom"]
 
     return {
         "id": pair["id"],
@@ -297,6 +349,13 @@ def process_pair(pair: dict[str, Any], receiver_grid: int, pair_dir: Path) -> di
             "highT1": pair["highT1"]["simStepCount"],
             "ordinaryLowT1": pair["ordinaryLowT1"]["simStepCount"],
             "ordinaryLowInitializationAuthority": pair["ordinaryLowT1"]["initializationAuthority"],
+            "ordinaryLowInitializedFrom": {
+                **{key: value for key, value in initialized_from.items() if key != "receiverInitialT"},
+                "receiverInitialT": {
+                    "fluid": artifact_receipt(initialized_from["receiverInitialT"]["fluid"]),
+                    "front": artifact_receipt(initialized_from["receiverInitialT"]["front"]),
+                },
+            },
         },
         "filterIdentity": FILTER_IDENTITY,
         "metrics": {

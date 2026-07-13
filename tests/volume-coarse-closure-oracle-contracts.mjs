@@ -23,10 +23,14 @@ const root = await mkdtemp(join(tmpdir(), 'kaminos-coarse-closure-contract-'));
 const inputDir = join(root, 'input');
 const outDir = join(root, 'output');
 const failedOutDir = join(root, 'failed-output');
+const provenanceFailedOutDir = join(root, 'provenance-failed-output');
+const initializationFailedOutDir = join(root, 'initialization-failed-output');
 await import('node:fs/promises').then(({ mkdir }) => Promise.all([
   mkdir(inputDir, { recursive: true }),
   mkdir(outDir, { recursive: true }),
   mkdir(failedOutDir, { recursive: true }),
+  mkdir(provenanceFailedOutDir, { recursive: true }),
+  mkdir(initializationFailedOutDir, { recursive: true }),
 ]));
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -37,6 +41,20 @@ const fluidChannels = [
 
 function floatsToBytes(values) {
   return Buffer.from(new Float32Array(values).buffer);
+}
+
+async function readFloats(path) {
+  const bytes = await readFile(path);
+  return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
+}
+
+function assertFloatsClose(actual, expected, label) {
+  assert.equal(actual.length, expected.length, `${label} length`);
+  let maxAbs = 0;
+  for (let index = 0; index < actual.length; index += 1) {
+    maxAbs = Math.max(maxAbs, Math.abs(actual[index] - expected[index]));
+  }
+  assert.ok(maxAbs < 1e-6, `${label} max abs ${maxAbs}`);
 }
 
 async function writeArtifact(name, values, shape) {
@@ -69,15 +87,19 @@ function boxAverage(values, highGrid, lowGrid, channels) {
     for (let ly = 0; ly < lowGrid; ly += 1) {
       for (let lx = 0; lx < lowGrid; lx += 1) {
         const lowCell = lx + ly * lowGrid + lz * lowGrid * lowGrid;
+        const sums = new Float64Array(channels);
         for (let hz = lz * scale; hz < (lz + 1) * scale; hz += 1) {
           for (let hy = ly * scale; hy < (ly + 1) * scale; hy += 1) {
             for (let hx = lx * scale; hx < (lx + 1) * scale; hx += 1) {
               const highCell = hx + hy * highGrid + hz * highGrid * highGrid;
               for (let channel = 0; channel < channels; channel += 1) {
-                output[lowCell * channels + channel] += values[highCell * channels + channel] / scale ** 3;
+                sums[channel] += values[highCell * channels + channel];
               }
             }
           }
+        }
+        for (let channel = 0; channel < channels; channel += 1) {
+          output[lowCell * channels + channel] = sums[channel] / scale ** 3;
         }
       }
     }
@@ -91,6 +113,8 @@ const highFluidT = highValues(highGrid, fluidChannels.length, 0);
 const highFluidT1 = highValues(highGrid, fluidChannels.length, 1);
 const highFrontT = highValues(highGrid, 1, 0);
 const highFrontT1 = highValues(highGrid, 1, 1);
+const filteredFluidT = boxAverage(highFluidT, highGrid, receiverGrid, fluidChannels.length);
+const filteredFrontT = boxAverage(highFrontT, highGrid, receiverGrid, 1);
 const filteredFluidT1 = boxAverage(highFluidT1, highGrid, receiverGrid, fluidChannels.length);
 const filteredFrontT1 = boxAverage(highFrontT1, highGrid, receiverGrid, 1);
 const ordinaryFluidT1 = Float32Array.from(filteredFluidT1, (value, index) => value - 0.0025 * ((index % fluidChannels.length) + 1));
@@ -120,8 +144,25 @@ const pair = {
   },
 };
 
+pair.ordinaryLowT1.initializedFrom = {
+  identity: 'receiver-initialized-from-filtered-high-t-v0',
+  highT: {
+    simStepCount: pair.highT.simStepCount,
+    fluidSha256: pair.highT.fluid.sha256,
+    frontSha256: pair.highT.front.sha256,
+  },
+  filterIdentity: 'volume-overlap-box-filter-high-to-receiver-v0',
+  receiverGrid,
+  layoutIdentity: 'x-fastest-zyx-c-interleaved-v0',
+  receiverInitialSimStepCount: 0,
+  receiverInitialT: {
+    fluid: await writeArtifact('receiver-initial-t-fluid', filteredFluidT, [receiverGrid, receiverGrid, receiverGrid, fluidChannels.length]),
+    front: await writeArtifact('receiver-initial-t-front', filteredFrontT, [receiverGrid, receiverGrid, receiverGrid, 1]),
+  },
+};
+
 const inputPath = join(inputDir, 'manifest.json');
-await writeFile(inputPath, `${JSON.stringify({
+const inputManifest = {
   schema: 'kaminos.volume.coarse-closure-corpus.v0',
   identity: 'phase-aligned-filtered-high-low-step-corpus-v0',
   basin: { path: basinPath, sha256: sha256(basinBytes), identity: 'contract-exact-basin' },
@@ -132,7 +173,34 @@ await writeFile(inputPath, `${JSON.stringify({
   grids: { high: highGrid, receiver: receiverGrid },
   layout: { order: 'x-fastest-zyx-c-interleaved-v0', fluidChannels, frontChannels: ['frontTopology'] },
   pairs: [pair],
-}, null, 2)}\n`);
+};
+
+const invalidProvenanceManifest = structuredClone(inputManifest);
+invalidProvenanceManifest.pairs[0].ordinaryLowT1.initializedFrom.highT.fluidSha256 = '0'.repeat(64);
+await writeFile(inputPath, `${JSON.stringify(invalidProvenanceManifest, null, 2)}\n`);
+const provenanceFailedReportPath = join(provenanceFailedOutDir, 'manifest.json');
+const rejectProvenance = spawnSync('python3', [scriptUrl.pathname, '--input', inputPath, '--out-dir', provenanceFailedOutDir, '--report', provenanceFailedReportPath], { encoding: 'utf8' });
+assert.equal(rejectProvenance.status, 2, 'receiver provenance must bind the exact source high-t state');
+const provenanceFailedReport = JSON.parse(await readFile(provenanceFailedReportPath, 'utf8'));
+assert.equal(provenanceFailedReport.failurePhase, 'input-validation');
+assert.match(provenanceFailedReport.reason, /initializedFrom highT fluid sha256 mismatch/);
+
+const invalidInitializationManifest = structuredClone(inputManifest);
+const independentInitialFluid = Float32Array.from(filteredFluidT, value => value + 0.125);
+invalidInitializationManifest.pairs[0].ordinaryLowT1.initializedFrom.receiverInitialT.fluid = await writeArtifact(
+  'independent-receiver-initial-t-fluid',
+  independentInitialFluid,
+  [receiverGrid, receiverGrid, receiverGrid, fluidChannels.length],
+);
+await writeFile(inputPath, `${JSON.stringify(invalidInitializationManifest, null, 2)}\n`);
+const initializationFailedReportPath = join(initializationFailedOutDir, 'manifest.json');
+const rejectInitialization = spawnSync('python3', [scriptUrl.pathname, '--input', inputPath, '--out-dir', initializationFailedOutDir, '--report', initializationFailedReportPath], { encoding: 'utf8' });
+assert.equal(rejectInitialization.status, 2, 'valid independent receiver bytes must not impersonate filtered high-t initialization');
+const initializationFailedReport = JSON.parse(await readFile(initializationFailedReportPath, 'utf8'));
+assert.equal(initializationFailedReport.failurePhase, 'input-validation');
+assert.match(initializationFailedReport.reason, /receiverInitialT fluid does not equal filtered highT/);
+
+await writeFile(inputPath, `${JSON.stringify(inputManifest, null, 2)}\n`);
 
 const reportPath = join(outDir, 'manifest.json');
 const run = spawnSync('python3', [scriptUrl.pathname, '--input', inputPath, '--out-dir', outDir, '--report', reportPath], { encoding: 'utf8' });
@@ -149,6 +217,17 @@ assert.ok(report.pairs[0].metrics.global.rmseReductionFraction > 0.999999);
 assert.equal(report.pairs[0].channels.length, fluidChannels.length + 1);
 assert.equal(report.pairs[0].artifacts.exactClosureResidual.fluid.shape.at(-1), fluidChannels.length);
 assert.equal(report.pairs[0].artifacts.filteredHighT1.front.shape.at(-1), 1);
+assert.equal(report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.highT.fluidSha256, pair.highT.fluid.sha256);
+assert.equal(report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.receiverInitialT.fluid.sha256, sha256(floatsToBytes(filteredFluidT)));
+
+const expectedClosureFluid = Float32Array.from(filteredFluidT1, (value, index) => value - ordinaryFluidT1[index]);
+const expectedClosureFront = Float32Array.from(filteredFrontT1, (value, index) => value - ordinaryFrontT1[index]);
+assertFloatsClose(await readFloats(report.pairs[0].artifacts.filteredHighT.fluid.path), filteredFluidT, 'filtered high t fluid golden');
+assertFloatsClose(await readFloats(report.pairs[0].artifacts.filteredHighT.front.path), filteredFrontT, 'filtered high t front golden');
+assertFloatsClose(await readFloats(report.pairs[0].artifacts.filteredHighT1.fluid.path), filteredFluidT1, 'filtered high t1 fluid golden');
+assertFloatsClose(await readFloats(report.pairs[0].artifacts.filteredHighT1.front.path), filteredFrontT1, 'filtered high t1 front golden');
+assertFloatsClose(await readFloats(report.pairs[0].artifacts.exactClosureResidual.fluid.path), expectedClosureFluid, 'closure fluid golden');
+assertFloatsClose(await readFloats(report.pairs[0].artifacts.exactClosureResidual.front.path), expectedClosureFront, 'closure front golden');
 
 await writeFile(pair.highT1.fluid.path, Buffer.alloc(pair.highT1.fluid.byteLength, 0xff));
 const failedReportPath = join(failedOutDir, 'manifest.json');
