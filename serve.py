@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs, urlencode
 
@@ -320,6 +321,73 @@ def resolve_pipeline_source(payload):
     if not any(target.is_relative_to(root) for root in _declared_pipeline_source_roots()):
         raise PermissionError("pipeline source must live under declared Kaminos roots")
     return {"source": source or source_path, "path": str(target)}
+
+
+def resolve_pipeline_layer_payload(path_value):
+    candidate = Path(str(path_value or "")).expanduser().resolve()
+    root = KAMINOS_PIPELINE_RUNS_DIR.resolve()
+    if not candidate.is_relative_to(root):
+        raise PermissionError("bake layer payload must live under the pipeline-runs root")
+    if not candidate.is_file():
+        raise FileNotFoundError(str(candidate))
+    if candidate.suffix.lower() != ".npz":
+        raise ValueError("bake layer payload must be an .npz artifact")
+    return candidate
+
+
+def compose_selected_splat_bake_layers(payload):
+    source = resolve_pipeline_source(payload)
+    layer_specs = []
+    for item in payload.get("layers") or []:
+        if not isinstance(item, dict):
+            raise ValueError("each bake layer must be an object")
+        layer_specs.append({
+            "path": str(resolve_pipeline_layer_payload(item.get("path"))),
+            "enabled": item.get("enabled") is not False,
+            "strength": max(0.0, min(1.0, float(item.get("strength", 1.0)))),
+        })
+    if not layer_specs:
+        return {
+            "schema": "kaminos.selected-splat-bake-composite.v0",
+            "ok": True,
+            "source": source["source"],
+            "compositeSource": None,
+            "layerCount": 0,
+        }
+
+    output_root = (BROWSE_ROOTS["scratch"] / "selected-splat-bake-composites").resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    token = f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:10]}"
+    output_path = output_root / f"selected-splat-bake-{token}.ply"
+    report_path = output_root / f"selected-splat-bake-{token}.report.json"
+    python_bin = Path(os.environ.get(
+        "KAMINOS_SPLAT_BAKE_PYTHON",
+        os.path.expanduser("~/dev/moge-standalone/.venv/bin/python"),
+    )).expanduser()
+    script_path = ROOT / "tools" / "selected_splat_view_bake.py"
+    if not python_bin.is_file():
+        raise FileNotFoundError(f"splat bake Python is missing: {python_bin}")
+    command = [
+        str(python_bin),
+        str(script_path),
+        "--input", source["path"],
+        "--output", str(output_path),
+        "--report", str(report_path),
+        "--compose-layers", json.dumps(layer_specs),
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr[-4000:] or f"bake composite exited {result.returncode}")
+    rel_path = output_path.relative_to(BROWSE_ROOTS["scratch"].resolve()).as_posix()
+    return {
+        "schema": "kaminos.selected-splat-bake-composite.v0",
+        "ok": True,
+        "source": source["source"],
+        "compositeSource": "/api/read?" + urlencode({"root": "scratch", "path": rel_path}),
+        "outputPath": str(output_path),
+        "reportPath": str(report_path),
+        "layerCount": len(layer_specs),
+    }
 
 
 def _default_pipeline_out_dir(pipeline_id):
@@ -1006,6 +1074,10 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_save_scene()
         elif parsed.path == "/api/run-pipeline":
             self.handle_run_pipeline()
+        elif parsed.path == "/api/compose-splat-bake-layers":
+            self.handle_compose_splat_bake_layers()
+        elif parsed.path == "/api/capture-splat-bake-view":
+            self.handle_capture_splat_bake_view()
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
@@ -1109,6 +1181,52 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": str(error)}, 500)
             return
         self.send_json(result, 200 if result.get("ok") else 500)
+
+    def handle_compose_splat_bake_layers(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            payload = json.loads(self.rfile.read(length) or b"{}")
+            result = compose_selected_splat_bake_layers(payload)
+        except (ValueError, json.JSONDecodeError) as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        except PermissionError as error:
+            self.send_json({"error": str(error)}, 403)
+            return
+        except FileNotFoundError as error:
+            self.send_json({"error": str(error)}, 404)
+            return
+        except subprocess.TimeoutExpired:
+            self.send_json({"error": "bake layer composition timed out"}, 504)
+            return
+        except Exception as error:
+            self.send_json({"error": str(error)}, 500)
+            return
+        self.send_json(result)
+
+    def handle_capture_splat_bake_view(self):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            self.send_json({"error": "Invalid Content-Length"}, 400)
+            return
+        body = self.rfile.read(length)
+        if not body.startswith(b"\x89PNG\r\n\x1a\n"):
+            self.send_json({"error": "Bake view capture must be a PNG"}, 400)
+            return
+        output_root = (BROWSE_ROOTS["scratch"] / "selected-splat-bake-captures").resolve()
+        output_root.mkdir(parents=True, exist_ok=True)
+        token = f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:10]}"
+        output_path = output_root / f"selected-splat-view-{token}.png"
+        output_path.write_bytes(body)
+        rel_path = output_path.relative_to(BROWSE_ROOTS["scratch"].resolve()).as_posix()
+        self.send_json({
+            "schema": "kaminos.selected-splat-bake-source-view.v0",
+            "ok": True,
+            "path": str(output_path),
+            "source": "/api/read?" + urlencode({"root": "scratch", "path": rel_path}),
+            "bytes": len(body),
+        })
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.

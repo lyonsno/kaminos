@@ -425,8 +425,10 @@ function makeSelectedViewBakeRequestContext(outputPath) {
 
 function makeSelectedViewBakeLayerReceipt(outputPath) {
   const contextPath = artifactPathFor('requestContext');
+  const layerPayloadPath = artifactPathFor('layerPayload');
   const context = readJson(contextPath);
   const inputEvidence = fileEvidence(inputPath);
+  const layerPayloadEvidence = fileEvidence(layerPayloadPath);
   writeJson(outputPath, {
     schema: 'kaminos.selected-splat-view-bake-layer.pipeline-receipt.v0',
     pipeline: {
@@ -441,10 +443,15 @@ function makeSelectedViewBakeLayerReceipt(outputPath) {
       inputBytes: inputEvidence.bytes,
     },
     requestContext: context,
-    outputAuthority: 'pipeline-receipt-only',
+    layerPayload: {
+      role: pipeline.artifacts.layerPayload.role,
+      schema: pipeline.artifacts.layerPayload.schema,
+      ...layerPayloadEvidence,
+    },
+    outputAuthority: 'model-baked-layer-payload',
     status: {
       stageMode: 'selected-view-bake-receipt',
-      truthBoundary: 'route-local Bake View receipt; no material shard, persisted crucible cast, or renderer-quality proof is claimed',
+      truthBoundary: 'route-local Lotus-D normal layer payload exists; no persisted crucible cast, other material channels, monotonic improvement, or renderer-quality proof is claimed',
     },
     createdAt: new Date().toISOString(),
   });

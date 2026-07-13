@@ -317,6 +317,9 @@ assert.match(index, /kaminos\.splat-bake-layer\.v0/, 'candidate bake layers pres
 assert.match(index, /kaminos\.splat-bake-layer\.receipt\.v0/, 'candidate bake layer receipts preserve explicit receipt schema identity');
 assert.match(index, /kaminos\.splat-bake-layer\.preview-contribution\.v0/, 'candidate bake layers expose explicit preview contribution identity');
 assert.match(index, /selected-splat-view-bake-layer-v0/, 'candidate bake layers preserve route identity for the first operator-driven view bake');
+assert.doesNotMatch(index, /telemetry-only-no-bake-output/, 'Bake View must not represent receipt-only telemetry as a visible material layer');
+assert.match(index, /splatBakeCompositeSource/, 'enabled bake layers must drive a composed renderer source distinct from the original splat radiance source');
+assert.match(index, /scheduleSelectedSplatBakeLayerComposite/, 'layer strength changes must schedule real composite regeneration');
 assert.match(index, /selected-splat-view-bake-layer-crucible-v0/, 'candidate bake layers identify the crucible kind rather than masquerading as exported splat assets');
 assert.match(index, /function selectedSplatBakeLayerPreviewContribution\(/, 'candidate bake layers compute a selected-splat preview contribution instead of only recording receipts');
 assert.match(index, /function applySelectedSplatBakeLayerPreview\(/, 'candidate bake layers are coupled to the visible selected-splat preview path');
@@ -338,6 +341,9 @@ assert.match(index, /SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID\s*=\s*'selected-
 assert.match(index, /async function runSelectedSplatViewBakeLayerPipeline\(/, 'selected-splat Bake View must route through an explicit async pipeline firing helper');
 assert.match(index, /\/api\/run-pipeline/, 'selected-splat Bake View must call the server pipeline endpoint instead of remaining browser-local');
 assert.match(index, /requestContext:\s*selectedSplatViewBakeLayerPipelineRequestContext/, 'selected-splat Bake View must send current camera/control context to the pipeline witness');
+assert.match(index, /sourceAssetViewMatrix/, 'selected-splat Bake View must capture the raw source asset-to-camera matrix rather than the scene renderer pretransformed frame');
+assert.match(index, /captureSelectedSplatBakeSourceView/, 'selected-splat Bake View must capture the exact hybrid source-radiance canvas instead of substituting an approximate color harvester');
+assert.match(index, /\/api\/capture-splat-bake-view/, 'selected-splat Bake View must preserve its captured model input under a server-owned route');
 assert.match(index, /selectedSplatViewBakeLayerPipelineOutputRefs/, 'selected-splat Bake View must preserve returned pipeline artifact refs on the layer receipt');
 assert.match(index, /pipelineResultSummary/, 'selected-splat Bake View must store effective route/result identity on the candidate layer');
 assert.match(index, /window\.kaminosCreateSelectedSplatViewBakeLayer/, 'browser witnesses can create selected-splat view bake layers without DOM inference');
@@ -345,7 +351,7 @@ assert.match(index, /window\.kaminosSetSelectedSplatBakeLayerControls/, 'browser
 assert.match(index, /window\.kaminosSelectedSplatBakeLayerDebugState/, 'browser witnesses can inspect selected-splat bake layers and receipts without DOM inference');
 assert.match(index, /window\.kaminosSelectedSplatBakeLayerPreviewDebugState/, 'browser witnesses can inspect selected-splat bake-layer preview coupling without DOM inference');
 assert.match(index, /candidateLayerPreview/, 'Hybrid Renderer controls carry selected-splat candidate layer preview telemetry');
-assert.match(index, /rendererControlScope:\s*previewStrength > 0 \? 'telemetry-only-no-bake-output' : 'none'/, 'candidate bake layers must not fake backend coupling by mutating global renderer material curves');
+assert.match(index, /rendererControlScope:\s*previewStrength > 0 \? 'composed-per-splat-layer-payload' : 'none'/, 'candidate bake layer telemetry must identify the real composed per-splat payload path');
 assert.doesNotMatch(index, /roughnessContrast \+ previewStrength|albedoContrast \+ previewStrength|previewStrength \* 0\.12|previewStrength \* 0\.08/, 'candidate bake layer preview strength must not tint deferred material controls without a real baked output');
 assert.match(index, /function publishHybridSplatRendererControls\(/, 'Kaminos publishes renderer-control slider state through the overlay setRendererControls API');
 assert.match(index, /rendererControlsTelemetry/, 'Hybrid Renderer debug state exposes renderer-control telemetry for smoke evidence');

@@ -46,6 +46,8 @@ assert.match(preparedPipeline.description, /Load Source/i, 'prepared route descr
 const selectedViewBakePipeline = manifest.pipelines.find(pipeline => pipeline.id === 'selected-splat-view-bake-layer-v0');
 assert.ok(selectedViewBakePipeline, 'manifest must include a selected-splat current-view bake-layer route');
 assert.equal(selectedViewBakePipeline.routeId, 'selected-splat.view-bake-layer.v0');
+assert.equal(selectedViewBakePipeline.artifacts?.layerPayload?.role, 'selected-view-pbr-layer', 'selected-view bake route must declare a real per-splat PBR layer payload');
+assert.ok(selectedViewBakePipeline.stages.some(stage => stage.statusMode === 'model-adapter' && stage.route?.executesModel === true && stage.outputArtifact === 'layerPayload'), 'selected-view bake route must execute a real model adapter instead of stopping at a receipt');
 assert.equal(selectedViewBakePipeline.artifacts?.requestContext?.schema, 'kaminos.selected-splat-view-bake-request.v0', 'selected-view bake route must declare request context as a first-class artifact');
 assert.equal(selectedViewBakePipeline.artifacts?.layerReceipt?.schema, 'kaminos.selected-splat-view-bake-layer.pipeline-receipt.v0', 'selected-view bake route must declare its layer receipt artifact');
 assert.ok(selectedViewBakePipeline.stages.some(stage => stage.statusMode === 'selected-view-bake-request-context' && stage.outputArtifact === 'requestContext'), 'selected-view bake route must preserve request context through the witness');
@@ -237,6 +239,25 @@ try {
   const selectedViewContextPath = join(tempRoot, 'selected-view-request-context.json');
   const selectedViewOutDir = join(tempRoot, 'selected-view-out');
   const selectedViewReportPath = join(tempRoot, 'reports', 'selected-view-bake.json');
+  const selectedViewAdapterPath = join(tempRoot, 'mock-selected-view-bake-adapter.mjs');
+  writeFileSync(selectedViewAdapterPath, `#!/usr/bin/env node
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+const args = new Map();
+for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
+const output = args.get('--output');
+const report = args.get('--report');
+mkdirSync(dirname(output), { recursive: true });
+mkdirSync(dirname(report), { recursive: true });
+writeFileSync(output, 'mock selected-view per-splat layer payload\\n');
+writeFileSync(report, JSON.stringify({
+  schema: 'mock.selected-splat-view-bake-adapter-report.v0',
+  ok: true,
+  backend: { modelFamily: 'Lotus-D', runtime: 'mock-adapter' },
+  output: { path: output },
+}, null, 2) + '\\n');
+`);
+  chmodSync(selectedViewAdapterPath, 0o755);
   writeFileSync(selectedViewContextPath, JSON.stringify({
     schema: 'kaminos.selected-splat-view-bake-request.v0',
     layerId: 'layer-contract',
@@ -253,13 +274,21 @@ try {
     '--out-dir', selectedViewOutDir,
     '--report', selectedViewReportPath,
     '--request-context', selectedViewContextPath,
-  ], { encoding: 'utf8' });
+  ], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      KAMINOS_SELECTED_SPLAT_VIEW_BAKE_COMMAND: selectedViewAdapterPath,
+    },
+  });
 
   assert.equal(selectedViewBake.status, 0, selectedViewBake.stderr || selectedViewBake.stdout);
   const selectedViewReport = JSON.parse(readFileSync(selectedViewReportPath, 'utf8'));
   assert.equal(selectedViewReport.ok, true);
   assert.equal(selectedViewReport.effectiveRouteConfig.routeId, 'selected-splat.view-bake-layer.v0');
   assert.equal(selectedViewReport.artifacts.requestContext.status, 'real');
+  assert.equal(selectedViewReport.artifacts.layerPayload.status, 'fixture', 'mock selected-view adapter output must remain fixture-labeled in contract tests');
+  assert.equal(selectedViewReport.artifacts.layerPayload.role, 'selected-view-pbr-layer');
   assert.equal(selectedViewReport.artifacts.layerReceipt.status, 'real');
   assert.ok(selectedViewReport.artifacts.requestContext.path.startsWith(selectedViewOutDir), 'selected-view request context artifact must be caller-rooted');
   assert.ok(selectedViewReport.artifacts.layerReceipt.path.startsWith(selectedViewOutDir), 'selected-view layer receipt artifact must be caller-rooted');
@@ -273,7 +302,7 @@ try {
   assert.equal(selectedViewLayerReceipt.pipeline.routeId, 'selected-splat.view-bake-layer.v0');
   assert.equal(selectedViewLayerReceipt.source.inputPath, preparedInputPath);
   assert.equal(selectedViewLayerReceipt.requestContext.layerId, 'layer-contract');
-  assert.equal(selectedViewLayerReceipt.outputAuthority, 'pipeline-receipt-only');
+  assert.equal(selectedViewLayerReceipt.outputAuthority, 'model-baked-layer-payload');
 
   const liveMissingOutDir = join(tempRoot, 'live-missing-out');
   const liveMissingReportPath = join(tempRoot, 'reports', 'live-missing.json');

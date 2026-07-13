@@ -2316,6 +2316,7 @@ let hybridSplatOverlayState = {
 let hybridSplatDepthProxyDebugEnabled = true;
 const hybridSplatOverlayHiddenPreviewObjects = new Set();
 let selectedSplatBakeLayerSequence = 0;
+let selectedSplatBakeCompositeSequence = 0;
 
 function hideHybridSplatPreviewObject(record) {
   const visualRoot = record?.type === 'splat' ? (splatVisualRootFor(record.object) || record.object) : null;
@@ -3257,7 +3258,7 @@ function hybridSplatRendererControlsPayload() {
     },
     candidateLayerPreview: {
       ...candidateLayerPreview,
-      rendererControlScope: previewStrength > 0 ? 'telemetry-only-no-bake-output' : 'none',
+      rendererControlScope: previewStrength > 0 ? 'composed-per-splat-layer-payload' : 'none',
       materialCurveDeltas: {
         roughnessContrast: 0,
         roughnessBrightness: 0,
@@ -3604,6 +3605,10 @@ function hybridSplatOverlaySourceUrl(source) {
   return new URL(String(source || ''), window.location.href).href;
 }
 
+function hybridSplatRendererSource(record) {
+  return record?.splatBakeCompositeSource || record?.source || null;
+}
+
 function splatOverlaySceneEntry(record) {
   const visualRoot = splatVisualRootFor(record.object) || record.object;
   visualRoot.updateMatrixWorld?.(true);
@@ -3613,7 +3618,7 @@ function splatOverlaySceneEntry(record) {
     : new THREE.Matrix4().copy(visualRoot.matrixWorld);
   return {
     id: record.id,
-    source: hybridSplatOverlaySourceUrl(record.source),
+    source: hybridSplatOverlaySourceUrl(hybridSplatRendererSource(record)),
     fileName: record.fileName || record.label || `${record.id}.ply`,
     modelMatrix: Array.from(overlayAssetWorldMatrix.elements),
     correction: splatOverlayCorrectionIdentity(record, assetFrame),
@@ -3831,7 +3836,7 @@ async function startSelectedSplatHybridRenderer() {
     if (hybridSplatOverlayState.handle && hybridSplatOverlayState.objectId && hybridSplatOverlayState.objectId !== entry.id) {
       stopHybridSplatOverlay({ silent: true });
     }
-    const overlaySource = hybridSplatOverlaySourceUrl(entry.source);
+    const overlaySource = hybridSplatOverlaySourceUrl(hybridSplatRendererSource(entry));
     hybridSplatOverlayState.rendererMode = 'selected';
     hybridSplatOverlayState.sceneSplatIds = [];
     hybridSplatOverlayState.objectId = entry.id;
@@ -4429,12 +4434,27 @@ function selectedSplatViewBakeLayerCameraSnapshot() {
   if (!camera) return null;
   camera.updateMatrixWorld?.();
   const viewport = currentHybridOverlayViewport();
+  const frame = hybridSplatOverlayState.lastFrame;
+  const selected = selectedSplatRecord();
+  const matchingFrame = frame && selected && frame.objectId === selected.id ? frame : null;
+  const sourceAssetViewMatrix = matchingFrame?.overlayViewMatrix && matchingFrame?.overlayAssetWorldMatrix
+    ? new THREE.Matrix4().multiplyMatrices(
+      new THREE.Matrix4().fromArray(matchingFrame.overlayViewMatrix),
+      new THREE.Matrix4().fromArray(matchingFrame.overlayAssetWorldMatrix),
+    )
+    : new THREE.Matrix4().copy(camera.matrixWorldInverse);
   return {
     schema: 'kaminos.splat-bake-layer.camera.v0',
     position: camera.position.toArray(),
     target: controls?.target?.toArray?.() || null,
     projectionMatrix: Array.from(camera.projectionMatrix.elements),
     matrixWorldInverse: Array.from(camera.matrixWorldInverse.elements),
+    sourceAssetViewMatrix: Array.from(sourceAssetViewMatrix.elements),
+    effectiveViewMatrix: matchingFrame?.effectiveViewMatrix || null,
+    overlayAssetWorldMatrix: matchingFrame?.overlayAssetWorldMatrix || null,
+    rendererModelMatrix: matchingFrame?.rendererModelMatrix || null,
+    frameMode: matchingFrame?.assetFrameMode || null,
+    projectionFrameMode: matchingFrame?.projectionFrameMode || null,
     viewport,
     capturedAt: new Date().toISOString(),
   };
@@ -4448,7 +4468,7 @@ function ensureSelectedSplatBakeLayerList(record) {
 
 function selectedSplatBakeLayerPreviewContribution(record = selectedSplatRecord()) {
   const layers = record ? ensureSelectedSplatBakeLayerList(record) : [];
-  const enabledLayers = layers.filter(layer => layer?.enabled !== false);
+  const enabledLayers = layers.filter(layer => layer?.enabled !== false && layer?.payloadRef?.path);
   const strength = Math.max(0, Math.min(1, enabledLayers.reduce((total, layer) => {
     const value = Number(layer?.strength);
     return total + (Number.isFinite(value) ? value : 0);
@@ -4461,8 +4481,8 @@ function selectedSplatBakeLayerPreviewContribution(record = selectedSplatRecord(
     layerCount: layers.length,
     strength,
     layerIds: enabledLayers.map(layer => layer.id),
-    previewPath: 'selected-splat-point-cloud-material',
-    artifactAuthority: 'candidate-layer-preview-only',
+    previewPath: 'hybrid-renderer-composed-ply',
+    artifactAuthority: 'model-baked-layer-payload',
   };
 }
 
@@ -4506,29 +4526,10 @@ function selectedSplatPointCloudPreviewMaterialState(record) {
 
 function applySelectedSplatBakeLayerPreview(record = selectedSplatRecord()) {
   const contribution = selectedSplatBakeLayerPreviewContribution(record);
-  const preview = record?.object?.userData?.kaminosSplatPointCloudPreview || null;
-  const materials = [preview?.includedMaterial, preview?.excludedMaterial].filter(Boolean);
-  const pointSizeFactor = 1 + contribution.strength * 0.7;
-  let appliedMaterialCount = 0;
-  for (const material of materials) {
-    material.userData ||= {};
-    if (!Number.isFinite(material.userData.kaminosSplatBakeLayerPreviewBaseSize)) {
-      material.userData.kaminosSplatBakeLayerPreviewBaseSize = Number(material.size) || 0.02;
-    }
-    if (!Number.isFinite(material.userData.kaminosSplatBakeLayerPreviewBaseOpacity)) {
-      material.userData.kaminosSplatBakeLayerPreviewBaseOpacity = Number(material.opacity) || 1;
-    }
-    const baseSize = material.userData.kaminosSplatBakeLayerPreviewBaseSize;
-    const baseOpacity = material.userData.kaminosSplatBakeLayerPreviewBaseOpacity;
-    material.size = baseSize * pointSizeFactor;
-    material.opacity = Math.min(1, baseOpacity + contribution.strength * 0.08);
-    material.userData.kaminosSplatBakeLayerPreviewStrength = contribution.strength;
-    material.needsUpdate = true;
-    appliedMaterialCount += 1;
-  }
   const applied = {
     ...contribution,
-    appliedMaterialCount,
+    appliedMaterialCount: 0,
+    compositeSource: record?.splatBakeCompositeSource || null,
     pointCloudMaterial: selectedSplatPointCloudPreviewMaterialState(record),
   };
   if (record) {
@@ -4601,12 +4602,49 @@ function selectedSplatViewBakeLayerPipelineRequestContext(record, layer) {
     crucibleKind: SELECTED_SPLAT_VIEW_BAKE_LAYER_CRUCIBLE_KIND,
     armatureRef: layer?.armatureRef || selectedSplatArmatureRef(record),
     camera: layer?.camera || selectedSplatViewBakeLayerCameraSnapshot(),
+    sourceViewCapture: layer?.sourceViewCapture || null,
     rendererControls: layer?.receipt?.witness?.rendererControls || hybridSplatRendererControlsPayload(),
     requestedConfig: layer?.requestedConfig || {},
     effectiveConfig: layer?.effectiveConfig || {},
     previewContribution: selectedSplatBakeLayerPreviewContribution(record),
     requestedAt: new Date().toISOString(),
   };
+}
+
+function hybridSplatOverlayCanvas() {
+  return document.querySelector('#hybrid-splat-overlay-host canvas');
+}
+
+function nextAnimationFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve));
+}
+
+async function captureSelectedSplatBakeSourceView() {
+  const canvas = hybridSplatOverlayCanvas();
+  if (!(canvas instanceof HTMLCanvasElement) || hybridSplatOverlayState.status !== 'rendering') {
+    throw new Error('Start the Hybrid Renderer before baking the selected view');
+  }
+  const sourceInput = document.getElementById('hybrid-control-preview-source-color');
+  const previousSourceRadiance = sourceInput instanceof HTMLInputElement ? sourceInput.checked : true;
+  if (sourceInput instanceof HTMLInputElement) sourceInput.checked = true;
+  publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
+  await nextAnimationFrame();
+  await nextAnimationFrame();
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(value => value ? resolve(value) : reject(new Error('Hybrid Renderer canvas produced no PNG capture')), 'image/png');
+  });
+  if (sourceInput instanceof HTMLInputElement) sourceInput.checked = previousSourceRadiance;
+  publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
+  const response = await fetch('/api/capture-splat-bake-view', {
+    method: 'POST',
+    headers: { 'Content-Type': 'image/png' },
+    body: blob,
+  });
+  const result = await response.json();
+  if (!response.ok || result?.ok !== true || !result?.path) {
+    throw new Error(result?.error || `Bake view capture failed (${response.status})`);
+  }
+  return result;
 }
 
 function selectedSplatViewBakeLayerPipelineArtifactRecords(result) {
@@ -4635,6 +4673,88 @@ function selectedSplatViewBakeLayerPipelineOutputRefs(result) {
       bytes: artifact.bytes ?? null,
       sha256: artifact.sha256 || null,
     }));
+}
+
+function selectedSplatBakeLayerPayloadRef(layer) {
+  return layer?.payloadRef?.path ? layer.payloadRef : null;
+}
+
+function selectedSplatBakeLayerCompositeInputs(record) {
+  return ensureSelectedSplatBakeLayerList(record)
+    .map(layer => ({ layer, payloadRef: selectedSplatBakeLayerPayloadRef(layer) }))
+    .filter(item => item.payloadRef && item.layer.enabled !== false && Number(item.layer.strength) > 0)
+    .map(item => ({
+      id: item.layer.id,
+      path: item.payloadRef.path,
+      enabled: true,
+      strength: Math.max(0, Math.min(1, Number(item.layer.strength) || 0)),
+    }));
+}
+
+function hybridSplatRendererUsesRecord(record) {
+  if (!record || hybridSplatOverlayState.status !== 'rendering') return false;
+  if (hybridSplatOverlayState.rendererMode === 'scene') {
+    return hybridSplatOverlayState.sceneSplatIds.includes(record.id);
+  }
+  return hybridSplatOverlayState.objectId === record.id;
+}
+
+async function refreshHybridSplatRendererForBakeComposite(record) {
+  if (!hybridSplatRendererUsesRecord(record)) return null;
+  return hybridSplatOverlayState.rendererMode === 'scene'
+    ? reloadHybridSplatSceneRenderer()
+    : reloadSelectedSplatHybridRenderer();
+}
+
+async function composeSelectedSplatBakeLayers(record, generation) {
+  const layers = selectedSplatBakeLayerCompositeInputs(record);
+  if (!layers.length) {
+    record.splatBakeCompositeSource = null;
+    record.splatBakeCompositeReceipt = {
+      schema: 'kaminos.selected-splat-bake-composite.v0',
+      ok: true,
+      layerCount: 0,
+      compositeSource: null,
+    };
+    applySelectedSplatBakeLayerPreview(record);
+    await refreshHybridSplatRendererForBakeComposite(record);
+    return record.splatBakeCompositeReceipt;
+  }
+  const response = await fetch('/api/compose-splat-bake-layers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      source: record.source,
+      targetObjectId: record.id,
+      layers,
+    }),
+  });
+  const result = await response.json();
+  if (!response.ok || result?.ok !== true || !result?.compositeSource) {
+    throw new Error(result?.error || `Bake layer composition failed (${response.status})`);
+  }
+  if (record.splatBakeCompositeGeneration !== generation) return null;
+  record.splatBakeCompositeSource = result.compositeSource;
+  record.splatBakeCompositeReceipt = result;
+  applySelectedSplatBakeLayerPreview(record);
+  await refreshHybridSplatRendererForBakeComposite(record);
+  window._kaminosDirty?.();
+  return result;
+}
+
+function scheduleSelectedSplatBakeLayerComposite(record) {
+  if (!record) return Promise.resolve(null);
+  const generation = ++selectedSplatBakeCompositeSequence;
+  record.splatBakeCompositeGeneration = generation;
+  const promise = composeSelectedSplatBakeLayers(record, generation).catch(error => {
+    if (record.splatBakeCompositeGeneration === generation) {
+      record.splatBakeCompositeError = error?.message || String(error);
+      setInfo(`Bake layer composition failed: ${record.splatBakeCompositeError}`);
+    }
+    throw error;
+  });
+  record.splatBakeCompositePromise = promise;
+  return promise;
 }
 
 function pipelineResultSummary(result) {
@@ -4667,6 +4787,7 @@ async function runSelectedSplatViewBakeLayerPipeline(record, layer) {
   const summary = pipelineResultSummary(result);
   const outputRefs = selectedSplatViewBakeLayerPipelineOutputRefs(result);
   const receiptRef = outputRefs.find(ref => ref.id === 'layerReceipt') || null;
+  const payloadRef = outputRefs.find(ref => ref.id === 'layerPayload' && ref.status === 'real') || null;
   layer.pipelineRun = summary;
   layer.receipt.firing.status = result?.ok ? 'complete' : 'failed';
   layer.receipt.firing.completedAt = new Date().toISOString();
@@ -4677,13 +4798,17 @@ async function runSelectedSplatViewBakeLayerPipeline(record, layer) {
     ...layer.receipt.outputs,
     shardRefs: outputRefs,
     receiptRef,
-    artifactAuthority: result?.ok ? 'pipeline-receipt-only' : 'candidate-layer-record-only',
+    artifactAuthority: payloadRef ? 'model-baked-layer-payload' : 'candidate-layer-record-only',
   };
-  layer.status = result?.ok ? 'candidate' : 'failed';
+  layer.payloadRef = payloadRef;
+  layer.status = payloadRef ? 'candidate' : 'failed';
   layer.receipt.failurePhase = result?.ok ? null : 'pipeline-run';
   layer.updatedAt = new Date().toISOString();
+  syncSelectedSplatBakeLayerPresentation(record);
+  applySelectedSplatBakeLayerPreview(record);
   renderSelectedSplatBakeLayerPanel(record);
   publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
+  if (payloadRef) await scheduleSelectedSplatBakeLayerComposite(record);
   window._kaminosDirty?.();
   return result;
 }
@@ -4699,7 +4824,7 @@ async function createSelectedSplatViewBakeLayer(options = {}) {
   const layerId = `splat-view-layer-${Date.now().toString(36)}-${++selectedSplatBakeLayerSequence}`;
   const requestedConfig = {
     route: SELECTED_SPLAT_VIEW_BAKE_LAYER_ROUTE,
-    channelIntent: options.channelIntent || ['albedo', 'roughness', 'metalness', 'emissive', 'normal', 'ao'],
+    channelIntent: options.channelIntent || ['normal'],
     inputFrame: 'current-kaminos-camera',
     operatorDriven: true,
   };
@@ -4708,9 +4833,16 @@ async function createSelectedSplatViewBakeLayer(options = {}) {
     layerContributionMode: 'candidate-parameter-layer',
     backendRoute: options.backendRoute || 'kaminos-pipeline-witness-v0',
     pipelineId: SELECTED_SPLAT_VIEW_BAKE_LAYER_PIPELINE_ID,
-    renderedIntoSplat: false,
+    renderedIntoSplat: true,
   };
   const cameraSnapshot = selectedSplatViewBakeLayerCameraSnapshot();
+  let sourceViewCapture;
+  try {
+    sourceViewCapture = await captureSelectedSplatBakeSourceView();
+  } catch (error) {
+    setInfo(`Bake View failed: ${error?.message || error}`);
+    return null;
+  }
   const rendererControls = hybridSplatRendererControlsPayload();
   const armatureRef = selectedSplatArmatureRef(record);
   const crucible = {
@@ -4736,6 +4868,7 @@ async function createSelectedSplatViewBakeLayer(options = {}) {
     requestedConfig,
     effectiveConfig,
     camera: cameraSnapshot,
+    sourceViewCapture,
     rendererControls,
     createdAt: now,
   });
@@ -4751,6 +4884,7 @@ async function createSelectedSplatViewBakeLayer(options = {}) {
     targetObjectId: record.id,
     armatureRef,
     camera: cameraSnapshot,
+    sourceViewCapture,
     requestedConfig,
     effectiveConfig,
     receipt,
@@ -4767,7 +4901,7 @@ async function createSelectedSplatViewBakeLayer(options = {}) {
   setInfo(`Bake layer queued: ${layer.label}`);
   try {
     const result = await runSelectedSplatViewBakeLayerPipeline(record, layer);
-    setInfo(result?.ok ? `Bake layer pipeline receipt written: ${layer.label}` : `Bake layer pipeline failed: ${layer.label}`);
+    setInfo(result?.ok && layer.payloadRef ? `Bake layer composed: ${layer.label}` : `Bake layer pipeline failed: ${layer.label}`);
   } catch (err) {
     layer.status = 'failed';
     layer.updatedAt = new Date().toISOString();
@@ -4788,7 +4922,7 @@ function findSelectedSplatBakeLayer(layerId) {
   return { record: null, layer: null };
 }
 
-function setSelectedSplatBakeLayerControls(layerId, controls = {}) {
+async function setSelectedSplatBakeLayerControls(layerId, controls = {}) {
   const found = findSelectedSplatBakeLayer(layerId);
   if (!found.layer) throw new Error(`Unknown splat bake layer: ${layerId}`);
   if (typeof controls.enabled === 'boolean') found.layer.enabled = controls.enabled;
@@ -4801,6 +4935,7 @@ function setSelectedSplatBakeLayerControls(layerId, controls = {}) {
   publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
   renderSelectedSplatBakeLayerPanel(selectedSplatRecord() || found.record);
   window._kaminosDirty?.();
+  await scheduleSelectedSplatBakeLayerComposite(found.record);
   return found.layer;
 }
 

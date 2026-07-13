@@ -102,9 +102,9 @@
     },
     {
       "id": "selected-splat-view-bake-layer-v0",
-      "label": "Selected Splat: Current View Bake Layer Receipt",
+      "label": "Selected Splat: Current View Lotus Normal Layer",
       "routeId": "selected-splat.view-bake-layer.v0",
-      "description": "Captures the selected splat, current Kaminos camera, and renderer controls as a route-local candidate bake-layer receipt. This route records a pipeline firing and request context only; it does not claim a model-baked material shard, persisted crucible cast, or monotonic improvement.",
+      "description": "Renders the selected splat through the effective Kaminos camera, executes Lotus-D normal inference, and projects covered normals into a route-local per-splat candidate layer. The output is an editable crucible layer, not a persisted cast or a monotonic-improvement claim.",
       "artifacts": {
         "input": {
           "role": "selected-splat",
@@ -114,6 +114,11 @@
           "role": "selected-view-bake-request",
           "schema": "kaminos.selected-splat-view-bake-request.v0",
           "pathTemplate": "artifacts/selected-view-bake.request.json"
+        },
+        "layerPayload": {
+          "role": "selected-view-pbr-layer",
+          "schema": "kaminos.selected-view-pbr-layer.v0",
+          "pathTemplate": "artifacts/selected-view-bake.layer.npz"
         },
         "layerReceipt": {
           "role": "selected-view-bake-layer-receipt",
@@ -134,6 +139,23 @@
           },
           "inputArtifact": "input",
           "outputArtifact": "requestContext"
+        },
+        {
+          "id": "run-selected-view-normal-bake",
+          "label": "Run Selected View Lotus-D Normal Bake",
+          "statusMode": "model-adapter",
+          "route": {
+            "id": "adapter.selected-splat-view-lotus-normal.v0",
+            "tool": "Lotus-D selected-view splat baker",
+            "commandEnv": "KAMINOS_SELECTED_SPLAT_VIEW_BAKE_COMMAND",
+            "commandDefault": "scripts/run-selected-splat-view-bake-adapter",
+            "modelFamily": "Lotus-D",
+            "realModel": true,
+            "executesModel": true,
+            "effectiveBackend": "local-mps-subprocess"
+          },
+          "inputArtifact": "requestContext",
+          "outputArtifact": "layerPayload"
         },
         {
           "id": "write-selected-view-bake-layer-receipt",

@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+PYTHON_BIN="${KAMINOS_SPLAT_BAKE_PYTHON:-$HOME/dev/moge-standalone/.venv/bin/python}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$PYTHON_BIN" "$SCRIPT_DIR/../tools/selected_splat_view_bake.py" "$@"
