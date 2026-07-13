@@ -1,11 +1,14 @@
 import {
   classifySam31MemoryAttentionAdapter,
   createRouteInvocationRequest,
+  createSam31TrackerState,
   createSam31MemoryAttentionPhaseProgramRouteDefinition,
   createSam31MemoryEncoderPhaseProgramRouteDefinition,
   createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition,
   createSam31TemporalMemoryBankPhaseProgramRouteDefinition,
-  createSam31TemporalMemoryBankPlan,
+  getSam31TrackerStateSnapshot,
+  insertSam31TrackerFrame,
+  prepareSam31TrackerTemporalInputs,
   runSam31MemoryAttentionPhaseProgramRoute,
   runSam31MemoryEncoderPhaseProgramRoute,
   runSam31MultiplexMaskDecoderPhaseProgramRoute,
@@ -246,13 +249,44 @@ async function run() {
   const frame0MemoryResult = await runSam31MemoryEncoderPhaseProgramRoute({ request: memoryRequest, route: memoryRoute, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: navigator.userAgent, model: { revision: episode.reference.model.revision, weightsHash: memoryWeightsHash }, kernel: memoryRoute.kernel, tensors: { propagationFeature: frame0Inputs.imageEmbedding, maskLogits: suppression.memoryInputMasks, objectScores: new Float32Array(frame0DecoderResult.debugReadback.objectScores), shape: { batch: 1, featureHeight: 2, featureWidth: 2, featureChannels: 256, maskHeight: 8, maskWidth: 8, multiplexCount: 16, conditionChannels: true, conditioning, resampledMaskHeight: 32, resampledMaskWidth: 32 }, config: memoryManifest.config, weights: memoryWeights }, includeReadback: true });
   const memoryParity = { features: maxAbs(frame0MemoryResult.debugReadback.memoryFeatures, await episodeTensor('frame-0-memory-features')), position: maxAbs(frame0MemoryResult.debugReadback.memoryPositionEncoding, await episodeTensor('frame-0-memory-position')) };
 
-  const plan = createSam31TemporalMemoryBankPlan({ ...episode.plan, frameTokenCount: 4, multiplexCount: 16 });
+  const trackerState = createSam31TrackerState({
+    numFrames: episode.plan.numFrames,
+    frameTokenCount: episode.shape.queryTokens,
+    multiplexCount: episode.shape.multiplexCount,
+    channels: episode.shape.channels,
+    maskHeight: episode.shape.maskHeight,
+    maskWidth: episode.shape.maskWidth,
+    numMaskmem: episode.plan.numMaskmem,
+    maxConditioningFrames: episode.plan.maxConditioningFrames,
+    maxObjectPointerFrames: episode.plan.maxObjectPointerFrames,
+    memoryTemporalStride: episode.plan.memoryTemporalStride,
+    useMaskmemTemporalPositionV2: episode.plan.useMaskmemTemporalPositionV2,
+  });
+  insertSam31TrackerFrame(trackerState, {
+    frameIndex: 0,
+    kind: 'conditioning',
+    conditioningObjects: episode.stateTransition.conditioningObjects,
+    memory: new Float32Array(frame0MemoryResult.debugReadback.memoryFeatures),
+    memoryPosition: new Float32Array(frame0MemoryResult.debugReadback.memoryPositionEncoding),
+    image: frame0Inputs.imageEmbedding,
+    imagePosition: frame0Inputs.imagePosition,
+    pointers: new Float32Array(frame0DecoderResult.debugReadback.objectPointers),
+    maskLogits: suppression.memoryInputMasks,
+    objectScores: new Float32Array(frame0DecoderResult.debugReadback.objectScores),
+    origin: {
+      kind: 'propagation-decoder',
+      maskOwner: 'browser-webgpu',
+      pointerOwner: 'browser-webgpu',
+      pointerReceipt: frame0DecoderResult.receipt,
+    },
+  });
+  const preparedTrackerState = prepareSam31TrackerTemporalInputs(trackerState, { frameIndex: 1, trackInReverse: false });
+  const { plan, spatialFrames, pointerFrames } = preparedTrackerState;
+  const trackerStateSnapshot = getSam31TrackerStateSnapshot(trackerState);
   const temporalEmbeddings = await temporalTensor('maskmem-temporal-embeddings');
   const pointerPositionProjection = { weight: await temporalTensor('pointer-position-projection-weight'), bias: await temporalTensor('pointer-position-projection-bias') };
-  const spatialFrames = [{ frameIndex: 0, memory: new Float32Array(frame0MemoryResult.debugReadback.memoryFeatures), memoryPosition: new Float32Array(frame0MemoryResult.debugReadback.memoryPositionEncoding), image: frame0Inputs.imageEmbedding, imagePosition: frame0Inputs.imagePosition }];
-  const pointerFrames = [{ frameIndex: 0, pointers: new Float32Array(frame0DecoderResult.debugReadback.objectPointers) }];
   const temporalRoute = createSam31TemporalMemoryBankPhaseProgramRouteDefinition({ model: { revision: episode.reference.model.revision }, kernel: { profile: 'sam31-temporal-memory-bank-phase-program-v0', commit: params.get('commit') || null } });
-  const episodeHash = await sha256Text(JSON.stringify(episode.plan));
+  const episodeHash = await sha256Text(JSON.stringify(trackerStateSnapshot));
   const temporalHash = await sha256Text(temporalManifest.tensors.filter(entry => ['maskmem-temporal-embeddings', 'pointer-position-projection-weight', 'pointer-position-projection-bias'].includes(entry.role)).map(entry => `${entry.role}:${entry.sha256}`).join('\n'));
   const temporalRequest = createRouteInvocationRequest(temporalRoute, { requestId: `sam31-two-frame-bank-${Date.now()}`, inputs: { 'source-video-episode': { artifactId: 'sam31-two-frame-episode', sha256: episodeHash, shape: [2] }, 'sam31-temporal-spatial-memory-frames': { artifactId: 'sam31-frame-0-spatial-state', sha256: frame0MemoryResult.receipt.outputs[0].sha256, shape: [1, 1, 4, 256] }, 'sam31-temporal-object-pointer-frames': { artifactId: 'sam31-frame-0-pointer-state', sha256: frame0DecoderResult.receipt.outputs.find(output => output.role === 'sam31-multiplex-object-pointers').sha256, shape: [1, 1, 16, 256] }, 'sam31-temporal-memory-position-weights': { artifactId: 'sam31-temporal-weights:official', sha256: temporalHash, mappedTensorCount: 3 } }, outputs: { 'sam31-temporal-memory-attention-bank': { artifactId: 'sam31-frame-1-memory-bank', shape: [1, 20, 256] } } });
   update('running', 'frame-1-temporal-bank', { frame0MemoryReceipt: frame0MemoryResult.receipt });
@@ -283,12 +317,13 @@ async function run() {
   const maximums = { frame0Decoder: frame0Decoder.maximum, frame0Memory: Math.max(...Object.values(memoryParity)), temporalBank: Math.max(...Object.values(bankParity)), frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.maximum };
   const routeChainPassed = receipts.every((receipt, index) => receipt.status === 'real' && receipt.fallbackReason == null && receipt.effectiveRouteId === requestedRouteIds[index]);
   const suppressionPassed = episode.stateTransition.noObjectMaskScore === NO_OBJ_SCORE && suppression.suppressedAbsentMaskCount === episode.stateTransition.frame0SuppressedAbsentMaskCount && suppression.suppressedAbsentMaskCount === episode.stateTransition.frame0AbsentObjectCount && suppression.semanticsPassed;
-  const stateTransitionPassed = episode.stateTransition.frame0AppearingObjectCount > 0 && episode.stateTransition.frame0AbsentObjectCount > 0 && suppressionPassed && plan.spatialFrames.length === 1 && plan.pointerFrames.length === 1 && bank.memory.length === 20 * 256;
+  const persistentStatePassed = preparedTrackerState.stateVersion === 1 && trackerStateSnapshot.conditioningFrameIndices.length === 1 && trackerStateSnapshot.conditioningFrameIndices[0] === 0 && trackerStateSnapshot.nonConditioningFrameIndices.length === 0 && trackerStateSnapshot.bridgeDebt.length === 0;
+  const stateTransitionPassed = episode.stateTransition.frame0AppearingObjectCount > 0 && episode.stateTransition.frame0AbsentObjectCount > 0 && suppressionPassed && persistentStatePassed && plan.spatialFrames.length === 1 && plan.pointerFrames.length === 1 && bank.memory.length === 20 * 256;
   const parityPassed = suppressionParity <= episode.tolerances.decoderMaxAbsDiff && maximums.frame0Decoder <= episode.tolerances.decoderMaxAbsDiff && maximums.frame0Memory <= episode.tolerances.memoryMaxAbsDiff && maximums.temporalBank <= episode.tolerances.bankMaxAbsDiff && maximums.frame1Attention <= episode.tolerances.conditionedMaxAbsDiff && maximums.frame1Decoder <= episode.tolerances.decoderMaxAbsDiff;
   const packetAuthorityPassed = packetAuthority.passed === true && packetAuthority.verifiedPackets.length === 4;
-  const evidence = { packetAuthorityPassed, adapterPassed: adapterInfo.isFallbackAdapter === false, routeChainPassed, stateTransitionPassed, parityPassed, errorsPassed: errors.length === 0 };
+  const evidence = { packetAuthorityPassed, adapterPassed: adapterInfo.isFallbackAdapter === false, routeChainPassed, persistentStatePassed, stateTransitionPassed, parityPassed, errorsPassed: errors.length === 0 };
   evidence.passed = Object.values(evidence).every(Boolean);
-  const final = { packetAuthority, adapterInfo, requestedRouteIds, effectiveRouteIds, receipts, parity: { maximums, frame0Decoder: frame0Decoder.parity, frame0MaskSuppression: { maxAbsDiff: suppressionParity, suppressedAbsentMaskCount: suppression.suppressedAbsentMaskCount, semanticsPassed: suppression.semanticsPassed, memoryInputMaskSha256: memoryInputMaskHash }, frame0Memory: memoryParity, temporalBank: bankParity, frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.parity }, stateTransition: episode.stateTransition, evidence, uncapturedErrors: errors, manifest: { reference: episode.reference, shape: episode.shape, plan: episode.plan } };
+  const final = { packetAuthority, trackerState: trackerStateSnapshot, adapterInfo, requestedRouteIds, effectiveRouteIds, receipts, parity: { maximums, frame0Decoder: frame0Decoder.parity, frame0MaskSuppression: { maxAbsDiff: suppressionParity, suppressedAbsentMaskCount: suppression.suppressedAbsentMaskCount, semanticsPassed: suppression.semanticsPassed, memoryInputMaskSha256: memoryInputMaskHash }, frame0Memory: memoryParity, temporalBank: bankParity, frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.parity }, stateTransition: episode.stateTransition, evidence, uncapturedErrors: errors, manifest: { reference: episode.reference, shape: episode.shape, plan: episode.plan } };
   if (!evidence.passed) throw Object.assign(new Error(`two-frame tracker evidence failed: ${JSON.stringify(evidence)}`), { evidenceState: final });
   update('passed', 'complete', final);
 }

@@ -312,6 +312,13 @@ export {
 } from './sam31-temporal-memory-bank-phase-program.js';
 
 export {
+  createSam31TrackerState,
+  getSam31TrackerStateSnapshot,
+  insertSam31TrackerFrame,
+  prepareSam31TrackerTemporalInputs,
+} from './sam31-tracker-state.js';
+
+export {
   SAM31_MULTIPLEX_MASK_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam31MultiplexMaskDecoderPhaseProgramCpuOracle,
   createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition,
