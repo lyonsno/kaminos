@@ -371,6 +371,10 @@ try {
     budgetedReport.diagnostics.residuals.artifacts.exactMinusPrediction,
     budgetedReport.diagnostics.residuals.artifacts.predictionMinusIdentity,
     budgetedReport.diagnostics.churnOverlay.artifacts.supportChurn,
+    budgetedReport.diagnostics.churnOverlay.artifacts.missedSupport,
+    budgetedReport.diagnostics.churnOverlay.artifacts.falseSupport,
+    budgetedReport.diagnostics.churnOverlay.artifacts.trueBirth,
+    budgetedReport.diagnostics.churnOverlay.artifacts.trueDeath,
     budgetedReport.diagnostics.inspection.artifacts.contextSheet,
   ];
   for (const artifact of diagnosticArtifacts) {

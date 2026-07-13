@@ -776,6 +776,12 @@ function diagnosticPrototypeRadius(row, gridStep) {
 function renderSupportChurnOverlay(sourceRows, targetRows, predictionSites, predictedOccupiedKeys, camera, renderOptions, gridStep) {
   const keys = new Set([...sourceRows.keys(), ...targetRows.keys(), ...predictionSites.keys(), ...predictedOccupiedKeys]);
   const rows = [];
+  const categoryRows = {
+    missedSupport: [],
+    falseSupport: [],
+    trueBirth: [],
+    trueDeath: [],
+  };
   const counts = {
     trueSurvival: 0,
     missedSupport: 0,
@@ -801,27 +807,61 @@ function renderSupportChurnOverlay(sourceRows, targetRows, predictionSites, pred
     } else if (targetOccupied && !predicted) {
       counts.missedSupport += 1;
       color = [1.0, 0.08, 0.18];
+      categoryRows.missedSupport.push(key);
     } else if (predicted && !targetOccupied) {
       counts.falseSupport += 1;
       color = [1.0, 0.46, 0.05];
       if (!sourceOccupied) counts.falseBirth += 1;
       else counts.retainedDeadSource += 1;
+      categoryRows.falseSupport.push(key);
     } else if (!sourceOccupied && targetOccupied && predicted) {
       counts.trueBirth += 1;
       color = [1.0, 0.88, 0.16];
+      categoryRows.trueBirth.push(key);
     } else if (sourceOccupied && !targetOccupied && !predicted) {
       counts.trueDeath += 1;
       color = [0.12, 0.48, 1.0];
       opacity = 0.72;
+      categoryRows.trueDeath.push(key);
     }
     if (!color) continue;
     const prototype = sourceRow?.splat || targetRow?.splat;
     const position = sourceRow?.position || targetRow?.position || site?.position || keyToWorldPosition(key);
     rows.push(makeDiagnosticSplat(position, color, diagnosticPrototypeRadius(prototype, gridStep), opacity));
   }
-  const render = renderBoundarySplatRowsPng(rows.length ? rows : [makeDiagnosticSplat([0, 0, 0], [0.05, 0.05, 0.05], gridStep, 0.01)], camera, renderOptions);
+  const fallbackRow = makeDiagnosticSplat([0, 0, 0], [0.05, 0.05, 0.05], gridStep, 0.01);
+  const renderRows = (categoryKeys, color, opacity = 0.9) => {
+    const category = [];
+    for (const key of categoryKeys) {
+      const sourceRow = sourceRows.get(key);
+      const targetRow = targetRows.get(key);
+      const site = predictionSites.get(key);
+      const prototype = sourceRow?.splat || targetRow?.splat;
+      const position = sourceRow?.position || targetRow?.position || site?.position || keyToWorldPosition(key);
+      category.push(makeDiagnosticSplat(position, color, diagnosticPrototypeRadius(prototype, gridStep), opacity));
+    }
+    return renderBoundarySplatRowsPng(category.length ? category : [fallbackRow], camera, renderOptions);
+  };
+  const render = renderBoundarySplatRowsPng(rows.length ? rows : [fallbackRow], camera, renderOptions);
   render.authority = 'world-position-support-churn-overlay-v0';
-  return { render, counts };
+  const missedSupport = renderRows(categoryRows.missedSupport, [1.0, 0.08, 0.18], 0.9);
+  missedSupport.authority = 'world-position-support-churn-category-overlay-v0';
+  const falseSupport = renderRows(categoryRows.falseSupport, [1.0, 0.46, 0.05], 0.9);
+  falseSupport.authority = 'world-position-support-churn-category-overlay-v0';
+  const trueBirth = renderRows(categoryRows.trueBirth, [1.0, 0.88, 0.16], 0.9);
+  trueBirth.authority = 'world-position-support-churn-category-overlay-v0';
+  const trueDeath = renderRows(categoryRows.trueDeath, [0.12, 0.48, 1.0], 0.8);
+  trueDeath.authority = 'world-position-support-churn-category-overlay-v0';
+  return {
+    render,
+    counts,
+    categoryRenders: {
+      missedSupport,
+      falseSupport,
+      trueBirth,
+      trueDeath,
+    },
+  };
 }
 
 function composeHorizontal(rendered) {
@@ -1367,6 +1407,10 @@ async function runLocalGridOccupancyRenderWitness(context) {
     exactMinusPrediction: await writeRenderArtifact(resolve(outDir, `phase-render-residual-exact-minus-prediction-${offsetLabel}.png`), exactMinusPredictionRender),
     predictionMinusIdentity: await writeRenderArtifact(resolve(outDir, `phase-render-residual-prediction-minus-identity-${offsetLabel}.png`), predictionMinusIdentityRender),
     supportChurn: await writeRenderArtifact(resolve(outDir, `phase-render-support-churn-overlay-${offsetLabel}.png`), churnOverlay.render),
+    missedSupport: await writeRenderArtifact(resolve(outDir, `phase-render-support-churn-missed-support-${offsetLabel}.png`), churnOverlay.categoryRenders.missedSupport),
+    falseSupport: await writeRenderArtifact(resolve(outDir, `phase-render-support-churn-false-support-${offsetLabel}.png`), churnOverlay.categoryRenders.falseSupport),
+    trueBirth: await writeRenderArtifact(resolve(outDir, `phase-render-support-churn-true-birth-${offsetLabel}.png`), churnOverlay.categoryRenders.trueBirth),
+    trueDeath: await writeRenderArtifact(resolve(outDir, `phase-render-support-churn-true-death-${offsetLabel}.png`), churnOverlay.categoryRenders.trueDeath),
     contextSheet: await writeRenderArtifact(resolve(outDir, `phase-render-diagnostic-context-${offsetLabel}.png`), diagnosticContextRender),
   };
   const identityPixelMse = imageMse(identityRender.rgba, exactRender.rgba);
@@ -1480,6 +1524,10 @@ async function runLocalGridOccupancyRenderWitness(context) {
         interpretation: 'Categorical world-position support overlay: green true survival, yellow true birth, red missed target support, orange false predicted support, blue true death.',
         artifacts: {
           supportChurn: diagnosticArtifacts.supportChurn,
+          missedSupport: diagnosticArtifacts.missedSupport,
+          falseSupport: diagnosticArtifacts.falseSupport,
+          trueBirth: diagnosticArtifacts.trueBirth,
+          trueDeath: diagnosticArtifacts.trueDeath,
         },
         counts: churnOverlay.counts,
       },
