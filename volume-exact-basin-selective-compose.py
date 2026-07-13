@@ -48,6 +48,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest")
     parser.add_argument("--batch-cells", type=int, default=32768)
     parser.add_argument("--support-threshold", type=float)
+    parser.add_argument("--residual-scale", type=float, default=1.0)
     return parser.parse_args()
 
 
@@ -262,6 +263,14 @@ def main() -> int:
                 if args.support_threshold is None
                 else "caller-specified-calibration-assay-v0"
             )
+            residual_scale = float(args.residual_scale)
+            if not np.isfinite(residual_scale):
+                raise CompositionFailure(phase, f"residual scale must be finite, got {residual_scale}")
+            residual_scale_authority = (
+                "checkpoint-full-residual-v0"
+                if residual_scale == 1.0
+                else "caller-specified-residual-blend-assay-v0"
+            )
         with np.load(heads_path, allow_pickle=False) as heads_archive:
             channel_states = {channel: model_state(heads_archive, channel) for channel in requested_channels}
         if classifier["w1"].shape[0] != feature_mean.size or feature_mean.shape != feature_std.shape:
@@ -304,9 +313,9 @@ def main() -> int:
                 channel_index = 16 if channel == "frontTopology" else FLUID_CHANNELS.index(channel)
                 low_channel = low_values[:, channel_index]
                 residual = probe_module.predict_mlp(features, channel_states[channel], binary=False)
-                composed = low_channel + residual
+                composed = low_channel + residual * np.float32(residual_scale)
                 if policy == SPARSE_POLICY:
-                    composed = low_channel + residual * hard_mask.astype(np.float32)
+                    composed = low_channel + residual * hard_mask.astype(np.float32) * np.float32(residual_scale)
                 truth = high_front[indexes] if channel == "frontTopology" else high_fluid[indexes, channel_index]
                 if channel == "frontTopology":
                     front_out[start:end] = composed
@@ -357,6 +366,12 @@ def main() -> int:
                 "hardMask": artifact_descriptor(mask_path, [high_grid, high_grid, high_grid, 1], ["acceptedSplatHardMask"], "uint8"),
             },
             "channelPolicies": channel_policies,
+            "residualBlend": {
+                "identity": "low-plus-scaled-learned-residual-v0",
+                "scale": residual_scale,
+                "authority": residual_scale_authority,
+                "appliesTo": requested_channels,
+            },
             "channelMetrics": {channel: finish_metrics(value) for channel, value in metrics.items()},
             "receiver": {
                 "grid": high_grid,
