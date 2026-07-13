@@ -349,6 +349,9 @@ try {
       );
       const splat = report.artifacts?.splat || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
+      const foregroundKilnHeartbeatWitness = foregroundKilnHeartbeat
+        ? { ...foregroundKilnHeartbeat, sharpDutyCorrelation: undefined }
+        : null;
       return {
         status: routeState.status || null,
         message: routeState.message || null,
@@ -372,8 +375,19 @@ try {
         inferenceWindowFinalizeInterval,
         uninstrumentedGapsAtOrAbove50Ms,
         output: splat ? { path: splat.path, bytes: splat.bytes, sha256: splat.sha256, status: splat.status } : null,
-        backgroundHeartbeat,
-        foregroundKilnHeartbeat,
+        backgroundHeartbeat: backgroundHeartbeat ? {
+          schema: backgroundHeartbeat.schema,
+          status: backgroundHeartbeat.status,
+          evidenceSource: backgroundHeartbeat.evidenceSource,
+          disclaimer: backgroundHeartbeat.disclaimer,
+          requestedScheduler: backgroundHeartbeat.requestedScheduler,
+          effectiveScheduler: backgroundHeartbeat.effectiveScheduler,
+          inferenceWindow: backgroundHeartbeat.inferenceWindow,
+          crossPageClock: backgroundHeartbeat.crossPageClock,
+          gpuDutyIntervals: backgroundHeartbeat.gpuDutyIntervals,
+          worstFrameGaps: backgroundHeartbeat.worstFrameGaps,
+        } : null,
+        foregroundKilnHeartbeat: foregroundKilnHeartbeatWitness,
         sharpDutyCorrelation,
         volumeReleased: Boolean(fire?.volumeReleased),
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),

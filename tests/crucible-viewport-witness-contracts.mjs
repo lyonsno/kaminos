@@ -29,6 +29,7 @@ for (const [pattern, message] of [
   [/boundaryRankings/, 'Full-route witness must rank named SHARP boundary overlap'],
   [/crossPageClock/, 'Full-route witness must require the shared epoch clock'],
   [/gpuDutyIntervals/, 'Full-route witness must require run-bound submitted-work duty intervals'],
+  [/backgroundHeartbeat:\s*backgroundHeartbeat\s*\?\s*\{[\s\S]*gpuDutyIntervals:\s*backgroundHeartbeat\.gpuDutyIntervals/, 'CDP witness must project the complete duty envelope without serializing the entire duplicated adapter report'],
   [/inferenceWindow/, 'Full-route witness mode must fail if the measured inference window is absent'],
   [/worstFrameGaps/, 'Full-route witness mode must fail if scoped gap rows are absent'],
   [/volumeReleased/, 'Full-route witness mode must verify the furnace releases after the cast lands'],
@@ -68,3 +69,9 @@ for (const [pattern, message] of [
 ]) {
   assert.match(witness, pattern, message);
 }
+
+assert.doesNotMatch(
+  witness,
+  /\n\s*backgroundHeartbeat,\n\s*foregroundKilnHeartbeat,/,
+  'CDP witness must not return the raw multi-megabyte background heartbeat shorthand',
+);
