@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -208,6 +208,20 @@ const initializationFailedReport = JSON.parse(await readFile(initializationFaile
 assert.equal(initializationFailedReport.failurePhase, 'input-validation');
 assert.match(initializationFailedReport.reason, /receiverInitialT fluid does not equal filtered highT/);
 
+for (const [ordinaryStep, label] of [[0, 'held receiver'], [2, 'two-step receiver']]) {
+  const wrongStepManifest = structuredClone(inputManifest);
+  wrongStepManifest.pairs[0].ordinaryLowT1.simStepCount = ordinaryStep;
+  await writeFile(inputPath, `${JSON.stringify(wrongStepManifest, null, 2)}\n`);
+  const wrongStepOutDir = join(root, `wrong-step-${ordinaryStep}`);
+  await mkdir(wrongStepOutDir);
+  const wrongStepReportPath = join(wrongStepOutDir, 'manifest.json');
+  const rejectWrongStep = spawnSync('python3', [scriptUrl.pathname, '--input', inputPath, '--out-dir', wrongStepOutDir, '--report', wrongStepReportPath], { encoding: 'utf8' });
+  assert.equal(rejectWrongStep.status, 2, `${label} cannot impersonate ordinaryLowT1`);
+  const wrongStepReport = JSON.parse(await readFile(wrongStepReportPath, 'utf8'));
+  assert.equal(wrongStepReport.failurePhase, 'input-validation');
+  assert.match(wrongStepReport.reason, /ordinary low state is not one step after receiver initialization/);
+}
+
 await writeFile(inputPath, `${JSON.stringify(inputManifest, null, 2)}\n`);
 
 const reportPath = join(outDir, 'manifest.json');
@@ -220,9 +234,17 @@ assert.equal(report.runtimeTruthAvailable, false);
 assert.deepEqual(report.roleOrder, ['filteredHighT', 'ordinaryLowT1', 'exactClosureResidual', 'oracleApplied', 'filteredHighT1']);
 assert.equal(report.pairs.length, 1);
 assert.ok(report.pairs[0].metrics.global.baselineRmse > 0);
+assert.ok(report.pairs[0].metrics.global.holdRmse > 0);
+assert.ok(Number.isFinite(report.pairs[0].metrics.global.receiverStepDirectionCosine));
+assert.ok(Number.isFinite(report.pairs[0].metrics.global.ordinaryVsHoldRmseRatio));
+assert.ok(Math.abs(report.pairs[0].metrics.global.ordinaryVsHoldRmseRatio - 0.6259928891998702) < 1e-12);
+assert.ok(Math.abs(report.pairs[0].metrics.global.errorReductionVsHoldFraction - 0.3740071108001298) < 1e-12);
 assert.ok(report.pairs[0].metrics.global.oracleRmse < 1e-7);
 assert.ok(report.pairs[0].metrics.global.rmseReductionFraction > 0.999999);
 assert.equal(report.pairs[0].channels.length, fluidChannels.length + 1);
+assert.ok(report.pairs[0].channels.every(channel => channel.hold.rmse > 0));
+assert.ok(report.pairs[0].channels.every(channel => Number.isFinite(channel.receiverStep.directionCosine)));
+assert.ok(report.pairs[0].channels.every(channel => Number.isFinite(channel.receiverStep.ordinaryVsHoldRmseRatio)));
 assert.equal(report.pairs[0].artifacts.exactClosureResidual.fluid.shape.at(-1), fluidChannels.length);
 assert.equal(report.pairs[0].artifacts.filteredHighT1.front.shape.at(-1), 1);
 assert.equal(report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.highT.fluidSha256, pair.highT.fluid.sha256);

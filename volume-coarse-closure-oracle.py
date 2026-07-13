@@ -166,7 +166,31 @@ def array_metrics(candidate: np.ndarray, target: np.ndarray) -> dict[str, float]
     }
 
 
+def receiver_step_metrics(initial: np.ndarray, ordinary: np.ndarray, target: np.ndarray) -> dict[str, float]:
+    initial64 = initial.astype(np.float64, copy=False).reshape(-1)
+    ordinary64 = ordinary.astype(np.float64, copy=False).reshape(-1)
+    target64 = target.astype(np.float64, copy=False).reshape(-1)
+    target_delta = target64 - initial64
+    receiver_delta = ordinary64 - initial64
+    target_norm = float(np.linalg.norm(target_delta))
+    receiver_norm = float(np.linalg.norm(receiver_delta))
+    direction_cosine = float(np.dot(target_delta, receiver_delta) / (target_norm * receiver_norm)) if target_norm > 0 and receiver_norm > 0 else 0.0
+    hold_rmse = math.sqrt(float(np.mean(target_delta * target_delta)))
+    ordinary_error = ordinary64 - target64
+    ordinary_rmse = math.sqrt(float(np.mean(ordinary_error * ordinary_error)))
+    return {
+        "targetDeltaRmse": hold_rmse,
+        "receiverDeltaRmse": math.sqrt(float(np.mean(receiver_delta * receiver_delta))),
+        "directionCosine": direction_cosine,
+        "stepNormRatio": receiver_norm / target_norm if target_norm > 0 else 0.0,
+        "ordinaryVsHoldRmseRatio": ordinary_rmse / hold_rmse if hold_rmse > 0 else 0.0,
+        "errorReductionVsHoldFraction": (hold_rmse - ordinary_rmse) / hold_rmse if hold_rmse > 0 else 0.0,
+    }
+
+
 def combined_metrics(
+    initial_fluid: np.ndarray,
+    initial_front: np.ndarray,
     ordinary_fluid: np.ndarray,
     ordinary_front: np.ndarray,
     oracle_fluid: np.ndarray,
@@ -174,6 +198,7 @@ def combined_metrics(
     target_fluid: np.ndarray,
     target_front: np.ndarray,
 ) -> dict[str, float]:
+    initial = np.concatenate((initial_fluid.reshape(-1), initial_front.reshape(-1))).astype(np.float64)
     ordinary = np.concatenate((ordinary_fluid.reshape(-1), ordinary_front.reshape(-1))).astype(np.float64)
     oracle = np.concatenate((oracle_fluid.reshape(-1), oracle_front.reshape(-1))).astype(np.float64)
     target = np.concatenate((target_fluid.reshape(-1), target_front.reshape(-1))).astype(np.float64)
@@ -181,12 +206,21 @@ def combined_metrics(
     oracle_delta = oracle - target
     baseline_rmse = math.sqrt(float(np.mean(baseline_delta * baseline_delta)))
     oracle_rmse = math.sqrt(float(np.mean(oracle_delta * oracle_delta)))
+    hold_delta = initial - target
+    hold_rmse = math.sqrt(float(np.mean(hold_delta * hold_delta)))
+    step = receiver_step_metrics(initial, ordinary, target)
     return {
+        "holdRmse": hold_rmse,
+        "holdMae": float(np.mean(np.abs(hold_delta))),
         "baselineRmse": baseline_rmse,
         "baselineMae": float(np.mean(np.abs(baseline_delta))),
         "oracleRmse": oracle_rmse,
         "oracleMae": float(np.mean(np.abs(oracle_delta))),
         "rmseReductionFraction": (baseline_rmse - oracle_rmse) / baseline_rmse if baseline_rmse > 0 else 0.0,
+        "receiverStepDirectionCosine": step["directionCosine"],
+        "receiverStepNormRatio": step["stepNormRatio"],
+        "ordinaryVsHoldRmseRatio": step["ordinaryVsHoldRmseRatio"],
+        "errorReductionVsHoldFraction": step["errorReductionVsHoldFraction"],
     }
 
 
@@ -353,12 +387,20 @@ def process_pair(pair: dict[str, Any], receiver_grid: int, pair_dir: Path) -> di
 
     channels = []
     for channel_index, channel_name in enumerate(EXPECTED_FLUID_CHANNELS):
+        hold = array_metrics(filtered_fluid_t[:, :, :, channel_index], filtered_fluid_t1[:, :, :, channel_index])
         baseline = array_metrics(ordinary_fluid_t1[:, :, :, channel_index], filtered_fluid_t1[:, :, :, channel_index])
         oracle = array_metrics(oracle_fluid[:, :, :, channel_index], filtered_fluid_t1[:, :, :, channel_index])
-        channels.append({"name": channel_name, "family": "fluid", "baseline": baseline, "oracle": oracle})
+        receiver_step = receiver_step_metrics(
+            filtered_fluid_t[:, :, :, channel_index],
+            ordinary_fluid_t1[:, :, :, channel_index],
+            filtered_fluid_t1[:, :, :, channel_index],
+        )
+        channels.append({"name": channel_name, "family": "fluid", "hold": hold, "baseline": baseline, "oracle": oracle, "receiverStep": receiver_step})
+    front_hold = array_metrics(filtered_front_t[:, :, :, 0], filtered_front_t1[:, :, :, 0])
     front_baseline = array_metrics(ordinary_front_t1[:, :, :, 0], filtered_front_t1[:, :, :, 0])
     front_oracle = array_metrics(oracle_front[:, :, :, 0], filtered_front_t1[:, :, :, 0])
-    channels.append({"name": "frontTopology", "family": "front", "baseline": front_baseline, "oracle": front_oracle})
+    front_receiver_step = receiver_step_metrics(filtered_front_t[:, :, :, 0], ordinary_front_t1[:, :, :, 0], filtered_front_t1[:, :, :, 0])
+    channels.append({"name": "frontTopology", "family": "front", "hold": front_hold, "baseline": front_baseline, "oracle": front_oracle, "receiverStep": front_receiver_step})
     initialized_from = pair["ordinaryLowT1"]["initializedFrom"]
 
     return {
@@ -379,6 +421,8 @@ def process_pair(pair: dict[str, Any], receiver_grid: int, pair_dir: Path) -> di
         "filterIdentity": FILTER_IDENTITY,
         "metrics": {
             "global": combined_metrics(
+                filtered_fluid_t,
+                filtered_front_t,
                 ordinary_fluid_t1,
                 ordinary_front_t1,
                 oracle_fluid,

@@ -23,6 +23,8 @@ const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-full-grid-f
 const manifestPath = resolve(String(args.get('--manifest') || join(outDir, 'manifest.json')));
 const requestedUrl = String(args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1');
 const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get('--source-capture'))) : null;
+const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
+const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
 const targetOrigin = args.has('--target-origin') ? String(args.get('--target-origin')) : null;
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -36,6 +38,7 @@ const deterministicReplaySteps = Number(args.get('--deterministic-replay-steps')
 const deterministicReplayRequested = Number.isFinite(deterministicReplaySteps) && deterministicReplaySteps > 0;
 const deterministicReplayTimeStepMs = Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60));
 const deterministicReplayStartTimeMs = Number(args.get('--deterministic-replay-start-ms') || 1000);
+const advanceImportedSteps = Math.max(0, Math.floor(Number(args.get('--advance-imported-steps') || 0)));
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -48,6 +51,57 @@ function writeManifest(payload) {
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function sha256File(path) {
+  return sha256(readFileSync(path));
+}
+
+function resolveInitialFieldManifest() {
+  if (!initialFieldManifestPath) return null;
+  if (deterministicReplayRequested) {
+    throw new Error('--initial-field-manifest and --deterministic-replay-steps are mutually exclusive');
+  }
+  const raw = readFileSync(initialFieldManifestPath, 'utf8');
+  const manifest = JSON.parse(raw);
+  if (manifest.schema !== 'kaminos.volume.coarse-receiver-initial.v0' || manifest.status !== 'captured') {
+    throw new Error(`unsupported initial field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
+  }
+  if (manifest.failurePhase !== null) throw new Error('initial field manifest carries a failure phase');
+  if (manifest.initializationAuthority !== 'receiver-initialized-from-filtered-high-t-v0') {
+    throw new Error(`unsupported initialization authority: ${manifest.initializationAuthority || '(missing)'}`);
+  }
+  if (manifest.filterIdentity !== 'volume-overlap-box-filter-high-to-receiver-v0') {
+    throw new Error(`unsupported receiver filter: ${manifest.filterIdentity || '(missing)'}`);
+  }
+  if (manifest.layoutIdentity !== 'x-fastest-zyx-c-interleaved-v0') {
+    throw new Error(`unsupported receiver layout: ${manifest.layoutIdentity || '(missing)'}`);
+  }
+  const grid = Number(manifest.receiver?.grid);
+  const fluid = manifest.receiver?.fluid;
+  const front = manifest.receiver?.front;
+  const fluidChannels = [
+    'velocityX', 'velocityY', 'velocityZ', 'densityCarrier', 'smokeDensity', 'heat', 'fuel', 'detail',
+    'flame', 'ember', 'visibleFireCarrier', 'combustionFront', 'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
+  ];
+  const validateArtifact = (artifact, label, shape, channelOrder) => {
+    if (!artifact || JSON.stringify(artifact.shape) !== JSON.stringify(shape)) throw new Error(`${label} shape mismatch`);
+    if (JSON.stringify(artifact.channelOrder) !== JSON.stringify(channelOrder)) throw new Error(`${label} channel order mismatch`);
+    const path = resolve(String(artifact.path || ''));
+    if (statSync(path).size !== Number(artifact.byteLength)) throw new Error(`${label} byte length mismatch`);
+    const actualSha256 = sha256File(path);
+    if (actualSha256 !== artifact.sha256) throw new Error(`${label} SHA-256 mismatch: ${actualSha256} != ${artifact.sha256}`);
+    return { ...artifact, path, actualSha256 };
+  };
+  if (!Number.isInteger(grid) || grid < 1) throw new Error('initial receiver grid is invalid');
+  return {
+    manifest,
+    manifestPath: initialFieldManifestPath,
+    manifestSha256: sha256(raw),
+    grid,
+    fluid: validateArtifact(fluid, 'initial fluid', [grid, grid, grid, 16], fluidChannels),
+    front: validateArtifact(front, 'initial front', [grid, grid, grid, 1], ['frontTopology']),
+  };
 }
 
 function resolveSourceCapture() {
@@ -260,11 +314,41 @@ async function drainSidecar(ws, session, kind, outputPath, descriptorOverride = 
   };
 }
 
+async function uploadInitialArtifact(ws, sessionId, kind, artifact) {
+  const bytes = readFileSync(artifact.path);
+  const chunkBytes = chunkFloats * Float32Array.BYTES_PER_ELEMENT;
+  let byteOffset = 0;
+  let chunkCount = 0;
+  while (byteOffset < bytes.byteLength) {
+    const chunk = bytes.subarray(byteOffset, Math.min(bytes.byteLength, byteOffset + chunkBytes));
+    const receipt = await evaluateByValue(
+      ws,
+      `window.__kaminosVolumePrototype.writeDebugFullFieldImportChunk(${JSON.stringify({
+        sessionId,
+        kind,
+        byteOffset,
+        base64: chunk.toString('base64'),
+      })})`,
+      `initial-field-${kind}-chunk`,
+    );
+    if (receipt?.ok !== true || receipt.kind !== kind || Number(receipt.byteOffset) !== byteOffset) {
+      throw new Error(`bad initial ${kind} chunk at ${byteOffset}: ${JSON.stringify(receipt)}`);
+    }
+    byteOffset += chunk.byteLength;
+    chunkCount += 1;
+  }
+  return { kind, byteLength: bytes.byteLength, sha256: artifact.sha256, chunkCount, chunkFloats };
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
   let phase = 'source-capture-validation';
   let url = requestedUrl;
   let sourceCapture = null;
+  let initialField = null;
+  let initialFieldImport = null;
+  let importedAdvance = null;
+  let importedRender = null;
   let browserSession = null;
   let ws = null;
   let begin = null;
@@ -272,9 +356,20 @@ async function main() {
   let pageDiagnostics = null;
   const runtimeEvents = [];
   try {
+    initialField = resolveInitialFieldManifest();
+    if (initialField && !args.has('--advance-imported-steps')) {
+      throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
+    }
+    if (renderPngPath && !initialField) throw new Error('--render-png requires --initial-field-manifest');
     const resolved = resolveSourceCapture();
     url = resolved.url;
     sourceCapture = resolved.sourceCapture;
+    if (initialField) {
+      const receiverRoute = new URL(url);
+      receiverRoute.searchParams.set('volume_resolution', String(initialField.grid));
+      receiverRoute.searchParams.set('volume_look_freeze', '0');
+      url = receiverRoute.href;
+    }
 
     phase = 'launch';
     browserSession = await attachOrLaunchBrowser(url);
@@ -321,6 +416,147 @@ async function main() {
     }
     if (lastDebugState?.prototypeIdentity !== 'kaminos-volume-prototype-v0') {
       throw new Error(`wrong prototype identity: ${lastDebugState?.prototypeIdentity || '(missing)'}`);
+    }
+
+    if (initialField) {
+      phase = 'begin-initial-field-import';
+      const importBegin = await evaluateByValue(
+        ws,
+        `window.__kaminosVolumePrototype.beginDebugFullFieldImport(${JSON.stringify({
+          grid: initialField.grid,
+          initializationAuthority: initialField.manifest.initializationAuthority,
+          filterIdentity: initialField.manifest.filterIdentity,
+          layoutIdentity: initialField.manifest.layoutIdentity,
+          sourceManifestPath: initialField.manifestPath,
+          sourceManifestSha256: initialField.manifestSha256,
+          source: initialField.manifest.source,
+          receiverInitialSimStepCount: initialField.manifest.receiver.initialSimStepCount,
+          fluid: initialField.fluid,
+          front: initialField.front,
+        })})`,
+        phase,
+      );
+      if (importBegin?.ok !== true) throw new Error(`initial field import did not begin cleanly: ${JSON.stringify(importBegin)}`);
+      phase = 'upload-initial-fluid';
+      const fluidUpload = await uploadInitialArtifact(ws, importBegin.sessionId, 'fluid', initialField.fluid);
+      phase = 'upload-initial-front';
+      const frontUpload = await uploadInitialArtifact(ws, importBegin.sessionId, 'front', initialField.front);
+      phase = 'finish-initial-field-import';
+      const importFinish = await evaluateByValue(
+        ws,
+        `window.__kaminosVolumePrototype.finishDebugFullFieldImport(${JSON.stringify({ sessionId: importBegin.sessionId })})`,
+        phase,
+      );
+      if (importFinish?.ok !== true || importFinish.status !== 'applied') {
+        throw new Error(`initial field import did not apply cleanly: ${JSON.stringify(importFinish)}`);
+      }
+      initialFieldImport = {
+        requested: {
+          manifestPath: initialField.manifestPath,
+          manifestSha256: initialField.manifestSha256,
+          grid: initialField.grid,
+          advanceImportedSteps,
+        },
+        uploads: { fluid: fluidUpload, front: frontUpload },
+        effective: importFinish,
+      };
+      phase = 'advance-imported-field';
+      importedAdvance = await evaluateByValue(
+        ws,
+        `window.__kaminosVolumePrototype.advanceDebugImportedFieldSteps(${JSON.stringify({
+          sessionId: importFinish.sessionId,
+          steps: advanceImportedSteps,
+          timeStepMs: deterministicReplayTimeStepMs,
+          startTimeMs: deterministicReplayStartTimeMs,
+        })})`,
+        phase,
+      );
+      if (importedAdvance?.ok !== true || importedAdvance.completedSteps !== advanceImportedSteps) {
+        throw new Error(`imported receiver advance failed: ${JSON.stringify(importedAdvance)}`);
+      }
+      if (renderPngPath) {
+        phase = 'mount-imported-render-canvas';
+        const canvasMount = await evaluateByValue(ws, `(() => {
+          const canvas = window.__kaminosVolumePrototype?.canvasElement?.();
+          if (!canvas) return { ok: false, reason: 'renderer-canvas-missing' };
+          const height = Math.max(64, Math.min(700, window.innerHeight));
+          const width = Math.max(64, Math.min(window.innerWidth, height * canvas.width / Math.max(1, canvas.height)));
+          document.body.appendChild(canvas);
+          canvas.style.setProperty('position', 'fixed', 'important');
+          canvas.style.setProperty('left', '0px', 'important');
+          canvas.style.setProperty('top', '0px', 'important');
+          canvas.style.setProperty('width', width + 'px', 'important');
+          canvas.style.setProperty('height', height + 'px', 'important');
+          canvas.style.setProperty('display', 'block', 'important');
+          canvas.style.setProperty('visibility', 'visible', 'important');
+          canvas.style.setProperty('opacity', '1', 'important');
+          canvas.style.setProperty('transform', 'none', 'important');
+          canvas.style.setProperty('z-index', '2147483647', 'important');
+          canvas.style.setProperty('pointer-events', 'none', 'important');
+          const rect = canvas.getBoundingClientRect();
+          return {
+            ok: true,
+            identity: 'witness-mounted-imported-canvas-v0',
+            connected: canvas.isConnected,
+            intrinsicWidth: canvas.width,
+            intrinsicHeight: canvas.height,
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+          };
+        })()`, phase);
+        const mountedRect = canvasMount?.rect;
+        if (canvasMount?.ok !== true
+          || !canvasMount.connected
+          || !mountedRect
+          || mountedRect.x < 0
+          || mountedRect.y < 0
+          || mountedRect.width < 64
+          || mountedRect.height < 64
+          || mountedRect.x + mountedRect.width > canvasMount.viewportWidth + 0.5
+          || mountedRect.y + mountedRect.height > canvasMount.viewportHeight + 0.5) {
+          throw new Error(`canvas-clip-offscreen: ${JSON.stringify(canvasMount)}`);
+        }
+        phase = 'render-imported-field';
+        const renderReceipt = await evaluateByValue(
+          ws,
+          `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+            fullFieldImportSessionId: importFinish.sessionId,
+            renderScale: 1,
+            now: deterministicReplayStartTimeMs + advanceImportedSteps * deterministicReplayTimeStepMs,
+            sameStateCaptureId: `imported-receiver-render-step-${advanceImportedSteps}`,
+          })})`,
+          phase,
+        );
+        if (renderReceipt?.ok !== true || renderReceipt?.imageAuthority !== 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state') {
+          throw new Error(`imported receiver render failed: ${JSON.stringify(renderReceipt)}`);
+        }
+        const rect = renderReceipt.canvasCssRect;
+        if (rect.x < 0 || rect.y < 0 || rect.width < 64 || rect.height < 64) {
+          throw new Error(`canvas-clip-offscreen: ${JSON.stringify(rect)}`);
+        }
+        await delay(100);
+        phase = 'capture-imported-render';
+        const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
+          format: 'png',
+          fromSurface: true,
+          clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 },
+        });
+        const png = Buffer.from(screenshot.data, 'base64');
+        mkdirSync(dirname(renderPngPath), { recursive: true });
+        writeFileSync(renderPngPath, png);
+        importedRender = {
+          ...renderReceipt,
+          canvasMount,
+          path: renderPngPath,
+          byteLength: png.byteLength,
+          sha256: sha256(png),
+          importedFieldManifestPath: initialField.manifestPath,
+          importedFieldManifestSha256: initialField.manifestSha256,
+          importedAdvanceIdentity: importedAdvance.identity,
+          importedAdvanceCompletedSteps: importedAdvance.completedSteps,
+        };
+      }
     }
 
     phase = 'begin-full-grid-export';
@@ -399,6 +635,9 @@ async function main() {
       cellCount: begin.cellCount,
       simGridLabel: begin.simGridLabel,
       deterministicReplay: begin.deterministicReplay,
+      initialFieldImport,
+      importedAdvance,
+      importedRender,
       fluidComponents: begin.fluidComponents,
       fluidChannelOrder: begin.fluidChannelOrder,
       frontChannelOrder: begin.frontChannelOrder,
@@ -430,6 +669,10 @@ async function main() {
       url,
       sourceCapture,
       requestedSourceCapture: sourceCapturePath,
+      requestedInitialFieldManifest: initialFieldManifestPath,
+      initialFieldImport,
+      importedAdvance,
+      importedRender,
       targetOrigin,
       browserSession: browserReceipt(browserSession),
       lastDebugState,

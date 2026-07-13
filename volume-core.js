@@ -12,6 +12,8 @@ const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
 const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
+const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
+const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
@@ -5306,6 +5308,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureJacobiInlineDivergencePasses: 0,
     fullGridPassBreakdown: null,
     fullFieldExportSession: null,
+    fullFieldImportReceipt: null,
     frontFieldIdentity: FRONT_FIELD_IDENTITY,
     frontFieldBytes: frontFieldBufferBytes(gridSize),
     frontFieldReadIndex: 0,
@@ -5601,6 +5604,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
   let boundarySidecarOverrideUpload = null;
+  let debugFullFieldImportUpload = null;
   let boundarySplatBuffer = null;
   let boundarySplatDrawBuffer = null;
   let boundarySplatIndirectBuffer = null;
@@ -9024,6 +9028,297 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return btoa(binary);
   }
 
+  function decodeFullFieldImportChunk(base64) {
+    const binary = atob(String(base64 || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function fullFieldImportFailure(failurePhase, reason, extra = {}) {
+    const failed = {
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      identity: 'checksum-addressed-fluid-front-import-v0',
+      status: 'failed',
+      failurePhase,
+      reason,
+      initializationAuthority: COARSE_RECEIVER_INITIALIZATION_AUTHORITY,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+      ...extra,
+    };
+    state.fullFieldImportReceipt = failed;
+    return { ok: false, ...failed };
+  }
+
+  function beginDebugFullFieldImport(payload = {}) {
+    if (!device) return fullFieldImportFailure('begin', 'inactive');
+    if (payload.initializationAuthority !== COARSE_RECEIVER_INITIALIZATION_AUTHORITY) {
+      return fullFieldImportFailure('begin', 'initialization-authority-mismatch');
+    }
+    const requestedGrid = Math.floor(Number(payload.grid));
+    if (!SUPPORTED_GRID_SIZES.includes(requestedGrid)) {
+      return fullFieldImportFailure('begin', 'unsupported-grid', { requestedGrid });
+    }
+    const expectedFluidBytes = fluidBufferBytes(requestedGrid);
+    const expectedFrontBytes = frontFieldBufferBytes(requestedGrid);
+    const fluid = payload.fluid || {};
+    const front = payload.front || {};
+    const validSha256 = value => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
+    if (Number(fluid.byteLength) !== expectedFluidBytes || Number(front.byteLength) !== expectedFrontBytes) {
+      return fullFieldImportFailure('begin', 'byte-length-mismatch', {
+        expectedFluidBytes,
+        requestedFluidBytes: Number(fluid.byteLength),
+        expectedFrontBytes,
+        requestedFrontBytes: Number(front.byteLength),
+      });
+    }
+    if (!validSha256(fluid.sha256) || !validSha256(front.sha256)) {
+      return fullFieldImportFailure('begin', 'sha256-missing');
+    }
+    if (JSON.stringify(fluid.channelOrder) !== JSON.stringify(FULL_FIELD_CHANNELS)
+      || JSON.stringify(front.channelOrder) !== JSON.stringify(['frontTopology'])) {
+      return fullFieldImportFailure('begin', 'channel-order-mismatch');
+    }
+    const wasActive = state.active;
+    state.active = false;
+    canvas.classList.remove('active');
+    cancelAnimationFrame(raf);
+    if (gridSize !== requestedGrid) rebuildFluidState(requestedGrid, majorantGridSize, 'full-field-import-grid-rebuild');
+    debugFullFieldImportUpload = {
+      sessionId: `full-field-import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      status: 'receiving',
+      wasActive,
+      grid: requestedGrid,
+      initializationAuthority: payload.initializationAuthority,
+      filterIdentity: String(payload.filterIdentity || ''),
+      layoutIdentity: String(payload.layoutIdentity || ''),
+      source: payload.source || null,
+      sourceManifestPath: payload.sourceManifestPath || null,
+      sourceManifestSha256: payload.sourceManifestSha256 || null,
+      receiverInitialSimStepCount: Math.max(0, Math.floor(Number(payload.receiverInitialSimStepCount) || 0)),
+      fluid: {
+        expectedSha256: fluid.sha256.toLowerCase(),
+        byteLength: expectedFluidBytes,
+        bytes: new Uint8Array(expectedFluidBytes),
+        receivedBytes: 0,
+        chunkCount: 0,
+      },
+      front: {
+        expectedSha256: front.sha256.toLowerCase(),
+        byteLength: expectedFrontBytes,
+        bytes: new Uint8Array(expectedFrontBytes),
+        receivedBytes: 0,
+        chunkCount: 0,
+      },
+    };
+    state.fullFieldImportReceipt = {
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      identity: 'checksum-addressed-fluid-front-import-v0',
+      status: 'receiving',
+      failurePhase: null,
+      sessionId: debugFullFieldImportUpload.sessionId,
+      initializationAuthority: payload.initializationAuthority,
+      filterIdentity: debugFullFieldImportUpload.filterIdentity,
+      layoutIdentity: debugFullFieldImportUpload.layoutIdentity,
+      grid: requestedGrid,
+      receiverInitialSimStepCount: debugFullFieldImportUpload.receiverInitialSimStepCount,
+      expectedFluidSha256: debugFullFieldImportUpload.fluid.expectedSha256,
+      expectedFrontSha256: debugFullFieldImportUpload.front.expectedSha256,
+      expectedFluidBytes,
+      expectedFrontBytes,
+      renderLoopPaused: true,
+    };
+    return { ok: true, ...state.fullFieldImportReceipt };
+  }
+
+  function writeDebugFullFieldImportChunk(payload = {}) {
+    const upload = debugFullFieldImportUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) {
+      return fullFieldImportFailure('chunk-write', 'session-id-mismatch');
+    }
+    const kind = payload.kind === 'front' ? 'front' : payload.kind === 'fluid' ? 'fluid' : null;
+    if (!kind) return fullFieldImportFailure('chunk-write', 'unsupported-kind');
+    const target = upload[kind];
+    const byteOffset = Math.floor(Number(payload.byteOffset));
+    if (byteOffset !== target.receivedBytes) {
+      return fullFieldImportFailure('chunk-write', 'non-sequential-byte-offset', {
+        kind,
+        expectedByteOffset: target.receivedBytes,
+        requestedByteOffset: byteOffset,
+      });
+    }
+    const chunk = decodeFullFieldImportChunk(payload.base64);
+    if (byteOffset + chunk.byteLength > target.byteLength) {
+      return fullFieldImportFailure('chunk-write', 'chunk-overflow', { kind, byteOffset, chunkByteLength: chunk.byteLength });
+    }
+    target.bytes.set(chunk, byteOffset);
+    target.receivedBytes += chunk.byteLength;
+    target.chunkCount += 1;
+    return {
+      ok: true,
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      sessionId: upload.sessionId,
+      kind,
+      byteOffset,
+      byteLength: chunk.byteLength,
+      receivedBytes: target.receivedBytes,
+      expectedBytes: target.byteLength,
+      chunkCount: target.chunkCount,
+      isFinal: target.receivedBytes === target.byteLength,
+    };
+  }
+
+  async function finishDebugFullFieldImport(payload = {}) {
+    const upload = debugFullFieldImportUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) {
+      return fullFieldImportFailure('finish', 'session-id-mismatch');
+    }
+    for (const kind of ['fluid', 'front']) {
+      if (upload[kind].receivedBytes !== upload[kind].byteLength) {
+        return fullFieldImportFailure('finish', 'incomplete-upload', {
+          kind,
+          receivedBytes: upload[kind].receivedBytes,
+          expectedBytes: upload[kind].byteLength,
+        });
+      }
+    }
+    const digestHex = async bytes => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes)))
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+    const actualFluidSha256 = await digestHex(upload.fluid.bytes);
+    const actualFrontSha256 = await digestHex(upload.front.bytes);
+    if (actualFluidSha256 !== upload.fluid.expectedSha256 || actualFrontSha256 !== upload.front.expectedSha256) {
+      debugFullFieldImportUpload = null;
+      return fullFieldImportFailure('sha256-validation', 'sha256-mismatch', {
+        expectedFluidSha256: upload.fluid.expectedSha256,
+        actualFluidSha256,
+        expectedFrontSha256: upload.front.expectedSha256,
+        actualFrontSha256,
+      });
+    }
+    device.queue.writeBuffer(fluidBuffers[0], 0, upload.fluid.bytes);
+    device.queue.writeBuffer(fluidBuffers[1], 0, upload.fluid.bytes);
+    device.queue.writeBuffer(frontBuffers[0], 0, upload.front.bytes);
+    device.queue.writeBuffer(frontBuffers[1], 0, upload.front.bytes);
+    const zeroPressure = new Float32Array(gridCellCount(gridSize) * 4);
+    device.queue.writeBuffer(pressureBuffers[0], 0, zeroPressure);
+    device.queue.writeBuffer(pressureBuffers[1], 0, zeroPressure);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    currentFluid = 0;
+    currentFront = 0;
+    state.frameCount = upload.receiverInitialSimStepCount;
+    state.simStepCount = upload.receiverInitialSimStepCount;
+    state.frontFieldReadIndex = currentFront;
+    state.frontFieldWriteIndex = 1 - currentFront;
+    state.majorantBuilt = false;
+    state.majorantBuiltThisFrame = false;
+    state.majorantLastBuiltFrame = -1;
+    state.boundarySidecarBuilt = false;
+    state.boundarySidecarBuiltThisFrame = false;
+    state.boundarySidecarLastBuiltFrame = -1;
+    state.boundarySidecarOverrideReceipt = null;
+    boundarySidecarOverrideUpload = null;
+    state.deterministicReplay = null;
+    resetTemporalHistory('full-field-import');
+    const receipt = {
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      identity: 'checksum-addressed-fluid-front-import-v0',
+      status: 'applied',
+      failurePhase: null,
+      sessionId: upload.sessionId,
+      initializationAuthority: upload.initializationAuthority,
+      filterIdentity: upload.filterIdentity,
+      layoutIdentity: upload.layoutIdentity,
+      grid: upload.grid,
+      source: upload.source,
+      sourceManifestPath: upload.sourceManifestPath,
+      sourceManifestSha256: upload.sourceManifestSha256,
+      receiverInitialSimStepCount: upload.receiverInitialSimStepCount,
+      fluidSha256: actualFluidSha256,
+      frontSha256: actualFrontSha256,
+      fluidByteLength: upload.fluid.byteLength,
+      frontByteLength: upload.front.byteLength,
+      fluidChunkCount: upload.fluid.chunkCount,
+      frontChunkCount: upload.front.chunkCount,
+      pressureState: 'zeroed-before-first-receiver-step',
+      pingPongState: 'both-read-write-buffers-identical',
+      temporalHistory: 'reset',
+      renderLoopPaused: true,
+      activeBeforeImport: upload.wasActive,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+    };
+    state.active = false;
+    canvas.classList.remove('active');
+    cancelAnimationFrame(raf);
+    state.fullFieldImportReceipt = receipt;
+    debugFullFieldImportUpload = null;
+    emitStatus({ phase: 'full-field-import-applied' });
+    return { ok: true, ...receipt };
+  }
+
+  function advanceDebugImportedFieldSteps(payload = {}) {
+    const receipt = state.fullFieldImportReceipt;
+    if (!receipt || receipt.status !== 'applied' || payload.sessionId !== receipt.sessionId) {
+      return fullFieldImportFailure('imported-advance', 'session-id-mismatch');
+    }
+    if (receipt.importedAdvance) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'imported-receiver-advance-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'imported-advance',
+        reason: 'already-advanced',
+        sessionId: receipt.sessionId,
+        priorAdvance: receipt.importedAdvance,
+        priorAppliedReceipt: receipt,
+      };
+    }
+    const requestedSteps = Number(payload.steps);
+    if (!Number.isInteger(requestedSteps) || requestedSteps < 0) {
+      return fullFieldImportFailure('imported-advance', 'invalid-step-count', { requestedSteps });
+    }
+    const timeStepMs = Number.isFinite(Number(payload.timeStepMs)) ? Number(payload.timeStepMs) : 1000 / 60;
+    const startTimeMs = Number.isFinite(Number(payload.startTimeMs)) ? Number(payload.startTimeMs) : 1000;
+    state.active = false;
+    canvas.classList.remove('active');
+    cancelAnimationFrame(raf);
+    const before = { frameCount: state.frameCount, simStepCount: state.simStepCount };
+    for (let step = 0; step < requestedSteps; step += 1) {
+      updateUniforms(startTimeMs + step * timeStepMs);
+      const encoder = device.createCommandEncoder({ label: `kaminos imported receiver step ${step + 1}/${requestedSteps}` });
+      encodeSim(encoder);
+      if (step === requestedSteps - 1) encodeMajorant(encoder, { force: true });
+      device.queue.submit([encoder.finish()]);
+      state.frameCount += 1;
+    }
+    const importedAdvance = {
+      identity: requestedSteps === 0
+        ? 'imported-receiver-held-state-v0'
+        : requestedSteps === 1
+          ? 'ordinary-receiver-single-simulation-step-v0'
+          : 'imported-receiver-multi-step-sequence-v0',
+      authority: 'session-bound-imported-state-ordinary-sim-step',
+      requestedSteps,
+      completedSteps: state.simStepCount - before.simStepCount,
+      timeStepMs,
+      startTimeMs,
+      before,
+      after: { frameCount: state.frameCount, simStepCount: state.simStepCount },
+      renderLoopPaused: true,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+    };
+    state.fullFieldImportReceipt = { ...receipt, importedAdvance };
+    return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, sessionId: receipt.sessionId, ...importedAdvance };
+  }
+
   async function beginDebugFullFieldExport(options = {}) {
     if (!device) {
       const failed = {
@@ -11241,7 +11536,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function renderFrozenScaleToCanvas(options = {}) {
-    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const fullFieldImportSessionId = String(options.fullFieldImportSessionId || '');
+    const importedFieldCustody = Boolean(
+      fullFieldImportSessionId
+      && state.fullFieldImportReceipt?.status === 'applied'
+      && state.fullFieldImportReceipt?.renderLoopPaused === true
+      && fullFieldImportSessionId === state.fullFieldImportReceipt.sessionId
+    );
+    if ((!state.active && !importedFieldCustody) || !device) return { ok: false, reason: 'inactive', ...state };
     cancelAnimationFrame(raf);
     if (device.queue?.onSubmittedWorkDone) {
       await device.queue.onSubmittedWorkDone();
@@ -11791,6 +12093,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     sampleFrame,
     sampleDeterministicReplayFrame,
+    beginDebugFullFieldImport,
+    writeDebugFullFieldImportChunk,
+    finishDebugFullFieldImport,
+    advanceDebugImportedFieldSteps,
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
