@@ -21,6 +21,7 @@ APPLICATION_AUTHORITY = "offline-oracle-training-and-diagnostic-only"
 INITIALIZATION_AUTHORITY = "receiver-initialized-from-filtered-high-t-v0"
 FILTER_IDENTITY = "volume-overlap-box-filter-high-to-receiver-v0"
 LAYOUT_IDENTITY = "x-fastest-zyx-c-interleaved-v0"
+FILTER_AGREEMENT_IDENTITY = "float32-one-ulp-at-unit-floor-v0"
 ROLE_ORDER = [
     "filteredHighT",
     "ordinaryLowT1",
@@ -140,6 +141,20 @@ def volume_filter(values: np.ndarray, target_grid: int) -> np.ndarray:
     return filtered
 
 
+def validate_filter_agreement(actual: np.ndarray, expected: np.ndarray, label: str) -> dict[str, float | str]:
+    delta = np.abs(actual.astype(np.float64) - expected.astype(np.float64))
+    scale = np.maximum(np.abs(expected), np.float32(1.0))
+    tolerance = np.spacing(scale).astype(np.float64)
+    max_abs = float(np.max(delta))
+    max_allowed = float(np.max(tolerance))
+    require(bool(np.all(delta <= tolerance)), f"{label} does not equal filtered highT within one float32 ulp (maxAbs={max_abs}, maxAllowed={max_allowed})")
+    return {
+        "identity": FILTER_AGREEMENT_IDENTITY,
+        "maxAbs": max_abs,
+        "maxAllowed": max_allowed,
+    }
+
+
 def array_metrics(candidate: np.ndarray, target: np.ndarray) -> dict[str, float]:
     delta = candidate.astype(np.float64) - target.astype(np.float64)
     mse = float(np.mean(delta * delta))
@@ -251,8 +266,8 @@ def validate_input(manifest: dict[str, Any], input_path: Path) -> dict[str, Any]
         receiver_initial_front = validate_artifact(receiver_initial.get("front"), receiver_grid, len(EXPECTED_FRONT_CHANNELS), f"{pair_id} receiverInitialT front")
         computed_initial_fluid = volume_filter(load_array(high_t_fluid), receiver_grid)
         computed_initial_front = volume_filter(load_array(high_t_front), receiver_grid)
-        require(bool(np.array_equal(load_array(receiver_initial_fluid), computed_initial_fluid)), f"{pair_id} receiverInitialT fluid does not equal filtered highT")
-        require(bool(np.array_equal(load_array(receiver_initial_front), computed_initial_front)), f"{pair_id} receiverInitialT front does not equal filtered highT")
+        fluid_filter_agreement = validate_filter_agreement(load_array(receiver_initial_fluid), computed_initial_fluid, f"{pair_id} receiverInitialT fluid")
+        front_filter_agreement = validate_filter_agreement(load_array(receiver_initial_front), computed_initial_front, f"{pair_id} receiverInitialT front")
         validated_pairs.append({
             "id": pair_id,
             "highT": {
@@ -282,6 +297,10 @@ def validate_input(manifest: dict[str, Any], input_path: Path) -> dict[str, Any]
                     "receiverInitialT": {
                         "fluid": receiver_initial_fluid,
                         "front": receiver_initial_front,
+                    },
+                    "filterAgreement": {
+                        "fluid": fluid_filter_agreement,
+                        "front": front_filter_agreement,
                     },
                 },
                 "fluid": ordinary_fluid,

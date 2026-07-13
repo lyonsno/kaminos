@@ -80,26 +80,34 @@ function highValues(grid, channels, timeOffset) {
 }
 
 function boxAverage(values, highGrid, lowGrid, channels) {
-  assert.equal(highGrid % lowGrid, 0);
-  const scale = highGrid / lowGrid;
+  const sourceWidth = highGrid / lowGrid;
+  const weights = Array.from({ length: lowGrid }, (_, target) => {
+    const start = target * sourceWidth;
+    const end = (target + 1) * sourceWidth;
+    return Array.from({ length: highGrid }, (_, source) => (
+      Math.max(0, Math.min(end, source + 1) - Math.max(start, source)) / sourceWidth
+    ));
+  });
   const output = new Float32Array(lowGrid ** 3 * channels);
   for (let lz = 0; lz < lowGrid; lz += 1) {
     for (let ly = 0; ly < lowGrid; ly += 1) {
       for (let lx = 0; lx < lowGrid; lx += 1) {
         const lowCell = lx + ly * lowGrid + lz * lowGrid * lowGrid;
         const sums = new Float64Array(channels);
-        for (let hz = lz * scale; hz < (lz + 1) * scale; hz += 1) {
-          for (let hy = ly * scale; hy < (ly + 1) * scale; hy += 1) {
-            for (let hx = lx * scale; hx < (lx + 1) * scale; hx += 1) {
+        for (let hz = 0; hz < highGrid; hz += 1) {
+          for (let hy = 0; hy < highGrid; hy += 1) {
+            for (let hx = 0; hx < highGrid; hx += 1) {
+              const weight = weights[lz][hz] * weights[ly][hy] * weights[lx][hx];
+              if (weight === 0) continue;
               const highCell = hx + hy * highGrid + hz * highGrid * highGrid;
               for (let channel = 0; channel < channels; channel += 1) {
-                sums[channel] += values[highCell * channels + channel];
+                sums[channel] += values[highCell * channels + channel] * weight;
               }
             }
           }
         }
         for (let channel = 0; channel < channels; channel += 1) {
-          output[lowCell * channels + channel] = sums[channel] / scale ** 3;
+          output[lowCell * channels + channel] = sums[channel];
         }
       }
     }
@@ -107,8 +115,8 @@ function boxAverage(values, highGrid, lowGrid, channels) {
   return output;
 }
 
-const highGrid = 4;
-const receiverGrid = 2;
+const highGrid = 5;
+const receiverGrid = 3;
 const highFluidT = highValues(highGrid, fluidChannels.length, 0);
 const highFluidT1 = highValues(highGrid, fluidChannels.length, 1);
 const highFrontT = highValues(highGrid, 1, 0);
@@ -219,6 +227,9 @@ assert.equal(report.pairs[0].artifacts.exactClosureResidual.fluid.shape.at(-1), 
 assert.equal(report.pairs[0].artifacts.filteredHighT1.front.shape.at(-1), 1);
 assert.equal(report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.highT.fluidSha256, pair.highT.fluid.sha256);
 assert.equal(report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.receiverInitialT.fluid.sha256, sha256(floatsToBytes(filteredFluidT)));
+assert.equal(report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.filterAgreement.fluid.identity, 'float32-one-ulp-at-unit-floor-v0');
+assert.ok(report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.filterAgreement.fluid.maxAbs > 0, '5-to-3 fixture exercises cross-implementation float drift');
+assert.ok(report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.filterAgreement.fluid.maxAbs <= report.pairs[0].sourceSteps.ordinaryLowInitializedFrom.filterAgreement.fluid.maxAllowed);
 
 const expectedClosureFluid = Float32Array.from(filteredFluidT1, (value, index) => value - ordinaryFluidT1[index]);
 const expectedClosureFront = Float32Array.from(filteredFrontT1, (value, index) => value - ordinaryFrontT1[index]);
