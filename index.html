@@ -5055,6 +5055,15 @@ function boundarySplatFieldLayoutRouteValue(params = new URLSearchParams(window.
   return ['field', 'composed-field', 'field-100'].includes(legacyComposition) ? 'field' : 'proof';
 }
 
+function boundarySplatCompositionRouteValue(params = new URLSearchParams(window.location.search)) {
+  const requested = params.get('volume_boundary_splat_composition');
+  if (requested === null) return null;
+  const normalized = String(requested).toLowerCase().replace(/_/g, '-');
+  // The old composition=field spelling owns layout compatibility only.
+  if (['field', 'composed-field', 'field-100'].includes(normalized)) return null;
+  return normalizeBoundarySplatComposition(requested);
+}
+
 function boundarySplatFieldLayoutCameraPose(params = new URLSearchParams(window.location.search)) {
   const requested = boundarySplatFieldLayoutRouteValue(params);
   if (requested !== 'field') return null;
@@ -11383,6 +11392,8 @@ let routedVolumeMajorantCadence = 1;
 let routedVolumePressureIterations = undefined;
 let routedVolumePressureStrategy = 'global';
 let routedVolumePressureMode = 'auto';
+let routedVolumeSmokeDomainMode = 'single';
+let routedVolumeSmokeDomainFarGrid = 48;
 let routedVolumeSimProfile = false;
 let routedVolumeLifecycleEffect = 'none';
 let routedVolumeLifecycleT = 0;
@@ -11423,6 +11434,14 @@ function normalizeVolumeRuntimeQuality(value) {
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
+}
+
+function normalizeVolumeSmokeDomainMode(value) {
+  const mode = String(value || 'single').toLowerCase().replace(/_/g, '-');
+  if (mode === 'coupled' || mode === 'coupled-near-fire-far-smoke-v0') {
+    return 'coupled-near-fire-far-smoke-v0';
+  }
+  return 'single';
 }
 
 function normalizeVolumeQualityReason(value) {
@@ -12091,6 +12110,8 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
   ['pressureTierLowerMax', 'volume_pressure_tier_lower_max'],
   ['pressureTierHeroMin', 'volume_pressure_tier_hero_min'],
   ['pressureTierHeroMax', 'volume_pressure_tier_hero_max'],
+  ['smokeDomainMode', 'volume_smoke_domain_mode'],
+  ['smokeDomainFarGrid', 'volume_smoke_domain_far_grid'],
   ['reactionLiveView', 'volume_reaction_live_view'],
   ['boundarySidecarSource', 'volume_boundary_sidecar_source'],
   ['boundarySidecarView', 'volume_boundary_sidecar_view'],
@@ -16644,6 +16665,9 @@ function readVolumeControls() {
     shellSmoke: parseFloat(document.getElementById('volume-shell-smoke').value),
     resolution: parseInt(document.getElementById('volume-resolution').value, 10),
     majorantGrid: parseInt(document.getElementById('volume-majorant-grid').value, 10),
+    smokeDomainMode: routedVolumeSmokeDomainMode,
+    smokeDomainNearGrid: parseInt(document.getElementById('volume-resolution').value, 10),
+    smokeDomainFarGrid: routedVolumeSmokeDomainFarGrid,
     volumeResidualMode: document.getElementById('volume-residual-mode').value || 'off',
     volumeResidualModelUrl: document.getElementById('volume-residual-model-url').value || '',
     volumeResidualStrength: parseFloat(document.getElementById('volume-residual-strength').value),
@@ -17209,6 +17233,11 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_quality_reason')) {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
+  routedVolumeSmokeDomainMode = normalizeVolumeSmokeDomainMode(params.get('volume_smoke_domain_mode'));
+  const routeSmokeDomainFarGrid = Number(params.get('volume_smoke_domain_far_grid'));
+  if ([24, 32, 48, 64, 96].includes(routeSmokeDomainFarGrid)) {
+    routedVolumeSmokeDomainFarGrid = routeSmokeDomainFarGrid;
+  }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
     document.getElementById('volume-resolution').value = String(routeResolution);
@@ -17717,8 +17746,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_mode')) {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
   }
-  if (params.has('volume_boundary_splat_composition') && boundarySplatFieldLayoutRouteValue(params) === 'proof') {
-    document.getElementById('volume-boundary-splat-composition').value = normalizeBoundarySplatComposition(params.get('volume_boundary_splat_composition'));
+  const routeBoundarySplatComposition = boundarySplatCompositionRouteValue(params);
+  if (routeBoundarySplatComposition !== null) {
+    document.getElementById('volume-boundary-splat-composition').value = routeBoundarySplatComposition;
   }
   if (params.has('volume_boundary_splat_phase_mode')) {
     document.getElementById('volume-boundary-splat-phase-mode').value = normalizeBoundarySplatPhaseMode(params.get('volume_boundary_splat_phase_mode'));

@@ -162,7 +162,7 @@ const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderSca
 const controlledStepPrefix = String(args.get('--controlled-step-prefix') || 'controlled-step-sequence');
 const freezeIntegrityProbeRequested = args.has('--freeze-integrity-probe') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe') || '1').toLowerCase());
 const freezeIntegrityProbeOnly = freezeIntegrityProbeRequested && args.has('--freeze-integrity-probe-only') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe-only') || '1').toLowerCase());
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'smoke-domain-coupling']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -170,11 +170,16 @@ if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
+const expectsSmokeDomainCouplingEvidence = evidenceMode === 'smoke-domain-coupling';
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
-  : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
+  : (expectsPyroMaterialEvidence
+    ? 'pyro-material-coupled-volume-signal'
+    : (expectsPerformanceVolumeEvidence
+      ? 'performance-volume-signal'
+      : (expectsSmokeDomainCouplingEvidence ? 'smoke-domain-coupling-signal' : 'fire-volume')));
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -2399,6 +2404,19 @@ async function main() {
             hybridSmokePhaseAuthority: sample.hybridSmokePhaseAuthority,
             hybridSplatLayer: sample.hybridSplatLayer,
             hybridSmokeLayer: sample.hybridSmokeLayer,
+            coupledSmokeAttachmentIdentity: sample.coupledSmokeAttachmentIdentity,
+            coupledSmokeOverlapAuthority: sample.coupledSmokeOverlapAuthority,
+            coupledSmokeDepthContract: sample.coupledSmokeDepthContract,
+            smokeDomainMode: sample.smokeDomainMode,
+            smokeDomainFarGrid: sample.smokeDomainFarGrid,
+            smokeDomainHandoffStatus: sample.smokeDomainHandoffStatus,
+            smokeDomainTransferActiveCells: sample.smokeDomainTransferActiveCells,
+            smokeDomainFarActiveCells: sample.smokeDomainFarActiveCells,
+            smokeDomainFarAdvectedActiveCells: sample.smokeDomainFarAdvectedActiveCells,
+            smokeDomainFarHighestActiveLayer: sample.smokeDomainFarHighestActiveLayer,
+            smokeDomainFarTopActiveCells: sample.smokeDomainFarTopActiveCells,
+            smokeDomainFarOutflowCells: sample.smokeDomainFarOutflowCells,
+            smokeDomainFarSupportLifetimeFrames: sample.smokeDomainFarSupportLifetimeFrames,
             boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity,
             boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity,
             boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority,
@@ -2509,6 +2527,84 @@ async function main() {
       writeFileSync(reportPath, JSON.stringify(report, null, 2));
       ws.close();
       closeBrowserSession(browserSession);
+      return;
+    }
+    if (expectsSmokeDomainCouplingEvidence) {
+      phase = 'smoke-domain-coupling';
+      const requestedSmokeDomainMode = routeParams.get('volume_smoke_domain_mode');
+      assert.ok(
+        ['single', 'coupled-near-fire-far-smoke-v0'].includes(requestedSmokeDomainMode),
+        'smoke-domain coupling evidence requires an explicit single or coupled mode',
+      );
+      const expectedSmokeDomainMode = requestedSmokeDomainMode;
+      const expectedSmokeDomainStrategy = expectedSmokeDomainMode === 'single'
+        ? 'single-uniform-volume-v0'
+        : expectedSmokeDomainMode;
+      assert.equal(state.smokeDomainMode, expectedSmokeDomainMode, 'smoke-domain route did not reach the effective renderer state');
+      assert.equal(state.smokeDomainStrategy, expectedSmokeDomainStrategy, 'smoke-domain strategy silently diverged from the effective mode');
+      assert.equal(state.error, null, 'smoke-domain renderer reported a runtime error');
+      assert.equal(routeParams.get('volume_boundary_splat_composition'), 'hybrid-smoke', 'coupling evidence requires an explicit hybrid-smoke route');
+      assert.equal(state.boundarySplatCompositionRequested, 'hybrid-smoke', 'hybrid-smoke request was not preserved');
+      assert.equal(state.boundarySplatCompositionEffective, 'hybrid-smoke', 'hybrid-smoke request fell back before presentation');
+      assert.equal(state.boundarySplatCompositionFallbackReason, null, 'hybrid-smoke compositor reported fallback');
+      if (routeParams.has('volume_boundary_splat_layout')) {
+        assert.equal(
+          state.boundarySplatFieldLayout,
+          routeParams.get('volume_boundary_splat_layout'),
+          'splat field layout route did not reach the effective renderer state',
+        );
+      }
+      if (expectedSmokeDomainMode === 'coupled-near-fire-far-smoke-v0') {
+        assert.equal(state.coupledSmokeAttachmentIdentity, 'coupled-near-far-raymarched-smoke-attachment-v0', 'coupled smoke attachment ABI mismatch');
+        assert.equal(state.coupledSmokeOverlapAuthority, 'near-authoritative-overlap-far-residual-v0', 'coupled smoke overlap authority mismatch');
+        assert.equal(state.coupledSmokeDepthContract, 'splat-depth-conditioned-front-back-near-far-smoke-intervals-v1', 'coupled smoke depth contract mismatch');
+        assert.equal(state.hybridSplatSmokeCompositorIdentity, 'splat-depth-conditioned-front-back-smoke-compositor-v1', 'coupled smoke route is not using the v1 interval compositor');
+        assert.equal(state.splatDepthConditionedSmokeSplit, 'per-pixel-transformed-splat-depth-raymarch-split-v1', 'coupled smoke route lost transformed-splat-depth split authority');
+        assert.equal(state.hybridSmokePhaseAuthority, 'shared-current-single-simulator-no-instance-smoke-history', 'coupled smoke route overstated per-instance smoke phase authority');
+        assert.equal(state.smokeDomainTransferEncoded, true, 'coupled smoke transfer was not encoded');
+        assert.ok(state.smokeDomainTransferFrameCount > 0, 'coupled smoke transfer never advanced');
+        assert.ok(state.smokeDomainTransferActiveCells > 0, 'coupled smoke transfer produced no active cells');
+        assert.equal(state.smokeDomainFarSolverStatus, 'metric-correct-coarse-advection-open-ceiling-v0', 'far smoke solver identity mismatch');
+        assert.ok(state.smokeDomainFarActiveCells > 0, 'far smoke solver produced no active far-state support');
+        assert.ok(state.smokeDomainFarAdvectedActiveCells > 0, 'far smoke transfer did not become persistent advection');
+        assert.ok(state.smokeDomainFarSupportLifetimeFrames > 0, 'far smoke support did not persist beyond transfer');
+        assert.ok(state.smokeDomainMetricVelocityScale > 0 && state.smokeDomainMetricVelocityScale < 1, 'far smoke velocity conversion is not metric-correct for a coarser grid');
+      } else {
+        assert.equal(state.smokeDomainTransferEncoded, false, 'single-domain counterexample unexpectedly encoded far transfer');
+        assert.equal(state.smokeDomainFarSolverStatus, 'absent', 'single-domain counterexample unexpectedly ran the far solver');
+        assert.equal(state.smokeDomainTransferActiveCells, 0, 'single-domain counterexample reported far transfer activity');
+      }
+      await captureViewportScreenshot(ws, out);
+      const screenshotMetrics = measureScreenshot(readFileSync(out));
+      if (screenshotMetrics.litPixels < 1000 || screenshotMetrics.meanLuma < 1.2) {
+        throw new Error(`coupled smoke screenshot missing visible output: ${JSON.stringify(screenshotMetrics)}`);
+      }
+      const report = {
+        identity: 'kaminos-smoke-domain-coupling-witness-v1',
+        requestedRoute: url,
+        effectiveRoute: state.effectiveRoute,
+        evidenceMode,
+        visualEvidenceMode,
+        phase,
+        windowSize,
+        settleMs,
+        requestedSmokeDomainMode,
+        effectiveSmokeDomainMode: state.smokeDomainMode,
+        state,
+        screenshotMetrics,
+        screenshot: out,
+        browserSession: {
+          identity: browserSession.identity,
+          mode: browserSession.mode,
+          port: browserSession.port,
+          userDataDir: browserSession.userDataDir,
+          keepBrowserOpen: browserSession.keepBrowserOpen,
+        },
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      closeBrowserSession(browserSession);
+      console.log(JSON.stringify(report, null, 2));
       return;
     }
     assert.equal(state.volumeScene, expectedVolumeScene, 'volume scene route/control did not apply');
@@ -4311,6 +4407,19 @@ async function main() {
       hybridSmokePhaseAuthority: sample.hybridSmokePhaseAuthority ?? state.hybridSmokePhaseAuthority,
       hybridSplatLayer: sample.hybridSplatLayer ?? state.hybridSplatLayer,
       hybridSmokeLayer: sample.hybridSmokeLayer ?? state.hybridSmokeLayer,
+      coupledSmokeAttachmentIdentity: sample.coupledSmokeAttachmentIdentity ?? state.coupledSmokeAttachmentIdentity,
+      coupledSmokeOverlapAuthority: sample.coupledSmokeOverlapAuthority ?? state.coupledSmokeOverlapAuthority,
+      coupledSmokeDepthContract: sample.coupledSmokeDepthContract ?? state.coupledSmokeDepthContract,
+      smokeDomainMode: sample.smokeDomainMode ?? state.smokeDomainMode,
+      smokeDomainFarGrid: sample.smokeDomainFarGrid ?? state.smokeDomainFarGrid,
+      smokeDomainHandoffStatus: sample.smokeDomainHandoffStatus ?? state.smokeDomainHandoffStatus,
+      smokeDomainTransferActiveCells: sample.smokeDomainTransferActiveCells ?? state.smokeDomainTransferActiveCells,
+      smokeDomainFarActiveCells: sample.smokeDomainFarActiveCells ?? state.smokeDomainFarActiveCells,
+      smokeDomainFarAdvectedActiveCells: sample.smokeDomainFarAdvectedActiveCells ?? state.smokeDomainFarAdvectedActiveCells,
+      smokeDomainFarHighestActiveLayer: sample.smokeDomainFarHighestActiveLayer ?? state.smokeDomainFarHighestActiveLayer,
+      smokeDomainFarTopActiveCells: sample.smokeDomainFarTopActiveCells ?? state.smokeDomainFarTopActiveCells,
+      smokeDomainFarOutflowCells: sample.smokeDomainFarOutflowCells ?? state.smokeDomainFarOutflowCells,
+      smokeDomainFarSupportLifetimeFrames: sample.smokeDomainFarSupportLifetimeFrames ?? state.smokeDomainFarSupportLifetimeFrames,
       boundarySplatRendererIdentity: sample.boundarySplatRendererIdentity ?? state.boundarySplatRendererIdentity,
       boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity ?? state.boundarySplatAttributeModelIdentity,
       boundarySplatFeatureCaptureRequested: sample.boundarySplatFeatureCaptureRequested ?? state.boundarySplatFeatureCaptureRequested,

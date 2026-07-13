@@ -23,5 +23,15 @@ assert.match(
   /legacy[^\n]*volume_boundary_splat_composition|volume_boundary_splat_composition[^\n]*legacy/i,
   'legacy composition=field routes remain explicit compatibility input',
 );
+assert.match(
+  page,
+  /function boundarySplatCompositionRouteValue\(/,
+  'composition routing distinguishes the current composition namespace from legacy field-layout aliases',
+);
+assert.doesNotMatch(
+  page,
+  /params\.has\('volume_boundary_splat_composition'\)\s*&&\s*boundarySplatFieldLayoutRouteValue\(params\)\s*===\s*'proof'/,
+  'an explicit field layout must not suppress an independently requested hybrid-smoke composition',
+);
 
 console.log('boundary splat composition namespace contracts passed');

@@ -30,6 +30,14 @@ import {
   createSpatialStrataHybridSmokeSourceLifecycle,
   createSpatialStrataHybridSmokeSourceRuntime,
 } from './spatial-strata-hybrid-smoke-source-lifecycle.mjs';
+import {
+  COUPLED_SMOKE_ATTACHMENT_IDENTITY,
+  COUPLED_SMOKE_DEPTH_CONTRACT,
+  COUPLED_SMOKE_OVERLAP_AUTHORITY,
+  coupledSmokeDomainShaderWGSL,
+  smokeDomainMetricVelocityScale,
+  smokeDomainWorldContract,
+} from './coupled-smoke-domain.mjs';
 
 // Hybrid smoke is split during the raymarch around the transformed splat depth.
 
@@ -44,6 +52,10 @@ const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const HYBRID_SMOKE_RENDERER_IDENTITY = 'native-3d-compute-fluid-raymarch-smoke-only-v0';
+const COUPLED_SMOKE_STRATEGY = 'coupled-near-fire-far-smoke-v0';
+const COUPLED_SMOKE_HANDOFF_POLICY = 'near-fire-to-far-smoke-one-way-v0';
+const COUPLED_SMOKE_READBACK_CADENCE = 30;
+const COUPLED_SMOKE_COUNTER_COUNT = 8;
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
 const BOUNDARY_SPLAT_FIELD_LAYOUT_IDENTITY = 'boundary-splat-composed-field-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
@@ -74,6 +86,7 @@ const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
+const SUPPORTED_FAR_SMOKE_GRID_SIZES = [24, 32, 48, 64, 96];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
@@ -138,6 +151,27 @@ function normalizeMajorantGridSize(value) {
   const requested = Number(value);
   if (SUPPORTED_MAJORANT_GRID_SIZES.includes(requested)) return requested;
   return DEFAULT_MAJORANT_GRID_SIZE;
+}
+
+function normalizeFarSmokeGridSize(value) {
+  const requested = Number(value);
+  if (SUPPORTED_FAR_SMOKE_GRID_SIZES.includes(requested)) return requested;
+  return 48;
+}
+
+function normalizeSmokeDomainControls(snapshot = {}, nearGrid = DEFAULT_GRID_SIZE) {
+  const requestedMode = String(snapshot.smokeDomainMode || 'single').toLowerCase().replace(/_/g, '-');
+  const coupled = requestedMode === COUPLED_SMOKE_STRATEGY || requestedMode === 'coupled';
+  const farGrid = coupled ? normalizeFarSmokeGridSize(snapshot.smokeDomainFarGrid) : 0;
+  return {
+    mode: coupled ? COUPLED_SMOKE_STRATEGY : 'single',
+    strategy: coupled ? COUPLED_SMOKE_STRATEGY : 'single-uniform-volume-v0',
+    nearGrid,
+    farGrid,
+    handoffPolicy: coupled ? COUPLED_SMOKE_HANDOFF_POLICY : 'none',
+    handoffStatus: coupled ? 'gpu-transfer-pending' : 'inactive',
+    metricVelocityScale: coupled ? smokeDomainMetricVelocityScale(nearGrid, farGrid) : 0,
+  };
 }
 
 function normalizeRenderScale(value) {
@@ -534,6 +568,25 @@ function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize) {
 
 function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function smokeDomainFieldBufferBytes(gridSize) {
+  return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function coupledSmokeDomainDebug(domain) {
+  const coupled = domain.mode === COUPLED_SMOKE_STRATEGY;
+  const world = smokeDomainWorldContract();
+  return {
+    smokeDomainSpatialCoupling: coupled ? world.identity : 'inactive',
+    smokeDomainNearWorldBounds: { min: [...world.near.min], max: [...world.near.max] },
+    smokeDomainFarWorldBounds: coupled ? { min: [...world.far.min], max: [...world.far.max] } : null,
+    smokeDomainWorldOverlapBounds: coupled ? { min: [...world.overlap.min], max: [...world.overlap.max] } : null,
+    smokeDomainFarLinearExtentRatio: coupled ? world.farLinearExtentRatio : 0,
+    smokeDomainFarVolumeRatio: coupled ? world.farVolumeRatio : 0,
+    smokeDomainMetricVelocityScale: coupled ? domain.metricVelocityScale : 0,
+    smokeDomainMetricVelocityScaleStatus: coupled ? 'near-cell-to-far-cell-metric-rescale-v0' : 'inactive',
+  };
 }
 
 function majorantBufferBytes(majorantGridSize = DEFAULT_MAJORANT_GRID_SIZE) {
@@ -5330,15 +5383,64 @@ fn vs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
 
 @group(0) @binding(0) var splatColorOpacity: texture_2d<f32>;
 @group(0) @binding(1) var splatMoments: texture_2d<f32>;
-@group(0) @binding(2) var smokeFrontColor: texture_2d<f32>;
-@group(0) @binding(3) var smokeFrontInterval: texture_2d<f32>;
-@group(0) @binding(4) var smokeBackColor: texture_2d<f32>;
-@group(0) @binding(5) var smokeBackInterval: texture_2d<f32>;
+@group(0) @binding(2) var nearSmokeFrontColor: texture_2d<f32>;
+@group(0) @binding(3) var nearSmokeFrontInterval: texture_2d<f32>;
+@group(0) @binding(4) var nearSmokeBackColor: texture_2d<f32>;
+@group(0) @binding(5) var nearSmokeBackInterval: texture_2d<f32>;
 @group(0) @binding(6) var layerSampler: sampler;
+@group(0) @binding(7) var farSmokeFrontColor: texture_2d<f32>;
+@group(0) @binding(8) var farSmokeFrontInterval: texture_2d<f32>;
+@group(0) @binding(9) var farSmokeBackColor: texture_2d<f32>;
+@group(0) @binding(10) var farSmokeBackInterval: texture_2d<f32>;
 
 fn compositePremultiplied(front: vec4<f32>, back: vec4<f32>) -> vec4<f32> {
   let visibility = 1.0 - clamp(front.a, 0.0, 1.0);
   return vec4<f32>(front.rgb + visibility * back.rgb, front.a + visibility * back.a);
+}
+
+struct SmokeSegment {
+  color: vec4<f32>,
+  interval: vec4<f32>,
+};
+
+fn combineSmokeSegment(
+  nearColor: vec4<f32>,
+  nearInterval: vec4<f32>,
+  farColor: vec4<f32>,
+  farInterval: vec4<f32>,
+) -> SmokeSegment {
+  let nearPresent = nearColor.a > 0.000001 && nearInterval.y > 0.000001;
+  let farPresent = farColor.a > 0.000001 && farInterval.y > 0.000001;
+  var result: SmokeSegment;
+  if (!nearPresent && !farPresent) {
+    result.color = vec4<f32>(0.0);
+    result.interval = vec4<f32>(0.0);
+    return result;
+  }
+  if (!farPresent) {
+    result.color = nearColor;
+    result.interval = nearInterval;
+    return result;
+  }
+  if (!nearPresent) {
+    result.color = farColor;
+    result.interval = farInterval;
+    return result;
+  }
+  let nearFirst = nearInterval.z <= farInterval.z;
+  let frontColor = select(farColor, nearColor, nearFirst);
+  let frontInterval = select(farInterval, nearInterval, nearFirst);
+  let backColor = select(nearColor, farColor, nearFirst);
+  let backInterval = select(nearInterval, farInterval, nearFirst);
+  let backVisibility = 1.0 - clamp(frontColor.a, 0.0, 1.0);
+  result.color = compositePremultiplied(frontColor, backColor);
+  result.interval = vec4<f32>(
+    frontInterval.x + backVisibility * backInterval.x,
+    frontInterval.y + backVisibility * backInterval.y,
+    min(frontInterval.z, backInterval.z),
+    max(frontInterval.w, backInterval.w),
+  );
+  return result;
 }
 
 @fragment
@@ -5346,20 +5448,28 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
   let hybridLayerUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
   let splat = textureSampleLevel(splatColorOpacity, layerSampler, hybridLayerUv, 0.0);
   let splatDepthMoments = textureSampleLevel(splatMoments, layerSampler, hybridLayerUv, 0.0);
-  let smokeFront = textureSampleLevel(smokeFrontColor, layerSampler, hybridLayerUv, 0.0);
-  let smokeFrontDepthInterval = textureSampleLevel(smokeFrontInterval, layerSampler, hybridLayerUv, 0.0);
-  let smokeBack = textureSampleLevel(smokeBackColor, layerSampler, hybridLayerUv, 0.0);
-  let smokeBackDepthInterval = textureSampleLevel(smokeBackInterval, layerSampler, hybridLayerUv, 0.0);
+  let smokeFront = combineSmokeSegment(
+    textureSampleLevel(nearSmokeFrontColor, layerSampler, hybridLayerUv, 0.0),
+    textureSampleLevel(nearSmokeFrontInterval, layerSampler, hybridLayerUv, 0.0),
+    textureSampleLevel(farSmokeFrontColor, layerSampler, hybridLayerUv, 0.0),
+    textureSampleLevel(farSmokeFrontInterval, layerSampler, hybridLayerUv, 0.0),
+  );
+  let smokeBack = combineSmokeSegment(
+    textureSampleLevel(nearSmokeBackColor, layerSampler, hybridLayerUv, 0.0),
+    textureSampleLevel(nearSmokeBackInterval, layerSampler, hybridLayerUv, 0.0),
+    textureSampleLevel(farSmokeBackColor, layerSampler, hybridLayerUv, 0.0),
+    textureSampleLevel(farSmokeBackInterval, layerSampler, hybridLayerUv, 0.0),
+  );
   let splatPresent = splat.a > 0.000001 && splatDepthMoments.y > 0.000001;
-  let smokeFrontPresent = smokeFront.a > 0.000001 && smokeFrontDepthInterval.y > 0.000001;
-  let smokeBackPresent = smokeBack.a > 0.000001 && smokeBackDepthInterval.y > 0.000001;
+  let smokeFrontPresent = smokeFront.color.a > 0.000001 && smokeFront.interval.y > 0.000001;
+  let smokeBackPresent = smokeBack.color.a > 0.000001 && smokeBack.interval.y > 0.000001;
   let splatDepth = splatDepthMoments.x / max(splatDepthMoments.y, 0.000001);
   let depthIntervalTolerance = max(0.02, splatDepth * 0.002);
-  let smokeFrontIntervalValid = !smokeFrontPresent || !splatPresent || smokeFrontDepthInterval.w <= splatDepth + depthIntervalTolerance;
-  let smokeBackIntervalValid = !smokeBackPresent || !splatPresent || smokeBackDepthInterval.z >= splatDepth - depthIntervalTolerance;
+  let smokeFrontIntervalValid = !smokeFrontPresent || !splatPresent || smokeFront.interval.w <= splatDepth + depthIntervalTolerance;
+  let smokeBackIntervalValid = !smokeBackPresent || !splatPresent || smokeBack.interval.z >= splatDepth - depthIntervalTolerance;
   if (!smokeFrontIntervalValid) { return vec4<f32>(1.0, 0.0, 0.0, 1.0); }
   if (!smokeBackIntervalValid) { return vec4<f32>(0.0, 0.75, 1.0, 1.0); }
-  var composed = compositePremultiplied(smokeFront, compositePremultiplied(splat, smokeBack));
+  var composed = compositePremultiplied(smokeFront.color, compositePremultiplied(splat, smokeBack.color));
   if (!splatPresent && !smokeFrontPresent && !smokeBackPresent) { composed = vec4<f32>(0.0); }
   let background = vec3<f32>(0.004, 0.005, 0.006);
   let hdr = composed.rgb + background * (1.0 - clamp(composed.a, 0.0, 1.0));
@@ -5588,7 +5698,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       depth: 'weighted-linear-depth-plus-near-far-interval',
       opticalComposition: 'front-smoke>splat>back-smoke',
       excludedAuthority: 'raymarched-flame-interface-emission',
+      coupledDomain: null,
     },
+    coupledSmokeAttachmentIdentity: 'inactive',
+    coupledSmokeOverlapAuthority: 'inactive',
+    coupledSmokeDepthContract: 'inactive',
+    smokeDomainMode: 'single',
+    smokeDomainStrategy: 'single-uniform-volume-v0',
+    smokeDomainNearGrid: gridSize,
+    smokeDomainFarGrid: 0,
+    smokeDomainHandoffPolicy: 'none',
+    smokeDomainHandoffStatus: 'inactive',
+    smokeDomainTransferEncoded: false,
+    smokeDomainTransferFrameCount: 0,
+    smokeDomainTransferActiveCells: 0,
+    smokeDomainFarActiveCells: 0,
+    smokeDomainFarAdvectedActiveCells: 0,
+    smokeDomainFarHighestActiveLayer: 0,
+    smokeDomainFarTopActiveCells: 0,
+    smokeDomainFarOutflowCells: 0,
+    smokeDomainFarSupportLifetimeFrames: 0,
+    smokeDomainTransferLastReadbackFrame: -1,
+    smokeDomainTransferReadbackPending: false,
+    smokeDomainTransferBufferBytes: 0,
+    smokeDomainFarStateBufferBytes: 0,
+    smokeDomainFarSolverStatus: 'absent',
+    ...coupledSmokeDomainDebug(normalizeSmokeDomainControls(controlsSnapshot, gridSize)),
     boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
     boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
     boundarySplatPhaseMode: normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode),
@@ -5989,6 +6124,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     getCurrentConfig: spatialStrataHybridSmokeConfig,
     publishState: publishSpatialStrataHybridSmokeLifecycle,
   });
+  let smokeDomainOutletPipeline = null;
+  let smokeDomainFarInputPipeline = null;
+  let smokeDomainLayerPipeline = null;
   let hybridCompositorPipeline = null;
   let hybridCompositorReadbackPipeline = null;
   let bindGroups = [];
@@ -6003,6 +6141,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatRenderBindGroup = null;
   let hybridSmokeSplitBindGroup = null;
   let hybridCompositorBindGroup = null;
+  let smokeDomainTransferBindGroups = [];
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
@@ -6012,6 +6151,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatRenderBindGroupLayout = null;
   let hybridSmokeSplitBindGroupLayout = null;
   let hybridCompositorBindGroupLayout = null;
+  let smokeDomainTransferBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
   let pressureReadBindGroupLayout = null;
@@ -6023,6 +6163,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatRenderPipelineLayout = null;
   let hybridSmokePipelineLayout = null;
   let hybridCompositorPipelineLayout = null;
+  let smokeDomainTransferPipelineLayout = null;
+  let smokeDomainLayerPipelineLayout = null;
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
   let pressureJacobiTieredPipelineLayout = null;
@@ -6030,6 +6172,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectTieredPipelineLayout = null;
   let shader = null;
   let hybridCompositorShader = null;
+  let smokeDomainShader = null;
   let boundarySplatComputeShader = null;
   let boundarySplatRenderShader = null;
   let uniformBuffer = null;
@@ -6052,8 +6195,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
+  let smokeDomainTransferBuffer = null;
+  let smokeDomainFarStateBuffers = [];
+  let smokeDomainTransferCounterBuffer = null;
+  let smokeDomainTransferCounterReadbackBuffer = null;
+  let smokeDomainTransferReadbackPending = false;
+  let smokeDomainTransferReadbackMapping = false;
+  let smokeDomainTransferGeneration = 0;
+  let smokeDomainTransferCounterSourceFrame = -1;
+  let smokeDomainFarSupportStartFrame = -1;
   let currentFluid = 0;
   let currentFront = 0;
+  let currentSmokeDomainFarState = 0;
   let frameTexture = null;
   let frameTextureSize = '';
   let hybridSplatColorTexture = null;
@@ -6062,6 +6215,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let hybridSmokeFrontIntervalTexture = null;
   let hybridSmokeBackColorTexture = null;
   let hybridSmokeBackIntervalTexture = null;
+  let hybridFarSmokeFrontColorTexture = null;
+  let hybridFarSmokeFrontIntervalTexture = null;
+  let hybridFarSmokeBackColorTexture = null;
+  let hybridFarSmokeBackIntervalTexture = null;
   let hybridLayerTextureSize = '';
   let hybridCompositorSampler = null;
   let browserResidualFeatureTexture = null;
@@ -6542,9 +6699,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function destroyFluidState() {
+    smokeDomainTransferGeneration += 1;
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
+    smokeDomainTransferBuffer?.destroy();
+    for (const buffer of smokeDomainFarStateBuffers) buffer.destroy();
+    smokeDomainTransferCounterBuffer?.destroy();
+    smokeDomainTransferCounterReadbackBuffer?.destroy();
     boundarySidecarBuffer?.destroy();
     boundarySplatBuffer?.destroy();
     boundarySplatDrawBuffer?.destroy();
@@ -6568,6 +6730,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fluidBuffers = [];
     frontBuffers = [];
     pressureBuffers = [];
+    smokeDomainTransferBuffer = null;
+    smokeDomainFarStateBuffers = [];
+    smokeDomainTransferCounterBuffer = null;
+    smokeDomainTransferCounterReadbackBuffer = null;
+    smokeDomainTransferReadbackPending = false;
+    smokeDomainTransferReadbackMapping = false;
+    smokeDomainTransferCounterSourceFrame = -1;
+    smokeDomainFarSupportStartFrame = -1;
+    smokeDomainTransferBindGroups = [];
+    smokeDomainOutletPipeline = null;
+    smokeDomainFarInputPipeline = null;
+    smokeDomainLayerPipeline = null;
     bindGroups = [];
     majorantFrontBindGroups = [];
     boundarySidecarReadBindGroups = [];
@@ -6934,6 +7108,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
+    const smokeDomain = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
     destroyFluidState();
     boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
     state.boundarySplatCapacity = boundarySplatCapacity;
@@ -6973,6 +7148,82 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
       return buffer;
     });
+    if (smokeDomain.mode === COUPLED_SMOKE_STRATEGY) {
+      const farFieldBytes = smokeDomainFieldBufferBytes(smokeDomain.farGrid);
+      smokeDomainTransferBuffer = device.createBuffer({
+        label: `kaminos metric-correct near-to-far smoke transfer ${gridSize}^3 to ${smokeDomain.farGrid}^3`,
+        size: farFieldBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      smokeDomainFarStateBuffers = [0, 1].map(index => device.createBuffer({
+        label: `kaminos persistent far-smoke state ${smokeDomain.farGrid}^3 ${index}`,
+        size: farFieldBytes,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      }));
+      smokeDomainTransferCounterBuffer = device.createBuffer({
+        label: 'kaminos coupled smoke transfer telemetry counters',
+        size: COUPLED_SMOKE_COUNTER_COUNT * Uint32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+      });
+      smokeDomainTransferCounterReadbackBuffer = device.createBuffer({
+        label: 'kaminos coupled smoke transfer telemetry readback',
+        size: COUPLED_SMOKE_COUNTER_COUNT * Uint32Array.BYTES_PER_ELEMENT,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      const zeroFarField = new Float32Array(gridCellCount(smokeDomain.farGrid) * 4);
+      device.queue.writeBuffer(smokeDomainTransferBuffer, 0, zeroFarField);
+      for (const buffer of smokeDomainFarStateBuffers) device.queue.writeBuffer(buffer, 0, zeroFarField);
+      device.queue.writeBuffer(smokeDomainTransferCounterBuffer, 0, new Uint32Array(COUPLED_SMOKE_COUNTER_COUNT));
+      smokeDomainShader = device.createShaderModule({
+        label: `kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} ${gridSize}^3 to ${smokeDomain.farGrid}^3`,
+        code: coupledSmokeDomainShaderWGSL(gridSize, smokeDomain.farGrid, FLUID_SLOTS_PER_CELL),
+      });
+      smokeDomainOutletPipeline = device.createComputePipeline({
+        label: 'kaminos metric-correct near-fire smoke outlet pipeline',
+        layout: smokeDomainTransferPipelineLayout,
+        compute: { module: smokeDomainShader, entryPoint: 'csSmokeDomainOutlet' },
+      });
+      smokeDomainFarInputPipeline = device.createComputePipeline({
+        label: 'kaminos persistent coarse far-smoke advection pipeline',
+        layout: smokeDomainTransferPipelineLayout,
+        compute: { module: smokeDomainShader, entryPoint: 'csSmokeDomainFarInput' },
+      });
+      smokeDomainLayerPipeline = device.createRenderPipeline({
+        label: `kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} far smoke-only layer`,
+        layout: smokeDomainLayerPipelineLayout,
+        vertex: { module: smokeDomainShader, entryPoint: 'vsSmokeDomainLayer' },
+        fragment: {
+          module: smokeDomainShader,
+          entryPoint: 'fsSmokeDomainLayer',
+          targets: [0, 1, 2, 3].map(() => ({ format: 'rgba16float' })),
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+      smokeDomainTransferBindGroups = [];
+      for (let fluidIndex = 0; fluidIndex < 2; fluidIndex += 1) {
+        smokeDomainTransferBindGroups[fluidIndex] = [];
+        for (let farIndex = 0; farIndex < 2; farIndex += 1) {
+          smokeDomainTransferBindGroups[fluidIndex][farIndex] = device.createBindGroup({
+            label: `kaminos coupled smoke fluid ${fluidIndex} far ${farIndex}`,
+            layout: smokeDomainTransferBindGroupLayout,
+            entries: [
+              { binding: 0, resource: { buffer: fluidBuffers[fluidIndex] } },
+              { binding: 1, resource: { buffer: smokeDomainTransferBuffer } },
+              { binding: 2, resource: { buffer: smokeDomainFarStateBuffers[farIndex] } },
+              { binding: 3, resource: { buffer: smokeDomainFarStateBuffers[1 - farIndex] } },
+              { binding: 4, resource: { buffer: smokeDomainTransferCounterBuffer } },
+              { binding: 5, resource: { buffer: uniformBuffer } },
+            ],
+          });
+        }
+      }
+      state.smokeDomainTransferBufferBytes = farFieldBytes;
+      state.smokeDomainFarStateBufferBytes = farFieldBytes;
+    } else {
+      smokeDomainShader = null;
+      state.smokeDomainTransferBufferBytes = 0;
+      state.smokeDomainFarStateBufferBytes = 0;
+    }
     ensureOracleActivityCueBuffer();
     if (oracleActivityCueSourceValues && oracleActivityCueSourceGrid) {
       const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
@@ -7225,6 +7476,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ];
     currentFluid = 0;
     currentFront = 0;
+    currentSmokeDomainFarState = 0;
     state.simStepCount = 0;
     state.simGrid = gridSize;
     state.simGridLabel = `${gridSize}^3 velocity-material-fire-microdetail-storage-buffer+${FRONT_FIELD_IDENTITY}`;
@@ -7240,6 +7492,47 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.majorantBuiltThisFrame = false;
     state.majorantLastBuiltFrame = -1;
     state.majorantSkippedFrameCount = 0;
+    state.smokeDomainMode = smokeDomain.mode;
+    state.smokeDomainStrategy = smokeDomain.strategy;
+    state.smokeDomainNearGrid = smokeDomain.nearGrid;
+    state.smokeDomainFarGrid = smokeDomain.farGrid;
+    state.smokeDomainHandoffPolicy = smokeDomain.handoffPolicy;
+    state.smokeDomainHandoffStatus = smokeDomain.handoffStatus;
+    state.smokeDomainTransferEncoded = false;
+    state.smokeDomainTransferFrameCount = 0;
+    state.smokeDomainTransferActiveCells = 0;
+    state.smokeDomainFarActiveCells = 0;
+    state.smokeDomainFarAdvectedActiveCells = 0;
+    state.smokeDomainFarHighestActiveLayer = 0;
+    state.smokeDomainFarTopActiveCells = 0;
+    state.smokeDomainFarOutflowCells = 0;
+    state.smokeDomainFarSupportLifetimeFrames = 0;
+    state.smokeDomainTransferLastReadbackFrame = -1;
+    state.smokeDomainTransferReadbackPending = false;
+    state.smokeDomainFarSolverStatus = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? 'metric-correct-coarse-advection-open-ceiling-v0'
+      : 'absent';
+    state.coupledSmokeAttachmentIdentity = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_SMOKE_ATTACHMENT_IDENTITY
+      : 'inactive';
+    state.coupledSmokeOverlapAuthority = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_SMOKE_OVERLAP_AUTHORITY
+      : 'inactive';
+    state.coupledSmokeDepthContract = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_SMOKE_DEPTH_CONTRACT
+      : 'inactive';
+    Object.assign(state, coupledSmokeDomainDebug(smokeDomain));
+    state.hybridSmokeLayer = {
+      ...state.hybridSmokeLayer,
+      coupledDomain: smokeDomain.mode === COUPLED_SMOKE_STRATEGY ? {
+        identity: COUPLED_SMOKE_ATTACHMENT_IDENTITY,
+        strategy: smokeDomain.strategy,
+        overlapAuthority: COUPLED_SMOKE_OVERLAP_AUTHORITY,
+        depthContract: COUPLED_SMOKE_DEPTH_CONTRACT,
+        farGrid: smokeDomain.farGrid,
+        metricVelocityScale: smokeDomain.metricVelocityScale,
+      } : null,
+    };
     state.boundarySidecarIdentity = BOUNDARY_SIDECAR_IDENTITY;
     state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
     state.boundarySidecarBytes = nextBoundarySidecarBufferBytes;
@@ -7603,7 +7896,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     hybridCompositorBindGroupLayout = device.createBindGroupLayout({
       label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} bind group layout`,
-      entries: [0, 1, 2, 3, 4, 5].map(binding => ({
+      entries: [0, 1, 2, 3, 4, 5, 7, 8, 9, 10].map(binding => ({
         binding,
         visibility: GPUShaderStage.FRAGMENT,
         texture: { sampleType: 'float' },
@@ -7612,6 +7905,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         visibility: GPUShaderStage.FRAGMENT,
         sampler: { type: 'filtering' },
       }]),
+    });
+    smokeDomainTransferBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} bind group layout`,
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 5, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+      ],
     });
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
@@ -7628,6 +7932,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     hybridCompositorPipelineLayout = device.createPipelineLayout({
       label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} pipeline layout`,
       bindGroupLayouts: [hybridCompositorBindGroupLayout],
+    });
+    smokeDomainTransferPipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} pipeline layout`,
+      bindGroupLayouts: [smokeDomainTransferBindGroupLayout],
+    });
+    smokeDomainLayerPipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} splat-depth interval layer pipeline layout`,
+      bindGroupLayouts: [smokeDomainTransferBindGroupLayout, hybridSmokeSplitBindGroupLayout],
     });
     majorantPipelineLayout = device.createPipelineLayout({
       label: 'kaminos coarse majorant pipeline layout',
@@ -7744,12 +8056,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     hybridSmokeFrontIntervalTexture?.destroy();
     hybridSmokeBackColorTexture?.destroy();
     hybridSmokeBackIntervalTexture?.destroy();
+    hybridFarSmokeFrontColorTexture?.destroy();
+    hybridFarSmokeFrontIntervalTexture?.destroy();
+    hybridFarSmokeBackColorTexture?.destroy();
+    hybridFarSmokeBackIntervalTexture?.destroy();
     hybridSplatColorTexture = null;
     hybridSplatMomentsTexture = null;
     hybridSmokeFrontColorTexture = null;
     hybridSmokeFrontIntervalTexture = null;
     hybridSmokeBackColorTexture = null;
     hybridSmokeBackIntervalTexture = null;
+    hybridFarSmokeFrontColorTexture = null;
+    hybridFarSmokeFrontIntervalTexture = null;
+    hybridFarSmokeBackColorTexture = null;
+    hybridFarSmokeBackIntervalTexture = null;
     hybridLayerTextureSize = '';
     hybridSmokeSplitBindGroup = null;
     hybridCompositorBindGroup = null;
@@ -7772,6 +8092,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     hybridSmokeFrontIntervalTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} front depth interval`);
     hybridSmokeBackColorTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} back color-opacity`);
     hybridSmokeBackIntervalTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} back depth interval`);
+    hybridFarSmokeFrontColorTexture = makeLayerTexture(`kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} far front color-opacity`);
+    hybridFarSmokeFrontIntervalTexture = makeLayerTexture(`kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} far front depth interval`);
+    hybridFarSmokeBackColorTexture = makeLayerTexture(`kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} far back color-opacity`);
+    hybridFarSmokeBackIntervalTexture = makeLayerTexture(`kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} far back depth interval`);
     hybridSmokeSplitBindGroup = device.createBindGroup({
       label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} transformed-splat-depth split bind group`,
       layout: hybridSmokeSplitBindGroupLayout,
@@ -7791,6 +8115,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 4, resource: hybridSmokeBackColorTexture.createView() },
         { binding: 5, resource: hybridSmokeBackIntervalTexture.createView() },
         { binding: 6, resource: hybridCompositorSampler },
+        { binding: 7, resource: hybridFarSmokeFrontColorTexture.createView() },
+        { binding: 8, resource: hybridFarSmokeFrontIntervalTexture.createView() },
+        { binding: 9, resource: hybridFarSmokeBackColorTexture.createView() },
+        { binding: 10, resource: hybridFarSmokeBackIntervalTexture.createView() },
       ],
     });
     hybridLayerTextureSize = key;
@@ -8646,6 +8974,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const pressureBytes = pressureBufferBytes(gridSize);
     const majorantBytes = majorantBufferBytes(majorantGridSize);
     const boundarySidecarBytes = boundarySidecarBufferBytes(gridSize);
+    const smokeDomainTransferBytes = state.smokeDomainTransferBufferBytes || 0;
+    const smokeDomainFarStateBytes = state.smokeDomainFarStateBufferBytes || 0;
     state.majorantCadence = majorantBuildCadence;
     state.pressureIterationDefault = defaultPressureIterationsForScene(scene);
     state.pressureIterationRequested = pressureIterationRequested;
@@ -8755,6 +9085,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySidecarBuiltThisFrame,
       boundarySidecarCellVisitsThisFrame: boundarySidecarBuiltThisFrame ? fullGridCells : 0,
       boundarySidecarLastBuiltFrame: state.boundarySidecarLastBuiltFrame,
+      coupledSmokeAttachmentIdentity: state.coupledSmokeAttachmentIdentity,
+      smokeDomainFarGrid: state.smokeDomainFarGrid,
+      smokeDomainTransferEncoded: state.smokeDomainTransferEncoded,
+      smokeDomainTransferCellVisitsThisFrame: state.smokeDomainTransferEncoded ? state.smokeDomainFarGrid ** 3 * 2 : 0,
       pressureProjectionEnabled: pressureEnabled,
       pressureIterationDefault: state.pressureIterationDefault,
       pressureIterationRequested,
@@ -8764,8 +9098,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       pressureBufferBytes: pressureBytes,
       majorantBufferBytes: majorantBytes,
       boundarySidecarBufferBytes: boundarySidecarBytes,
+      smokeDomainTransferBufferBytes: smokeDomainTransferBytes,
+      smokeDomainFarStateBufferBytesEach: smokeDomainFarStateBytes,
+      smokeDomainFarStateBufferCount: smokeDomainFarStateBytes > 0 ? 2 : 0,
       externalEmitterBufferBytes: externalEmitterBufferBytes(),
-      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + boundarySidecarBytes + externalEmitterBufferBytes(),
+      estimatedResidentBytes: fluidBytes * 2 + frontBytes * 2 + pressureBytes * 2 + majorantBytes + boundarySidecarBytes + smokeDomainTransferBytes + smokeDomainFarStateBytes * 2 + externalEmitterBufferBytes(),
       timing: { ...state.timing },
     };
     return state.simCostLedger;
@@ -8789,6 +9126,93 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodePressureProjection(encoder);
     state.simStepCount += 1;
     updateSimCostLedger();
+  }
+
+  function encodeSmokeDomainTransfer(encoder) {
+    const domain = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
+    const bindGroup = smokeDomainTransferBindGroups[currentFluid]?.[currentSmokeDomainFarState];
+    if (
+      domain.mode !== COUPLED_SMOKE_STRATEGY
+      || !smokeDomainOutletPipeline
+      || !smokeDomainFarInputPipeline
+      || !smokeDomainTransferCounterBuffer
+      || !bindGroup
+    ) {
+      state.smokeDomainTransferEncoded = false;
+      return false;
+    }
+    const shouldReadback = !smokeDomainTransferReadbackPending
+      && !smokeDomainTransferReadbackMapping
+      && state.frameCount % COUPLED_SMOKE_READBACK_CADENCE === 0;
+    encoder.clearBuffer(smokeDomainTransferCounterBuffer);
+    const pass = encoder.beginComputePass({ label: 'kaminos metric-correct near-to-far smoke pass' });
+    const workgroups = Math.ceil(domain.farGrid / 4);
+    pass.setBindGroup(0, bindGroup);
+    pass.setPipeline(smokeDomainOutletPipeline);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.setPipeline(smokeDomainFarInputPipeline);
+    pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    pass.end();
+    currentSmokeDomainFarState = 1 - currentSmokeDomainFarState;
+    if (shouldReadback && smokeDomainTransferCounterReadbackBuffer) {
+      encoder.copyBufferToBuffer(
+        smokeDomainTransferCounterBuffer,
+        0,
+        smokeDomainTransferCounterReadbackBuffer,
+        0,
+        COUPLED_SMOKE_COUNTER_COUNT * Uint32Array.BYTES_PER_ELEMENT,
+      );
+      smokeDomainTransferReadbackPending = true;
+      smokeDomainTransferCounterSourceFrame = state.frameCount;
+    }
+    state.smokeDomainTransferEncoded = true;
+    state.smokeDomainTransferFrameCount += 1;
+    state.smokeDomainHandoffStatus = 'gpu-transfer-live-metric-correct-coarse-far-advection';
+    state.smokeDomainTransferReadbackPending = smokeDomainTransferReadbackPending || smokeDomainTransferReadbackMapping;
+    return true;
+  }
+
+  function consumeSmokeDomainTransferReadback() {
+    if (
+      !smokeDomainTransferReadbackPending
+      || smokeDomainTransferReadbackMapping
+      || !smokeDomainTransferCounterReadbackBuffer
+    ) return;
+    smokeDomainTransferReadbackMapping = true;
+    const generation = smokeDomainTransferGeneration;
+    const readbackBuffer = smokeDomainTransferCounterReadbackBuffer;
+    const readbackFrame = smokeDomainTransferCounterSourceFrame;
+    readbackBuffer.mapAsync(GPUMapMode.READ)
+      .then(() => {
+        const counts = new Uint32Array(readbackBuffer.getMappedRange()).slice();
+        readbackBuffer.unmap();
+        if (generation !== smokeDomainTransferGeneration) return;
+        state.smokeDomainTransferActiveCells = Number(counts[0] || 0);
+        state.smokeDomainFarActiveCells = Number(counts[1] || 0);
+        state.smokeDomainFarAdvectedActiveCells = Number(counts[2] || 0);
+        state.smokeDomainFarHighestActiveLayer = Number(counts[3] || 0);
+        state.smokeDomainFarTopActiveCells = Number(counts[4] || 0);
+        state.smokeDomainFarOutflowCells = Number(counts[5] || 0);
+        state.smokeDomainTransferLastReadbackFrame = readbackFrame;
+        if (state.smokeDomainFarActiveCells > 0) {
+          if (smokeDomainFarSupportStartFrame < 0) smokeDomainFarSupportStartFrame = readbackFrame;
+          state.smokeDomainFarSupportLifetimeFrames = Math.max(1, readbackFrame - smokeDomainFarSupportStartFrame + 1);
+        } else {
+          smokeDomainFarSupportStartFrame = -1;
+          state.smokeDomainFarSupportLifetimeFrames = 0;
+        }
+      })
+      .catch(error => {
+        if (generation !== smokeDomainTransferGeneration) return;
+        state.smokeDomainHandoffStatus = 'gpu-transfer-readback-error';
+        state.smokeDomainTransferReadbackError = error?.message || String(error);
+      })
+      .finally(() => {
+        if (generation !== smokeDomainTransferGeneration) return;
+        smokeDomainTransferReadbackPending = false;
+        smokeDomainTransferReadbackMapping = false;
+        state.smokeDomainTransferReadbackPending = false;
+      });
   }
 
   function encodePressureProjection(encoder) {
@@ -9497,6 +9921,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.hybridSmokeRepresentationEffective = 'raymarch';
     }
 
+    const farSmokePass = encoder.beginRenderPass({
+      label: `kaminos ${COUPLED_SMOKE_ATTACHMENT_IDENTITY} far layer pass`,
+      colorAttachments: [
+        hybridFarSmokeFrontColorTexture,
+        hybridFarSmokeFrontIntervalTexture,
+        hybridFarSmokeBackColorTexture,
+        hybridFarSmokeBackIntervalTexture,
+      ].map(texture => ({
+        view: texture.createView(),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      })),
+    });
+    const farSmokeBindGroup = smokeDomainTransferBindGroups[currentFluid]?.[currentSmokeDomainFarState];
+    if (state.smokeDomainMode === COUPLED_SMOKE_STRATEGY && smokeDomainLayerPipeline && farSmokeBindGroup) {
+      farSmokePass.setPipeline(smokeDomainLayerPipeline);
+      farSmokePass.setBindGroup(0, farSmokeBindGroup);
+      farSmokePass.setBindGroup(1, hybridSmokeSplitBindGroup);
+      farSmokePass.draw(3);
+    }
+    farSmokePass.end();
+
     const compositePass = encoder.beginRenderPass({
       label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} resolve pass`,
       colorAttachments: [{
@@ -10082,6 +10529,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
         encodeSim(encoder);
+        encodeSmokeDomainTransfer(encoder);
         encodeMajorant(encoder);
       }
       encodeBoundarySidecar(encoder);
@@ -10122,6 +10570,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeHistoryCopy(encoder, currentTexture);
       encodeBoundarySplatTelemetry(encoder);
       device.queue.submit([encoder.finish()]);
+      if (smokeDomainTransferReadbackPending) consumeSmokeDomainTransferReadback();
       if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       commitPreviousViewProjection();
       state.frameCount += 1;
@@ -11535,6 +11984,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         hybridSmokePhaseAuthority: state.hybridSmokePhaseAuthority,
         hybridSplatLayer: { ...state.hybridSplatLayer },
         hybridSmokeLayer: { ...state.hybridSmokeLayer },
+        coupledSmokeAttachmentIdentity: state.coupledSmokeAttachmentIdentity,
+        coupledSmokeOverlapAuthority: state.coupledSmokeOverlapAuthority,
+        coupledSmokeDepthContract: state.coupledSmokeDepthContract,
+        smokeDomainMode: state.smokeDomainMode,
+        smokeDomainStrategy: state.smokeDomainStrategy,
+        smokeDomainNearGrid: state.smokeDomainNearGrid,
+        smokeDomainFarGrid: state.smokeDomainFarGrid,
+        smokeDomainHandoffPolicy: state.smokeDomainHandoffPolicy,
+        smokeDomainHandoffStatus: state.smokeDomainHandoffStatus,
+        smokeDomainTransferEncoded: state.smokeDomainTransferEncoded,
+        smokeDomainTransferFrameCount: state.smokeDomainTransferFrameCount,
+        smokeDomainTransferActiveCells: state.smokeDomainTransferActiveCells,
+        smokeDomainFarActiveCells: state.smokeDomainFarActiveCells,
+        smokeDomainFarAdvectedActiveCells: state.smokeDomainFarAdvectedActiveCells,
+        smokeDomainFarHighestActiveLayer: state.smokeDomainFarHighestActiveLayer,
+        smokeDomainFarTopActiveCells: state.smokeDomainFarTopActiveCells,
+        smokeDomainFarOutflowCells: state.smokeDomainFarOutflowCells,
+        smokeDomainFarSupportLifetimeFrames: state.smokeDomainFarSupportLifetimeFrames,
+        smokeDomainTransferLastReadbackFrame: state.smokeDomainTransferLastReadbackFrame,
+        smokeDomainTransferReadbackPending: state.smokeDomainTransferReadbackPending,
+        smokeDomainTransferBufferBytes: state.smokeDomainTransferBufferBytes,
+        smokeDomainFarStateBufferBytes: state.smokeDomainFarStateBufferBytes,
+        smokeDomainFarSolverStatus: state.smokeDomainFarSolverStatus,
+        smokeDomainSpatialCoupling: state.smokeDomainSpatialCoupling,
+        smokeDomainNearWorldBounds: state.smokeDomainNearWorldBounds,
+        smokeDomainFarWorldBounds: state.smokeDomainFarWorldBounds,
+        smokeDomainWorldOverlapBounds: state.smokeDomainWorldOverlapBounds,
+        smokeDomainMetricVelocityScale: state.smokeDomainMetricVelocityScale,
         boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
         boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
         boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
@@ -11932,6 +12409,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       hybridSmokePhaseAuthority: state.hybridSmokePhaseAuthority,
       hybridSplatLayer: { ...state.hybridSplatLayer },
       hybridSmokeLayer: { ...state.hybridSmokeLayer },
+      coupledSmokeAttachmentIdentity: state.coupledSmokeAttachmentIdentity,
+      coupledSmokeOverlapAuthority: state.coupledSmokeOverlapAuthority,
+      coupledSmokeDepthContract: state.coupledSmokeDepthContract,
+      smokeDomainMode: state.smokeDomainMode,
+      smokeDomainStrategy: state.smokeDomainStrategy,
+      smokeDomainNearGrid: state.smokeDomainNearGrid,
+      smokeDomainFarGrid: state.smokeDomainFarGrid,
+      smokeDomainHandoffPolicy: state.smokeDomainHandoffPolicy,
+      smokeDomainHandoffStatus: state.smokeDomainHandoffStatus,
+      smokeDomainTransferEncoded: state.smokeDomainTransferEncoded,
+      smokeDomainTransferFrameCount: state.smokeDomainTransferFrameCount,
+      smokeDomainTransferActiveCells: state.smokeDomainTransferActiveCells,
+      smokeDomainFarActiveCells: state.smokeDomainFarActiveCells,
+      smokeDomainFarAdvectedActiveCells: state.smokeDomainFarAdvectedActiveCells,
+      smokeDomainFarHighestActiveLayer: state.smokeDomainFarHighestActiveLayer,
+      smokeDomainFarTopActiveCells: state.smokeDomainFarTopActiveCells,
+      smokeDomainFarOutflowCells: state.smokeDomainFarOutflowCells,
+      smokeDomainFarSupportLifetimeFrames: state.smokeDomainFarSupportLifetimeFrames,
+      smokeDomainTransferLastReadbackFrame: state.smokeDomainTransferLastReadbackFrame,
+      smokeDomainTransferReadbackPending: state.smokeDomainTransferReadbackPending,
+      smokeDomainTransferBufferBytes: state.smokeDomainTransferBufferBytes,
+      smokeDomainFarStateBufferBytes: state.smokeDomainFarStateBufferBytes,
+      smokeDomainFarSolverStatus: state.smokeDomainFarSolverStatus,
+      smokeDomainSpatialCoupling: state.smokeDomainSpatialCoupling,
+      smokeDomainNearWorldBounds: state.smokeDomainNearWorldBounds,
+      smokeDomainFarWorldBounds: state.smokeDomainFarWorldBounds,
+      smokeDomainWorldOverlapBounds: state.smokeDomainWorldOverlapBounds,
+      smokeDomainMetricVelocityScale: state.smokeDomainMetricVelocityScale,
       boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
       boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
       boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
@@ -12388,6 +12893,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     setControls(next) {
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;
+      const previousSmokeDomain = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
@@ -12399,13 +12905,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastTemporalControlSignature = nextControlSignature;
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
       const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
+      const requestedSmokeDomain = normalizeSmokeDomainControls(controlsSnapshot, requestedGrid);
+      const smokeDomainStateResetNeeded = device && (
+        previousSmokeDomain.mode !== requestedSmokeDomain.mode
+        || previousSmokeDomain.farGrid !== requestedSmokeDomain.farGrid
+      );
       const sourceStateResetNeeded = device
         && requestedGrid === previousGrid
         && requestedMajorantGrid === previousMajorantGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
-        rebuildFluidState(requestedGrid, requestedMajorantGrid);
+      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid || smokeDomainStateResetNeeded)) {
+        rebuildFluidState(requestedGrid, requestedMajorantGrid, smokeDomainStateResetNeeded ? 'smoke-domain-control-change' : 'grid-rebuilt');
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
       } else {
