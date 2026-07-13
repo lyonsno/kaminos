@@ -14,6 +14,7 @@ assert.match(page, /boundary-splat-pbr-fire-field-camera-v0/, 'PBR route must pu
 
 assert.match(core, /const BOUNDARY_SPLAT_PBR_WGSL\s*=\s*`/, 'native renderer must own an explicit PBR scene shader');
 assert.match(core, /@builtin\(frag_depth\)/, 'PBR scene shader must write hardware depth');
+assert.match(core, /let ndc = vec2<f32>\(uv\.x \* 2\.0 - 1\.0, uv\.y \* 2\.0 - 1\.0\)/, 'PBR ray reconstruction must preserve WebGPU clip-space Y so the scene is not vertically inverted behind upright splats');
 assert.match(core, /boundarySplatPbrScenePipeline/, 'runtime must own a PBR scene pipeline on the live-volume device');
 assert.match(core, /depthStencil:\s*\{[\s\S]*format:\s*'depth24plus'[\s\S]*depthWriteEnabled:\s*true[\s\S]*depthCompare:\s*'less'/, 'PBR scene pipeline must write the shared depth attachment');
 assert.match(core, /boundarySplatRenderPipeline[\s\S]*depthStencil:\s*\{[\s\S]*format:\s*'depth24plus'[\s\S]*depthWriteEnabled:\s*false[\s\S]*depthCompare:\s*'less-equal'/, 'learned splats must test against PBR scene depth without replacing it');
@@ -32,6 +33,9 @@ assert.match(core, /sampleBoundarySplatPbrCostLadder/, 'runtime must expose a fr
 assert.match(witness, /kaminos\.volume\.boundary-splat-pbr-witness\.v0/, 'witness must publish a stable report schema');
 assert.match(witness, /\[0, 1, 4, 16, 100\]/, 'witness must measure the required PBR count ladder');
 assert.match(witness, /sampleBoundarySplatPbrCostLadder/, 'witness must use timestamp-backed runtime measurements');
+assert.match(witness, /cameraSweep/, 'witness must preserve a multi-pose parallax and occlusion sequence');
+assert.match(witness, /kaminosSetCameraDebugPose/, 'camera sweep must drive the real composition camera');
+assert.match(witness, /camera-sweep-simulator-advanced/, 'camera sweep must fail if any pose advances the authoritative simulator');
 assert.match(witness, /operator-pretty-four-flame-substrate-v0/, 'witness must verify the locked operator substrate identity');
 assert.match(witness, /depth-occlusion-authority-missing/, 'witness must fail when scene depth authority is absent');
 assert.match(witness, /stale-or-default-pbr-scene/, 'witness must fail when requested and effective PBR scenes disagree');

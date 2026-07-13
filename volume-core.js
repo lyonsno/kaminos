@@ -4929,7 +4929,7 @@ fn pbrVs(@builtin(vertex_index) vertexIndex: u32) -> PbrVertexOut {
 }
 
 fn cameraRay(uv: vec2<f32>) -> array<vec3<f32>, 2> {
-  let ndc = vec2<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+  let ndc = vec2<f32>(uv.x * 2.0 - 1.0, uv.y * 2.0 - 1.0);
   let nearH = pbrCamera.invViewProj * vec4<f32>(ndc, 0.0, 1.0);
   let farH = pbrCamera.invViewProj * vec4<f32>(ndc, 1.0, 1.0);
   let nearP = nearH.xyz / max(abs(nearH.w), 0.00001);
@@ -4979,9 +4979,9 @@ fn pbrShade(position: vec3<f32>, normal: vec3<f32>, albedo: vec3<f32>, roughness
   let fresnel = fresnelSchlick(vdh, f0);
   let specular = distribution * geometryV * geometryL * fresnel / max(4.0 * ndv * ndl, 0.001);
   let diffuse = (vec3<f32>(1.0) - fresnel) * (1.0 - metalness) * albedo / 3.14159265;
-  let key = (diffuse + specular) * vec3<f32>(1.02, 0.96, 0.88) * ndl * 3.1;
-  let horizon = mix(vec3<f32>(0.012, 0.017, 0.022), vec3<f32>(0.055, 0.072, 0.085), clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
-  return key + horizon * (albedo * (1.0 - metalness) + fresnel * 1.8);
+  let key = (diffuse + specular) * vec3<f32>(1.04, 0.92, 0.78) * ndl * 2.65;
+  let horizon = mix(vec3<f32>(0.002, 0.004, 0.007), vec3<f32>(0.022, 0.032, 0.044), clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
+  return key + horizon * (albedo * (1.0 - metalness) + fresnel * 1.35);
 }
 
 @fragment
@@ -4991,37 +4991,37 @@ fn pbrFs(in: PbrVertexOut) -> PbrFragmentOut {
   let rd = ray[1];
   var bestT = 100000.0;
   var normal = vec3<f32>(0.0, 1.0, 0.0);
-  var albedo = vec3<f32>(0.052, 0.058, 0.062);
-  var roughness = 0.72;
-  var metalness = 0.02;
+  var albedo = vec3<f32>(0.007, 0.009, 0.012);
+  var roughness = 0.42;
+  var metalness = 0.24;
 
   let floorT = (-0.86 - ro.y) / rd.y;
   if (floorT > 0.0 && floorT < bestT) { bestT = floorT; }
 
-  let plinth = hitBox(ro, rd, vec3<f32>(0.0, -0.79, 0.15), vec3<f32>(2.75, 0.07, 2.15));
+  let plinth = hitBox(ro, rd, vec3<f32>(0.12, -0.825, 0.05), vec3<f32>(3.32, 0.035, 2.58));
   if (plinth.x > 0.0 && plinth.x < bestT) {
-    bestT = plinth.x; normal = plinth.yzw; albedo = vec3<f32>(0.075, 0.080, 0.083); roughness = 0.58; metalness = 0.08;
+    bestT = plinth.x; normal = plinth.yzw; albedo = vec3<f32>(0.018, 0.021, 0.025); roughness = 0.34; metalness = 0.30;
   }
-  let leftStele = hitBox(ro, rd, vec3<f32>(-2.30, -0.25, 0.15), vec3<f32>(0.16, 0.61, 0.34));
+  let leftStele = hitBox(ro, rd, vec3<f32>(-2.92, -0.43, -1.64), vec3<f32>(0.10, 0.43, 0.22));
   if (leftStele.x > 0.0 && leftStele.x < bestT) {
-    bestT = leftStele.x; normal = leftStele.yzw; albedo = vec3<f32>(0.20, 0.145, 0.09); roughness = 0.30; metalness = 0.82;
+    bestT = leftStele.x; normal = leftStele.yzw; albedo = vec3<f32>(0.19, 0.082, 0.025); roughness = 0.22; metalness = 0.90;
   }
-  let rightStele = hitBox(ro, rd, vec3<f32>(2.30, -0.25, 0.15), vec3<f32>(0.16, 0.61, 0.34));
+  let rightStele = hitBox(ro, rd, vec3<f32>(2.98, -0.43, -1.48), vec3<f32>(0.10, 0.43, 0.22));
   if (rightStele.x > 0.0 && rightStele.x < bestT) {
-    bestT = rightStele.x; normal = rightStele.yzw; albedo = vec3<f32>(0.20, 0.145, 0.09); roughness = 0.30; metalness = 0.82;
+    bestT = rightStele.x; normal = rightStele.yzw; albedo = vec3<f32>(0.19, 0.082, 0.025); roughness = 0.22; metalness = 0.90;
   }
-  let nearStele = hitBox(ro, rd, vec3<f32>(0.72, -0.39, 1.28), vec3<f32>(0.20, 0.47, 0.20));
+  let nearStele = hitBox(ro, rd, vec3<f32>(3.24, -0.55, 1.64), vec3<f32>(0.09, 0.31, 0.18));
   if (nearStele.x > 0.0 && nearStele.x < bestT) {
-    bestT = nearStele.x; normal = nearStele.yzw; albedo = vec3<f32>(0.13, 0.14, 0.145); roughness = 0.24; metalness = 0.88;
+    bestT = nearStele.x; normal = nearStele.yzw; albedo = vec3<f32>(0.055, 0.071, 0.082); roughness = 0.20; metalness = 0.92;
   }
-  let farStele = hitBox(ro, rd, vec3<f32>(-0.62, -0.48, -1.35), vec3<f32>(0.22, 0.38, 0.22));
+  let farStele = hitBox(ro, rd, vec3<f32>(-3.18, -0.55, 1.48), vec3<f32>(0.09, 0.31, 0.18));
   if (farStele.x > 0.0 && farStele.x < bestT) {
-    bestT = farStele.x; normal = farStele.yzw; albedo = vec3<f32>(0.12, 0.13, 0.135); roughness = 0.36; metalness = 0.74;
+    bestT = farStele.x; normal = farStele.yzw; albedo = vec3<f32>(0.055, 0.071, 0.082); roughness = 0.20; metalness = 0.92;
   }
 
   var out: PbrFragmentOut;
   if (bestT >= 99999.0) {
-    let sky = mix(vec3<f32>(0.004, 0.006, 0.008), vec3<f32>(0.018, 0.025, 0.032), clamp(1.0 - in.uv.y, 0.0, 1.0));
+    let sky = mix(vec3<f32>(0.001, 0.002, 0.004), vec3<f32>(0.008, 0.014, 0.022), clamp(1.0 - in.uv.y, 0.0, 1.0));
     out.color = vec4<f32>(sky, 1.0);
     out.depth = 0.999999;
     return out;
@@ -5029,7 +5029,7 @@ fn pbrFs(in: PbrVertexOut) -> PbrFragmentOut {
   let position = ro + rd * bestT;
   if (abs(position.y + 0.86) < 0.002) {
     let seams = smoothstep(0.475, 0.5, max(abs(fract(position.x * 0.5) - 0.5), abs(fract(position.z * 0.5) - 0.5)));
-    albedo *= mix(0.78, 1.0, seams);
+    albedo *= mix(1.0, 0.56, seams);
   }
   let linear = pbrShade(position, normal, albedo, roughness, metalness, ro);
   let mapped = linear / (linear + vec3<f32>(1.0));

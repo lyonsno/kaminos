@@ -18,6 +18,10 @@ const CAMERA = 'boundary-splat-pbr-fire-field-camera-v0';
 const PBR_SCENE = 'boundary-splat-pbr-fire-field-v0';
 const DEPTH_AUTHORITY = 'same-device-depth24plus-less-equal-v0';
 const FIXED_SUBSTRATE = 'operator-pretty-four-flame-substrate-v0';
+const CAMERA_SWEEP_POSES = [
+  { identity: 'left-arc', position: [-5.15, 1.85, 7.65], target: [0.12, -0.48, 0.05] },
+  { identity: 'right-grazing', position: [7.10, 0.95, 3.25], target: [0.15, -0.50, 0.02] },
+];
 const BROWSER_CONTINUITY_MODES = new Set([
   'continuous-existing',
   'reseated-after-original-process-disappeared',
@@ -113,7 +117,7 @@ try {
       boundarySplatPbrScene: 'fire-field',
     },
     restoreControls: true,
-    resumeRenderLoop: true,
+    resumeRenderLoop: false,
   })})`, true);
   if (capture?.ok !== true || capture.sampleAuthority !== 'render-only-frozen-sim-state') {
     throw new Error(`blank-or-partial-native-capture: renderer capture failed ${JSON.stringify(capture)}`);
@@ -130,6 +134,85 @@ try {
   }
   mkdirSync(dirname(imagePath), { recursive: true });
   writeFileSync(imagePath, imageBuffer);
+  failurePhase = 'camera-parallax-sweep';
+  const cameraSweep = [{
+    identity: 'canonical',
+    requestedPose: { position: cameraState.position, target: cameraState.target },
+    effectivePose: cameraState,
+    path: imagePath,
+    sha256: sha256(imageBuffer),
+    metrics: imageMetrics,
+    simStepCount: capture.simStepCount,
+    sampleAuthority: capture.sampleAuthority,
+  }];
+  try {
+    for (const pose of CAMERA_SWEEP_POSES) {
+      const effectivePose = await evaluate(`window.kaminosSetCameraDebugPose(${JSON.stringify(pose)})`);
+      const poseCapture = await evaluate(`window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+        renderScale: 1,
+        controlOverrides: {
+          boundarySplatInstances: 100,
+          boundarySplatComposition: 'field',
+          boundarySplatMode: 'learned',
+          boundarySplatPbrScene: 'fire-field',
+        },
+        restoreControls: true,
+        resumeRenderLoop: false,
+      })})`, true);
+      if (poseCapture?.ok !== true || poseCapture.sampleAuthority !== 'render-only-frozen-sim-state') {
+        throw new Error(`blank-or-partial-native-capture: camera ${pose.identity} ${JSON.stringify(poseCapture)}`);
+      }
+      if (Number(poseCapture.simStepCount) !== Number(capture.simStepCount)) {
+        throw new Error(`camera-sweep-simulator-advanced: ${JSON.stringify({
+          identity: pose.identity,
+          expected: capture.simStepCount,
+          actual: poseCapture.simStepCount,
+        })}`);
+      }
+      const poseShot = await wsRequest('Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+        clip: clipFromCanvas(poseCapture.canvasCssRect),
+      });
+      const poseBuffer = Buffer.from(poseShot.data, 'base64');
+      const poseMetrics = measureScreenshot(poseBuffer);
+      if (poseMetrics.width < 100 || poseMetrics.height < 100 || poseMetrics.litPixels <= 200 || poseMetrics.meanLuma <= 1) {
+        throw new Error(`blank-or-partial-native-capture: camera ${pose.identity} ${JSON.stringify(poseMetrics)}`);
+      }
+      const posePath = resolve(outDir, `pbr-camera-${pose.identity}.png`);
+      writeFileSync(posePath, poseBuffer);
+      cameraSweep.push({
+        identity: pose.identity,
+        requestedPose: pose,
+        effectivePose,
+        path: posePath,
+        sha256: sha256(poseBuffer),
+        metrics: poseMetrics,
+        simStepCount: poseCapture.simStepCount,
+        sampleAuthority: poseCapture.sampleAuthority,
+      });
+    }
+  } finally {
+    await evaluate(`window.kaminosSetCameraDebugPose(${JSON.stringify({
+      position: cameraState.position,
+      target: cameraState.target,
+    })})`);
+    await evaluate(`window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+      renderScale: 1,
+      controlOverrides: {
+        boundarySplatInstances: 100,
+        boundarySplatComposition: 'field',
+        boundarySplatMode: 'learned',
+        boundarySplatPbrScene: 'fire-field',
+      },
+      restoreControls: true,
+      resumeRenderLoop: true,
+    })})`, true);
+  }
+  if (cameraSweep.length !== 3) {
+    throw new Error(`blank-or-partial-native-capture: incomplete camera sweep ${cameraSweep.length}/3`);
+  }
+  lastTrustworthyEvidence.cameraSweep = cameraSweep;
   const finalState = await debugState();
   const finalPageUrl = await evaluate('location.href');
   browserPageUrl = finalPageUrl;
@@ -192,6 +275,7 @@ try {
       depth: DEPTH_AUTHORITY,
       fixedSubstrate: FIXED_SUBSTRATE,
       capture: capture.imageAuthority,
+      cameraSweep: 'same-frozen-simulator-state-real-camera-matrices-v0',
     },
     historyPrime,
     ladder,
@@ -207,6 +291,7 @@ try {
       candidateCopyBytes: finalState.boundarySplatCopyBytesThisFrame,
       fallbackReason: finalState.boundarySplatFallbackReason,
     },
+    cameraSweep,
     finalState: compactState(finalState),
     falseClosureChecks: {
       fallbackRoute: false,
@@ -220,6 +305,8 @@ try {
       depthOcclusionAuthorityMissing: false,
       staleOrDefaultPbrScene: false,
       duplicatedSimulationAuthority: false,
+      cameraSweepSimulatorAdvanced: false,
+      cameraSweepIncomplete: cameraSweep.length !== 3,
       browserClosedDuringWitness: !finalTargetReachable,
     },
     claimBoundary: 'Same-device PBR color/depth plus learned splats and a frozen 0/1/4/16/100 cost ladder from one live simulator. This does not claim independent per-instance simulation, learned prediction, per-flame proxy lighting, or final product beauty.',
@@ -290,6 +377,7 @@ function classifyFalseClosure(phase, error) {
     'depth-occlusion-authority-missing',
     'stale-or-default-pbr-scene',
     'duplicated-simulation-authority',
+    'camera-sweep-simulator-advanced',
     'blank-or-partial-native-capture',
   ]) {
     if (message.includes(className)) return className;
