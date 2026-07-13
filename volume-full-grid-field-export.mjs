@@ -25,6 +25,8 @@ const requestedUrl = String(args.get('--url') || 'http://127.0.0.1:8095/?kaminos
 const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get('--source-capture'))) : null;
 const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
+const renderCompositionExplicit = args.has('--render-composition');
+const renderComposition = String(args.get('--render-composition') || 'splat-only-v0');
 const targetOrigin = args.has('--target-origin') ? String(args.get('--target-origin')) : null;
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -349,6 +351,7 @@ async function main() {
   let initialFieldImport = null;
   let importedAdvance = null;
   let importedRender = null;
+  let renderControlOverrides = {};
   let browserSession = null;
   let ws = null;
   let begin = null;
@@ -356,6 +359,17 @@ async function main() {
   let pageDiagnostics = null;
   const runtimeEvents = [];
   try {
+    phase = 'render-option-validation';
+    if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(renderComposition)) {
+      throw new Error(`unsupported --render-composition: ${renderComposition}`);
+    }
+    renderControlOverrides = args.has('--render-control-overrides-json')
+      ? JSON.parse(String(args.get('--render-control-overrides-json')))
+      : {};
+    if (!renderControlOverrides || typeof renderControlOverrides !== 'object' || Array.isArray(renderControlOverrides)) {
+      throw new Error('--render-control-overrides-json must decode to an object');
+    }
+    phase = 'source-capture-validation';
     initialField = resolveInitialFieldManifest();
     if (initialField && !args.has('--advance-imported-steps')) {
       throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
@@ -523,6 +537,8 @@ async function main() {
           `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
             fullFieldImportSessionId: importFinish.sessionId,
             renderScale: 1,
+            boundarySplatComposition: renderComposition,
+            controlOverrides: renderControlOverrides,
             now: deterministicReplayStartTimeMs + advanceImportedSteps * deterministicReplayTimeStepMs,
             sameStateCaptureId: `imported-receiver-render-step-${advanceImportedSteps}`,
           })})`,
@@ -530,6 +546,9 @@ async function main() {
         );
         if (renderReceipt?.ok !== true || renderReceipt?.imageAuthority !== 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state') {
           throw new Error(`imported receiver render failed: ${JSON.stringify(renderReceipt)}`);
+        }
+        if (renderCompositionExplicit && renderReceipt.boundarySplatCompositionEffective !== renderComposition) {
+          throw new Error(`requested render composition was not effective: ${renderComposition} != ${renderReceipt.boundarySplatCompositionEffective || '(missing)'}`);
         }
         const rect = renderReceipt.canvasCssRect;
         if (rect.x < 0 || rect.y < 0 || rect.width < 64 || rect.height < 64) {

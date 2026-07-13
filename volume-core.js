@@ -8409,13 +8409,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline, options = {}) {
     if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
+    const loadOp = options.loadOp === 'load' ? 'load' : 'clear';
     const pass = encoder.beginRenderPass({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} canvas pass`,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
       colorAttachments: [{
         view,
         clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
-        loadOp: 'clear',
+        loadOp,
         storeOp: 'store',
       }],
     });
@@ -11544,6 +11545,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && fullFieldImportSessionId === state.fullFieldImportReceipt.sessionId
     );
     if ((!state.active && !importedFieldCustody) || !device) return { ok: false, reason: 'inactive', ...state };
+    const boundarySplatCompositionRequestedRaw = options.boundarySplatComposition ?? 'splat-only-v0';
+    if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(boundarySplatCompositionRequestedRaw)) {
+      return {
+        ok: false,
+        reason: 'unsupported-boundary-splat-composition',
+        boundarySplatCompositionRequestedRaw,
+        boundarySplatCompositionRequested: null,
+        boundarySplatCompositionEffective: 'unavailable',
+        raymarchEncoded: false,
+        splatEncoded: false,
+        raymarchApplied: false,
+        splatApplied: false,
+      };
+    }
     cancelAnimationFrame(raf);
     if (device.queue?.onSubmittedWorkDone) {
       await device.queue.onSubmittedWorkDone();
@@ -11553,6 +11568,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const controlOverrides = options.controlOverrides && typeof options.controlOverrides === 'object'
       ? { ...options.controlOverrides }
       : {};
+    const boundarySplatCompositionRequested = boundarySplatCompositionRequestedRaw;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
     const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
@@ -11567,21 +11583,42 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeBoundarySplats(encoder);
       const currentTexture = context.getCurrentTexture();
       let residualApplied = false;
+      let raymarchEncoded = false;
+      let splatEncoded = false;
+      let raymarchApplied = false;
+      let splatApplied = false;
+      let boundarySplatCompositionEffective = boundarySplatRequested()
+        ? boundarySplatCompositionRequested
+        : 'raymarch-only-v0';
       let featureCaptureSourcePassApplied = false;
       let sourcePassEncodeMs = null;
       let residualPassEncodeMs = null;
       if (boundarySplatRequested()) {
-        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView());
-        if (!splatApplied) {
+        if (boundarySplatCompositionRequested === 'raymarch-under-splats-v0') {
+          encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen hybrid raymarch under splats pass');
+          raymarchEncoded = true;
+          splatEncoded = encodeBoundarySplatDraw(encoder, currentTexture.createView(), boundarySplatRenderPipeline, { loadOp: 'load' });
+        } else {
+          splatEncoded = encodeBoundarySplatDraw(encoder, currentTexture.createView());
+        }
+        if (!splatEncoded) {
           return {
             ok: false,
             reason: 'boundary-splat-frozen-canvas-route-unavailable',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            raymarchEncoded,
+            splatEncoded,
+            raymarchApplied: false,
+            splatApplied: false,
             boundarySplatFallbackReason: state.boundarySplatFallbackReason,
             boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
             boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
             boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
           };
         }
+        state.volumeReconstructionStyle = boundarySplatCompositionEffective;
         encodeBoundarySplatTelemetry(encoder, true);
         recordBrowserResidualCost({ applied: false });
       } else if (browserResidualCanApply()) {
@@ -11589,6 +11626,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ensureBrowserResidualFeatureTexture();
         const sourcePassStart = performance.now();
         encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
+        raymarchEncoded = true;
         sourcePassEncodeMs = performance.now() - sourcePassStart;
         featureCaptureSourcePassApplied = true;
         const residualPassStart = performance.now();
@@ -11597,6 +11635,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
       } else {
         encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
+        raymarchEncoded = true;
         state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
         recordBrowserResidualCost({ applied: false });
       }
@@ -11607,6 +11646,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         featureCaptureSourcePassApplied = true;
       }
       device.queue.submit([encoder.finish()]);
+      raymarchApplied = raymarchEncoded;
+      splatApplied = splatEncoded;
       if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
       if (device.queue?.onSubmittedWorkDone) {
         await device.queue.onSubmittedWorkDone();
@@ -11625,6 +11666,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sampleAuthority: 'render-only-frozen-sim-state',
         imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
         controlOverrides,
+        boundarySplatCompositionRequestedRaw,
+        boundarySplatCompositionRequested,
+        boundarySplatCompositionEffective,
+        raymarchEncoded,
+        splatEncoded,
+        raymarchApplied,
+        splatApplied,
         residualApplied,
         residualSourcePassEncodeMs: sourcePassEncodeMs,
         residualPassEncodeMs,
