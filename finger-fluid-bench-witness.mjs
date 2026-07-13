@@ -227,6 +227,10 @@ async function main() {
     if (lastDebugState.runtime?.directRenderFrameCount < 20) throw new Error(`missing direct GPU render frames: ${lastDebugState.runtime?.directRenderFrameCount}`);
     const activeExtent3d = lastDebugState.runtime?.diagnostics?.activeExtent3d;
     if (!activeExtent3d || activeExtent3d.size?.length !== 3) throw new Error('missing activeExtent3d diagnostics');
+    const diagnosticsLagSteps = lastDebugState.runtime.stepCount - lastDebugState.runtime.diagnostics?.stepCount;
+    if (!Number.isInteger(diagnosticsLagSteps) || diagnosticsLagSteps < 0 || diagnosticsLagSteps > 120) {
+      throw new Error(`stale GPU diagnostics rejected: ${JSON.stringify({ diagnosticsLagSteps, stepCount: lastDebugState.runtime.stepCount, diagnosticsStepCount: lastDebugState.runtime.diagnostics?.stepCount })}`);
+    }
     if (activeExtent3d.size.some(value => !Number.isFinite(value) || value < 0.35)) throw new Error(`fluid state is not materially 3D: ${JSON.stringify(activeExtent3d)}`);
     if (lastDebugState.runtime?.diagnostics?.maxSpeed > 3.35) throw new Error(`bounded-energy stability failure: maxSpeed ${lastDebugState.runtime.diagnostics.maxSpeed}`);
     const restDensity = lastDebugState.runtime?.restDensity;

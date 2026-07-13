@@ -52,7 +52,7 @@ export function createFingerFluidBenchState(options = {}) {
       backend: options.solverBackend || 'loading',
       mode: 'gpu_3d_linked_cell_position_based_fluid',
       particleCount: nonNegativeInteger(options.particleCount, 0),
-      gridDimensions: options.gridDimensions || [24, 20, 24],
+      gridDimensions: options.gridDimensions || [32, 20, 32],
       neighborGridContract: options.neighborGridContract || 'wgsl-linked-cell-neighbor-grid-v0',
       densityContinuity: options.densityContract || 'wgsl-pbf-density-constraint-v0',
       pressureProjection: 'iterative_position_density_projection',

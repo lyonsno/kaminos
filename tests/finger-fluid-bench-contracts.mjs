@@ -52,6 +52,7 @@ assert.match(webgpuCoreSource, /pipelineFor\('apply_position_delta'\)/, 'solver 
 assert.match(webgpuCoreSource, /dispatchWorkgroups/, 'solver dispatches GPU compute work');
 assert.match(webgpuCoreSource, /createRenderPipeline/, 'solver state is rendered directly on GPU');
 assert.match(webgpuCoreSource, /createWebGPUFingerFluidSolver/, 'GPU solver factory is exported');
+assert.match(webgpuCoreSource, /stepCount:\s*diagnosticsStepCount/, 'sparse GPU diagnostics carry the exact simulation step they represent');
 
 assert.match(indexSource, /data-tab="finger-fluid-bench"/, 'Kaminos sidebar exposes a Finger Fluid bench tab');
 assert.match(indexSource, /id="tab-finger-fluid-bench"/, 'Kaminos app shell contains Finger Fluid bench content');
@@ -79,6 +80,7 @@ assert.match(benchWitnessSource, /densityIterationCount/, 'bench witness require
 assert.match(benchWitnessSource, /activeExtent3d/, 'bench witness requires non-flat 3D extent evidence');
 assert.match(benchWitnessSource, /maxSpeed\s*>\s*3\.35/, 'bench witness rejects energetic solver blow-up');
 assert.match(benchWitnessSource, /relativeDensityError/, 'bench witness rejects density convergence to the wrong basin');
+assert.match(benchWitnessSource, /diagnosticsLagSteps > 120/, 'bench witness rejects stale sparse diagnostics');
 assert.match(benchWitnessSource, /cadenceProbe/, 'bench witness measures settled live cadence');
 assert.match(benchWitnessSource, /--cadence-ms/, 'bench witness accepts an explicit, reportable cadence observation window');
 assert.match(benchWitnessSource, /cadenceWindowMs:\s*cadenceMs/, 'bench witness records its effective cadence window');
@@ -105,6 +107,7 @@ assert.equal(state.route, 'kaminos/finger-fluid-bench');
 assert.equal(state.source.schema, 'big-papa.finger-fluid.synthetic-source.v0');
 assert.equal(state.source.producerDiaulos, 'big-papa-finger-fluid');
 assert.equal(state.solver.identity, 'webgpu-pbf-linked-cell-fluid-v0');
+assert.deepEqual(state.solver.gridDimensions, [32, 20, 32]);
 assert.equal(state.renderer.identity, 'webgpu-particle-sphere-renderer-v0');
 assert.equal(state.graduation.mode, 'remain_in_kaminos_terrarium_until_source_exports_earn_extraction');
 assert.ok(state.downgrades.includes('kaminos_native_synthetic_fluid_not_lerms_source_truth'));
