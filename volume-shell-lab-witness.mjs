@@ -14,7 +14,14 @@ const out = resolve(args.get('--out') || '/tmp/kaminos-volume-shell-lab.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const expectedMode = (args.get('--expected-mode') || new URL(url).searchParams.get('volume_fire_render_mode') || 'shell').replace(/-/g, '_');
 const expectedInspect = (args.get('--expected-inspect') || new URL(url).searchParams.get('volume_shell_inspect') || 'shell').replace(/-/g, '_');
-const expectedDomainInspect = (args.get('--expected-domain-inspect') || new URL(url).searchParams.get('volume_smoke_domain_inspect') || 'near-render').toLowerCase();
+function normalizeDomainInspect(value) {
+  const mode = String(value || 'near-render').toLowerCase();
+  if (mode === 'far-projection' || mode === 'projection' || mode === 'far-only' || mode === 'far') return 'far-projection';
+  if (mode === 'far-volume') return 'far-volume';
+  return 'near-render';
+}
+
+const expectedDomainInspect = normalizeDomainInspect(args.get('--expected-domain-inspect') || new URL(url).searchParams.get('volume_smoke_domain_inspect'));
 const minFrames = Number(args.get('--min-frames') || 4);
 const settleMs = Number(args.get('--settle-ms') || 2200);
 const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
@@ -26,6 +33,7 @@ let phase = 'initializing';
 let primaryOutputWritten = false;
 let lastDebugState = null;
 let sampleSummary = null;
+let cameraResponse = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -219,7 +227,7 @@ async function main() {
     phase = 'state';
     for (let i = 0; i < 80; i += 1) {
       lastDebugState = await evaluate(ws, 'window.__kaminosVolumePrototype?.debugState?.()');
-      const farInspectSettled = expectedDomainInspect !== 'far-only' || (
+      const farInspectSettled = expectedDomainInspect === 'near-render' || (
         (lastDebugState?.smokeDomainFarAdvectedActiveCells || 0) > 0
         && lastDebugState?.smokeDomainTransferLastReadbackFrame >= minFrames
       );
@@ -233,9 +241,12 @@ async function main() {
     assert.ok(lastDebugState.frameCount >= minFrames, `volume route rendered ${lastDebugState.frameCount || 0} frames`);
     assert.equal(lastDebugState.fireRenderMode, expectedMode, 'shell render mode did not match route');
     assert.equal(lastDebugState.shellInspectMode, expectedInspect, 'shell inspect mode did not match route');
-    if (expectedDomainInspect === 'far-only') {
-      assert.equal(lastDebugState.smokeDomainInspectMode, 'far-only', 'far-only domain inspect request did not apply');
-      assert.equal(lastDebugState.smokeDomainInspectIdentity, 'far-smoke-only-max-projection-v0', 'far-only inspect effective identity is wrong');
+    if (expectedDomainInspect !== 'near-render') {
+      assert.equal(lastDebugState.smokeDomainInspectMode, expectedDomainInspect, `${expectedDomainInspect} domain inspect request did not apply`);
+      const expectedIdentity = expectedDomainInspect === 'far-projection'
+        ? 'far-smoke-only-max-projection-v0'
+        : 'far-smoke-camera-raymarch-inspection-space-v0';
+      assert.equal(lastDebugState.smokeDomainInspectIdentity, expectedIdentity, `${expectedDomainInspect} effective identity is wrong`);
       assert.ok(lastDebugState.smokeDomainFarAdvectedActiveCells > 0, 'far-smoke field has no occupied cells beyond the injection band');
       assert.ok(lastDebugState.smokeDomainFarHighestActiveLayer > 0, 'far-smoke field did not report an occupied layer above its base');
       assert.ok(lastDebugState.smokeDomainTransferLastReadbackFrame >= minFrames, 'far-smoke counters are stale relative to the requested frame floor');
@@ -252,6 +263,55 @@ async function main() {
       'shell-controls-visible-fire-render-authority-stock-fire-bypassed-in-shell-mode',
       'topology shell authority did not reach debug state',
     );
+
+    if (expectedDomainInspect === 'far-volume') {
+      phase = 'camera-response';
+      await evaluate(ws, `(() => {
+        const freeze = document.getElementById('volume-look-freeze');
+        freeze.value = '1';
+        freeze.dispatchEvent(new Event('input', { bubbles: true }));
+        freeze.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      })()`);
+      await delay(150);
+      const beforeCamera = await evaluate(ws, 'window.kaminosCameraDebugState()');
+      const beforeSample = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleFrame()');
+      assert.equal(beforeSample?.ok, true, `pre-orbit sampleFrame failed: ${beforeSample?.reason || 'unknown'}`);
+      const afterCamera = await evaluate(ws, `(() => {
+        const c = window.kaminosCameraDebugState();
+        const dx = c.position[0] - c.target[0];
+        const dz = c.position[2] - c.target[2];
+        const angle = 0.48;
+        return window.kaminosSetCameraDebugPose({
+          position: [
+            c.target[0] + dx * Math.cos(angle) - dz * Math.sin(angle),
+            c.position[1] + 0.18,
+            c.target[2] + dx * Math.sin(angle) + dz * Math.cos(angle),
+          ],
+          target: c.target,
+        });
+      })()`);
+      await delay(180);
+      const afterState = await evaluate(ws, 'window.__kaminosVolumePrototype.debugState()');
+      assert.equal(afterState.smokeDomainInspectIdentity, 'far-smoke-camera-raymarch-inspection-space-v0', 'camera orbit fell back from far-volume inspection');
+      const afterSample = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleFrame()');
+      assert.equal(afterSample?.ok, true, `post-orbit sampleFrame failed: ${afterSample?.reason || 'unknown'}`);
+      assert.notDeepEqual(afterCamera.position, beforeCamera.position, 'camera witness pose did not move');
+      const beforeRgba = beforeSample.preview?.rgba || [];
+      const afterRgba = afterSample.preview?.rgba || [];
+      assert.equal(afterRgba.length, beforeRgba.length, 'camera comparison previews have different sizes');
+      let changedPixels = 0;
+      for (let i = 0; i < beforeRgba.length; i += 4) {
+        const delta = Math.abs(beforeRgba[i] - afterRgba[i])
+          + Math.abs(beforeRgba[i + 1] - afterRgba[i + 1])
+          + Math.abs(beforeRgba[i + 2] - afterRgba[i + 2]);
+        if (delta > 9) changedPixels += 1;
+      }
+      const pixelCount = beforeRgba.length / 4;
+      assert.ok(changedPixels > Math.max(32, pixelCount * 0.005), `far-volume image did not respond materially to camera orbit (${changedPixels}/${pixelCount} pixels changed)`);
+      cameraResponse = { beforeCamera, afterCamera, changedPixels, pixelCount };
+      lastDebugState = afterState;
+    }
 
     phase = 'sample-frame';
     const sample = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleFrame()');
@@ -274,6 +334,7 @@ async function main() {
       domainInspectIdentity: lastDebugState.smokeDomainInspectIdentity,
       farAdvectedActiveCells: lastDebugState.smokeDomainFarAdvectedActiveCells,
       farHighestActiveLayer: lastDebugState.smokeDomainFarHighestActiveLayer,
+      cameraResponse,
       topologyShellControls: lastDebugState.topologyShellControls,
     };
     assert.ok(sample.litPixels > 0 || expectedMode === 'off', 'sampleFrame produced no visible volume signal');

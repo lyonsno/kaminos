@@ -1647,6 +1647,25 @@ assert.match(core, /smokeDomainInspectPipeline/, 'volume core builds a distinct 
 assert.match(core, /smokeDomainInspectReadbackPipeline/, 'far-only inspect owns an rgba8 readback pipeline instead of binding the swapchain pipeline to witness textures');
 assert.match(core, /far-smoke-only-max-projection-v0/, 'far-only inspect identity is explicit and does not imply compositing');
 assert.match(core, /u32\(clamp\(in\.uv\.y, 0\.0, 0\.999999\) \* f32\(FAR_GRID\)\)/, 'far-only inspect maps grid Y=0 to the bottom of the diagnostic');
+assert.match(core, /far-smoke-camera-raymarch-inspection-space-v0/, 'operator far-smoke inspection has a camera-aware identity distinct from the max projection');
+assert.match(core, /far-projection/, 'the exact max-depth projection remains separately routable for machine evidence');
+assert.match(core, /struct SmokeInspectUniforms[\s\S]*invViewProj: mat4x4<f32>[\s\S]*cameraPos_time: vec4<f32>/, 'far-volume inspection receives the live camera transform');
+assert.match(core, /@group\(0\) @binding\(5\) var<uniform> smokeInspectUniforms/, 'far-volume camera uniforms are bound explicitly');
+assert.match(core, /fn fsSmokeDomainVolumeInspect/, 'operator far-smoke inspection uses a volume raymarch instead of a depth collapse');
+assert.match(core, /let farBoundsMin = vec3<f32>/, 'far-volume inspection names its diagnostic-space bounds explicitly');
+assert.match(core, /transmittance = transmittance \* \(1\.0 - alpha\)/, 'far-volume inspection accumulates smoke front to back');
+assert.match(core, /binding: 5, visibility: GPUShaderStage\.FRAGMENT, buffer: \{ type: 'uniform' \}/, 'far-volume transfer layout exposes the camera uniform to the fragment stage');
+assert.match(index, /value="far-volume">Far volume \(camera\)<\/option>/, 'Domain View names the camera-aware far-volume operator mode');
+assert.match(index, /value="far-projection">Far field projection \(diagnostic\)<\/option>/, 'Domain View labels the fixed projection as a diagnostic');
+for (const [source, label] of [
+  [core, 'volume core'],
+  [index, 'volume cockpit'],
+  [volumeShellLabWitness, 'shell witness'],
+]) {
+  assert.match(source, /mode === 'far-projection' \|\| mode === 'projection' \|\| mode === 'far-only' \|\| mode === 'far'/, `${label} preserves legacy far-only/far aliases as the fixed machine projection`);
+  assert.match(source, /if \(mode === 'far-volume'\) return 'far-volume'/, `${label} selects camera-aware inspection only for explicit far-volume requests`);
+}
+assert.match(volumeShellLabWitness, /far-smoke-camera-raymarch-inspection-space-v0/, 'shell witness rejects fallback when camera-aware far-volume inspection is requested');
 assert.match(volumeShellLabWitness, /--expected-domain-inspect/, 'shell-lab witness accepts an explicit far-only domain inspection contract');
 assert.doesNotMatch(volumeShellLabWitness, /Page\.captureScreenshot/, 'far-only witness does not accept page screenshot byte size as field evidence');
 assert.match(volumeShellLabWitness, /sample\.litPixels > 0/, 'far-only witness requires programmatic nonblank GPU readback pixels');

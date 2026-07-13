@@ -2100,7 +2100,8 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <span class="slider-label">Domain View</span>
       <select id="volume-smoke-domain-inspect" class="select-input">
         <option value="near-render" selected>Near render</option>
-        <option value="far-only">Far smoke only</option>
+        <option value="far-volume">Far volume (camera)</option>
+        <option value="far-projection">Far field projection (diagnostic)</option>
       </select>
       <span class="slider-val" id="volume-smoke-domain-inspect-val">Near render</span>
     </div>
@@ -11710,7 +11711,9 @@ function normalizeVolumeSmokeDomainMode(value) {
 
 function normalizeVolumeSmokeDomainInspect(value) {
   const mode = String(value || 'near-render').toLowerCase();
-  return mode === 'far-only' || mode === 'far' ? 'far-only' : 'near-render';
+  if (mode === 'far-projection' || mode === 'projection' || mode === 'far-only' || mode === 'far') return 'far-projection';
+  if (mode === 'far-volume') return 'far-volume';
+  return 'near-render';
 }
 
 function volumeSmokeDomainControlsForMode(mode, values = {}) {
@@ -17152,7 +17155,10 @@ function updateVolumeControlLabels() {
   document.getElementById('volume-smoke-domain-mode-val').textContent = smokeDomainControls.smokeDomainMode === 'coupled-near-fire-far-smoke-v0'
     ? 'One-way coupled'
     : (smokeDomainControls.smokeDomainMode === 'cascaded-uniform-scaffold' ? 'Near + far scaffold' : 'Single volume');
-  document.getElementById('volume-smoke-domain-inspect-val').textContent = normalizeVolumeSmokeDomainInspect(c.smokeDomainInspect) === 'far-only' ? 'Far smoke only' : 'Near render';
+  const smokeDomainInspect = normalizeVolumeSmokeDomainInspect(c.smokeDomainInspect);
+  document.getElementById('volume-smoke-domain-inspect-val').textContent = smokeDomainInspect === 'far-volume'
+    ? 'Far volume'
+    : (smokeDomainInspect === 'far-projection' ? 'Far projection diagnostic' : 'Near render');
   document.getElementById('volume-canonical-spread-val').textContent = c.canonicalSpread.toFixed(2);
   document.getElementById('volume-canonical-centerline-val').textContent = c.canonicalCenterline.toFixed(2);
   document.getElementById('volume-canonical-body-balance-val').textContent = c.canonicalBodyBalance.toFixed(2);

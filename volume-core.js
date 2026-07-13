@@ -420,7 +420,8 @@ const SMOKE_DOMAIN_HANDOFF_POLICY_ONE_WAY = 'near-fire-to-far-smoke-one-way-v0';
 const SMOKE_DOMAIN_PROOF_BOUNDARY_SCAFFOLD = 'route-control-debug-identity-only-no-far-smoke-solver-v0';
 const SMOKE_DOMAIN_PROOF_BOUNDARY_COUPLED = 'gpu-outlet-persistent-far-input-coarse-advection-no-far-pressure-or-composite-v0';
 const SMOKE_DOMAIN_TRANSFER_READBACK_CADENCE = 30;
-const SMOKE_DOMAIN_FAR_INSPECT_IDENTITY = 'far-smoke-only-max-projection-v0';
+const SMOKE_DOMAIN_FAR_INSPECT_IDENTITY = 'far-smoke-camera-raymarch-inspection-space-v0';
+const SMOKE_DOMAIN_FAR_PROJECTION_IDENTITY = 'far-smoke-only-max-projection-v0';
 const PRESSURE_STRATEGY_SPATIAL_TIERS = 'spatial_tiers';
 const PRESSURE_STRATEGY_ACTIVITY_TIERS = 'activity_tiers';
 const PRESSURE_STRATEGY_GLOBAL = 'global';
@@ -485,6 +486,13 @@ const FLUID_STRIDE: u32 = ${FLUID_COMPONENTS / 4}u;
 @group(0) @binding(3) var<storage, read_write> farStateDst: array<vec4<f32>>;
 @group(0) @binding(4) var<storage, read_write> transferCounters: array<atomic<u32>>;
 
+struct SmokeInspectUniforms {
+  invViewProj: mat4x4<f32>,
+  cameraPos_time: vec4<f32>,
+};
+
+@group(0) @binding(5) var<uniform> smokeInspectUniforms: SmokeInspectUniforms;
+
 fn farIndex(c: vec3<u32>) -> u32 {
   return c.x + c.y * FAR_GRID + c.z * FAR_GRID * FAR_GRID;
 }
@@ -510,6 +518,23 @@ fn sampleFarStateTrilinear(p: vec3<f32>) -> vec4<f32> {
   let x01 = mix(readFarState(base + vec3<i32>(0, 0, 1)), readFarState(base + vec3<i32>(1, 0, 1)), f.x);
   let x11 = mix(readFarState(base + vec3<i32>(0, 1, 1)), readFarState(base + vec3<i32>(1, 1, 1)), f.x);
   return mix(mix(x00, x10, f.y), mix(x01, x11, f.y), f.z);
+}
+
+fn smokeInspectSlabAxis(origin: f32, direction: f32, halfExtent: f32) -> vec2<f32> {
+  if (abs(direction) < 0.000001) {
+    if (abs(origin) > halfExtent) { return vec2<f32>(1.0, -1.0); }
+    return vec2<f32>(-1e20, 1e20);
+  }
+  let a = (-halfExtent - origin) / direction;
+  let b = (halfExtent - origin) / direction;
+  return vec2<f32>(min(a, b), max(a, b));
+}
+
+fn smokeInspectBoxHit(ro: vec3<f32>, rd: vec3<f32>, halfExtents: vec3<f32>) -> vec2<f32> {
+  let sx = smokeInspectSlabAxis(ro.x, rd.x, halfExtents.x);
+  let sy = smokeInspectSlabAxis(ro.y, rd.y, halfExtents.y);
+  let sz = smokeInspectSlabAxis(ro.z, rd.z, halfExtents.z);
+  return vec2<f32>(max(max(sx.x, sy.x), sz.x), min(min(sx.y, sy.y), sz.y));
 }
 
 @compute @workgroup_size(4, 4, 4)
@@ -597,6 +622,50 @@ fn fsSmokeDomainInspect(in: SmokeInspectVSOut) -> @location(0) vec4<f32> {
   let warm = vec3<f32>(0.72, 0.48, 0.22);
   let color = mix(cold, warm, speed) * (0.18 + signal * 1.35);
   return vec4<f32>(color, 1.0);
+}
+
+@fragment
+fn fsSmokeDomainVolumeInspect(in: SmokeInspectVSOut) -> @location(0) vec4<f32> {
+  let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
+  let nearClip = vec4<f32>(ndc, -1.0, 1.0);
+  let farClip = vec4<f32>(ndc, 1.0, 1.0);
+  let nearWorldRaw = smokeInspectUniforms.invViewProj * nearClip;
+  let farWorldRaw = smokeInspectUniforms.invViewProj * farClip;
+  let nearWorld = nearWorldRaw.xyz / nearWorldRaw.w;
+  let farWorld = farWorldRaw.xyz / farWorldRaw.w;
+  let ro = smokeInspectUniforms.cameraPos_time.xyz;
+  let rd = normalize(farWorld - nearWorld);
+
+  // This expanded box is inspection space only. It does not assert a closed near/far world join.
+  let farBoundsMin = vec3<f32>(-1.20, -1.0, -1.20);
+  let farBoundsMax = vec3<f32>(1.20, 1.40, 1.20);
+  let farBoundsCenter = (farBoundsMin + farBoundsMax) * 0.5;
+  let farBoundsHalf = (farBoundsMax - farBoundsMin) * 0.5;
+  let hit = smokeInspectBoxHit(ro - farBoundsCenter, rd, farBoundsHalf);
+  let tStart = max(hit.x, 0.0);
+  if (hit.y <= tStart) { return vec4<f32>(0.004, 0.005, 0.006, 1.0); }
+
+  let stepCount = 96.0;
+  let stepLength = (hit.y - tStart) / stepCount;
+  var color = vec3<f32>(0.0);
+  var transmittance = 1.0;
+  for (var i = 0u; i < 96u; i = i + 1u) {
+    let p = ro + rd * (tStart + (f32(i) + 0.5) * stepLength);
+    let farUv = clamp((p - farBoundsMin) / (farBoundsMax - farBoundsMin), vec3<f32>(0.0), vec3<f32>(1.0));
+    let sample = sampleFarStateTrilinear(farUv * f32(FAR_GRID - 1u));
+    let smoke = max(0.0, sample.w);
+    let alpha = clamp(1.0 - exp(-smoke * stepLength * 11.0), 0.0, 0.48);
+    let speed = clamp(length(sample.xyz) * 2.5, 0.0, 1.0);
+    let cold = vec3<f32>(0.24, 0.46, 0.58);
+    let warm = vec3<f32>(0.92, 0.54, 0.24);
+    let sampleColor = mix(cold, warm, speed) * (0.72 + smoke * 0.68);
+    color = color + transmittance * alpha * sampleColor;
+    transmittance = transmittance * (1.0 - alpha);
+    if (transmittance < 0.015) { break; }
+  }
+  let background = vec3<f32>(0.004, 0.005, 0.006);
+  let exposed = vec3<f32>(1.0) - exp(-color * 2.8);
+  return vec4<f32>(pow(max(exposed + transmittance * background, vec3<f32>(0.0)), vec3<f32>(0.82)), 1.0);
 }
 `;
 }
@@ -870,7 +939,9 @@ function normalizeSmokeDomainControls(value = {}, gridSize = 96) {
 
 function normalizeSmokeDomainInspectMode(value) {
   const mode = String(value || 'near-render').toLowerCase();
-  return mode === 'far-only' || mode === 'far' ? 'far-only' : 'near-render';
+  if (mode === 'far-projection' || mode === 'projection' || mode === 'far-only' || mode === 'far') return 'far-projection';
+  if (mode === 'far-volume') return 'far-volume';
+  return 'near-render';
 }
 
 function normalizeActivityPressureMaxTier(value, legacyP4Enabled = undefined) {
@@ -5803,6 +5874,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let smokeDomainFarInputPipeline = null;
   let smokeDomainInspectPipeline = null;
   let smokeDomainInspectReadbackPipeline = null;
+  let smokeDomainProjectionPipeline = null;
+  let smokeDomainProjectionReadbackPipeline = null;
   let bindGroups = [];
   let pressureTieredFluidBindGroups = [];
   let majorantFrontBindGroups = [];
@@ -7049,11 +7122,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         label: `kaminos ${SMOKE_DOMAIN_FAR_INSPECT_IDENTITY} ${smokeDomainControls.farGrid}^3`,
         layout: smokeDomainTransferPipelineLayout,
         vertex: { module: transferShader, entryPoint: 'vsSmokeDomainInspect' },
-        fragment: { module: transferShader, entryPoint: 'fsSmokeDomainInspect', targets: [{ format }] },
+        fragment: { module: transferShader, entryPoint: 'fsSmokeDomainVolumeInspect', targets: [{ format }] },
         primitive: { topology: 'triangle-list' },
       });
       smokeDomainInspectReadbackPipeline = device.createRenderPipeline({
         label: `kaminos ${SMOKE_DOMAIN_FAR_INSPECT_IDENTITY} readback ${smokeDomainControls.farGrid}^3`,
+        layout: smokeDomainTransferPipelineLayout,
+        vertex: { module: transferShader, entryPoint: 'vsSmokeDomainInspect' },
+        fragment: { module: transferShader, entryPoint: 'fsSmokeDomainVolumeInspect', targets: [{ format: 'rgba8unorm' }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      smokeDomainProjectionPipeline = device.createRenderPipeline({
+        label: `kaminos ${SMOKE_DOMAIN_FAR_PROJECTION_IDENTITY} ${smokeDomainControls.farGrid}^3`,
+        layout: smokeDomainTransferPipelineLayout,
+        vertex: { module: transferShader, entryPoint: 'vsSmokeDomainInspect' },
+        fragment: { module: transferShader, entryPoint: 'fsSmokeDomainInspect', targets: [{ format }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      smokeDomainProjectionReadbackPipeline = device.createRenderPipeline({
+        label: `kaminos ${SMOKE_DOMAIN_FAR_PROJECTION_IDENTITY} readback ${smokeDomainControls.farGrid}^3`,
         layout: smokeDomainTransferPipelineLayout,
         vertex: { module: transferShader, entryPoint: 'vsSmokeDomainInspect' },
         fragment: { module: transferShader, entryPoint: 'fsSmokeDomainInspect', targets: [{ format: 'rgba8unorm' }] },
@@ -7072,6 +7159,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
               { binding: 2, resource: { buffer: smokeDomainFarStateBuffers[farIndex] } },
               { binding: 3, resource: { buffer: smokeDomainFarStateBuffers[1 - farIndex] } },
               { binding: 4, resource: { buffer: smokeDomainTransferCounterBuffer } },
+              { binding: 5, resource: { buffer: uniformBuffer } },
             ],
           });
         }
@@ -7083,6 +7171,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeDomainFarInputPipeline = null;
       smokeDomainInspectPipeline = null;
       smokeDomainInspectReadbackPipeline = null;
+      smokeDomainProjectionPipeline = null;
+      smokeDomainProjectionReadbackPipeline = null;
       state.smokeDomainTransferBufferBytes = 0;
       state.smokeDomainFarStateBufferBytes = 0;
     }
@@ -7367,8 +7457,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.smokeDomainTransferReadbackPending = false;
     state.smokeDomainFarSolverStatus = smokeDomainControls.farSolverStatus;
     state.smokeDomainInspectMode = normalizeSmokeDomainInspectMode(controlsSnapshot.smokeDomainInspect);
-    state.smokeDomainInspectIdentity = state.smokeDomainInspectMode === 'far-only' && smokeDomainControls.mode === 'coupled-near-fire-far-smoke-v0'
-      ? SMOKE_DOMAIN_FAR_INSPECT_IDENTITY
+    state.smokeDomainInspectIdentity = smokeDomainControls.mode === 'coupled-near-fire-far-smoke-v0'
+      ? (state.smokeDomainInspectMode === 'far-volume'
+        ? SMOKE_DOMAIN_FAR_INSPECT_IDENTITY
+        : (state.smokeDomainInspectMode === 'far-projection' ? SMOKE_DOMAIN_FAR_PROJECTION_IDENTITY : 'near-domain-render-v0'))
       : 'near-domain-render-v0';
     state.pressureProjectionEnabled = false;
     state.pressureProjectionIterations = 0;
@@ -7643,6 +7735,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 2, visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT, buffer: { type: 'read-only-storage' } },
         { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 5, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
       ],
     });
     pressureWriteBindGroupLayout = device.createBindGroupLayout({
@@ -8217,12 +8310,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.smokeDomainProofBoundary = smokeDomainControls.proofBoundary;
     state.smokeDomainFarSolverStatus = smokeDomainControls.farSolverStatus;
     const smokeDomainInspectRequested = normalizeSmokeDomainInspectMode(controlsSnapshot.smokeDomainInspect);
-    state.smokeDomainInspectMode = smokeDomainInspectRequested === 'far-only' && smokeDomainControls.mode === 'coupled-near-fire-far-smoke-v0'
-      ? 'far-only'
+    state.smokeDomainInspectMode = smokeDomainInspectRequested !== 'near-render' && smokeDomainControls.mode === 'coupled-near-fire-far-smoke-v0'
+      ? smokeDomainInspectRequested
       : 'near-render';
-    state.smokeDomainInspectIdentity = state.smokeDomainInspectMode === 'far-only'
+    state.smokeDomainInspectIdentity = state.smokeDomainInspectMode === 'far-volume'
       ? SMOKE_DOMAIN_FAR_INSPECT_IDENTITY
-      : (smokeDomainInspectRequested === 'far-only' ? 'near-domain-render-fallback-no-far-field-v0' : 'near-domain-render-v0');
+      : (state.smokeDomainInspectMode === 'far-projection'
+        ? SMOKE_DOMAIN_FAR_PROJECTION_IDENTITY
+        : (smokeDomainInspectRequested !== 'near-render' ? 'near-domain-render-fallback-no-far-field-v0' : 'near-domain-render-v0'));
     if (smokeDomainControls.mode !== 'coupled-near-fire-far-smoke-v0') {
       state.smokeDomainTransferEncoded = false;
       state.smokeDomainTransferReadbackPending = false;
@@ -9139,10 +9234,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const timestampWrites = gpuTimingRenderPassTimestampWrites(10, 11);
     if (timestampWrites) descriptor.timestampWrites = timestampWrites;
     const pass = encoder.beginRenderPass(descriptor);
-    const farInspectPipeline = targetPipeline === readbackPipeline
-      ? smokeDomainInspectReadbackPipeline
-      : smokeDomainInspectPipeline;
-    const farOnlyInspect = state.smokeDomainInspectMode === 'far-only'
+    const readbackTarget = targetPipeline === readbackPipeline;
+    const farInspectPipeline = state.smokeDomainInspectMode === 'far-projection'
+      ? (readbackTarget ? smokeDomainProjectionReadbackPipeline : smokeDomainProjectionPipeline)
+      : (readbackTarget ? smokeDomainInspectReadbackPipeline : smokeDomainInspectPipeline);
+    const farOnlyInspect = state.smokeDomainInspectMode !== 'near-render'
       && farInspectPipeline
       && smokeDomainTransferBindGroups[currentFluid]?.[currentSmokeDomainFarState];
     pass.setPipeline(farOnlyInspect ? farInspectPipeline : targetPipeline);
