@@ -269,7 +269,11 @@ function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGa
       const fireState = window.__kaminosSharpBreathingRoomKilnFireState || {};
       const firingId = fireState.firingId || null;
       const expected = fireState.expectedFirePresentation || null;
-      const effective = fireState.volumeDebugState?.firePresentation || null;
+      const liveVolumeDebugState = window.__kaminosVolumePrototype?.debugState?.() || null;
+      const effective = liveVolumeDebugState?.firePresentation || null;
+      const presentationSource = liveVolumeDebugState
+        ? 'live-volume-prototype-debug-state'
+        : 'missing-live-volume-prototype-debug-state';
       const presentationFailures = validatePresentation({
         requestedPresentation: 'hybrid-smoke-preview',
         firingId,
@@ -297,6 +301,7 @@ function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGa
         atMs: nowMs,
         firingId,
         firePhase: fireState.phase || null,
+        presentationSource,
         admissible: fireState.phase === 'burning' && presentationFailures.length === 0,
         status: readiness.status,
         observationGapMs,

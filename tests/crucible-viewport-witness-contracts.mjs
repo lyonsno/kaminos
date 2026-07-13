@@ -242,12 +242,16 @@ const buildInFlightHybridSettleMonitorExpression = vm.runInNewContext(`(() => {
 })()`);
 let browserNowMs = 0;
 const rafCallbacks = [];
+let liveHybridPresentation = hybridPresentation;
 const browserWindow = {
   __kaminosSharpBreathingRoomKilnFireState: {
     phase: 'burning',
     firingId: 'firing-hybrid-witness',
     expectedFirePresentation: { effectiveMode: hybridPresentation.effectiveMode },
     volumeDebugState: { firePresentation: hybridPresentation },
+  },
+  __kaminosVolumePrototype: {
+    debugState: () => ({ firePresentation: liveHybridPresentation }),
   },
 };
 vm.runInNewContext(
@@ -268,7 +272,7 @@ for (const nowMs of [0, 10, 20, 30]) runRafAt(nowMs);
 assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.ready, true);
 assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.sampleRetention, 'uncapped');
 assert.equal(browserWindow.__kaminosInFlightHybridSettleMonitor.samples.length, 4);
-browserWindow.__kaminosSharpBreathingRoomKilnFireState.volumeDebugState.firePresentation = {
+liveHybridPresentation = {
   ...hybridPresentation,
   fallbackReason: 'simulated-between-frame-fallback',
 };
