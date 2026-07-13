@@ -1,12 +1,12 @@
 {
   "schema": "kaminos.sam3-gate-u-tolerance-calibration.v0",
-  "createdAt": "2026-07-13T11:49:49Z",
+  "createdAt": "2026-07-13T13:18:23Z",
   "modelPackageId": "sam3-model-package:sha256:db43a2fba3e297e1331e744e21e9a3be9b7b15397e04f19089e4aec9a0c13def",
   "method": {
     "browserBackend": "Chrome WebGPU on Apple GPU",
     "referenceBackend": "MLX float32 with MLX Metal erf/expm1 GELU semantics",
     "route": "browser original image -> preprocess -> patch embed -> 32-layer ViT -> FPN neck -> text ingress -> DETR encoder/decoder -> scoring/selection -> pixel/mask tail",
-    "sampling": "two independently authenticated prompt invocations against one immutable model package",
+    "sampling": "three independently authenticated image/prompt invocations across two source images against one immutable model package",
     "causalCheck": "authenticated browser pre-decoder tensors replayed through the unmodified MLX decoder and mask tail"
   },
   "samples": [
@@ -39,6 +39,26 @@
         "binaryMismatchCount": 1,
         "binaryElementCount": 819200
       }
+    },
+    {
+      "sourceImageSha256": "sha256:979f120edcb0050a12d5b4a1f1eaf6bc888b89f675524e7ffcf6ae5b77aa6bc4",
+      "promptSha256": "sha256:38a81e87e79631e602bf5fbd307ce2fcd382b1670c585ea09032aac778a80531",
+      "invocationId": "sam3-invocation:sha256:679f257914d3ff66cc555dd7801ed02ae7d1d365d3bb312c343c2d1e8d240607",
+      "verificationSha256": "sha256:b8c967df07ca45a3bbdb5317936c8264b07c1661d3aef6cf971b7bad32e4ad80",
+      "reportSha256": "sha256:53531652ad1bcdd01818fe49b6fdb2635928f02633663cbc5b3393e64f11969b",
+      "observed": {
+        "imagePatchEmbedCpuMaxAbsDiff": 0.000004291534423828125,
+        "decoderHiddenStatesMaxAbsDiff": 0.0010828375816345215,
+        "lastHsMaxAbsDiff": 0.0010828375816345215,
+        "maskLogitsMaxAbsDiff": 0.020503997802734375,
+        "predLogitsMaxAbsDiff": 0.0008637905120849609,
+        "selectionScoresMaxAbsDiff": 0.00005154311656951904,
+        "selectionBoxesMaxAbsDiff": 0.010833740234375,
+        "selectedIndexMaxAbsDiff": 0,
+        "selectedBoxMaxAbsDiff": 0.000030517578125,
+        "binaryMismatchCount": 0,
+        "binaryElementCount": 819200
+      }
     }
   ],
   "causalReplay": {
@@ -51,13 +71,59 @@
       "maskLogitsMaxAbsDiff": 0.0225372314453125,
       "binaryMismatchCount": 2,
       "binaryElementCount": 819200
-    }
+    },
+    "additionalSamples": [
+      {
+        "sourceInvocationId": "sam3-invocation:sha256:679f257914d3ff66cc555dd7801ed02ae7d1d365d3bb312c343c2d1e8d240607",
+        "reportSha256": "sha256:b655eda15218179471f3c0ed47066bf22697a34d824c2841e3a29eb81e95552f",
+        "browserVsMlxReplay": {
+          "decoderHiddenStatesMaxAbsDiff": 0.00012221932411193848,
+          "lastHsMaxAbsDiff": 0.00012221932411193848,
+          "maskLogitsMaxAbsDiff": 0.0023479461669921875,
+          "binaryMismatchCount": 0,
+          "binaryElementCount": 819200
+        },
+        "mlxReplayVsCanonical": {
+          "decoderHiddenStatesMaxAbsDiff": 0.0011159181594848633,
+          "lastHsMaxAbsDiff": 0.0011159181594848633,
+          "maskLogitsMaxAbsDiff": 0.0225982666015625,
+          "binaryMismatchCount": 0,
+          "binaryElementCount": 819200
+        }
+      }
+    ]
   },
+  "counterexamples": [
+    {
+      "status": "retained-anti-evidence-not-used-to-expand-acceptance-budget",
+      "sourceImageSha256": "sha256:7073dfecb5a3ecafb6152124113163a0ea1c1c70f92999ec892b519eca63e3d3",
+      "promptSha256": "sha256:9e6c0f4f9263e10503510239f59fbecf76dc526bf9d00875cc618272d833e75d",
+      "invocationId": "sam3-invocation:sha256:ddc7e7001c5faee6260eee65dcb54fb0bfdc8fc5e18f735f41b845b8c8dde1bf",
+      "reportSha256": "sha256:8f8c476b4d33d12c7e27a5812b166295f78726e336e5edc683641b8bd3a3b438",
+      "replayReportSha256": "sha256:7b1533d2a240c939e6a01d9c25cfa0bbb896f3bfb5d57e3094b055f79b947f37",
+      "reason": "all-query canonical maxima amplify small pre-decoder residuals while selected output and browser-vs-MLX replay remain stable; requires a separately reviewed robust numerical predicate rather than a large max-budget expansion",
+      "observed": {
+        "decoderHiddenStatesMaxAbsDiff": 0.053523570648394525,
+        "maskLogitsMaxAbsDiff": 0.6495628356933594,
+        "selectedIndexMaxAbsDiff": 0,
+        "selectedBoxMaxAbsDiff": 0.000030517578125,
+        "binaryMismatchCount": 1,
+        "binaryElementCount": 819200
+      },
+      "browserVsMlxReplay": {
+        "decoderHiddenStatesMaxAbsDiff": 0.00017138570547103882,
+        "maskLogitsMaxAbsDiff": 0.002399444580078125,
+        "binaryMismatchCount": 0
+      }
+    }
+  ],
   "observedMaxima": {
     "imagePatchEmbedCpuMaxAbsDiff": 0.0000095367431640625,
     "decoderHiddenStatesMaxAbsDiff": 0.0024722814559936523,
     "lastHsMaxAbsDiff": 0.0024722814559936523,
     "maskLogitsMaxAbsDiff": 0.023479461669921875,
+    "predLogitsMaxAbsDiff": 0.0008637905120849609,
+    "selectionScoresMaxAbsDiff": 0.00005154311656951904,
     "selectionBoxesMaxAbsDiff": 0.0527496337890625,
     "binaryMismatchCount": 2
   },
@@ -66,6 +132,8 @@
     "decoderHiddenStatesMaxAbsDiff": 0.003,
     "lastHsMaxAbsDiff": 0.003,
     "webGpuLogitsMaxAbsDiff": 0.03,
+    "predLogitsMaxAbsDiff": 0.001,
+    "selectionScoresMaxAbsDiff": 0.00006,
     "selectionBoxesMaxAbsDiff": 0.065,
     "binaryMismatchCount": 8
   },

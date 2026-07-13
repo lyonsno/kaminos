@@ -28,6 +28,7 @@ assert.match(routeSource, /fn mlx_erf\(x: f32\)/, 'ViT MLP GELU shader must port
 assert.match(routeSource, /fn mlx_expm1f\(x: f32\)/, 'ViT MLP GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
 assert.match(routeSource, /0\.927734375/, 'ViT MLP GELU shader must preserve the MLX Metal erf branch boundary');
 assert.doesNotMatch(routeSource, /0\.044715/, 'ViT block-stack GPU and CPU GELU paths must not retain the tanh approximation');
+assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*if \(gid\.x >= dims\.total_values\) \{ return; \}/, 'block-stack residual add must guard rounded-up dispatch tail writes');
 
 assert.match(stackExporter, /--image-vit-block-stack-ingress/, 'detector-stack packet must expose image ViT block-stack ingress CLI flag');
 assert.match(stackExporter, /--image-vit-full-backbone-ingress/, 'detector-stack packet must expose image ViT full-backbone ingress CLI flag');

@@ -9,6 +9,7 @@ import {
   createSam3BrowserStaticArtifactCache,
   createSam3DualInvocationEvidence,
 } from '../src/sam-browser-package-manifest.js';
+import * as samBrowserPackageManifest from '../src/sam-browser-package-manifest.js';
 
 const root = new URL('..', import.meta.url);
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -296,12 +297,16 @@ const dualInvocationEvidence = createSam3DualInvocationEvidence({
   packageId: 'sam3-model-package:one',
   invocationId: 'sam3-invocation:first',
   verificationSha256: 'sha256:verification-one',
+  sourceImageSha256: 'sha256:image-one',
+  promptSha256: 'sha256:prompt-one',
   requestIds: ['request:first'],
   outputIdentity: 'sha256:output-one',
 }, {
   packageId: 'sam3-model-package:one',
   invocationId: 'sam3-invocation:second',
   verificationSha256: 'sha256:verification-two',
+  sourceImageSha256: 'sha256:image-two',
+  promptSha256: 'sha256:prompt-two',
   requestIds: ['request:second'],
   outputIdentity: 'sha256:output-two',
 });
@@ -310,19 +315,70 @@ assert.equal(dualInvocationEvidence.distinctInvocations, true);
 assert.equal(dualInvocationEvidence.distinctVerification, true);
 assert.equal(dualInvocationEvidence.distinctRequestSets, true);
 assert.equal(dualInvocationEvidence.distinctOutputs, true);
+assert.equal(dualInvocationEvidence.distinctSourceImages, true);
+assert.equal(dualInvocationEvidence.distinctPrompts, true);
 assert.throws(() => createSam3DualInvocationEvidence({
   packageId: 'sam3-model-package:one',
   invocationId: 'sam3-invocation:first',
   verificationSha256: 'sha256:stale',
+  sourceImageSha256: 'sha256:image-one',
+  promptSha256: 'sha256:prompt-one',
   requestIds: ['request:first'],
   outputIdentity: 'sha256:output-one',
 }, {
   packageId: 'sam3-model-package:one',
   invocationId: 'sam3-invocation:second',
   verificationSha256: 'sha256:stale',
+  sourceImageSha256: 'sha256:image-two',
+  promptSha256: 'sha256:prompt-two',
   requestIds: ['request:second'],
   outputIdentity: 'sha256:output-two',
 }), /verification identity was reused/, 'a fresh invocation must not inherit the first invocation verification artifact');
+
+const invocationSummary = overrides => ({
+  packageId: 'sam3-model-package:one',
+  invocationId: 'sam3-invocation:first',
+  verificationSha256: 'sha256:verification-one',
+  sourceImageSha256: 'sha256:image-one',
+  promptSha256: 'sha256:prompt-one',
+  requestIds: ['request:first'],
+  outputIdentity: 'sha256:output-one',
+  ...overrides,
+});
+assert.throws(() => createSam3DualInvocationEvidence(
+  invocationSummary(),
+  invocationSummary({ invocationId: 'sam3-invocation:second', verificationSha256: 'sha256:verification-two', promptSha256: 'sha256:prompt-two', requestIds: ['request:second'], outputIdentity: 'sha256:output-two' }),
+), /source image identity was reused/, 'dual invocation freshness must reject repeated encoded-image bytes');
+assert.throws(() => createSam3DualInvocationEvidence(
+  invocationSummary(),
+  invocationSummary({ invocationId: 'sam3-invocation:second', verificationSha256: 'sha256:verification-two', sourceImageSha256: 'sha256:image-two', requestIds: ['request:second'], outputIdentity: 'sha256:output-two' }),
+), /prompt identity was reused/, 'dual invocation freshness must reject repeated normalized prompt identity');
+
+assert.match(witness, /--second-image/, 'dual witness must accept a distinct second encoded image');
+assert.match(witness, /generateOraclePacket\(secondOracleDir, secondPrompt, secondSourceImage\)/, 'second packet must be generated from the second image rather than the first invocation global');
+assert.equal(typeof samBrowserPackageManifest.resolveSam3BrowserArtifactUrl, 'function', 'browser package resolver must expose contained nested-artifact URL resolution');
+if (typeof samBrowserPackageManifest.resolveSam3BrowserArtifactUrl === 'function') {
+  const resolveArtifact = samBrowserPackageManifest.resolveSam3BrowserArtifactUrl;
+  assert.equal(
+    resolveArtifact('weights.bin', '/oracle/tensor-manifest.json', 'http://127.0.0.1:18527/smokes/sam-mask-island-parity.html'),
+    'http://127.0.0.1:18527/oracle/weights.bin',
+  );
+  assert.throws(
+    () => resolveArtifact('../weights.bin', '/oracle/tensor-manifest.json', 'http://127.0.0.1:18527/smokes/sam-mask-island-parity.html'),
+    /escapes manifest artifact root/,
+    'browser nested-artifact resolution must reject parent traversal before the server can reinterpret the route',
+  );
+  assert.throws(
+    () => resolveArtifact('..%2fweights.bin', '/oracle/tensor-manifest.json', 'http://127.0.0.1:18527/smokes/sam-mask-island-parity.html'),
+    /escapes manifest artifact root/,
+    'browser nested-artifact resolution must reject traversal hidden behind an encoded path separator',
+  );
+  assert.throws(
+    () => resolveArtifact('https://example.com/weights.bin', '/oracle/tensor-manifest.json', 'http://127.0.0.1:18527/smokes/sam-mask-island-parity.html'),
+    /escapes manifest artifact root/,
+    'browser nested-artifact resolution must reject cross-origin absolute references',
+  );
+}
 
 assert.equal(join(new URL('.', root).pathname, 'smokes').includes('webgpu-inference-kit'), true);
 

@@ -547,7 +547,8 @@ def main():
         "decoderHiddenStatesMaxAbsDiff": 0.003,
         "selectedScoreMaxAbsDiff": 0.00002,
         "selectedBoxMaxAbsDiff": 0.004,
-        "selectionScoresMaxAbsDiff": 0.00002,
+        "predLogitsMaxAbsDiff": 0.001,
+        "selectionScoresMaxAbsDiff": 0.00006,
         "selectionBoxesMaxAbsDiff": 0.065,
         "webGpuLogitsMaxAbsDiff": 0.03,
         "cpuOracleBinaryMismatchCount": 8,
@@ -708,12 +709,19 @@ def main():
             "invocationId": f"sam3-invocation:{invocation_digest}",
             **invocation_contract,
         }
-        verification = {
-            "schema": SAM3_BROWSER_VERIFICATION_SCHEMA,
+        verification_contract = {
+            "verifiedPackageId": model_package["packageId"],
+            "verifiedInvocationId": invocation["invocationId"],
             **{key: manifest[key] for key in [
                 "reference", "upstreamBoundaries", "toleranceBudgetSource", "toleranceCalibration", "tolerances",
                 "visualization", "tensors",
             ]},
+        }
+        verification_digest = encoder_tool.sha256_bytes(canonical_identity_json(verification_contract).encode("utf-8"))
+        verification = {
+            "schema": SAM3_BROWSER_VERIFICATION_SCHEMA,
+            "verificationId": f"sam3-verification:{verification_digest}",
+            **verification_contract,
         }
         root_manifest = {
             **{key: manifest[key] for key in ["schema", "routeId", "mode", "boundary", "createdAt"]},

@@ -15,6 +15,7 @@ import {
   SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
   SAM3_IMAGE_FPN_NECK_PHASE_PROGRAM_ROUTE_ID,
   createSam3BrowserStaticArtifactCache,
+  resolveSam3BrowserArtifactUrl,
   resolveSam3BrowserPackageManifest,
   createRouteInvocationRequest,
   createSam3MaskDecoderIslandRouteDefinition,
@@ -278,7 +279,7 @@ async function resolveBrowserManifest(rootManifest) {
 }
 
 function resolveManifestFile(file) {
-  return new URL(file, new URL(activeManifestUrl, window.location.href)).toString();
+  return resolveSam3BrowserArtifactUrl(file, activeManifestUrl, window.location.href);
 }
 
 function tensorByRole(manifest, role) {

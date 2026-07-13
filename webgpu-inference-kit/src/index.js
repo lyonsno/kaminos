@@ -266,6 +266,7 @@ export {
   SAM3_BROWSER_VERIFICATION_SCHEMA,
   createSam3BrowserStaticArtifactCache,
   createSam3DualInvocationEvidence,
+  resolveSam3BrowserArtifactUrl,
   resolveSam3BrowserPackageManifest,
   resolveSam3BrowserPackageManifestSync,
 } from './sam-browser-package-manifest.js';

@@ -29,6 +29,7 @@ assert.match(routeSource, /fn mlx_erf\(x: f32\)/, 'first-block GELU shader must 
 assert.match(routeSource, /fn mlx_expm1f\(x: f32\)/, 'first-block GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
 assert.match(routeSource, /0\.927734375/, 'first-block GELU shader must preserve the MLX Metal erf branch boundary');
 assert.doesNotMatch(routeSource, /0\.044715/, 'first-block GPU and CPU GELU paths must not retain the tanh approximation');
+assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*if \(gid\.x >= dims\.total_values\) \{ return; \}/, 'first-block residual add must guard rounded-up dispatch tail writes');
 assert.match(routeSource, /readback-vit-first-block-hidden-states/, 'image ViT first-block route must expose readback identity');
 assert.match(routeSource, /window partition\/pad\/crop/, 'image ViT first-block route must document the MLX window partition boundary');
 assert.match(routeSource, /pairwise RoPE/, 'image ViT first-block route must document the SAM3 pairwise RoPE boundary');

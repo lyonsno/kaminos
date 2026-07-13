@@ -21,6 +21,9 @@ const MODEL_PACKAGE_FIELDS = [
 ];
 const INVOCATION_FIELDS = ['invocationId', 'prompt', 'sourceImage', 'postprocess'];
 const VERIFICATION_FIELDS = [
+  'verificationId',
+  'verifiedPackageId',
+  'verifiedInvocationId',
   'reference',
   'upstreamBoundaries',
   'toleranceBudgetSource',
@@ -215,6 +218,8 @@ function validateInvocationSummary(summary, label) {
   requireNonEmptyString(summary.packageId, `${label}.packageId`);
   requireNonEmptyString(summary.invocationId, `${label}.invocationId`);
   requireNonEmptyString(summary.verificationSha256, `${label}.verificationSha256`);
+  requireNonEmptyString(summary.sourceImageSha256, `${label}.sourceImageSha256`);
+  requireNonEmptyString(summary.promptSha256, `${label}.promptSha256`);
   requireNonEmptyString(summary.outputIdentity, `${label}.outputIdentity`);
   if (!Array.isArray(summary.requestIds) || summary.requestIds.length === 0 || summary.requestIds.some(value => typeof value !== 'string' || value.length === 0)) {
     throw new Error(`${label}.requestIds must be a non-empty string array`);
@@ -227,6 +232,8 @@ export function createSam3DualInvocationEvidence(first, second) {
   if (first.packageId !== second.packageId) throw new Error('dual invocation model package identity changed');
   if (first.invocationId === second.invocationId) throw new Error('dual invocation identity was reused');
   if (first.verificationSha256 === second.verificationSha256) throw new Error('dual invocation verification identity was reused');
+  if (first.sourceImageSha256 === second.sourceImageSha256) throw new Error('dual invocation source image identity was reused');
+  if (first.promptSha256 === second.promptSha256) throw new Error('dual invocation prompt identity was reused');
   if (first.outputIdentity === second.outputIdentity) throw new Error('dual invocation output identity was reused');
   const firstRequests = new Set(first.requestIds);
   if (second.requestIds.some(requestId => firstRequests.has(requestId))) throw new Error('dual invocation request identity was reused');
@@ -236,6 +243,8 @@ export function createSam3DualInvocationEvidence(first, second) {
     sameModelPackage: true,
     distinctInvocations: true,
     distinctVerification: true,
+    distinctSourceImages: true,
+    distinctPrompts: true,
     distinctRequestSets: true,
     distinctOutputs: true,
     first: JSON.parse(JSON.stringify(first)),
@@ -310,6 +319,40 @@ function assertIdentity(label, actual, prefix, digest) {
   if (actual !== expected) throw new Error(`${label} identity mismatch: ${actual || 'missing'} !== ${expected}`);
 }
 
+function assertVerificationBinding(verification, modelPackage, invocation) {
+  requireNonEmptyString(verification.verificationId, 'verification.verificationId');
+  requireNonEmptyString(verification.verifiedPackageId, 'verification.verifiedPackageId');
+  requireNonEmptyString(verification.verifiedInvocationId, 'verification.verifiedInvocationId');
+  if (verification.verifiedPackageId !== modelPackage.packageId) {
+    throw new Error(`verification model package binding mismatch: ${verification.verifiedPackageId} !== ${modelPackage.packageId}`);
+  }
+  if (verification.verifiedInvocationId !== invocation.invocationId) {
+    throw new Error(`verification invocation binding mismatch: ${verification.verifiedInvocationId} !== ${invocation.invocationId}`);
+  }
+}
+
+export function resolveSam3BrowserArtifactUrl(file, manifestUrl, pageUrl) {
+  const artifactRef = requireNonEmptyString(file, 'artifact file');
+  const page = new URL(requireNonEmptyString(pageUrl, 'page URL'));
+  const manifest = new URL(requireNonEmptyString(manifestUrl, 'manifest URL'), page);
+  const artifactRoot = new URL('.', manifest);
+  const resolved = new URL(artifactRef, manifest);
+  let rootPath = artifactRoot.pathname;
+  let resolvedPath = resolved.pathname;
+  try {
+    while (decodeURIComponent(rootPath) !== rootPath) rootPath = decodeURIComponent(rootPath);
+    while (decodeURIComponent(resolvedPath) !== resolvedPath) resolvedPath = decodeURIComponent(resolvedPath);
+  } catch {
+    throw new Error(`artifact file escapes manifest artifact root: ${artifactRef}`);
+  }
+  const relativePath = resolvedPath.startsWith(rootPath) ? resolvedPath.slice(rootPath.length) : '';
+  const hasTraversalSegment = relativePath.split(/[\\/]/u).some(segment => segment === '..');
+  if (resolved.origin !== artifactRoot.origin || !resolvedPath.startsWith(rootPath) || hasTraversalSegment) {
+    throw new Error(`artifact file escapes manifest artifact root: ${artifactRef}`);
+  }
+  return resolved.toString();
+}
+
 function composeResolution(root, modelPackage, invocation, verification, effectiveHashes) {
   if (!modelPackage.packageId) throw new Error('model package missing packageId');
   if (!invocation.invocationId) throw new Error('invocation missing invocationId');
@@ -365,6 +408,15 @@ export async function resolveSam3BrowserPackageManifest(rootManifest, { readArti
     'sam3-invocation:',
     await sha256Text(canonicalSam3IdentityJson(identityContract(invocation, INVOCATION_FIELDS, 'invocationId'))),
   );
+  if (verification) {
+    assertVerificationBinding(verification, modelPackage, invocation);
+    assertIdentity(
+      'verification',
+      verification.verificationId,
+      'sam3-verification:',
+      await sha256Text(canonicalSam3IdentityJson(identityContract(verification, VERIFICATION_FIELDS, 'verificationId'))),
+    );
+  }
   return composeResolution(root, modelPackage, invocation, verification, {
     modelPackage: root.modelPackage.sha256,
     invocation: root.invocation.sha256,
@@ -398,6 +450,15 @@ export function resolveSam3BrowserPackageManifestSync(rootManifest, { readArtifa
     'sam3-invocation:',
     sha256Text(canonicalSam3IdentityJson(identityContract(invocation, INVOCATION_FIELDS, 'invocationId'))),
   );
+  if (verification) {
+    assertVerificationBinding(verification, modelPackage, invocation);
+    assertIdentity(
+      'verification',
+      verification.verificationId,
+      'sam3-verification:',
+      sha256Text(canonicalSam3IdentityJson(identityContract(verification, VERIFICATION_FIELDS, 'verificationId'))),
+    );
+  }
   return composeResolution(root, modelPackage, invocation, verification, {
     modelPackage: root.modelPackage.sha256,
     invocation: root.invocation.sha256,

@@ -68,12 +68,19 @@ assert.match(stackExporter, /"pixelEmbedMaxAbsDiff": 0\.0015/, 'image-FPN packet
 assert.match(stackExporter, /"toleranceBudgetSource": tolerance_budget_source/, 'detector-stack packet must surface the effective tolerance budget source');
 assert.match(stackExporter, /"toleranceCalibration": tolerance_calibration/, 'split verification must embed the calibration receipt and its source hash');
 assert.equal(gateUToleranceCalibration.schema, 'kaminos.sam3-gate-u-tolerance-calibration.v0');
-assert.equal(gateUToleranceCalibration.samples.length, 2, 'Gate U calibration must retain both independently authenticated prompt samples');
+assert.equal(gateUToleranceCalibration.samples.length, 3, 'Gate U calibration must retain three authenticated invocations across two source images');
+const distinctImageCalibrationSample = gateUToleranceCalibration.samples.find(sample => sample.sourceImageSha256 === 'sha256:979f120edcb0050a12d5b4a1f1eaf6bc888b89f675524e7ffcf6ae5b77aa6bc4');
+assert.ok(distinctImageCalibrationSample, 'Gate U calibration must include the distinct person-image invocation');
+assert.equal(distinctImageCalibrationSample.observed.binaryMismatchCount, 0);
 assert.equal(gateUToleranceCalibration.causalReplay.status, 'passed', 'Gate U calibration must retain the MLX-on-browser-intermediates causal replay');
 assert.ok(gateUToleranceCalibration.observedMaxima.lastHsMaxAbsDiff < gateUToleranceCalibration.acceptanceBudget.lastHsMaxAbsDiff);
 assert.ok(gateUToleranceCalibration.observedMaxima.maskLogitsMaxAbsDiff < gateUToleranceCalibration.acceptanceBudget.webGpuLogitsMaxAbsDiff);
 assert.ok(gateUToleranceCalibration.observedMaxima.selectionBoxesMaxAbsDiff < gateUToleranceCalibration.acceptanceBudget.selectionBoxesMaxAbsDiff);
 assert.ok(gateUToleranceCalibration.observedMaxima.binaryMismatchCount < gateUToleranceCalibration.acceptanceBudget.binaryMismatchCount);
+assert.ok(gateUToleranceCalibration.observedMaxima.predLogitsMaxAbsDiff < gateUToleranceCalibration.acceptanceBudget.predLogitsMaxAbsDiff);
+assert.ok(gateUToleranceCalibration.observedMaxima.selectionScoresMaxAbsDiff < gateUToleranceCalibration.acceptanceBudget.selectionScoresMaxAbsDiff);
+assert.match(stackExporter, /"predLogitsMaxAbsDiff": 0\.001/, 'Gate U packet budget must carry the distinct-image calibrated all-query scoring bound');
+assert.match(stackExporter, /"selectionScoresMaxAbsDiff": 0\.00006/, 'Gate U packet budget must carry the distinct-image calibrated all-query selection-score bound');
 assert.match(modelLoader, /load_model as load_mlx_vlm_model/, 'SAM3 reference loader must use the config-aware MLX-VLM model loader');
 assert.match(modelLoader, /checkpointParameterAudit/, 'SAM3 reference loader must expose checkpoint-to-model parameter audit evidence');
 assert.match(modelLoader, /model\.set_dtype\(mx\.float32\)/, 'SAM3 reference loader must promote audited checkpoint parameters to the browser FP32 compute contract');
@@ -188,12 +195,16 @@ if (existsSync(packageResolverUrl)) {
   invocation.invocationId = `sam3-invocation:${identityDigest(invocation, ['schema', 'invocationId'])}`;
   const verification = {
     schema: 'kaminos.sam3-browser-verification.v0',
+    verificationId: 'sam3-verification:test-a',
+    verifiedPackageId: modelPackage.packageId,
+    verifiedInvocationId: invocation.invocationId,
     reference: { owner: 'mlx' },
     toleranceBudgetSource: 'test-budget',
     toleranceCalibration: { schema: 'test-calibration', sourceSha256: 'calibration-sha' },
     tolerances: { binaryMismatchCount: 96 },
     tensors: [{ role: 'expected-mask' }],
   };
+  verification.verificationId = `sam3-verification:${identityDigest(verification, ['schema', 'verificationId'])}`;
   const root = {
     schema: 'kaminos.sam3-detector-stack.image-fpn-neck-packet.v0',
     routeId: 'sam3.mask-decoder-island.webgpu-local.v0',
@@ -258,6 +269,26 @@ if (existsSync(packageResolverUrl)) {
     () => resolveSam3BrowserPackageManifestSync({ ...root, invocation: relabeledInvocationRef }, { readArtifactText: readArtifactTextSync, sha256Text: sha256 }),
     /invocation identity mismatch/,
     'a consistently rehashed root must not authorize a false embedded invocation identity',
+  );
+  const crossInvocationVerification = {
+    ...verification,
+    verificationId: 'sam3-verification:pending',
+    verifiedInvocationId: 'sam3-invocation:other-valid-invocation',
+    reference: { owner: 'mlx', prompt: 'person' },
+    tensors: [{ role: 'expected-mask', file: 'person-mask.bin' }],
+  };
+  crossInvocationVerification.verificationId = `sam3-verification:${identityDigest(crossInvocationVerification, ['schema', 'verificationId'])}`;
+  const crossInvocationVerificationRef = addArtifact('sam3-verification-cross-invocation.json', crossInvocationVerification);
+  const crossInvocationRoot = { ...root, verification: crossInvocationVerificationRef };
+  assert.throws(
+    () => resolveSam3BrowserPackageManifestSync(crossInvocationRoot, { readArtifactText: readArtifactTextSync, sha256Text: sha256 }),
+    /verification invocation binding mismatch/,
+    'sync resolution must reject a hash-valid verification artifact belonging to another invocation',
+  );
+  await assert.rejects(
+    resolveSam3BrowserPackageManifest(crossInvocationRoot, { readArtifactText, sha256Text: async text => sha256(text) }),
+    /verification invocation binding mismatch/,
+    'async resolution must reject a hash-valid verification artifact belonging to another invocation',
   );
 }
 

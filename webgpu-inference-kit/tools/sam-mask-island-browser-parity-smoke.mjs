@@ -90,6 +90,7 @@ const packetTool = resolve(args.get('--packet-tool') || (
 ));
 const mlxVlmRoot = resolve(args.get('--mlx-vlm-root') || process.env.KAMINOS_MLX_VLM_ROOT || '/Users/noahlyons/dev/mlx-vlm');
 const sourceImage = args.get('--image') || process.env.KAMINOS_SAM3_FIXTURE_IMAGE || '/Users/noahlyons/dev/sam3/assets/images/truck.jpg';
+const secondSourceImage = args.get('--second-image') || '/Users/noahlyons/dev/sam3/assets/images/groceries.jpg';
 const requestedRouteId = args.get('--route-id') || (
   packetMode === 'mlx-prompt-fpn-export'
     ? PROMPT_FPN_PHASE_PROGRAM_ROUTE_ID
@@ -793,7 +794,7 @@ function startServer() {
   });
 }
 
-function generateOraclePacket(packetDir = oracleDir, packetPrompt = prompt) {
+function generateOraclePacket(packetDir = oracleDir, packetPrompt = prompt, packetImage = sourceImage) {
   if (reuseOraclePacket) {
     const rootManifestPath = join(packetDir, 'tensor-manifest.json');
     if (!existsSync(rootManifestPath)) throw new Error(`reused oracle packet manifest missing: ${rootManifestPath}`);
@@ -809,7 +810,7 @@ function generateOraclePacket(packetDir = oracleDir, packetPrompt = prompt) {
         'python',
         packetTool,
         '--out-dir', packetDir,
-        '--image', sourceImage,
+        '--image', packetImage,
         '--prompt', packetPrompt,
         '--model', model,
         '--resolution', String(resolution),
@@ -924,6 +925,8 @@ function invocationSummaryFromState(invocationState) {
     packageId: evidence?.packageId || null,
     invocationId: evidence?.invocationId || null,
     verificationSha256: evidence?.verification?.effectiveSha256 || null,
+    sourceImageSha256: invocationState?.sourceImage?.sha256 || null,
+    promptSha256: invocationState?.browserPromptTokenizerEvidence?.promptSha256 || null,
     requestIds: invocationState?.invocationRequestIds || [],
     outputIdentity: invocationState?.invocationOutputIdentity || null,
     effectiveRouteId: invocationState?.effectiveRouteId || null,
@@ -937,7 +940,7 @@ async function main() {
   try {
     phase = 'generate_oracle_packet';
     generateOraclePacket();
-    if (secondOracleDir) generateOraclePacket(secondOracleDir, secondPrompt);
+    if (secondOracleDir) generateOraclePacket(secondOracleDir, secondPrompt, secondSourceImage);
     const rootManifest = JSON.parse(readFileSync(join(oracleDir, 'tensor-manifest.json'), 'utf8'));
     ({ manifest: packetManifest, evidence: packageInvocationEvidence } = resolvePacketManifest(rootManifest));
     if (secondOracleDir) {

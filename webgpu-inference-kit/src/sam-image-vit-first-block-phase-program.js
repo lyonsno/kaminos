@@ -294,11 +294,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 `;
 
 const RESIDUAL_ADD_WGSL = `
+struct BlockDims {
+  batch: u32, height: u32, width: u32, channels: u32,
+  heads: u32, head_dim: u32, window_size: u32, intermediate_size: u32,
+  padded_height: u32, padded_width: u32, windows_per_row: u32, window_count: u32,
+  window_tokens: u32, total_values: u32, padded_total_values: u32, _pad0: u32,
+};
 @group(0) @binding(0) var<storage, read> residual: array<f32>;
 @group(0) @binding(1) var<storage, read> update: array<f32>;
 @group(0) @binding(2) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(3) var<uniform> dims: BlockDims;
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x >= dims.total_values) { return; }
   output_values[gid.x] = residual[gid.x] + update[gid.x];
 }
 `;
@@ -904,7 +912,7 @@ export async function runSam3ImageVitFirstBlockPhaseProgramRoute(input = {}) {
       layerNorm2: { code: LAYERNORM_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:layerNorm2Weight'), bindTensor('tensor:layerNorm2Bias'), bindTensor('tensor:layerNorm2', 'storage'), bindUniform('uniform:lnDims')] },
       mlpFc1: { code: LINEAR_GELU_WGSL, bindings: [bindTensor('tensor:layerNorm2'), bindTensor('tensor:mlpFc1Weight'), bindTensor('tensor:mlpFc1Bias'), bindTensor('tensor:mlpHidden', 'storage'), bindUniform('uniform:fc1Dims')] },
       mlpFc2: { code: LINEAR_WGSL, bindings: [bindTensor('tensor:mlpHidden'), bindTensor('tensor:mlpFc2Weight'), bindTensor('tensor:mlpFc2Bias'), bindTensor('tensor:mlpOut', 'storage'), bindUniform('uniform:fc2Dims')] },
-      residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor('tensor:vitFirstBlockHiddenStates', 'storage')] },
+      residualMlp: { code: RESIDUAL_ADD_WGSL, bindings: [bindTensor('tensor:attentionResidual'), bindTensor('tensor:mlpOut'), bindTensor('tensor:vitFirstBlockHiddenStates', 'storage'), bindUniform('uniform:blockDims')] },
     },
     phases: [
       { name: 'vit-block-layernorm1', kernel: 'layerNorm1', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true },
