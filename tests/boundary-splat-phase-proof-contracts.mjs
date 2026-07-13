@@ -158,6 +158,15 @@ try {
   const source = await readFile(new URL('../boundary-splat-phase-proof.mjs', import.meta.url), 'utf8');
   assert.match(source, /identityBaseline/, 'proof must preserve identity/current-state reuse baseline');
   assert.match(source, /offsetSteps\/maxAbsOffset/, 'proof must condition the model on signed phase offset');
+  const witnessSource = await readFile(new URL('../boundary-splat-phase-corpus-witness.mjs', import.meta.url), 'utf8');
+  assert.match(witnessSource, /--capture/, 'phase corpus witness must accept saved operator basin captures');
+  assert.match(witnessSource, /readVolumeCaptureReplay/, 'phase corpus witness must load saved capture replay documents');
+  assert.match(witnessSource, /replayCaptureControls/, 'phase corpus witness must reapply saved DOM controls before temporal feature capture');
+  assert.match(witnessSource, /kaminosSetCameraDebugPose/, 'phase corpus witness must reapply saved camera pose for named basin replay');
+  assert.match(witnessSource, /captureReplay/, 'phase corpus witness report must preserve capture replay identity');
+  assert.match(witnessSource, /--live-sample-interval-ms/, 'phase corpus witness must support live-interval sampling when controlled stepping is too destructive');
+  assert.match(witnessSource, /live-running-sample-sequence-v0/, 'live sampling must carry distinct sequence authority');
+  assert.match(witnessSource, /controlledStepFrame\(\{\s*advanceSim:\s*false/, 'live sampling must read feature frames without forcing simulator steps');
 } finally {
   await rm(root, { recursive: true, force: true });
 }

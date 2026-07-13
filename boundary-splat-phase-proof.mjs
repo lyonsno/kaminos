@@ -110,8 +110,9 @@ function validateSharedTemporalAlignment(alignment, frameIds) {
 }
 
 async function validatePhaseCandidateCorpus(manifest, manifestPath, manifestBytes) {
-  if (manifest.authority !== 'live-simulator-controlled-step-selected-candidate-features-v0') {
-    throw new Error('phase candidate corpus authority must preserve live controlled-step selected-candidate features');
+  if (manifest.authority !== 'live-simulator-controlled-step-selected-candidate-features-v0'
+    && manifest.authority !== 'live-running-sample-sequence-v0') {
+    throw new Error('phase candidate corpus authority must preserve live selected-candidate features');
   }
   if (!exactFeatureOrder(manifest.featureOrder)) throw new Error('phase candidate corpus feature order must match the 16-feature candidate contract');
   if (!Array.isArray(manifest.frames) || manifest.frames.length === 0) throw new Error('phase candidate corpus must contain frames');

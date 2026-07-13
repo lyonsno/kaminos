@@ -32,7 +32,8 @@ const FEATURE_ORDER = [
 ];
 
 const args = parseArgs(process.argv.slice(2));
-const inputUrl = String(args.get('--url') || '');
+const captureReplay = args.has('--capture') ? readVolumeCaptureReplay(args.get('--capture')) : null;
+const inputUrl = String(captureReplay?.route || args.get('--url') || '');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-boundary-splat-phase-corpus'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/phase-corpus-witness-report.json`));
 const manifestPath = resolve(String(args.get('--manifest') || `${outDir}/phase-corpus.json`));
@@ -41,6 +42,7 @@ const previewPath = resolve(String(args.get('--preview') || `${outDir}/phase-pre
 const previewReportPath = resolve(String(args.get('--preview-report') || `${outDir}/phase-preview.json`));
 const frames = Math.max(13, Math.floor(Number(args.get('--frames') || 13)));
 const stepMs = Math.max(1, Number(args.get('--step-ms') || 180));
+const liveSampleIntervalMs = Math.max(0, Number(args.get('--live-sample-interval-ms') || 0));
 const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const port = Math.max(1, Math.floor(Number(args.get('--chrome-port') || 19437)));
 const chrome = String(args.get('--chrome') || process.env.CHROME || defaultChromePath());
@@ -69,19 +71,48 @@ try {
   await waitForWebSocketOpen(ws);
   await wsRequest('Runtime.enable');
   await waitForPrototype();
+  let replayedCaptureControls = null;
+  let replayedCaptureCamera = null;
+  if (captureReplay) {
+    failurePhase = 'capture-replay';
+    replayedCaptureControls = await replayCaptureControls(captureReplay.capture);
+    replayedCaptureCamera = await replayCaptureCamera(captureReplay.capture);
+    await forcePhaseFeatureCapture();
+    lastTrustworthyEvidence.captureReplay = {
+      path: captureReplay.path,
+      documentIdentity: captureReplay.documentIdentity,
+      controlsApplied: replayedCaptureControls?.applied ?? null,
+      controlsSkipped: replayedCaptureControls?.skipped ?? null,
+      cameraApplied: replayedCaptureCamera?.applied ?? null,
+    };
+  }
   await delay(settleMs);
   const initialState = await debugState();
   lastTrustworthyEvidence.initialState = compactState(initialState);
 
   failurePhase = 'controlled-step-feature-capture';
-  const capturedFrames = await captureFeatureFrames(requestedRoute);
+  const capturedFrames = liveSampleIntervalMs > 0
+    ? await captureLiveSampleFeatureFrames(requestedRoute)
+    : await captureFeatureFrames(requestedRoute);
   failurePhase = 'manifest-build';
   const temporalAlignment = buildTemporalAlignment(capturedFrames);
   const manifest = {
     schema: BOUNDARY_SPLAT_PHASE_CORPUS_SCHEMA,
-    authority: 'live-simulator-controlled-step-selected-candidate-features-v0',
+    authority: liveSampleIntervalMs > 0
+      ? 'live-running-sample-sequence-v0'
+      : 'live-simulator-controlled-step-selected-candidate-features-v0',
     requestedRoute,
     effectiveRoute: capturedFrames[0]?.effectiveRoute || initialState?.effectiveRoute || null,
+    captureReplay: captureReplay ? {
+      path: captureReplay.path,
+      documentIdentity: captureReplay.documentIdentity,
+      captureId: captureReplay.captureId,
+      kind: captureReplay.capture?.kind || null,
+      route: captureReplay.route,
+      controls: replayedCaptureControls,
+      camera: replayedCaptureCamera,
+      featureCaptureOverride: 'volume_boundary_splat_feature_capture forced on for phase corpus witness after saved control replay',
+    } : null,
     featureOrder: FEATURE_ORDER,
     frames: capturedFrames,
     temporalAlignment,
@@ -101,6 +132,7 @@ try {
     status: 'completed',
     requestedRoute,
     effectiveRoute: manifest.effectiveRoute,
+    captureReplay: manifest.captureReplay,
     browser: {
       identity: 'boundary-splat-phase-corpus-single-cdp-browser-v0',
       port,
@@ -111,6 +143,7 @@ try {
     },
     frameCount: capturedFrames.length,
     stepMs,
+    liveSampleIntervalMs,
     manifest: { path: manifestPath, sha256: sha256(manifestBytes) },
     proof: {
       path: proofPath,
@@ -139,6 +172,13 @@ try {
     failurePhase,
     error: error?.stack || error?.message || String(error),
     inputUrl,
+    captureReplay: captureReplay ? {
+      path: captureReplay.path,
+      documentIdentity: captureReplay.documentIdentity,
+      captureId: captureReplay.captureId,
+      kind: captureReplay.capture?.kind || null,
+      route: captureReplay.route,
+    } : null,
     browser: browser ? { port, userDataDir, keepBrowserOpen, windowSize } : null,
     lastTrustworthyEvidence,
   };
@@ -166,12 +206,141 @@ function parseArgs(argv) {
   return map;
 }
 
+function readVolumeCaptureReplay(capturePath) {
+  if (!capturePath || capturePath === '1') throw new Error('--capture requires a saved capture path');
+  const resolved = resolve(String(capturePath));
+  const document = JSON.parse(readFileSync(resolved, 'utf8'));
+  const capture = document.capture || document;
+  const route = capture.route || capture.href || document.route;
+  if (!route) throw new Error(`Volume capture ${resolved} has no replay route`);
+  return {
+    path: resolved,
+    documentIdentity: document.identity || null,
+    captureId: document.captureId || capture.captureId || null,
+    capture,
+    route,
+  };
+}
+
 function phaseUrl(value) {
   const url = new URL(value);
   url.searchParams.set('kaminos_volume_smoke', '1');
   url.searchParams.set('volume_boundary_splat_mode', 'learned');
   url.searchParams.set('volume_boundary_splat_feature_capture', '1');
   return url.toString();
+}
+
+async function replayCaptureControls(capture = {}) {
+  const controls = capture.domControls || {};
+  if (!controls || Object.keys(controls).length === 0) {
+    return {
+      identity: 'kaminos-volume-capture-control-replay-v0',
+      total: 0,
+      applied: 0,
+      skipped: 0,
+      reason: 'no-dom-controls',
+    };
+  }
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const controls = ${JSON.stringify(controls)};
+      const results = [];
+      const idForKey = (key) => 'volume-' + String(key).replace(/[A-Z]/g, (match) => '-' + match.toLowerCase());
+      const valueFor = (entry) => entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, 'value') ? entry.value : entry;
+      for (const [key, entry] of Object.entries(controls)) {
+        const id = entry && typeof entry === 'object' && entry.id ? entry.id : idForKey(key);
+        const el = document.getElementById(id);
+        if (!el) {
+          results.push({ key, id, applied: false, reason: 'missing-element' });
+          continue;
+        }
+        const value = valueFor(entry);
+        if (el.type === 'checkbox') el.checked = Boolean(value);
+        else el.value = String(value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        results.push({ key, id, applied: true, value });
+      }
+      if (typeof readVolumeControls === 'function') {
+        window.__kaminosVolumePrototype?.setControls?.(readVolumeControls());
+      }
+      return {
+        identity: 'kaminos-volume-capture-control-replay-v0',
+        total: results.length,
+        applied: results.filter((item) => item.applied).length,
+        skipped: results.filter((item) => !item.applied).length,
+        results,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return result.result.value;
+}
+
+async function replayCaptureCamera(capture = {}) {
+  const camera = capture.camera || null;
+  if (!camera) {
+    return {
+      identity: 'kaminos-volume-capture-camera-replay-v0',
+      applied: false,
+      reason: 'no-camera',
+    };
+  }
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const camera = ${JSON.stringify(camera)};
+      if (typeof window.kaminosSetCameraDebugPose !== 'function') {
+        return {
+          identity: 'kaminos-volume-capture-camera-replay-v0',
+          applied: false,
+          reason: 'missing-kaminosSetCameraDebugPose',
+          camera,
+        };
+      }
+      return {
+        identity: 'kaminos-volume-capture-camera-replay-v0',
+        applied: true,
+        camera,
+        result: window.kaminosSetCameraDebugPose(camera),
+      };
+    })()`,
+    returnByValue: true,
+  });
+  return result.result.value;
+}
+
+async function forcePhaseFeatureCapture() {
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: `(() => {
+      const checkbox = document.getElementById('volume-boundary-splat-feature-capture');
+      if (checkbox) {
+        checkbox.checked = true;
+        checkbox.dispatchEvent(new Event('input', { bubbles: true }));
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      const mode = document.getElementById('volume-boundary-splat-mode');
+      if (mode) {
+        mode.value = 'learned';
+        mode.dispatchEvent(new Event('input', { bubbles: true }));
+        mode.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (typeof readVolumeControls === 'function') {
+        window.__kaminosVolumePrototype?.setControls?.(readVolumeControls());
+      }
+      const state = window.__kaminosVolumePrototype?.debugState?.();
+      return {
+        identity: 'phase-corpus-feature-capture-replay-override-v0',
+        featureCaptureElementFound: Boolean(checkbox),
+        learnedModeElementFound: Boolean(mode),
+        boundarySplatFeatureCaptureRequested: state?.boundarySplatFeatureCaptureRequested ?? null,
+        boundarySplatFeatureCaptureEffective: state?.boundarySplatFeatureCaptureEffective ?? null,
+        boundarySplatMode: state?.boundarySplatMode ?? null,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  lastTrustworthyEvidence.featureCaptureOverride = result.result.value;
+  return result.result.value;
 }
 
 function defaultChromePath() {
@@ -371,6 +540,77 @@ async function captureFeatureFrames(requestedRoute) {
       rowCount: candidates.count,
       bytes: candidates.bytes,
       simStepCount: sample.simStepCount,
+      rendererIdentity: sample.boundarySplatRendererIdentity,
+      fallbackReason,
+    });
+  }
+  return captured;
+}
+
+async function captureLiveSampleFeatureFrames(requestedRoute) {
+  const captured = [];
+  const sameBrowserSessionId = `live-sample-${Date.now().toString(36)}`;
+  for (let frameIndex = 0; frameIndex < frames; frameIndex += 1) {
+    if (frameIndex > 0) await delay(liveSampleIntervalMs);
+    logProgress({ phase: 'live-sample-start', frameIndex, frames, liveSampleIntervalMs });
+    const result = await wsRequest('Runtime.evaluate', {
+      expression: `window.__kaminosVolumePrototype.controlledStepFrame({
+        advanceSim: false,
+        controlledStepFrameIndex: ${frameIndex},
+        renderScales: [1],
+        includeRgba: false,
+        compactSamples: false,
+        resumeRenderLoop: true
+      })`,
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    const frame = result.result.value;
+    if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
+      throw new Error(`live sample frame ${frameIndex} failed: ${JSON.stringify(frame)}`);
+    }
+    const sample = frame.scaleSet?.samples?.[0];
+    if (sample?.ok !== true) throw new Error(`live sample frame ${frameIndex} did not return a valid scale sample`);
+    const candidatePath = resolve(outDir, `frame-${String(frameIndex).padStart(3, '0')}.features.f32`);
+    const candidates = materializeFeatureCapture(sample.boundarySplatFeatureCapture, candidatePath);
+    const fallbackReason = sample.boundarySplatFallbackReason ?? null;
+    captured.push({
+      id: `frame-${frameIndex}`,
+      sequenceAuthority: 'live-running-sample-sequence-v0',
+      sameBrowserSessionId,
+      sameStateCaptureId: sample.sameStateCaptureId,
+      liveSampleFrameIndex: frameIndex,
+      liveSampleIntervalMs,
+      simStepCount: sample.simStepCount,
+      frameCount: sample.frameCount,
+      requestedRoute,
+      effectiveRoute: sample.effectiveRoute,
+      rendererIdentity: sample.boundarySplatRendererIdentity,
+      modelIdentity: sample.boundarySplatAttributeModelIdentity,
+      sourceAuthority: sample.boundarySplatSourceAuthority,
+      fallbackReason,
+      boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
+      boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
+      boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
+      boundarySplatCountAuthority: sample.boundarySplatCountAuthority,
+      candidates,
+    });
+    lastTrustworthyEvidence[`frame-${frameIndex}`] = {
+      sequenceAuthority: 'live-running-sample-sequence-v0',
+      rowCount: candidates.count,
+      simStepCount: sample.simStepCount,
+      frameCount: sample.frameCount,
+      rendererIdentity: sample.boundarySplatRendererIdentity,
+      fallbackReason,
+    };
+    logProgress({
+      phase: 'live-sample-captured',
+      frameIndex,
+      frames,
+      rowCount: candidates.count,
+      bytes: candidates.bytes,
+      simStepCount: sample.simStepCount,
+      frameCount: sample.frameCount,
       rendererIdentity: sample.boundarySplatRendererIdentity,
       fallbackReason,
     });
