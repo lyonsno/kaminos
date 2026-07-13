@@ -15,7 +15,8 @@ import numpy as np
 import torch
 
 
-SCHEMA = "kaminos.sam31-two-frame-tracker-meta-packet.v0"
+PROPAGATION_SCHEMA = "kaminos.sam31-two-frame-tracker-meta-packet.v0"
+MASK_CONDITIONED_SCHEMA = "kaminos.sam31-mask-conditioned-two-frame-tracker-meta-packet.v0"
 HF_REVISION = "daa63191845a41281374e725f4c9e51c7a824460"
 SOURCE_COMMIT = "5dd401d1c5c1d5c3eedff06d41b77af824517619"
 CHECKPOINT_SHA256 = "sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6"
@@ -30,6 +31,7 @@ def parse_args():
     parser.add_argument("--checkpoint", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--source-root", default=str(Path.home() / "dev/sam3"))
     parser.add_argument("--seed", type=int, default=3167)
+    parser.add_argument("--frame0-mode", choices=("propagation-decoder", "mask-conditioning"), default="propagation-decoder")
     return parser.parse_args()
 
 
@@ -156,6 +158,95 @@ def build_memory_proxy(encoder, state):
     )
 
 
+def build_interactive_mask_proxy(video_module, state):
+    prompt_encoder = video_module.PromptEncoder(
+        embed_dim=256,
+        image_embedding_size=(2, 2),
+        input_image_size=(8, 8),
+        mask_in_chans=16,
+    )
+    prompt_prefix = "tracker.model.interactive_sam_prompt_encoder."
+    prompt_encoder.load_state_dict(
+        {key.removeprefix(prompt_prefix): value for key, value in state.items() if key.startswith(prompt_prefix)},
+        strict=True,
+    )
+    interactive_decoder = video_module.MaskDecoder(
+        num_multimask_outputs=3,
+        transformer=video_module.TwoWayTransformer(
+            depth=2,
+            embedding_dim=256,
+            mlp_dim=2048,
+            num_heads=8,
+        ),
+        transformer_dim=256,
+        iou_head_depth=3,
+        iou_head_hidden_dim=256,
+        use_high_res_features=True,
+        iou_prediction_use_sigmoid=False,
+        pred_obj_scores=True,
+        pred_obj_scores_mlp=True,
+        use_multimask_token_for_obj_ptr=True,
+        dynamic_multimask_via_stability=True,
+        dynamic_multimask_stability_delta=0.05,
+        dynamic_multimask_stability_thresh=0.98,
+    )
+    decoder_prefix = "tracker.model.interactive_sam_mask_decoder."
+    interactive_decoder.load_state_dict(
+        {key.removeprefix(decoder_prefix): value for key, value in state.items() if key.startswith(decoder_prefix)},
+        strict=True,
+    )
+    mask_downsample = torch.nn.Conv2d(1, 1, kernel_size=4, stride=4)
+    downsample_prefix = "tracker.model.interactive_mask_downsample."
+    mask_downsample.load_state_dict(
+        {key.removeprefix(downsample_prefix): value for key, value in state.items() if key.startswith(downsample_prefix)},
+        strict=True,
+    )
+    pointer_projection = video_module.MLP(256, 256, 256, 3)
+    pointer_prefix = "tracker.model.interactive_obj_ptr_proj."
+    pointer_projection.load_state_dict(
+        {key.removeprefix(pointer_prefix): value for key, value in state.items() if key.startswith(pointer_prefix)},
+        strict=True,
+    )
+    no_object_projection = torch.nn.Linear(256, 256)
+    no_object_prefix = "tracker.model.no_obj_ptr_linear."
+    no_object_projection.load_state_dict(
+        {key.removeprefix(no_object_prefix): value for key, value in state.items() if key.startswith(no_object_prefix)},
+        strict=True,
+    )
+    for module in (prompt_encoder, interactive_decoder, mask_downsample, pointer_projection, no_object_projection):
+        module.eval()
+    proxy = types.SimpleNamespace(
+        hidden_dim=256,
+        sam_image_embedding_size=2,
+        image_size=8,
+        interactive_sam_prompt_encoder=prompt_encoder,
+        interactive_sam_mask_decoder=interactive_decoder,
+        interactive_mask_downsample=mask_downsample,
+        interactive_obj_ptr_proj=pointer_projection,
+        no_obj_ptr_linear=no_object_projection,
+        use_obj_ptrs_in_encoder=True,
+        pred_obj_scores=True,
+        object_score_logit_threshold=0.0,
+        use_no_obj_ptr=True,
+        use_linear_no_obj_ptr=True,
+        fixed_no_obj_ptr=True,
+        decode_mask_with_shared_tokens=False,
+        stability_score_attentuation=False,
+        _maybe_clone=lambda value: value.clone(),
+    )
+    proxy._forward_sam_heads = types.MethodType(video_module.VideoTrackingMultiplex._forward_sam_heads, proxy)
+    return proxy
+
+
+def create_binary_mask_fixture():
+    masks = torch.zeros((16, 1, 8, 8), dtype=torch.float32)
+    for object_index in range(7):
+        row = object_index % 4
+        column = (object_index * 3) % 4
+        masks[object_index, 0, row : row + 4, column : column + 4] = 1.0
+    return masks
+
+
 def decode_frame(decoder, pointer_projection, no_object_projection, image, position, high0, high1, extra):
     output = decoder(
         image_embeddings=image,
@@ -197,7 +288,7 @@ def write_failure_receipt(args, error: Exception):
         "schema": "kaminos.sam31-two-frame-tracker-meta-reference-receipt.v0",
         "failurePhase": FAILURE_PHASE,
         "error": f"{type(error).__name__}: {error}",
-        "requested": {"checkpoint": str(Path(args.checkpoint).resolve()), "sourceRoot": str(Path(args.source_root).resolve()), "seed": args.seed},
+        "requested": {"checkpoint": str(Path(args.checkpoint).resolve()), "sourceRoot": str(Path(args.source_root).resolve()), "seed": args.seed, "frame0Mode": args.frame0_mode},
         "expected": {"modelRevision": HF_REVISION, "checkpointSha256": CHECKPOINT_SHA256, "sourceCommit": SOURCE_COMMIT},
         "lastTrustworthyEvidence": "No primary two-frame tracker packet was published.",
     }
@@ -231,6 +322,7 @@ def main():
     FAILURE_PHASE = "checkpoint-load"
     state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     decoder, pointer_projection, no_object_projection = decoder_tool.build_decoder(transformer_module, decoder_module, state)
+    interactive_mask_proxy = build_interactive_mask_proxy(video_module, state) if args.frame0_mode == "mask-conditioning" else None
     memory_encoder = build_memory_encoder(memory_classes, state)
     memory_proxy = build_memory_proxy(memory_encoder, state)
     official_attention = temporal_tool.build_official_encoder(temporal_decoder_module)
@@ -264,12 +356,31 @@ def main():
         "extra": random((1, 16, 256), 1.0),
     }
     with torch.inference_mode():
-        frame0 = decode_frame(decoder, pointer_projection, no_object_projection, **frame0_inputs)
-        frame0_memory_input_masks = torch.where(
-            frame0["appearing"][:, None, None, None],
-            frame0["selected_masks"],
-            NO_OBJ_SCORE,
-        )
+        if args.frame0_mode == "mask-conditioning":
+            frame0_binary_masks = create_binary_mask_fixture()
+            interactive_high_res_features = [frame0_inputs["high0"], frame0_inputs["high1"]]
+            frame0_outputs = video_module.VideoTrackingMultiplex._use_mask_as_output(
+                interactive_mask_proxy,
+                backbone_features=frame0_inputs["image"],
+                high_res_features=interactive_high_res_features,
+                mask_inputs=frame0_binary_masks,
+                multiplex_state=multiplex_state,
+                objects_in_mask=list(range(16)),
+            )
+            frame0 = {
+                "scores": frame0_outputs["object_score_logits"],
+                "pointers": frame0_outputs["obj_ptr"],
+                "appearing": frame0_outputs["object_score_logits"][:, 0] > 0.0,
+            }
+            frame0_memory_input_masks = frame0_outputs["high_res_masks"]
+        else:
+            frame0_binary_masks = None
+            frame0 = decode_frame(decoder, pointer_projection, no_object_projection, **frame0_inputs)
+            frame0_memory_input_masks = torch.where(
+                frame0["appearing"][:, None, None, None],
+                frame0["selected_masks"],
+                NO_OBJ_SCORE,
+            )
         frame0_tokens = frame0_inputs["image"].flatten(2).permute(2, 0, 1)
         frame0_memory, frame0_memory_pos = video_module.VideoTrackingMultiplex._encode_new_memory(
             memory_proxy,
@@ -333,7 +444,6 @@ def main():
         "frame-0-high-resolution-s0": frame0_inputs["high0"],
         "frame-0-high-resolution-s1": frame0_inputs["high1"],
         "frame-0-extra-per-object-embedding": frame0_inputs["extra"],
-        "frame-0-selected-masks": frame0["selected_masks"],
         "frame-0-memory-input-masks": frame0_memory_input_masks,
         "frame-0-object-scores": frame0["scores"],
         "frame-0-object-pointers": frame0["pointers"],
@@ -353,6 +463,10 @@ def main():
         "frame-1-object-scores": frame1["scores"],
         "frame-1-object-pointers": frame1["pointers"],
     }
+    if args.frame0_mode == "mask-conditioning":
+        tensors["frame-0-binary-mask-inputs"] = frame0_binary_masks
+    else:
+        tensors["frame-0-selected-masks"] = frame0["selected_masks"]
     entries = []
     for role, tensor in tensors.items():
         file_name = f"{role}.f32.bin"
@@ -360,22 +474,29 @@ def main():
 
     appearing0 = int(frame0["appearing"].sum().item())
     appearing1 = int(frame1["appearing"].sum().item())
+    mask_conditioned = args.frame0_mode == "mask-conditioning"
     reference = {
         "model": {"id": "facebook/sam3.1", "revision": HF_REVISION, "checkpointFile": checkpoint_path.name, "sha256": checkpoint_sha},
         "source": {"repository": "facebookresearch/sam3", "root": str(source_root), "commit": source_commit, "workingTreeClean": True},
         "execution": {
             "kind": "pinned-official-two-frame-composed-method-and-module-execution",
             "decoderClass": "MultiplexMaskDecoder",
+            "maskConditioningMethod": "VideoTrackingMultiplex._use_mask_as_output" if mask_conditioned else None,
+            "interactivePromptEncoderClass": "PromptEncoder" if mask_conditioned else None,
+            "interactiveMaskDecoderClass": "MaskDecoder" if mask_conditioned else None,
             "memoryMethod": "VideoTrackingMultiplex._encode_new_memory",
             "temporalMethod": "VideoTrackingMultiplex._prepare_memory_conditioned_features",
             "attentionClass": "TransformerEncoderDecoupledCrossAttention",
         },
         "framework": {"name": "torch", "version": torch.__version__, "device": "cpu"},
     }
+    schema = MASK_CONDITIONED_SCHEMA if mask_conditioned else PROPAGATION_SCHEMA
+    mode = "official-meta-mask-conditioning-memory-attention-propagation-decoder" if mask_conditioned else "official-meta-two-frame-decoder-memory-attention-decoder"
+    boundary = "frame-0-mask-conditioning-to-memory-state-to-frame-1-conditioned-decoder" if mask_conditioned else "frame-0-decoder-to-memory-state-to-frame-1-conditioned-decoder"
     manifest = {
-        "schema": SCHEMA,
-        "mode": "official-meta-two-frame-decoder-memory-attention-decoder",
-        "boundary": "frame-0-decoder-to-memory-state-to-frame-1-conditioned-decoder",
+        "schema": schema,
+        "mode": mode,
+        "boundary": boundary,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "reference": reference,
         "fixture": {"seed": args.seed, "kind": "deterministic-two-frame-mixed-object-presence", "sourceFeaturesSynthetic": True},
@@ -384,17 +505,35 @@ def main():
         "plan": {"frameIndex": 1, "numFrames": 2, "conditioningFrameIndices": [0], "nonConditioningFrameIndices": [], "selectedConditioningFrameIndices": [0], "spatialFrameIndices": [0], "spatialTemporalPositionIndices": [5], "pointerFrameIndices": [0], "pointerRelativePositions": [1], "numMaskmem": 7, "maxConditioningFrames": 4, "maxObjectPointerFrames": 2, "memoryTemporalStride": 1, "useMaskmemTemporalPositionV2": True, "trackInReverse": False},
         "stateTransition": {
             "frame0Kind": "conditioning",
+            "frame0OriginKind": "mask-conditioning" if mask_conditioned else "propagation-decoder",
+            "maskOwner": "browser-webgpu" if mask_conditioned else "official-reference-bridge",
+            "pointerOwner": "official-reference-bridge",
             "frame1Kind": "non-conditioning",
             "conditioningObjects": list(range(16)),
             "frame0AppearingObjectCount": appearing0,
             "frame0AbsentObjectCount": 16 - appearing0,
-            "frame0SuppressedAbsentMaskCount": 16 - appearing0,
-            "noObjectMaskScore": NO_OBJ_SCORE,
+            "frame0SuppressedAbsentMaskCount": 0 if mask_conditioned else 16 - appearing0,
+            "noObjectMaskScore": None if mask_conditioned else NO_OBJ_SCORE,
             "frame1AppearingObjectCount": appearing1,
             "frame1AbsentObjectCount": 16 - appearing1,
         },
-        "claims": {"officialFrame0DecoderExecuted": True, "officialMemoryMethodExecuted": True, "officialTemporalMethodExecuted": True, "officialMemoryAttentionExecuted": True, "officialFrame1DecoderExecuted": True, "fullImageBackboneExecuted": False},
-        "tolerances": {"decoderMaxAbsDiff": 0.0015, "memoryMaxAbsDiff": 0.0008, "bankMaxAbsDiff": 0.0001, "conditionedMaxAbsDiff": 0.0001},
+        "claims": {
+            "officialFrame0DecoderExecuted": not mask_conditioned,
+            "officialMaskConditioningMethodExecuted": mask_conditioned,
+            "officialInteractiveSamHeadsExecuted": mask_conditioned,
+            "officialInteractivePromptEncoderExecuted": mask_conditioned,
+            "officialInteractiveMaskDecoderExecuted": mask_conditioned,
+            "checkpointBackedInteractivePointers": mask_conditioned,
+            "fullProductionInteractiveGeometryExecuted": False,
+            "effectiveInteractiveImageEmbeddingSize": [2, 2] if mask_conditioned else None,
+            "effectiveMaskInputSize": [8, 8] if mask_conditioned else None,
+            "officialMemoryMethodExecuted": True,
+            "officialTemporalMethodExecuted": True,
+            "officialMemoryAttentionExecuted": True,
+            "officialFrame1DecoderExecuted": True,
+            "fullImageBackboneExecuted": False,
+        },
+        "tolerances": {"decoderMaxAbsDiff": 0.0015, "maskConditioningMaxAbsDiff": 0.0, "memoryMaxAbsDiff": 0.0008, "bankMaxAbsDiff": 0.0001, "conditionedMaxAbsDiff": 0.0001},
         "tensors": entries,
     }
     manifest_path = out_dir / "tensor-manifest.json"
@@ -402,7 +541,7 @@ def main():
     manifest_text = json.dumps(manifest, indent=2)
     receipt = {
         "ok": True,
-        "schema": "kaminos.sam31-two-frame-tracker-meta-reference-receipt.v0",
+        "schema": "kaminos.sam31-mask-conditioned-two-frame-tracker-meta-reference-receipt.v0" if mask_conditioned else "kaminos.sam31-two-frame-tracker-meta-reference-receipt.v0",
         "boundary": manifest["boundary"],
         "reference": reference,
         "shape": manifest["shape"],

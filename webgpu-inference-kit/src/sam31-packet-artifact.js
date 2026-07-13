@@ -163,6 +163,34 @@ export const SAM31_TWO_FRAME_PACKET_AUTHORITIES = Object.freeze({
     shape: TWO_FRAME_EPISODE_SHAPE,
     plan: TWO_FRAME_EPISODE_PLAN,
   }),
+  conditionedEpisode: Object.freeze({
+    manifestSchema: 'kaminos.sam31-mask-conditioned-two-frame-tracker-meta-packet.v0',
+    receiptSchema: 'kaminos.sam31-mask-conditioned-two-frame-tracker-meta-reference-receipt.v0',
+    boundary: 'frame-0-mask-conditioning-to-memory-state-to-frame-1-conditioned-decoder',
+    mode: 'official-meta-mask-conditioning-memory-attention-propagation-decoder',
+    shape: TWO_FRAME_EPISODE_SHAPE,
+    plan: TWO_FRAME_EPISODE_PLAN,
+    stateTransition: Object.freeze({
+      frame0OriginKind: 'mask-conditioning',
+      maskOwner: 'browser-webgpu',
+      pointerOwner: 'official-reference-bridge',
+    }),
+    claims: Object.freeze({
+      officialFrame0DecoderExecuted: false,
+      officialMaskConditioningMethodExecuted: true,
+      officialInteractiveSamHeadsExecuted: true,
+      officialInteractivePromptEncoderExecuted: true,
+      officialInteractiveMaskDecoderExecuted: true,
+      checkpointBackedInteractivePointers: true,
+      fullProductionInteractiveGeometryExecuted: false,
+      effectiveInteractiveImageEmbeddingSize: Object.freeze([2, 2]),
+      effectiveMaskInputSize: Object.freeze([8, 8]),
+      officialMemoryMethodExecuted: true,
+      officialTemporalMethodExecuted: true,
+      officialMemoryAttentionExecuted: true,
+      officialFrame1DecoderExecuted: true,
+    }),
+  }),
 });
 
 function assertEqual(actual, expected, field) {
@@ -233,52 +261,65 @@ function assertNamedJsonEqual(name, actual, expected, field) {
   }
 }
 
-export async function verifySam31TwoFramePacketAuthority({ name, manifestText, manifest, referenceReceipt, expectedManifestSha256 }) {
-  const expected = SAM31_TWO_FRAME_PACKET_AUTHORITIES[name];
-  if (!expected) throw new Error(`unknown two-frame packet authority name: ${name}`);
-  if (typeof manifestText !== 'string' || manifestText.length === 0) throw new Error(`${name} packet manifest text is required`);
-  if (!manifest || typeof manifest !== 'object') throw new Error(`${name} packet manifest is required`);
-  if (!referenceReceipt || typeof referenceReceipt !== 'object') throw new Error(`${name} packet reference receipt is required`);
+export async function verifySam31TwoFramePacketAuthority({ name, authorityName = name, manifestText, manifest, referenceReceipt, expectedManifestSha256 }) {
+  const expected = SAM31_TWO_FRAME_PACKET_AUTHORITIES[authorityName];
+  if (!expected) throw new Error(`unknown two-frame packet authority name: ${authorityName}`);
+  if (typeof manifestText !== 'string' || manifestText.length === 0) throw new Error(`${authorityName} packet manifest text is required`);
+  if (!manifest || typeof manifest !== 'object') throw new Error(`${authorityName} packet manifest is required`);
+  if (!referenceReceipt || typeof referenceReceipt !== 'object') throw new Error(`${authorityName} packet reference receipt is required`);
   if (typeof expectedManifestSha256 !== 'string' || !expectedManifestSha256.startsWith('sha256:')) {
-    throw new Error(`${name} packet authority requires invocation-scoped expectedManifestSha256`);
+    throw new Error(`${authorityName} packet authority requires invocation-scoped expectedManifestSha256`);
   }
 
   const manifestDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(manifestText));
   const manifestSha256 = `sha256:${sha256Hex(new Uint8Array(manifestDigest))}`;
-  assertNamedEqual(name, manifestSha256, expectedManifestSha256, 'expectedManifestSha256');
-  assertNamedEqual(name, manifest.schema, expected.manifestSchema, 'manifest.schema');
-  assertNamedEqual(name, referenceReceipt.schema, expected.receiptSchema, 'referenceReceipt.schema');
-  assertNamedEqual(name, referenceReceipt.ok, true, 'referenceReceipt.ok');
-  assertNamedEqual(name, manifest.boundary, expected.boundary, 'manifest.boundary');
-  assertNamedEqual(name, referenceReceipt.boundary, expected.boundary, 'referenceReceipt.boundary');
-  assertNamedEqual(name, referenceReceipt.outputs?.tensorManifestSha256, manifestSha256, 'referenceReceipt.outputs.tensorManifestSha256');
+  assertNamedEqual(authorityName, manifestSha256, expectedManifestSha256, 'expectedManifestSha256');
+  assertNamedEqual(authorityName, manifest.schema, expected.manifestSchema, 'manifest.schema');
+  assertNamedEqual(authorityName, referenceReceipt.schema, expected.receiptSchema, 'referenceReceipt.schema');
+  assertNamedEqual(authorityName, referenceReceipt.ok, true, 'referenceReceipt.ok');
+  assertNamedEqual(authorityName, manifest.boundary, expected.boundary, 'manifest.boundary');
+  assertNamedEqual(authorityName, referenceReceipt.boundary, expected.boundary, 'referenceReceipt.boundary');
+  assertNamedEqual(authorityName, referenceReceipt.outputs?.tensorManifestSha256, manifestSha256, 'referenceReceipt.outputs.tensorManifestSha256');
+  if (expected.mode) assertNamedEqual(authorityName, manifest.mode, expected.mode, 'manifest.mode');
   if (expected.routeId) {
-    assertNamedEqual(name, manifest.routeId, expected.routeId, 'manifest.routeId');
-    assertNamedEqual(name, referenceReceipt.routeId, expected.routeId, 'referenceReceipt.routeId');
+    assertNamedEqual(authorityName, manifest.routeId, expected.routeId, 'manifest.routeId');
+    assertNamedEqual(authorityName, referenceReceipt.routeId, expected.routeId, 'referenceReceipt.routeId');
   }
   if (expected.routeIds) {
-    assertNamedJsonEqual(name, manifest.routeIds, expected.routeIds, 'manifest.routeIds');
-    assertNamedJsonEqual(name, referenceReceipt.routeIds, expected.routeIds, 'referenceReceipt.routeIds');
+    assertNamedJsonEqual(authorityName, manifest.routeIds, expected.routeIds, 'manifest.routeIds');
+    assertNamedJsonEqual(authorityName, referenceReceipt.routeIds, expected.routeIds, 'referenceReceipt.routeIds');
   }
 
   for (const [surface, value] of [['manifest', manifest.reference], ['referenceReceipt', referenceReceipt.reference]]) {
-    assertNamedEqual(name, value?.model?.id, TWO_FRAME_REFERENCE.modelId, `${surface}.model.id`);
-    assertNamedEqual(name, value?.model?.revision, TWO_FRAME_REFERENCE.modelRevision, `${surface}.model.revision`);
-    assertNamedEqual(name, value?.model?.sha256, TWO_FRAME_REFERENCE.checkpointSha256, `${surface}.model.sha256`);
-    assertNamedEqual(name, value?.source?.repository, TWO_FRAME_REFERENCE.sourceRepository, `${surface}.source.repository`);
-    assertNamedEqual(name, value?.source?.commit, TWO_FRAME_REFERENCE.sourceCommit, `${surface}.source.commit`);
-    assertNamedEqual(name, value?.source?.workingTreeClean, true, `${surface}.source.workingTreeClean`);
+    assertNamedEqual(authorityName, value?.model?.id, TWO_FRAME_REFERENCE.modelId, `${surface}.model.id`);
+    assertNamedEqual(authorityName, value?.model?.revision, TWO_FRAME_REFERENCE.modelRevision, `${surface}.model.revision`);
+    assertNamedEqual(authorityName, value?.model?.sha256, TWO_FRAME_REFERENCE.checkpointSha256, `${surface}.model.sha256`);
+    assertNamedEqual(authorityName, value?.source?.repository, TWO_FRAME_REFERENCE.sourceRepository, `${surface}.source.repository`);
+    assertNamedEqual(authorityName, value?.source?.commit, TWO_FRAME_REFERENCE.sourceCommit, `${surface}.source.commit`);
+    assertNamedEqual(authorityName, value?.source?.workingTreeClean, true, `${surface}.source.workingTreeClean`);
   }
-  assertNamedJsonEqual(name, referenceReceipt.reference, manifest.reference, 'referenceReceipt.reference');
-  assertNamedJsonEqual(name, referenceReceipt.shape, manifest.shape, 'referenceReceipt.shape');
-  assertNamedJsonEqual(name, referenceReceipt.plan, manifest.plan, 'referenceReceipt.plan');
-  assertNamedJsonEqual(name, referenceReceipt.checkpointAudit, manifest.checkpointAudit, 'referenceReceipt.checkpointAudit');
-  if (expected.shape) assertNamedJsonEqual(name, manifest.shape, expected.shape, 'manifest.shape');
-  if (expected.plan) assertNamedJsonEqual(name, manifest.plan, expected.plan, 'manifest.plan');
+  assertNamedJsonEqual(authorityName, referenceReceipt.reference, manifest.reference, 'referenceReceipt.reference');
+  assertNamedJsonEqual(authorityName, referenceReceipt.shape, manifest.shape, 'referenceReceipt.shape');
+  assertNamedJsonEqual(authorityName, referenceReceipt.plan, manifest.plan, 'referenceReceipt.plan');
+  assertNamedJsonEqual(authorityName, referenceReceipt.checkpointAudit, manifest.checkpointAudit, 'referenceReceipt.checkpointAudit');
+  if (expected.shape) assertNamedJsonEqual(authorityName, manifest.shape, expected.shape, 'manifest.shape');
+  if (expected.plan) assertNamedJsonEqual(authorityName, manifest.plan, expected.plan, 'manifest.plan');
+  if (expected.stateTransition) {
+    assertNamedJsonEqual(authorityName, referenceReceipt.stateTransition, manifest.stateTransition, 'referenceReceipt.stateTransition');
+    for (const [field, value] of Object.entries(expected.stateTransition)) {
+      assertNamedEqual(authorityName, manifest.stateTransition?.[field], value, `manifest.stateTransition.${field}`);
+    }
+  }
+  if (expected.claims) {
+    for (const [field, value] of Object.entries(expected.claims)) {
+      assertNamedJsonEqual(authorityName, manifest.claims?.[field], value, `manifest.claims.${field}`);
+    }
+  }
 
   return {
     passed: true,
-    name,
+    name: authorityName,
+    packetName: name,
     manifestSha256,
     expectedManifestSha256,
     manifestSchema: manifest.schema,

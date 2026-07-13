@@ -9,6 +9,11 @@ assert.equal(
   'node tools/sam31-two-frame-tracker-browser-parity-smoke.mjs',
   'the two-frame decoder-memory-attention-decoder episode must be directly runnable',
 );
+assert.equal(
+  packageJson.scripts['test:live:sam31-mask-conditioned-tracker-webgpu'],
+  'node tools/sam31-two-frame-tracker-browser-parity-smoke.mjs --episode-mode mask-conditioning',
+  'the browser-native mask-conditioned transaction must be directly runnable',
+);
 
 const exporter = readFileSync(new URL('tools/sam31-two-frame-tracker-meta-packet.py', root), 'utf8');
 for (const token of [
@@ -31,11 +36,22 @@ const browser = readFileSync(new URL('smokes/sam31-two-frame-tracker-parity.js',
 for (const token of [
   'runSam31MultiplexMaskDecoderPhaseProgramRoute',
   'runSam31MemoryEncoderPhaseProgramRoute',
+  'runSam31MaskConditioningPhaseProgramRoute',
+  "params.get('episodeMode')",
+  'SAM3.1 mask conditioning → memory → attention → decoder',
+  'conditionedEpisode',
+  'frame0MaskConditioningResult.receipt',
+  'maskReceipt:',
+  "'interactive-mask-conditioning-object-pointer'",
+  'browserNativeMaskConditioning',
+  'pointerDigestPassed',
   'runSam31TemporalMemoryBankPhaseProgramRoute',
   'runSam31MemoryAttentionPhaseProgramRoute',
   'createSam31TrackerState',
   'insertSam31TrackerFrame',
   'prepareSam31TrackerTemporalInputs',
+  "kind: 'mask-conditioning'",
+  "pointerOwner: 'official-reference-bridge'",
   'frame0DecoderResult.receipt',
   'frame0MemoryResult.receipt',
   'suppressAbsentMasks',

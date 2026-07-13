@@ -319,6 +319,14 @@ export {
 } from './sam31-tracker-state.js';
 
 export {
+  SAM31_MASK_CONDITIONING_PHASE_PROGRAM_ROUTE_ID,
+  createSam31MaskConditioningPhaseProgramCpuOracle,
+  createSam31MaskConditioningPhaseProgramRouteDefinition,
+  createSam31MaskConditioningPhaseProgramRouteReceipt,
+  runSam31MaskConditioningPhaseProgramRoute,
+} from './sam31-mask-conditioning-phase-program.js';
+
+export {
   SAM31_MULTIPLEX_MASK_DECODER_PHASE_PROGRAM_ROUTE_ID,
   createSam31MultiplexMaskDecoderPhaseProgramCpuOracle,
   createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition,

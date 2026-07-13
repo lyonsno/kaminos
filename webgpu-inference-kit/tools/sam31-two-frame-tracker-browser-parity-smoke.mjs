@@ -18,6 +18,9 @@ const serverPort = Number(args.get('--server-port') || 18576);
 const timeoutMs = Number(args.get('--timeout-ms') || 300000);
 const reusePacket = args.get('--reuse-packet') === '1';
 const verifyOnly = args.get('--verify-only') === '1';
+const episodeMode = args.get('--episode-mode') || 'propagation-decoder';
+if (!['propagation-decoder', 'mask-conditioning'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
+const episodeAuthorityName = episodeMode === 'mask-conditioning' ? 'conditionedEpisode' : 'episode';
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const python = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
 const userDataDir = mkdtempSync(join(tmpdir(), `kaminos-sam31-two-frame-chrome-${process.pid}-`));
@@ -56,6 +59,7 @@ function writeReport(extra = {}) {
     url,
     packetDir,
     packetSource: reusePacket ? 'caller-provided-existing' : 'generated',
+    episodeMode,
     packetTools,
     packetAuthority,
     browserPacketAuthority: lastState?.packetAuthority || null,
@@ -99,7 +103,14 @@ async function verifyPacketAuthority() {
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'));
     const expectedDigest = expectedManifestSha256[name] || (!reusePacket ? receipt.outputs?.tensorManifestSha256 : null);
     if (reusePacket && !expectedDigest) throw new Error(`${name} reused packet requires --expected-${name}-manifest-sha256`);
-    packets[name] = await verifySam31TwoFramePacketAuthority({ name, manifestText, manifest, referenceReceipt: receipt, expectedManifestSha256: expectedDigest });
+    packets[name] = await verifySam31TwoFramePacketAuthority({
+      name,
+      authorityName: name === 'episode' ? episodeAuthorityName : name,
+      manifestText,
+      manifest,
+      referenceReceipt: receipt,
+      expectedManifestSha256: expectedDigest,
+    });
     expectedManifestSha256[name] = packets[name].manifestSha256;
     verifiedPackets.push(name);
   }
@@ -115,7 +126,9 @@ function generatePackets() {
       continue;
     }
     mkdirSync(outDir, { recursive: true });
-    const result = spawnSync(python, [resolve(root, 'tools', tool), '--out-dir', outDir], { cwd: root, encoding: 'utf8', timeout: 240000 });
+    const toolArgs = [resolve(root, 'tools', tool), '--out-dir', outDir];
+    if (name === 'episode') toolArgs.push('--frame0-mode', episodeMode);
+    const result = spawnSync(python, toolArgs, { cwd: root, encoding: 'utf8', timeout: 240000 });
     if (result.status !== 0) throw new Error(`${name} official packet generation failed: ${result.stderr || result.stdout}`);
   }
 }
@@ -182,7 +195,7 @@ async function main() {
       process.stdout.write(`${JSON.stringify({ ok: true, reportPath, packetAuthority: value.packetAuthority }, null, 2)}\n`);
       return;
     }
-    const browserParams = new URLSearchParams({ packetSource: reusePacket ? 'caller-provided-existing' : 'generated' });
+    const browserParams = new URLSearchParams({ packetSource: reusePacket ? 'caller-provided-existing' : 'generated', episodeMode });
     for (const name of Object.keys(packetTools)) browserParams.set(`expected-${name}-manifest-sha256`, expectedManifestSha256[name]);
     url = `${baseUrl}?${browserParams}`;
     phase = 'start_server'; await startServer();

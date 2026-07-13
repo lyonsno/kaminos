@@ -21,10 +21,23 @@ const specs = {
   memory: { manifestSchema: 'kaminos.sam31-propagation-memory-meta-packet.v0', receiptSchema: 'kaminos.sam31-propagation-memory-meta-reference-receipt.v0', boundary: 'sam31-official-tri-neck-to-multiplex-memory-encoder', manifestExtra: { routeIds: ['sam3.1.propagation-neck.phase-program.webgpu-local.v0', 'sam3.1.memory-encoder.phase-program.webgpu-local.v0'], shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.memory.shape }, receiptExtra: { routeIds: ['sam3.1.propagation-neck.phase-program.webgpu-local.v0', 'sam3.1.memory-encoder.phase-program.webgpu-local.v0'], shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.memory.shape } },
   temporal: { manifestSchema: 'kaminos.sam31-temporal-memory-bank-meta-packet.v0', receiptSchema: 'kaminos.sam31-temporal-memory-bank-meta-reference-receipt.v0', boundary: 'sam31-video-output-dictionary-to-temporal-bank-to-four-layer-memory-attention', manifestExtra: { routeId: 'sam3.1.temporal-memory-bank.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.temporal.shape, plan: SAM31_TWO_FRAME_PACKET_AUTHORITIES.temporal.plan }, receiptExtra: { routeId: 'sam3.1.temporal-memory-bank.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.temporal.shape, plan: SAM31_TWO_FRAME_PACKET_AUTHORITIES.temporal.plan } },
   episode: { manifestSchema: 'kaminos.sam31-two-frame-tracker-meta-packet.v0', receiptSchema: 'kaminos.sam31-two-frame-tracker-meta-reference-receipt.v0', boundary: 'frame-0-decoder-to-memory-state-to-frame-1-conditioned-decoder', manifestExtra: { shape: episodeShape, plan: episodePlan }, receiptExtra: { shape: episodeShape, plan: episodePlan } },
+  conditionedEpisode: {
+    manifestSchema: 'kaminos.sam31-mask-conditioned-two-frame-tracker-meta-packet.v0',
+    receiptSchema: 'kaminos.sam31-mask-conditioned-two-frame-tracker-meta-reference-receipt.v0',
+    boundary: 'frame-0-mask-conditioning-to-memory-state-to-frame-1-conditioned-decoder',
+    manifestExtra: {
+      mode: 'official-meta-mask-conditioning-memory-attention-propagation-decoder',
+      shape: episodeShape,
+      plan: episodePlan,
+      stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' },
+      claims: { officialFrame0DecoderExecuted: false, officialMaskConditioningMethodExecuted: true, officialInteractiveSamHeadsExecuted: true, officialInteractivePromptEncoderExecuted: true, officialInteractiveMaskDecoderExecuted: true, checkpointBackedInteractivePointers: true, fullProductionInteractiveGeometryExecuted: false, effectiveInteractiveImageEmbeddingSize: [2, 2], effectiveMaskInputSize: [8, 8], officialMemoryMethodExecuted: true, officialTemporalMethodExecuted: true, officialMemoryAttentionExecuted: true, officialFrame1DecoderExecuted: true },
+    },
+    receiptExtra: { shape: episodeShape, plan: episodePlan, stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' } },
+  },
 };
 
-async function writePacket(name, { reference = pinnedReference, manifestSchema = null, overrides = {} } = {}) {
-  const spec = specs[name];
+async function writePacket(name, { reference = pinnedReference, manifestSchema = null, overrides = {}, authorityName = name } = {}) {
+  const spec = specs[authorityName];
   const directory = join(packetDir, name);
   await mkdir(directory, { recursive: true });
   const manifestText = `${JSON.stringify({ schema: manifestSchema || spec.manifestSchema, boundary: spec.boundary, reference, ...spec.manifestExtra, ...overrides }, null, 2)}\n`;
@@ -37,12 +50,13 @@ async function writePacket(name, { reference = pinnedReference, manifestSchema =
 const digests = {};
 for (const name of ['decoder', 'memory', 'temporal', 'episode']) digests[name] = await writePacket(name);
 
-function verifyOnly(report, expected = digests) {
+function verifyOnly(report, expected = digests, episodeMode = 'propagation-decoder') {
   return spawnSync(process.execPath, [driver.pathname,
     '--packet-dir', packetDir,
     '--report', report,
     '--reuse-packet', '1',
     '--verify-only', '1',
+    '--episode-mode', episodeMode,
     '--expected-decoder-manifest-sha256', expected.decoder,
     '--expected-memory-manifest-sha256', expected.memory,
     '--expected-temporal-manifest-sha256', expected.temporal,
@@ -60,6 +74,23 @@ assert.equal(validReport.ok, true);
 assert.equal(validReport.packetAuthority.passed, true);
 assert.deepEqual(validReport.packetAuthority.verifiedPackets, ['decoder', 'memory', 'temporal', 'episode']);
 assert.equal(validReport.primary_output_written, false, 'authority-only verification must not pretend to write browser evidence');
+
+const conditionedDigest = await writePacket('episode', { authorityName: 'conditionedEpisode' });
+const conditionedAsPropagationReportPath = join(packetDir, 'conditioned-as-propagation-report.json');
+const conditionedAsPropagation = verifyOnly(conditionedAsPropagationReportPath, { ...digests, episode: conditionedDigest });
+assert.notEqual(conditionedAsPropagation.status, 0, 'a conditioned packet must not select conditioned authority when propagation was requested');
+assert.match(JSON.parse(await readFile(conditionedAsPropagationReportPath, 'utf8')).error, /episode.*manifest\.schema/);
+const conditionedReportPath = join(packetDir, 'conditioned-report.json');
+const conditioned = verifyOnly(conditionedReportPath, { ...digests, episode: conditionedDigest }, 'mask-conditioning');
+assert.equal(conditioned.status, 0, conditioned.stderr || conditioned.stdout);
+const conditionedReport = JSON.parse(await readFile(conditionedReportPath, 'utf8'));
+assert.equal(conditionedReport.packetAuthority.packets.episode.name, 'conditionedEpisode');
+assert.equal(conditionedReport.episodeMode, 'mask-conditioning');
+digests.episode = await writePacket('episode');
+const propagationAsConditionedReportPath = join(packetDir, 'propagation-as-conditioned-report.json');
+const propagationAsConditioned = verifyOnly(propagationAsConditionedReportPath, digests, 'mask-conditioning');
+assert.notEqual(propagationAsConditioned.status, 0, 'a propagation packet must not select legacy authority when mask conditioning was requested');
+assert.match(JSON.parse(await readFile(propagationAsConditionedReportPath, 'utf8')).error, /conditionedEpisode.*manifest\.schema/);
 
 await writeFile(join(packetDir, 'memory', 'tensor-manifest.json'), '{"tampered":true}\n');
 const tamperedReportPath = join(packetDir, 'tampered-report.json');
