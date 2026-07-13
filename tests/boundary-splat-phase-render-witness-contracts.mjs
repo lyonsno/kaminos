@@ -203,7 +203,7 @@ try {
     const features = new Float32Array(3 * 16);
     const splats = new Float32Array(3 * 12);
     const positions = stablePositions.map(position => [...position]);
-    if (frameIndex === 0 || frameIndex === 6) positions[2] = birthPosition;
+    if (frameIndex === 0 || frameIndex === 5 || frameIndex === 6) positions[2] = birthPosition;
     for (let row = 0; row < 3; row += 1) {
       const occupancyBias = positions[row][0] === birthPosition[0] ? 0.45 : 0;
       for (let feature = 0; feature < 16; feature += 1) {
@@ -233,7 +233,7 @@ try {
     temporalAlignment: {
       ...manifest.temporalAlignment,
       pairs: offsets.map(offset => {
-        const churn = Math.abs(offset) === 3;
+        const churn = Math.abs(offset) === 3 || offset === 2;
         return {
           sourceFrameId: 'spatial-frame-3',
           targetFrameId: `spatial-frame-${3 + offset}`,
@@ -271,6 +271,34 @@ try {
   assert.ok(
     spatialReport.pixelMetrics.phasePredictionToExactMse <= spatialReport.baselines.spatialPriorInterpolation.pixelMse,
     'spatial occupancy model should beat the interpolation/prior baseline on the birth fixture',
+  );
+
+  const localGridReportPath = join(root, 'local-grid-render-report.json');
+  const localGridReport = await writeBoundarySplatPhaseRenderWitness(manifestPath, {
+    model: modelPath,
+    offset: 3,
+    outDir: root,
+    report: localGridReportPath,
+    width: 96,
+    height: 96,
+    phaseModelFamily: 'local-grid-occupancy-classifier-v0',
+  });
+  assert.equal(localGridReport.phaseModel.family, 'local-grid-occupancy-classifier-v0');
+  assert.equal(localGridReport.phaseModel.occupancy.authority, 'calibrated-local-grid-logistic-occupancy-classifier-v0');
+  assert.equal(localGridReport.phaseModel.occupancy.calibration.authority, 'training-pair-precision-recall-threshold-calibration-v0');
+  assert.ok(localGridReport.phaseModel.occupancy.calibration.threshold > 0, 'classifier threshold must be learned from calibration, not left blank');
+  assert.ok(localGridReport.phaseModel.occupancy.calibration.birth.precision > 0, 'classifier must report birth-specific calibration for synthesized-site opacity');
+  assert.equal(localGridReport.phaseModel.localGrid.authority, 'world-position-neighborhood-source-context-v0');
+  assert.ok(localGridReport.phaseModel.localGrid.neighborCount > 0, 'classifier must consume local-grid neighborhood context');
+  assert.equal(localGridReport.alignment.birthSynthesis, 'local-grid-classifier-training-site-synthesis-v0');
+  assert.equal(localGridReport.metrics.occupancyPrecisionRecall.authority, 'held-out-site-occupancy-pr-v0');
+  assert.equal(localGridReport.metrics.birthDeathPrecisionRecall.authority, 'held-out-birth-death-pr-v0');
+  assert.ok(localGridReport.metrics.birthDeathPrecisionRecall.birth.recall > 0, 'classifier fixture must recover a held-out target-only birth');
+  assert.equal(localGridReport.baselines.advectionPrior.authority, 'zero-velocity-world-site-advection-baseline-v0');
+  assert.equal(localGridReport.renders.blocks.join(','), 'identity,spatialPriorInterpolation,advectionPrior,phasePrediction,exactTarget');
+  assert.ok(
+    localGridReport.pixelMetrics.phasePredictionToExactMse <= localGridReport.baselines.spatialPriorInterpolation.pixelMse,
+    'local-grid classifier should beat the spatial-prior baseline on the birth fixture',
   );
 } finally {
   await rm(root, { recursive: true, force: true });
