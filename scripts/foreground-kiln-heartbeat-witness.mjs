@@ -11,6 +11,7 @@ const url = args.get('--url') || 'http://127.0.0.1:8095/?tab=generate';
 const out = resolve(args.get('--out') || '/tmp/kaminos-foreground-kiln-heartbeat.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const settleMs = Number(args.get('--settle-ms') || 5000);
+const firingId = `foreground-kiln-heartbeat-witness-${Date.now()}`;
 const chromePath = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const sharpRepo = process.env.KAMINOS_SHARP_WEBGPU_REPO || '/Users/noahlyons/dev/sharp-webgpu';
 
@@ -59,19 +60,25 @@ try {
   await page.waitForFunction(() => window.kaminosSharpBreathingRoomKilnFireDebug?.begin, { timeout: 30000 });
 
   phase = 'starting-fire';
-  await page.evaluate(async () => {
+  await page.evaluate(async exactFiringId => {
     await window.kaminosSharpBreathingRoomKilnFireDebug.begin({
       profileId: 'cooperative-spn-gaussian',
       pipelineId: 'sharp-image-to-splat-live-v0',
       source: { source: 'witness://foreground-kiln-heartbeat', label: 'Foreground heartbeat witness' },
+      firingId: exactFiringId,
+      requireSharpDutyCorrelation: false,
     });
-  });
+  }, firingId);
 
   phase = 'recording-foreground';
   await new Promise(resolveDelay => setTimeout(resolveDelay, settleMs));
   lastTrustworthyEvidence = await page.evaluate(() => window.kaminosSharpBreathingRoomKilnFireDebug.state());
   if (lastTrustworthyEvidence?.fire?.phase !== 'burning') throw new Error('kiln fire did not enter burning phase');
   if (lastTrustworthyEvidence?.volume?.active !== true) throw new Error('live volume route is not active');
+  if (lastTrustworthyEvidence?.fire?.fireEpisodeHooks?.firingId !== firingId
+    || lastTrustworthyEvidence?.fire?.fireEpisodeHooks?.status !== 'recording') {
+    throw new Error('renderer did not expose the requested recording fire episode');
+  }
   await page.screenshot({ path: out, fullPage: true });
   primaryOutputWritten = true;
 
@@ -87,8 +94,19 @@ try {
   });
   lastTrustworthyEvidence = await page.evaluate(() => window.kaminosSharpBreathingRoomKilnFireDebug.state());
   const foreground = lastTrustworthyEvidence?.fire?.foregroundHeartbeat || null;
+  const completedEpisode = lastTrustworthyEvidence?.fire?.fireEpisodeHooks || null;
   if (foreground?.schema !== 'kaminos.foreground-kiln-heartbeat.v0') throw new Error('foreground heartbeat report is missing');
   if (foreground.status !== 'verified') throw new Error(`foreground heartbeat is ${foreground.status}: ${(foreground.failures || []).join(', ')}`);
+  if (completedEpisode?.firingId !== firingId || completedEpisode?.status !== 'witness-complete') {
+    throw new Error('renderer did not close the requested fire episode');
+  }
+  if (foreground.effectiveFireEpisodeHooks?.firingId !== firingId) {
+    throw new Error('foreground heartbeat verified against a different fire episode');
+  }
+  if (lastTrustworthyEvidence?.fire?.volumeReleaseConfirmed !== true
+    || lastTrustworthyEvidence?.volume?.active === true) {
+    throw new Error('completed witness left the kiln volume active');
+  }
   if (foreground.effectiveFireBudget?.resolution !== 90
     || foreground.effectiveFireBudget?.renderScale !== 0.4
     || foreground.effectiveFireBudget?.adaptiveRays !== 1) {

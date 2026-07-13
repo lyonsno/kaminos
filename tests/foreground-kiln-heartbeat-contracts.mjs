@@ -62,9 +62,12 @@ const learnedHybridPresentation = {
 function episodeHarness({
   effectiveBudget = budget,
   routeIdentity = 'native-3d-compute-fluid-raymarch-v0',
+  prototypeIdentity = 'kaminos-volume-prototype-v0',
   firePresentation = null,
+  fireEpisodeHooks = null,
   expectedFirePresentation = null,
   firingId = null,
+  requireExactFireEpisode = false,
   requireSharpDutyCorrelation = false,
   timeOriginEpochMs = 1_700_000_000_000,
 } = {}) {
@@ -74,12 +77,14 @@ function episodeHarness({
   let volume = {
     active: true,
     routeIdentity,
+    prototypeIdentity,
     frameCount: 10,
     simStepCount: 20,
     resolution: effectiveBudget.resolution,
     renderScale: effectiveBudget.renderScale,
     adaptiveRaymarch: effectiveBudget.adaptiveRays,
     firePresentation,
+    fireEpisodeHooks,
   };
   const episode = createForegroundKilnHeartbeatEpisode({
     routeId: 'sharp-image-to-splat-live-v0',
@@ -89,6 +94,7 @@ function episodeHarness({
     requestedFireBudget: budget,
     expectedFirePresentation,
     firingId,
+    requireExactFireEpisode,
     requireSharpDutyCorrelation,
     timeOriginEpochMs,
     readVolumeState: () => ({ ...volume }),
@@ -206,6 +212,143 @@ assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.identity, '
 assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.firingId, 'firing-0713-a');
 assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.rawRafGapSamplesMs, undefined, 'per-frame presentation samples retain only the episode join, not repeated raw gap arrays');
 assert.deepEqual(hybridReport.firePresentationMismatchSamples, []);
+
+const exactFireEpisodeRecording = {
+  identity: 'foreground-kiln-fire-episode-hooks-v0',
+  firingId: 'firing-exact-0713',
+  generation: 4,
+  phase: 'recording',
+  status: 'recording',
+  evidenceSource: 'foreground-volume-render-loop-raf-sim-step-and-queue-proxy-v0',
+  authority: 'renderer-simulator-hooks-for-wake-foreground-heartbeat',
+  routeIdentity: {
+    effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+    prototypeIdentity: 'kaminos-volume-prototype-v0',
+  },
+  sampleCount: 2,
+  frameAdvanceCount: 2,
+  simStepAdvanceCount: 2,
+  startedAtMs: 90,
+  endedAtMs: null,
+};
+const exactFireEpisode = episodeHarness({
+  firingId: exactFireEpisodeRecording.firingId,
+  requireExactFireEpisode: true,
+  fireEpisodeHooks: exactFireEpisodeRecording,
+});
+exactFireEpisode.episode.start();
+exactFireEpisode.advance();
+exactFireEpisode.setVolume({
+  fireEpisodeHooks: {
+    ...exactFireEpisodeRecording,
+    phase: 'complete',
+    status: 'complete',
+    sampleCount: 3,
+    frameAdvanceCount: 3,
+    simStepAdvanceCount: 3,
+    endedAtMs: 116,
+  },
+});
+const exactFireEpisodeReport = exactFireEpisode.episode.finish({ phase: 'complete' });
+assert.equal(exactFireEpisodeReport.status, 'verified');
+assert.equal(exactFireEpisodeReport.effectiveFireEpisodeHooks.firingId, 'firing-exact-0713');
+assert.equal(exactFireEpisodeReport.effectiveFireEpisodeHooks.status, 'complete');
+assert.deepEqual(exactFireEpisodeReport.fireEpisodeMismatchSamples, []);
+
+const forgedSourceExactEpisode = episodeHarness({
+  firingId: 'firing-forged-source-0713',
+  requireExactFireEpisode: true,
+  fireEpisodeHooks: {
+    ...exactFireEpisodeRecording,
+    firingId: 'firing-forged-source-0713',
+    evidenceSource: 'fixture-or-stale-side-channel',
+  },
+});
+forgedSourceExactEpisode.episode.start();
+const forgedSourceReport = forgedSourceExactEpisode.episode.report({ phase: 'burning' });
+assert.equal(forgedSourceReport.status, 'invalid');
+assert.ok(forgedSourceReport.failures.includes('fire-episode-evidence-source-mismatch'));
+
+const forgedAuthorityExactEpisode = episodeHarness({
+  firingId: 'firing-forged-authority-0713',
+  requireExactFireEpisode: true,
+  fireEpisodeHooks: {
+    ...exactFireEpisodeRecording,
+    firingId: 'firing-forged-authority-0713',
+    authority: 'fixture-authority-not-renderer-simulator-hooks',
+  },
+});
+forgedAuthorityExactEpisode.episode.start();
+const forgedAuthorityReport = forgedAuthorityExactEpisode.episode.report({ phase: 'burning' });
+assert.equal(forgedAuthorityReport.status, 'invalid');
+assert.ok(forgedAuthorityReport.failures.includes('fire-episode-authority-mismatch'));
+
+const staleRouteExactEpisode = episodeHarness({
+  firingId: 'firing-stale-route-0713',
+  requireExactFireEpisode: true,
+  fireEpisodeHooks: {
+    ...exactFireEpisodeRecording,
+    firingId: 'firing-stale-route-0713',
+    routeIdentity: {
+      effectiveRoute: 'fixture-volume-v0',
+      prototypeIdentity: 'foreign-prototype',
+    },
+  },
+});
+staleRouteExactEpisode.episode.start();
+const staleRouteReport = staleRouteExactEpisode.episode.report({ phase: 'burning' });
+assert.equal(staleRouteReport.status, 'invalid');
+assert.ok(staleRouteReport.failures.includes('fire-episode-route-identity-mismatch'));
+
+const staleCompletedExactEpisode = episodeHarness({
+  firingId: 'firing-stale-window-0713',
+  requireExactFireEpisode: true,
+  fireEpisodeHooks: {
+    ...exactFireEpisodeRecording,
+    firingId: 'firing-stale-window-0713',
+  },
+});
+staleCompletedExactEpisode.episode.start();
+staleCompletedExactEpisode.advance();
+staleCompletedExactEpisode.setVolume({
+  fireEpisodeHooks: {
+    ...exactFireEpisodeRecording,
+    firingId: 'firing-stale-window-0713',
+    phase: 'complete',
+    status: 'complete',
+    frameAdvanceCount: 2,
+    simStepAdvanceCount: 2,
+    endedAtMs: 116,
+  },
+});
+staleCompletedExactEpisode.advance({ gapMs: 400 });
+const staleCompletedExactEpisodeReport = staleCompletedExactEpisode.episode.finish({ phase: 'complete' });
+assert.equal(staleCompletedExactEpisodeReport.status, 'invalid');
+assert.ok(staleCompletedExactEpisodeReport.failures.includes('fire-episode-window-ended-early'));
+
+const missingExactFireEpisode = episodeHarness({
+  firingId: 'firing-missing-0713',
+  requireExactFireEpisode: true,
+});
+missingExactFireEpisode.episode.start();
+missingExactFireEpisode.advance();
+const missingExactFireEpisodeReport = missingExactFireEpisode.episode.finish({ phase: 'complete' });
+assert.equal(missingExactFireEpisodeReport.status, 'invalid');
+assert.ok(missingExactFireEpisodeReport.failures.includes('fire-episode-hooks-missing'));
+
+const crossFiringExactEpisode = episodeHarness({
+  firingId: 'firing-requested-0713',
+  requireExactFireEpisode: true,
+  fireEpisodeHooks: {
+    ...exactFireEpisodeRecording,
+    firingId: 'firing-from-another-run',
+  },
+});
+crossFiringExactEpisode.episode.start();
+crossFiringExactEpisode.advance();
+const crossFiringExactEpisodeReport = crossFiringExactEpisode.episode.finish({ phase: 'complete' });
+assert.equal(crossFiringExactEpisodeReport.status, 'invalid');
+assert.ok(crossFiringExactEpisodeReport.failures.includes('fire-episode-firing-id-mismatch'));
 
 const hiddenFallback = episodeHarness({
   firePresentation: {
@@ -522,5 +665,25 @@ assert.match(witnessSource, /foreground\.status !== 'verified'/, 'browser witnes
 assert.match(witnessSource, /effectiveFireBudget\?\.resolution !== 90/, 'browser witness rejects a stale or substituted fire budget');
 assert.match(witnessSource, /primaryOutputWritten/, 'browser witness reports whether its visual output was actually written');
 assert.match(witnessSource, /lastTrustworthyEvidence/, 'browser witness preserves the last trustworthy state when failure precedes closure');
+assert.match(
+  witnessSource,
+  /kaminosSharpBreathingRoomKilnFireDebug\.begin\(\{[\s\S]*firingId:\s*exactFiringId,/,
+  'browser witness must open an exact renderer episode instead of exercising the rejected anonymous path',
+);
+assert.match(
+  witnessSource,
+  /fireEpisodeHooks\?\.firingId !== firingId/,
+  'browser witness rejects a renderer episode belonging to another firing',
+);
+assert.match(
+  witnessSource,
+  /volumeReleaseConfirmed !== true/,
+  'browser witness must fail when the completed firing leaves the volume active',
+);
+assert.match(
+  witnessSource,
+  /requireSharpDutyCorrelation:\s*false/,
+  'renderer lifecycle witness must not impersonate a real SHARP cross-page duty correlation smoke',
+);
 
 console.log('foreground kiln heartbeat contracts passed');

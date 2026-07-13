@@ -13349,10 +13349,17 @@ async function beginSharpBreathingRoomKilnFire({
     volumePrototype.setControls(readVolumeControls());
     frameVolumeCamera();
     await volumePrototype.setActive(true);
+    const fireEpisodeHooks = volumePrototype.beginFireEpisode({ firingId });
+    if (fireEpisodeHooks?.identity !== 'foreground-kiln-fire-episode-hooks-v0'
+      || fireEpisodeHooks?.firingId !== firingId
+      || fireEpisodeHooks?.status !== 'recording') {
+      throw new Error(`The renderer did not open the requested fire episode ${firingId || '<missing>'}.`);
+    }
     fireState.phase = 'burning';
     fireState.activatedByRun = !wasActive;
     fireState.previousActive = wasActive;
     fireState.volumeDebugState = volumePrototype.debugState();
+    fireState.fireEpisodeHooks = fireEpisodeHooks;
     fireState.requestedFireBudget = fireBudget.requestedFireBudget;
     fireState.effectiveFireBudget = fireBudgetFromVolumeState(fireState.volumeDebugState);
     activeForegroundKilnHeartbeat = createForegroundKilnHeartbeatEpisode({
@@ -13364,6 +13371,7 @@ async function beginSharpBreathingRoomKilnFire({
       expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
       requestedFireBudget: fireState.requestedFireBudget,
       readVolumeState: () => volumePrototype?.debugState?.() || null,
+      requireExactFireEpisode: true,
     });
     activeForegroundKilnHeartbeat.start();
     fireState.foregroundHeartbeat = activeForegroundKilnHeartbeat.report({ phase: 'burning' });
@@ -13424,6 +13432,14 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   fireState.phase = phase;
   fireState.finishedAt = new Date().toISOString();
   const foregroundHeartbeat = activeForegroundKilnHeartbeat;
+  try {
+    fireState.fireEpisodeHooks = volumePrototype.endFireEpisode({
+      firingId: fireState.firingId,
+      status: phase,
+    });
+  } catch (err) {
+    fireState.fireEpisodeCloseError = err?.message || String(err);
+  }
   fireState.foregroundHeartbeat = foregroundHeartbeat?.finish({
     phase,
     sharpHeartbeat: options.sharpHeartbeat || null,
@@ -13431,6 +13447,10 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
   activeForegroundKilnHeartbeat = null;
   if (options.runResult && typeof options.runResult === 'object') {
     options.runResult.foregroundKilnHeartbeat = fireState.foregroundHeartbeat;
+    options.runResult.fireEpisodeHooks = fireState.fireEpisodeHooks || null;
+    if (fireState.fireEpisodeCloseError) {
+      options.runResult.fireEpisodeCloseError = fireState.fireEpisodeCloseError;
+    }
   }
   if ((fireState.activatedByRun || forceInactive) && volumePrototype) {
     volumeBridge?.forceHidden?.('sharp-breathing-room-release');

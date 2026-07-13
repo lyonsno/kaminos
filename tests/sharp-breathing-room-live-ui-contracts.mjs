@@ -440,6 +440,11 @@ assert.match(
 );
 assert.match(
   index,
+  /await volumePrototype\.setActive\(true\);[\s\S]*volumePrototype\.beginFireEpisode\(\{\s*firingId\s*\}\)[\s\S]*createForegroundKilnHeartbeatEpisode\(/,
+  'The renderer must begin the exact requested fire episode after activation and before foreground sampling',
+);
+assert.match(
+  index,
   /const kilnFire = await beginSharpBreathingRoomKilnFire\([\s\S]*foregroundKilnStartAllowsPipeline\(kilnFire\)[\s\S]*kiln-fire-startup-failed/,
   'A failed or invalid kiln start must stop before SHARP can turn a cast into a complete firing receipt',
 );
@@ -447,6 +452,11 @@ assert.match(
   index,
   /foregroundHeartbeat\?\.finish\([\s\S]*sharpHeartbeat/,
   'Kiln-fire completion closes foreground evidence while preserving the separate SHARP heartbeat',
+);
+assert.match(
+  index,
+  /volumePrototype\.endFireEpisode\(\{\s*firingId:\s*fireState\.firingId,\s*status:\s*phase,?\s*\}\)[\s\S]*foregroundHeartbeat\?\.finish\([\s\S]*confirmSharpBreathingRoomKilnFireReleased/,
+  'Kiln completion must close the same exact fire episode before the final foreground sample and furnace release',
 );
 assert.match(
   index,

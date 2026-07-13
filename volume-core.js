@@ -4803,8 +4803,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     error: null,
   };
 
+  let volumeQueueCompletionSequence = 0;
   const fireEpisodeHooks = createFireEpisodeHooks({
     readCounters: () => ({ frameCount: state.frameCount, simStepCount: state.simStepCount }),
+    readQueueProxy: () => ({ completionSequence: volumeQueueCompletionSequence }),
     readRouteIdentity: () => ({
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
@@ -5101,6 +5103,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function recordVolumeQueueTiming(submittedAt) {
     const queueDoneMs = performance.now() - submittedAt;
+    volumeQueueCompletionSequence += 1;
     pushTimingSample('queueDone', queueDoneMs, 80);
     state.timing = {
       ...state.timing,
@@ -5115,6 +5118,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fireEpisodeHooks.recordQueueProxy({
       available: true,
       pending: queueProbePending,
+      completionSequence: volumeQueueCompletionSequence,
       samples: timingSamples.queueDone.length,
       lastDoneMs: queueDoneMs,
       p95DoneMs: state.timing.queueDoneP95Ms,
@@ -5134,6 +5138,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fireEpisodeHooks.recordQueueProxy({
       available: true,
       pending: true,
+      completionSequence: volumeQueueCompletionSequence,
       samples: timingSamples.queueDone.length,
       lastDoneMs: state.timing.queueDoneMs,
       p95DoneMs: state.timing.queueDoneP95Ms,
@@ -5152,6 +5157,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireEpisodeHooks.recordQueueProxy({
           available: false,
           pending: false,
+          completionSequence: volumeQueueCompletionSequence,
           samples: timingSamples.queueDone.length,
           error: state.timing.queueTimingError,
         });
@@ -5167,6 +5173,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireEpisodeHooks.recordQueueProxy({
           available: state.timing.queueTimingAvailable === true,
           pending: false,
+          completionSequence: volumeQueueCompletionSequence,
           samples: timingSamples.queueDone.length,
           lastDoneMs: state.timing.queueDoneMs,
           p95DoneMs: state.timing.queueDoneP95Ms,
