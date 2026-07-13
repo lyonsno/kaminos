@@ -66,6 +66,7 @@ for (const [pattern, message] of [
   [/Runtime\.exceptionThrown/, 'Witness must fail loud on browser runtime exceptions'],
   [/primaryOutputWritten/, 'Witness must report whether primary screenshot evidence was written'],
   [/lastTrustworthyEvidence/, 'Witness failures after inference must preserve the last trustworthy route and heartbeat evidence'],
+  [/async function evaluate\(ws, expression, timeoutMs[\s\S]*wsRequest\(ws, 'Runtime\.evaluate',[\s\S]*timeoutMs\)[\s\S]*state\.fullRoute = await evaluate\(ws,[\s\S]*fireTimeoutMs\)/, 'Post-firing evidence collection must inherit the explicit firing budget instead of timing out while the completed cast binds'],
 ]) {
   assert.match(witness, pattern, message);
 }

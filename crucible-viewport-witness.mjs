@@ -110,12 +110,12 @@ function wsRequest(ws, method, params = {}, timeoutMs = 20000) {
   });
 }
 
-async function evaluate(ws, expression) {
+async function evaluate(ws, expression, timeoutMs = 20000) {
   const result = await wsRequest(ws, 'Runtime.evaluate', {
     expression,
     awaitPromise: true,
     returnByValue: true,
-  });
+  }, timeoutMs);
   if (result.exceptionDetails) {
     throw new Error(`evaluation failed during ${phase}: ${result.exceptionDetails.text || 'exception'}`);
   }
@@ -393,7 +393,7 @@ try {
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
       };
-    })()`);
+    })()`, fireTimeoutMs);
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
     if (state.fullRoute.status !== 'complete') throw new Error(`Friendly firing failed: ${state.fullRoute.message || state.fullRoute.status}`);
     if (expectedSharpRevision && state.fullRoute.effectiveSharpRevision !== expectedSharpRevision) {
