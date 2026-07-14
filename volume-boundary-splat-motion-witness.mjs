@@ -20,7 +20,8 @@ const SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const SOURCE_AUTHORITY = SPLAT_SOURCE_AUTHORITY;
 const RAYMARCH_RENDERER = 'matched-raymarch';
 const INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
-const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-deterministic-gpu-hash-thinning-v0';
+const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-nested-permutation-prefix-v0';
+const BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY = 'boundary-splat-projected-area-nested-tiers-v0';
 const ALIGNED_BUDGET_PAIRS = [
   [6400, 1600],
   [6400, 3200],
@@ -678,7 +679,7 @@ async function captureAlignedBudgetPair(sequenceConfigs) {
     budgetPair: alignedBudgetPair,
     effectiveRoute: sequences[0]?.effectiveRoute || null,
     sequences,
-    claimBoundary: 'This paired witness measures deterministic hash budget loss and charged selector+raster cost on the same controlled live sequence; it does not certify smarter selectors or aesthetic closure.',
+    claimBoundary: 'This paired witness measures fixed-LOD nested-prefix budget loss and charged selector+raster cost on the same controlled live sequence, while preserving smart-selector allocation telemetry for later LOD mode comparisons; it does not certify aesthetic closure.',
   };
 }
 
@@ -761,6 +762,10 @@ async function captureAlignedBudgetSequence(config) {
         requested: capture.boundarySplatRequestedCandidateBudget,
         effective: capture.boundarySplatEffectiveCandidateBudget,
         selected: capture.boundarySplatSelectedCandidateCount,
+        lodMode: capture.boundarySplatLodMode,
+        adaptiveLodIdentity: capture.boundarySplatAdaptiveLodIdentity,
+        tierGroups: capture.boundarySplatTierGroups,
+        globalRenderedInstanceCount: capture.boundarySplatGlobalRenderedInstanceCount,
         selectorPlusRasterMs: capture.selectorPlusRasterMs,
         image: capture.image.path,
       })),
@@ -793,6 +798,7 @@ async function captureAlignedBudgetRendererReadback({
   boundarySplatCandidateBudget = null,
 }) {
   const controlOverrides = { boundarySplatMode };
+  if (boundarySplatMode !== 'off') controlOverrides.boundarySplatLodMode = 'fixed';
   if (boundarySplatCandidateBudget) controlOverrides.boundarySplatCandidateBudget = boundarySplatCandidateBudget;
   const readbackKey = `__kaminosAlignedBudgetReadback_${frameIndex}_${slug(requestedRenderer)}`;
   const readbackEval = await wsRequest('Runtime.evaluate', {
@@ -856,6 +862,11 @@ async function captureAlignedBudgetRendererReadback({
     boundarySplatRequestedInstanceCount: isSplat ? sample.boundarySplatRequestedInstanceCount ?? null : null,
     boundarySplatSourceCandidateCount: isSplat ? sample.boundarySplatSourceCandidateCount ?? null : null,
     boundarySplatSelectorPolicyIdentity: isSplat ? sample.boundarySplatSelectorPolicyIdentity ?? null : null,
+    boundarySplatLodMode: isSplat ? sample.boundarySplatLodMode ?? null : null,
+    boundarySplatAdaptiveLodIdentity: isSplat ? sample.boundarySplatAdaptiveLodIdentity ?? null : null,
+    boundarySplatRequestedTierGroups: isSplat ? sample.boundarySplatRequestedTierGroups ?? null : null,
+    boundarySplatTierGroups: isSplat ? sample.boundarySplatTierGroups ?? null : null,
+    boundarySplatGlobalRenderedInstanceCount: isSplat ? sample.boundarySplatGlobalRenderedInstanceCount ?? null : null,
     boundarySplatRequestedCandidateBudget: isSplat ? sample.boundarySplatRequestedCandidateBudget ?? null : null,
     boundarySplatEffectiveCandidateBudget: isSplat ? sample.boundarySplatEffectiveCandidateBudget ?? null : null,
     boundarySplatSelectedCandidateCount: isSplat ? sample.boundarySplatSelectedCandidateCount ?? null : null,
@@ -920,6 +931,11 @@ async function captureAlignedBudgetRendererReadback({
       boundarySplatEffectiveCandidateBudget: sample.boundarySplatEffectiveCandidateBudget,
       boundarySplatSelectedCandidateCount: sample.boundarySplatSelectedCandidateCount,
       boundarySplatSelectorPolicyIdentity: sample.boundarySplatSelectorPolicyIdentity,
+      boundarySplatLodMode: sample.boundarySplatLodMode,
+      boundarySplatAdaptiveLodIdentity: sample.boundarySplatAdaptiveLodIdentity,
+      boundarySplatRequestedTierGroups: sample.boundarySplatRequestedTierGroups,
+      boundarySplatTierGroups: sample.boundarySplatTierGroups,
+      boundarySplatGlobalRenderedInstanceCount: sample.boundarySplatGlobalRenderedInstanceCount,
       boundarySplatSelectorCostProfile: sample.boundarySplatSelectorCostProfile,
       boundarySplatGpuProfile: sample.boundarySplatGpuProfile,
       boundarySplatSourceCandidateCount: sample.boundarySplatSourceCandidateCount,
@@ -1069,6 +1085,11 @@ async function captureRenderer({
     boundarySplatRequestedInstanceCount: isSplat ? canvasCapture.boundarySplatRequestedInstanceCount ?? postState?.boundarySplatRequestedInstanceCount ?? null : null,
     boundarySplatSourceCandidateCount: isSplat ? canvasCapture.boundarySplatSourceCandidateCount ?? postState?.boundarySplatSourceCandidateCount ?? null : null,
     boundarySplatSelectorPolicyIdentity: isSplat ? canvasCapture.boundarySplatSelectorPolicyIdentity ?? postState?.boundarySplatSelectorPolicyIdentity ?? null : null,
+    boundarySplatLodMode: isSplat ? canvasCapture.boundarySplatLodMode ?? postState?.boundarySplatLodMode ?? null : null,
+    boundarySplatAdaptiveLodIdentity: isSplat ? canvasCapture.boundarySplatAdaptiveLodIdentity ?? postState?.boundarySplatAdaptiveLodIdentity ?? null : null,
+    boundarySplatRequestedTierGroups: isSplat ? canvasCapture.boundarySplatRequestedTierGroups ?? postState?.boundarySplatRequestedTierGroups ?? null : null,
+    boundarySplatTierGroups: isSplat ? canvasCapture.boundarySplatTierGroups ?? postState?.boundarySplatTierGroups ?? null : null,
+    boundarySplatGlobalRenderedInstanceCount: isSplat ? canvasCapture.boundarySplatGlobalRenderedInstanceCount ?? postState?.boundarySplatGlobalRenderedInstanceCount ?? null : null,
     boundarySplatRequestedCandidateBudget: isSplat ? canvasCapture.boundarySplatRequestedCandidateBudget ?? postState?.boundarySplatRequestedCandidateBudget ?? null : null,
     boundarySplatEffectiveCandidateBudget: isSplat ? canvasCapture.boundarySplatEffectiveCandidateBudget ?? postState?.boundarySplatEffectiveCandidateBudget ?? null : null,
     boundarySplatSelectedCandidateCount: isSplat ? canvasCapture.boundarySplatSelectedCandidateCount ?? postState?.boundarySplatSelectedCandidateCount ?? null : null,
@@ -1128,6 +1149,11 @@ async function captureRenderer({
       boundarySplatEffectiveCandidateBudget: canvasCapture.boundarySplatEffectiveCandidateBudget,
       boundarySplatSelectedCandidateCount: canvasCapture.boundarySplatSelectedCandidateCount,
       boundarySplatSelectorPolicyIdentity: canvasCapture.boundarySplatSelectorPolicyIdentity,
+      boundarySplatLodMode: canvasCapture.boundarySplatLodMode,
+      boundarySplatAdaptiveLodIdentity: canvasCapture.boundarySplatAdaptiveLodIdentity,
+      boundarySplatRequestedTierGroups: canvasCapture.boundarySplatRequestedTierGroups,
+      boundarySplatTierGroups: canvasCapture.boundarySplatTierGroups,
+      boundarySplatGlobalRenderedInstanceCount: canvasCapture.boundarySplatGlobalRenderedInstanceCount,
       boundarySplatSelectorCostProfile: canvasCapture.boundarySplatSelectorCostProfile,
       boundarySplatGpuProfile: canvasCapture.boundarySplatGpuProfile,
       boundarySplatSourceCandidateCount: canvasCapture.boundarySplatSourceCandidateCount,
@@ -1318,6 +1344,19 @@ function validateAlignedBudgetCapture(capture, expectedPair = expectedAlignedBud
   }
   if (capture.boundarySplatSelectorPolicyIdentity !== BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY) {
     throw new Error(`aligned-budget selector policy disagreement: ${capture.boundarySplatSelectorPolicyIdentity}`);
+  }
+  if (capture.boundarySplatLodMode !== 'fixed') {
+    throw new Error(`aligned-budget lod mode disagreement: ${capture.boundarySplatLodMode}`);
+  }
+  if (capture.boundarySplatAdaptiveLodIdentity !== BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY) {
+    throw new Error(`aligned-budget adaptive lod identity disagreement: ${capture.boundarySplatAdaptiveLodIdentity}`);
+  }
+  if (!Array.isArray(capture.boundarySplatTierGroups) || capture.boundarySplatTierGroups.length < 1) {
+    throw new Error(`aligned-budget tier telemetry missing: ${JSON.stringify(capture.boundarySplatTierGroups)}`);
+  }
+  if (!Number.isFinite(Number(capture.boundarySplatGlobalRenderedInstanceCount))
+    || Number(capture.boundarySplatGlobalRenderedInstanceCount) <= 0) {
+    throw new Error(`aligned-budget global rendered-count missing: ${capture.boundarySplatGlobalRenderedInstanceCount}`);
   }
   if (capture.fallbackReason) {
     throw new Error(`aligned-budget fallback rejected: ${capture.fallbackReason}`);
@@ -1902,6 +1941,11 @@ function compactState(state) {
     boundarySplatEffectiveCandidateBudget: state.boundarySplatEffectiveCandidateBudget,
     boundarySplatSelectedCandidateCount: state.boundarySplatSelectedCandidateCount,
     boundarySplatSelectorPolicyIdentity: state.boundarySplatSelectorPolicyIdentity,
+    boundarySplatLodMode: state.boundarySplatLodMode,
+    boundarySplatAdaptiveLodIdentity: state.boundarySplatAdaptiveLodIdentity,
+    boundarySplatRequestedTierGroups: state.boundarySplatRequestedTierGroups,
+    boundarySplatTierGroups: state.boundarySplatTierGroups,
+    boundarySplatGlobalRenderedInstanceCount: state.boundarySplatGlobalRenderedInstanceCount,
     boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
     boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
     frameCount: state.frameCount,
@@ -1926,6 +1970,10 @@ function compactAlignedBudgetPair(pair) {
         requested: capture.boundarySplatRequestedCandidateBudget,
         effective: capture.boundarySplatEffectiveCandidateBudget,
         selected: capture.boundarySplatSelectedCandidateCount,
+        lodMode: capture.boundarySplatLodMode,
+        adaptiveLodIdentity: capture.boundarySplatAdaptiveLodIdentity,
+        tierGroups: capture.boundarySplatTierGroups,
+        globalRenderedInstanceCount: capture.boundarySplatGlobalRenderedInstanceCount,
         selectorPlusRasterMs: capture.selectorPlusRasterMs,
       })),
       comparison: frame.comparison,
