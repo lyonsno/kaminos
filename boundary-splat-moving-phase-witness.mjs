@@ -188,16 +188,151 @@ function addBitmapLabel(rendered, label) {
   return writeRgbaPng(rendered.width, rendered.height, rgba);
 }
 
+
+function boxBlur(values, width, height, radius) {
+  const stride = width + 1;
+  const integral = new Float64Array((width + 1) * (height + 1));
+  for (let y = 0; y < height; y += 1) {
+    let rowSum = 0;
+    for (let x = 0; x < width; x += 1) {
+      rowSum += values[y * width + x];
+      integral[(y + 1) * stride + x + 1] = integral[y * stride + x + 1] + rowSum;
+    }
+  }
+  const result = new Float32Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const y0 = Math.max(0, y - radius);
+    const y1 = Math.min(height - 1, y + radius);
+    for (let x = 0; x < width; x += 1) {
+      const x0 = Math.max(0, x - radius);
+      const x1 = Math.min(width - 1, x + radius);
+      const sum = integral[(y1 + 1) * stride + x1 + 1]
+        - integral[y0 * stride + x1 + 1]
+        - integral[(y1 + 1) * stride + x0]
+        + integral[y0 * stride + x0];
+      result[y * width + x] = sum / ((x1 - x0 + 1) * (y1 - y0 + 1));
+    }
+  }
+  return result;
+}
+
+function analyzeRenderedFrame(rendered) {
+  const pixelCount = rendered.width * rendered.height;
+  const luminance = new Float32Array(pixelCount);
+  const foregroundThreshold = rendered.backgroundLuminance + (1 / 255);
+  let areaPixels = 0;
+  let weightedX = 0;
+  let weightedY = 0;
+  let luminanceEnergy = 0;
+  let minX = rendered.width;
+  let minY = rendered.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let pixel = 0; pixel < pixelCount; pixel += 1) {
+    const value = (
+      rendered.rgba[pixel * 4] * 0.2126
+      + rendered.rgba[pixel * 4 + 1] * 0.7152
+      + rendered.rgba[pixel * 4 + 2] * 0.0722
+    ) / 255;
+    luminance[pixel] = value;
+    const excess = Math.max(0, value - rendered.backgroundLuminance);
+    if (value <= foregroundThreshold) continue;
+    const x = pixel % rendered.width;
+    const y = Math.floor(pixel / rendered.width);
+    areaPixels += 1;
+    luminanceEnergy += excess;
+    weightedX += x * excess;
+    weightedY += y * excess;
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  if (areaPixels === 0 || luminanceEnergy <= 0) throw new Error('temporal diagnostic found no foreground envelope');
+  const lowPass = boxBlur(luminance, rendered.width, rendered.height, 4);
+  let spatialDetailEnergy = 0;
+  for (let pixel = 0; pixel < pixelCount; pixel += 1) spatialDetailEnergy += Math.abs(luminance[pixel] - lowPass[pixel]);
+  return {
+    luminance,
+    metrics: {
+      envelope: {
+        areaPixels,
+        areaFraction: areaPixels / pixelCount,
+        widthPixels: maxX - minX + 1,
+        heightPixels: maxY - minY + 1,
+        widthNormalized: (maxX - minX + 1) / rendered.width,
+        heightNormalized: (maxY - minY + 1) / rendered.height,
+        centroidXNormalized: weightedX / luminanceEnergy / Math.max(1, rendered.width - 1),
+        centroidYNormalized: weightedY / luminanceEnergy / Math.max(1, rendered.height - 1),
+        luminanceEnergy,
+      },
+      spatialDetailEnergy: spatialDetailEnergy / pixelCount,
+    },
+  };
+}
+
+function analyzeTransition(previous, current, width, height, index) {
+  const delta = new Float32Array(previous.length);
+  let totalMotionEnergy = 0;
+  for (let pixel = 0; pixel < delta.length; pixel += 1) {
+    delta[pixel] = current[pixel] - previous[pixel];
+    totalMotionEnergy += Math.abs(delta[pixel]);
+  }
+  const lowPassDelta = boxBlur(delta, width, height, 4);
+  let lowFrequencyMotionEnergy = 0;
+  let highFrequencyMotionEnergy = 0;
+  for (let pixel = 0; pixel < delta.length; pixel += 1) {
+    lowFrequencyMotionEnergy += Math.abs(lowPassDelta[pixel]);
+    highFrequencyMotionEnergy += Math.abs(delta[pixel] - lowPassDelta[pixel]);
+  }
+  return {
+    fromFrame: index - 1,
+    toFrame: index,
+    totalMotionEnergy: totalMotionEnergy / delta.length,
+    lowFrequencyMotionEnergy: lowFrequencyMotionEnergy / delta.length,
+    highFrequencyMotionEnergy: highFrequencyMotionEnergy / delta.length,
+  };
+}
+
+function summarizeTemporalDiagnostics(frames, transitions) {
+  const first = frames[0];
+  const last = frames.at(-1);
+  const mean = key => transitions.reduce((sum, row) => sum + row[key], 0) / Math.max(1, transitions.length);
+  return {
+    envelopeAreaRatioEndToStart: last.envelope.areaPixels / first.envelope.areaPixels,
+    envelopeWidthRatioEndToStart: last.envelope.widthPixels / first.envelope.widthPixels,
+    envelopeHeightRatioEndToStart: last.envelope.heightPixels / first.envelope.heightPixels,
+    luminanceEnergyRatioEndToStart: last.envelope.luminanceEnergy / first.envelope.luminanceEnergy,
+    spatialDetailRatioEndToStart: last.spatialDetailEnergy / Math.max(1e-12, first.spatialDetailEnergy),
+    centroidDisplacementNormalized: Math.hypot(
+      last.envelope.centroidXNormalized - first.envelope.centroidXNormalized,
+      last.envelope.centroidYNormalized - first.envelope.centroidYNormalized,
+    ),
+    meanTotalMotionEnergy: mean('totalMotionEnergy'),
+    meanLowFrequencyMotionEnergy: mean('lowFrequencyMotionEnergy'),
+    meanHighFrequencyMotionEnergy: mean('highFrequencyMotionEnergy'),
+  };
+}
+
 async function renderSequence(sequence, camera, outDir, renderOptions, label) {
   await mkdir(outDir, { recursive: true });
   const frameHashes = [];
   const frameEvidence = [];
+  const diagnosticFrames = [];
+  const diagnosticTransitions = [];
+  let previousLuminance = null;
   for (let index = 0; index < sequence.frames.length; index += 1) {
     const rendered = renderBoundarySplatRowsPng(sequence.frames[index].rows, camera, renderOptions);
     if (rendered.projectedSplatCount <= 0 || rendered.nonBackgroundPixelCount <= 0 || rendered.maxLuminance <= rendered.backgroundLuminance) {
       throw new Error(`rendered frame ${index} is blank or partial`);
     }
     const path = resolve(outDir, `frame-${String(index).padStart(3, '0')}.png`);
+    const diagnostic = analyzeRenderedFrame(rendered);
+    diagnosticFrames.push({ index, ...diagnostic.metrics });
+    if (previousLuminance) {
+      diagnosticTransitions.push(analyzeTransition(previousLuminance, diagnostic.luminance, rendered.width, rendered.height, index));
+    }
+    previousLuminance = diagnostic.luminance;
     const labeledPng = addBitmapLabel(rendered, label);
     await writeFile(path, labeledPng);
     frameHashes.push(sha256(labeledPng));
@@ -213,7 +348,15 @@ async function renderSequence(sequence, camera, outDir, renderOptions, label) {
       maxLuminance: rendered.maxLuminance,
     });
   }
-  return { frameHashes, frameEvidence };
+  return {
+    frameHashes,
+    frameEvidence,
+    temporalDiagnostics: {
+      frames: diagnosticFrames,
+      transitions: diagnosticTransitions,
+      summary: summarizeTemporalDiagnostics(diagnosticFrames, diagnosticTransitions),
+    },
+  };
 }
 
 function run(command, commandArgs, label) {
@@ -261,6 +404,7 @@ async function encodeComparison(roleDirs, outputPath, fps, frameCount, labels, f
 
 function inspectionGuide(report) {
   const labels = report.discreteOffsets.map(row => `<li><strong>${row.label}</strong>: reference <code>${row.referenceFrameId}</code>; recurrent prediction step ${row.step}.</li>`).join('');
+  const diagnostics = Object.entries(report.temporalDiagnostics.roles).map(([role, value]) => `<tr><th>${role}</th><td>${value.summary.envelopeAreaRatioEndToStart.toFixed(3)}</td><td>${value.summary.luminanceEnergyRatioEndToStart.toFixed(3)}</td><td>${value.summary.spatialDetailRatioEndToStart.toFixed(3)}</td><td>${value.summary.meanLowFrequencyMotionEnergy.toFixed(6)}</td><td>${value.summary.meanHighFrequencyMotionEnergy.toFixed(6)}</td></tr>`).join('');
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Phase Transport Motion Witness</title>
@@ -269,6 +413,7 @@ function inspectionGuide(report) {
 <p>This finite forward episode starts at the exact current state and ends at the farthest held-out target. Playback does not loop; replay is an explicit viewer action.</p>
 <section><h2>Beauty Motion</h2><p><strong>Reference: exact held-out simulator states.</strong> <strong>Control: copied current state at zero velocity.</strong> <strong>Prediction: recurrent learned local-grid transport plus calibrated residual births/deaths.</strong> All three use the same camera, interpolation count, and ${report.playback.effectiveFps} fps cadence.</p><video controls muted playsinline src="beauty-comparison.mp4"></video></section>
 <section><h2>Partial Flow Debug, Gain 0.625</h2><p>This is a display-only mix over the same role frames and cadence. It exposes carrier motion and support churn without changing simulation, prediction, or raster state.</p><div class="legend"><span class="stable">green: stable</span><span class="transport">blue: transported</span><span class="birth">magenta: birth</span><span class="death">orange: death</span></div><video controls muted playsinline src="partial-flow-debug-comparison.mp4"></video></section>
+<section><h2>Low-frequency envelope diagnostics</h2><p>The sequence spans ${report.playback.simulatedDurationSeconds.toFixed(2)} simulator seconds and ${report.playback.encodedDurationSeconds.toFixed(2)} encoded seconds. Ratios compare the final unlabeled raster to the first; transition energies are measured before role labels are painted. Envelope contraction with retained spatial detail is the suspected collapse signature.</p><table><thead><tr><th>role</th><th>area end/start</th><th>luma end/start</th><th>detail end/start</th><th>mean low-pass motion</th><th>mean residual motion</th></tr></thead><tbody>${diagnostics}</tbody></table></section>
 <section><h2>Temporal Anchors</h2><ol>${labels}</ol></section>
 <section><h2>Claim Boundary</h2><p>${report.claimBoundary}</p></section></main></body></html>`;
 }
@@ -383,6 +528,8 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
         frameCount,
         framesPerControlledStep: framesPerStep,
         controlledStepDeltaMs,
+        simulatedDurationSeconds: (referenceStates.length - 1) * controlledStepDeltaMs / 1000,
+        encodedDurationSeconds: beautyComparison.probe.duration,
         loops: false,
         resetDisclosure: 'playback ends on the farthest held-out target and restarts only by explicit viewer action',
       },
@@ -400,6 +547,12 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
         effectiveFps: partialDebugComparison.probe.fps,
         frameHashes: Object.fromEntries(roleNames.map((role, index) => [role, debugEvidence[index].frameHashes])),
         stateMutation: false,
+      },
+      temporalDiagnostics: {
+        authority: 'isolated-raster-envelope-and-frequency-separation-v0',
+        measurementSurface: 'unlabeled beauty-role raster before bitmap role banner',
+        lowPassRadiusPixels: 4,
+        roles: Object.fromEntries(roleNames.map((role, index) => [role, beautyEvidence[index].temporalDiagnostics])),
       },
       discreteOffsets: referenceIds.map((referenceFrameId, step) => ({ step, label: offsetLabel(step, controlledStepDeltaMs), referenceFrameId })),
       correspondence: {

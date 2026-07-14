@@ -166,6 +166,8 @@ assert.equal(report.source.model.schema, 'kaminos-boundary-splat-phase-transport
 assert.equal(report.playback.frameCount, 7);
 assert.equal(report.playback.requestedFps, 6);
 assert.equal(report.playback.effectiveFps, 6);
+assert.equal(report.playback.simulatedDurationSeconds, 0.48);
+assert.ok(report.playback.encodedDurationSeconds >= 1);
 assert.equal(report.playback.loops, false);
 assert.equal(report.roles.reference.frameHashes.length, 7);
 assert.equal(report.roles.control.frameHashes.length, 7);
@@ -181,7 +183,21 @@ assert.equal(report.partialFlowDebug.effectiveFps, 6);
 assert.equal(report.artifacts.beautyComparison.probe.frameCount, 7);
 assert.equal(report.artifacts.partialDebugComparison.probe.frameCount, 7);
 assert.equal(report.artifacts.beautyComparison.probe.width, 288);
+assert.equal(report.temporalDiagnostics.authority, 'isolated-raster-envelope-and-frequency-separation-v0');
+assert.deepEqual(Object.keys(report.temporalDiagnostics.roles), ['reference', 'control', 'predicted']);
+for (const role of Object.values(report.temporalDiagnostics.roles)) {
+  assert.equal(role.frames.length, 7);
+  assert.equal(role.transitions.length, 6);
+  assert.ok(role.frames.every(frame => frame.envelope.areaPixels > 0));
+  assert.ok(role.frames.every(frame => Number.isFinite(frame.envelope.centroidXNormalized)));
+  assert.ok(role.frames.every(frame => Number.isFinite(frame.spatialDetailEnergy)));
+}
+assert.ok(report.temporalDiagnostics.roles.reference.transitions.some(row => row.totalMotionEnergy > 0));
+assert.ok(report.temporalDiagnostics.roles.predicted.transitions.some(row => row.highFrequencyMotionEnergy > 0));
+assert.ok(report.temporalDiagnostics.roles.control.transitions.every(row => row.totalMotionEnergy === 0));
+assert.equal(report.temporalDiagnostics.roles.control.summary.envelopeAreaRatioEndToStart, 1);
 assert.match(readFileSync(join(outDir, 'inspection-guide.html'), 'utf8'), /Reference: exact held-out simulator states/);
 assert.match(readFileSync(join(outDir, 'inspection-guide.html'), 'utf8'), /Prediction: recurrent learned local-grid transport/);
+assert.match(readFileSync(join(outDir, 'inspection-guide.html'), 'utf8'), /Low-frequency envelope diagnostics/);
 
 console.log('boundary splat moving phase witness contracts passed');
