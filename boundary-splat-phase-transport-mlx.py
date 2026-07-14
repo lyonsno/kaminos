@@ -20,6 +20,8 @@ PREDICTION_SCHEMA = "kaminos-boundary-splat-phase-transport-predictions-v0"
 INPUT_AUTHORITY = "exact-16-feature-plus-directional-local-grid-occupancy-v0"
 CORRESPONDENCE_AUTHORITY = "stable-site-first-bounded-local-grid-feature-correspondence-v0"
 ARCHITECTURE_AUTHORITY = "shared-two-layer-relu-carrier-displacement-and-residual-birth-heads-v0"
+LEGACY_OBJECTIVE_FAMILY = "population-weighted-carrier-and-residual-birth-v0"
+MOTION_BALANCED_OBJECTIVE_FAMILY = "motion-balanced-static-scaffold-v0"
 FEATURES = (
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.density", "material.heat", "material.fuel", "material.detail",
@@ -33,6 +35,7 @@ DISPLACEMENTS = tuple(
     for dz in (-1, 0, 1)
 )
 DEATH_CLASS = len(DISPLACEMENTS)
+CARRIER_COHORTS = ("stable-q1", "stable-q2", "stable-q3", "stable-q4", "transported", "death")
 POSITION_PRECISION = 6
 DENSE_GRID_MAX_CELLS_PER_SOURCE = 256
 DENSE_GRID_MIN_CELL_BUDGET = 4096
@@ -271,6 +274,39 @@ def build_birth_universe(source, target, correspondence, grid_step):
     return sorted(key for key in keys if key not in source_keys)
 
 
+def carrier_motion_cohorts(source, target, correspondence, stable_bin_count=4):
+    if stable_bin_count != 4:
+        raise ValueError("motion-balanced transport currently requires four stable state-change bins")
+    candidate_scale = np.maximum(np.std(source["candidates"], axis=0, dtype=np.float64), 1e-6)
+    splat_scale = np.maximum(np.std(source["splats"][:, 3:12], axis=0, dtype=np.float64), 1e-6)
+    cohorts = np.full(len(source["keys"]), "", dtype="<U12")
+    stable_rows = []
+    for source_index, target_index, _, kind, _ in correspondence["matches"]:
+        if kind == "transported":
+            cohorts[source_index] = "transported"
+            continue
+        candidate_delta = (
+            source["candidates"][source_index].astype(np.float64)
+            - target["candidates"][target_index].astype(np.float64)
+        ) / candidate_scale
+        splat_delta = (
+            source["splats"][source_index, 3:12].astype(np.float64)
+            - target["splats"][target_index, 3:12].astype(np.float64)
+        ) / splat_scale
+        score = math.sqrt(float((np.sum(candidate_delta ** 2) + np.sum(splat_delta ** 2)) / 25.0))
+        stable_rows.append((score, target["keys"][target_index], source_index))
+    stable_rows.sort(key=lambda row: (row[0], row[1]))
+    for rank, (_, _, source_index) in enumerate(stable_rows):
+        bin_index = min(stable_bin_count - 1, math.floor(rank * stable_bin_count / len(stable_rows)))
+        cohorts[source_index] = f"stable-q{bin_index + 1}"
+    for source_index in correspondence["deaths"]:
+        cohorts[source_index] = "death"
+    if np.any(cohorts == ""):
+        raise ValueError("carrier motion cohorts are incomplete")
+    counts = {cohort: int(np.sum(cohorts == cohort)) for cohort in CARRIER_COHORTS}
+    return cohorts, counts
+
+
 def build_pair_dataset(source, target, grid_step, radius_cells=1):
     correspondence = build_correspondence(source, target, grid_step, radius_cells)
     carrier_labels = np.full(len(source["keys"]), DEATH_CLASS, dtype=np.int32)
@@ -287,14 +323,68 @@ def build_pair_dataset(source, target, grid_step, radius_cells=1):
         for key in birth_keys
     ]).astype(np.float32)
     birth_labels = np.asarray([1.0 if key in residual_birth_keys else 0.0 for key in birth_keys], dtype=np.float32)
+    carrier_cohorts, cohort_counts = carrier_motion_cohorts(source, target, correspondence)
     return {
         "correspondence": correspondence,
         "carrierInputs": carrier_inputs,
         "carrierLabels": carrier_labels,
+        "carrierCohorts": carrier_cohorts,
+        "cohortCounts": cohort_counts,
         "birthInputs": birth_inputs,
         "birthLabels": birth_labels,
         "birthKeys": birth_keys,
     }
+
+
+def build_motion_sampling_pools(cohorts):
+    cohorts = np.asarray(cohorts)
+    pools = {}
+    for cohort in CARRIER_COHORTS:
+        indices = np.flatnonzero(cohorts == cohort)
+        if not len(indices):
+            raise ValueError(f"motion-balanced sampling requires populated cohort {cohort}")
+        pools[cohort] = indices
+    return pools
+
+
+def sample_motion_balanced_indices(rng, pools, batch_size):
+    if tuple(pools) != CARRIER_COHORTS or any(not len(pools[cohort]) for cohort in CARRIER_COHORTS):
+        raise ValueError("motion-balanced sampling pools are incomplete or out of order")
+    if batch_size < len(pools):
+        raise ValueError("motion-balanced batch must contain at least one row per carrier cohort")
+    base, remainder = divmod(int(batch_size), len(pools))
+    sampled = []
+    for cohort_index, cohort in enumerate(CARRIER_COHORTS):
+        indices = pools[cohort]
+        count = base + (1 if cohort_index < remainder else 0)
+        sampled.append(rng.choice(indices, size=count, replace=True))
+    result = np.concatenate(sampled).astype(np.int64)
+    rng.shuffle(result)
+    return result
+
+
+def build_binary_sampling_pools(labels):
+    labels = np.asarray(labels) > 0.5
+    negative = np.flatnonzero(~labels)
+    positive = np.flatnonzero(labels)
+    if not len(negative) or not len(positive):
+        raise ValueError("balanced birth sampling requires positive and negative rows")
+    return {"negative": negative, "positive": positive}
+
+
+def sample_binary_balanced_indices(rng, pools, batch_size):
+    negative = pools.get("negative", ())
+    positive = pools.get("positive", ())
+    if not len(negative) or not len(positive):
+        raise ValueError("balanced birth sampling pools are incomplete")
+    negative_count = int(batch_size) // 2
+    positive_count = int(batch_size) - negative_count
+    result = np.concatenate((
+        rng.choice(negative, size=negative_count, replace=True),
+        rng.choice(positive, size=positive_count, replace=True),
+    )).astype(np.int64)
+    rng.shuffle(result)
+    return result
 
 
 class TransportModel(nn.Module):
@@ -352,6 +442,49 @@ def calibrate_birth(probabilities, labels):
             "falseNegative": fn, "sampleCount": len(labels),
         })
     return max(rows, key=lambda row: (row["fScore"], row["precision"], row["threshold"]))
+
+
+def calibrate_action_margin(probabilities, labels):
+    probabilities = np.asarray(probabilities, dtype=np.float32)
+    labels = np.asarray(labels, dtype=np.int32)
+    stable_class = displacement_class((0, 0, 0))
+    action_probabilities = probabilities.copy()
+    action_probabilities[:, stable_class] = -np.inf
+    margins = np.max(action_probabilities, axis=1) - probabilities[:, stable_class]
+    truth = labels != stable_class
+    order = np.argsort(-margins, kind="stable")
+    sorted_margins = margins[order]
+    sorted_truth = truth[order].astype(np.int64)
+    cumulative_true = np.cumsum(sorted_truth)
+    group_ends = np.flatnonzero(np.r_[sorted_margins[1:] != sorted_margins[:-1], True])
+    total_true = int(np.sum(truth))
+    best = None
+    for end in group_ends:
+        predicted_count = int(end) + 1
+        tp = int(cumulative_true[end])
+        fp = predicted_count - tp
+        fn = total_true - tp
+        precision = tp / max(1, tp + fp)
+        recall = tp / max(1, tp + fn)
+        f_score = 2 * precision * recall / max(1e-12, precision + recall)
+        row = {
+            "authority": "training-carrier-action-margin-f1-v0",
+            "algorithmAuthority": "descending-margin-cumulative-confusion-v0",
+            "thresholdCandidateCount": int(len(group_ends)),
+            "threshold": float(sorted_margins[end]),
+            "precision": precision,
+            "recall": recall,
+            "fScore": f_score,
+            "truePositive": tp,
+            "falsePositive": fp,
+            "falseNegative": fn,
+            "sampleCount": len(labels),
+        }
+        if best is None or (row["fScore"], row["precision"], row["threshold"]) > (
+            best["fScore"], best["precision"], best["threshold"]
+        ):
+            best = row
+    return best
 
 
 def calibrate_target_support_ratio(pair_rows):
@@ -483,7 +616,27 @@ def validate_frozen_model_document(document):
         raise ValueError("frozen model birth calibration mismatch")
     if not math.isfinite(float(target_support.get("medianRatio", math.nan))) or float(target_support["medianRatio"]) <= 0:
         raise ValueError("frozen model target support calibration mismatch")
-    return {"hiddenSize": hidden_size, "mean": mean, "scale": scale}
+    objective_family = document.get("training", {}).get("objectiveFamily", LEGACY_OBJECTIVE_FAMILY)
+    if objective_family not in (LEGACY_OBJECTIVE_FAMILY, MOTION_BALANCED_OBJECTIVE_FAMILY):
+        raise ValueError("frozen model objective family mismatch")
+    composition_authority = "carrier-argmax-with-ranked-residual-birth-v0"
+    if objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY:
+        action = document.get("calibration", {}).get("carrierAction", {})
+        if (
+            action.get("authority") != "training-carrier-action-margin-f1-v0"
+            or not math.isfinite(float(action.get("threshold", math.nan)))
+            or not math.isfinite(float(action.get("precision", math.nan)))
+            or not math.isfinite(float(action.get("recall", math.nan)))
+        ):
+            raise ValueError("frozen motion-balanced model action calibration mismatch")
+        composition_authority = "copied-static-scaffold-with-calibrated-carrier-actions-v0"
+    return {
+        "hiddenSize": hidden_size,
+        "mean": mean,
+        "scale": scale,
+        "objectiveFamily": objective_family,
+        "compositionAuthority": composition_authority,
+    }
 
 
 def hydrate_frozen_model_document(document):
@@ -525,24 +678,90 @@ def prediction_universe(source, grid_step, plan=None):
     return [tuple(row) for row in positions.tolist()]
 
 
-def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_calibration, target_support_calibration, batch_size):
-    grid_plan = local_grid_plan(source, grid_step)
-    carrier_inputs = make_directional_inputs(source["keys"], source, grid_step, grid_plan)
-    carrier_probabilities, _ = predict_model(model, carrier_inputs, input_mean, input_scale, batch_size)
+def compose_static_scaffold_claims(source, carrier_probabilities, grid_step, action_margin_threshold):
+    carrier_probabilities = np.asarray(carrier_probabilities, dtype=np.float32)
+    if carrier_probabilities.shape != (len(source["keys"]), DEATH_CLASS + 1):
+        raise ValueError("carrier probabilities do not align with the scaffold source")
+    if not math.isfinite(action_margin_threshold):
+        raise ValueError("carrier action margin threshold must be finite")
+    stable_class = displacement_class((0, 0, 0))
     claims = {}
-    death_count = 0
+    default_static_count = 0
+    activated_transport_count = 0
+    activated_death_count = 0
+    action_count = 0
     for source_index, probabilities in enumerate(carrier_probabilities):
-        class_index = int(np.argmax(probabilities))
-        if class_index == DEATH_CLASS:
-            death_count += 1
-            continue
-        delta = DISPLACEMENTS[class_index]
-        target_key = offset_key(source["keys"][source_index], delta, grid_step)
-        score = float(probabilities[class_index])
+        action_probabilities = probabilities.copy()
+        action_probabilities[stable_class] = -np.inf
+        action_class = int(np.argmax(action_probabilities))
+        action_margin = float(action_probabilities[action_class] - probabilities[stable_class])
+        if action_margin < action_margin_threshold:
+            class_index = stable_class
+            score = float(probabilities[stable_class])
+            default_static_count += 1
+        else:
+            class_index = action_class
+            score = float(probabilities[action_class])
+            action_count += 1
+            if class_index == DEATH_CLASS:
+                activated_death_count += 1
+                continue
+            activated_transport_count += 1
+        target_key = offset_key(source["keys"][source_index], DISPLACEMENTS[class_index], grid_step)
         incumbent = claims.get(target_key)
         if incumbent is None or score > incumbent[0] or (score == incumbent[0] and source_index < incumbent[1]):
             claims[target_key] = (score, source_index, class_index)
-    collision_count = sum(1 for probabilities in carrier_probabilities if int(np.argmax(probabilities)) != DEATH_CLASS) - len(claims)
+    collision_count = len(source["keys"]) - activated_death_count - len(claims)
+    return claims, {
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "actionMarginThreshold": float(action_margin_threshold),
+        "defaultStaticCount": default_static_count,
+        "activatedActionCount": action_count,
+        "activatedTransportCount": activated_transport_count,
+        "activatedDeathCount": activated_death_count,
+        "collisionCount": collision_count,
+    }
+
+
+def recurrent_predict(
+    model,
+    source,
+    grid_step,
+    input_mean,
+    input_scale,
+    birth_calibration,
+    target_support_calibration,
+    batch_size,
+    action_calibration=None,
+):
+    grid_plan = local_grid_plan(source, grid_step)
+    carrier_inputs = make_directional_inputs(source["keys"], source, grid_step, grid_plan)
+    carrier_probabilities, _ = predict_model(model, carrier_inputs, input_mean, input_scale, batch_size)
+    scaffold_accounting = None
+    if action_calibration is not None:
+        claims, scaffold_accounting = compose_static_scaffold_claims(
+            source,
+            carrier_probabilities,
+            grid_step,
+            float(action_calibration["threshold"]),
+        )
+        death_count = scaffold_accounting["activatedDeathCount"]
+        collision_count = scaffold_accounting["collisionCount"]
+    else:
+        claims = {}
+        death_count = 0
+        for source_index, probabilities in enumerate(carrier_probabilities):
+            class_index = int(np.argmax(probabilities))
+            if class_index == DEATH_CLASS:
+                death_count += 1
+                continue
+            delta = DISPLACEMENTS[class_index]
+            target_key = offset_key(source["keys"][source_index], delta, grid_step)
+            score = float(probabilities[class_index])
+            incumbent = claims.get(target_key)
+            if incumbent is None or score > incumbent[0] or (score == incumbent[0] and source_index < incumbent[1]):
+                claims[target_key] = (score, source_index, class_index)
+        collision_count = sum(1 for probabilities in carrier_probabilities if int(np.argmax(probabilities)) != DEATH_CLASS) - len(claims)
     birth_keys = prediction_universe(source, grid_step, grid_plan)
     birth_inputs = make_directional_inputs(birth_keys, source, grid_step, grid_plan)
     _, birth_probabilities = predict_model(model, birth_inputs, input_mean, input_scale, batch_size)
@@ -583,7 +802,7 @@ def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_c
         rows.append(row)
         features.append(source["candidates"][source_index].copy())
     result = index_frame(np.asarray(features, dtype=np.float32), np.asarray(rows, dtype=np.float32))
-    return result, {
+    accounting = {
         "sourceCount": len(source["keys"]),
         "predictedCount": len(result["keys"]),
         "stableCarrierCount": stable_count,
@@ -602,6 +821,11 @@ def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_c
         "thresholdQualifiedBirthCount": threshold_qualified_birth_count,
         "selectedBirthCount": len(result["keys"]) - len(claims),
     }
+    if scaffold_accounting is not None:
+        accounting["staticScaffold"] = scaffold_accounting
+    else:
+        accounting["compositionAuthority"] = "carrier-argmax-with-ranked-residual-birth-v0"
+    return result, accounting
 
 
 def support_metrics(source, prediction, exact):
@@ -617,6 +841,22 @@ def support_metrics(source, prediction, exact):
         "predictionToIdentityRatio": iou(prediction_keys, exact_keys) / max(1e-12, iou(source_keys, exact_keys)),
         "exactCount": len(exact_keys),
         "predictionCount": len(prediction_keys),
+    }
+
+
+def summarize_rollout_gate(metrics):
+    if not metrics:
+        raise ValueError("rollout gate requires at least one recurrent step")
+    beat_steps = [row for row in metrics if row.get("beatsIdentity") is True]
+    loss_steps = [int(row["step"]) for row in metrics if row.get("beatsIdentity") is not True]
+    return {
+        "authority": "every-recurrent-step-support-advantage-gate-v0",
+        "evaluatedStepCount": len(metrics),
+        "beatStepCount": len(beat_steps),
+        "firstIdentityLossStep": min(loss_steps) if loss_steps else None,
+        "allStepsBeatIdentity": len(beat_steps) == len(metrics),
+        "minimumPredictionToIdentityRatio": min(float(row["predictionToIdentityRatio"]) for row in metrics),
+        "aggregateOrEarlyStepCanCloseClaim": False,
     }
 
 
@@ -654,6 +894,7 @@ def build_prediction_document(
         "frames": frames,
         "recurrent": recurrent,
         "supportMetrics": support_metrics,
+        "rolloutGate": summarize_rollout_gate(support_metrics) if support_metrics else None,
         "claimBoundary": "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration",
     }
 
@@ -674,6 +915,11 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float, default=0.0015)
     parser.add_argument("--weight-decay", type=float, default=0.0001)
     parser.add_argument("--seed", type=int, default=713)
+    parser.add_argument(
+        "--objective-family",
+        choices=(LEGACY_OBJECTIVE_FAMILY, MOTION_BALANCED_OBJECTIVE_FAMILY),
+        default=LEGACY_OBJECTIVE_FAMILY,
+    )
     return parser.parse_args()
 
 
@@ -766,6 +1012,12 @@ def main():
             inference_metrics = []
             birth_calibration = frozen_model_document["calibration"]["birth"]
             target_support_calibration = frozen_model_document["calibration"]["targetSupport"]
+            objective_family = frozen_model_document.get("training", {}).get("objectiveFamily", LEGACY_OBJECTIVE_FAMILY)
+            action_calibration = (
+                frozen_model_document["calibration"]["carrierAction"]
+                if objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
+                else None
+            )
             for step_index in range(1, len(inference_docs)):
                 predicted, recurrent = recurrent_predict(
                     frozen_model,
@@ -776,6 +1028,7 @@ def main():
                     birth_calibration,
                     target_support_calibration,
                     args.batch_size,
+                    action_calibration,
                 )
                 exact = frames[inference_docs[step_index]["id"]]
                 recurrent_rows.append({"step": step_index, **recurrent})
@@ -825,6 +1078,7 @@ def main():
                 "model": model_receipt,
                 "predictions": {"path": str(prediction_path), "sha256": sha256_bytes(prediction_path.read_bytes())},
                 "holdoutMetrics": inference_metrics,
+                "rolloutGate": summarize_rollout_gate(inference_metrics),
                 "recurrent": recurrent_rows,
             }
             write_json(report_path, report)
@@ -844,9 +1098,11 @@ def main():
                 "targetCount": len(frames[right["id"]]["keys"]),
                 "birthSampleCount": len(dataset["birthLabels"]),
                 "birthPositiveCount": int(np.sum(dataset["birthLabels"])),
+                "carrierCohorts": dataset["cohortCounts"],
             })
         carrier_inputs = np.concatenate([dataset["carrierInputs"] for dataset in datasets])
         carrier_labels = np.concatenate([dataset["carrierLabels"] for dataset in datasets])
+        carrier_cohorts = np.concatenate([dataset["carrierCohorts"] for dataset in datasets])
         birth_inputs = np.concatenate([dataset["birthInputs"] for dataset in datasets])
         birth_labels = np.concatenate([dataset["birthLabels"] for dataset in datasets])
         all_inputs = np.concatenate((carrier_inputs, birth_inputs))
@@ -856,9 +1112,17 @@ def main():
         carrier_inputs = ((carrier_inputs - input_mean) / input_scale).astype(np.float32)
         birth_inputs = ((birth_inputs - input_mean) / input_scale).astype(np.float32)
         class_counts = np.bincount(carrier_labels, minlength=DEATH_CLASS + 1).astype(np.float32)
-        class_weights = np.sqrt(np.sum(class_counts) / np.maximum(class_counts, 1.0))
-        class_weights /= np.mean(class_weights)
-        birth_positive_weight = float(np.sum(birth_labels == 0) / max(1, np.sum(birth_labels > 0.5)))
+        if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY:
+            class_weights = np.ones(DEATH_CLASS + 1, dtype=np.float32)
+            birth_positive_weight = 1.0
+            carrier_sampling_pools = build_motion_sampling_pools(carrier_cohorts)
+            birth_sampling_pools = build_binary_sampling_pools(birth_labels)
+        else:
+            class_weights = np.sqrt(np.sum(class_counts) / np.maximum(class_counts, 1.0))
+            class_weights /= np.mean(class_weights)
+            birth_positive_weight = float(np.sum(birth_labels == 0) / max(1, np.sum(birth_labels > 0.5)))
+            carrier_sampling_pools = None
+            birth_sampling_pools = None
         failure_phase = "route-validation"
         device = str(mx.default_device())
         if not device.lower().startswith("device(gpu"):
@@ -874,8 +1138,12 @@ def main():
         step_count = steps_per_epoch * args.epochs
         losses = []
         for step in range(step_count):
-            carrier_indices = rng.integers(0, len(carrier_inputs), size=min(args.batch_size, len(carrier_inputs)))
-            birth_indices = rng.integers(0, len(birth_inputs), size=min(args.batch_size, len(birth_inputs)))
+            if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY:
+                carrier_indices = sample_motion_balanced_indices(rng, carrier_sampling_pools, args.batch_size)
+                birth_indices = sample_binary_balanced_indices(rng, birth_sampling_pools, args.batch_size)
+            else:
+                carrier_indices = rng.integers(0, len(carrier_inputs), size=min(args.batch_size, len(carrier_inputs)))
+                birth_indices = rng.integers(0, len(birth_inputs), size=min(args.batch_size, len(birth_inputs)))
             (loss, components), gradients = loss_and_grad(
                 model,
                 mx.array(carrier_inputs[carrier_indices]),
@@ -900,6 +1168,11 @@ def main():
         carrier_training_metrics = carrier_metrics(carrier_probabilities, carrier_labels)
         birth_calibration = calibrate_birth(birth_probabilities, birth_labels)
         target_support_calibration = calibrate_target_support_ratio(pair_reports)
+        action_calibration = (
+            calibrate_action_margin(carrier_probabilities, carrier_labels)
+            if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
+            else None
+        )
         failure_phase = "model-write"
         model_artifact = {
             "schema": MODEL_SCHEMA,
@@ -934,11 +1207,27 @@ def main():
                 "weightDecay": args.weight_decay,
                 "seed": args.seed,
                 "losses": losses,
+                "objectiveFamily": args.objective_family,
+                "carrierSamplingAuthority": (
+                    "uniform-with-replacement-across-q1-q4-transported-death-v0"
+                    if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
+                    else "population-random-with-replacement-v0"
+                ),
+                "birthSamplingAuthority": (
+                    "balanced-positive-negative-with-replacement-v0"
+                    if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
+                    else "population-random-with-positive-loss-weight-v0"
+                ),
+                "carrierCohortCounts": {
+                    cohort: int(np.sum(carrier_cohorts == cohort))
+                    for cohort in CARRIER_COHORTS
+                },
             },
             "calibration": {
                 "carrier": carrier_training_metrics,
                 "birth": {"authority": "training-residual-birth-f1-threshold-v0", **birth_calibration},
                 "targetSupport": target_support_calibration,
+                **({"carrierAction": action_calibration} if action_calibration is not None else {}),
             },
             "correspondence": {
                 "authority": CORRESPONDENCE_AUTHORITY,
@@ -958,7 +1247,15 @@ def main():
         holdout_metrics = []
         for step_index in range(1, len(holdout_docs)):
             predicted, recurrent = recurrent_predict(
-                model, current, grid_step, input_mean, input_scale, birth_calibration, target_support_calibration, args.batch_size,
+                model,
+                current,
+                grid_step,
+                input_mean,
+                input_scale,
+                birth_calibration,
+                target_support_calibration,
+                args.batch_size,
+                action_calibration,
             )
             exact = frames[holdout_docs[step_index]["id"]]
             recurrent_rows.append({"step": step_index, **recurrent})
@@ -1006,6 +1303,7 @@ def main():
             "trainingPairs": pair_reports,
             "calibration": model_artifact["calibration"],
             "holdoutMetrics": holdout_metrics,
+            "rolloutGate": summarize_rollout_gate(holdout_metrics),
             "recurrent": recurrent_rows,
         }
         write_json(report_path, report)

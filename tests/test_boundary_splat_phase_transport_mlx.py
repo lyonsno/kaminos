@@ -160,6 +160,114 @@ class TransportDatasetContracts(unittest.TestCase):
         self.assertGreater(int(np.sum(dataset["birthLabels"])), 0)
         self.assertGreater(int(np.sum(dataset["birthLabels"] == 0)), 0)
 
+    def test_motion_cohorts_partition_stable_change_transport_and_death(self):
+        source = frame([
+            ((0.0, 0.0, 0.0), 0.0),
+            ((0.0, 1.0, 0.0), 0.0),
+            ((0.0, 2.0, 0.0), 0.0),
+            ((0.0, 3.0, 0.0), 0.0),
+            ((0.0, 4.0, 0.0), 0.5),
+            ((9.0, 9.0, 9.0), 0.5),
+        ])
+        target = frame([
+            ((0.0, 0.0, 0.0), 0.001),
+            ((0.0, 1.0, 0.0), 0.01),
+            ((0.0, 2.0, 0.0), 0.1),
+            ((0.0, 3.0, 0.0), 1.0),
+            ((1.0, 4.0, 0.0), 0.51),
+            ((20.0, 20.0, 20.0), 2.0),
+        ])
+        dataset = MODULE.build_pair_dataset(source, target, grid_step=1.0, radius_cells=1)
+        self.assertEqual(
+            dataset["carrierCohorts"].tolist(),
+            ["stable-q1", "stable-q2", "stable-q3", "stable-q4", "transported", "death"],
+        )
+        self.assertEqual(dataset["cohortCounts"], {
+            "stable-q1": 1,
+            "stable-q2": 1,
+            "stable-q3": 1,
+            "stable-q4": 1,
+            "transported": 1,
+            "death": 1,
+        })
+
+    def test_motion_balanced_sampler_spends_equal_batch_on_each_cohort(self):
+        cohorts = np.asarray(
+            ["stable-q1"] * 100
+            + ["stable-q2"] * 30
+            + ["stable-q3"] * 9
+            + ["stable-q4"] * 4
+            + ["transported"] * 2
+            + ["death"],
+        )
+        pools = MODULE.build_motion_sampling_pools(cohorts)
+        self.assertEqual({cohort: len(indices) for cohort, indices in pools.items()}, {
+            "stable-q1": 100,
+            "stable-q2": 30,
+            "stable-q3": 9,
+            "stable-q4": 4,
+            "transported": 2,
+            "death": 1,
+        })
+        sampled = MODULE.sample_motion_balanced_indices(
+            np.random.default_rng(713),
+            pools,
+            batch_size=12,
+        )
+        sampled_counts = {
+            cohort: int(np.sum(cohorts[sampled] == cohort))
+            for cohort in MODULE.CARRIER_COHORTS
+        }
+        self.assertEqual(sampled_counts, {cohort: 2 for cohort in MODULE.CARRIER_COHORTS})
+        birth_labels = np.asarray([0.0] * 100 + [1.0] * 3, dtype=np.float32)
+        birth_pools = MODULE.build_binary_sampling_pools(birth_labels)
+        birth_sampled = MODULE.sample_binary_balanced_indices(
+            np.random.default_rng(713),
+            birth_pools,
+            batch_size=12,
+        )
+        self.assertEqual(int(np.sum(birth_labels[birth_sampled] > 0.5)), 6)
+        self.assertEqual(int(np.sum(birth_labels[birth_sampled] <= 0.5)), 6)
+
+    def test_action_margin_calibration_separates_static_and_motion(self):
+        probabilities = np.zeros((4, MODULE.DEATH_CLASS + 1), dtype=np.float32)
+        stable_class = MODULE.displacement_class((0, 0, 0))
+        motion_class = MODULE.displacement_class((1, 0, 0))
+        probabilities[:, stable_class] = [0.6, 0.55, 0.1, 0.15]
+        probabilities[:, motion_class] = [0.5, 0.35, 0.9, 0.85]
+        labels = np.asarray([stable_class, stable_class, motion_class, motion_class], dtype=np.int32)
+        calibration = MODULE.calibrate_action_margin(probabilities, labels)
+        self.assertEqual(calibration["authority"], "training-carrier-action-margin-f1-v0")
+        self.assertEqual(calibration["algorithmAuthority"], "descending-margin-cumulative-confusion-v0")
+        self.assertEqual(calibration["thresholdCandidateCount"], 4)
+        self.assertEqual(calibration["precision"], 1.0)
+        self.assertEqual(calibration["recall"], 1.0)
+        self.assertGreater(calibration["threshold"], 0.0)
+
+    def test_static_scaffold_keeps_uncertain_support_and_applies_confident_motion(self):
+        source = frame([
+            ((0.0, 0.0, 0.0), 1.0),
+            ((1.0, 0.0, 0.0), 2.0),
+        ])
+        probabilities = np.zeros((2, MODULE.DEATH_CLASS + 1), dtype=np.float32)
+        stable_class = MODULE.displacement_class((0, 0, 0))
+        move_class = MODULE.displacement_class((1, 0, 0))
+        probabilities[0, stable_class] = 0.40
+        probabilities[0, MODULE.DEATH_CLASS] = 0.45
+        probabilities[1, stable_class] = 0.10
+        probabilities[1, move_class] = 0.80
+        claims, accounting = MODULE.compose_static_scaffold_claims(
+            source,
+            probabilities,
+            grid_step=1.0,
+            action_margin_threshold=0.10,
+        )
+        self.assertEqual(set(claims), {(0.0, 0.0, 0.0), (2.0, 0.0, 0.0)})
+        self.assertEqual(accounting["defaultStaticCount"], 1)
+        self.assertEqual(accounting["activatedTransportCount"], 1)
+        self.assertEqual(accounting["activatedDeathCount"], 0)
+        self.assertEqual(accounting["compositionAuthority"], "copied-static-scaffold-with-calibrated-carrier-actions-v0")
+
     def test_displacement_class_round_trips(self):
         for class_index, delta in enumerate(MODULE.DISPLACEMENTS):
             self.assertEqual(MODULE.displacement_class(delta), class_index)
@@ -190,6 +298,26 @@ class TransportDatasetContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "input authority"):
             MODULE.validate_frozen_model_document(hostile)
 
+    def test_motion_balanced_artifact_reuses_schema_but_requires_action_calibration(self):
+        model_document = frozen_model_document()
+        model_document["training"] = {"objectiveFamily": MODULE.MOTION_BALANCED_OBJECTIVE_FAMILY}
+        model_document["calibration"]["carrierAction"] = {
+            "authority": "training-carrier-action-margin-f1-v0",
+            "threshold": 0.25,
+            "precision": 0.8,
+            "recall": 0.7,
+        }
+        validated = MODULE.validate_frozen_model_document(model_document)
+        self.assertEqual(model_document["schema"], MODULE.MODEL_SCHEMA)
+        self.assertEqual(model_document["architecture"]["authority"], MODULE.ARCHITECTURE_AUTHORITY)
+        self.assertEqual(validated["objectiveFamily"], MODULE.MOTION_BALANCED_OBJECTIVE_FAMILY)
+        self.assertEqual(validated["compositionAuthority"], "copied-static-scaffold-with-calibrated-carrier-actions-v0")
+
+        hostile = copy.deepcopy(model_document)
+        del hostile["calibration"]["carrierAction"]
+        with self.assertRaisesRegex(ValueError, "action calibration"):
+            MODULE.validate_frozen_model_document(hostile)
+
     def test_frozen_model_hydration_preserves_serialized_head_logits(self):
         model, input_mean, input_scale = MODULE.hydrate_frozen_model_document(frozen_model_document())
         carrier, birth = MODULE.predict_model(
@@ -215,6 +343,18 @@ class TransportDatasetContracts(unittest.TestCase):
         )
         self.assertEqual(prediction["manifest"]["sha256"], "1" * 64)
         self.assertEqual(prediction["modelTrainingManifest"]["sha256"], "0" * 64)
+
+    def test_rollout_gate_cannot_close_on_early_step_advantage(self):
+        gate = MODULE.summarize_rollout_gate([
+            {"step": 1, "beatsIdentity": True, "predictionToIdentityRatio": 1.10},
+            {"step": 2, "beatsIdentity": True, "predictionToIdentityRatio": 1.02},
+            {"step": 3, "beatsIdentity": False, "predictionToIdentityRatio": 0.90},
+        ])
+        self.assertEqual(gate["authority"], "every-recurrent-step-support-advantage-gate-v0")
+        self.assertEqual(gate["evaluatedStepCount"], 3)
+        self.assertEqual(gate["beatStepCount"], 2)
+        self.assertEqual(gate["firstIdentityLossStep"], 3)
+        self.assertEqual(gate["allStepsBeatIdentity"], False)
 
 
 if __name__ == "__main__":
