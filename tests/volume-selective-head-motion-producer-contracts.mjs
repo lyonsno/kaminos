@@ -119,6 +119,7 @@ assert.equal(manifest.staticSidecarOverMovingMaterial, false);
 const producerSource = readFileSync(producer, 'utf8');
 assert.match(producerSource, /process\.on\('SIGINT'[\s\S]*interrupted/, 'operator interruption leaves a durable failed producer manifest');
 assert.match(producerSource, /viewportContract:\s*renderManifest\.viewportContract/, 'per-frame receipt retains effective viewport custody after ephemeral render manifests are deleted');
+assert.match(producerSource, /renderWidth:\s*beauty\.renderWidth[\s\S]*renderHeight:\s*beauty\.renderHeight/, 'crop identity uses post-render dimensions rather than placeholder pre-render canvas intrinsics');
 
 const targeted = run([
   '--frame-count', '1',

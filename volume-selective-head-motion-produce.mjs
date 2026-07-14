@@ -424,8 +424,9 @@ function executeFrame(frame, context, identity) {
     }
     const effectiveCrop = sha256(Buffer.from(JSON.stringify({
       rect: beauty.canvasCssRect,
-      intrinsicWidth: beauty.canvasMount?.intrinsicWidth,
-      intrinsicHeight: beauty.canvasMount?.intrinsicHeight,
+      renderWidth: beauty.renderWidth,
+      renderHeight: beauty.renderHeight,
+      devicePixelRatio: beauty.devicePixelRatio,
     })));
     if (cropIdentity && cropIdentity !== effectiveCrop) throw new Error(`camera/crop drift at ${role}`);
     cropIdentity = effectiveCrop;
@@ -448,8 +449,11 @@ function executeFrame(frame, context, identity) {
         viewportContract: renderManifest.viewportContract,
         canvas: {
           cssRect: beauty.canvasCssRect,
-          intrinsicWidth: beauty.canvasMount?.intrinsicWidth,
-          intrinsicHeight: beauty.canvasMount?.intrinsicHeight,
+          intrinsicWidthBeforeRender: beauty.canvasMount?.intrinsicWidth,
+          intrinsicHeightBeforeRender: beauty.canvasMount?.intrinsicHeight,
+          renderWidth: beauty.renderWidth,
+          renderHeight: beauty.renderHeight,
+          devicePixelRatio: beauty.devicePixelRatio,
         },
         boundarySplatCandidateCount: beauty.boundarySplatCandidateCount,
         boundarySplatInstanceCount: beauty.boundarySplatInstanceCount,
