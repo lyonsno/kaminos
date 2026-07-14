@@ -19,6 +19,7 @@ const SOURCE = 'live-baked-sidecar-plus-fluid-material-v0';
 const COMPOSITION = 'boundary-splat-composed-field-v0';
 const BUFFER_INTEGRITY = 'boundary-splat-buffer-integrity-v0';
 const PHASE_SOURCE = 'age-sweep-history';
+const INDIRECT_DRAW = 'boundary-splat-single-global-indirect-no-first-instance-v0';
 
 const requestedRoute = String(args.get('--url') || '');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-boundary-splat-temporal-witness'));
@@ -108,7 +109,11 @@ try {
       pause = await evaluate('window.__kaminosVolumePrototype.captureBoundarySplatWitnessFrame()', true);
       if (pause?.ok !== true) throw new Error(`exact-frame-witness-pause-failed:${JSON.stringify(pause)}`);
       const exactDrawState = pause.exactDrawState;
-      if (!exactDrawState || exactDrawState.authority !== 'gpu-indirect-post-submit-witness-readback') {
+      if (
+        !exactDrawState
+        || exactDrawState.authority !== 'gpu-indirect-post-submit-witness-readback'
+        || exactDrawState.indirectDrawIdentity !== INDIRECT_DRAW
+      ) {
         throw new Error(`exact-frame-draw-state-unavailable:${JSON.stringify(exactDrawState)}`);
       }
       const state = await debugState();
@@ -173,6 +178,7 @@ try {
         boundarySplatPhaseSources: compactPhaseSources(state.boundarySplatPhaseSources),
         sourceCandidateCount: Number(exactDrawState.sourceCandidateCount),
         renderedInstanceCount: Number(exactDrawState.instanceCount),
+        indirectDrawIdentity: exactDrawState.indirectDrawIdentity,
         tierGroups: exactDrawState.tierGroups,
         bufferIntegrity: state.boundarySplatBufferIntegrity,
         overflowCount: Number(exactDrawState.overflowCount),
@@ -242,6 +248,7 @@ try {
       source: SOURCE,
       composition: COMPOSITION,
       phaseSource: PHASE_SOURCE,
+      indirectDraw: INDIRECT_DRAW,
       capture: 'cdp-exact-frozen-live-composed-canvas-sample-v0',
       sequenceRetention: 'all-samples-retained-v0',
     },
@@ -451,6 +458,7 @@ function validateState(state, pageUrl) {
   if (state?.boundarySplatSourceAuthority !== SOURCE) mismatches.push(['source', SOURCE, state?.boundarySplatSourceAuthority]);
   if (state?.boundarySplatCompositionIdentity !== COMPOSITION) mismatches.push(['composition', COMPOSITION, state?.boundarySplatCompositionIdentity]);
   if (state?.boundarySplatPhaseSourceIdentity !== PHASE_SOURCE) mismatches.push(['phaseSource', PHASE_SOURCE, state?.boundarySplatPhaseSourceIdentity]);
+  if (state?.boundarySplatIndirectDrawIdentity !== INDIRECT_DRAW) mismatches.push(['indirectDraw', INDIRECT_DRAW, state?.boundarySplatIndirectDrawIdentity]);
   if (Number(state?.boundarySplatRequestedInstanceCount) !== 100) mismatches.push(['instances', 100, state?.boundarySplatRequestedInstanceCount]);
   if (Number(state?.boundarySplatPhaseSourceCount) !== Number(state?.boundarySplatHistoryDepth)) mismatches.push(['phaseSourceCount', state?.boundarySplatHistoryDepth, state?.boundarySplatPhaseSourceCount]);
   if (!Array.isArray(state?.boundarySplatPhaseSources) || state.boundarySplatPhaseSources.length !== 100) mismatches.push(['phaseDescriptors', 100, state?.boundarySplatPhaseSources?.length]);
@@ -483,6 +491,7 @@ function compactState(state) {
     requestedInstanceCount: state?.boundarySplatRequestedInstanceCount,
     sourceCandidateCount: state?.boundarySplatSourceCandidateCount,
     renderedInstanceCount: state?.boundarySplatInstanceCount,
+    indirectDrawIdentity: state?.boundarySplatIndirectDrawIdentity,
     phaseSourceIdentity: state?.boundarySplatPhaseSourceIdentity,
     phaseSourceCount: state?.boundarySplatPhaseSourceCount,
     historyWriteSlot: state?.boundarySplatHistoryWriteSlot,
