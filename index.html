@@ -1178,6 +1178,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="same-history-slot">same history slot</option>
           <option value="offset-history" selected>offset history</option>
           <option value="age-sweep">age sweep</option>
+          <option value="two-phase-alternating">two phase alternating</option>
         </select>
         <span class="slider-val" id="volume-boundary-splat-phase-mode-val">offset history</span>
       </div>
@@ -11918,7 +11919,7 @@ const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 const BOUNDARY_SPLAT_COMPOSITION_VALUES = new Set(['splat-only', 'hybrid-smoke']);
-const BOUNDARY_SPLAT_PHASE_MODE_VALUES = new Set(['shared-current', 'same-history-slot', 'offset-history', 'age-sweep']);
+const BOUNDARY_SPLAT_PHASE_MODE_VALUES = new Set(['shared-current', 'same-history-slot', 'offset-history', 'age-sweep', 'two-phase-alternating']);
 const BOUNDARY_SPLAT_FIELD_LAYOUT_VALUES = new Set(['proof', 'field']);
 
 function normalizeReactionFrontLiveView(value) {
@@ -16474,6 +16475,11 @@ function readVolumeControls() {
   const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(document.getElementById('volume-boundary-splat-phase-mode')?.value);
   const boundarySplatFieldLayout = normalizeBoundarySplatFieldLayout(boundarySplatFieldLayoutRouteValue(params));
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
+  const hybridSmokeRepresentation = params.get('volume_hybrid_smoke_representation') || 'raymarch';
+  const hybridSmokeManifestUrl = params.get('volume_hybrid_smoke_manifest') || '';
+  const hybridSmokeFineLod = Number(params.get('volume_hybrid_smoke_fine_lod') ?? 1);
+  const hybridSmokeMotionRate = Number(params.get('volume_hybrid_smoke_motion_rate') ?? 0.16);
+  const hybridSmokeCoarseCoverage = Number(params.get('volume_hybrid_smoke_coarse_coverage') ?? 1.8);
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
     gradientGain: parseFloat(document.getElementById('volume-reaction-boundary-gradient').value),
@@ -16544,6 +16550,11 @@ function readVolumeControls() {
     boundarySplatComposition,
     boundarySplatFieldLayout,
     boundarySplatFeatureCapture,
+    hybridSmokeRepresentation,
+    hybridSmokeManifestUrl,
+    hybridSmokeFineLod,
+    hybridSmokeMotionRate,
+    hybridSmokeCoarseCoverage,
     boundarySplatInstances: parseFloat(document.getElementById('volume-boundary-splat-instances').value),
     boundarySplatPhaseStride: parseFloat(document.getElementById('volume-boundary-splat-phase-stride').value),
     boundarySplatHistoryDepth: parseFloat(document.getElementById('volume-boundary-splat-history-depth').value),

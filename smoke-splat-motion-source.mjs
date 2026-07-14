@@ -336,6 +336,172 @@ export function buildSmokeSplatDrawPlan({ products, instanceCount, fineLodFracti
   };
 }
 
+export function buildPhaseMatchedHybridSmokePlan({
+  products,
+  flameInstances,
+  fineLodFraction = 1,
+  requestedRoute,
+  effectiveRoute,
+} = {}) {
+  if (!Array.isArray(products) || products.length === 0) throw new TypeError('products must be non-empty');
+  if (!Array.isArray(flameInstances) || flameInstances.length === 0) {
+    throw new TypeError('flameInstances must be non-empty');
+  }
+  const requestedRouteIdentity = requireIdentity(requestedRoute, 'requestedRoute');
+  const effectiveRouteIdentity = requireIdentity(effectiveRoute, 'effectiveRoute');
+  if (requestedRouteIdentity !== effectiveRouteIdentity) {
+    throw new Error(
+      `requested and effective hybrid route mismatch: ${requestedRouteIdentity} != ${effectiveRouteIdentity}`,
+    );
+  }
+
+  const chronologicalProducts = [...products].sort((left, right) => (
+    requireInteger(left?.slotIdentity?.slotWriteTick, 'product slotWriteTick')
+    - requireInteger(right?.slotIdentity?.slotWriteTick, 'product slotWriteTick')
+  ));
+  for (let index = 1; index < chronologicalProducts.length; index += 1) {
+    const previousTick = chronologicalProducts[index - 1].slotIdentity.slotWriteTick;
+    const currentTick = chronologicalProducts[index].slotIdentity.slotWriteTick;
+    if (currentTick !== previousTick + 1) {
+      throw new Error(`hybrid smoke products must have consecutive write ticks: ${previousTick} -> ${currentTick}`);
+    }
+  }
+
+  const productUploads = chronologicalProducts.map(product => prepareProductUpload(product, fineLodFraction));
+  const productsByRelativeAge = [...chronologicalProducts].reverse();
+  const productIndexByIdentity = new Map(
+    chronologicalProducts.map((product, index) => [product.identity, index]),
+  );
+  const instanceBindings = flameInstances.map((instance, instanceIndex) => {
+    const relativeAgeSlots = requireInteger(
+      instance?.phaseHistoryOffsetSlots,
+      `flame instance ${instanceIndex} phaseHistoryOffsetSlots`,
+    );
+    if (relativeAgeSlots < 0) throw new RangeError(`flame instance ${instanceIndex} relative age must be non-negative`);
+    if (relativeAgeSlots >= productsByRelativeAge.length) {
+      throw new RangeError(
+        `flame instance ${instanceIndex} relative age ${relativeAgeSlots} exceeds the ${productsByRelativeAge.length}-product temporal horizon`,
+      );
+    }
+    const product = productsByRelativeAge[relativeAgeSlots];
+    const translation = requireVector3(instance?.transform?.translate, `flame instance ${instanceIndex} translation`);
+    const scale = requireFinite(instance?.transform?.scale, `flame instance ${instanceIndex} scale`);
+    if (!(scale > 0)) throw new RangeError(`flame instance ${instanceIndex} scale must be positive`);
+    const descriptorIndex = requireInteger(instance?.index ?? instanceIndex, `flame instance ${instanceIndex} index`);
+    if (descriptorIndex !== instanceIndex) {
+      throw new Error(
+        `flame instance ${instanceIndex} dense descriptor index must be ${instanceIndex}, got ${descriptorIndex}`,
+      );
+    }
+    return {
+      instanceIndex: descriptorIndex,
+      relativeAgeSlots,
+      productIndex: productIndexByIdentity.get(product.identity),
+      productIdentity: product.identity,
+      productWriteTick: product.slotIdentity.slotWriteTick,
+      translation,
+      scale,
+    };
+  });
+
+  const maxSelectedProductCount = Math.max(...productUploads.map(upload => upload.selectedCount));
+  const drawInstanceCount = maxSelectedProductCount * instanceBindings.length;
+  if (!Number.isSafeInteger(drawInstanceCount) || drawInstanceCount > 0xffffffff) {
+    throw new RangeError(`requested uncapped hybrid draw exceeds WebGPU draw instance address space: ${drawInstanceCount}`);
+  }
+  return {
+    identity: 'phase-matched-spatial-strata-hybrid-plan-v0',
+    status: 'bound',
+    requestedRoute: requestedRouteIdentity,
+    effectiveRoute: effectiveRouteIdentity,
+    temporalAuthority: 'explicit-relative-age-consecutive-product-binding-v0',
+    temporalHorizonProducts: chronologicalProducts.length,
+    latestSlotWriteTick: chronologicalProducts.at(-1).slotIdentity.slotWriteTick,
+    oldestSlotWriteTick: chronologicalProducts[0].slotIdentity.slotWriteTick,
+    flameInstanceCount: instanceBindings.length,
+    uniqueProductCount: productUploads.length,
+    fineLodFraction,
+    maxSelectedProductCount,
+    drawInstanceCount,
+    rejectedExtinctionMass: productUploads.reduce((sum, upload) => sum + upload.rejectedExtinctionMass, 0),
+    productUploads,
+    instanceBindings,
+  };
+}
+
+export function assessControlledHybridSmokeMotion({
+  sameTimeRepeatMeanAbsDiff,
+  simulatorStepCounts,
+  controlledTimesMs,
+  rendererElapsedSeconds,
+  frameHashes,
+  adjacentMeanAbsDiffs,
+  flameControlMeanAbsDiffs,
+  determinismTolerance = 0.02,
+  flameControlTolerance = 0.02,
+  timeToleranceSeconds = 1e-6,
+  motionThreshold = 0.1,
+} = {}) {
+  if (!Array.isArray(simulatorStepCounts) || simulatorStepCounts.length < 2) {
+    throw new TypeError('simulatorStepCounts must contain at least two captures');
+  }
+  if (!Array.isArray(controlledTimesMs) || controlledTimesMs.length !== simulatorStepCounts.length) {
+    throw new TypeError('controlledTimesMs must align with simulatorStepCounts');
+  }
+  if (!Array.isArray(frameHashes) || frameHashes.length !== simulatorStepCounts.length) {
+    throw new TypeError('frameHashes must align with simulatorStepCounts');
+  }
+  if (!Array.isArray(rendererElapsedSeconds) || rendererElapsedSeconds.length !== simulatorStepCounts.length) {
+    throw new TypeError('rendererElapsedSeconds must align with simulatorStepCounts');
+  }
+  if (!Array.isArray(adjacentMeanAbsDiffs) || adjacentMeanAbsDiffs.length !== simulatorStepCounts.length - 1) {
+    throw new TypeError('adjacentMeanAbsDiffs must describe every adjacent capture pair');
+  }
+  if (!Array.isArray(flameControlMeanAbsDiffs) || flameControlMeanAbsDiffs.length !== simulatorStepCounts.length - 1) {
+    throw new TypeError('flameControlMeanAbsDiffs must describe every adjacent capture pair');
+  }
+  const baseStep = requireInteger(simulatorStepCounts[0], 'simulatorStepCounts[0]');
+  if (simulatorStepCounts.some((value, index) => requireInteger(value, `simulatorStepCounts[${index}]`) !== baseStep)) {
+    throw new Error('simulator state moved during the controlled smoke-only timeline');
+  }
+  const times = controlledTimesMs.map((value, index) => requireFinite(value, `controlledTimesMs[${index}]`));
+  for (let index = 1; index < times.length; index += 1) {
+    if (!(times[index] > times[index - 1])) throw new Error('controlled smoke time must increase strictly');
+  }
+  const elapsedTimes = rendererElapsedSeconds.map((value, index) => requireFinite(value, `rendererElapsedSeconds[${index}]`));
+  elapsedTimes.forEach((elapsed, index) => {
+    const expected = times[index] * 0.001;
+    if (Math.abs(elapsed - expected) > timeToleranceSeconds) {
+      throw new Error(`renderer elapsed time disagreement at frame ${index}: ${elapsed} != ${expected}`);
+    }
+  });
+  const repeatDiff = requireNonNegative(sameTimeRepeatMeanAbsDiff, 'sameTimeRepeatMeanAbsDiff');
+  if (repeatDiff > determinismTolerance) {
+    throw new Error(`same-time smoke determinism failed: ${repeatDiff} > ${determinismTolerance}`);
+  }
+  const diffs = adjacentMeanAbsDiffs.map((value, index) => requireNonNegative(value, `adjacentMeanAbsDiffs[${index}]`));
+  const flameDiffs = flameControlMeanAbsDiffs.map((value, index) => requireNonNegative(value, `flameControlMeanAbsDiffs[${index}]`));
+  const maxFlameControlMeanAbsDiff = Math.max(...flameDiffs);
+  if (maxFlameControlMeanAbsDiff > flameControlTolerance) {
+    throw new Error(`flame control moved during smoke-only motion proof: ${maxFlameControlMeanAbsDiff} > ${flameControlTolerance}`);
+  }
+  const maxMeanAbsDiff = Math.max(...diffs);
+  const uniqueFrameHashCount = new Set(frameHashes.map((value, index) => requireIdentity(value, `frameHashes[${index}]`))).size;
+  if (uniqueFrameHashCount < 2 || !(maxMeanAbsDiff > motionThreshold)) {
+    throw new Error('cached or static hybrid output rejected: controlled smoke did not move in pixels');
+  }
+  return {
+    status: 'passed',
+    authority: 'frozen-simulator-controlled-smoke-time-pixel-delta-v0',
+    simulatorStepCount: baseStep,
+    controlledDurationMs: times.at(-1) - times[0],
+    uniqueFrameHashCount,
+    maxMeanAbsDiff,
+    sameTimeRepeatMeanAbsDiff: repeatDiff,
+    maxFlameControlMeanAbsDiff,
+  };
+}
+
 export async function sha256Hex(buffer) {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
   return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
