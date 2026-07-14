@@ -1,6 +1,13 @@
 export const COUPLED_SMOKE_ATTACHMENT_IDENTITY = 'coupled-near-far-raymarched-smoke-attachment-v0';
 export const COUPLED_SMOKE_OVERLAP_AUTHORITY = 'near-authoritative-overlap-far-residual-v0';
 export const COUPLED_SMOKE_DEPTH_CONTRACT = 'splat-depth-conditioned-front-back-near-far-smoke-intervals-v1';
+export const COUPLED_PHASE_STATE_SOCKET_IDENTITY = 'coupled-near-far-phase-state-socket-v0';
+export const COUPLED_PHASE_STATE_SCHEMA = 'kaminos.coupled-smoke.phase-state.v0';
+export const COUPLED_PHASE_STATE_PRODUCER_IDENTITY = 'native-near-far-fluid-state-export-v0';
+export const COUPLED_PHASE_STATE_NEAR_LAYOUT = 'fluid-4xvec4f-per-cell-v0';
+export const COUPLED_PHASE_STATE_FAR_LAYOUT = 'velocity-density-extinction-proxy-vec4f-per-cell-v0';
+export const COUPLED_PHASE_STATE_HISTORY_AUTHORITY = 'current-state-only-no-fabricated-phase-history-v0';
+export const COUPLED_PHASE_STATE_RENDERER_AUTHORITY = 'renderer-neutral-state-only-v0';
 
 const WORLD_CONTRACT = Object.freeze({
   identity: 'explicit-2x-world-bounds-upper-quarter-overlap-v0',
@@ -26,6 +33,28 @@ function positiveGrid(value, label) {
   return grid;
 }
 
+function nonnegativeInteger(value, label) {
+  const integer = Number(value);
+  if (!Number.isInteger(integer) || integer < 0) throw new Error(`${label} must be a nonnegative integer`);
+  return integer;
+}
+
+function assertExpectedVersion(expected, effective, label) {
+  if (expected === null || expected === undefined) return;
+  const normalizedExpected = nonnegativeInteger(expected, `expected ${label}`);
+  if (normalizedExpected !== effective) {
+    throw new Error(`coupled phase state stale ${label}: expected ${normalizedExpected}, effective ${effective}`);
+  }
+}
+
+function unitFromWorld(bounds) {
+  const scale = bounds.min.map((minimum, index) => 1 / (bounds.max[index] - minimum));
+  return {
+    scale,
+    offset: bounds.min.map((minimum, index) => -minimum * scale[index]),
+  };
+}
+
 export function smokeDomainWorldContract() {
   return {
     identity: WORLD_CONTRACT.identity,
@@ -41,6 +70,130 @@ export function smokeDomainMetricVelocityScale(nearGrid, farGrid) {
   const near = positiveGrid(nearGrid, 'nearGrid');
   const far = positiveGrid(farGrid, 'farGrid');
   return far / (2 * near);
+}
+
+export function createCoupledSmokePhaseStateDescriptor({
+  active,
+  generation,
+  retainedHistoryEpoch,
+  writeTick,
+  nearGrid,
+  farGrid,
+  nearBuffer,
+  farBuffer,
+  farBufferIndex,
+  historyOffset = 0,
+  expectedGeneration = null,
+  expectedRetainedHistoryEpoch = null,
+  expectedWriteTick = null,
+} = {}) {
+  if (!active) throw new Error('coupled phase state socket inactive');
+  const effectiveGeneration = nonnegativeInteger(generation, 'generation');
+  const effectiveRetainedHistoryEpoch = nonnegativeInteger(retainedHistoryEpoch, 'retainedHistoryEpoch');
+  const effectiveWriteTick = nonnegativeInteger(writeTick, 'writeTick');
+  const requestedHistoryOffset = nonnegativeInteger(historyOffset, 'historyOffset');
+  if (requestedHistoryOffset !== 0) {
+    throw new Error(`coupled phase state history offset ${requestedHistoryOffset} unavailable; retained slot count is 1`);
+  }
+  assertExpectedVersion(expectedGeneration, effectiveGeneration, 'generation');
+  assertExpectedVersion(expectedRetainedHistoryEpoch, effectiveRetainedHistoryEpoch, 'retained-history epoch');
+  assertExpectedVersion(expectedWriteTick, effectiveWriteTick, 'write tick');
+  if (!nearBuffer) throw new Error('coupled phase state nearBuffer is unavailable');
+  if (!farBuffer) throw new Error('coupled phase state farBuffer is unavailable');
+  const effectiveFarBufferIndex = nonnegativeInteger(farBufferIndex, 'farBufferIndex');
+  if (effectiveFarBufferIndex > 1) throw new Error('farBufferIndex must identify ping-pong state 0 or 1');
+  const effectiveNearGrid = Math.round(positiveGrid(nearGrid, 'nearGrid'));
+  const effectiveFarGrid = Math.round(positiveGrid(farGrid, 'farGrid'));
+  const world = smokeDomainWorldContract();
+
+  return {
+    schema: COUPLED_PHASE_STATE_SCHEMA,
+    socketIdentity: COUPLED_PHASE_STATE_SOCKET_IDENTITY,
+    producerIdentity: COUPLED_PHASE_STATE_PRODUCER_IDENTITY,
+    phase: {
+      token: {
+        generation: effectiveGeneration,
+        retainedHistoryEpoch: effectiveRetainedHistoryEpoch,
+        writeTick: effectiveWriteTick,
+      },
+      retainedHistoryAuthority: COUPLED_PHASE_STATE_HISTORY_AUTHORITY,
+      writeTickAuthority: 'command-encoded-order-not-queue-completion-v0',
+      retainedSlotCount: 1,
+      historyOffset: requestedHistoryOffset,
+      currentFarStateIndex: effectiveFarBufferIndex,
+    },
+    domains: {
+      near: {
+        role: 'near-fire-and-smoke-state',
+        grid: effectiveNearGrid,
+        worldBounds: world.near,
+        unitFromWorld: unitFromWorld(world.near),
+        buffer: nearBuffer,
+        bufferLayout: {
+          identity: COUPLED_PHASE_STATE_NEAR_LAYOUT,
+          bytesPerCell: 64,
+          slots: [
+            { index: 0, channels: ['velocity-x', 'velocity-y', 'velocity-z', 'density'] },
+            { index: 1, channels: ['smoke', 'heat', 'fuel', 'material-detail'] },
+            { index: 2, channels: ['flame', 'ember', 'flame-detail', 'combustion-front'] },
+            { index: 3, channels: ['micro-smoke', 'interface-shred', 'fire-lick', 'ember-fleck'] },
+          ],
+        },
+        witnesses: {
+          conservativeDensityExtinction: {
+            authority: 'near-density-material-microdetail-source-fields-v0',
+            availability: 'source-fields-present-derivation-consumer-owned',
+          },
+          transport: { authority: 'near-velocity-density-slot-v0', availability: 'source-fields-present' },
+          materialTemperature: {
+            authority: 'near-material-fire-microdetail-slots-v0',
+            availability: 'source-fields-present',
+            temperatureAuthority: 'normalized-simulation-heat-witness-not-kelvin-v0',
+          },
+        },
+      },
+      far: {
+        role: 'far-smoke-transport-state',
+        grid: effectiveFarGrid,
+        worldBounds: world.far,
+        unitFromWorld: unitFromWorld(world.far),
+        buffer: farBuffer,
+        bufferLayout: {
+          identity: COUPLED_PHASE_STATE_FAR_LAYOUT,
+          bytesPerCell: 16,
+          channels: ['velocity-x', 'velocity-y', 'velocity-z', 'density-extinction-proxy'],
+        },
+        witnesses: {
+          conservativeDensityExtinction: {
+            authority: 'far-density-is-extinction-proxy-v0',
+            availability: 'source-field-present',
+          },
+          transport: { authority: 'far-velocity-density-state-v0', availability: 'source-fields-present' },
+          materialTemperature: {
+            authority: 'not-carried-by-far-vec4-state-v0',
+            availability: 'unavailable',
+          },
+        },
+      },
+    },
+    overlap: {
+      authority: COUPLED_SMOKE_OVERLAP_AUTHORITY,
+      depthContract: COUPLED_SMOKE_DEPTH_CONTRACT,
+      worldBounds: world.overlap,
+      axisIntervals: {
+        x: [world.overlap.min[0], world.overlap.max[0]],
+        y: [world.overlap.min[1], world.overlap.max[1]],
+        z: [world.overlap.min[2], world.overlap.max[2]],
+      },
+    },
+    renderer: {
+      authority: COUPLED_PHASE_STATE_RENDERER_AUTHORITY,
+      ownsRasterization: false,
+      ownsPhaseSlotCache: false,
+      ownsHierarchyProduction: false,
+      consumerSynchronization: 'same-device-queue-order-or-explicit-onSubmittedWorkDone-v0',
+    },
+  };
 }
 
 export function coupledSmokeDomainShaderWGSL(nearGrid, farGrid, fluidSlotsPerCell = 4) {
