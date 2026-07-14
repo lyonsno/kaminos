@@ -25,6 +25,8 @@ assert.match(core, /finishDebugFullFieldImport/, 'runtime exposes import validat
 assert.match(core, /receiver-initialized-from-filtered-high-t-v0/, 'runtime names receiver initialization authority');
 assert.match(core, /learned-selective-head-composition-not-filtered-high-truth-v0/, 'runtime names learned selective composition authority without impersonating high truth');
 assert.match(core, /learned-selective-head-application-v0/, 'runtime names the selective head application route');
+assert.match(core, /offline-high-truth-diagnostic-velocity-oracle-v0/, 'runtime names diagnostic velocity oracle authority explicitly');
+assert.match(core, /offline-diagnostic-velocity-oracle-application-v0/, 'runtime gives the oracle a separate non-predictive import route');
 assert.match(core, /advanceDebugImportedFieldSteps/, 'controlled receiver stepping is atomic and bound to the applied import session');
 assert.match(core, /renderLoopPaused:[\s\S]*state\.active = false/, 'applied imports remain held outside the animation loop');
 assert.match(core, /fluidBuffers\[0\][\s\S]*fluidBuffers\[1\]/, 'runtime initializes both fluid ping-pong buffers');
@@ -35,6 +37,11 @@ assert.match(
   exporter,
   /learned-selective-head-composition-not-filtered-high-truth-v0[\s\S]*mustNotBeAcceptedAs[\s\S]*filtered-high/,
   'selective composition admission preserves its explicit non-truth consumption contract',
+);
+assert.match(
+  exporter,
+  /offline-high-truth-diagnostic-velocity-oracle-v0[\s\S]*exact-high-velocity-transplant-oracle-v0[\s\S]*mustNotBePromotedAs/,
+  'diagnostic velocity oracle admission requires exact oracle identity and a non-promotion contract',
 );
 assert.match(exporter, /--advance-imported-steps/, 'exporter advances imported state by an explicit caller-owned step count');
 assert.match(
@@ -65,8 +72,13 @@ assert.match(exporter, /importedAdvance/, 'export manifest preserves before/afte
 assert.match(core, /requestedSteps === 0[\s\S]*imported-receiver-held-state-v0/, 'zero-step imports identify a held control');
 assert.match(
   core,
-  /SELECTIVE_COMPOSITION_AUTHORITY[\s\S]*requestedSteps > 0[\s\S]*selective-composition-held-only/,
-  'learned selective compositions cannot be advanced as physical receiver state',
+  /isHeldOnlyImportedFieldAuthority[\s\S]*requestedSteps > 0[\s\S]*held-imported-field-only/,
+  'learned selective compositions and diagnostic velocity oracles cannot be advanced as physical receiver state',
+);
+assert.match(
+  exporter,
+  /initialField\?\.oracleOnly[\s\S]*!renderOnly[\s\S]*diagnostic-velocity-oracle-render-only/,
+  'diagnostic velocity oracle cannot escape the render-only witness path',
 );
 assert.match(core, /learned-selective-composition-held-render-v0/, 'held learned composition has an authority-specific render identity');
 assert.match(core, /requestedSteps === 1[\s\S]*ordinary-receiver-single-simulation-step-v0/, 'one-step imports identify the ordinary receiver assay');

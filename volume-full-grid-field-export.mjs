@@ -12,6 +12,18 @@ const COARSE_RECEIVER_FILTER = 'volume-overlap-box-filter-high-to-receiver-v0';
 const SELECTIVE_COMPOSITION_SCHEMA = 'kaminos.volume.exact-basin-selective-composition.v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0';
+const DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY = 'offline-high-truth-diagnostic-velocity-oracle-v0';
+const DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION = 'offline-diagnostic-velocity-oracle-application-v0';
+const SCALAR_ACTIVITY_CUE_SCHEMA = 'kaminos.volume.exact-basin-support-probe.v0';
+const SCALAR_ACTIVITY_CUE_APPLICATION = 'learned-fire-flow-visibility-carrier-v0';
+const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
+  'exact-high-field-renderer-coupled-derived-target-v0',
+  'native-low-derived-then-nearest-upsampled-control-v0',
+  'full-low-state-spatial-mlp-derived-carrier-v0',
+  'support-probability-weighted-derived-carrier-v0',
+  'validation-selected-residual-gate-derived-carrier-v0',
+  'accepted-splat-support-gated-derived-carrier-v0',
+]);
 const FIELD_LAYOUT_IDENTITY = 'x-fastest-zyx-c-interleaved-v0';
 
 const args = new Map();
@@ -31,6 +43,8 @@ const manifestPath = resolve(String(args.get('--manifest') || join(outDir, 'mani
 const requestedUrl = String(args.get('--url') || 'http://127.0.0.1:8095/?kaminos_volume_smoke=1');
 const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get('--source-capture'))) : null;
 const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
+const scalarActivityCueManifestPath = args.has('--scalar-activity-cue-manifest') ? resolve(String(args.get('--scalar-activity-cue-manifest'))) : null;
+const scalarActivityCueRole = args.has('--scalar-activity-cue-role') ? String(args.get('--scalar-activity-cue-role')) : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
 const renderOnly = args.has('--render-only');
 const renderWarmupCount = Math.max(0, Math.floor(Number(args.get('--render-warmup-count') || 0)));
@@ -88,13 +102,24 @@ function resolveInitialFieldManifest() {
   if (isCoarseReceiver && manifest.filterIdentity !== COARSE_RECEIVER_FILTER) {
     throw new Error(`unsupported receiver filter: ${manifest.filterIdentity || '(missing)'}`);
   }
+  const isVelocityOracle = isSelectiveComposition
+    && manifest.compositionAuthority === DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY;
+  const isLearnedSelectiveComposition = isSelectiveComposition
+    && manifest.compositionAuthority === SELECTIVE_COMPOSITION_AUTHORITY;
   if (isSelectiveComposition) {
-    if (manifest.compositionAuthority !== SELECTIVE_COMPOSITION_AUTHORITY || manifest.runtimeTruthAvailable !== false) {
+    if ((!isLearnedSelectiveComposition && !isVelocityOracle) || manifest.runtimeTruthAvailable !== false) {
       throw new Error('selective composition authority or runtime truth contract mismatch');
     }
     if (manifest.consumptionContract?.requiresExplicitSchemaAdmission !== true
       || !String(manifest.consumptionContract?.mustNotBeAcceptedAs || '').includes('coarse-receiver-initial')) {
       throw new Error('selective composition mustNotBeAcceptedAs filtered-high receiver state');
+    }
+    if (isVelocityOracle
+      && (manifest.diagnosticVelocity?.identity !== 'exact-high-velocity-transplant-oracle-v0'
+        || manifest.diagnosticVelocity?.highTruthReadAtApplication !== true
+        || manifest.diagnosticVelocity?.deployable !== false
+        || !String(manifest.consumptionContract?.mustNotBePromotedAs || '').match(/prediction|runtime/i))) {
+      throw new Error('diagnostic velocity oracle identity or non-promotion contract mismatch');
     }
   }
   const layoutIdentity = isCoarseReceiver ? manifest.layoutIdentity : FIELD_LAYOUT_IDENTITY;
@@ -121,14 +146,77 @@ function resolveInitialFieldManifest() {
     manifestPath: initialFieldManifestPath,
     manifestSha256: sha256(raw),
     grid,
-    initializationAuthority: isSelectiveComposition ? SELECTIVE_COMPOSITION_AUTHORITY : COARSE_RECEIVER_AUTHORITY,
-    filterIdentity: isSelectiveComposition ? SELECTIVE_COMPOSITION_APPLICATION : COARSE_RECEIVER_FILTER,
+    initializationAuthority: isVelocityOracle
+      ? DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY
+      : isSelectiveComposition
+        ? SELECTIVE_COMPOSITION_AUTHORITY
+        : COARSE_RECEIVER_AUTHORITY,
+    filterIdentity: isVelocityOracle
+      ? DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION
+      : isSelectiveComposition
+        ? SELECTIVE_COMPOSITION_APPLICATION
+        : COARSE_RECEIVER_FILTER,
     layoutIdentity,
     source: manifest.source || null,
     receiverInitialSimStepCount: Number(manifest.receiver?.initialSimStepCount || 0),
     heldOnly: isSelectiveComposition,
+    oracleOnly: isVelocityOracle,
     fluid: validateArtifact(fluid, 'initial fluid', [grid, grid, grid, 16], fluidChannels),
     front: validateArtifact(front, 'initial front', [grid, grid, grid, 1], ['frontTopology']),
+  };
+}
+
+function resolveScalarActivityCueManifest() {
+  if (!scalarActivityCueManifestPath) {
+    if (scalarActivityCueRole) throw new Error('--scalar-activity-cue-role requires --scalar-activity-cue-manifest');
+    return null;
+  }
+  if (!scalarActivityCueRole) throw new Error('--scalar-activity-cue-manifest requires --scalar-activity-cue-role');
+  const raw = readFileSync(scalarActivityCueManifestPath, 'utf8');
+  const manifest = JSON.parse(raw);
+  if (manifest.schema !== SCALAR_ACTIVITY_CUE_SCHEMA || manifest.status !== 'captured' || manifest.failurePhase !== null) {
+    throw new Error(`unsupported scalar activity cue manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
+  }
+  const target = manifest.derivedTargets?.fireFlowVisibilityCarrier;
+  if (target?.identity !== 'fire-flow-visibility-carrier-v0'
+    || target.authority !== 'exact-high-field-renderer-coupled-derived-target-v0'
+    || target.physicalTruth !== false) {
+    throw new Error('scalar activity cue target identity or physical-truth contract mismatch');
+  }
+  const artifact = manifest.denseDerivedTargets?.fireFlowVisibilityCarrier?.[scalarActivityCueRole];
+  if (!artifact) throw new Error(`scalar activity cue role is absent: ${scalarActivityCueRole}`);
+  const shape = artifact.shape;
+  const grid = Number(shape?.[0]);
+  if (!Number.isInteger(grid) || JSON.stringify(shape) !== JSON.stringify([grid, grid, grid, 1])) {
+    throw new Error(`scalar activity cue shape mismatch: ${JSON.stringify(shape)}`);
+  }
+  if (JSON.stringify(artifact.channelOrder) !== JSON.stringify(['fireFlowVisibilityCarrier'])) {
+    throw new Error('scalar activity cue channel order mismatch');
+  }
+  if (!SCALAR_ACTIVITY_CUE_AUTHORITIES.has(artifact.authority)) {
+    throw new Error(`unsupported scalar activity cue authority: ${artifact.authority || '(missing)'}`);
+  }
+  const path = resolve(String(artifact.path || ''));
+  const expectedByteLength = grid * grid * grid * Float32Array.BYTES_PER_ELEMENT;
+  if (Number(artifact.byteLength) !== expectedByteLength || statSync(path).size !== expectedByteLength) {
+    throw new Error(`scalar activity cue byte length mismatch: ${artifact.byteLength}/${statSync(path).size}/${expectedByteLength}`);
+  }
+  const actualSha256 = sha256File(path);
+  if (actualSha256 !== artifact.sha256) {
+    throw new Error(`scalar activity cue SHA-256 mismatch: ${actualSha256} != ${artifact.sha256}`);
+  }
+  return {
+    applicationIdentity: SCALAR_ACTIVITY_CUE_APPLICATION,
+    manifestPath: scalarActivityCueManifestPath,
+    manifestSha256: sha256(raw),
+    role: scalarActivityCueRole,
+    grid,
+    path,
+    sha256: artifact.sha256,
+    actualSha256,
+    byteLength: expectedByteLength,
+    channelOrder: artifact.channelOrder,
+    cueAuthority: artifact.authority,
   };
 }
 
@@ -368,6 +456,62 @@ async function uploadInitialArtifact(ws, sessionId, kind, artifact) {
   return { kind, byteLength: bytes.byteLength, sha256: artifact.sha256, chunkCount, chunkFloats };
 }
 
+async function uploadScalarActivityCue(ws, cue) {
+  const begin = await evaluateByValue(
+    ws,
+    `window.__kaminosVolumePrototype.beginDebugScalarActivityCueImport(${JSON.stringify({
+      grid: cue.grid,
+      byteLength: cue.byteLength,
+      sha256: cue.sha256,
+      channelOrder: cue.channelOrder,
+      cueAuthority: cue.cueAuthority,
+      applicationIdentity: cue.applicationIdentity,
+      sourceManifestPath: cue.manifestPath,
+      sourceManifestSha256: cue.manifestSha256,
+      sourceRole: cue.role,
+    })})`,
+    'begin-scalar-activity-cue-import',
+  );
+  if (begin?.ok !== true) throw new Error(`scalar activity cue import did not begin cleanly: ${JSON.stringify(begin)}`);
+  const bytes = readFileSync(cue.path);
+  const chunkBytes = chunkFloats * Float32Array.BYTES_PER_ELEMENT;
+  let byteOffset = 0;
+  let chunkCount = 0;
+  while (byteOffset < bytes.byteLength) {
+    const chunk = bytes.subarray(byteOffset, Math.min(bytes.byteLength, byteOffset + chunkBytes));
+    const receipt = await evaluateByValue(
+      ws,
+      `window.__kaminosVolumePrototype.writeDebugScalarActivityCueImportChunk(${JSON.stringify({
+        sessionId: begin.sessionId,
+        byteOffset,
+        base64: chunk.toString('base64'),
+      })})`,
+      'scalar-activity-cue-chunk',
+    );
+    if (receipt?.ok !== true || Number(receipt.byteOffset) !== byteOffset) {
+      throw new Error(`bad scalar activity cue chunk at ${byteOffset}: ${JSON.stringify(receipt)}`);
+    }
+    byteOffset += chunk.byteLength;
+    chunkCount += 1;
+  }
+  const finish = await evaluateByValue(
+    ws,
+    `window.__kaminosVolumePrototype.finishDebugScalarActivityCueImport(${JSON.stringify({ sessionId: begin.sessionId })})`,
+    'finish-scalar-activity-cue-import',
+  );
+  if (finish?.ok !== true || finish.status !== 'applied') {
+    throw new Error(`scalar activity cue import did not apply cleanly: ${JSON.stringify(finish)}`);
+  }
+  if (finish.cueAuthority !== cue.cueAuthority || finish.sha256 !== cue.sha256 || finish.sourceRole !== cue.role) {
+    throw new Error(`scalar activity cue effective identity mismatch: ${JSON.stringify(finish)}`);
+  }
+  return {
+    requested: cue,
+    upload: { byteLength: bytes.byteLength, chunkCount, chunkFloats },
+    effective: finish,
+  };
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
   let phase = 'source-capture-validation';
@@ -377,6 +521,8 @@ async function main() {
   let initialFieldImport = null;
   let importedAdvance = null;
   let importedRender = null;
+  let scalarActivityCue = null;
+  let scalarActivityCueImport = null;
   const renderWarmups = [];
   let renderControlOverrides = {};
   let browserSession = null;
@@ -387,7 +533,7 @@ async function main() {
   const runtimeEvents = [];
   try {
     phase = 'render-option-validation';
-    if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(renderComposition)) {
+    if (!['splat-only-v0', 'raymarch-under-splats-v0', 'raymarch-only-v0'].includes(renderComposition)) {
       throw new Error(`unsupported --render-composition: ${renderComposition}`);
     }
     renderControlOverrides = args.has('--render-control-overrides-json')
@@ -398,15 +544,37 @@ async function main() {
     }
     phase = 'source-capture-validation';
     initialField = resolveInitialFieldManifest();
+    scalarActivityCue = resolveScalarActivityCueManifest();
     if (initialField && !args.has('--advance-imported-steps')) {
       throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
     }
     if (initialField?.heldOnly && advanceImportedSteps > 0) {
       throw new Error('selective-composition-held-only: --advance-imported-steps must be 0');
     }
+    if (initialField?.oracleOnly && !renderOnly) {
+      throw new Error('diagnostic-velocity-oracle-render-only: --render-only is required');
+    }
     if (renderPngPath && !initialField) throw new Error('--render-png requires --initial-field-manifest');
     if (renderOnly && (!initialField || !renderPngPath)) {
       throw new Error('--render-only requires --initial-field-manifest and --render-png');
+    }
+    if (scalarActivityCue) {
+      if (!renderOnly || !initialField || advanceImportedSteps !== 0) {
+        throw new Error('scalar activity cue assay requires --render-only, --initial-field-manifest, and --advance-imported-steps 0');
+      }
+      for (const key of ['oracleActivityCue', 'oracleActivityCurlNoise', 'oracleActivityVorticity', 'oracleActivityMaterial']) {
+        if (Number(renderControlOverrides[key] || 0) !== 0) {
+          throw new Error(`scalar activity cue display forbids force/material injection: ${key}`);
+        }
+      }
+      renderControlOverrides = {
+        ...renderControlOverrides,
+        oracleActivityCue: 0,
+        oracleActivityDisplay: 1,
+        oracleActivityCurlNoise: 0,
+        oracleActivityVorticity: 0,
+        oracleActivityMaterial: 0,
+      };
     }
     const resolved = resolveSourceCapture();
     url = resolved.url;
@@ -521,6 +689,10 @@ async function main() {
       if (importedAdvance?.ok !== true || importedAdvance.completedSteps !== advanceImportedSteps) {
         throw new Error(`imported receiver advance failed: ${JSON.stringify(importedAdvance)}`);
       }
+      if (scalarActivityCue) {
+        phase = 'scalar-activity-cue-import';
+        scalarActivityCueImport = await uploadScalarActivityCue(ws, scalarActivityCue);
+      }
       if (renderPngPath) {
         phase = 'mount-imported-render-canvas';
         const canvasMount = await evaluateByValue(ws, `(() => {
@@ -612,7 +784,40 @@ async function main() {
         if (renderCompositionExplicit && renderReceipt.boundarySplatCompositionEffective !== renderComposition) {
           throw new Error(`requested render composition was not effective: ${renderComposition} != ${renderReceipt.boundarySplatCompositionEffective || '(missing)'}`);
         }
-        const rect = renderReceipt.canvasCssRect;
+        phase = 'post-render-canvas-geometry';
+        const postRenderCanvasMount = await evaluateByValue(ws, `(() => {
+          const canvas = window.__kaminosVolumePrototype?.canvasElement?.();
+          if (!canvas) return { ok: false, reason: 'renderer-canvas-missing' };
+          const intrinsicAspect = canvas.width / Math.max(1, canvas.height);
+          const maxHeight = Math.max(64, Math.min(700, window.innerHeight));
+          const maxWidth = Math.max(64, window.innerWidth);
+          const widthFromHeight = maxHeight * intrinsicAspect;
+          const width = Math.min(maxWidth, widthFromHeight);
+          const height = width / Math.max(0.0001, intrinsicAspect);
+          canvas.style.setProperty('width', width + 'px', 'important');
+          canvas.style.setProperty('height', height + 'px', 'important');
+          const rect = canvas.getBoundingClientRect();
+          return {
+            ok: true,
+            identity: 'post-render-canvas-geometry-v0',
+            connected: canvas.isConnected,
+            intrinsicWidth: canvas.width,
+            intrinsicHeight: canvas.height,
+            intrinsicAspect,
+            cssAspect: rect.width / Math.max(1, rect.height),
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+            rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+          };
+        })()`, phase);
+        const aspectError = Math.abs(
+          Number(postRenderCanvasMount?.cssAspect) - Number(postRenderCanvasMount?.intrinsicAspect),
+        ) / Math.max(0.0001, Number(postRenderCanvasMount?.intrinsicAspect));
+        if (postRenderCanvasMount?.ok !== true || !postRenderCanvasMount.connected || !Number.isFinite(aspectError) || aspectError > 0.002) {
+          throw new Error(`post-render-canvas-geometry-mismatch: ${JSON.stringify(postRenderCanvasMount)}`);
+        }
+        renderReceipt.canvasCssRect = postRenderCanvasMount.rect;
+        const rect = postRenderCanvasMount.rect;
         if (rect.x < 0 || rect.y < 0 || rect.width < 64 || rect.height < 64) {
           throw new Error(`canvas-clip-offscreen: ${JSON.stringify(rect)}`);
         }
@@ -628,7 +833,8 @@ async function main() {
         writeFileSync(renderPngPath, png);
         importedRender = {
           ...renderReceipt,
-          canvasMount,
+          initialCanvasMount: canvasMount,
+          canvasMount: postRenderCanvasMount,
           path: renderPngPath,
           byteLength: png.byteLength,
           sha256: sha256(png),
@@ -636,6 +842,7 @@ async function main() {
           importedFieldManifestSha256: initialField.manifestSha256,
           importedAdvanceIdentity: importedAdvance.identity,
           importedAdvanceCompletedSteps: importedAdvance.completedSteps,
+          scalarActivityCueImport,
         };
       }
     }
@@ -660,6 +867,7 @@ async function main() {
         runtimeEvents,
         initialFieldImport,
         importedAdvance,
+        scalarActivityCueImport,
         renderWarmups,
         importedRender,
         routeIdentity: importedRender?.routeIdentity || initialFieldImport?.effective?.routeIdentity || null,
@@ -755,6 +963,7 @@ async function main() {
       deterministicReplay: begin.deterministicReplay,
       initialFieldImport,
       importedAdvance,
+      scalarActivityCueImport,
       renderWarmups,
       importedRender,
       fluidComponents: begin.fluidComponents,
@@ -789,8 +998,11 @@ async function main() {
       sourceCapture,
       requestedSourceCapture: sourceCapturePath,
       requestedInitialFieldManifest: initialFieldManifestPath,
+      requestedScalarActivityCueManifest: scalarActivityCueManifestPath,
+      requestedScalarActivityCueRole: scalarActivityCueRole,
       initialFieldImport,
       importedAdvance,
+      scalarActivityCueImport,
       renderWarmups,
       importedRender,
       targetOrigin,

@@ -20,6 +20,14 @@ assert.match(core, /releaseDebugFullFieldExport/, 'volume prototype exposes expl
 assert.match(core, /boundaryDescriptor/, 'full-field export includes the live boundary sidecar');
 assert.match(core, /materializeFullFieldDerivedBuffersForDebugExport/, 'full-field export rebuilds derived sidecar and splat buffers from the frozen field');
 assert.match(core, /boundarySplatDescriptor/, 'full-field export includes the effective compact learned-splat output');
+assert.match(core, /beginDebugScalarActivityCueImport/, 'volume prototype exposes chunked scalar activity cue import custody');
+assert.match(core, /writeDebugScalarActivityCueImportChunk/, 'scalar activity cue import accepts sequential checksum-bound chunks');
+assert.match(core, /finishDebugScalarActivityCueImport/, 'scalar activity cue import validates and publishes the complete field');
+assert.match(core, /learned-fire-flow-visibility-carrier-v0/, 'scalar cue receiver distinguishes learned fire carrier authority from truth oracle authority');
+assert.match(core, /validation-selected-residual-gate-derived-carrier-v0/, 'scalar cue receiver admits the validation-calibrated carrier authority');
+assert.match(core, /\['splat-only-v0', 'raymarch-under-splats-v0', 'raymarch-only-v0'\]/, 'frozen renderer admits an explicit raymarch-only carrier display');
+assert.match(core, /scalar-activity-cue-isolated-raymarch-display-v0/, 'scalar cue display identifies its isolated cue-opacity projection');
+assert.match(core, /alpha\s*=\s*mix\(alpha,\s*oracleDisplayAlpha,\s*oracleDisplay\)/, 'isolated scalar cue display replaces unrelated smoke opacity with cue-controlled opacity');
 assert.match(
   core,
   /deterministicReplay:\s*replaySample\s*\?\s*\{[\s\S]*identity:\s*replaySample\.identity[\s\S]*completedSteps:\s*replaySample\.completedSteps/,
@@ -29,7 +37,12 @@ assert.match(
 assert.match(exporter, /--source-capture/, 'exporter accepts an operator exact-tab source capture');
 assert.match(exporter, /--target-origin/, 'exporter can rebind the captured route to a caller-owned server origin');
 assert.match(exporter, /--render-composition/, 'exporter accepts an invocation-scoped frozen render composition');
+assert.match(exporter, /raymarch-only-v0/, 'exporter admits a raymarch-only carrier display without silently requesting splats');
 assert.match(exporter, /--render-control-overrides-json/, 'exporter accepts structured invocation-scoped render controls');
+assert.match(exporter, /--scalar-activity-cue-manifest/, 'exporter accepts a checksum-addressed derived carrier manifest');
+assert.match(exporter, /--scalar-activity-cue-role/, 'exporter requires an explicit semantic carrier role');
+assert.match(exporter, /scalarActivityCueImport/, 'render receipt preserves effective scalar activity cue import authority');
+assert.match(exporter, /validation-selected-residual-gate-derived-carrier-v0/, 'exporter admits the validation-calibrated dense carrier role');
 assert.match(exporter, /JSON\.parse\(String\(args\.get\('--render-control-overrides-json'\)/, 'render control overrides use structured JSON parsing instead of ad hoc text splitting');
 assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
 assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
@@ -40,6 +53,16 @@ assert.match(exporter, /failurePhase/, 'exporter writes a durable failure phase'
 assert.match(exporter, /boundarySplatComposition:\s*renderComposition/, 'imported render invocation passes the requested composition to the frozen renderer');
 assert.match(exporter, /controlOverrides:\s*renderControlOverrides/, 'imported render invocation passes structured control overrides to the frozen renderer');
 assert.match(exporter, /renderCompositionExplicit[\s\S]*boundarySplatCompositionEffective\s*!==\s*renderComposition/, 'an explicitly requested hybrid composition fails loud when the renderer reports another effective composition');
+assert.match(
+  exporter,
+  /post-render-canvas-geometry-v0[\s\S]*Page\.captureScreenshot/,
+  'the witness recomputes capture geometry from the post-render intrinsic canvas before screenshotting',
+);
+assert.match(
+  exporter,
+  /post-render-canvas-geometry-mismatch/,
+  'the witness rejects post-render CSS geometry that distorts the intrinsic canvas aspect ratio',
+);
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-exact-basin-export-contract-'));
 const capturePath = join(fixtureRoot, 'corrupt-capture.json');

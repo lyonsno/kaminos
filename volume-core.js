@@ -16,6 +16,8 @@ const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
+const DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY = 'offline-high-truth-diagnostic-velocity-oracle-v0';
+const DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION_IDENTITY = 'offline-diagnostic-velocity-oracle-application-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
@@ -26,12 +28,27 @@ const EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY = 'chunked-external-boundary-sid
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
+
+function isHeldOnlyImportedFieldAuthority(authority) {
+  return authority === SELECTIVE_COMPOSITION_AUTHORITY || authority === DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY;
+}
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
+const FIRE_FLOW_VISIBILITY_CARRIER_APPLICATION_IDENTITY = 'learned-fire-flow-visibility-carrier-v0';
+const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
+  TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+  'exact-high-field-renderer-coupled-derived-target-v0',
+  'native-low-derived-then-nearest-upsampled-control-v0',
+  'full-low-state-spatial-mlp-derived-carrier-v0',
+  'support-probability-weighted-derived-carrier-v0',
+  'validation-selected-residual-gate-derived-carrier-v0',
+  'accepted-splat-support-gated-derived-carrier-v0',
+]);
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
+const SCALAR_ACTIVITY_CUE_DISPLAY_IDENTITY = 'scalar-activity-cue-isolated-raymarch-display-v0';
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
@@ -4701,7 +4718,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let oracleDisplay = clamp(u.oracle_activity_controls2.x, 0.0, 1.0);
     let oracleDisplayCue = rawTruthOracleActivityCueAtCell(sampleCell);
     let oracleDisplayColor = mix(vec3<f32>(0.02, 0.08, 0.04), vec3<f32>(0.65, 1.0, 0.78), smoothstep(0.04, 0.72, oracleDisplayCue));
-    local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
+    let oracleDisplayAlpha = clamp(oracleDisplayCue * rayStepOpacity * 0.12, 0.0, 0.08);
+    alpha = mix(alpha, oracleDisplayAlpha, oracleDisplay);
+    local = mix(local, oracleDisplayColor, oracleDisplay);
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
     color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + shellSmokeBacklight + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
@@ -5083,6 +5102,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     frameId: null,
     uploadedAtMs: null,
   };
+  let debugScalarActivityCueImportUpload = null;
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
     routeIdentity: ROUTE_IDENTITY,
@@ -5826,8 +5846,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       identity: TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY,
       hookIdentity: SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY,
-      requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-      effectiveCueAuthority: externalCueActive ? TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+      applicationIdentity: oracleActivityCueUpload.applicationIdentity || null,
+      displayIdentity: SCALAR_ACTIVITY_CUE_DISPLAY_IDENTITY,
+      requestedCueAuthority: oracleActivityCueUpload.requestedCueAuthority,
+      effectiveCueAuthority: externalCueActive ? oracleActivityCueUpload.effectiveCueAuthority : PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
       enabled: controls.enabled,
       display: controls.display,
       curlNoiseGain: controls.curlNoiseGain,
@@ -5839,7 +5861,66 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       receiverGrid: gridSize,
       frameId: oracleActivityCueUpload.frameId,
       uploadedAtMs: oracleActivityCueUpload.uploadedAtMs,
+      sourceManifestPath: oracleActivityCueUpload.sourceManifestPath || null,
+      sourceManifestSha256: oracleActivityCueUpload.sourceManifestSha256 || null,
+      sourceRole: oracleActivityCueUpload.sourceRole || null,
     };
+  }
+
+  function setScalarActivityCue(payload = {}) {
+    const source = payload && typeof payload === 'object' ? payload : {};
+    const cueAuthority = String(source.cueAuthority || '');
+    if (!SCALAR_ACTIVITY_CUE_AUTHORITIES.has(cueAuthority)) {
+      throw new Error(`unsupported scalar activity cue authority: ${cueAuthority || '(missing)'}`);
+    }
+    const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
+    const values = source.values || source.data || source.activity || [];
+    if (!values || Number(values.length) <= 0) {
+      oracleActivityCueSourceValues = null;
+      oracleActivityCueSourceGrid = null;
+      oracleActivityCueUpload = {
+        status: 'cleared',
+        applicationIdentity: source.applicationIdentity || null,
+        requestedCueAuthority: cueAuthority,
+        effectiveCueAuthority: PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
+        grid: null,
+        receiverGrid: gridSize,
+        externalCueCellCount: 0,
+        frameId: source.frameId ?? null,
+        uploadedAtMs: performance.now(),
+        sourceManifestPath: source.sourceManifestPath || null,
+        sourceManifestSha256: source.sourceManifestSha256 || null,
+        sourceRole: source.sourceRole || null,
+      };
+      if (device) {
+        ensureOracleActivityCueBuffer();
+        device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
+      }
+      state.scalarActivityReceiver = scalarActivityReceiverDebug();
+      emitStatus({ phase: 'scalar-activity-cue-cleared' });
+      return { ...state.scalarActivityReceiver };
+    }
+    oracleActivityCueSourceValues = values instanceof Float32Array ? new Float32Array(values) : new Float32Array(values);
+    oracleActivityCueSourceGrid = sourceGrid;
+    const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
+    writeOracleActivityCueBuffer(resampledCue);
+    oracleActivityCueUpload = {
+      status: 'uploaded',
+      applicationIdentity: source.applicationIdentity || null,
+      requestedCueAuthority: cueAuthority,
+      effectiveCueAuthority: cueAuthority,
+      grid: sourceGrid,
+      receiverGrid: gridSize,
+      externalCueCellCount: resampledCue.length,
+      frameId: source.frameId ?? null,
+      uploadedAtMs: performance.now(),
+      sourceManifestPath: source.sourceManifestPath || null,
+      sourceManifestSha256: source.sourceManifestSha256 || null,
+      sourceRole: source.sourceRole || null,
+    };
+    state.scalarActivityReceiver = scalarActivityReceiverDebug();
+    emitStatus({ phase: 'scalar-activity-cue-uploaded' });
+    return { ...state.scalarActivityReceiver };
   }
 
   function boundarySidecarDebug(boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource)) {
@@ -6485,7 +6566,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       oracleActivityCueUpload = {
         ...oracleActivityCueUpload,
         status: 'uploaded',
-        effectiveCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+        effectiveCueAuthority: oracleActivityCueUpload.requestedCueAuthority,
         externalCueCellCount: resampledCue.length,
         receiverGrid: gridSize,
       };
@@ -9062,7 +9143,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && payload.filterIdentity === 'volume-overlap-box-filter-high-to-receiver-v0';
     const isSelectiveComposition = payload.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
       && payload.filterIdentity === SELECTIVE_COMPOSITION_APPLICATION_IDENTITY;
-    if (!isCoarseReceiver && !isSelectiveComposition) {
+    const isDiagnosticVelocityOracle = payload.initializationAuthority === DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY
+      && payload.filterIdentity === DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION_IDENTITY;
+    if (!isCoarseReceiver && !isSelectiveComposition && !isDiagnosticVelocityOracle) {
       return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
         requestedInitializationAuthority: payload.initializationAuthority || null,
         requestedFilterIdentity: payload.filterIdentity || null,
@@ -9271,6 +9354,166 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ok: true, ...receipt };
   }
 
+  function scalarActivityCueImportFailure(failurePhase, reason, extra = {}) {
+    const failed = {
+      schema: 'kaminos.volume.scalar-activity-cue-import.v0',
+      identity: FIRE_FLOW_VISIBILITY_CARRIER_APPLICATION_IDENTITY,
+      status: 'failed',
+      failurePhase,
+      reason,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+      ...extra,
+    };
+    state.scalarActivityCueImportReceipt = failed;
+    return { ok: false, ...failed };
+  }
+
+  function beginDebugScalarActivityCueImport(payload = {}) {
+    if (!device) return scalarActivityCueImportFailure('begin', 'inactive');
+    const requestedGrid = Math.floor(Number(payload.grid));
+    const expectedByteLength = requestedGrid * requestedGrid * requestedGrid * Float32Array.BYTES_PER_ELEMENT;
+    const byteLength = Number(payload.byteLength);
+    const cueAuthority = String(payload.cueAuthority || '');
+    if (!Number.isInteger(requestedGrid) || requestedGrid < 1) {
+      return scalarActivityCueImportFailure('begin', 'invalid-grid', { requestedGrid });
+    }
+    if (byteLength !== expectedByteLength) {
+      return scalarActivityCueImportFailure('begin', 'byte-length-mismatch', { byteLength, expectedByteLength });
+    }
+    if (!/^[a-f0-9]{64}$/i.test(String(payload.sha256 || ''))) {
+      return scalarActivityCueImportFailure('begin', 'sha256-missing');
+    }
+    if (JSON.stringify(payload.channelOrder) !== JSON.stringify(['fireFlowVisibilityCarrier'])) {
+      return scalarActivityCueImportFailure('begin', 'channel-order-mismatch');
+    }
+    if (!SCALAR_ACTIVITY_CUE_AUTHORITIES.has(cueAuthority)) {
+      return scalarActivityCueImportFailure('begin', 'cue-authority-mismatch', { requestedCueAuthority: cueAuthority || null });
+    }
+    debugScalarActivityCueImportUpload = {
+      sessionId: `scalar-activity-cue-import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      status: 'receiving',
+      grid: requestedGrid,
+      cueAuthority,
+      applicationIdentity: String(payload.applicationIdentity || FIRE_FLOW_VISIBILITY_CARRIER_APPLICATION_IDENTITY),
+      sourceManifestPath: payload.sourceManifestPath || null,
+      sourceManifestSha256: payload.sourceManifestSha256 || null,
+      sourceRole: payload.sourceRole || null,
+      expectedSha256: String(payload.sha256).toLowerCase(),
+      byteLength,
+      bytes: new Uint8Array(byteLength),
+      receivedBytes: 0,
+      chunkCount: 0,
+    };
+    state.scalarActivityCueImportReceipt = {
+      schema: 'kaminos.volume.scalar-activity-cue-import.v0',
+      identity: debugScalarActivityCueImportUpload.applicationIdentity,
+      status: 'receiving',
+      failurePhase: null,
+      sessionId: debugScalarActivityCueImportUpload.sessionId,
+      grid: requestedGrid,
+      cueAuthority,
+      sourceRole: debugScalarActivityCueImportUpload.sourceRole,
+      expectedSha256: debugScalarActivityCueImportUpload.expectedSha256,
+      expectedByteLength: byteLength,
+    };
+    return { ok: true, ...state.scalarActivityCueImportReceipt };
+  }
+
+  function writeDebugScalarActivityCueImportChunk(payload = {}) {
+    const upload = debugScalarActivityCueImportUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) {
+      return scalarActivityCueImportFailure('chunk-write', 'session-id-mismatch');
+    }
+    const byteOffset = Math.floor(Number(payload.byteOffset));
+    if (byteOffset !== upload.receivedBytes) {
+      return scalarActivityCueImportFailure('chunk-write', 'non-sequential-byte-offset', {
+        expectedByteOffset: upload.receivedBytes,
+        requestedByteOffset: byteOffset,
+      });
+    }
+    const chunk = decodeFullFieldImportChunk(payload.base64);
+    if (byteOffset + chunk.byteLength > upload.byteLength) {
+      return scalarActivityCueImportFailure('chunk-write', 'chunk-overflow', { byteOffset, chunkByteLength: chunk.byteLength });
+    }
+    upload.bytes.set(chunk, byteOffset);
+    upload.receivedBytes += chunk.byteLength;
+    upload.chunkCount += 1;
+    return {
+      ok: true,
+      schema: 'kaminos.volume.scalar-activity-cue-import.v0',
+      sessionId: upload.sessionId,
+      byteOffset,
+      byteLength: chunk.byteLength,
+      receivedBytes: upload.receivedBytes,
+      expectedBytes: upload.byteLength,
+      chunkCount: upload.chunkCount,
+      isFinal: upload.receivedBytes === upload.byteLength,
+    };
+  }
+
+  async function finishDebugScalarActivityCueImport(payload = {}) {
+    const upload = debugScalarActivityCueImportUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) {
+      return scalarActivityCueImportFailure('finish', 'session-id-mismatch');
+    }
+    if (upload.receivedBytes !== upload.byteLength) {
+      return scalarActivityCueImportFailure('finish', 'incomplete-upload', {
+        receivedBytes: upload.receivedBytes,
+        expectedBytes: upload.byteLength,
+      });
+    }
+    const actualSha256 = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', upload.bytes)))
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+    if (actualSha256 !== upload.expectedSha256) {
+      debugScalarActivityCueImportUpload = null;
+      return scalarActivityCueImportFailure('sha256-validation', 'sha256-mismatch', {
+        expectedSha256: upload.expectedSha256,
+        actualSha256,
+      });
+    }
+    const values = new Float32Array(upload.bytes.buffer.slice(
+      upload.bytes.byteOffset,
+      upload.bytes.byteOffset + upload.bytes.byteLength,
+    ));
+    const receiver = setScalarActivityCue({
+      grid: upload.grid,
+      values,
+      cueAuthority: upload.cueAuthority,
+      applicationIdentity: upload.applicationIdentity,
+      sourceManifestPath: upload.sourceManifestPath,
+      sourceManifestSha256: upload.sourceManifestSha256,
+      sourceRole: upload.sourceRole,
+    });
+    const receipt = {
+      schema: 'kaminos.volume.scalar-activity-cue-import.v0',
+      identity: upload.applicationIdentity,
+      status: 'applied',
+      failurePhase: null,
+      sessionId: upload.sessionId,
+      grid: upload.grid,
+      receiverGrid: gridSize,
+      cueAuthority: upload.cueAuthority,
+      sourceManifestPath: upload.sourceManifestPath,
+      sourceManifestSha256: upload.sourceManifestSha256,
+      sourceRole: upload.sourceRole,
+      sha256: actualSha256,
+      byteLength: upload.byteLength,
+      chunkCount: upload.chunkCount,
+      receiver,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+    };
+    state.scalarActivityCueImportReceipt = receipt;
+    debugScalarActivityCueImportUpload = null;
+    emitStatus({ phase: 'scalar-activity-cue-import-applied' });
+    return { ok: true, ...receipt };
+  }
+
   function advanceDebugImportedFieldSteps(payload = {}) {
     const receipt = state.fullFieldImportReceipt;
     if (!receipt || receipt.status !== 'applied' || payload.sessionId !== receipt.sessionId) {
@@ -9293,14 +9536,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!Number.isInteger(requestedSteps) || requestedSteps < 0) {
       return fullFieldImportFailure('imported-advance', 'invalid-step-count', { requestedSteps });
     }
-    if (receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY && requestedSteps > 0) {
+    if (isHeldOnlyImportedFieldAuthority(receipt.initializationAuthority) && requestedSteps > 0) {
       return {
         ok: false,
         schema: FULL_FIELD_IMPORT_IDENTITY,
         identity: 'imported-receiver-advance-rejected-v0',
         status: 'rejected',
         failurePhase: 'imported-advance',
-        reason: 'selective-composition-held-only',
+        reason: 'held-imported-field-only',
         sessionId: receipt.sessionId,
         requestedSteps,
         priorAppliedReceipt: receipt,
@@ -9324,7 +9567,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       identity: requestedSteps === 0
         ? receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
           ? 'learned-selective-composition-held-render-v0'
-          : 'imported-receiver-held-state-v0'
+          : receipt.initializationAuthority === DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY
+            ? 'diagnostic-velocity-oracle-held-render-v0'
+            : 'imported-receiver-held-state-v0'
         : requestedSteps === 1
           ? 'ordinary-receiver-single-simulation-step-v0'
           : 'imported-receiver-multi-step-sequence-v0',
@@ -11570,7 +11815,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     );
     if ((!state.active && !importedFieldCustody) || !device) return { ok: false, reason: 'inactive', ...state };
     const boundarySplatCompositionRequestedRaw = options.boundarySplatComposition ?? 'splat-only-v0';
-    if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(boundarySplatCompositionRequestedRaw)) {
+    if (!['splat-only-v0', 'raymarch-under-splats-v0', 'raymarch-only-v0'].includes(boundarySplatCompositionRequestedRaw)) {
       return {
         ok: false,
         reason: 'unsupported-boundary-splat-composition',
@@ -11589,16 +11834,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const controlsBefore = { ...controlsSnapshot };
     const renderScale = normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
-    const controlOverrides = options.controlOverrides && typeof options.controlOverrides === 'object'
-      ? { ...options.controlOverrides }
-      : {};
+    const controlOverrides = {
+      ...(options.controlOverrides && typeof options.controlOverrides === 'object'
+        ? options.controlOverrides
+        : {}),
+      ...(boundarySplatCompositionRequestedRaw === 'raymarch-only-v0' ? { boundarySplatMode: 'off' } : {}),
+    };
     const boundarySplatCompositionRequested = boundarySplatCompositionRequestedRaw;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
     const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
     const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
     try {
-      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...controlOverrides, renderScale });
+      controlsSnapshot = applyRuntimeQualityControls({
+        ...controlsSnapshot,
+        ...controlOverrides,
+        renderScale,
+      });
       resetTemporalHistory('same-state-render-scale-canvas-capture');
       updateUniforms(fixedNow);
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
@@ -12079,48 +12331,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     },
     setTruthOracleActivityCue(payload = {}) {
-      const source = payload && typeof payload === 'object' ? payload : {};
-      const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
-      const values = source.values || source.data || source.activity || [];
-      if (!values || Number(values.length) <= 0) {
-        oracleActivityCueSourceValues = null;
-        oracleActivityCueSourceGrid = null;
-        oracleActivityCueUpload = {
-          status: 'cleared',
-          requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-          effectiveCueAuthority: PROCEDURAL_ACTIVITY_CUE_AUTHORITY,
-          grid: null,
-          receiverGrid: gridSize,
-          externalCueCellCount: 0,
-          frameId: source.frameId ?? null,
-          uploadedAtMs: performance.now(),
-        };
-        if (device) {
-          ensureOracleActivityCueBuffer();
-          device.queue.writeBuffer(oracleActivityCueBuffer, 0, new Float32Array(gridCellCount(gridSize)));
-        }
-        state.scalarActivityReceiver = scalarActivityReceiverDebug();
-        emitStatus({ phase: 'truth-oracle-activity-cue-cleared' });
-        return { ...state.scalarActivityReceiver };
-      }
-      oracleActivityCueSourceValues = values instanceof Float32Array ? new Float32Array(values) : new Float32Array(values);
-      oracleActivityCueSourceGrid = sourceGrid;
-      const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
-      writeOracleActivityCueBuffer(resampledCue);
-      oracleActivityCueUpload = {
-        status: 'uploaded',
-        requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-        effectiveCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
-        grid: sourceGrid,
-        receiverGrid: gridSize,
-        externalCueCellCount: resampledCue.length,
-        frameId: source.frameId ?? null,
-        uploadedAtMs: performance.now(),
-      };
-      state.scalarActivityReceiver = scalarActivityReceiverDebug();
-      emitStatus({ phase: 'truth-oracle-activity-cue-uploaded' });
-      return { ...state.scalarActivityReceiver };
+      return setScalarActivityCue({
+        ...(payload && typeof payload === 'object' ? payload : {}),
+        cueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
+      });
     },
+    beginDebugScalarActivityCueImport,
+    writeDebugScalarActivityCueImportChunk,
+    finishDebugScalarActivityCueImport,
     beginDebugBoundarySidecarOverride,
     writeDebugBoundarySidecarOverrideChunk,
     finishDebugBoundarySidecarOverride,
