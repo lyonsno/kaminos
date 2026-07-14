@@ -271,6 +271,39 @@ def calibrate_birth(probabilities, labels):
     return max(rows, key=lambda row: (row["fScore"], row["precision"], row["threshold"]))
 
 
+def calibrate_target_support_ratio(pair_rows):
+    ratios = []
+    for row in pair_rows:
+        source_count = int(row["sourceCount"])
+        target_count = int(row["targetCount"])
+        if source_count <= 0 or target_count <= 0:
+            raise ValueError("target support calibration requires positive source and target counts")
+        ratios.append(target_count / source_count)
+    if not ratios:
+        raise ValueError("target support calibration requires at least one training pair")
+    return {
+        "authority": "training-adjacent-target-source-count-ratio-median-v0",
+        "pairCount": len(ratios),
+        "ratios": ratios,
+        "minimumRatio": min(ratios),
+        "maximumRatio": max(ratios),
+        "medianRatio": float(np.median(np.asarray(ratios, dtype=np.float64))),
+    }
+
+
+def select_ranked_births(birth_keys, birth_probabilities, claimed_keys, target_support_budget, claimed_count):
+    birth_budget = max(0, int(target_support_budget) - int(claimed_count))
+    ranked = sorted(
+        (
+            (key, float(probability))
+            for key, probability in zip(birth_keys, birth_probabilities)
+            if key not in claimed_keys
+        ),
+        key=lambda row: (-row[1], row[0]),
+    )
+    return ranked[:birth_budget]
+
+
 def carrier_metrics(probabilities, labels):
     predicted = np.argmax(probabilities, axis=1)
     exact = predicted == labels
@@ -310,7 +343,7 @@ def prediction_universe(source, grid_step):
     return sorted(key for key in keys if key not in source_keys)
 
 
-def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_calibration, batch_size):
+def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_calibration, target_support_calibration, batch_size):
     carrier_inputs = np.stack([make_directional_input(key, source, grid_step) for key in source["keys"]])
     carrier_probabilities, _ = predict_model(model, carrier_inputs, input_mean, input_scale, batch_size)
     claims = {}
@@ -330,11 +363,15 @@ def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_c
     birth_keys = prediction_universe(source, grid_step)
     birth_inputs = np.stack([make_directional_input(key, source, grid_step) for key in birth_keys])
     _, birth_probabilities = predict_model(model, birth_inputs, input_mean, input_scale, batch_size)
-    selected_births = [
-        (key, float(probability))
-        for key, probability in zip(birth_keys, birth_probabilities)
-        if probability >= birth_calibration["threshold"] and key not in claims
-    ]
+    target_support_budget = max(1, round(len(source["keys"]) * target_support_calibration["medianRatio"]))
+    selected_births = select_ranked_births(
+        birth_keys,
+        birth_probabilities,
+        set(claims),
+        target_support_budget,
+        len(claims),
+    )
+    threshold_qualified_birth_count = int(np.sum(birth_probabilities >= birth_calibration["threshold"]))
     rows = []
     features = []
     transported_count = 0
@@ -371,6 +408,9 @@ def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_c
         "deathCount": death_count,
         "collisionCount": collision_count,
         "birthCandidateCount": len(birth_keys),
+        "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+        "targetSupportBudget": target_support_budget,
+        "thresholdQualifiedBirthCount": threshold_qualified_birth_count,
         "selectedBirthCount": len(result["keys"]) - len(claims),
     }
 
@@ -485,6 +525,8 @@ def main():
                 "sourceFrameId": left["id"], "targetFrameId": right["id"],
                 **{key: value for key, value in dataset["correspondence"].items() if key != "matches" and key not in ("births", "deaths")},
                 "carrierSampleCount": len(dataset["carrierLabels"]),
+                "sourceCount": len(frames[left["id"]]["keys"]),
+                "targetCount": len(frames[right["id"]]["keys"]),
                 "birthSampleCount": len(dataset["birthLabels"]),
                 "birthPositiveCount": int(np.sum(dataset["birthLabels"])),
             })
@@ -542,6 +584,7 @@ def main():
         _, birth_probabilities = predict_model(model, (birth_inputs * input_scale) + input_mean, input_mean, input_scale, args.batch_size)
         carrier_training_metrics = carrier_metrics(carrier_probabilities, carrier_labels)
         birth_calibration = calibrate_birth(birth_probabilities, birth_labels)
+        target_support_calibration = calibrate_target_support_ratio(pair_reports)
         failure_phase = "model-write"
         model_artifact = {
             "schema": MODEL_SCHEMA,
@@ -580,6 +623,7 @@ def main():
             "calibration": {
                 "carrier": carrier_training_metrics,
                 "birth": {"authority": "training-residual-birth-f1-threshold-v0", **birth_calibration},
+                "targetSupport": target_support_calibration,
             },
             "correspondence": {
                 "authority": CORRESPONDENCE_AUTHORITY,
@@ -599,7 +643,7 @@ def main():
         holdout_metrics = []
         for step_index in range(1, len(holdout_docs)):
             predicted, recurrent = recurrent_predict(
-                model, current, grid_step, input_mean, input_scale, birth_calibration, args.batch_size,
+                model, current, grid_step, input_mean, input_scale, birth_calibration, target_support_calibration, args.batch_size,
             )
             exact = frames[holdout_docs[step_index]["id"]]
             recurrent_rows.append({"step": step_index, **recurrent})
