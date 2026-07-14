@@ -5392,9 +5392,12 @@ fn finalizeBoundarySplats() {
   var archiveCandidateCount = 0u;
   var totalRenderedInstanceCount = 0u;
   for (var groupIndex = 0u; groupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; groupIndex += 1u) {
+    let descriptorCount = boundarySplatDrawGroups[groupIndex].descriptorCount;
+    let hasDescriptors = descriptorCount > 0u;
     let requestedBudget = boundarySplatDrawGroups[groupIndex].requestedCandidateBudget;
-    let effectiveBudget = select(candidateCount, min(candidateCount, requestedBudget), requestedBudget > 0u);
-    let groupInstanceCount = effectiveBudget * boundarySplatDrawGroups[groupIndex].descriptorCount;
+    let requestedEffectiveBudget = select(candidateCount, min(candidateCount, requestedBudget), requestedBudget > 0u);
+    let effectiveBudget = select(0u, requestedEffectiveBudget, hasDescriptors);
+    let groupInstanceCount = effectiveBudget * descriptorCount;
     boundarySplatDrawGroups[groupIndex].vertexCount = 6u;
     boundarySplatDrawGroups[groupIndex].instanceCount = groupInstanceCount;
     boundarySplatDrawGroups[groupIndex].firstVertex = 0u;

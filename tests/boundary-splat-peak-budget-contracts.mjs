@@ -17,8 +17,8 @@ assert.match(
 );
 assert.match(
   core,
-  /let requestedBudget = boundarySplatDrawGroups\[groupIndex\]\.requestedCandidateBudget;\s*let effectiveBudget = select\(candidateCount,\s*min\(candidateCount,\s*requestedBudget\),\s*requestedBudget > 0u\)/,
-  'each GPU tier preserves every candidate unless a positive budget is explicit',
+  /let requestedBudget = boundarySplatDrawGroups\[groupIndex\]\.requestedCandidateBudget;\s*let requestedEffectiveBudget = select\(candidateCount,\s*min\(candidateCount,\s*requestedBudget\),\s*requestedBudget > 0u\);\s*let effectiveBudget = select\(0u,\s*requestedEffectiveBudget,\s*hasDescriptors\)/,
+  'each populated GPU tier preserves every candidate unless a positive budget is explicit, while empty groups stay zero',
 );
 assert.match(
   page,
