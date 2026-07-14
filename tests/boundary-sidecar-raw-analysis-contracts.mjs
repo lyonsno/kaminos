@@ -137,6 +137,43 @@ try {
   assert.equal(failure.failurePhase, 'validate-inputs');
   assert.match(failure.error, /structure\.f32 byte length/);
 
+  for (const rejected of [
+    { name: 'wrong-route', effectiveRoute: 'fallback-volume-route-v0', fallbackReason: null, error: /effective route/ },
+    { name: 'fallback', effectiveRoute: 'native-3d-compute-fluid-raymarch-v0', fallbackReason: 'test-fallback', error: /fallback reason/ },
+  ]) {
+    const rejectedInput = join(tempRoot, `${rejected.name}-input`);
+    const rejectedOutput = join(tempRoot, `${rejected.name}-output`);
+    mkdirSync(rejectedInput, { recursive: true });
+    writeFloatFile(join(rejectedInput, 'structure.f32'), structure);
+    writeFloatFile(join(rejectedInput, 'meta.f32'), meta);
+    writeFileSync(join(rejectedInput, 'metadata.json'), JSON.stringify({
+      job_type: 'kaminos_boundary_sidecar_raw_export',
+      job_id: `${rejected.name}-fixture-job`,
+    }));
+    writeFileSync(join(rejectedInput, 'report.json'), JSON.stringify({
+      schema: 'boundary-sidecar-raw-export-report-v0',
+      ok: true,
+      effectiveRoute: rejected.effectiveRoute,
+      backend: 'WebGPU:fixture',
+      fallbackReason: rejected.fallbackReason,
+      capture: {
+        identity: 'boundary-sidecar-raw-two-buffer-export-v0',
+        captureId: `${rejected.name}-fixture-capture`,
+        grid: [2, 2, 2],
+        fields: {
+          structure: { bytes: structure.length * 4 },
+          meta: { bytes: meta.length * 4 },
+        },
+      },
+    }));
+    const result = runAnalyzer(rejectedInput, rejectedOutput);
+    assert.notEqual(result.status, 0, `${rejected.name} export was accepted`);
+    const rejectedReport = JSON.parse(readFileSync(join(rejectedOutput, 'analysis-report.json'), 'utf8'));
+    assert.equal(rejectedReport.ok, false);
+    assert.equal(rejectedReport.failurePhase, 'validate-source-authority');
+    assert.match(rejectedReport.error, rejected.error);
+  }
+
   console.log('boundary sidecar raw analysis contracts passed');
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });

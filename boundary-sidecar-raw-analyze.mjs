@@ -168,6 +168,13 @@ try {
   if (sourceReport.schema !== 'boundary-sidecar-raw-export-report-v0' || sourceReport.ok !== true) {
     throw new Error(`raw export report is not complete: schema=${sourceReport.schema || 'missing'} ok=${sourceReport.ok}`);
   }
+  report.failurePhase = 'validate-source-authority';
+  if (sourceReport.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0') {
+    throw new Error(`unexpected effective route: ${sourceReport.effectiveRoute || 'missing'}`);
+  }
+  if (sourceReport.fallbackReason !== null) {
+    throw new Error(`raw export carries fallback reason: ${sourceReport.fallbackReason ?? 'missing'}`);
+  }
   const capture = sourceReport.capture;
   if (capture?.identity !== 'boundary-sidecar-raw-two-buffer-export-v0') {
     throw new Error(`unexpected raw export identity: ${capture?.identity || 'missing'}`);
