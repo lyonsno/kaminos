@@ -32,6 +32,7 @@ const CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY = 'checksum-addressed-live-replay
 const EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY = 'exact-field-live-replay-application-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v1';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-footprint-proximity-normal-v2';
+const BOUNDARY_SIDECAR_RAW_EXPORT_IDENTITY = 'boundary-sidecar-raw-two-buffer-export-v0';
 const TEMPORAL_SIDECAR_IDENTITY = 'temporal-boundary-sidecar-history-v0';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
 const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
@@ -5869,6 +5870,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatTelemetryMapPending = false;
   let boundarySplatSupervisionCaptureActive = false;
   let boundarySplatSupervisionFireOnlyTargetActive = false;
+  let boundarySidecarRawCapture = null;
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -8776,7 +8778,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return;
     }
     state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
-    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off' || boundarySplatRequested();
+    const shouldBakeBoundarySidecar = options.force === true || sourceName !== 'live' || sidecarViewName !== 'off' || boundarySplatRequested();
     if (
       !shouldBakeBoundarySidecar ||
       !boundarySidecarBuildPipeline ||
@@ -12369,6 +12371,161 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  function boundarySidecarGridToWorld() {
+    const scale = 2 / gridSize;
+    const translation = -1 + (1 / gridSize);
+    return {
+      identity: 'boundary-sidecar-cell-center-index-to-volume-world-v0',
+      indexAuthority: 'zero-based-grid-cell-center',
+      worldAuthority: 'volume-local-cube-minus-one-to-one',
+      scale: [scale, scale, scale],
+      translation: [translation, translation, translation],
+      matrixColumnMajor: [
+        scale, 0, 0, 0,
+        0, scale, 0, 0,
+        0, 0, scale, 0,
+        translation, translation, translation, 1,
+      ],
+    };
+  }
+
+  function bytesToBase64(bytes) {
+    let binary = '';
+    const blockBytes = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += blockBytes) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + blockBytes)));
+    }
+    return btoa(binary);
+  }
+
+  async function captureBoundarySidecarRawFrame(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    if (!boundarySidecarBuffer || !boundarySidecarMetaBuffer) {
+      return { ok: false, reason: 'boundary-sidecar-buffers-unavailable', ...state };
+    }
+    if (boundarySidecarRawCapture) {
+      return {
+        ok: false,
+        reason: 'boundary-sidecar-raw-capture-already-retained',
+        captureId: boundarySidecarRawCapture.captureId,
+      };
+    }
+    boundarySplatSupervisionCaptureActive = true;
+    let structureReadback = null;
+    let metaReadback = null;
+    try {
+      cancelAnimationFrame(raf);
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      cancelAnimationFrame(raf);
+      const structureBytes = boundarySidecarBufferBytes(gridSize);
+      const metaBytes = boundarySidecarMetaBufferBytes(gridSize);
+      structureReadback = device.createBuffer({
+        label: `kaminos ${BOUNDARY_SIDECAR_RAW_EXPORT_IDENTITY} structure readback`,
+        size: structureBytes,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      metaReadback = device.createBuffer({
+        label: `kaminos ${BOUNDARY_SIDECAR_RAW_EXPORT_IDENTITY} meta readback`,
+        size: metaBytes,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      updateUniforms(Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now());
+      const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SIDECAR_RAW_EXPORT_IDENTITY} encoder` });
+      encodeBoundarySidecar(encoder, { force: true });
+      encoder.copyBufferToBuffer(boundarySidecarBuffer, 0, structureReadback, 0, structureBytes);
+      encoder.copyBufferToBuffer(boundarySidecarMetaBuffer, 0, metaReadback, 0, metaBytes);
+      device.queue.submit([encoder.finish()]);
+      await Promise.all([
+        structureReadback.mapAsync(GPUMapMode.READ),
+        metaReadback.mapAsync(GPUMapMode.READ),
+      ]);
+      const captureId = options.captureId
+        ? String(options.captureId)
+        : `boundary-sidecar-raw-f${state.frameCount}-s${state.simStepCount}-${Math.round(performance.now())}`;
+      boundarySidecarRawCapture = {
+        captureId,
+        structure: new Uint8Array(structureReadback.getMappedRange()).slice(),
+        meta: new Uint8Array(metaReadback.getMappedRange()).slice(),
+      };
+      return {
+        ok: true,
+        identity: BOUNDARY_SIDECAR_RAW_EXPORT_IDENTITY,
+        captureId,
+        dtype: 'float32-le',
+        grid: [gridSize, gridSize, gridSize],
+        gridToWorld: boundarySidecarGridToWorld(),
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        boundarySidecarIdentity: BOUNDARY_SIDECAR_IDENTITY,
+        boundarySidecarAuthority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+        requestedRoute: state.requestedRoute,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+        fallbackReason: null,
+        fields: {
+          structure: {
+            channels: ['support', 'coverage', 'ridge', 'footprint'],
+            components: 4,
+            bytes: structureBytes,
+          },
+          meta: {
+            channels: ['proximity', 'normalX', 'normalY', 'normalZ'],
+            components: 4,
+            bytes: metaBytes,
+          },
+        },
+      };
+    } finally {
+      if (structureReadback?.mapState === 'mapped') structureReadback.unmap();
+      if (metaReadback?.mapState === 'mapped') metaReadback.unmap();
+      structureReadback?.destroy();
+      metaReadback?.destroy();
+      boundarySplatSupervisionCaptureActive = false;
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+  }
+
+  function readBoundarySidecarRawCaptureChunk(captureId, field, byteOffset = 0, byteLength = null) {
+    if (!boundarySidecarRawCapture || boundarySidecarRawCapture.captureId !== String(captureId)) {
+      return { ok: false, reason: 'boundary-sidecar-raw-capture-not-found', captureId: String(captureId || '') };
+    }
+    const fieldName = String(field || '');
+    const bytes = boundarySidecarRawCapture[fieldName];
+    if (!(bytes instanceof Uint8Array)) {
+      return { ok: false, reason: 'boundary-sidecar-raw-field-not-found', captureId: boundarySidecarRawCapture.captureId, field: fieldName };
+    }
+    const offset = Math.max(0, Math.trunc(Number(byteOffset) || 0));
+    if (offset > bytes.length) {
+      return { ok: false, reason: 'boundary-sidecar-raw-offset-out-of-range', captureId: boundarySidecarRawCapture.captureId, field: fieldName, byteOffset: offset, totalBytes: bytes.length };
+    }
+    const requestedLength = byteLength == null ? bytes.length - offset : Math.max(0, Math.trunc(Number(byteLength) || 0));
+    const end = Math.min(bytes.length, offset + requestedLength);
+    const chunk = bytes.subarray(offset, end);
+    return {
+      ok: true,
+      captureId: boundarySidecarRawCapture.captureId,
+      field: fieldName,
+      byteOffset: offset,
+      byteLength: chunk.length,
+      totalBytes: bytes.length,
+      base64: bytesToBase64(chunk),
+      done: end === bytes.length,
+    };
+  }
+
+  function releaseBoundarySidecarRawCapture(captureId) {
+    if (!boundarySidecarRawCapture || boundarySidecarRawCapture.captureId !== String(captureId)) {
+      return { ok: false, reason: 'boundary-sidecar-raw-capture-not-found', captureId: String(captureId || '') };
+    }
+    const releasedCaptureId = boundarySidecarRawCapture.captureId;
+    boundarySidecarRawCapture = null;
+    return { ok: true, captureId: releasedCaptureId, released: true };
+  }
+
   async function sampleRenderScaleSet(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const requestedScales = Array.isArray(options.renderScales) ? options.renderScales : [];
@@ -13567,6 +13724,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,
     captureBoundarySplatSupervisionFrame,
+    captureBoundarySidecarRawFrame,
+    readBoundarySidecarRawCaptureChunk,
+    releaseBoundarySidecarRawCapture,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
