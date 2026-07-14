@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   FOREGROUND_KILN_HEARTBEAT_SCHEMA,
   createForegroundKilnHeartbeatEpisode,
+  createForegroundHostEventCorrelation,
   foregroundKilnStartAllowsPipeline,
 } from '../lib/foreground-kiln-heartbeat.mjs';
 
@@ -644,6 +645,20 @@ assert.equal(correlatedReport.sharpDutyCorrelation.foregroundGaps.length, 3, 'al
 assert.equal(correlatedReport.sharpDutyCorrelation.totals.foregroundGapDurationMs, 76);
 assert.equal(correlatedReport.sharpDutyCorrelation.totals.attributedDurationMs, 30);
 assert.equal(correlatedReport.sharpDutyCorrelation.totals.unattributedDurationMs, 46);
+correlatedReport.hostEvents = [{
+  kind: 'browser-performance',
+  phase: 'longtask',
+  startEpochMs: 1_700_000_000_120,
+  endEpochMs: 1_700_000_000_140,
+  durationMs: 20,
+}];
+const hostCorrelation = createForegroundHostEventCorrelation({
+  foregroundHeartbeat: correlatedReport,
+  foregroundGaps: correlatedReport.sharpDutyCorrelation.foregroundGaps,
+});
+assert.equal(hostCorrelation.schema, 'kaminos.foreground-host-event-correlation.v0');
+assert.equal(hostCorrelation.hostEventCount, 1);
+assert.equal(hostCorrelation.coveredDurationMs, 20);
 assert.deepEqual(
   correlatedReport.sharpDutyCorrelation.phaseRankings.map(row => [row.phase, row.overlapDurationMs]),
   [['spn-fusion', 20], ['monodepth', 10]],
