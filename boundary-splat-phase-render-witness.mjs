@@ -2637,7 +2637,7 @@ export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options
   }
 }
 
-function writeRgbaPng(width, height, rgba) {
+export function writeRgbaPng(width, height, rgba) {
   const raw = Buffer.alloc((width * 4 + 1) * height);
   for (let y = 0; y < height; y += 1) {
     raw[y * (width * 4 + 1)] = 0;
