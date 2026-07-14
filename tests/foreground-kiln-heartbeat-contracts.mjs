@@ -15,6 +15,49 @@ const budget = {
   adaptiveRays: 1,
 };
 
+// The foreground heartbeat must preserve host/browser intervals that are not
+// SHARP submitted-work duties, so cadence gaps can be attributed honestly.
+{
+  let nowMs = 100;
+  const events = [];
+  const episode = createForegroundKilnHeartbeatEpisode({
+    routeId: 'sharp-image-to-splat-live-v0',
+    profileId: 'cooperative-spn-gaussian',
+    pipelineId: 'sharp-image-to-splat-live-v0',
+    expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    requestedFireBudget: budget,
+    timeOriginEpochMs: 1_700_000_000_000,
+    readVolumeState: () => ({
+      active: true,
+      routeIdentity: 'native-3d-compute-fluid-raymarch-v0',
+      prototypeIdentity: 'kaminos-volume-prototype-v0',
+      frameCount: 1,
+      simStepCount: 1,
+      resolution: 90,
+      renderScale: 0.4,
+      adaptiveRaymarch: 1,
+    }),
+    now: () => nowMs,
+    requestFrame: () => 1,
+    cancelFrame: () => {},
+  });
+  episode.start();
+  nowMs = 120;
+  episode.recordEvent({ kind: 'browser-host', phase: 'present', startMs: 110, endMs: 118, detail: 'test' });
+  const report = episode.finish();
+  assert.equal(typeof episode.recordEvent, 'function');
+  assert.deepEqual(report.hostEvents, [{
+    kind: 'browser-host',
+    phase: 'present',
+    startMs: 110,
+    endMs: 118,
+    startEpochMs: 1_700_000_000_110,
+    endEpochMs: 1_700_000_000_118,
+    durationMs: 8,
+    detail: 'test',
+  }]);
+}
+
 const learnedHybridPresentation = {
   schema: 'kaminos.kiln-fire-presentation.v0',
   firingId: 'firing-0713-a',
