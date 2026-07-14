@@ -8,11 +8,14 @@ import { tmpdir } from 'node:os';
 
 const root = resolve(import.meta.dirname, '..');
 const probePath = join(root, 'volume-exact-basin-support-probe.py');
+const frozenTransferPath = join(root, 'volume-fire-flow-carrier-frozen-transfer.py');
 const composerPath = join(root, 'volume-exact-basin-selective-compose.py');
 const phaseAlignedPackerPath = join(root, 'volume-phase-aligned-corpus-contract.py');
 
 assert.ok(existsSync(probePath), 'exact-basin support classifier probe exists');
+assert.ok(existsSync(frozenTransferPath), 'frozen fire-flow carrier transfer evaluator exists');
 const source = readFileSync(probePath, 'utf8');
+const frozenTransferSource = existsSync(frozenTransferPath) ? readFileSync(frozenTransferPath, 'utf8') : '';
 assert.match(source, /kaminos\.volume\.exact-basin-support-probe\.v0/, 'probe emits a stable report schema');
 assert.match(source, /effective-splat-position-and-shader-formula-agreement-v0/, 'probe names independent accepted-label agreement authority');
 assert.match(source, /spatial-block-hash-holdout-v0/, 'probe uses spatial blocks instead of random-cell leakage');
@@ -24,6 +27,9 @@ assert.match(source, /clamped-central-difference-matching-volume-core-wgsl-v0/, 
 assert.match(source, /full-low-context-ridge-residual-control-v0/, 'carrier probe preserves a calibrated linear-context control');
 assert.match(source, /native-low-derived-neighborhood-flow-context-v0/, 'carrier probe gives both controls free low-grid derivative context');
 assert.match(source, /validation-selected-support-conditioned-residual-gate-v0/, 'carrier probe calibrates residual weighting on validation data');
+assert.match(frozenTransferSource, /kaminos\.volume\.fire-flow-carrier-frozen-transfer\.v0/, 'frozen evaluator emits a stable transfer report schema');
+assert.match(frozenTransferSource, /targetDataUsedForTraining/, 'frozen evaluator reports whether target data entered fitting');
+assert.match(frozenTransferSource, /frozen-model-validation/, 'frozen evaluator fails checkpoints before target metrics');
 assert.ok(existsSync(phaseAlignedPackerPath), 'phase-aligned corpus packer exists beside the carrier probe');
 const phaseAlignedPackerSource = existsSync(phaseAlignedPackerPath) ? readFileSync(phaseAlignedPackerPath, 'utf8') : '';
 assert.match(phaseAlignedPackerSource, /kaminos\.volume\.full-grid-field-pair\.v0/, 'phase-aligned packer emits the carrier probe pair schema directly');
@@ -305,6 +311,11 @@ assert.ok(carrierChannel, 'probe reports the derived fire flow carrier');
 assert.equal(carrierChannel.channelIndex, null, 'derived carrier does not impersonate a native fluid channel');
 assert.equal(carrierChannel.linearContext.identity, 'full-low-context-ridge-residual-control-v0');
 assert.equal(typeof carrierChannel.linearContext.metrics.rmse, 'number');
+assert.deepEqual(carrierChannel.linearContext.artifactKeys, {
+  weights: 'fireFlowVisibilityCarrier.linearWeights',
+  bias: 'fireFlowVisibilityCarrier.linearBias',
+  ridgeAlpha: 'fireFlowVisibilityCarrier.linearRidgeAlpha',
+});
 assert.equal(typeof carrierChannel.ungated.improvementVsLinearContext.rmseReductionFraction, 'number');
 assert.equal(typeof carrierChannel.softGated.improvementVsLinearContext.rmseReductionFraction, 'number');
 assert.equal(carrierChannel.calibratedResidual.calibration.identity, 'validation-selected-support-conditioned-residual-gate-v0');
@@ -325,6 +336,64 @@ for (const role of ['lowDerived', 'truthHigh', 'ungatedPrediction', 'softSupport
   assert.ok(existsSync(artifact.path), `${role} dense carrier exists`);
   assert.equal(artifact.sha256, sha256(readFileSync(artifact.path)), `${role} dense carrier checksum binds bytes`);
 }
+
+const frozenTargetPairPath = join(fixtureRoot, 'frozen-target-pair.json');
+const frozenTargetPair = structuredClone(JSON.parse(readFileSync(packedPairPath, 'utf8')));
+frozenTargetPair.source.deterministicReplay = { identity: 'fixture-replay', completedSteps: 13, simStepCount: 13 };
+writeFileSync(frozenTargetPairPath, `${JSON.stringify(frozenTargetPair, null, 2)}\n`);
+const frozenTargetFullPath = join(fixtureRoot, 'frozen-target-full-grid.json');
+const frozenTargetFull = JSON.parse(readFileSync(fullGridPath, 'utf8'));
+frozenTargetFull.deterministicReplay = { identity: 'fixture-replay', completedSteps: 13, simStepCount: 13 };
+writeFileSync(frozenTargetFullPath, `${JSON.stringify(frozenTargetFull, null, 2)}\n`);
+const frozenTransferDir = join(fixtureRoot, 'frozen-transfer-out');
+execFileSync('python3', [
+  frozenTransferPath,
+  '--source-probe-manifest', join(carrierOutDir, 'manifest.json'),
+  '--target-pair-manifest', frozenTargetPairPath,
+  '--target-full-grid-manifest', frozenTargetFullPath,
+  '--out-dir', frozenTransferDir,
+  '--test-samples', '350',
+], { stdio: 'pipe' });
+const frozenTransfer = JSON.parse(readFileSync(join(frozenTransferDir, 'manifest.json'), 'utf8'));
+assert.equal(frozenTransfer.schema, 'kaminos.volume.fire-flow-carrier-frozen-transfer.v0');
+assert.equal(frozenTransfer.status, 'captured');
+assert.equal(frozenTransfer.failurePhase, null);
+assert.equal(frozenTransfer.transfer.targetDataUsedForTraining, false);
+assert.equal(frozenTransfer.transfer.targetDataUsedForCalibration, false);
+assert.equal(frozenTransfer.transfer.distinctReplay, true);
+assert.equal(frozenTransfer.transfer.sourceReplay.completedSteps, 12);
+assert.equal(frozenTransfer.transfer.targetReplay.completedSteps, 13);
+assert.equal(frozenTransfer.source.probeManifest.sha256, sha256(readFileSync(join(carrierOutDir, 'manifest.json'))));
+assert.equal(frozenTransfer.source.classifier.sha256, carrierReport.classifier.artifact.sha256);
+assert.equal(frozenTransfer.source.channelHeads.sha256, carrierReport.channelHeadArtifact.sha256);
+assert.equal(frozenTransfer.channel.channel, 'fireFlowVisibilityCarrier');
+assert.equal(frozenTransfer.channel.linearContext.identity, 'full-low-context-ridge-residual-control-v0');
+assert.equal(typeof frozenTransfer.channel.lowUpsampled.rmse, 'number');
+assert.equal(typeof frozenTransfer.channel.linearContext.metrics.rmse, 'number');
+assert.equal(typeof frozenTransfer.channel.ungated.metrics.rmse, 'number');
+assert.equal(typeof frozenTransfer.channel.constantResidual.metrics.rmse, 'number');
+assert.equal(typeof frozenTransfer.channel.constantResidual.improvementVsLow.rmseReductionFraction, 'number');
+assert.equal(frozenTransfer.channel.constantResidual.scale, carrierChannel.calibratedResidual.calibration.constantControl.scale);
+
+const corruptFrozenHeadsPath = join(fixtureRoot, 'frozen-heads-corrupt.npz');
+const frozenHeadBytes = readFileSync(carrierReport.channelHeadArtifact.path);
+writeFileSync(corruptFrozenHeadsPath, Buffer.concat([frozenHeadBytes, Buffer.from([0x7f])]));
+const corruptFrozenSource = structuredClone(carrierReport);
+corruptFrozenSource.channelHeadArtifact.path = corruptFrozenHeadsPath;
+const corruptFrozenSourcePath = join(fixtureRoot, 'frozen-source-corrupt-heads.json');
+writeFileSync(corruptFrozenSourcePath, `${JSON.stringify(corruptFrozenSource, null, 2)}\n`);
+const corruptFrozenTransferDir = join(fixtureRoot, 'frozen-transfer-corrupt');
+const corruptFrozenTransfer = spawnSync('python3', [
+  frozenTransferPath,
+  '--source-probe-manifest', corruptFrozenSourcePath,
+  '--target-pair-manifest', frozenTargetPairPath,
+  '--target-full-grid-manifest', frozenTargetFullPath,
+  '--out-dir', corruptFrozenTransferDir,
+], { encoding: 'utf8' });
+assert.notEqual(corruptFrozenTransfer.status, 0, 'frozen evaluator rejects altered head bytes before metrics');
+const corruptFrozenTransferReport = JSON.parse(readFileSync(join(corruptFrozenTransferDir, 'manifest.json'), 'utf8'));
+assert.equal(corruptFrozenTransferReport.status, 'failed');
+assert.equal(corruptFrozenTransferReport.failurePhase, 'frozen-model-validation');
 
 const compositionDir = join(fixtureRoot, 'composition-out');
 execFileSync('python3', [

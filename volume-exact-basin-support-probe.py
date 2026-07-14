@@ -1088,6 +1088,11 @@ def main() -> int:
                     "ridgeAlpha": linear_state["ridgeAlpha"],
                     "featureCount": linear_state["featureCount"],
                     "trainingRows": linear_state["trainingRows"],
+                    "artifactKeys": {
+                        "weights": f"{channel}.linearWeights",
+                        "bias": f"{channel}.linearBias",
+                        "ridgeAlpha": f"{channel}.linearRidgeAlpha",
+                    },
                     "metrics": linear_metrics,
                     "improvementVsLow": improvement(low_metrics, linear_metrics),
                 },
@@ -1244,6 +1249,10 @@ def main() -> int:
                 model_payload[f"{channel}.{key}"] = np.asarray(state[key])
             model_payload[f"{channel}.targetMean"] = np.asarray([state["targetMean"]], dtype=np.float32)
             model_payload[f"{channel}.targetStd"] = np.asarray([state["targetStd"]], dtype=np.float32)
+            linear_state = linear_states[channel]
+            model_payload[f"{channel}.linearWeights"] = np.asarray(linear_state["weights"], dtype=np.float32)
+            model_payload[f"{channel}.linearBias"] = np.asarray([linear_state["bias"]], dtype=np.float32)
+            model_payload[f"{channel}.linearRidgeAlpha"] = np.asarray([linear_state["ridgeAlpha"]], dtype=np.float32)
         np.savez(model_path, **model_payload)
         report = {
             "schema": REPORT_SCHEMA,
