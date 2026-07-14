@@ -27,6 +27,7 @@ ARCHITECTURE_AUTHORITY = "shared-two-layer-relu-carrier-displacement-and-residua
 LEGACY_OBJECTIVE_FAMILY = "population-weighted-carrier-and-residual-birth-v0"
 MOTION_BALANCED_OBJECTIVE_FAMILY = "motion-balanced-static-scaffold-v0"
 EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY = "motion-balanced-eulerian-destination-occupancy-v0"
+STATE_RECURRENCE_MODES = ("coupled", "protected-splat")
 FEATURES = (
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.density", "material.heat", "material.fuel", "material.detail",
@@ -1527,6 +1528,109 @@ def apply_frozen_destination_state_model(
     }
 
 
+def apply_protected_splat_destination_state_model(
+    model,
+    normalization,
+    canonical_source,
+    appearance_source,
+    carried,
+    grid_step,
+    batch_size,
+):
+    if set(appearance_source["keys"]) != set(canonical_source["keys"]):
+        raise ValueError("protected appearance support must match canonical support")
+    donor_classes = carried.get("donorClasses")
+    if donor_classes is None:
+        raise ValueError("protected carried support lacks destination-state donor provenance")
+    donor_classes = np.asarray(donor_classes, dtype=np.int32)
+    if donor_classes.shape != (len(carried["keys"]),):
+        raise ValueError("protected donor classes must align with carried support")
+
+    appearance_splats = carried["splats"].copy()
+    for target_index, (target_key, class_index) in enumerate(zip(carried["keys"], donor_classes)):
+        if class_index < 0 or class_index >= DEATH_CLASS:
+            raise ValueError("protected donor classes must name a local displacement")
+        donor_key = offset_key(
+            target_key,
+            tuple(-value for value in DISPLACEMENTS[int(class_index)]),
+            grid_step,
+        )
+        appearance_index = appearance_source["index"].get(donor_key)
+        if appearance_index is None:
+            raise ValueError("protected appearance source lacks the canonical donor")
+        appearance_splats[target_index, 3:] = appearance_source["splats"][appearance_index, 3:]
+
+    appearance_carried = index_frame(carried["candidates"].copy(), appearance_splats)
+    inputs = build_destination_state_inference_inputs(
+        canonical_source,
+        appearance_carried,
+        donor_classes,
+        grid_step,
+    )
+    residuals = predict_destination_state_model(
+        model,
+        inputs,
+        normalization["inputMean"],
+        normalization["inputScale"],
+        normalization["residualMean"],
+        normalization["residualScale"],
+        batch_size,
+    )
+    predicted_splats = appearance_carried["splats"].copy()
+    predicted_splats[:, 3:] += residuals[:, len(FEATURES):]
+    predicted = index_frame(carried["candidates"].copy(), predicted_splats)
+    splat_residuals = residuals[:, len(FEATURES):]
+    return predicted, {
+        "authority": "protected-canonical-candidate-splat-only-recurrence-v0",
+        "updatedCount": len(predicted["keys"]),
+        "supportChanged": predicted["keys"] != carried["keys"],
+        "candidateStateProtected": True,
+        "occupancyFeedbackEnabled": False,
+        "meanAbsoluteSplatResidual": float(np.mean(np.abs(splat_residuals), dtype=np.float64)),
+        "maximumAbsoluteSplatResidual": float(np.max(np.abs(splat_residuals))),
+    }
+
+
+def protected_splat_recurrent_predict(
+    model,
+    canonical_source,
+    appearance_source,
+    grid_step,
+    input_mean,
+    input_scale,
+    birth_calibration,
+    target_support_calibration,
+    batch_size,
+    destination_death_calibration,
+    destination_state_bundle,
+):
+    if destination_death_calibration is None or destination_state_bundle is None:
+        raise ValueError("protected splat recurrence requires Eulerian occupancy and destination-state models")
+    canonical_next, accounting = recurrent_predict(
+        model,
+        canonical_source,
+        grid_step,
+        input_mean,
+        input_scale,
+        birth_calibration,
+        target_support_calibration,
+        batch_size,
+        destination_death_calibration=destination_death_calibration,
+    )
+    appearance_next, state_accounting = apply_protected_splat_destination_state_model(
+        destination_state_bundle["model"],
+        destination_state_bundle["normalization"],
+        canonical_source,
+        appearance_source,
+        canonical_next,
+        grid_step,
+        batch_size,
+    )
+    accounting["destinationState"] = state_accounting
+    accounting["compositionAuthority"] = "protected-occupancy-with-splat-only-state-recurrence-v0"
+    return canonical_next, appearance_next, accounting
+
+
 def summarize_count_drift_gate(source_count, exact_counts, predicted_counts):
     source_count = int(source_count)
     exact_counts = [int(value) for value in exact_counts]
@@ -1636,6 +1740,25 @@ def summarize_rollout_gate(metrics):
     }
 
 
+def validate_state_recurrence_mode(mode, has_transport_model, has_state_model, objective_family):
+    if mode not in STATE_RECURRENCE_MODES:
+        raise ValueError("state recurrence mode is unsupported")
+    if mode == "protected-splat":
+        if not has_transport_model:
+            raise ValueError("protected splat recurrence requires a frozen transport model")
+        if not has_state_model:
+            raise ValueError("protected splat recurrence requires a destination-state model")
+        if objective_family != EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+            raise ValueError("protected splat recurrence requires the Eulerian occupancy objective")
+    return {
+        "authority": "explicit-state-recurrence-mode-v0",
+        "mode": mode,
+        "occupancyFeedbackEnabled": mode == "coupled" and bool(has_state_model),
+        "candidateStateProtected": mode == "protected-splat",
+        "splatAppearanceRecurrent": mode == "protected-splat" and bool(has_state_model),
+    }
+
+
 def write_frame_artifacts(out_dir, label, frame):
     feature_path = out_dir / f"{label}.features.f32"
     splat_path = out_dir / f"{label}.splats.f32"
@@ -1658,7 +1781,7 @@ def write_frame_artifacts(out_dir, label, frame):
 
 def build_prediction_document(
     *, inference_manifest, training_manifest, model, route, temporal, frames, recurrent, support_metrics,
-    state_model=None, count_drift_gate=None,
+    state_model=None, state_recurrence=None, count_drift_gate=None,
 ):
     return {
         "schema": PREDICTION_SCHEMA,
@@ -1667,6 +1790,7 @@ def build_prediction_document(
         "modelTrainingManifest": training_manifest,
         "model": model,
         **({"destinationStateModel": state_model} if state_model is not None else {}),
+        **({"stateRecurrence": state_recurrence} if state_recurrence is not None else {}),
         "route": route,
         "temporal": temporal,
         "frames": frames,
@@ -1675,7 +1799,10 @@ def build_prediction_document(
         "rolloutGate": summarize_rollout_gate(support_metrics) if support_metrics else None,
         "countDriftGate": count_drift_gate,
         "claimBoundary": (
-            "isolated recurrent one-cell transport with frozen destination-state residuals on predicted support; "
+            "isolated protected occupancy recurrence with splat-only destination-state residuals; "
+            "candidate state cannot feed occupancy; no live renderer or instancing integration"
+            if state_recurrence is not None and state_recurrence.get("mode") == "protected-splat"
+            else "isolated recurrent one-cell transport with frozen destination-state residuals on predicted support; "
             "no live renderer or instancing integration"
             if state_model is not None
             else "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration"
@@ -1689,6 +1816,7 @@ def parse_args():
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--model", default="")
     parser.add_argument("--state-model", default="")
+    parser.add_argument("--state-recurrence-mode", choices=STATE_RECURRENCE_MODES, default="coupled")
     parser.add_argument("--inference-start", type=int, default=0)
     parser.add_argument("--inference-steps", type=int, default=0)
     parser.add_argument("--holdout-start", type=int, default=6)
@@ -1815,6 +1943,13 @@ def main():
                     "destinationStateModelPath": str(state_model_path),
                     "destinationStateModelSha256": state_model_receipt["sha256"],
                 })
+            state_recurrence = validate_state_recurrence_mode(
+                args.state_recurrence_mode,
+                has_transport_model=True,
+                has_state_model=destination_state_bundle is not None,
+                objective_family=objective_family,
+            )
+            last_trustworthy["stateRecurrence"] = state_recurrence
             failure_phase = "route-validation"
             device = str(mx.default_device())
             if not device.lower().startswith("device(gpu"):
@@ -1823,6 +1958,8 @@ def main():
             failure_phase = "frozen-recurrent-inference"
             inference_docs = [frames_docs[index] for index in sorted(holdout_indices)]
             current = frames[inference_docs[0]["id"]]
+            canonical_current = current
+            appearance_current = current
             prediction_frames = [current]
             recurrent_rows = []
             inference_metrics = []
@@ -1839,24 +1976,40 @@ def main():
                 else None
             )
             for step_index in range(1, len(inference_docs)):
-                predicted, recurrent = recurrent_predict(
-                    frozen_model,
-                    current,
-                    grid_step,
-                    input_mean,
-                    input_scale,
-                    birth_calibration,
-                    target_support_calibration,
-                    args.batch_size,
-                    action_calibration,
-                    destination_death_calibration,
-                    destination_state_bundle,
-                )
+                if state_recurrence["mode"] == "protected-splat":
+                    canonical_current, predicted, recurrent = protected_splat_recurrent_predict(
+                        frozen_model,
+                        canonical_current,
+                        appearance_current,
+                        grid_step,
+                        input_mean,
+                        input_scale,
+                        birth_calibration,
+                        target_support_calibration,
+                        args.batch_size,
+                        destination_death_calibration,
+                        destination_state_bundle,
+                    )
+                    appearance_current = predicted
+                else:
+                    predicted, recurrent = recurrent_predict(
+                        frozen_model,
+                        current,
+                        grid_step,
+                        input_mean,
+                        input_scale,
+                        birth_calibration,
+                        target_support_calibration,
+                        args.batch_size,
+                        action_calibration,
+                        destination_death_calibration,
+                        destination_state_bundle,
+                    )
+                    current = predicted
                 exact = frames[inference_docs[step_index]["id"]]
                 recurrent_rows.append({"step": step_index, **recurrent})
                 inference_metrics.append({"step": step_index, **support_metrics(prediction_frames[0], predicted, exact)})
                 prediction_frames.append(predicted)
-                current = predicted
             failure_phase = "prediction-write"
             prediction_docs = []
             for step_index, (frame_doc, predicted) in enumerate(zip(inference_docs, prediction_frames)):
@@ -1890,6 +2043,7 @@ def main():
                 recurrent=recurrent_rows,
                 support_metrics=inference_metrics,
                 state_model=state_model_receipt,
+                state_recurrence=state_recurrence,
                 count_drift_gate=count_drift_gate,
             )
             prediction_path = out_dir / "transport-predictions.json"

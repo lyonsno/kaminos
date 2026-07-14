@@ -550,6 +550,112 @@ class TransportDatasetContracts(unittest.TestCase):
         self.assertEqual(accounting["authority"], "frozen-destination-state-residual-on-predicted-support-v0")
         self.assertEqual(accounting["updatedCount"], 1)
 
+    def test_protected_splat_state_uses_recurrent_appearance_without_candidate_feedback(self):
+        canonical_source = frame([((0.0, 0.0, 0.0), 1.0)])
+        appearance_source = frame([((0.0, 0.0, 0.0), 9.0)])
+        appearance_source["splats"][0, 3] = 4.0
+        carried = frame([((1.0, 0.0, 0.0), 1.0)])
+        donor_class = MODULE.displacement_class((1, 0, 0))
+        carried["donorClasses"] = np.asarray([donor_class], dtype=np.int32)
+        document = frozen_state_model_document()
+        document["architecture"]["layers"][-1]["bias"][0] = 0.5
+        document["architecture"]["layers"][-1]["bias"][len(MODULE.FEATURES)] = 0.25
+        model, normalization = MODULE.hydrate_frozen_destination_state_model_document(document)
+
+        predicted, accounting = MODULE.apply_protected_splat_destination_state_model(
+            model,
+            normalization,
+            canonical_source,
+            appearance_source,
+            carried,
+            grid_step=1.0,
+            batch_size=1,
+        )
+
+        self.assertEqual(predicted["keys"], carried["keys"])
+        np.testing.assert_array_equal(predicted["candidates"], carried["candidates"])
+        np.testing.assert_array_equal(predicted["splats"][:, :3], carried["splats"][:, :3])
+        self.assertAlmostEqual(float(predicted["splats"][0, 3]), 4.25)
+        self.assertEqual(accounting["authority"], "protected-canonical-candidate-splat-only-recurrence-v0")
+        self.assertTrue(accounting["candidateStateProtected"])
+        self.assertFalse(accounting["occupancyFeedbackEnabled"])
+
+        mismatched_appearance = frame([((2.0, 0.0, 0.0), 9.0)])
+        with self.assertRaisesRegex(ValueError, "protected appearance support"):
+            MODULE.apply_protected_splat_destination_state_model(
+                model,
+                normalization,
+                canonical_source,
+                mismatched_appearance,
+                carried,
+                grid_step=1.0,
+                batch_size=1,
+            )
+
+    def test_protected_splat_recurrence_returns_separate_canonical_and_appearance_tracks(self):
+        canonical_source = frame([((0.0, 0.0, 0.0), 1.0)])
+        appearance_source = frame([((0.0, 0.0, 0.0), 9.0)])
+        appearance_source["splats"][0, 3] = 4.0
+        transport_document = frozen_model_document()
+        transport_document["training"] = {"objectiveFamily": MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY}
+        transport_document["calibration"]["birth"]["threshold"] = 1.0
+        transport_document["calibration"]["destinationDeath"] = {
+            "authority": "training-eulerian-source-death-margin-f1-v0",
+            "threshold": 2.0,
+            "precision": 1.0,
+            "recall": 0.0,
+        }
+        transport_model, input_mean, input_scale = MODULE.hydrate_frozen_model_document(transport_document)
+        state_document = frozen_state_model_document()
+        state_document["architecture"]["layers"][-1]["bias"][len(MODULE.FEATURES)] = 0.25
+        state_model, state_normalization = MODULE.hydrate_frozen_destination_state_model_document(state_document)
+
+        canonical_next, appearance_next, accounting = MODULE.protected_splat_recurrent_predict(
+            transport_model,
+            canonical_source,
+            appearance_source,
+            grid_step=1.0,
+            input_mean=input_mean,
+            input_scale=input_scale,
+            birth_calibration=transport_document["calibration"]["birth"],
+            target_support_calibration=transport_document["calibration"]["targetSupport"],
+            batch_size=1,
+            destination_death_calibration=transport_document["calibration"]["destinationDeath"],
+            destination_state_bundle={"model": state_model, "normalization": state_normalization},
+        )
+
+        self.assertEqual(canonical_next["keys"], appearance_next["keys"])
+        np.testing.assert_array_equal(canonical_next["candidates"], appearance_next["candidates"])
+        self.assertAlmostEqual(float(canonical_next["splats"][0, 3]), 1.0)
+        self.assertAlmostEqual(float(appearance_next["splats"][0, 3]), 4.25)
+        self.assertEqual(accounting["compositionAuthority"], "protected-occupancy-with-splat-only-state-recurrence-v0")
+        self.assertEqual(accounting["destinationState"]["occupancyFeedbackEnabled"], False)
+
+    def test_protected_state_recurrence_mode_requires_both_frozen_models_and_eulerian_occupancy(self):
+        validated = MODULE.validate_state_recurrence_mode(
+            "protected-splat",
+            has_transport_model=True,
+            has_state_model=True,
+            objective_family=MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+        )
+        self.assertEqual(validated["authority"], "explicit-state-recurrence-mode-v0")
+        self.assertEqual(validated["mode"], "protected-splat")
+        self.assertEqual(validated["occupancyFeedbackEnabled"], False)
+        with self.assertRaisesRegex(ValueError, "requires a destination-state model"):
+            MODULE.validate_state_recurrence_mode(
+                "protected-splat",
+                has_transport_model=True,
+                has_state_model=False,
+                objective_family=MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+            )
+        with self.assertRaisesRegex(ValueError, "requires the Eulerian occupancy objective"):
+            MODULE.validate_state_recurrence_mode(
+                "protected-splat",
+                has_transport_model=True,
+                has_state_model=True,
+                objective_family=MODULE.MOTION_BALANCED_OBJECTIVE_FAMILY,
+            )
+
     def test_action_margin_calibration_separates_static_and_motion(self):
         probabilities = np.zeros((4, MODULE.DEATH_CLASS + 1), dtype=np.float32)
         stable_class = MODULE.displacement_class((0, 0, 0))
