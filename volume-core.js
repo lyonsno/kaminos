@@ -38,6 +38,10 @@ const BOUNDARY_SPLAT_MAX_INSTANCES = 128;
 const BOUNDARY_SPLAT_HISTORY_SLOTS = 16;
 const BOUNDARY_SPLAT_DEFAULT_HISTORY_DEPTH = 4;
 const BOUNDARY_SPLAT_MAX_HISTORY_FRAME_STRIDE = 16;
+const BOUNDARY_SPLAT_HISTORY_ARCHIVE_CONTROL_BYTES = 32;
+const BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_U32 = 12;
+const BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_BYTES = BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_U32 * Uint32Array.BYTES_PER_ELEMENT;
+const BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_BYTES = BOUNDARY_SPLAT_HISTORY_SLOTS * BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_BYTES;
 const BOUNDARY_SPLAT_PHASE_LAB_MODES = new Set([
   'shared-current',
   'same-history-slot',
@@ -311,6 +315,116 @@ export function boundarySplatHistoryAgeFrames(offsetSlots, historyFrameStride, f
   const stride = Math.max(1, Math.floor(Number(historyFrameStride) || 1));
   const phase = Math.max(0, Math.floor(Number(frameCount) || 0)) % stride;
   return (slots - 1) * stride + phase + 1;
+}
+
+export function nextBoundarySplatHistoryAllocation(previous = {}, options = {}) {
+  const generation = Math.max(0, Math.floor(Number(previous.generation) || 0)) + 1;
+  const slotCount = Math.max(1, Math.floor(Number(options.slotCount) || BOUNDARY_SPLAT_DEFAULT_HISTORY_DEPTH));
+  const allocatedSlotCount = Math.max(slotCount, Math.floor(Number(options.allocatedSlotCount) || slotCount));
+  const candidateCapacity = Math.max(0, Math.floor(Number(options.candidateCapacity) || 0));
+  return {
+    identity: 'boundary-splat-history-allocation-v0',
+    generation,
+    slotCount,
+    allocatedSlotCount,
+    candidateCapacity,
+    reason: String(options.reason || 'allocation-replaced'),
+    slots: Array.from({ length: slotCount }, (_, slotIndex) => ({
+      slotIndex,
+      initialized: false,
+      historyAllocationGeneration: generation,
+      archiveWriteSequence: 0,
+      writeSubmissionCompleted: false,
+      sourceCandidateGeneration: null,
+      sourceSimStepCount: null,
+      sourceCandidateCount: null,
+      effectiveDrawCount: null,
+      sourceRenderFrameCount: null,
+    })),
+  };
+}
+
+export function boundarySplatHistoryArchiveDecision(options = {}) {
+  const historyFrameStride = Math.max(1, Math.floor(Number(options.historyFrameStride) || 1));
+  const historyDepth = Math.max(1, Math.floor(Number(options.historyDepth) || BOUNDARY_SPLAT_HISTORY_SLOTS));
+  const sourceCandidateGeneration = Math.max(0, Math.floor(Number(options.sourceCandidateGeneration) || 0));
+  const writeTick = sourceCandidateGeneration > 0
+    ? Math.floor((sourceCandidateGeneration - 1) / historyFrameStride)
+    : 0;
+  const writeSlot = writeTick % historyDepth;
+  if (options.holdover === true) return { archive: false, reason: 'holdover-does-not-archive', writeTick, writeSlot };
+  if (sourceCandidateGeneration <= 0 || Math.floor(Number(options.sourceSimStepCount) || 0) <= 0) {
+    return { archive: false, reason: 'source-generation-unavailable', writeTick, writeSlot };
+  }
+  const allocationGeneration = Math.max(0, Math.floor(Number(options.allocationGeneration) || 0));
+  const lastAllocationGeneration = Math.max(0, Math.floor(Number(options.lastArchivedAllocationGeneration) || 0));
+  const lastSourceGeneration = Math.max(0, Math.floor(Number(options.lastArchivedSourceCandidateGeneration) || 0));
+  if (allocationGeneration === lastAllocationGeneration && sourceCandidateGeneration <= lastSourceGeneration) {
+    return { archive: false, reason: 'source-generation-already-archived', writeTick, writeSlot };
+  }
+  return { archive: true, reason: 'new-source-candidate-generation', writeTick, writeSlot };
+}
+
+export function boundarySplatHistorySlotReadiness(slot = {}, selection = {}) {
+  const reasons = [];
+  const integer = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : null;
+  const slotIndex = integer(slot.slotIndex);
+  const selectedSlotIndex = integer(selection.slotIndex);
+  const slotGeneration = integer(slot.historyAllocationGeneration);
+  const selectedGeneration = integer(selection.historyAllocationGeneration);
+  const slotWriteSequence = integer(slot.archiveWriteSequence);
+  const selectedWriteSequence = integer(selection.archiveWriteSequence);
+  const sourceCandidateGeneration = integer(slot.sourceCandidateGeneration);
+  const currentSourceCandidateGeneration = integer(selection.currentSourceCandidateGeneration);
+  const sourceCandidateCount = integer(slot.sourceCandidateCount);
+  const effectiveDrawCount = integer(slot.effectiveDrawCount);
+  const requestedDrawCount = integer(selection.requestedDrawCount);
+  const candidateCapacity = integer(selection.candidateCapacity);
+  if (slotIndex === null || selectedSlotIndex === null || slotIndex !== selectedSlotIndex) reasons.push('slot-index-mismatch');
+  if (slot.initialized !== true) reasons.push('slot-uninitialized');
+  if (slot.writeSubmissionCompleted !== true) reasons.push('write-not-completed');
+  if (slotGeneration === null || selectedGeneration === null || slotGeneration !== selectedGeneration) reasons.push('allocation-generation-mismatch');
+  if (slotWriteSequence === null || selectedWriteSequence === null || slotWriteSequence !== selectedWriteSequence) reasons.push('slot-overwritten-after-selection');
+  if (sourceCandidateGeneration === null || sourceCandidateGeneration <= 0 || currentSourceCandidateGeneration === null) {
+    reasons.push('source-generation-unknown');
+  } else if (sourceCandidateGeneration > currentSourceCandidateGeneration) {
+    reasons.push('source-generation-future');
+  }
+  const sourceAgeGenerations = sourceCandidateGeneration !== null && currentSourceCandidateGeneration !== null
+    ? currentSourceCandidateGeneration - sourceCandidateGeneration
+    : null;
+  const maxAgeGenerations = integer(selection.maxAgeGenerations);
+  if (sourceAgeGenerations !== null && maxAgeGenerations !== null && sourceAgeGenerations > maxAgeGenerations) {
+    reasons.push('source-generation-age-exceeded');
+  }
+  if (sourceCandidateCount === null || sourceCandidateCount <= 0) reasons.push('source-candidate-count-zero');
+  if (candidateCapacity !== null && sourceCandidateCount !== null && sourceCandidateCount > candidateCapacity) {
+    reasons.push('source-candidate-count-exceeds-capacity');
+  }
+  if (effectiveDrawCount === null || effectiveDrawCount <= 0) reasons.push('archived-draw-count-zero');
+  if (sourceCandidateCount !== null && effectiveDrawCount !== null && effectiveDrawCount > sourceCandidateCount) {
+    reasons.push('archived-draw-count-exceeds-source-count');
+  }
+  if (requestedDrawCount !== null && effectiveDrawCount !== null && requestedDrawCount > effectiveDrawCount) {
+    reasons.push('requested-draw-count-exceeds-archived-count');
+  }
+  return { ok: reasons.length === 0, reasons, sourceAgeGenerations };
+}
+
+export function boundarySplatHistoryHoldoverDrawPlan(slot = {}, selection = {}) {
+  const readiness = boundarySplatHistorySlotReadiness(slot, selection);
+  if (!readiness.ok) return { ...readiness, drawCount: 0, indirectCommand: null };
+  const drawCount = Math.max(1, Math.floor(Number(selection.requestedDrawCount) || Number(slot.effectiveDrawCount) || 0));
+  return {
+    ...readiness,
+    drawCount,
+    indirectCommand: {
+      vertexCount: 6,
+      instanceCount: drawCount,
+      firstVertex: 0,
+      firstInstance: 0,
+    },
+  };
 }
 
 export function boundarySplatBufferIntegrity(options = {}) {
@@ -5402,6 +5516,32 @@ struct BoundarySplatInstanceDescriptor {
   phase: vec4<f32>,
 };
 
+struct BoundarySplatHistoryArchiveControl {
+  allocationGeneration: u32,
+  sourceCandidateGeneration: u32,
+  sourceSimStepCount: u32,
+  archiveWriteSequence: u32,
+  sourceRenderFrameCount: u32,
+  archiveEnabled: u32,
+  padding0: u32,
+  padding1: u32,
+};
+
+struct BoundarySplatHistorySlotMetadata {
+  allocationGeneration: u32,
+  archiveWriteSequence: u32,
+  sourceCandidateGeneration: u32,
+  sourceSimStepCount: u32,
+  sourceCandidateCount: u32,
+  effectiveDrawCount: u32,
+  sourceRenderFrameCount: u32,
+  sourceTimestampMs: u32,
+  initialized: u32,
+  padding0: u32,
+  padding1: u32,
+  padding2: u32,
+};
+
 struct BoundarySplatAttributeHookOutput {
   colorOpacity: vec4<f32>,
   radiusScale: vec2<f32>,
@@ -5427,6 +5567,8 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(8) var<storage, read_write> boundarySplatHistory: array<BoundarySplat>;
 @group(0) @binding(9) var<storage, read> boundarySplatHistoryForRender: array<BoundarySplat>;
 @group(0) @binding(10) var<storage, read_write> boundarySplatDrawGroups: array<BoundarySplatDrawGroup>;
+@group(0) @binding(11) var<storage, read> boundarySplatHistoryArchiveControl: BoundarySplatHistoryArchiveControl;
+@group(0) @binding(12) var<storage, read_write> boundarySplatHistorySlotMetadata: array<BoundarySplatHistorySlotMetadata>;
 
 const BOUNDARY_SPLAT_DRAW_GROUP_COUNT: u32 = 6u;
 
@@ -5580,8 +5722,21 @@ fn finalizeBoundarySplats() {
 @compute @workgroup_size(64)
 fn archiveBoundarySplatHistory(@builtin(global_invocation_id) gid: vec3<u32>) {
   let candidateIndex = gid.x;
+  if (boundarySplatHistoryArchiveControl.archiveEnabled == 0u) { return; }
   if (candidateIndex >= boundarySplatDraw.capacity) { return; }
   let targetIndex = boundarySplatDraw.historyWriteSlot * boundarySplatDraw.capacity + candidateIndex;
+  if (candidateIndex == 0u) {
+    let slot = boundarySplatDraw.historyWriteSlot;
+    boundarySplatHistorySlotMetadata[slot].allocationGeneration = boundarySplatHistoryArchiveControl.allocationGeneration;
+    boundarySplatHistorySlotMetadata[slot].archiveWriteSequence = boundarySplatHistoryArchiveControl.archiveWriteSequence;
+    boundarySplatHistorySlotMetadata[slot].sourceCandidateGeneration = boundarySplatHistoryArchiveControl.sourceCandidateGeneration;
+    boundarySplatHistorySlotMetadata[slot].sourceSimStepCount = boundarySplatHistoryArchiveControl.sourceSimStepCount;
+    boundarySplatHistorySlotMetadata[slot].sourceCandidateCount = boundarySplatDraw.sourceCandidateCount;
+    boundarySplatHistorySlotMetadata[slot].effectiveDrawCount = boundarySplatDraw.selectedCandidateCount;
+    boundarySplatHistorySlotMetadata[slot].sourceRenderFrameCount = boundarySplatHistoryArchiveControl.sourceRenderFrameCount;
+    boundarySplatHistorySlotMetadata[slot].sourceTimestampMs = boundarySplatHistoryArchiveControl.padding0;
+    boundarySplatHistorySlotMetadata[slot].initialized = select(0u, 1u, boundarySplatDraw.sourceCandidateCount > 0u && boundarySplatDraw.selectedCandidateCount > 0u);
+  }
   if (candidateIndex < boundarySplatDraw.sourceCandidateCount) {
     let selectedSourceCandidateIndex = boundarySplatNestedSourceIndex(candidateIndex, boundarySplatDraw.sourceCandidateCount);
     boundarySplatHistory[targetIndex] = boundarySplats[selectedSourceCandidateIndex];
@@ -5884,6 +6039,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatPhaseSourceCount: 1,
     boundarySplatPhaseSourceIdentity: boundarySplatPhaseModeIdentity(controlsSnapshot.boundarySplatPhaseMode),
     boundarySplatHistoryRingIdentity: 'boundary-splat-live-history-ring-v0',
+    boundarySplatHistoryAllocationIdentity: 'boundary-splat-history-allocation-v0',
+    boundarySplatHistoryAllocationGeneration: 0,
+    boundarySplatHistoryAllocationReason: 'runtime-unallocated',
+    boundarySplatHistoryAllocatedSlots: BOUNDARY_SPLAT_HISTORY_SLOTS,
+    boundarySplatHistorySlotMetadataAuthority: 'gpu-archive-slot-metadata-awaiting-completed-readback-v0',
+    boundarySplatHistorySlotMetadata: [],
+    boundarySplatHistoryArchiveDecision: null,
+    boundarySplatHistoryLastArchivedSourceCandidateGeneration: 0,
+    boundarySplatHistoryArchiveWriteSequence: 0,
     boundarySplatHistorySlots: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
     boundarySplatHistoryWriteSlot: 0,
     boundarySplatHistoryWriteTick: 0,
@@ -6277,12 +6441,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatCameraBuffer = null;
   let boundarySplatInstanceDescriptorBuffer = null;
   let boundarySplatHistoryBuffer = null;
+  let boundarySplatHistoryArchiveControlBuffer = null;
+  let boundarySplatHistorySlotMetadataBuffer = null;
   let boundarySplatReadbackBuffer = null;
   let boundarySplatFeatureBuffer = null;
   let boundarySplatFeatureBufferCapacity = 0;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
   let boundarySplatTelemetryLodModePending = null;
+  let boundarySplatHistoryAllocation = nextBoundarySplatHistoryAllocation({}, {
+    slotCount: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
+    allocatedSlotCount: BOUNDARY_SPLAT_HISTORY_SLOTS,
+    candidateCapacity: boundarySplatCapacity,
+    reason: 'runtime-unallocated',
+  });
+  boundarySplatHistoryAllocation.generation = 0;
+  let boundarySplatHistoryArchiveWriteSequence = 0;
+  let boundarySplatHistoryLastArchivedAllocationGeneration = 0;
+  let boundarySplatHistoryLastArchivedSourceCandidateGeneration = 0;
+  let boundarySplatValidatedHistorySelection = null;
   let boundarySplatPbrDepthTexture = null;
   let boundarySplatPbrDepthTextureSize = '';
   let fluidBuffers = [];
@@ -6752,6 +6929,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatIndirectBuffer?.destroy();
     boundarySplatInstanceDescriptorBuffer?.destroy();
     boundarySplatHistoryBuffer?.destroy();
+    boundarySplatHistoryArchiveControlBuffer?.destroy();
+    boundarySplatHistorySlotMetadataBuffer?.destroy();
     boundarySplatReadbackBuffer?.destroy();
     boundarySplatFeatureBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
@@ -6762,12 +6941,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatIndirectBuffer = null;
     boundarySplatInstanceDescriptorBuffer = null;
     boundarySplatHistoryBuffer = null;
+    boundarySplatHistoryArchiveControlBuffer = null;
+    boundarySplatHistorySlotMetadataBuffer = null;
     boundarySplatReadbackBuffer = null;
     boundarySplatFeatureBuffer = null;
     boundarySplatFeatureBufferCapacity = 0;
     boundarySplatTelemetryCopyPending = false;
     boundarySplatTelemetryMapPending = false;
     boundarySplatTelemetryLodModePending = null;
+    boundarySplatValidatedHistorySelection = null;
     oracleActivityCueBuffer = null;
     fluidBuffers = [];
     frontBuffers = [];
@@ -7004,8 +7186,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
+  function publishBoundarySplatHistoryAllocation() {
+    state.boundarySplatHistoryAllocationIdentity = boundarySplatHistoryAllocation.identity;
+    state.boundarySplatHistoryAllocationGeneration = boundarySplatHistoryAllocation.generation;
+    state.boundarySplatHistoryAllocationReason = boundarySplatHistoryAllocation.reason;
+    state.boundarySplatHistoryAllocatedSlots = boundarySplatHistoryAllocation.allocatedSlotCount;
+    state.boundarySplatHistoryArchiveWriteSequence = boundarySplatHistoryArchiveWriteSequence;
+    state.boundarySplatHistoryLastArchivedSourceCandidateGeneration = boundarySplatHistoryLastArchivedSourceCandidateGeneration;
+  }
+
   function ensureBoundarySplatBuffers() {
-    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatDrawGroupBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatInstanceDescriptorBuffer && boundarySplatHistoryBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer) return;
+    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatDrawGroupBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatInstanceDescriptorBuffer && boundarySplatHistoryBuffer && boundarySplatHistoryArchiveControlBuffer && boundarySplatHistorySlotMetadataBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer) return;
     const requestedCapacity = boundarySplatCapacity;
     boundarySplatCapacity = Math.min(
       boundarySplatCapacity,
@@ -7063,6 +7254,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: BOUNDARY_SPLAT_HISTORY_SLOTS * boundarySplatCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
       usage: GPUBufferUsage.STORAGE,
     });
+    boundarySplatHistoryArchiveControlBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} history archive control`,
+      size: BOUNDARY_SPLAT_HISTORY_ARCHIVE_CONTROL_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatHistorySlotMetadataBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} history slot metadata`,
+      size: BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(boundarySplatHistoryArchiveControlBuffer, 0, new Uint32Array(8));
+    device.queue.writeBuffer(boundarySplatHistorySlotMetadataBuffer, 0, new Uint32Array(BOUNDARY_SPLAT_HISTORY_SLOTS * BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_U32));
+    boundarySplatHistoryAllocation = nextBoundarySplatHistoryAllocation(boundarySplatHistoryAllocation, {
+      slotCount: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
+      allocatedSlotCount: BOUNDARY_SPLAT_HISTORY_SLOTS,
+      candidateCapacity: boundarySplatCapacity,
+      reason: 'initial-gpu-allocation',
+    });
+    boundarySplatHistoryLastArchivedAllocationGeneration = 0;
+    boundarySplatHistoryLastArchivedSourceCandidateGeneration = 0;
+    publishBoundarySplatHistoryAllocation();
     boundarySplatReadbackBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} asynchronous count readback`,
       size: 64 + BOUNDARY_SPLAT_DRAW_GROUP_COUNT * BOUNDARY_SPLAT_DRAW_GROUP_STRIDE_BYTES,
@@ -7092,6 +7304,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatCameraBuffer
       || !boundarySplatInstanceDescriptorBuffer
       || !boundarySplatHistoryBuffer
+      || !boundarySplatHistoryArchiveControlBuffer
+      || !boundarySplatHistorySlotMetadataBuffer
       || !boundarySplatFeatureBuffer
       || fluidBuffers.length !== 2
     ) return;
@@ -7107,6 +7321,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
         { binding: 8, resource: { buffer: boundarySplatHistoryBuffer } },
         { binding: 10, resource: { buffer: boundarySplatDrawGroupBuffer } },
+        { binding: 11, resource: { buffer: boundarySplatHistoryArchiveControlBuffer } },
+        { binding: 12, resource: { buffer: boundarySplatHistorySlotMetadataBuffer } },
       ],
     }));
     boundarySplatRenderBindGroup = device.createBindGroup({
@@ -7174,6 +7390,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       size: BOUNDARY_SPLAT_HISTORY_SLOTS * nextCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
       usage: GPUBufferUsage.STORAGE,
     });
+    boundarySplatHistoryAllocation = nextBoundarySplatHistoryAllocation(boundarySplatHistoryAllocation, {
+      slotCount: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
+      allocatedSlotCount: BOUNDARY_SPLAT_HISTORY_SLOTS,
+      candidateCapacity: nextCapacity,
+      reason: 'candidate-capacity-growth',
+    });
+    boundarySplatHistoryLastArchivedAllocationGeneration = 0;
+    boundarySplatHistoryLastArchivedSourceCandidateGeneration = 0;
+    boundarySplatValidatedHistorySelection = null;
+    device.queue.writeBuffer(boundarySplatHistoryArchiveControlBuffer, 0, new Uint32Array(8));
+    device.queue.writeBuffer(boundarySplatHistorySlotMetadataBuffer, 0, new Uint32Array(BOUNDARY_SPLAT_HISTORY_SLOTS * BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_U32));
+    publishBoundarySplatHistoryAllocation();
     rebuildBoundarySplatBindGroups();
     previousSplatBuffer?.destroy();
     previousHistoryBuffer?.destroy();
@@ -7594,6 +7822,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           .replace('@group(0) @binding(3) var<storage, read_write> boundarySplatDraw: BoundarySplatDraw;\n', '')
           .replace('@group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;\n', '')
           .replace('@group(0) @binding(8) var<storage, read_write> boundarySplatHistory: array<BoundarySplat>;\n', '')
+          .replace('@group(0) @binding(11) var<storage, read> boundarySplatHistoryArchiveControl: BoundarySplatHistoryArchiveControl;\n', '')
+          .replace('@group(0) @binding(12) var<storage, read_write> boundarySplatHistorySlotMetadata: array<BoundarySplatHistorySlotMetadata>;\n', '')
           .replace('@group(0) @binding(10) var<storage, read_write> boundarySplatDrawGroups: array<BoundarySplatDrawGroup>;\n', '@group(0) @binding(10) var<storage, read> boundarySplatDrawGroups: array<BoundarySplatDrawGroup>;\n')
       : BOUNDARY_SPLAT_WGSL;
     boundarySplatComputeShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compute wgsl`, code: boundarySplatComputeWgsl });
@@ -7739,6 +7969,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 11, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 12, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       ],
     });
     boundarySplatRenderBindGroupLayout = device.createBindGroupLayout({
@@ -9235,8 +9467,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const phaseStride = normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride);
     const historyDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
     const historyFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
-    const historyWriteTick = Math.floor(state.frameCount / historyFrameStride);
-    const historyWriteSlot = historyWriteTick % historyDepth;
+    const historyWriteTick = Math.max(0, Math.floor(Number(state.boundarySplatHistoryWriteTick) || 0));
+    const historyWriteSlot = Math.max(0, Math.min(historyDepth - 1, Math.floor(Number(state.boundarySplatHistoryWriteSlot) || 0)));
+    const boundarySplatHistorySlotOverride = requestedInstanceCount === 1
+      && boundarySplatValidatedHistorySelection?.historyAllocationGeneration === boundarySplatHistoryAllocation.generation
+      ? Math.max(0, Math.min(historyDepth - 1, Math.floor(Number(boundarySplatValidatedHistorySelection.slotIndex) || 0)))
+      : null;
     const composition = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
     const layout = boundarySplatInstanceLayout(requestedInstanceCount, composition);
     const active = layout.map((entry, index) => {
@@ -9252,10 +9488,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         historyFrameStride,
         state.frameCount,
       );
-      const historySlot = (historyWriteSlot - historyOffsetSlots + historyDepth) % historyDepth;
-      const phaseSourceIdentity = historyOffsetSlots > 0
-        ? boundarySplatPhaseModeIdentity(phaseMode)
-        : 'shared-current-control';
+      const historySlot = boundarySplatHistorySlotOverride ?? ((historyWriteSlot - historyOffsetSlots + historyDepth) % historyDepth);
+      const phaseSourceIdentity = boundarySplatHistorySlotOverride !== null
+        ? 'explicit-completed-history-slot'
+        : historyOffsetSlots > 0
+          ? boundarySplatPhaseModeIdentity(phaseMode)
+          : 'shared-current-control';
       return {
         identity: BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY,
         index,
@@ -9272,7 +9510,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveHistoryOffsetFrames: boundarySplatPhysicalHistoryAgeFrames,
         boundarySplatPhysicalHistoryAgeFrames,
         phaseHistorySlot: historySlot,
-        phaseSourceAuthority: historyOffsetSlots > 0 ? 'live-gpu-candidate-history-ring' : 'current-live-candidate-buffer',
+        phaseSourceAuthority: boundarySplatHistorySlotOverride !== null
+          ? 'gpu-archive-slot-metadata-completed-readback-v0'
+          : historyOffsetSlots > 0
+            ? 'live-gpu-candidate-history-ring'
+            : 'current-live-candidate-buffer',
+        historyAllocationGeneration: boundarySplatHistoryAllocation.generation,
+        archiveWriteSequence: boundarySplatHistorySlotOverride !== null
+          ? boundarySplatValidatedHistorySelection.archiveWriteSequence
+          : null,
       };
     });
     return active;
@@ -9347,8 +9593,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ]));
     state.boundarySplatInstanceDescriptors = descriptors;
     state.boundarySplatHistorySlots = state.boundarySplatHistoryDepth;
-    state.boundarySplatHistoryWriteTick = Math.floor(state.frameCount / state.boundarySplatHistoryFrameStride);
-    state.boundarySplatHistoryWriteSlot = state.boundarySplatHistoryWriteTick % state.boundarySplatHistoryDepth;
+    state.boundarySplatHistoryWriteTick = Math.max(0, Math.floor(Number(state.boundarySplatHistoryWriteTick) || 0));
+    state.boundarySplatHistoryWriteSlot = Math.max(0, Math.min(
+      state.boundarySplatHistoryDepth - 1,
+      Math.floor(Number(state.boundarySplatHistoryWriteSlot) || 0),
+    ));
     state.boundarySplatEffectiveHistoryWindowFrames = (state.boundarySplatHistoryDepth - 1) * state.boundarySplatHistoryFrameStride;
     state.boundarySplatPhysicalHistoryWindowFrames = boundarySplatHistoryAgeFrames(
       state.boundarySplatHistoryDepth - 1,
@@ -9371,6 +9620,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveHistoryOffsetFrames: descriptor.effectiveHistoryOffsetFrames,
         physicalHistoryAgeFrames: descriptor.boundarySplatPhysicalHistoryAgeFrames,
         historySlot: descriptor.phaseHistorySlot,
+        historyAllocationGeneration: descriptor.historyAllocationGeneration,
+        archiveWriteSequence: descriptor.archiveWriteSequence,
         authority: descriptor.phaseSourceAuthority,
       }));
     state.boundarySplatIncrementalInstanceCost = {
@@ -9489,7 +9740,36 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const lodMode = normalizeBoundarySplatLodMode(controlsSnapshot.boundarySplatLodMode);
     const historyDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
     const historyFrameStride = normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride);
-    const historyWriteSlot = Math.floor(state.frameCount / historyFrameStride) % historyDepth;
+    const sourceCandidateGeneration = Math.max(0, Math.floor(state.simStepCount));
+    const archiveDecision = boundarySplatHistoryArchiveDecision({
+      allocationGeneration: boundarySplatHistoryAllocation.generation,
+      sourceCandidateGeneration,
+      sourceSimStepCount: state.simStepCount,
+      lastArchivedAllocationGeneration: boundarySplatHistoryLastArchivedAllocationGeneration,
+      lastArchivedSourceCandidateGeneration: boundarySplatHistoryLastArchivedSourceCandidateGeneration,
+      historyFrameStride,
+      historyDepth,
+      holdover: hooks.holdover === true,
+    });
+    const historyWriteSlot = archiveDecision.writeSlot;
+    if (archiveDecision.archive) boundarySplatHistoryArchiveWriteSequence += 1;
+    device.queue.writeBuffer(boundarySplatHistoryArchiveControlBuffer, 0, new Uint32Array([
+      boundarySplatHistoryAllocation.generation,
+      sourceCandidateGeneration,
+      Math.max(0, Math.floor(state.simStepCount)),
+      boundarySplatHistoryArchiveWriteSequence,
+      Math.max(0, Math.floor(state.frameCount)),
+      archiveDecision.archive ? 1 : 0,
+      Math.max(0, Math.floor(performance.now())) >>> 0,
+      0,
+    ]));
+    state.boundarySplatHistoryArchiveDecision = {
+      ...archiveDecision,
+      historyAllocationGeneration: boundarySplatHistoryAllocation.generation,
+      sourceCandidateGeneration,
+      sourceSimStepCount: state.simStepCount,
+      archiveWriteSequence: boundarySplatHistoryArchiveWriteSequence,
+    };
     const phaseSourceCount = Math.max(1, Math.min(historyDepth, state.boundarySplatPhaseSourceCount || 1));
     state.boundarySplatSelectorPolicyIdentity = BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY;
     state.boundarySplatSelectorPolicyId = BOUNDARY_SPLAT_SELECTOR_POLICY_CODE;
@@ -9534,11 +9814,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     finalizePass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
     finalizePass.dispatchWorkgroups(1);
     finalizePass.end();
-    const archivePass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} live history archive pass` });
-    archivePass.setPipeline(boundarySplatArchivePipeline);
-    archivePass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
-    archivePass.dispatchWorkgroups(Math.ceil(boundarySplatCapacity / 64));
-    archivePass.end();
+    if (archiveDecision.archive) {
+      const archivePass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} live history archive pass` });
+      archivePass.setPipeline(boundarySplatArchivePipeline);
+      archivePass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
+      archivePass.dispatchWorkgroups(Math.ceil(boundarySplatCapacity / 64));
+      archivePass.end();
+      boundarySplatHistoryLastArchivedAllocationGeneration = boundarySplatHistoryAllocation.generation;
+      boundarySplatHistoryLastArchivedSourceCandidateGeneration = sourceCandidateGeneration;
+      state.boundarySplatHistoryWriteTick = archiveDecision.writeTick;
+      state.boundarySplatHistoryWriteSlot = archiveDecision.writeSlot;
+      publishBoundarySplatHistoryAllocation();
+    }
     hooks.afterCompaction?.();
     state.boundarySplatCopyBytesThisFrame = 0;
     state.boundarySplatCopyDisposition = makeBoundarySplatCopyDisposition(0, state.boundarySplatRendererIdentity);
@@ -9915,6 +10202,94 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatTelemetryMapPending = false;
       boundarySplatTelemetryLodModePending = null;
     }
+  }
+
+  async function sampleBoundarySplatHistorySlotMetadata() {
+    if (!boundarySplatHistorySlotMetadataBuffer) {
+      return { ok: false, reason: 'history-slot-metadata-buffer-unavailable', slots: [] };
+    }
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const readback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} history slot metadata readback`,
+      size: BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_BYTES,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    let mapped = false;
+    try {
+      const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} history slot metadata readback encoder` });
+      encoder.copyBufferToBuffer(
+        boundarySplatHistorySlotMetadataBuffer,
+        0,
+        readback,
+        0,
+        BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_BYTES,
+      );
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      mapped = true;
+      const values = new Uint32Array(readback.getMappedRange());
+      const activeDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
+      const observedAtMs = performance.now();
+      const slots = Array.from({ length: activeDepth }, (_, slotIndex) => {
+        const offset = slotIndex * BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_U32;
+        const initialized = values[offset + 8] === 1;
+        return {
+          slotIndex,
+          initialized,
+          historyAllocationGeneration: values[offset + 0],
+          archiveWriteSequence: values[offset + 1],
+          writeSubmissionCompleted: initialized,
+          sourceCandidateGeneration: values[offset + 2] || null,
+          sourceSimStepCount: values[offset + 3] || null,
+          sourceCandidateCount: values[offset + 4] || null,
+          effectiveDrawCount: values[offset + 5] || null,
+          sourceRenderFrameCount: values[offset + 6] || null,
+          sourceTimestampMs: values[offset + 7] || null,
+          completedWriteObservedAtMs: initialized ? observedAtMs : null,
+          authority: 'gpu-archive-slot-metadata-post-queue-completion-readback-v0',
+        };
+      });
+      const result = {
+        identity: 'boundary-splat-history-slot-metadata-readback-v0',
+        ok: true,
+        authority: 'gpu-archive-slot-metadata-post-queue-completion-readback-v0',
+        historyRingIdentity: state.boundarySplatHistoryRingIdentity,
+        historyAllocationGeneration: boundarySplatHistoryAllocation.generation,
+        candidateCapacity: boundarySplatCapacity,
+        historyDepth: activeDepth,
+        allocatedHistoryDepth: BOUNDARY_SPLAT_HISTORY_SLOTS,
+        currentSourceCandidateGeneration: boundarySplatHistoryLastArchivedSourceCandidateGeneration,
+        archiveWriteSequence: boundarySplatHistoryArchiveWriteSequence,
+        slots,
+      };
+      state.boundarySplatHistorySlotMetadataAuthority = result.authority;
+      state.boundarySplatHistorySlotMetadata = slots;
+      publishBoundarySplatHistoryAllocation();
+      return result;
+    } finally {
+      if (mapped) readback.unmap();
+      readback.destroy();
+    }
+  }
+
+  function writeBoundarySplatHistoryHoldoverDrawState(slot, plan) {
+    const historyDepth = normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth);
+    const drawCount = plan.drawCount;
+    device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([
+      6, drawCount, 0, 0,
+      slot.sourceCandidateCount, 0, boundarySplatCapacity, 1,
+      slot.sourceCandidateCount, 1, slot.slotIndex, historyDepth,
+      BOUNDARY_SPLAT_SELECTOR_POLICY_CODE, 0, drawCount, drawCount,
+    ]));
+    const drawGroups = new Uint32Array(BOUNDARY_SPLAT_DRAW_GROUP_COUNT * 8);
+    drawGroups.set([6, drawCount, 0, 0, 0, 1, drawCount, drawCount], 0);
+    device.queue.writeBuffer(boundarySplatDrawGroupBuffer, 0, drawGroups);
+    device.queue.writeBuffer(boundarySplatIndirectBuffer, 0, new Uint32Array([
+      6,
+      drawCount,
+      0,
+      0,
+    ]));
   }
 
   async function sampleBoundarySplatDrawState() {
@@ -13013,6 +13388,169 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  function resumeBoundarySplatHistoryHoldoverLoop(options) {
+    if (options.resumeRenderLoop === true && state.active) {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(render);
+    }
+  }
+
+  async function renderBoundarySplatHistorySlotToCanvas(options = {}) {
+    const noSourceSubmissions = {
+      simulationSubmitted: false,
+      sidecarSubmitted: false,
+      compactionSubmitted: false,
+      archiveSubmitted: false,
+    };
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...noSourceSubmissions };
+    cancelAnimationFrame(raf);
+    try {
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      const metadata = await sampleBoundarySplatHistorySlotMetadata();
+      if (!metadata.ok) return { ...metadata, ...noSourceSubmissions };
+      const slotIndex = Math.floor(Number(options.slotIndex));
+      if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= metadata.historyDepth) {
+        return { ok: false, reason: 'history-slot-index-out-of-range', slotIndex, metadata, ...noSourceSubmissions };
+      }
+      const slot = metadata.slots[slotIndex];
+      const selection = {
+        slotIndex,
+        historyAllocationGeneration: Number.isFinite(Number(options.historyAllocationGeneration))
+          ? Math.floor(Number(options.historyAllocationGeneration))
+          : metadata.historyAllocationGeneration,
+        archiveWriteSequence: Number.isFinite(Number(options.archiveWriteSequence))
+          ? Math.floor(Number(options.archiveWriteSequence))
+          : slot.archiveWriteSequence,
+        currentSourceCandidateGeneration: metadata.currentSourceCandidateGeneration,
+        maxAgeGenerations: Number.isFinite(Number(options.maxAgeGenerations))
+          ? Math.max(0, Math.floor(Number(options.maxAgeGenerations)))
+          : (metadata.historyDepth - 1) * normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride) + 1,
+        requestedDrawCount: Number.isFinite(Number(options.requestedDrawCount))
+          ? Math.max(0, Math.floor(Number(options.requestedDrawCount)))
+          : slot.effectiveDrawCount,
+        candidateCapacity: metadata.candidateCapacity,
+      };
+      const plan = boundarySplatHistoryHoldoverDrawPlan(slot, selection);
+      if (!plan.ok) {
+        return {
+          identity: 'boundary-splat-history-holdover-draw-v0',
+          ok: false,
+          reason: 'history-slot-not-ready',
+          slot,
+          selection,
+          plan,
+          metadata,
+          ...noSourceSubmissions,
+        };
+      }
+      const controlsBefore = { ...controlsSnapshot };
+      const validatedSelectionBefore = boundarySplatValidatedHistorySelection;
+      const historyWriteSlotBefore = state.boundarySplatHistoryWriteSlot;
+      const historyWriteTickBefore = state.boundarySplatHistoryWriteTick;
+      const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+      try {
+        boundarySplatValidatedHistorySelection = {
+          slotIndex,
+          historyAllocationGeneration: selection.historyAllocationGeneration,
+          archiveWriteSequence: selection.archiveWriteSequence,
+        };
+        controlsSnapshot = applyRuntimeQualityControls({
+          ...controlsSnapshot,
+          ...(options.controlOverrides && typeof options.controlOverrides === 'object' ? options.controlOverrides : {}),
+          boundarySplatMode: controlsBefore.boundarySplatMode,
+          boundarySplatHistoryDepth: metadata.historyDepth,
+          boundarySplatInstances: 1,
+        });
+        state.boundarySplatFallbackReason = null;
+        updateUniforms(fixedNow);
+        writeBoundarySplatHistoryHoldoverDrawState(slot, plan);
+        ensureBoundarySplatPbrDepthTexture();
+        const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat history holdover draw-only frame' });
+        const currentTexture = context.getCurrentTexture();
+        const pbrSceneApplied = encodeBoundarySplatPbrScene(
+          encoder,
+          currentTexture.createView(),
+          boundarySplatPbrDepthTexture.createView(),
+        );
+        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView(), boundarySplatRenderPipeline, {
+          depthView: boundarySplatPbrDepthTexture.createView(),
+          loadColor: pbrSceneApplied,
+          loadDepth: pbrSceneApplied,
+        });
+        if (!splatApplied) {
+          return {
+            identity: 'boundary-splat-history-holdover-draw-v0',
+            ok: false,
+            reason: state.boundarySplatFallbackReason || 'history-holdover-raster-unavailable',
+            slot,
+            selection,
+            plan,
+            ...noSourceSubmissions,
+          };
+        }
+        device.queue.submit([encoder.finish()]);
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        const exactDrawState = await sampleBoundarySplatDrawState();
+        const exactCommand = exactDrawState?.indirectCommand;
+        const physicalCommandAgreement = exactDrawState?.indirectCommandAgreement === true
+          && exactCommand?.vertexCount === 6
+          && exactCommand?.instanceCount === plan.drawCount
+          && exactCommand?.firstVertex === 0
+          && exactCommand?.firstInstance === 0;
+        if (!physicalCommandAgreement) {
+          throw new Error(`boundary-splat-history-holdover-command-mismatch:${JSON.stringify({
+            expected: plan.indirectCommand,
+            effective: exactCommand,
+          })}`);
+        }
+        const canvasRect = canvas.getBoundingClientRect();
+        const result = {
+          identity: 'boundary-splat-history-holdover-draw-v0',
+          ok: true,
+          authority: 'bounded-live-history-replay-no-simulator-progress',
+          phaseSourceIdentity: 'explicit-completed-history-slot',
+          phaseSourceAuthority: 'gpu-archive-slot-metadata-post-queue-completion-readback-v0',
+          slot,
+          selection,
+          plan,
+          physicalCommand: exactCommand,
+          physicalCommandAgreement,
+          physicalCommandAuthority: exactDrawState.indirectCommandAuthority,
+          sourceAgeSimSteps: Math.max(0, state.simStepCount - slot.sourceSimStepCount),
+          sourceAgeRenderFrames: Math.max(0, state.frameCount - slot.sourceRenderFrameCount),
+          sourceAgeMs: slot.sourceTimestampMs === null
+            ? null
+            : (((Math.floor(performance.now()) >>> 0) - slot.sourceTimestampMs) >>> 0),
+          holdoverOrdinal: Math.max(0, Math.floor(Number(options.holdoverOrdinal) || 0)),
+          maximumHoldoverFrames: Number.isFinite(Number(options.maximumHoldoverFrames))
+            ? Math.max(0, Math.floor(Number(options.maximumHoldoverFrames)))
+            : null,
+          repeatedSlotCount: Math.max(0, Math.floor(Number(options.repeatedSlotCount) || 0)),
+          exhaustion: options.exhaustion === true,
+          fallbackReason: null,
+          renderFrameCount: state.frameCount,
+          simStepCount: state.simStepCount,
+          canvasCssRect: {
+            x: canvasRect.left,
+            y: canvasRect.top,
+            width: canvasRect.width,
+            height: canvasRect.height,
+          },
+          ...noSourceSubmissions,
+        };
+        state.boundarySplatHistoryHoldover = result;
+        return result;
+      } finally {
+        controlsSnapshot = controlsBefore;
+        boundarySplatValidatedHistorySelection = validatedSelectionBefore;
+        state.boundarySplatHistoryWriteSlot = historyWriteSlotBefore;
+        state.boundarySplatHistoryWriteTick = historyWriteTickBefore;
+      }
+    } finally {
+      resumeBoundarySplatHistoryHoldoverLoop(options);
+    }
+  }
+
   return {
     setControls(next) {
       const previousGrid = gridSize;
@@ -13242,6 +13780,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     sampleFrame,
     primeBoundarySplatLiveHistory,
     sampleBoundarySplatDrawState,
+    sampleBoundarySplatHistorySlotMetadata,
     captureBoundarySplatWitnessFrame,
     resumeBoundarySplatWitnessFrame,
     sampleBoundarySplatCandidateGeometry,
@@ -13252,6 +13791,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     controlledStepFrame,
     controlledStepSequence,
     renderFrozenScaleToCanvas,
+    renderBoundarySplatHistorySlotToCanvas,
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();

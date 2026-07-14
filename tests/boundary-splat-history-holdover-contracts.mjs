@@ -139,5 +139,15 @@ assert.match(core, /historyAllocationGeneration/, 'runtime telemetry must expose
 assert.match(core, /boundarySplatHistorySlotOverride/, 'a single-flame descriptor must accept an explicit validated history slot');
 assert.match(core, /renderBoundarySplatHistorySlotToCanvas/, 'the public prototype must expose a draw-only history-slot render socket');
 assert.match(core, /simulationSubmitted:\s*false[\s\S]*sidecarSubmitted:\s*false[\s\S]*compactionSubmitted:\s*false[\s\S]*archiveSubmitted:\s*false/, 'holdover evidence must deny all source-progression work explicitly');
+assert.match(
+  core,
+  /function resumeBoundarySplatHistoryHoldoverLoop[\s\S]*finally \{[\s\S]*resumeBoundarySplatHistoryHoldoverLoop\(options\)/,
+  'every post-cancel holdover exit must pass through one render-loop restoration point',
+);
+assert.match(
+  core,
+  /\.\.\.\(options\.controlOverrides[\s\S]{0,300}boundarySplatInstances:\s*1/,
+  'the holdover socket must force one instance after applying caller overrides',
+);
 
 console.log('boundary splat history holdover contracts: ok');
