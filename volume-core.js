@@ -18,6 +18,8 @@ const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-
 const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
 const DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY = 'offline-high-truth-diagnostic-velocity-oracle-v0';
 const DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION_IDENTITY = 'offline-diagnostic-velocity-oracle-application-v0';
+const FIRE_FLOW_COMPOSITION_AUTHORITY = 'frozen-fire-flow-carrier-fire-lick-composition-v0';
+const FIRE_FLOW_COMPOSITION_APPLICATION_IDENTITY = 'positive-carrier-residual-to-fire-lick-application-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
@@ -30,7 +32,9 @@ const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 
 function isHeldOnlyImportedFieldAuthority(authority) {
-  return authority === SELECTIVE_COMPOSITION_AUTHORITY || authority === DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY;
+  return authority === SELECTIVE_COMPOSITION_AUTHORITY
+    || authority === DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY
+    || authority === FIRE_FLOW_COMPOSITION_AUTHORITY;
 }
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -9149,7 +9153,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && payload.filterIdentity === SELECTIVE_COMPOSITION_APPLICATION_IDENTITY;
     const isDiagnosticVelocityOracle = payload.initializationAuthority === DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY
       && payload.filterIdentity === DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION_IDENTITY;
-    if (!isCoarseReceiver && !isSelectiveComposition && !isDiagnosticVelocityOracle) {
+    const isFireFlowComposition = payload.initializationAuthority === FIRE_FLOW_COMPOSITION_AUTHORITY
+      && payload.filterIdentity === FIRE_FLOW_COMPOSITION_APPLICATION_IDENTITY;
+    if (!isCoarseReceiver && !isSelectiveComposition && !isDiagnosticVelocityOracle && !isFireFlowComposition) {
       return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
         requestedInitializationAuthority: payload.initializationAuthority || null,
         requestedFilterIdentity: payload.filterIdentity || null,
@@ -9573,6 +9579,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           ? 'learned-selective-composition-held-render-v0'
           : receipt.initializationAuthority === DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY
             ? 'diagnostic-velocity-oracle-held-render-v0'
+            : receipt.initializationAuthority === FIRE_FLOW_COMPOSITION_AUTHORITY
+              ? 'frozen-fire-flow-carrier-composition-held-render-v0'
             : 'imported-receiver-held-state-v0'
         : requestedSteps === 1
           ? 'ordinary-receiver-single-simulation-step-v0'

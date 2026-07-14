@@ -14,6 +14,9 @@ const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-
 const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0';
 const DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY = 'offline-high-truth-diagnostic-velocity-oracle-v0';
 const DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION = 'offline-diagnostic-velocity-oracle-application-v0';
+const FIRE_FLOW_COMPOSITION_SCHEMA = 'kaminos.volume.fire-flow-carrier-composition.v0';
+const FIRE_FLOW_COMPOSITION_AUTHORITY = 'frozen-fire-flow-carrier-fire-lick-composition-v0';
+const FIRE_FLOW_COMPOSITION_APPLICATION = 'positive-carrier-residual-to-fire-lick-application-v0';
 const SCALAR_ACTIVITY_CUE_SCHEMA = 'kaminos.volume.exact-basin-support-probe.v0';
 const FROZEN_TRANSFER_CUE_SCHEMA = 'kaminos.volume.fire-flow-carrier-frozen-transfer.v0';
 const SCALAR_ACTIVITY_CUE_APPLICATION = 'learned-fire-flow-visibility-carrier-v0';
@@ -98,7 +101,8 @@ function resolveInitialFieldManifest() {
   if (manifest.failurePhase !== null) throw new Error('initial field manifest carries a failure phase');
   const isCoarseReceiver = manifest.schema === COARSE_RECEIVER_SCHEMA;
   const isSelectiveComposition = manifest.schema === SELECTIVE_COMPOSITION_SCHEMA;
-  if (!isCoarseReceiver && !isSelectiveComposition) {
+  const isFireFlowComposition = manifest.schema === FIRE_FLOW_COMPOSITION_SCHEMA;
+  if (!isCoarseReceiver && !isSelectiveComposition && !isFireFlowComposition) {
     throw new Error(`unsupported initial field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
   }
   if (isCoarseReceiver && manifest.initializationAuthority !== COARSE_RECEIVER_AUTHORITY) {
@@ -127,7 +131,38 @@ function resolveInitialFieldManifest() {
       throw new Error('diagnostic velocity oracle identity or non-promotion contract mismatch');
     }
   }
-  const layoutIdentity = isCoarseReceiver ? manifest.layoutIdentity : FIELD_LAYOUT_IDENTITY;
+  if (isFireFlowComposition) {
+    if (manifest.compositionAuthority !== FIRE_FLOW_COMPOSITION_AUTHORITY
+      || manifest.runtimeTruthAvailable !== false
+      || manifest.policy?.identity !== 'positive-carrier-residual-to-fire-lick-v0'
+      || manifest.policy?.channel !== 'fireLick'
+      || Number(manifest.policy?.channelIndex) !== 14
+      || manifest.policy?.subtractiveResidualApplied !== false
+      || manifest.policy?.clippingApplied !== false) {
+      throw new Error('fire-flow composition authority or fireLick policy mismatch');
+    }
+    if (manifest.verification?.unchangedFluidChannelCount !== 15
+      || manifest.verification?.unchangedFluidMismatchCount !== 0
+      || manifest.verification?.frontByteIdenticalToLowUpsampled !== true
+      || manifest.verification?.frontMismatchCount !== 0) {
+      throw new Error('fire-flow composition unchanged-field verification mismatch');
+    }
+    if (manifest.consumptionContract?.requiresExplicitSchemaAdmission !== true
+      || !String(manifest.consumptionContract?.mustNotBeAcceptedAs || '').includes('coarse-receiver-initial')
+      || manifest.consumptionContract?.heldOnly !== true
+      || manifest.consumptionContract?.smokeChannelsPredicted !== false
+      || manifest.consumptionContract?.physicalTruth !== false
+      || !String(manifest.consumptionContract?.mustNotBePromotedAs || '').match(/smoke|native-low|simulation-force/i)) {
+      throw new Error('fire-flow composition held-only or non-promotion contract mismatch');
+    }
+    if (manifest.source?.carrierRole === 'frozenConstant'
+      && (manifest.source?.targetDataUsedForTraining !== false
+        || manifest.source?.targetDataUsedForCalibration !== false
+        || manifest.source?.targetLabelsUsedForModelSelection !== false)) {
+      throw new Error('frozen fire-flow composition target exclusion contract mismatch');
+    }
+  }
+  const layoutIdentity = isCoarseReceiver || isFireFlowComposition ? manifest.layoutIdentity : FIELD_LAYOUT_IDENTITY;
   if (layoutIdentity !== FIELD_LAYOUT_IDENTITY) throw new Error(`unsupported receiver layout: ${layoutIdentity || '(missing)'}`);
   const grid = Number(manifest.receiver?.grid);
   const fluid = manifest.receiver?.fluid;
@@ -153,18 +188,22 @@ function resolveInitialFieldManifest() {
     grid,
     initializationAuthority: isVelocityOracle
       ? DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY
+      : isFireFlowComposition
+        ? FIRE_FLOW_COMPOSITION_AUTHORITY
       : isSelectiveComposition
         ? SELECTIVE_COMPOSITION_AUTHORITY
         : COARSE_RECEIVER_AUTHORITY,
     filterIdentity: isVelocityOracle
       ? DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION
+      : isFireFlowComposition
+        ? FIRE_FLOW_COMPOSITION_APPLICATION
       : isSelectiveComposition
         ? SELECTIVE_COMPOSITION_APPLICATION
         : COARSE_RECEIVER_FILTER,
     layoutIdentity,
     source: manifest.source || null,
     receiverInitialSimStepCount: Number(manifest.receiver?.initialSimStepCount || 0),
-    heldOnly: isSelectiveComposition,
+    heldOnly: isSelectiveComposition || isFireFlowComposition,
     oracleOnly: isVelocityOracle,
     fluid: validateArtifact(fluid, 'initial fluid', [grid, grid, grid, 16], fluidChannels),
     front: validateArtifact(front, 'initial front', [grid, grid, grid, 1], ['frontTopology']),

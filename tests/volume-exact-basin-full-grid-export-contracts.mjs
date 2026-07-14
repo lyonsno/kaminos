@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -45,6 +46,8 @@ assert.match(exporter, /--scalar-activity-cue-role/, 'exporter requires an expli
 assert.match(exporter, /scalarActivityCueImport/, 'render receipt preserves effective scalar activity cue import authority');
 assert.match(exporter, /validation-selected-residual-gate-derived-carrier-v0/, 'exporter admits the validation-calibrated dense carrier role');
 assert.match(exporter, /kaminos\.volume\.fire-flow-carrier-frozen-transfer\.v0/, 'exporter admits the checksum-bound frozen transfer schema');
+assert.match(exporter, /kaminos\.volume\.fire-flow-carrier-composition\.v0/, 'exporter explicitly admits the held fireLick composition schema');
+assert.match(exporter, /frozen-fire-flow-carrier-fire-lick-composition-v0/, 'exporter binds the fireLick composition authority');
 assert.match(exporter, /frozen-earlier-replay-constant-residual-scale-derived-carrier-v0/, 'exporter admits the frozen fixed-gain carrier authority');
 assert.match(exporter, /targetDataUsedForTraining/, 'exporter validates target-blind transfer authority before import');
 assert.match(exporter, /JSON\.parse\(String\(args\.get\('--render-control-overrides-json'\)/, 'render control overrides use structured JSON parsing instead of ad hoc text splitting');
@@ -96,6 +99,81 @@ const failed = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
 assert.equal(failed.status, 'failed', 'corrupt source capture writes a failed manifest');
 assert.equal(failed.failurePhase, 'source-capture-validation', 'corrupt source capture fails during source-capture validation');
 assert.match(failed.error, /payload SHA-256 mismatch/, 'failure report names the source payload hash mismatch');
+
+const compositionFluidPath = join(fixtureRoot, 'composition.fluid.f32');
+const compositionFrontPath = join(fixtureRoot, 'composition.front.f32');
+const compositionFluid = Buffer.alloc(16 * Float32Array.BYTES_PER_ELEMENT);
+const compositionFront = Buffer.alloc(Float32Array.BYTES_PER_ELEMENT);
+writeFileSync(compositionFluidPath, compositionFluid);
+writeFileSync(compositionFrontPath, compositionFront);
+const compositionManifestPath = join(fixtureRoot, 'composition.json');
+writeFileSync(compositionManifestPath, `${JSON.stringify({
+  schema: 'kaminos.volume.fire-flow-carrier-composition.v0',
+  identity: 'low-upsampled-plus-fire-flow-carrier-fire-lick-v0',
+  status: 'captured',
+  failurePhase: null,
+  compositionAuthority: 'frozen-fire-flow-carrier-fire-lick-composition-v0',
+  runtimeTruthAvailable: false,
+  layoutIdentity: 'x-fastest-zyx-c-interleaved-v0',
+  source: {
+    carrierRole: 'frozenConstant',
+    targetDataUsedForTraining: false,
+    targetDataUsedForCalibration: false,
+    targetLabelsUsedForModelSelection: false,
+    route: { effective: 'native-3d-compute-fluid-raymarch-v0', backend: 'WebGPU:fixture' },
+  },
+  policy: {
+    identity: 'positive-carrier-residual-to-fire-lick-v0',
+    channel: 'fireLick',
+    channelIndex: 14,
+    subtractiveResidualApplied: false,
+    clippingApplied: false,
+  },
+  verification: {
+    unchangedFluidChannelCount: 15,
+    unchangedFluidMismatchCount: 0,
+    frontByteIdenticalToLowUpsampled: true,
+    frontMismatchCount: 0,
+  },
+  receiver: {
+    grid: 1,
+    initialSimStepCount: 0,
+    fluid: {
+      path: compositionFluidPath,
+      shape: [1, 1, 1, 16],
+      channelOrder: ['velocityX', 'velocityY', 'velocityZ', 'densityCarrier', 'smokeDensity', 'heat', 'fuel', 'detail', 'flame', 'ember', 'visibleFireCarrier', 'combustionFront', 'microdetail', 'interfaceShred', 'fireLick', 'emberFleck'],
+      byteLength: compositionFluid.byteLength,
+      sha256: createHash('sha256').update(compositionFluid).digest('hex'),
+    },
+    front: {
+      path: compositionFrontPath,
+      shape: [1, 1, 1, 1],
+      channelOrder: ['frontTopology'],
+      byteLength: compositionFront.byteLength,
+      sha256: createHash('sha256').update(compositionFront).digest('hex'),
+    },
+  },
+  consumptionContract: {
+    requiresExplicitSchemaAdmission: true,
+    mustNotBeAcceptedAs: 'kaminos.volume.coarse-receiver-initial.v0',
+    heldOnly: true,
+    smokeChannelsPredicted: false,
+    physicalTruth: false,
+    mustNotBePromotedAs: 'full-field reconstruction, smoke closure, native-low deployment, or simulation-force truth',
+  },
+}, null, 2)}\n`);
+const compositionAdmissionOut = join(fixtureRoot, 'composition-admission-out');
+assert.throws(() => execFileSync(process.execPath, [
+  exporterPath,
+  '--initial-field-manifest', compositionManifestPath,
+  '--advance-imported-steps', '0',
+  '--source-capture', capturePath,
+  '--target-origin', 'http://127.0.0.1:9',
+  '--out-dir', compositionAdmissionOut,
+], { stdio: 'pipe' }), /Command failed/, 'admitted composition reaches the independently corrupt source-capture gate');
+const compositionAdmission = JSON.parse(readFileSync(join(compositionAdmissionOut, 'manifest.json'), 'utf8'));
+assert.equal(compositionAdmission.failurePhase, 'source-capture-validation');
+assert.match(compositionAdmission.error, /payload SHA-256 mismatch/, 'composition admission does not bypass source-capture authority');
 
 const badFrozenCuePath = join(fixtureRoot, 'bad-frozen-cue.json');
 const badFrozenCueOutDir = join(fixtureRoot, 'bad-frozen-cue-out');
