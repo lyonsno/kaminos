@@ -313,6 +313,9 @@ assert.equal(carrierChannel.calibratedResidual.calibration.testDataUsedForSelect
 assert.ok(['logit-temperature-bias', 'constant-residual-scale'].includes(carrierChannel.calibratedResidual.calibration.selectedFamily));
 assert.equal(typeof carrierChannel.calibratedResidual.calibration.selectedAtSearchBoundary, 'boolean');
 assert.equal(typeof carrierChannel.calibratedResidual.calibration.constantControl.validationMetrics.rmse, 'number');
+assert.equal(typeof carrierChannel.calibratedResidual.calibration.constantControl.testMetrics.rmse, 'number');
+assert.equal(typeof carrierChannel.calibratedResidual.calibration.constantControl.selectedImprovementVsConstant.rmseReductionFraction, 'number');
+assert.equal(carrierChannel.calibratedResidual.calibration.constantControl.testDataUsedForSelection, false);
 assert.equal(typeof carrierChannel.calibratedResidual.metrics.rmse, 'number');
 assert.equal(typeof carrierChannel.gated.improvementVsLinearContext.rmseReductionFraction, 'number');
 for (const role of ['lowDerived', 'truthHigh', 'ungatedPrediction', 'softSupportGatedPrediction', 'calibratedResidualPrediction', 'supportGatedPrediction']) {

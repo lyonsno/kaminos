@@ -1061,6 +1061,8 @@ def main() -> int:
             ungated = np.clip(low_test_channel + residual_test, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test
             soft_gated = np.clip(low_test_channel + residual_test * test_probability, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test * test_probability
             calibrated_soft_gated = np.clip(low_test_channel + residual_test * calibrated_test_probability, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test * calibrated_test_probability
+            constant_scale = np.float32(gate_calibration["constantControl"]["scale"])
+            constant_soft_gated = np.clip(low_test_channel + residual_test * constant_scale, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test * constant_scale
             gated = np.clip(low_test_channel + residual_test * predicted_support_test.astype(np.float32), 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test * predicted_support_test.astype(np.float32)
             truth_support = labels[test_indexes]
             low_metrics = scalar_metrics(low_test_channel, high_test_channel)
@@ -1068,6 +1070,12 @@ def main() -> int:
             ungated_metrics = scalar_metrics(ungated, high_test_channel)
             soft_gated_metrics = scalar_metrics(soft_gated, high_test_channel)
             calibrated_soft_gated_metrics = scalar_metrics(calibrated_soft_gated, high_test_channel)
+            constant_soft_gated_metrics = scalar_metrics(constant_soft_gated, high_test_channel)
+            gate_calibration["constantControl"].update({
+                "testMetrics": constant_soft_gated_metrics,
+                "selectedImprovementVsConstant": improvement(constant_soft_gated_metrics, calibrated_soft_gated_metrics),
+                "testDataUsedForSelection": False,
+            })
             gated_metrics = scalar_metrics(gated, high_test_channel)
             gated_channels.append({
                 "channel": channel,
