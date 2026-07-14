@@ -688,8 +688,12 @@ async function run() {
           encodedSourceImagesPassed: JSON.stringify(invocation.packageRuntime.encodedSourceImageSha256) === JSON.stringify(callerEncodedDigests),
           rgbaSourceImagesPassed: JSON.stringify(invocation.packageRuntime.rgbaSourceImageSha256) === JSON.stringify(callerMetadata.authority.rgbaSourceImageSha256),
           initialMaskPassed: invocation.packageRuntime.initialMaskSha256 === callerMaskDigest,
+          expectedRgbaSourceImageSha256: callerMetadata.authority.rgbaSourceImageSha256,
+          effectiveRgbaSourceImageSha256: invocation.packageRuntime.rgbaSourceImageSha256,
         };
-        callerInputAuthority.passed = Object.values(callerInputAuthority).every(Boolean);
+        callerInputAuthority.passed = callerInputAuthority.encodedSourceImagesPassed
+          && callerInputAuthority.rgbaSourceImagesPassed
+          && callerInputAuthority.initialMaskPassed;
         if (!callerInputAuthority.passed) throw new Error(`caller browser input authority failed: ${JSON.stringify(callerInputAuthority)}`);
         invocation = { ...invocation, callerInputAuthority };
       }

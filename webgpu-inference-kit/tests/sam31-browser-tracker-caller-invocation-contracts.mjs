@@ -173,6 +173,26 @@ assert.deepEqual(
   metaBicubicRgba,
   'browser resize bytes must exactly match Pillow 12.2.0 RGB.resize default bicubic output used by pinned Meta SAM 3.1',
 );
+const downsampleSourceRgba = new Uint8Array(17 * 13 * 4);
+let downsampleState = 9;
+for (let pixel = 0; pixel < 17 * 13; pixel += 1) {
+  for (let channel = 0; channel < 3; channel += 1) {
+    downsampleState = (Math.imul(1664525, downsampleState) + 1013904223) >>> 0;
+    downsampleSourceRgba[pixel * 4 + channel] = downsampleState >>> 24;
+  }
+  downsampleSourceRgba[pixel * 4 + 3] = 255;
+}
+const expectedDownsampleRgb = [113, 130, 119, 126, 119, 129, 116, 125, 116, 124, 148, 120, 143, 142, 128, 127, 125, 119];
+const expectedDownsampleRgba = new Uint8Array(3 * 2 * 4);
+for (let pixel = 0; pixel < 6; pixel += 1) {
+  expectedDownsampleRgba.set(expectedDownsampleRgb.slice(pixel * 3, pixel * 3 + 3), pixel * 4);
+  expectedDownsampleRgba[pixel * 4 + 3] = 255;
+}
+assert.deepEqual(
+  callerInvocationModule.resizeRgbaMetaBicubic(downsampleSourceRgba, 17, 13, 3, 2),
+  expectedDownsampleRgba,
+  'strong downsampling must reproduce Pillow signed coefficient rounding, not only interpolation-scale fixtures',
+);
 
 await assert.rejects(
   () => createSam31BrowserTrackerCallerInvocationRuntime({ modelPackageRuntime, sourceImages: [sourceImages[0], sourceImages[0]], initialMask, session, decodeImage }),
@@ -310,6 +330,8 @@ const invocationSmokeSource = await readFile(new URL('../smokes/sam31-two-frame-
 assert.match(invocationSmokeSource, /modelPackageRoot/, 'the invocation smoke must call the public model-only session route');
 assert.match(invocationSmokeSource, /callerMetadata/, 'the invocation smoke must preload caller-owned images, mask, and session metadata');
 assert.match(invocationSmokeSource, /callerInputIndex/, 'an isolated one-root child must address caller inputs by its parent invocation index');
+assert.match(invocationSmokeSource, /expectedRgbaSourceImageSha256/, 'caller authority failures must preserve expected Meta RGBA digests');
+assert.match(invocationSmokeSource, /effectiveRgbaSourceImageSha256/, 'caller authority failures must preserve effective browser RGBA digests');
 const terminalSmokeSource = await readFile(new URL('../tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const ingressExporterSource = await readFile(new URL('../tools/sam31-two-image-ingress-meta-packet.py', import.meta.url), 'utf8');
 const metaPreprocessSource = await readFile(new URL('../tools/sam31-meta-image-preprocess.py', import.meta.url), 'utf8');

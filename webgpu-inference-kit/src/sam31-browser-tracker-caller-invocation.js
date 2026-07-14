@@ -128,7 +128,11 @@ export function resizeRgbaMetaBicubic(source, sourceWidth, sourceHeight, targetW
         total += weight;
       }
       for (let index = 0; index < weights.length; index += 1) weights[index] /= total;
-      return { start, end, weights: Int32Array.from(weights, weight => Math.trunc(weight * precisionScale + 0.5)) };
+      return {
+        start,
+        end,
+        weights: Int32Array.from(weights, weight => Math.trunc(weight * precisionScale + (weight < 0 ? -0.5 : 0.5))),
+      };
     });
   };
   const horizontal = new Uint8Array(sourceHeight * targetWidth * 3);
