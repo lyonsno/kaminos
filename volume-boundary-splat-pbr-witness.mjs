@@ -91,11 +91,13 @@ try {
 
   failurePhase = 'stale-or-default-config';
   const initialState = await waitForBoundarySplatTelemetry();
+  const initialDrawState = await samplePhysicalDrawState();
   const cameraState = await evaluate('window.kaminosBoundarySplatCompositionDebugState?.()');
   const effectivePageUrl = await evaluate('location.href');
   browserPageUrl = effectivePageUrl;
-  validateEffectiveState(initialState, cameraState, effectivePageUrl);
+  validateEffectiveState(initialState, cameraState, effectivePageUrl, initialDrawState);
   lastTrustworthyEvidence.initialState = compactState(initialState);
+  lastTrustworthyEvidence.initialDrawState = initialDrawState;
   lastTrustworthyEvidence.cameraState = cameraState;
 
   failurePhase = 'live-history-prime';
@@ -142,6 +144,7 @@ try {
   if (capture?.ok !== true || capture.sampleAuthority !== 'render-only-frozen-sim-state') {
     throw new Error(`blank-or-partial-native-capture: renderer capture failed ${JSON.stringify(capture)}`);
   }
+  validateAllocationEvidence(capture, requestedLodModeFromState(initialState), 'native-100-flame-capture');
   const shot = await wsRequest('Page.captureScreenshot', {
     format: 'png',
     fromSurface: true,
@@ -164,6 +167,9 @@ try {
     metrics: imageMetrics,
     simStepCount: capture.simStepCount,
     sampleAuthority: capture.sampleAuthority,
+    indirectCommand: capture.boundarySplatIndirectCommand,
+    indirectCommandAgreement: capture.boundarySplatIndirectCommandAgreement,
+    indirectCommandAuthority: capture.boundarySplatIndirectCommandAuthority,
   }];
   try {
     for (const pose of CAMERA_SWEEP_POSES) {
@@ -182,6 +188,7 @@ try {
       if (poseCapture?.ok !== true || poseCapture.sampleAuthority !== 'render-only-frozen-sim-state') {
         throw new Error(`blank-or-partial-native-capture: camera ${pose.identity} ${JSON.stringify(poseCapture)}`);
       }
+      validateAllocationEvidence(poseCapture, requestedLodModeFromState(initialState), `camera-sweep-${pose.identity}`);
       if (Number(poseCapture.simStepCount) !== Number(capture.simStepCount)) {
         throw new Error(`camera-sweep-simulator-advanced: ${JSON.stringify({
           identity: pose.identity,
@@ -210,6 +217,9 @@ try {
         metrics: poseMetrics,
         simStepCount: poseCapture.simStepCount,
         sampleAuthority: poseCapture.sampleAuthority,
+        indirectCommand: poseCapture.boundarySplatIndirectCommand,
+        indirectCommandAgreement: poseCapture.boundarySplatIndirectCommandAgreement,
+        indirectCommandAuthority: poseCapture.boundarySplatIndirectCommandAuthority,
       });
     }
   } finally {
@@ -234,9 +244,10 @@ try {
   }
   lastTrustworthyEvidence.cameraSweep = cameraSweep;
   const finalState = await debugState();
+  const finalDrawState = await samplePhysicalDrawState();
   const finalPageUrl = await evaluate('location.href');
   browserPageUrl = finalPageUrl;
-  validateEffectiveState(finalState, await evaluate('window.kaminosBoundarySplatCompositionDebugState?.()'), finalPageUrl);
+  validateEffectiveState(finalState, await evaluate('window.kaminosBoundarySplatCompositionDebugState?.()'), finalPageUrl, finalDrawState);
   const composedCaptureEvidence = {
     path: imagePath,
     sha256: sha256(imageBuffer),
@@ -253,9 +264,13 @@ try {
     phaseSourceCount: capture.boundarySplatPhaseSourceCount,
     boundarySplatBufferIntegrity: capture.boundarySplatBufferIntegrity,
     boundarySplatBufferIntegrityFailureReason: capture.boundarySplatBufferIntegrityFailureReason,
+    indirectCommand: capture.boundarySplatIndirectCommand,
+    indirectCommandAgreement: capture.boundarySplatIndirectCommandAgreement,
+    indirectCommandAuthority: capture.boundarySplatIndirectCommandAuthority,
   };
   lastTrustworthyEvidence.composedCapture = composedCaptureEvidence;
   lastTrustworthyEvidence.finalState = compactState(finalState);
+  lastTrustworthyEvidence.finalDrawState = finalDrawState;
   lastTrustworthyEvidence.finalPageUrl = finalPageUrl;
   finalTargetReachable = await targetIsReachable(browserPageId);
   if (!finalTargetReachable) throw new Error('browser-target-unreachable-after-witness');
@@ -543,6 +558,12 @@ async function debugState() {
   return evaluate('window.__kaminosVolumePrototype?.debugState?.()');
 }
 
+async function samplePhysicalDrawState() {
+  const drawState = await evaluate('window.__kaminosVolumePrototype.sampleBoundarySplatDrawState()', true);
+  if (!drawState) throw new Error('physical-indirect-command-sample-unavailable');
+  return drawState;
+}
+
 async function hideHud() {
   await evaluate(`(() => {
     const fps = document.getElementById('fps-counter');
@@ -551,7 +572,7 @@ async function hideHud() {
   })()`);
 }
 
-function validateEffectiveState(state, cameraState, pageUrl) {
+function validateEffectiveState(state, cameraState, pageUrl, drawState) {
   const params = new URL(pageUrl).searchParams;
   const requestedCandidateBudget = Number(params.get('volume_boundary_splat_candidate_budget') || 0);
   const requestedLodMode = normalizeRequestedLodMode(params.get('volume_boundary_splat_lod_mode'));
@@ -588,7 +609,7 @@ function validateEffectiveState(state, cameraState, pageUrl) {
   if (params.get('volume_boundary_splat_pbr_scene') !== 'fire-field') mismatches.push(['routePbrScene', 'fire-field', params.get('volume_boundary_splat_pbr_scene')]);
   if (params.get('volume_boundary_splat_instances') !== '100') mismatches.push(['routeInstances', '100', params.get('volume_boundary_splat_instances')]);
   if (mismatches.length) throw new Error(`stale-or-default-config: ${JSON.stringify(mismatches)}`);
-  validateAllocationEvidence(state, requestedLodMode, 'initial-state');
+  validateAllocationEvidence(drawState, requestedLodMode, 'effective-state-physical-draw');
   if (state?.boundarySplatPbrDepthAuthority !== DEPTH_AUTHORITY) {
     throw new Error(`depth-occlusion-authority-missing: ${JSON.stringify(state?.boundarySplatPbrDepthAuthority)}`);
   }
@@ -642,7 +663,7 @@ function validateCadence(cadence, initialState, requestedDurationMs) {
   }
   for (const sample of cadence.samples) {
     try {
-      validateAllocationEvidence(sample, requestedLodMode, 'cadence-sample');
+      validateAllocationEvidence(sample, requestedLodMode, 'cadence-sample', { requirePhysicalCommand: false });
     } catch (error) {
       throw new Error(`cadence-selected-count-mismatch:${error.message}:${JSON.stringify(sample)}`);
     }
@@ -692,7 +713,11 @@ function normalizeRequestedLodMode(value) {
     : 'fixed';
 }
 
-function validateAllocationEvidence(evidence, requestedLodMode, context) {
+function requestedLodModeFromState(state) {
+  return normalizeRequestedLodMode(state?.boundarySplatLodMode);
+}
+
+function validateAllocationEvidence(evidence, requestedLodMode, context, options = {}) {
   const lodMode = evidence?.boundarySplatLodMode ?? evidence?.lodMode;
   const adaptiveLodIdentity = evidence?.boundarySplatAdaptiveLodIdentity ?? evidence?.adaptiveLodIdentity;
   const indirectDrawIdentity = evidence?.boundarySplatIndirectDrawIdentity ?? evidence?.indirectDrawIdentity;
@@ -703,13 +728,15 @@ function validateAllocationEvidence(evidence, requestedLodMode, context) {
   const requestedInstanceCount = Number(evidence?.boundarySplatRequestedInstanceCount ?? evidence?.requestedInstanceCount);
   const effectiveCandidateBudget = Number(evidence?.boundarySplatEffectiveCandidateBudget ?? evidence?.effectiveCandidateBudget);
   const selectedCandidateCount = Number(evidence?.boundarySplatSelectedCandidateCount ?? evidence?.selectedCandidateCount);
-  const renderedInstanceCount = Number(evidence?.boundarySplatInstanceCount ?? evidence?.renderedInstanceCount);
+  const renderedInstanceCount = Number(evidence?.boundarySplatInstanceCount ?? evidence?.renderedInstanceCount ?? evidence?.instanceCount);
   const globalRenderedInstanceCount = Number(
     evidence?.boundarySplatGlobalRenderedInstanceCount ?? evidence?.globalRenderedInstanceCount,
   );
   const historyArchiveCandidateCount = Number(
     evidence?.boundarySplatHistoryArchiveCandidateCount ?? evidence?.historyArchiveCandidateCount,
   );
+  const physicalCommand = evidence?.boundarySplatIndirectCommand ?? evidence?.indirectCommand;
+  const requirePhysicalCommand = options.requirePhysicalCommand !== false;
   if (lodMode !== requestedLodMode) {
     throw new Error(`stale-or-default-adaptive-lod:${context}:${JSON.stringify({ requestedLodMode, lodMode })}`);
   }
@@ -719,12 +746,34 @@ function validateAllocationEvidence(evidence, requestedLodMode, context) {
       effective: indirectDrawIdentity,
     })}`);
   }
-  if (indirectCommandAuthority !== INDIRECT_COMMAND_AUTHORITY || indirectCommandAgreement !== true) {
+  if (requirePhysicalCommand && (
+    !physicalCommand
+    || indirectCommandAuthority !== INDIRECT_COMMAND_AUTHORITY
+    || indirectCommandAgreement !== true
+    || physicalCommand.vertexCount !== 6
+    || physicalCommand.instanceCount !== renderedInstanceCount
+    || physicalCommand.instanceCount !== globalRenderedInstanceCount
+    || physicalCommand.firstVertex !== 0
+    || physicalCommand.firstInstance !== 0
+  )) {
     throw new Error(`indirect-command-readback-disagreement:${context}:${JSON.stringify({
       expectedAuthority: INDIRECT_COMMAND_AUTHORITY,
       effectiveAuthority: indirectCommandAuthority,
       agreement: indirectCommandAgreement,
-      command: evidence?.boundarySplatIndirectCommand ?? evidence?.indirectCommand,
+      physicalCommand,
+      renderedInstanceCount,
+      globalRenderedInstanceCount,
+    })}`);
+  }
+  if (!requirePhysicalCommand && (
+    indirectCommandAuthority !== 'live-cadence-not-physical-command-sampled-v0'
+    || indirectCommandAgreement != null
+    || physicalCommand != null
+  )) {
+    throw new Error(`cadence-physical-command-authority-not-withheld:${context}:${JSON.stringify({
+      indirectCommandAuthority,
+      indirectCommandAgreement,
+      physicalCommand,
     })}`);
   }
   if (!Number.isFinite(sourceCandidateCount) || sourceCandidateCount <= 0) {

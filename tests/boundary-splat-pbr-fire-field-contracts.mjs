@@ -29,6 +29,9 @@ assert.match(core, /pbrSceneRaster/, 'GPU profile must separate PBR scene raster
 assert.match(core, /const requiredTimestampPairs\s*=\s*advanceSimulation[\s\S]*\[\[4, 5\], \[6, 7\], \[8, 9\], \[9, 10\]\]/, 'GPU timestamps must be validated within stages because compute and raster stages may overlap');
 assert.doesNotMatch(core, /requiredTimestamps\[index\]\s*<\s*requiredTimestamps\[index\s*-\s*1\]/, 'profiler must not reject legal cross-stage GPU overlap as nonmonotonic');
 assert.match(core, /sampleBoundarySplatPbrCostLadder/, 'runtime must expose a frozen-state 0/1/4/16/100 PBR cost ladder');
+assert.match(core, /sampleBoundarySplatDrawState,[\s\S]*sampleBoundarySplatPbrCostLadder/, 'runtime must expose explicit physical draw-state sampling to evidence witnesses');
+assert.match(core, /sampleBoundarySplatLiveCadence[\s\S]*indirectCommand:\s*null[\s\S]*indirectCommandAgreement:\s*null[\s\S]*indirectCommandAuthority:\s*'live-cadence-not-physical-command-sampled-v0'/, 'live cadence must explicitly withhold physical command authority instead of copying cached evidence');
+assert.match(core, /renderFrozenScaleToCanvas[\s\S]*const boundarySplatExactDrawState = boundarySplatRequested\(\)[\s\S]*await sampleBoundarySplatDrawState\(\)[\s\S]*boundarySplatIndirectCommand:\s*boundarySplatExactDrawState\?\.indirectCommand/, 'frozen visual capture must return a fresh post-submit physical command sample');
 
 assert.match(witness, /kaminos\.volume\.boundary-splat-pbr-witness\.v0/, 'witness must publish a stable report schema');
 assert.match(witness, /\[0, 1, 4, 16, 100\]/, 'witness must measure the required PBR count ladder');
@@ -44,6 +47,11 @@ assert.match(witness, /blank-or-partial-native-capture/, 'witness must reject mi
 assert.match(witness, /duplicated-simulation-authority/, 'witness must reject any PBR path that adds a simulator');
 assert.match(witness, /gpu-indirect-command-buffer-post-submit-readback-v0/, 'PBR evidence must require physical indirect-command readback authority');
 assert.match(witness, /indirect-command-readback-disagreement/, 'PBR evidence must fail when the physical draw command disagrees with logical allocation state');
+assert.match(witness, /sampleBoundarySplatDrawState\(\)/, 'PBR witness must request fresh physical command samples for initial and final state evidence');
+assert.match(witness, /physicalCommand\.vertexCount !== 6[\s\S]*physicalCommand\.instanceCount !== renderedInstanceCount[\s\S]*physicalCommand\.firstVertex !== 0[\s\S]*physicalCommand\.firstInstance !== 0/, 'PBR witness must bind physical command shape to the evidence row it accepts');
+assert.match(witness, /live-cadence-not-physical-command-sampled-v0/, 'PBR witness must recognize cadence as explicitly non-authoritative for physical command identity');
+assert.match(witness, /validateAllocationEvidence\(capture,[\s\S]*native-100-flame-capture/, 'PBR witness must validate the exact command returned by the primary visual capture');
+assert.match(witness, /validateAllocationEvidence\(poseCapture,[\s\S]*camera-sweep-/, 'PBR witness must validate the exact command returned by every camera capture');
 assert.match(witness, /failed-before-primary-output/, 'witness must durably report failure before primary output exists');
 
 console.log('boundary splat PBR fire-field contracts passed');
