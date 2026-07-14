@@ -25,6 +25,7 @@ assert.match(core, /writeDebugScalarActivityCueImportChunk/, 'scalar activity cu
 assert.match(core, /finishDebugScalarActivityCueImport/, 'scalar activity cue import validates and publishes the complete field');
 assert.match(core, /learned-fire-flow-visibility-carrier-v0/, 'scalar cue receiver distinguishes learned fire carrier authority from truth oracle authority');
 assert.match(core, /validation-selected-residual-gate-derived-carrier-v0/, 'scalar cue receiver admits the validation-calibrated carrier authority');
+assert.match(core, /frozen-earlier-replay-constant-residual-scale-derived-carrier-v0/, 'scalar cue runtime admits the frozen fixed-gain carrier authority validated by the exporter');
 assert.match(core, /\['splat-only-v0', 'raymarch-under-splats-v0', 'raymarch-only-v0'\]/, 'frozen renderer admits an explicit raymarch-only carrier display');
 assert.match(core, /scalar-activity-cue-isolated-raymarch-display-v0/, 'scalar cue display identifies its isolated cue-opacity projection');
 assert.match(core, /alpha\s*=\s*mix\(alpha,\s*oracleDisplayAlpha,\s*oracleDisplay\)/, 'isolated scalar cue display replaces unrelated smoke opacity with cue-controlled opacity');

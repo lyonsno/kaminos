@@ -45,6 +45,10 @@ const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'support-probability-weighted-derived-carrier-v0',
   'validation-selected-residual-gate-derived-carrier-v0',
   'accepted-splat-support-gated-derived-carrier-v0',
+  'frozen-earlier-replay-ridge-derived-carrier-v0',
+  'frozen-earlier-replay-ungated-derived-carrier-v0',
+  'frozen-earlier-replay-source-selected-gate-derived-carrier-v0',
+  'frozen-earlier-replay-constant-residual-scale-derived-carrier-v0',
 ]);
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
