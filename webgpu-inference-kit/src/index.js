@@ -77,6 +77,11 @@ export {
 } from './scheduler-backpressure.js';
 
 export {
+  FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
+  createForegroundBudgetGovernor,
+} from './foreground-budget-governor.js';
+
+export {
   SCHEDULER_EVENT_TRACE_SCHEMA,
   SCHEDULER_VERIFICATION_RECEIPT_SCHEMA,
   classifySchedulerVerificationReceipt,

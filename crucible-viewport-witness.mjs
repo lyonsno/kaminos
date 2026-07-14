@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { readBrowserArrayInChunks } from './lib/chunked-browser-array-reader.mjs';
+import { createForegroundBudgetGovernor } from './webgpu-inference-kit/src/index.js';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -89,6 +90,75 @@ function expectedSchedulerForProfile(profileId) {
     return { ...common, yieldMs: 3, gaussianPhaseYieldMs: 4, routeTailYieldMs: 3, spnFusionChunkItems: 524288 };
   }
   throw new Error(`Unsupported --scheduler-profile ${profileId}`);
+}
+
+function createSharpForegroundBudgetGovernor(expectedScheduler) {
+  const phaseChunkSize = {
+    spnPatch: expectedScheduler.spnPatchChunkSize,
+    gaussianCpuItems: expectedScheduler.cpuChunkItems,
+  };
+  if (Number.isInteger(expectedScheduler.spnFusionChunkItems)) {
+    phaseChunkSize.spnFusionOutputItems = expectedScheduler.spnFusionChunkItems;
+  }
+  const phaseControlMap = {
+    spn: 'spnPatch',
+    gaussian: 'gaussianCpuItems',
+  };
+  if (Number.isInteger(expectedScheduler.spnFusionChunkItems)) {
+    phaseControlMap['spn-fusion'] = 'spnFusionOutputItems';
+  }
+  const phaseChunkBounds = Object.fromEntries(Object.entries(phaseChunkSize).map(([phase, value]) => [
+    phase,
+    { min: 1, max: value, stepFactor: 2 },
+  ]));
+  return createForegroundBudgetGovernor({
+    targetFrameGapMs: 50,
+    failureWindowsBeforeAdjust: 1,
+    successWindowsBeforeRelax: 2,
+    scheduler: {
+      mode: 'cooperative',
+      yieldMs: expectedScheduler.yieldMs,
+      waitForSubmittedWorkDone: expectedScheduler.waitForSubmittedWorkDone,
+      phaseChunkSize,
+    },
+    bounds: {
+      yieldMs: {
+        min: 0,
+        max: 16,
+        step: Math.max(1, expectedScheduler.yieldMs),
+      },
+      phaseChunkSize: phaseChunkBounds,
+    },
+    phaseControlMap,
+  });
+}
+
+function projectSharpGovernorRecommendation(decision) {
+  let schedulerPatch = null;
+  if (decision.schedulerChanged) {
+    const scheduler = decision.effectiveScheduler;
+    if (decision.target === 'yieldMs') {
+      schedulerPatch = {
+        yieldMs: scheduler.yieldMs,
+        gaussianPhaseYieldMs: scheduler.yieldMs,
+        routeTailYieldMs: scheduler.yieldMs,
+      };
+    } else if (decision.target === 'spnPatch') {
+      schedulerPatch = { spnPatchChunkSize: scheduler.phaseChunkSize.spnPatch };
+    } else if (decision.target === 'spnFusionOutputItems') {
+      schedulerPatch = { spnFusionChunkItems: scheduler.phaseChunkSize.spnFusionOutputItems };
+    } else if (decision.target === 'gaussianCpuItems') {
+      schedulerPatch = { cpuChunkItems: scheduler.phaseChunkSize.gaussianCpuItems };
+    }
+  }
+  return {
+    status: schedulerPatch ? 'proposed' : 'no-scheduler-patch',
+    applicationAuthority: 'recommendation-only-not-applied-to-completed-firing',
+    action: decision.action,
+    measuredPhase: decision.measuredPhase,
+    target: decision.target,
+    schedulerPatch,
+  };
 }
 
 function validateSpnFusionTileEvidence({ profileId, expectedChunkItems, fullRoute }) {
@@ -512,6 +582,16 @@ function compactWitnessSummary({ state, out, inFlightCapture, reportPath }) {
         }
       : null,
     cadenceAcceptance: route?.cadenceAcceptance || null,
+    foregroundBudgetGovernor: route?.foregroundBudgetGovernorDecision
+      ? {
+          status: route.foregroundBudgetGovernorDecision.status,
+          action: route.foregroundBudgetGovernorDecision.action,
+          measuredPhase: route.foregroundBudgetGovernorDecision.measuredPhase,
+          target: route.foregroundBudgetGovernorDecision.target,
+          schedulerChanged: route.foregroundBudgetGovernorDecision.schedulerChanged,
+          recommendation: route.foregroundBudgetGovernorRecommendation,
+        }
+      : null,
     inFlightCapture: inFlightCapture
       ? {
           requested: inFlightCapture.requested,
@@ -1322,6 +1402,25 @@ try {
       || !Array.isArray(hostEventCorrelation.sourceRankings)
       || !Array.isArray(hostEventCorrelation.unexplainedGapsAtOrAboveThreshold)) {
       throw new Error('Friendly firing is missing verified foreground host-event attribution');
+    }
+    const governor = createSharpForegroundBudgetGovernor(expectedScheduler);
+    state.fullRoute.foregroundBudgetGovernorDecision = governor.observe({
+      episodeId: `${foregroundKilnHeartbeat.firingId}:${schedulerProfileId}`,
+      firingId: foregroundKilnHeartbeat.firingId,
+      frameTail: {
+        sampleWindowMs: foregroundKilnHeartbeat.durationMs,
+        maxFrameGapMs: foregroundKilnHeartbeat.maxFrameGapMs,
+        p95FrameGapMs: foregroundKilnHeartbeat.p95FrameGapMs,
+      },
+      hostEventCorrelation,
+      sharpDutyCorrelation,
+    });
+    state.fullRoute.foregroundBudgetGovernorRecommendation = projectSharpGovernorRecommendation(
+      state.fullRoute.foregroundBudgetGovernorDecision,
+    );
+    lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
+    if (state.fullRoute.foregroundBudgetGovernorDecision.status === 'held-invalid-evidence') {
+      throw new Error(`Foreground budget governor rejected the completed firing: ${JSON.stringify(state.fullRoute.foregroundBudgetGovernorDecision.failures)}`);
     }
     const expectedLateTailSteps = ['ply-blob-assembly', 'object-url-create', 'output-bind'];
     for (const step of expectedLateTailSteps) {
