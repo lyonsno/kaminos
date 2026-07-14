@@ -3,6 +3,8 @@ export const KAMINOS_FINGER_FLUID_BENCH_ROUTE = 'kaminos/finger-fluid-bench';
 export const BIG_PAPA_FLUID_SOURCE_SCHEMA = 'big-papa.finger-fluid.synthetic-source.v0';
 export const KAMINOS_FINGER_FLUID_SOLVER_IDENTITY = 'webgpu-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDERER_IDENTITY = 'webgpu-particle-sphere-renderer-v0';
+export const KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY = 'wgsl-shared-multi-regime-toy-playground-v0';
+export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY = 'kaminos.liquid-interface-carrier.v0';
 
 export const KAMINOS_FINGER_FLUID_DOWGRADES = [
   'kaminos_native_synthetic_fluid_not_lerms_source_truth',
@@ -58,6 +60,8 @@ export function createFingerFluidBenchState(options = {}) {
       pressureProjection: 'iterative_position_density_projection',
       vorticityConfinement: options.vorticityConfinementContract || 'wgsl-neighbor-vorticity-confinement-v0',
       freeSurfaceCohesion: options.freeSurfaceContract || 'wgsl-neighbor-free-surface-cohesion-v0',
+      playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
+      interfaceCarrierSchema: options.interfaceCarrierSchema || KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY,
       stepCount: nonNegativeInteger(options.stepCount, 0),
       linkedCellGridBuildCount: nonNegativeInteger(options.linkedCellGridBuildCount, 0),
       densityIterationCount: nonNegativeInteger(options.densityIterationCount, 0),
@@ -65,6 +69,7 @@ export function createFingerFluidBenchState(options = {}) {
       postProjectionGridRefreshCount: nonNegativeInteger(options.postProjectionGridRefreshCount, 0),
       freeSurfaceClassificationPassCount: nonNegativeInteger(options.freeSurfaceClassificationPassCount, 0),
       surfaceCohesionPassCount: nonNegativeInteger(options.surfaceCohesionPassCount, 0),
+      interfaceCompactionPassCount: nonNegativeInteger(options.interfaceCompactionPassCount, 0),
       frameTimeMsEstimate: finite(options.frameTimeMsEstimate, 26.5),
     },
     renderer: {
@@ -72,6 +77,8 @@ export function createFingerFluidBenchState(options = {}) {
       backend: options.renderBackend || 'loading',
       surface: 'direct_webgpu_particle_sphere_billboards_in_kaminos_viewport',
       obstacleContract: options.obstacleContract || 'shared-solver-render-obstacle-v0',
+      playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
+      supportGeometryCount: nonNegativeInteger(options.supportGeometryCount, 0),
       directRenderFrameCount: nonNegativeInteger(options.directRenderFrameCount, 0),
       finalFingerJuiceRenderer: false,
     },
@@ -83,6 +90,9 @@ export function createFingerFluidBenchState(options = {}) {
       colorModel: 'teal_blue_lilac_gold_source_channels',
       activeExtent3d: options.activeExtent3d || null,
     },
+    playground: options.playground || null,
+    playgroundZoneDiagnostics: options.playgroundZoneDiagnostics || null,
+    interfaceCarrier: options.interfaceCarrier || null,
     downgrades,
     compatibility: {
       lermsEventSchemas: ['lerms.juice-hit-event.v0'],

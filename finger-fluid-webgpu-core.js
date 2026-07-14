@@ -4,6 +4,8 @@ export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constrain
 export const KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT = 'wgsl-neighbor-vorticity-confinement-v0';
 export const KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT = 'wgsl-neighbor-free-surface-cohesion-v0';
 export const KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT = 'shared-solver-render-obstacle-v0';
+export const KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT = 'wgsl-shared-multi-regime-toy-playground-v0';
+export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA = 'kaminos.liquid-interface-carrier.v0';
 export const KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE = 'webgpu-particle-sphere-renderer-v0';
 export const KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE = 'wgsl-pbf-linked-cell-fluid-v0';
 export const KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE = 'wgsl-fluid-particle-sphere-v0';
@@ -11,6 +13,9 @@ export const KAMINOS_FINGER_FLUID_STABILITY_CONTRACT = 'bounded-pbf-energy-v0';
 
 const PARTICLE_FLOATS = 16;
 const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
+const INTERFACE_RECORD_FLOATS = 20;
+const INTERFACE_RECORD_BYTES = INTERFACE_RECORD_FLOATS * 4;
+const INTERFACE_SAMPLE_COUNT = 16;
 const WORKGROUP_SIZE = 64;
 const DEFAULT_PARTICLE_COUNT = 24_576;
 const MAX_FLUID_SPEED = 3.2;
@@ -21,6 +26,46 @@ const BOUNDS_MAX = [3.4, 3.0, 3.4];
 const OBSTACLE_CENTER = [0.85, -0.43, 0.02];
 const OBSTACLE_RADIUS = 0.52;
 const VORTICITY_UPDATE_INTERVAL = 3;
+const PLAYGROUND_TILE_COLUMNS = 22;
+const PLAYGROUND_TILE_ROWS = 22;
+const PLAYGROUND_TILE_COUNT = PLAYGROUND_TILE_COLUMNS * PLAYGROUND_TILE_ROWS;
+const PLAYGROUND_SKIRT_COLUMNS = 22;
+const PLAYGROUND_SKIRT_ROWS = 5;
+const PLAYGROUND_SKIRT_COUNT = PLAYGROUND_SKIRT_COLUMNS * PLAYGROUND_SKIRT_ROWS;
+const PLAYGROUND_OBSTACLE_COUNT = 1;
+const INTERFACE_THRESHOLD = 0.32;
+
+export const KAMINOS_FINGER_FLUID_PLAYGROUND_ZONES = Object.freeze([
+  'source_shelf',
+  'spillway',
+  'shallow_pool',
+  'deep_pool',
+  'obstacle_channel',
+  'catch_basin',
+]);
+
+const PLAYGROUND_WGSL = /* wgsl */`
+fn toyFloorHeight(p: vec3<f32>) -> f32 {
+  let radial = 0.15 * (p.x * p.x + p.z * p.z);
+  let sourceShelfWidth = 1.0 - smoothstep(1.55, 2.55, abs(p.x + 0.35));
+  let sourceShelf = (1.0 - smoothstep(-1.54, -1.31, p.z)) * 0.94 * sourceShelfWidth;
+  let spillway = -0.17 * exp(-p.x * p.x * 2.4) * exp(-(p.z + 0.72) * (p.z + 0.72) * 1.1);
+  let shallowPool = -0.15 * exp(-(p.x - 1.42) * (p.x - 1.42) * 2.0 - (p.z - 0.35) * (p.z - 0.35) * 1.7);
+  let deepPool = -0.34 * exp(-(p.x + 1.42) * (p.x + 1.42) * 1.8 - (p.z - 0.48) * (p.z - 0.48) * 1.45);
+  let catchBasin = -0.27 * exp(-p.x * p.x * 0.62 - (p.z - 2.05) * (p.z - 2.05) * 2.2);
+  let leftGate = 0.22 * exp(-(p.x + 0.58) * (p.x + 0.58) * 11.0 - (p.z - 0.48) * (p.z - 0.48) * 4.0);
+  let rightGate = 0.22 * exp(-(p.x - 0.58) * (p.x - 0.58) * 11.0 - (p.z - 0.48) * (p.z - 0.48) * 4.0);
+  let toyRipple = 0.035 * sin(p.x * 2.25) * cos(p.z * 1.8);
+  return -1.02 + radial * 0.22 + sourceShelf + spillway + shallowPool + deepPool + catchBasin + leftGate + rightGate + toyRipple;
+}
+
+fn toyFloorNormal(p: vec3<f32>) -> vec3<f32> {
+  let epsilon = 0.018;
+  let gradientX = (toyFloorHeight(p + vec3<f32>(epsilon, 0.0, 0.0)) - toyFloorHeight(p - vec3<f32>(epsilon, 0.0, 0.0))) / (2.0 * epsilon);
+  let gradientZ = (toyFloorHeight(p + vec3<f32>(0.0, 0.0, epsilon)) - toyFloorHeight(p - vec3<f32>(0.0, 0.0, epsilon))) / (2.0 * epsilon);
+  return normalize(vec3<f32>(-gradientX, 1.0, -gradientZ));
+}
+`;
 
 const COMPUTE_SHADER = /* wgsl */`
 struct Particle {
@@ -28,6 +73,14 @@ struct Particle {
   predicted: vec4<f32>,
   velocity: vec4<f32>,
   delta: vec4<f32>,
+}
+
+struct InterfaceRecord {
+  positionId: vec4<f32>,
+  velocityConfidence: vec4<f32>,
+  normalCurvature: vec4<f32>,
+  thicknessContactWetnessMaterial: vec4<f32>,
+  stabilityAgeSource: vec4<f32>,
 }
 
 struct Params {
@@ -46,24 +99,28 @@ struct Params {
 @group(0) @binding(1) var<storage, read_write> cellHeads: array<atomic<i32>>;
 @group(0) @binding(2) var<storage, read_write> particleNext: array<i32>;
 @group(0) @binding(3) var<uniform> params: Params;
+@group(0) @binding(4) var<storage, read_write> interfaceRecords: array<InterfaceRecord>;
+@group(0) @binding(5) var<storage, read_write> interfaceCounters: array<atomic<u32>>;
+@group(0) @binding(6) var<storage, read_write> interfaceAges: array<f32>;
+
+${PLAYGROUND_WGSL}
 
 fn floorHeight(p: vec3<f32>) -> f32 {
-  let radial = 0.15 * (p.x * p.x + p.z * p.z);
-  let channel = -0.12 * exp(-p.z * p.z * 1.8) * exp(-p.x * p.x * 0.28);
-  let ridge = 0.055 * sin(p.x * 2.15) * cos(p.z * 1.6);
-  return params.boundsMin.y + 0.16 + radial + channel + ridge;
+  return toyFloorHeight(p);
 }
 
 fn floorNormal(p: vec3<f32>) -> vec3<f32> {
-  let channel = -0.12 * exp(-p.z * p.z * 1.8) * exp(-p.x * p.x * 0.28);
-  let radialGradient = vec2<f32>(0.3 * p.x, 0.3 * p.z);
-  let channelGradient = vec2<f32>(channel * -0.56 * p.x, channel * -3.6 * p.z);
-  let ridgeGradient = vec2<f32>(
-    0.11825 * cos(p.x * 2.15) * cos(p.z * 1.6),
-    -0.088 * sin(p.x * 2.15) * sin(p.z * 1.6)
-  );
-  let gradient = radialGradient + channelGradient + ridgeGradient;
-  return normalize(vec3<f32>(-gradient.x, 1.0, -gradient.y));
+  return toyFloorNormal(p);
+}
+
+fn sourceParticleResetPosition(index: u32) -> vec3<f32> {
+  let sourceOrdinal = (index / 20u) * 8u + min(index % 20u, 7u);
+  let xIndex = sourceOrdinal % 20u;
+  let zIndex = (sourceOrdinal / 20u) % 20u;
+  let yIndex = sourceOrdinal / 400u;
+  let x = -0.42 + (f32(xIndex) - 9.5) * 0.055;
+  let z = -2.06 + (f32(zIndex) - 9.5) * 0.055;
+  return vec3<f32>(x, floorHeight(vec3<f32>(x, 0.0, z)) + 0.055 + f32(yIndex) * 0.055, z);
 }
 
 fn collideDomain(inputPosition: vec3<f32>) -> vec3<f32> {
@@ -122,6 +179,16 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
   if (index >= params.particleCount) { return; }
   var particle = particles[index];
+  if (particle.velocity.w < 0.15 && particle.position.z > -0.15) {
+    let resetPosition = sourceParticleResetPosition(index);
+    particle.position = vec4<f32>(resetPosition, 1.0);
+    particle.predicted = vec4<f32>(resetPosition, 0.0);
+    particle.velocity = vec4<f32>(0.03, 0.0, 0.18, particle.velocity.w);
+    particle.delta = vec4<f32>(0.0);
+    particles[index] = particle;
+    atomicAdd(&interfaceCounters[2], 1u);
+    return;
+  }
   var velocity = particle.velocity.xyz;
   velocity.y = velocity.y + params.forces.x * params.dt;
   particle.velocity = vec4<f32>(velocity, particle.velocity.w);
@@ -454,6 +521,81 @@ fn apply_velocity_position(@builtin(global_invocation_id) gid: vec3<u32>) {
   particles[index].velocity = vec4<f32>(particles[index].delta.xyz, particles[index].velocity.w);
   particles[index].position = vec4<f32>(particles[index].predicted.xyz, particles[index].position.w);
 }
+
+@compute @workgroup_size(1)
+fn clear_interface_counters(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (gid.x == 0u) {
+    atomicStore(&interfaceCounters[0], 0u);
+    atomicStore(&interfaceCounters[1], 0u);
+  }
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn compact_interface_records(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let particle = particles[index];
+  let position = particle.position.xyz;
+  let surfaceFactor = particle.predicted.w;
+  let baseCell = gridCoord(position);
+  var supportWeight = 0.0;
+  var directionalSupport = vec3<f32>(0.0);
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          if (neighborIndex != index) {
+            let offset = position - particles[neighborIndex].position.xyz;
+            let distance = length(offset);
+            let weight = kernelWeight(distance);
+            if (distance > 0.00001 && weight > 0.0) {
+              supportWeight = supportWeight + weight;
+              directionalSupport = directionalSupport + offset / distance * weight;
+            }
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+
+  let radius = params.fluid.x * 0.22;
+  let floorContact = select(0.0, 1.0, position.y <= floorHeight(position) + radius + 0.035);
+  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  let sphereContact = select(0.0, 1.0, abs(length(position - sphereCenter) - (${OBSTACLE_RADIUS} + radius)) < 0.045);
+  let contact = max(floorContact, sphereContact);
+  let anisotropy = length(directionalSupport) / max(supportWeight, 0.0001);
+  let fallbackNormal = select(vec3<f32>(0.0, 1.0, 0.0), floorNormal(position), floorContact > 0.5);
+  let sphereSupportNormal = normalize(position - sphereCenter + vec3<f32>(0.00001, 0.00002, 0.00003));
+  let contactSupportNormal = select(sphereSupportNormal, floorNormal(position), floorContact > 0.5);
+  var interfaceNormal = select(fallbackNormal, normalize(directionalSupport), length(directionalSupport) > 0.0001);
+  if (contact > 0.5 && dot(interfaceNormal, contactSupportNormal) < 0.0) {
+    interfaceNormal = -interfaceNormal;
+  }
+  let supportAlignment = select(1.0, dot(interfaceNormal, contactSupportNormal), contact > 0.5);
+  let priorAge = interfaceAges[index];
+  let interfaceAge = select(0.0, priorAge + params.dt, surfaceFactor >= ${INTERFACE_THRESHOLD});
+  interfaceAges[index] = interfaceAge;
+  if (surfaceFactor < ${INTERFACE_THRESHOLD}) { return; }
+
+  let slot = atomicAdd(&interfaceCounters[0], 1u);
+  if (slot >= params.particleCount) {
+    atomicAdd(&interfaceCounters[1], 1u);
+    return;
+  }
+  let speed = length(particle.velocity.xyz);
+  let thickness = params.fluid.x * clamp(supportWeight / max(params.fluid.y, 0.0001), 0.18, 2.5);
+  interfaceRecords[slot].positionId = vec4<f32>(position, f32(index));
+  interfaceRecords[slot].velocityConfidence = vec4<f32>(particle.velocity.xyz, surfaceFactor);
+  interfaceRecords[slot].normalCurvature = vec4<f32>(interfaceNormal, anisotropy);
+  interfaceRecords[slot].thicknessContactWetnessMaterial = vec4<f32>(thickness, contact, surfaceFactor, particle.velocity.w);
+  interfaceRecords[slot].stabilityAgeSource = vec4<f32>(1.0 - clamp(speed / ${MAX_FLUID_SPEED}, 0.0, 1.0), interfaceAge, f32(params.frameIndex), supportAlignment);
+}
 `;
 
 const RENDER_SHADER = /* wgsl */`
@@ -474,6 +616,8 @@ struct RenderParams {
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> params: RenderParams;
 
+${PLAYGROUND_WGSL}
+
 struct VertexOutput {
   @builtin(position) position: vec4<f32>,
   @location(0) uv: vec2<f32>,
@@ -489,7 +633,12 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0)
   );
   let corner = quad[vertexIndex];
-  let isObstacle = instanceIndex >= u32(params.viewport.w);
+  let particleCount = u32(params.viewport.w);
+  let supportIndex = instanceIndex - min(instanceIndex, particleCount);
+  let isFluid = instanceIndex < particleCount;
+  let isTerrain = !isFluid && supportIndex < ${PLAYGROUND_TILE_COUNT + PLAYGROUND_SKIRT_COUNT}u;
+  let isSkirt = isTerrain && supportIndex >= ${PLAYGROUND_TILE_COUNT}u;
+  let isObstacle = !isFluid && !isTerrain;
   var center = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
   var radius = ${OBSTACLE_RADIUS};
   var speed = 0.0;
@@ -498,13 +647,33 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
   let warm = vec3<f32>(0.18, 0.94, 0.71);
   let crest = vec3<f32>(0.80, 0.57, 1.0);
   var base = vec3<f32>(0.19, 0.23, 0.25);
-  if (!isObstacle) {
+  if (isFluid) {
     let particle = particles[instanceIndex];
     center = particle.position.xyz;
     speed = length(particle.velocity.xyz);
     radius = params.viewport.z * (0.88 + clamp(particle.delta.w / 16.0, 0.0, 0.42));
     phase = particle.velocity.w;
     base = mix(cold, warm, smoothstep(0.0, 0.62, phase));
+  } else if (isTerrain && !isSkirt) {
+    let tileX = supportIndex % ${PLAYGROUND_TILE_COLUMNS}u;
+    let tileZ = supportIndex / ${PLAYGROUND_TILE_COLUMNS}u;
+    let x = mix(${BOUNDS_MIN[0]}, ${BOUNDS_MAX[0]}, (f32(tileX) + 0.5) / f32(${PLAYGROUND_TILE_COLUMNS}));
+    let z = mix(${BOUNDS_MIN[2]}, ${BOUNDS_MAX[2]}, (f32(tileZ) + 0.5) / f32(${PLAYGROUND_TILE_ROWS}));
+    center = vec3<f32>(x, toyFloorHeight(vec3<f32>(x, 0.0, z)) - 0.035, z);
+    radius = 0.205;
+    phase = clamp((center.y + 1.25) * 0.42, 0.0, 1.0);
+    base = mix(vec3<f32>(0.18, 0.24, 0.21), vec3<f32>(0.45, 0.52, 0.27), phase);
+  } else if (isSkirt) {
+    let skirtIndex = supportIndex - ${PLAYGROUND_TILE_COUNT}u;
+    let skirtX = skirtIndex % ${PLAYGROUND_SKIRT_COLUMNS}u;
+    let skirtY = skirtIndex / ${PLAYGROUND_SKIRT_COLUMNS}u;
+    let x = mix(-2.55, 1.75, (f32(skirtX) + 0.5) / f32(${PLAYGROUND_SKIRT_COLUMNS}));
+    let lowY = toyFloorHeight(vec3<f32>(x, 0.0, -1.22));
+    let highY = toyFloorHeight(vec3<f32>(x, 0.0, -1.66));
+    center = vec3<f32>(x, mix(lowY, highY, (f32(skirtY) + 0.5) / f32(${PLAYGROUND_SKIRT_ROWS})), -1.43);
+    radius = 0.14;
+    phase = clamp((center.y + 1.25) * 0.42, 0.0, 1.0);
+    base = mix(vec3<f32>(0.16, 0.22, 0.20), vec3<f32>(0.50, 0.55, 0.25), phase);
   }
   let worldPosition = center + params.cameraRight.xyz * corner.x * radius + params.cameraUp.xyz * corner.y * radius;
   var output: VertexOutput;
@@ -512,7 +681,7 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
   output.uv = corner;
   output.color = mix(base, crest, smoothstep(0.68, 1.0, phase) * 0.72);
   output.speed = speed;
-  output.supportKind = select(0.0, 1.0, isObstacle);
+  output.supportKind = select(select(0.0, 1.0, isTerrain), 2.0, isObstacle);
   return output;
 }
 
@@ -527,10 +696,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
   let specular = pow(max(dot(reflect(-light, normal), vec3<f32>(0.0, 0.0, 1.0)), 0.0), 34.0);
   let speedGlow = smoothstep(0.7, 4.0, input.speed);
   let fluidColor = input.color * (0.28 + diffuse * 0.86) + vec3<f32>(0.36, 0.72, 0.90) * rim * 0.24 + vec3<f32>(1.0) * specular * 0.72 + speedGlow * vec3<f32>(0.12, 0.18, 0.24);
-  let obstacleColor = input.color * (0.30 + diffuse * 0.64) + vec3<f32>(0.72, 0.58, 0.30) * rim * 0.28 + vec3<f32>(1.0) * specular * 0.32;
-  let color = mix(fluidColor, obstacleColor, input.supportKind);
+  let terrainColor = input.color * (0.30 + diffuse * 0.70) + vec3<f32>(0.42, 0.34, 0.16) * rim * 0.18 + vec3<f32>(1.0) * specular * 0.12;
+  let obstacleColor = input.color * (0.30 + diffuse * 0.64) + vec3<f32>(0.82, 0.61, 0.24) * rim * 0.38 + vec3<f32>(1.0) * specular * 0.32;
+  let supportColor = select(terrainColor, obstacleColor, input.supportKind > 1.5);
+  let color = select(fluidColor, supportColor, input.supportKind > 0.5);
   let edgeAlpha = smoothstep(1.0, 0.70, radiusSquared);
-  let alpha = mix(0.90, 0.82, input.supportKind);
+  let alpha = select(0.90, select(0.72, 0.86, input.supportKind > 1.5), input.supportKind > 0.5);
   return vec4<f32>(color, alpha * edgeAlpha);
 }
 `;
@@ -601,21 +772,96 @@ function multiplyMatrices(a, b) {
   return out;
 }
 
+export function sampleFingerFluidPlaygroundHeight(x, z) {
+  const radial = 0.15 * (x * x + z * z);
+  const smoothstep = (edge0, edge1, value) => {
+    const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+  const sourceShelfWidth = 1 - smoothstep(1.55, 2.55, Math.abs(x + 0.35));
+  const sourceShelf = (1 - smoothstep(-1.54, -1.31, z)) * 0.94 * sourceShelfWidth;
+  const spillway = -0.17 * Math.exp(-x * x * 2.4) * Math.exp(-((z + 0.72) ** 2) * 1.1);
+  const shallowPool = -0.15 * Math.exp(-((x - 1.42) ** 2) * 2 - ((z - 0.35) ** 2) * 1.7);
+  const deepPool = -0.34 * Math.exp(-((x + 1.42) ** 2) * 1.8 - ((z - 0.48) ** 2) * 1.45);
+  const catchBasin = -0.27 * Math.exp(-x * x * 0.62 - ((z - 2.05) ** 2) * 2.2);
+  const leftGate = 0.22 * Math.exp(-((x + 0.58) ** 2) * 11 - ((z - 0.48) ** 2) * 4);
+  const rightGate = 0.22 * Math.exp(-((x - 0.58) ** 2) * 11 - ((z - 0.48) ** 2) * 4);
+  const toyRipple = 0.035 * Math.sin(x * 2.25) * Math.cos(z * 1.8);
+  return -1.02 + radial * 0.22 + sourceShelf + spillway + shallowPool + deepPool + catchBasin + leftGate + rightGate + toyRipple;
+}
+
+function playgroundZoneAt(x, z) {
+  if (z < -1.35) return 'source_shelf';
+  if (z < -0.34) return 'spillway';
+  if (z >= 1.3) return 'catch_basin';
+  if (x < -0.62) return 'deep_pool';
+  if (x > 0.62) return 'shallow_pool';
+  return 'obstacle_channel';
+}
+
+function playgroundZoneDiagnostics(values, particleCount) {
+  const zones = Object.fromEntries(KAMINOS_FINGER_FLUID_PLAYGROUND_ZONES.map(name => [name, {
+    name,
+    particleCount: 0,
+    surfaceParticleCount: 0,
+    kineticEnergy: 0,
+  }]));
+  for (let index = 0; index < particleCount; index += 1) {
+    const offset = index * PARTICLE_FLOATS;
+    const zone = zones[playgroundZoneAt(values[offset], values[offset + 2])];
+    const speedSquared = values[offset + 8] ** 2 + values[offset + 9] ** 2 + values[offset + 10] ** 2;
+    zone.particleCount += 1;
+    zone.kineticEnergy += 0.5 * speedSquared;
+    if (values[offset + 7] >= 0.5) zone.surfaceParticleCount += 1;
+  }
+  const rows = KAMINOS_FINGER_FLUID_PLAYGROUND_ZONES.map(name => {
+    const zone = zones[name];
+    return {
+      ...zone,
+      averageKineticEnergy: Number((zone.kineticEnergy / Math.max(1, zone.particleCount)).toFixed(5)),
+      kineticEnergy: Number(zone.kineticEnergy.toFixed(4)),
+      interfaceRatio: Number((zone.surfaceParticleCount / Math.max(1, zone.particleCount)).toFixed(4)),
+    };
+  });
+  const materialThreshold = Math.ceil(particleCount * 0.01);
+  return {
+    schema: 'kaminos.finger-fluid.playground-zone-diagnostics.v0',
+    zoneCount: rows.length,
+    occupiedZoneCount: rows.filter(zone => zone.particleCount > 0).length,
+    materialOccupancyThreshold: materialThreshold,
+    materiallyOccupiedZoneCount: rows.filter(zone => zone.particleCount >= materialThreshold).length,
+    particleCount: rows.reduce((sum, zone) => sum + zone.particleCount, 0),
+    zones: rows,
+  };
+}
+
 function createInitialParticles(particleCount) {
   const data = new Float32Array(particleCount * PARTICLE_FLOATS);
-  const columns = 32;
-  const rows = 24;
-  const layers = Math.ceil(particleCount / (columns * rows));
   const spacing = 0.055;
+  const zoneSeeds = [
+    { name: 'source_shelf', center: [-0.42, -2.06], columns: 20, velocity: [0.03, 0, 0.18], phase: 0.08 },
+    { name: 'spillway', center: [0.0, -0.83], columns: 16, velocity: [0, 0, 0.42], phase: 0.28 },
+    { name: 'shallow_pool', center: [1.43, 0.36], columns: 16, velocity: [-0.05, 0, 0.03], phase: 0.48 },
+    { name: 'deep_pool', center: [-1.42, 0.48], columns: 16, velocity: [0.04, 0, 0.02], phase: 0.66 },
+    { name: 'obstacle_channel', center: [0.0, 0.51], columns: 16, velocity: [0.02, 0, 0.25], phase: 0.82 },
+    { name: 'catch_basin', center: [0.0, 2.02], columns: 16, velocity: [0, 0, 0], phase: 0.96 },
+  ];
+  const zoneSchedule = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 5];
+  const zoneLocalCounts = new Uint32Array(zoneSeeds.length);
   for (let index = 0; index < particleCount; index += 1) {
-    const xIndex = index % columns;
-    const yIndex = Math.floor(index / columns) % rows;
-    const zIndex = Math.floor(index / (columns * rows));
+    const zoneIndex = zoneSchedule[index % zoneSchedule.length];
+    const localIndex = zoneLocalCounts[zoneIndex];
+    zoneLocalCounts[zoneIndex] += 1;
+    const zone = zoneSeeds[zoneIndex];
+    const columns = zone.columns;
+    const xIndex = localIndex % columns;
+    const zIndex = Math.floor(localIndex / columns) % columns;
+    const yIndex = Math.floor(localIndex / (columns * columns));
     const jitter = ((index * 1664525 + 1013904223) >>> 8) / 0x00ffffff - 0.5;
     const offset = index * PARTICLE_FLOATS;
-    const x = -1.52 + xIndex * spacing + jitter * 0.004;
-    const y = -0.45 + yIndex * spacing + Math.sin(index * 0.37) * 0.0025;
-    const z = -(layers - 1) * spacing * 0.5 + zIndex * spacing + Math.cos(index * 0.19) * 0.0025;
+    const x = zone.center[0] + (xIndex - (columns - 1) * 0.5) * spacing + jitter * 0.004;
+    const z = zone.center[1] + (zIndex - (columns - 1) * 0.5) * spacing + Math.cos(index * 0.19) * 0.0025;
+    const y = sampleFingerFluidPlaygroundHeight(x, z) + 0.055 + yIndex * spacing + Math.sin(index * 0.37) * 0.0025;
     data[offset + 0] = x;
     data[offset + 1] = y;
     data[offset + 2] = z;
@@ -624,10 +870,10 @@ function createInitialParticles(particleCount) {
     data[offset + 5] = y;
     data[offset + 6] = z;
     data[offset + 7] = 0;
-    data[offset + 8] = 0.06 + Math.sin(z * 2.7) * 0.025;
-    data[offset + 9] = 0;
-    data[offset + 10] = Math.sin(y * 3.1) * 0.06;
-    data[offset + 11] = clamp((xIndex / Math.max(1, columns - 1)) * 0.62 + (zIndex / Math.max(1, layers - 1)) * 0.38, 0, 1);
+    data[offset + 8] = zone.velocity[0] + Math.sin(z * 2.7) * 0.018;
+    data[offset + 9] = zone.velocity[1];
+    data[offset + 10] = zone.velocity[2] + Math.sin(y * 3.1) * 0.018;
+    data[offset + 11] = zone.phase;
   }
   return data;
 }
@@ -685,7 +931,34 @@ export async function createWebGPUFingerFluidSolver({
     size: particleData.byteLength,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
+  const interfaceRecordsBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-interface-records',
+    size: safeParticleCount * INTERFACE_RECORD_BYTES,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  });
+  const interfaceCountersBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-interface-counters',
+    size: 12,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+  });
+  const interfaceAgesBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-interface-ages',
+    size: safeParticleCount * 4,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  const interfaceCountersReadbackBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-interface-counters-readback',
+    size: 12,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
+  const interfaceRecordsReadbackBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-interface-records-readback',
+    size: safeParticleCount * INTERFACE_RECORD_BYTES,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
   device.queue.writeBuffer(particleBuffer, 0, particleData);
+  device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(3));
+  device.queue.writeBuffer(interfaceAgesBuffer, 0, new Float32Array(safeParticleCount));
 
   const computeModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: COMPUTE_SHADER });
   const computeLayout = device.createBindGroupLayout({
@@ -695,6 +968,9 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
     ],
   });
   const computePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [computeLayout] });
@@ -718,6 +994,8 @@ export async function createWebGPUFingerFluidSolver({
       confinement: await pipelineFor('apply_vorticity_confinement'),
       cohesion: await pipelineFor('apply_surface_cohesion'),
       applyVelocity: await pipelineFor('apply_velocity_position'),
+      clearInterface: await pipelineFor('clear_interface_counters'),
+      compactInterface: await pipelineFor('compact_interface_records'),
     };
   } catch (error) {
     return createUnavailableSolver(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
@@ -730,6 +1008,9 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 1, resource: { buffer: cellHeadsBuffer } },
       { binding: 2, resource: { buffer: particleNextBuffer } },
       { binding: 3, resource: { buffer: paramsBuffer } },
+      { binding: 4, resource: { buffer: interfaceRecordsBuffer } },
+      { binding: 5, resource: { buffer: interfaceCountersBuffer } },
+      { binding: 6, resource: { buffer: interfaceAgesBuffer } },
     ],
   });
 
@@ -783,6 +1064,7 @@ export async function createWebGPUFingerFluidSolver({
   let postProjectionGridRefreshCount = 0;
   let freeSurfaceClassificationPassCount = 0;
   let surfaceCohesionPassCount = 0;
+  let interfaceCompactionPassCount = 0;
   let directRenderFrameCount = 0;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -872,6 +1154,9 @@ export async function createWebGPUFingerFluidSolver({
       dispatch(pass, pipelines.cohesion, safeParticleCount);
       surfaceCohesionPassCount += 1;
       dispatch(pass, pipelines.applyVelocity, safeParticleCount);
+      dispatch(pass, pipelines.clearInterface, 1);
+      dispatch(pass, pipelines.compactInterface, safeParticleCount);
+      interfaceCompactionPassCount += 1;
       pass.end();
       device.queue.submit([encoder.finish()]);
       stepCount += 1;
@@ -928,7 +1213,7 @@ export async function createWebGPUFingerFluidSolver({
     });
     pass.setPipeline(renderPipeline);
     pass.setBindGroup(0, renderBindGroup);
-    pass.draw(6, safeParticleCount + 1);
+    pass.draw(6, safeParticleCount + PLAYGROUND_TILE_COUNT + PLAYGROUND_SKIRT_COUNT + PLAYGROUND_OBSTACLE_COUNT);
     pass.end();
     device.queue.submit([encoder.finish()]);
     directRenderFrameCount += 1;
@@ -937,14 +1222,21 @@ export async function createWebGPUFingerFluidSolver({
   async function requestDiagnostics() {
     if (diagnosticsPending || destroyed) return diagnostics;
     diagnosticsPending = true;
+    const readbackBuffers = [diagnosticsBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer];
     try {
       const diagnosticsStepCount = stepCount;
       const diagnosticsCapturedAtMs = performance.now();
       const encoder = device.createCommandEncoder({ label: 'kaminos-finger-fluid-diagnostics-copy' });
       encoder.copyBufferToBuffer(particleBuffer, 0, diagnosticsBuffer, 0, particleData.byteLength);
+      encoder.copyBufferToBuffer(interfaceCountersBuffer, 0, interfaceCountersReadbackBuffer, 0, 12);
+      encoder.copyBufferToBuffer(interfaceRecordsBuffer, 0, interfaceRecordsReadbackBuffer, 0, safeParticleCount * INTERFACE_RECORD_BYTES);
       device.queue.submit([encoder.finish()]);
-      await diagnosticsBuffer.mapAsync(GPUMapMode.READ);
+      const mapResults = await Promise.allSettled(readbackBuffers.map(buffer => buffer.mapAsync(GPUMapMode.READ)));
+      const failedMap = mapResults.find(result => result.status === 'rejected');
+      if (failedMap) throw failedMap.reason;
       const values = new Float32Array(diagnosticsBuffer.getMappedRange());
+      const interfaceCounters = new Uint32Array(interfaceCountersReadbackBuffer.getMappedRange());
+      const interfaceValues = new Float32Array(interfaceRecordsReadbackBuffer.getMappedRange());
       const min = [Infinity, Infinity, Infinity];
       const max = [-Infinity, -Infinity, -Infinity];
       let speedSum = 0;
@@ -973,6 +1265,47 @@ export async function createWebGPUFingerFluidSolver({
         maxSurfaceFactor = Math.max(maxSurfaceFactor, surfaceFactor);
         if (surfaceFactor >= 0.5) surfaceParticleCount += 1;
       }
+      const activeInterfaceCount = Math.min(interfaceCounters[0], safeParticleCount);
+      const sampleRecordCount = Math.min(activeInterfaceCount, INTERFACE_SAMPLE_COUNT);
+      const readInterfaceRecord = recordIndex => {
+        const offset = recordIndex * INTERFACE_RECORD_FLOATS;
+        return {
+          position: Array.from(interfaceValues.slice(offset, offset + 3), value => Number(value.toFixed(4))),
+          particleId: Math.round(interfaceValues[offset + 3]),
+          velocity: Array.from(interfaceValues.slice(offset + 4, offset + 7), value => Number(value.toFixed(4))),
+          confidence: Number(interfaceValues[offset + 7].toFixed(4)),
+          normal: Array.from(interfaceValues.slice(offset + 8, offset + 11), value => Number(value.toFixed(4))),
+          curvature: Number(interfaceValues[offset + 11].toFixed(4)),
+          thickness: Number(interfaceValues[offset + 12].toFixed(4)),
+          contact: Number(interfaceValues[offset + 13].toFixed(4)),
+          wetness: Number(interfaceValues[offset + 14].toFixed(4)),
+          material: Number(interfaceValues[offset + 15].toFixed(4)),
+          stability: Number(interfaceValues[offset + 16].toFixed(4)),
+          ageSeconds: Number(interfaceValues[offset + 17].toFixed(4)),
+          sourceFrame: Math.round(interfaceValues[offset + 18]),
+          supportAlignment: Number(interfaceValues[offset + 19].toFixed(4)),
+        };
+      };
+      let malformedRecordCount = 0;
+      let contactRecordCount = 0;
+      let minimumContactSupportAlignment = 1;
+      for (let index = 0; index < activeInterfaceCount; index += 1) {
+        const record = readInterfaceRecord(index);
+        const fields = [...record.position, ...record.velocity, ...record.normal, record.confidence, record.curvature, record.thickness, record.contact, record.wetness, record.material, record.stability, record.ageSeconds, record.sourceFrame, record.supportAlignment];
+        const normalLength = Math.hypot(...record.normal);
+        if (!Number.isSafeInteger(record.particleId) || !fields.every(Number.isFinite) || normalLength < 0.8 || normalLength > 1.2 || record.confidence < 0 || record.confidence > 1.001 || record.thickness <= 0) {
+          malformedRecordCount += 1;
+        }
+        if (record.contact >= 0.5) {
+          contactRecordCount += 1;
+          minimumContactSupportAlignment = Math.min(minimumContactSupportAlignment, record.supportAlignment);
+        }
+      }
+      const sampleRecords = [];
+      for (let index = 0; index < sampleRecordCount; index += 1) {
+        const sampleIndex = Math.floor(index * (activeInterfaceCount - 1) / Math.max(1, sampleRecordCount - 1));
+        sampleRecords.push(readInterfaceRecord(sampleIndex));
+      }
       diagnostics = {
         readbackMode: 'explicit_sparse_gpu_diagnostics_v0',
         stepCount: diagnosticsStepCount,
@@ -991,10 +1324,33 @@ export async function createWebGPUFingerFluidSolver({
         surfaceParticleRatio: Number((surfaceParticleCount / safeParticleCount).toFixed(4)),
         averageSurfaceFactor: Number((surfaceFactorSum / safeParticleCount).toFixed(4)),
         maxSurfaceFactor: Number(maxSurfaceFactor.toFixed(4)),
+        playgroundZoneDiagnostics: playgroundZoneDiagnostics(values, safeParticleCount),
+        sourceRecirculationCount: interfaceCounters[2],
+        interfaceCarrier: {
+          schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+          sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
+          recordFloats: INTERFACE_RECORD_FLOATS,
+          recordBytes: INTERFACE_RECORD_BYTES,
+          interfaceCapacity: safeParticleCount,
+          capacity: safeParticleCount,
+          candidateCapMode: 'uncapped_exact_particle_population_capacity',
+          activeCount: activeInterfaceCount,
+          overflowCount: interfaceCounters[1],
+          copyMode: 'gpu_compaction_full_active_population_diagnostics_v0',
+          qualifyingThreshold: INTERFACE_THRESHOLD,
+          validatedRecordCount: activeInterfaceCount,
+          malformedRecordCount,
+          contactRecordCount,
+          minimumContactSupportAlignment: contactRecordCount > 0 ? Number(minimumContactSupportAlignment.toFixed(4)) : null,
+          sampleCoverageMode: 'stratified_across_active_compacted_population_v0',
+          sampleRecords,
+        },
       };
-      diagnosticsBuffer.unmap();
       return diagnostics;
     } finally {
+      for (const buffer of readbackBuffers) {
+        if (buffer.mapState === 'mapped') buffer.unmap();
+      }
       diagnosticsPending = false;
     }
   }
@@ -1012,6 +1368,36 @@ export async function createWebGPUFingerFluidSolver({
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
       obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
+      playgroundContract: KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT,
+      playground: {
+        zones: [...KAMINOS_FINGER_FLUID_PLAYGROUND_ZONES],
+        supportGeometryMode: 'shared_analytic_heightfield_billboard_tiles_and_cliff_skirt_v0',
+        supportGeometryCount: PLAYGROUND_TILE_COUNT + PLAYGROUND_SKIRT_COUNT + PLAYGROUND_OBSTACLE_COUNT,
+        terrainTileCount: PLAYGROUND_TILE_COUNT,
+        cliffSkirtCount: PLAYGROUND_SKIRT_COUNT,
+        obstacleCount: PLAYGROUND_OBSTACLE_COUNT,
+        rendered: directRenderFrameCount > 0,
+      },
+      interfaceCarrierSchema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+      interfaceCapacity: safeParticleCount,
+      candidateCapMode: 'uncapped_exact_particle_population_capacity',
+      interfaceCarrier: diagnostics?.interfaceCarrier || {
+        schema: KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA,
+        sourceFrame: 'kaminos/finger-fluid-bench:gpu-simulation-frame',
+        recordFloats: INTERFACE_RECORD_FLOATS,
+        recordBytes: INTERFACE_RECORD_BYTES,
+        interfaceCapacity: safeParticleCount,
+        capacity: safeParticleCount,
+        candidateCapMode: 'uncapped_exact_particle_population_capacity',
+        activeCount: 0,
+        overflowCount: 0,
+        copyMode: 'gpu_compaction_exact_particle_capacity_v0',
+        qualifyingThreshold: INTERFACE_THRESHOLD,
+        sampleRecords: [],
+      },
+      playgroundZoneDiagnostics: diagnostics?.playgroundZoneDiagnostics || null,
+      sourceRecirculationMode: 'material_tagged_finite_particle_loop_v0',
+      sourceRecirculationCount: diagnostics?.sourceRecirculationCount || 0,
       stabilityContract: KAMINOS_FINGER_FLUID_STABILITY_CONTRACT,
       renderRoute: KAMINOS_FINGER_FLUID_GPU_RENDERER_ROUTE,
       renderShaderRoute: KAMINOS_FINGER_FLUID_RENDER_SHADER_ROUTE,
@@ -1030,6 +1416,7 @@ export async function createWebGPUFingerFluidSolver({
       postProjectionGridRefreshCount,
       freeSurfaceClassificationPassCount,
       surfaceCohesionPassCount,
+      interfaceCompactionPassCount,
       directRenderFrameCount,
       lastFrameCpuMs: Number(lastFrameCpuMs.toFixed(3)),
       diagnostics: diagnostics ? {
@@ -1052,6 +1439,11 @@ export async function createWebGPUFingerFluidSolver({
     particleNextBuffer.destroy();
     paramsBuffer.destroy();
     diagnosticsBuffer.destroy();
+    interfaceRecordsBuffer.destroy();
+    interfaceCountersBuffer.destroy();
+    interfaceAgesBuffer.destroy();
+    interfaceCountersReadbackBuffer.destroy();
+    interfaceRecordsReadbackBuffer.destroy();
     renderParamsBuffer.destroy();
     depthTexture?.destroy();
   }

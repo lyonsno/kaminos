@@ -2760,7 +2760,7 @@ let fingerFluidBenchSolver = null;
 let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchDiagnosticsRequestedAt = Number.NEGATIVE_INFINITY;
-let fingerFluidBenchCamera = { yaw: -0.55, pitch: 0.34, distance: 4.45, target: [0, -0.12, 0] };
+let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 let fingerFluidBenchState = createFingerFluidBenchState({
   status: 'idle',
   viewport: { width: 0, height: 0 },
@@ -9724,7 +9724,7 @@ function updateFingerFluidBenchReadout() {
   sourceEl.textContent = state.source?.schema || BIG_PAPA_FLUID_SOURCE_SCHEMA;
   document.getElementById('finger-fluid-bench-status').textContent = state.status || 'pending';
   document.getElementById('finger-fluid-bench-solver').textContent = state.solver?.backend === 'webgpu_compute' ? 'WebGPU PBF 3D' : (state.solver?.backend || 'pending');
-  document.getElementById('finger-fluid-bench-renderer').textContent = state.renderer?.backend === 'webgpu_direct_render' ? 'GPU spheres' : (state.renderer?.backend || 'pending');
+  document.getElementById('finger-fluid-bench-renderer').textContent = state.renderer?.backend === 'webgpu_direct_render' ? 'GPU spheres + toy course' : (state.renderer?.backend || 'pending');
   document.getElementById('finger-fluid-bench-active').textContent = (state.visual?.activeRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-basin').textContent = (state.visual?.basinFillRatio ?? 0).toFixed(2);
   document.getElementById('finger-fluid-bench-frame-ms').textContent = `${(state.solver?.frameTimeMsEstimate ?? 0).toFixed(1)} ms`;
@@ -9742,6 +9742,8 @@ function updateFingerFluidBenchReadout() {
     state.source?.sourceTruthAuthority || 'synthetic source',
     `${state.solver?.particleCount || 0} particles`,
     `${state.solver?.densityIterationCount || 0} density iterations`,
+    `${state.playgroundZoneDiagnostics?.occupiedZoneCount || 0}/6 regimes`,
+    `${state.interfaceCarrier?.activeCount || 0} interface records`,
     state.downgrades?.[0] || 'no downgrade recorded',
   ].join(' · ');
 }
@@ -9799,6 +9801,8 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     densityContract: gpuState.densityContract,
     vorticityConfinementContract: gpuState.vorticityConfinementContract,
     freeSurfaceContract: gpuState.freeSurfaceContract,
+    playgroundContract: gpuState.playgroundContract,
+    interfaceCarrierSchema: gpuState.interfaceCarrierSchema,
     obstacleContract: gpuState.obstacleContract,
     stepCount: gpuState.stepCount,
     linkedCellGridBuildCount: gpuState.linkedCellGridBuildCount,
@@ -9807,7 +9811,12 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     postProjectionGridRefreshCount: gpuState.postProjectionGridRefreshCount,
     freeSurfaceClassificationPassCount: gpuState.freeSurfaceClassificationPassCount,
     surfaceCohesionPassCount: gpuState.surfaceCohesionPassCount,
+    interfaceCompactionPassCount: gpuState.interfaceCompactionPassCount,
     directRenderFrameCount: gpuState.directRenderFrameCount,
+    supportGeometryCount: gpuState.playground?.supportGeometryCount,
+    playground: gpuState.playground,
+    playgroundZoneDiagnostics: gpuState.playgroundZoneDiagnostics,
+    interfaceCarrier: gpuState.interfaceCarrier,
     activeExtent3d: gpuState.diagnostics?.activeExtent3d || null,
   });
   fingerFluidBenchState.runtime = gpuState;
@@ -9873,7 +9882,7 @@ function initKaminosFingerFluidBenchRoute() {
   canvas?.addEventListener('pointerup', event => { if (pointer?.id === event.pointerId) pointer = null; });
   canvas?.addEventListener('wheel', event => {
     event.preventDefault();
-    fingerFluidBenchCamera.distance = Math.max(3.2, Math.min(11, fingerFluidBenchCamera.distance * Math.exp(event.deltaY * 0.0012)));
+    fingerFluidBenchCamera.distance = Math.max(4.0, Math.min(14, fingerFluidBenchCamera.distance * Math.exp(event.deltaY * 0.0012)));
   }, { passive: false });
   updateFingerFluidBenchReadout();
   const params = new URLSearchParams(window.location.search);

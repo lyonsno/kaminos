@@ -225,6 +225,10 @@ async function main() {
     if (lastDebugState.runtime?.densityContract !== 'wgsl-pbf-density-constraint-v0') throw new Error(`density contract mismatch: ${lastDebugState.runtime?.densityContract}`);
     if (lastDebugState.runtime?.vorticityConfinementContract !== 'wgsl-neighbor-vorticity-confinement-v0') throw new Error(`vorticity contract mismatch: ${lastDebugState.runtime?.vorticityConfinementContract}`);
     if (lastDebugState.runtime?.freeSurfaceContract !== 'wgsl-neighbor-free-surface-cohesion-v0') throw new Error(`free-surface contract mismatch: ${lastDebugState.runtime?.freeSurfaceContract}`);
+    if (lastDebugState.runtime?.playgroundContract !== 'wgsl-shared-multi-regime-toy-playground-v0') throw new Error(`playground contract mismatch: ${lastDebugState.runtime?.playgroundContract}`);
+    if (!lastDebugState.runtime?.playground?.rendered || lastDebugState.runtime.playground.supportGeometryCount < 300) {
+      throw new Error(`shared playground geometry is missing from the operator viewport: ${JSON.stringify(lastDebugState.runtime?.playground)}`);
+    }
     if (lastDebugState.runtime?.obstacleContract !== 'shared-solver-render-obstacle-v0' || lastDebugState.runtime?.obstacle?.rendered !== true) throw new Error(`solver obstacle is not attributable in the renderer: ${JSON.stringify(lastDebugState.runtime?.obstacle)}`);
     if (lastDebugState.runtime?.stepCount < 20) throw new Error(`insufficient real compute steps: ${lastDebugState.runtime?.stepCount}`);
     if (lastDebugState.runtime?.linkedCellGridBuildCount < 20) throw new Error(`missing linked-cell grid builds: ${lastDebugState.runtime?.linkedCellGridBuildCount}`);
@@ -236,6 +240,7 @@ async function main() {
     if (!Number.isSafeInteger(lastDebugState.runtime?.postProjectionGridRefreshCount) || lastDebugState.runtime.postProjectionGridRefreshCount < lastDebugState.runtime.stepCount) throw new Error(`missing post-projection neighbor refreshes: ${lastDebugState.runtime?.postProjectionGridRefreshCount}`);
     if (!Number.isSafeInteger(lastDebugState.runtime?.freeSurfaceClassificationPassCount) || lastDebugState.runtime.freeSurfaceClassificationPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing free-surface classification passes: ${lastDebugState.runtime?.freeSurfaceClassificationPassCount}`);
     if (!Number.isSafeInteger(lastDebugState.runtime?.surfaceCohesionPassCount) || lastDebugState.runtime.surfaceCohesionPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing surface cohesion passes: ${lastDebugState.runtime?.surfaceCohesionPassCount}`);
+    if (!Number.isSafeInteger(lastDebugState.runtime?.interfaceCompactionPassCount) || lastDebugState.runtime.interfaceCompactionPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing interface compaction passes: ${lastDebugState.runtime?.interfaceCompactionPassCount}`);
     if (lastDebugState.runtime?.directRenderFrameCount < 20) throw new Error(`missing direct GPU render frames: ${lastDebugState.runtime?.directRenderFrameCount}`);
     const activeExtent3d = lastDebugState.runtime?.diagnostics?.activeExtent3d;
     if (!activeExtent3d || activeExtent3d.size?.length !== 3) throw new Error('missing activeExtent3d diagnostics');
@@ -259,6 +264,41 @@ async function main() {
     }
     if (!Number.isFinite(averageSurfaceFactor) || averageSurfaceFactor < 0.01 || averageSurfaceFactor > 0.85 || !Number.isFinite(maxSurfaceFactor) || maxSurfaceFactor < 0.5 || maxSurfaceFactor > 1.001) {
       throw new Error(`free-surface confidence is absent or saturated: ${JSON.stringify({ averageSurfaceFactor, maxSurfaceFactor })}`);
+    }
+    const zoneDiagnostics = lastDebugState.runtime?.playgroundZoneDiagnostics;
+    if (zoneDiagnostics?.schema !== 'kaminos.finger-fluid.playground-zone-diagnostics.v0') throw new Error(`playground zone diagnostics missing: ${JSON.stringify(zoneDiagnostics)}`);
+    const minimumMaterialOccupancy = Math.ceil(lastDebugState.runtime.particleCount * 0.01);
+    if (zoneDiagnostics.materialOccupancyThreshold !== minimumMaterialOccupancy) throw new Error(`playground material-occupancy threshold is not source-honest: ${JSON.stringify(zoneDiagnostics)}`);
+    if (zoneDiagnostics.materiallyOccupiedZoneCount < 5) throw new Error(`playground did not retain five materially occupied regimes: ${JSON.stringify(zoneDiagnostics)}`);
+    if (lastDebugState.runtime?.sourceRecirculationCount < 1) throw new Error(`finite source recirculation did not execute: ${lastDebugState.runtime?.sourceRecirculationCount}`);
+    if (zoneDiagnostics.particleCount !== lastDebugState.runtime.particleCount || zoneDiagnostics.zones?.length !== 6) {
+      throw new Error(`playground zone accounting is incomplete: ${JSON.stringify(zoneDiagnostics)}`);
+    }
+    const interfaceCarrier = lastDebugState.runtime?.interfaceCarrier;
+    if (interfaceCarrier?.schema !== 'kaminos.liquid-interface-carrier.v0') throw new Error(`interface carrier schema mismatch: ${interfaceCarrier?.schema}`);
+    if (interfaceCarrier.capacity !== lastDebugState.runtime.particleCount) throw new Error(`hidden interface capacity cap rejected: ${JSON.stringify(interfaceCarrier)}`);
+    if (interfaceCarrier.candidateCapMode !== 'uncapped_exact_particle_population_capacity') throw new Error(`interface candidate cap identity mismatch: ${interfaceCarrier.candidateCapMode}`);
+    if (interfaceCarrier.overflowCount !== 0) throw new Error(`interface compaction overflowed: ${JSON.stringify(interfaceCarrier)}`);
+    if (!Number.isSafeInteger(interfaceCarrier.activeCount) || interfaceCarrier.activeCount < 64 || interfaceCarrier.activeCount >= interfaceCarrier.capacity) {
+      throw new Error(`interface carrier population is empty or swallowed the volume: ${JSON.stringify(interfaceCarrier)}`);
+    }
+    if (interfaceCarrier.validatedRecordCount !== interfaceCarrier.activeCount) throw new Error(`interface carrier population was not completely validated: ${JSON.stringify(interfaceCarrier)}`);
+    if (interfaceCarrier.malformedRecordCount !== 0) throw new Error(`interface carrier contains malformed records: ${JSON.stringify(interfaceCarrier)}`);
+    if (interfaceCarrier.contactRecordCount < 64) throw new Error(`interface carrier lacks material contact coverage: ${JSON.stringify(interfaceCarrier)}`);
+    if (interfaceCarrier.minimumContactSupportAlignment < -0.001) throw new Error(`interface carrier contains a support-facing contact normal: ${JSON.stringify(interfaceCarrier)}`);
+    if (!Array.isArray(interfaceCarrier.sampleRecords) || interfaceCarrier.sampleRecords.length < 4) throw new Error(`interface carrier sampleRecords missing: ${JSON.stringify(interfaceCarrier)}`);
+    const sampleIds = new Set();
+    for (const record of interfaceCarrier.sampleRecords) {
+      if (!Number.isSafeInteger(record.particleId) || sampleIds.has(record.particleId)) throw new Error(`interface record stable id is malformed or duplicated: ${JSON.stringify(record)}`);
+      sampleIds.add(record.particleId);
+      if (![...(record.position || []), ...(record.velocity || []), ...(record.normal || []), record.confidence, record.curvature, record.thickness, record.contact, record.wetness, record.material, record.stability, record.ageSeconds, record.sourceFrame, record.supportAlignment].every(Number.isFinite)) {
+        throw new Error(`interface record contains non-finite fields: ${JSON.stringify(record)}`);
+      }
+      const normalLength = Math.hypot(...record.normal);
+      if (normalLength < 0.8 || normalLength > 1.2 || record.confidence < 0.3 || record.confidence > 1.001 || record.thickness <= 0) {
+        throw new Error(`interface geometry record is not physically legible: ${JSON.stringify(record)}`);
+      }
+      if (record.contact >= 0.5 && record.supportAlignment < -0.001) throw new Error(`contact interface sample normal points into support geometry: ${JSON.stringify(record)}`);
     }
     const restDensity = lastDebugState.runtime?.restDensity;
     const averageDensity = lastDebugState.runtime?.diagnostics?.averageDensity;
@@ -289,6 +329,7 @@ async function main() {
     });
     if (decoded.status !== 0 || !decoded.stdout?.length) throw new Error(`ffmpeg canvas decode failed: ${decoded.stderr?.toString() || decoded.status}`);
     let activePixels = 0;
+    let supportPixels = 0;
     for (let i = 0; i < decoded.stdout.length; i += 3) {
       const r = decoded.stdout[i];
       const g = decoded.stdout[i + 1];
@@ -296,6 +337,7 @@ async function main() {
       const max = Math.max(r, g, b);
       const min = Math.min(r, g, b);
       if (max > 66 && max - min > 18) activePixels += 1;
+      if (g > 28 && r > 20 && g > r * 1.03 && r > b * 1.12 && max < 105) supportPixels += 1;
     }
     const pixelCount = Math.floor(decoded.stdout.length / 3);
     canvasActivity = {
@@ -304,9 +346,12 @@ async function main() {
       height: Math.round(canvasRect.height),
       activePixels,
       activeRatio: Number((activePixels / Math.max(1, pixelCount)).toFixed(5)),
+      supportPixels,
+      supportPixelRatio: Number((supportPixels / Math.max(1, pixelCount)).toFixed(5)),
       measurement: 'captured_webgpu_canvas_ffmpeg_rgb24_v0',
     };
     if (canvasActivity.activeRatio < 0.09) throw new Error(`native GPU fluid bench too sparse: ${JSON.stringify(canvasActivity)}`);
+    if (canvasActivity.supportPixelRatio < 0.025) throw new Error(`shared playground support is not materially visible: ${JSON.stringify(canvasActivity)}`);
 
     phase = 'capture_screenshot';
     const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
