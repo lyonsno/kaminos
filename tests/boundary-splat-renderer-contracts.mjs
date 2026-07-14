@@ -38,11 +38,11 @@ assert.match(core, /corner\.x \* splat\.shape\.x \* boundarySplatCamera\.control
 assert.match(core, /let kernelSharpness = clamp\(boundarySplatCamera\.controls\.w,[\s\S]*let gaussian = exp\(-radius2 \* kernelSharpness\)/, 'live sharpness control changes the Gaussian kernel instead of applying a screen-space post-filter');
 assert.match(core, /let footprintRadius = clamp\(boundarySplatCamera\.controls\.x,[\s\S]*let energyRatio = \(kernelSharpness \/ 3\.4\) \/ max\(footprintRadius \* footprintRadius,[\s\S]*let energyCompensation = clamp\(sqrt\(energyRatio\),[\s\S]*in\.colorOpacity\.a \* gaussian \* energyCompensation/, 'radius and kernel ablations preserve approximate integrated splat opacity without overdriving dense alpha-over overlap');
 assert.match(core, /splatCamera\.set\(\[normalizeBoundarySplatRadius\(controlsSnapshot\.boundarySplatRadius\),[\s\S]*normalizeBoundarySplatSharpness\(controlsSnapshot\.boundarySplatSharpness\)\]/, 'each frame publishes normalized radius and sharpness controls to WGSL');
-assert.match(core, /copyBufferToBuffer\(\s*boundarySplatDrawGroupBuffer,\s*groupIndex \* BOUNDARY_SPLAT_DRAW_GROUP_STRIDE_BYTES,\s*boundarySplatIndirectBuffer,\s*groupIndex \* BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,\s*BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES/, 'each storage tier draw state is copied into its separate indirect-only range');
+assert.match(core, /copyBufferToBuffer\(\s*boundarySplatDrawBuffer,\s*0,\s*boundarySplatIndirectBuffer,\s*0,\s*BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES/, 'global storage draw state is copied into one indirect command without nonzero firstInstance residency');
 assert.match(core, /boundarySplatComputeBindGroups/, 'splat compute uses separate bind groups from raster');
 assert.match(core, /boundarySplatRenderBindGroup[\s\S]*resource:\s*\{\s*buffer:\s*boundarySplatBuffer\s*\}/, 'splat raster reads the compacted candidate buffer directly after compute passes');
 assert.doesNotMatch(core, /boundarySplatRenderBuffer/, 'renderer no longer allocates a full-capacity render-copy buffer');
-assert.match(core, /for \(let groupIndex = 0; groupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; groupIndex \+= 1\)[\s\S]*pass\.drawIndirect\(boundarySplatIndirectBuffer,\s*groupIndex \* 16\)/, 'tier splat raster counts come from bounded GPU indirect buffer ranges');
+assert.match(core, /pass\.drawIndirect\(boundarySplatIndirectBuffer,\s*0\)/, 'splat raster count comes from the single global GPU indirect command');
 const splatDrawFunction = core.match(/function encodeBoundarySplatDraw\([\s\S]*?\n  \}/)?.[0] || '';
 assert.doesNotMatch(splatDrawFunction, /mapAsync|await/, 'live splat drawing must not depend on CPU readback');
 

@@ -79,7 +79,14 @@ assert.match(coreSource, /archiveBoundarySplatHistory[\s\S]*candidateIndex < bou
 assert.match(coreSource, /finalizeBoundarySplats[\s\S]*archiveCandidateCount[\s\S]*totalRenderedInstanceCount[\s\S]*boundarySplatDrawGroups/, 'GPU finalize must derive archive and global raster counts from effective tier groups');
 assert.match(coreSource, /finalizeBoundarySplats[\s\S]*descriptorCount > 0u[\s\S]*effectiveBudget/, 'zero-descriptor draw-group slots must contribute zero effective budget instead of inflating the selected prefix to full source');
 assert.match(coreSource, /boundarySplatVs[\s\S]*groupIndex[\s\S]*descriptorStart[\s\S]*descriptorCount[\s\S]*sourceCandidateIndex/, 'vertex decode must map each indirect tier draw to its descriptor range and nested rank');
-assert.match(coreSource, /for\s*\(let groupIndex = 0; groupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; groupIndex \+= 1\)[\s\S]*drawIndirect\(boundarySplatIndirectBuffer,\s*groupIndex \* 16\)/, 'renderer must issue bounded indirect draws for actual tier groups');
+assert.match(coreSource, /BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY\s*=\s*'boundary-splat-single-global-indirect-no-first-instance-v0'/, 'runtime must identify the single global indirect draw contract');
+const compactionPath = coreSource.match(/function encodeBoundarySplats\([\s\S]*?\n  function encodeBoundarySplatPbrScene/)?.[0] || '';
+assert.match(compactionPath, /copyBufferToBuffer\(\s*boundarySplatDrawBuffer,\s*0,\s*boundarySplatIndirectBuffer,\s*0,\s*BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,?\s*\)/, 'adaptive LOD must source one global indirect command from authoritative draw state');
+assert.doesNotMatch(compactionPath, /copyBufferToBuffer\(\s*boundarySplatDrawGroupBuffer[\s\S]*boundarySplatIndirectBuffer/, 'adaptive LOD must not depend on per-tier indirect firstInstance residency');
+const renderPath = coreSource.match(/function encodeBoundarySplatDraw\([\s\S]*?\n  function encodeBoundarySplatTelemetry/)?.[0] || '';
+assert.match(renderPath, /pass\.drawIndirect\(boundarySplatIndirectBuffer,\s*0\)/, 'renderer must issue one global indirect draw');
+assert.doesNotMatch(renderPath, /for\s*\(let groupIndex = 0; groupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; groupIndex \+= 1\)[\s\S]*pass\.drawIndirect/, 'renderer must decode tier residency in the shader instead of relying on nonzero indirect firstInstance');
+assert.match(coreSource, /indirectDrawIdentity:\s*BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY/, 'draw-state evidence must publish the effective indirect draw identity');
 assert.match(coreSource, /boundarySplatLodMode[\s\S]*boundarySplatAdaptiveLodIdentity[\s\S]*boundarySplatTierGroups[\s\S]*boundarySplatGlobalRenderedInstanceCount/, 'debug state must preserve requested/effective allocation and global count evidence');
 const descriptorWriter = coreSource.match(/function writeBoundarySplatInstanceDescriptors\(\)[\s\S]*?\n  \}/)?.[0] || '';
 assert.doesNotMatch(descriptorWriter, /state\.boundarySplatTierGroups\s*=\s*allocation\.groups/, 'descriptor upload must not erase the last authoritative GPU tier report with pending placeholders');
@@ -92,6 +99,8 @@ assert.match(page, /boundarySplatCandidateBudget[\s\S]*max:\s*12800/, 'operator 
 
 assert.match(witness, /volume_boundary_splat_lod_mode/, 'PBR witness must record the requested LOD mode');
 assert.match(witness, /boundarySplatAdaptiveLodIdentity[\s\S]*boundarySplatTierGroups[\s\S]*boundarySplatGlobalRenderedInstanceCount/, 'PBR witness must preserve adaptive allocation authority');
+assert.match(witness, /boundary-splat-single-global-indirect-no-first-instance-v0/, 'PBR witness must reject stale browsers that still use per-tier indirect firstInstance residency');
+assert.match(witness, /boundarySplatIndirectDrawIdentity/, 'PBR witness must record the effective indirect draw identity');
 assert.match(witness, /waitForBoundarySplatTelemetry[\s\S]*gpu-tier-group-post-submit-readback[\s\S]*boundarySplatTelemetryLodMode/, 'PBR witness must wait for authoritative tier groups whose GPU-observed LOD mode agrees with current controls');
 assert.match(witness, /stale-or-default-adaptive-lod|adaptive-lod-allocation-mismatch/, 'PBR witness must fail loud on stale or inconsistent adaptive allocation evidence');
 

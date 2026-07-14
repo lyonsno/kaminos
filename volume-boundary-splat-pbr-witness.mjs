@@ -19,6 +19,7 @@ const PBR_SCENE = 'boundary-splat-pbr-fire-field-v0';
 const DEPTH_AUTHORITY = 'same-device-depth24plus-less-equal-v0';
 const FIXED_SUBSTRATE = 'operator-pretty-four-flame-substrate-v0';
 const ADAPTIVE_LOD = 'boundary-splat-projected-area-nested-tiers-v0';
+const INDIRECT_DRAW = 'boundary-splat-single-global-indirect-no-first-instance-v0';
 const BUFFER_INTEGRITY = 'boundary-splat-buffer-integrity-v0';
 const ADAPTIVE_TIER_BUDGETS = new Set([0, 800, 1600, 3200, 6400, 12800]);
 const CAMERA_SWEEP_POSES = [
@@ -297,6 +298,7 @@ try {
       pbrScene: PBR_SCENE,
       depth: DEPTH_AUTHORITY,
       fixedSubstrate: FIXED_SUBSTRATE,
+      indirectDraw: finalState.boundarySplatIndirectDrawIdentity,
       capture: capture.imageAuthority,
       cameraSweep: 'same-frozen-simulator-state-real-camera-matrices-v0',
     },
@@ -320,6 +322,7 @@ try {
     falseClosureChecks: {
       fallbackRoute: false,
       staleOrDefaultConfig: false,
+      staleOrDefaultIndirectDraw: false,
       missingTimestampSupport: false,
       simulatorAdvancedDuringLadder: false,
       hiddenInstanceCap: false,
@@ -402,6 +405,7 @@ function classifyFalseClosure(phase, error) {
   for (const className of [
     'fallback-route',
     'stale-or-default-config',
+    'stale-or-default-indirect-draw',
     'depth-occlusion-authority-missing',
     'stale-or-default-pbr-scene',
     'duplicated-simulation-authority',
@@ -690,6 +694,7 @@ function normalizeRequestedLodMode(value) {
 function validateAllocationEvidence(evidence, requestedLodMode, context) {
   const lodMode = evidence?.boundarySplatLodMode ?? evidence?.lodMode;
   const adaptiveLodIdentity = evidence?.boundarySplatAdaptiveLodIdentity ?? evidence?.adaptiveLodIdentity;
+  const indirectDrawIdentity = evidence?.boundarySplatIndirectDrawIdentity ?? evidence?.indirectDrawIdentity;
   const groups = evidence?.boundarySplatTierGroups ?? evidence?.tierGroups;
   const sourceCandidateCount = Number(evidence?.boundarySplatSourceCandidateCount ?? evidence?.sourceCandidateCount);
   const requestedInstanceCount = Number(evidence?.boundarySplatRequestedInstanceCount ?? evidence?.requestedInstanceCount);
@@ -704,6 +709,12 @@ function validateAllocationEvidence(evidence, requestedLodMode, context) {
   );
   if (lodMode !== requestedLodMode) {
     throw new Error(`stale-or-default-adaptive-lod:${context}:${JSON.stringify({ requestedLodMode, lodMode })}`);
+  }
+  if (indirectDrawIdentity !== INDIRECT_DRAW) {
+    throw new Error(`stale-or-default-indirect-draw:${context}:${JSON.stringify({
+      expected: INDIRECT_DRAW,
+      effective: indirectDrawIdentity,
+    })}`);
   }
   if (!Number.isFinite(sourceCandidateCount) || sourceCandidateCount <= 0) {
     throw new Error(`adaptive-lod-allocation-mismatch:${context}:missing-source-count`);
@@ -906,6 +917,7 @@ function compactState(state) {
     renderedInstanceCount: state?.boundarySplatInstanceCount,
     lodMode: state?.boundarySplatLodMode,
     adaptiveLodIdentity: state?.boundarySplatAdaptiveLodIdentity,
+    indirectDrawIdentity: state?.boundarySplatIndirectDrawIdentity,
     tierGroups: state?.boundarySplatTierGroups,
     requestedTierGroups: state?.boundarySplatRequestedTierGroups,
     globalRenderedInstanceCount: state?.boundarySplatGlobalRenderedInstanceCount,
