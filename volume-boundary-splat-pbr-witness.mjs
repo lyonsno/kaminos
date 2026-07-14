@@ -20,9 +20,11 @@ const DEPTH_AUTHORITY = 'same-device-depth24plus-less-equal-v0';
 const FIXED_SUBSTRATE = 'operator-pretty-four-flame-substrate-v0';
 const ADAPTIVE_LOD = 'boundary-splat-projected-area-nested-tiers-v0';
 const ADAPTIVE_TIER_BUDGETS = new Set([0, 800, 1600, 3200, 6400, 12800]);
+const CLOSE_CAMERA_SATURATION_POSE_IDENTITY = 'close-foreground-whiteout';
 const CAMERA_SWEEP_POSES = [
   { identity: 'left-arc', position: [-5.15, 1.85, 7.65], target: [0.12, -0.48, 0.05] },
   { identity: 'right-grazing', position: [7.10, 0.95, 3.25], target: [0.15, -0.50, 0.02] },
+  { identity: CLOSE_CAMERA_SATURATION_POSE_IDENTITY, position: [2.85, 0.52, 2.20], target: [0.05, -0.58, -0.22] },
 ];
 const BROWSER_CONTINUITY_MODES = new Set([
   'continuous-existing',
@@ -243,10 +245,18 @@ try {
       resumeRenderLoop: true,
     })})`, true);
   }
-  if (cameraSweep.length !== 3) {
-    throw new Error(`blank-or-partial-native-capture: incomplete camera sweep ${cameraSweep.length}/3`);
+  if (cameraSweep.length !== 4) {
+    throw new Error(`blank-or-partial-native-capture: incomplete camera sweep ${cameraSweep.length}/4`);
+  }
+  const saturationSummary = summarizeSaturation(cameraSweep);
+  if (
+    saturationSummary.closePoseMeasured !== true
+    || saturationSummary.entries.some(entry => !Number.isFinite(entry.overexposedRatio) || !Number.isFinite(entry.whiteoutRatio))
+  ) {
+    throw new Error(`close-camera-saturation-unchecked: ${JSON.stringify(saturationSummary)}`);
   }
   lastTrustworthyEvidence.cameraSweep = cameraSweep;
+  lastTrustworthyEvidence.saturationSummary = saturationSummary;
   const finalState = await debugState();
   const finalPageUrl = await evaluate('location.href');
   browserPageUrl = finalPageUrl;
@@ -330,6 +340,7 @@ try {
       fallbackReason: finalState.boundarySplatFallbackReason,
     },
     cameraSweep,
+    saturationSummary,
     finalState: compactState(finalState),
     falseClosureChecks: {
       fallbackRoute: false,
@@ -344,14 +355,15 @@ try {
       staleOrDefaultPbrScene: false,
       duplicatedSimulationAuthority: false,
       cameraSweepSimulatorAdvanced: false,
-      cameraSweepIncomplete: cameraSweep.length !== 3,
+      cameraSweepIncomplete: cameraSweep.length !== 4,
+      closeCameraSaturationUnchecked: saturationSummary.closePoseMeasured !== true,
       browserClosedDuringWitness: !finalTargetReachable,
       incompleteCadenceDuration: false,
       staleOrDefaultCadenceBudget: false,
       cadenceSelectedCountMismatch: false,
       cadenceFallbackOrOverflow: false,
     },
-    claimBoundary: 'Same-device PBR color/depth plus learned splats, a frozen 0/1/4/16/100 cost ladder, and a bounded live-cadence sequence from one live simulator. RAF gaps and queue completion are browser cadence proxies, not GPU-exclusive present latency. This does not claim independent per-instance simulation, learned prediction, per-flame proxy lighting, or final product beauty.',
+    claimBoundary: 'Same-device PBR color/depth plus learned splats, a frozen 0/1/4/16/100 cost ladder, a bounded live-cadence sequence from one live simulator, and PNG-space saturation counters for the close-camera operator whiteout symptom. RAF gaps and queue completion are browser cadence proxies, not GPU-exclusive present latency. Saturation metrics diagnose captured output; they do not by themselves prove a radiance fix, independent per-instance simulation, learned prediction, per-flame proxy lighting, or final product beauty.',
   };
   writeReport(report);
   console.log(JSON.stringify(report, null, 2));
@@ -420,6 +432,7 @@ function classifyFalseClosure(phase, error) {
     'stale-or-default-pbr-scene',
     'duplicated-simulation-authority',
     'camera-sweep-simulator-advanced',
+    'close-camera-saturation-unchecked',
     'blank-or-partial-native-capture',
     'incomplete-cadence-duration',
     'stale-or-default-cadence-budget',
@@ -907,19 +920,88 @@ function parsePngRgba(buffer) {
 function measureScreenshot(buffer) {
   const png = parsePngRgba(buffer);
   let litPixels = 0;
+  let overexposedPixels = 0;
+  let maxChannelSaturatedPixels = 0;
+  let whiteoutPixels = 0;
   let totalLuma = 0;
+  let peakLuma = 0;
   let samples = 0;
   for (let y = Math.floor(png.height * 0.03); y < Math.floor(png.height * 0.97); y += 2) {
     const row = png.rows[y];
     for (let x = Math.floor(png.width * 0.03); x < Math.floor(png.width * 0.97); x += 2) {
       const index = x * png.channels;
-      const luma = 0.2126 * row[index] + 0.7152 * row[index + 1] + 0.0722 * row[index + 2];
+      const red = row[index];
+      const green = row[index + 1];
+      const blue = row[index + 2];
+      const luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      const maxChannel = Math.max(red, green, blue);
       totalLuma += luma;
+      peakLuma = Math.max(peakLuma, luma);
       samples += 1;
       if (luma > 18) litPixels += 1;
+      if (luma >= 240) overexposedPixels += 1;
+      if (maxChannel >= 252) maxChannelSaturatedPixels += 1;
+      if (red >= 245 && green >= 245 && blue >= 235) whiteoutPixels += 1;
     }
   }
-  return { width: png.width, height: png.height, samples, litPixels, meanLuma: samples ? totalLuma / samples : 0 };
+  return {
+    width: png.width,
+    height: png.height,
+    samples,
+    litPixels,
+    meanLuma: samples ? totalLuma / samples : 0,
+    peakLuma,
+    overexposedPixels,
+    overexposedRatio: samples ? overexposedPixels / samples : 0,
+    maxChannelSaturatedPixels,
+    maxChannelSaturatedRatio: samples ? maxChannelSaturatedPixels / samples : 0,
+    whiteoutPixels,
+    whiteoutRatio: samples ? whiteoutPixels / samples : 0,
+  };
+}
+
+function summarizeSaturation(cameraSweep) {
+  const entries = cameraSweep.map(entry => ({
+    identity: entry.identity,
+    path: entry.path,
+    samples: entry.metrics?.samples ?? 0,
+    meanLuma: entry.metrics?.meanLuma ?? null,
+    peakLuma: entry.metrics?.peakLuma ?? null,
+    overexposedPixels: entry.metrics?.overexposedPixels ?? null,
+    overexposedRatio: entry.metrics?.overexposedRatio ?? null,
+    maxChannelSaturatedPixels: entry.metrics?.maxChannelSaturatedPixels ?? null,
+    maxChannelSaturatedRatio: entry.metrics?.maxChannelSaturatedRatio ?? null,
+    whiteoutPixels: entry.metrics?.whiteoutPixels ?? null,
+    whiteoutRatio: entry.metrics?.whiteoutRatio ?? null,
+  }));
+  const numericEntries = entries.filter(entry => Number.isFinite(entry.overexposedRatio) && Number.isFinite(entry.whiteoutRatio));
+  const worstOverexposed = maxBy(numericEntries, entry => entry.overexposedRatio);
+  const worstWhiteout = maxBy(numericEntries, entry => entry.whiteoutRatio);
+  const closePose = entries.find(entry => entry.identity === CLOSE_CAMERA_SATURATION_POSE_IDENTITY) || null;
+  return {
+    identity: 'boundary-splat-close-camera-saturation-summary-v0',
+    closePoseIdentity: CLOSE_CAMERA_SATURATION_POSE_IDENTITY,
+    closePoseMeasured: closePose != null
+      && Number.isFinite(closePose.overexposedRatio)
+      && Number.isFinite(closePose.whiteoutRatio),
+    worstOverexposed,
+    worstWhiteout,
+    closePose,
+    entries,
+  };
+}
+
+function maxBy(entries, scorer) {
+  let best = null;
+  let bestScore = -Infinity;
+  for (const entry of entries) {
+    const score = Number(scorer(entry));
+    if (score > bestScore) {
+      best = entry;
+      bestScore = score;
+    }
+  }
+  return best;
 }
 
 function compactState(state) {

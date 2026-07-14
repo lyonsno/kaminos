@@ -36,6 +36,11 @@ assert.match(witness, /sampleBoundarySplatPbrCostLadder/, 'witness must use time
 assert.match(witness, /cameraSweep/, 'witness must preserve a multi-pose parallax and occlusion sequence');
 assert.match(witness, /kaminosSetCameraDebugPose/, 'camera sweep must drive the real composition camera');
 assert.match(witness, /camera-sweep-simulator-advanced/, 'camera sweep must fail if any pose advances the authoritative simulator');
+assert.match(witness, /close-foreground-whiteout/, 'camera sweep must include a close foreground pose that can reproduce operator-observed white blowout');
+assert.match(witness, /overexposedPixels/, 'witness image metrics must count overexposed pixels instead of only nonblank light');
+assert.match(witness, /whiteoutPixels/, 'witness image metrics must count near-white foreground saturation separately from general brightness');
+assert.match(witness, /saturationSummary/, 'witness report must summarize the worst saturation pose for operator diagnosis');
+assert.match(witness, /closeCameraSaturationUnchecked/, 'false-closure checks must fail loud if close-camera saturation is not measured');
 assert.match(witness, /operator-pretty-four-flame-substrate-v0/, 'witness must verify the locked operator substrate identity');
 assert.match(witness, /depth-occlusion-authority-missing/, 'witness must fail when scene depth authority is absent');
 assert.match(witness, /stale-or-default-pbr-scene/, 'witness must fail when requested and effective PBR scenes disagree');
