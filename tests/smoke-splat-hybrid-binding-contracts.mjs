@@ -395,6 +395,38 @@ assert.throws(
   ]),
   /nested smoke route mismatch/i,
 );
+const liveWitnessUrl = 'http://127.0.0.1:8237/?volume_hybrid_smoke_representation=spatial-strata&volume_hybrid_smoke_source=live-coupled&volume_hybrid_smoke_fine_lod=1&volume_hybrid_smoke_motion_rate=0&volume_hybrid_smoke_coarse_coverage=1.8';
+const requestedLiveWitnessConfig = witnessContracts.parseSpatialStrataHybridSmokeWitnessRequest(liveWitnessUrl);
+assert.deepEqual(requestedLiveWitnessConfig, {
+  sourceMode: 'live-coupled',
+  manifestUrl: null,
+  fineLodFraction: 1,
+  coarseCoverageScale: 1.8,
+  motionRate: 0,
+});
+const liveEffectiveIdentity = JSON.stringify(requestedLiveWitnessConfig);
+assert.doesNotThrow(() => witnessContracts.validateSpatialStrataHybridSmokeWitnessConfig({
+  requested: requestedLiveWitnessConfig,
+  lifecycle: {
+    status: 'loaded',
+    hasRenderer: true,
+    requestedConfigIdentity: liveEffectiveIdentity,
+    effectiveConfigIdentity: liveEffectiveIdentity,
+  },
+}));
+assert.equal(
+  witnessContracts.deriveSpatialStrataHybridSmokeEffectiveRoute([
+    {
+      spatialStrataHybridSmokeDebug: {
+        identity: 'phase-matched-spatial-strata-front-back-raster-v0',
+        requestedRoute: 'spatial-strata-hybrid-smoke-live-coupled-v0',
+        effectiveRoute: 'spatial-strata-hybrid-smoke-live-coupled-v0',
+        productSourceMode: 'live-owned-product-source',
+      },
+    },
+  ]),
+  'spatial-strata-hybrid-smoke-live-coupled-v0',
+);
 assert.equal(
   witnessContracts.requireHybridWitnessArtifactPath({ evidenceRoot: '/repo', bundleRoot: '/repo/artifacts/run', artifact: '/repo/artifacts/run/frame.png' }),
   '/repo/artifacts/run/frame.png',
@@ -473,7 +505,11 @@ assert.match(volumeWitnessSource, /hybridSmokeRepresentationEffective/, 'hybrid 
 assert.match(volumeWitnessSource, /spatialStrataHybridSmokeSourceStatus/, 'hybrid witness receipts fail loud on missing or partial source load');
 assert.match(volumeWitnessSource, /spatialStrataHybridSmokeSourceLifecycle/, 'hybrid witness preserves generation-keyed requested and effective source config identity');
 assert.match(volumeWitnessSource, /cached or static hybrid output/i, 'hybrid motion proof rejects static or cached frame sequences');
-assert.match(volumeWitnessSource, /advanceSim:\s*!hybridOnly\s*&&\s*frameIndex\s*>\s*0/, 'hybrid capture freezes simulator and learned-flame state');
+assert.match(
+  volumeWitnessSource,
+  /advanceSim:\s*\(!hybridOnly\s*\|\|\s*liveCoupledHybrid\)\s*&&\s*frameIndex\s*>\s*0/,
+  'offline hybrid freezes the simulator while live-coupled hybrid advances exact simulator products',
+);
 assert.match(volumeWitnessSource, /hybrid-spatial-strata-determinism-repeat/, 'hybrid capture measures a same-time wall-delay repeat');
 assert.match(volumeWitnessSource, /path:\s*artifactPath\(imagePath\)/, 'durable witness image references are repo-relative rather than worktree-absolute');
 assert.match(volumeWitnessSource, /status:\s*'failed'[\s\S]*failurePhase/, 'the witness preserves a durable report when failure precedes primary output');

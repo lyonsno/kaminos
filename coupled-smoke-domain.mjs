@@ -8,6 +8,7 @@ export const COUPLED_PHASE_STATE_NEAR_LAYOUT = 'fluid-4xvec4f-per-cell-v0';
 export const COUPLED_PHASE_STATE_FAR_LAYOUT = 'velocity-density-extinction-proxy-vec4f-per-cell-v0';
 export const COUPLED_PHASE_STATE_HISTORY_AUTHORITY = 'current-state-only-no-fabricated-phase-history-v0';
 export const COUPLED_PHASE_STATE_RENDERER_AUTHORITY = 'renderer-neutral-state-only-v0';
+export const COUPLED_SMOKE_FAR_RETENTION_THRESHOLD = 0.0005;
 
 const WORLD_CONTRACT = Object.freeze({
   identity: 'explicit-2x-world-bounds-upper-quarter-overlap-v0',
@@ -70,6 +71,14 @@ export function smokeDomainMetricVelocityScale(nearGrid, farGrid) {
   const near = positiveGrid(nearGrid, 'nearGrid');
   const far = positiveGrid(farGrid, 'farGrid');
   return far / (2 * near);
+}
+
+export function retainFarSmokeCandidate(value, threshold = COUPLED_SMOKE_FAR_RETENTION_THRESHOLD) {
+  const candidate = Number(value);
+  const floor = Number(threshold);
+  if (!Number.isFinite(candidate) || candidate < 0) throw new Error('far smoke candidate must be finite and nonnegative');
+  if (!Number.isFinite(floor) || floor < 0) throw new Error('far smoke retention threshold must be finite and nonnegative');
+  return candidate > floor ? candidate : 0;
 }
 
 export function createCoupledSmokePhaseStateDescriptor({
@@ -213,6 +222,7 @@ const NEAR_GRID: u32 = ${near}u;
 const FAR_GRID: u32 = ${far}u;
 const FLUID_STRIDE: u32 = ${slots}u;
 const METRIC_VELOCITY_SCALE: f32 = ${metricVelocityScale.toFixed(9)};
+const FAR_SMOKE_RETENTION_THRESHOLD: f32 = ${COUPLED_SMOKE_FAR_RETENTION_THRESHOLD.toFixed(7)};
 
 @group(0) @binding(0) var<storage, read> nearFluid: array<vec4<f32>>;
 @group(0) @binding(1) var<storage, read_write> smokeDomainTransferBuffer: array<vec4<f32>>;
@@ -291,17 +301,17 @@ fn csSmokeDomainFarInput(@builtin(global_invocation_id) gid: vec3<u32>) {
   let backtrace = vec3<f32>(gid) - vec3<f32>(previous.x * 1.15, rise, previous.z * 1.15);
   let advected = sampleFarStateTrilinear(backtrace);
   let smokeCandidate = max(advected.w * 0.996, injection.w);
-  let smoke = select(0.0, smokeCandidate, smokeCandidate > 0.012);
+  let smoke = select(0.0, smokeCandidate, smokeCandidate > FAR_SMOKE_RETENTION_THRESHOLD);
   var velocity = mix(advected.xyz * 0.997, injection.xyz, clamp(injection.w * 0.65, 0.0, 0.72));
   velocity.y = velocity.y + smoke * 0.002;
   farStateDst[index] = vec4<f32>(velocity, smoke);
-  if (smoke > 0.01) { atomicAdd(&transferCounters[1], 1u); }
+  if (smoke > FAR_SMOKE_RETENTION_THRESHOLD) { atomicAdd(&transferCounters[1], 1u); }
   let injectionDepth = max(2u, FAR_GRID / 8u);
-  if (smoke > 0.01 && gid.y >= injectionDepth) {
+  if (smoke > FAR_SMOKE_RETENTION_THRESHOLD && gid.y >= injectionDepth) {
     atomicAdd(&transferCounters[2], 1u);
     atomicMax(&transferCounters[3], gid.y);
   }
-  if (smoke > 0.01 && gid.y + 2u >= FAR_GRID) {
+  if (smoke > FAR_SMOKE_RETENTION_THRESHOLD && gid.y + 2u >= FAR_GRID) {
     atomicAdd(&transferCounters[4], 1u);
     if (velocity.y > 0.01) { atomicAdd(&transferCounters[5], 1u); }
   }

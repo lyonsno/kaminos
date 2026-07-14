@@ -6,7 +6,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { basename, relative, resolve } from 'node:path';
 import { inflateSync as zlibInflateSync } from 'node:zlib';
-import { assessControlledHybridSmokeMotion } from './smoke-splat-motion-source.mjs';
+import {
+  assessControlledHybridSmokeMotion,
+  assessLiveCoupledSmokeMotion,
+} from './smoke-splat-motion-source.mjs';
+import { assessCoupledLiveSmokeFarEvidence } from './coupled-live-smoke-hierarchy.mjs';
 import {
   deriveSpatialStrataHybridSmokeEffectiveRoute,
   parseSpatialStrataHybridSmokeWitnessRequest,
@@ -74,7 +78,11 @@ let browserSession = null;
 let ws = null;
 let failurePhase = 'startup';
 let requestedHybridSmokeConfig = null;
+let liveCoupledHybrid = false;
 let failureReportPathValidated = !hybridOnly;
+let liveWarmupStepIndex = 0;
+const liveWarmupSessionId = `controlled-live-warmup-${runStartedAt}`;
+const liveWarmupStartNowMs = Date.now();
 
 try {
   if (hybridOnly) {
@@ -85,6 +93,7 @@ try {
   if (hybridOnly) {
     requirePositiveHybridWitnessWallDelay(wallStepMs);
     requestedHybridSmokeConfig = parseSpatialStrataHybridSmokeWitnessRequest(requestedRoute);
+    liveCoupledHybrid = requestedHybridSmokeConfig.sourceMode === 'live-coupled';
   }
   mkdirSync(outDir, { recursive: true });
   browserSession = await launchBrowser();
@@ -100,6 +109,8 @@ try {
   await waitForPrototype();
   await delay(settleMs);
   await hideHud();
+  await wsRequest('Page.bringToFront');
+  if (liveCoupledHybrid) await waitForRequestedLiveRoute();
   const initialState = await debugState();
   validateRequestedEffectiveConfig(initialState);
   lastTrustworthyEvidence.initialState = compactState(initialState);
@@ -109,7 +120,11 @@ try {
     requestedRoute,
     rendererIdentity: hybridOnly ? HYBRID_SPATIAL_STRATA_EFFECTIVE_RENDERER : SPLAT_RENDERER,
     sourceAuthority: SOURCE_AUTHORITY,
-    routeMode: hybridOnly ? 'hybrid-spatial-strata-motion-falsification' : 'boundary-splat-motion-falsification',
+    routeMode: hybridOnly
+      ? (liveCoupledHybrid
+          ? 'frame-locked-controlled-live-coupled-near-far-cdp-canvas-v1'
+          : 'hybrid-spatial-strata-motion-falsification')
+      : 'boundary-splat-motion-falsification',
   };
   const staticCamera = {
     label: 'staticCamera',
@@ -132,12 +147,31 @@ try {
     },
   };
 
+  failurePhase = 'live-far-warmup';
+  const liveFarWarmup = liveCoupledHybrid ? await waitForLiveFarSmokeEvidence() : null;
+  if (liveFarWarmup) lastTrustworthyEvidence.liveFarWarmup = liveFarWarmup;
   failurePhase = 'static-camera-capture';
   const staticSequence = await captureSequence(staticCamera);
   lastTrustworthyEvidence.staticSequence = compactSequenceEvidence(staticSequence);
   failurePhase = 'grazing-camera-capture';
   const grazingSequence = await captureSequence(grazingCamera);
   lastTrustworthyEvidence.grazingSequence = compactSequenceEvidence(grazingSequence);
+  failurePhase = 'live-product-telemetry';
+  const liveProductTelemetry = liveCoupledHybrid
+    ? await inspectCoupledLiveSmokeProductTelemetry()
+    : null;
+  if (liveProductTelemetry) lastTrustworthyEvidence.liveProductTelemetry = liveProductTelemetry;
+  const liveCoupledDomainTelemetry = liveCoupledHybrid
+    ? summarizeLiveCoupledDomainTelemetry(await debugState())
+    : null;
+  if (liveCoupledDomainTelemetry) lastTrustworthyEvidence.liveCoupledDomainTelemetry = liveCoupledDomainTelemetry;
+  const liveFarSmokeEvidence = liveCoupledHybrid
+    ? assessCoupledLiveSmokeFarEvidence({
+        products: liveProductTelemetry,
+        domainTelemetry: liveCoupledDomainTelemetry,
+      })
+    : null;
+  if (liveFarSmokeEvidence) lastTrustworthyEvidence.liveFarSmokeEvidence = liveFarSmokeEvidence;
   failurePhase = 'false-closure-validation';
   const report = {
     schema: SCHEMA,
@@ -175,13 +209,22 @@ try {
       requestedHistoryDepth,
       requestedHistoryFrameStride,
       hybridOnly,
+      liveCoupledHybrid,
       staticCameraDurationMs: (frameCount - 1) * stepMs,
       grazingCameraDurationMs: (frameCount - 1) * stepMs,
     },
     frozenDeterminism: hybridOnly
       ? computeHybridFrozenDeterminism(staticSequence.frames[0])
       : computeFrozenDeterminism(staticSequence.frames[0]),
-    controlledSmokeMotion: hybridOnly ? summarizeControlledHybridSmokeMotion(staticSequence) : null,
+    controlledSmokeMotion: hybridOnly
+      ? (liveCoupledHybrid
+          ? summarizePublishedLiveCoupledHybridSmokeMotion([staticSequence, grazingSequence])
+          : summarizeControlledHybridSmokeMotion(staticSequence))
+      : null,
+    liveProductTelemetry,
+    liveCoupledDomainTelemetry,
+    liveFarSmokeEvidence,
+    liveFarWarmup,
     analyticLearnedComparison: summarizeAnalyticLearnedComparison([...staticSequence.frames, ...grazingSequence.frames]),
     staticCamera: staticSequence,
     grazingCamera: grazingSequence,
@@ -206,7 +249,9 @@ try {
       rejectsMissingSpatialStrataSource: hybridOnly,
     },
     claimBoundary: hybridOnly
-      ? 'Moving learned-flame plus two-product spatial-strata smoke depth-composition witness; the two-product temporal horizon is explicit and does not prove recurrent smoke decode.'
+      ? (liveCoupledHybrid
+          ? 'Simulator-advancing learned-flame plus consecutive owned live-smoke products; this proves source coupling and one-step phase history, not final smoke quality or long-horizon recurrence.'
+          : 'Moving learned-flame plus two-product spatial-strata smoke depth-composition witness; the two-product temporal horizon is explicit and does not prove recurrent smoke decode.')
       : undefined,
   };
   rejectFalseClosure(report);
@@ -397,6 +442,7 @@ function validateRequestedEffectiveConfig(state) {
     boundarySplatHistoryDepth: Number(params.get('volume_boundary_splat_history_depth') || requestedHistoryDepth),
     boundarySplatHistoryFrameStride: Number(params.get('volume_boundary_splat_history_frame_stride') || requestedHistoryFrameStride),
     hybridSmokeRepresentation: params.get('volume_hybrid_smoke_representation') || null,
+    hybridSmokeSource: params.get('volume_hybrid_smoke_source') || 'offline-manifest',
     hybridSmokeManifestUrl: params.get('volume_hybrid_smoke_manifest') || null,
   };
   const mismatches = [];
@@ -416,7 +462,15 @@ function validateRequestedEffectiveConfig(state) {
         effective: state?.hybridSmokeRepresentationRequested ?? null,
       });
     }
-    if (expected.hybridSmokeManifestUrl !== state?.spatialStrataHybridSmokeManifestUrl) {
+    if (expected.hybridSmokeSource !== state?.hybridSmokeSourceRequested) {
+      mismatches.push({
+        key: 'hybridSmokeSourceRequested',
+        requested: expected.hybridSmokeSource,
+        effective: state?.hybridSmokeSourceRequested ?? null,
+      });
+    }
+    const effectiveManifestUrl = state?.spatialStrataHybridSmokeManifestUrl || null;
+    if (expected.hybridSmokeManifestUrl !== effectiveManifestUrl) {
       mismatches.push({
         key: 'spatialStrataHybridSmokeManifestUrl',
         requested: expected.hybridSmokeManifestUrl,
@@ -481,6 +535,111 @@ async function debugState() {
   return result.result.value || null;
 }
 
+async function advanceLiveCoupledWarmupStep() {
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+      controlledStepFrameIndex: liveWarmupStepIndex,
+      advanceSim: true,
+      sameBrowserSessionId: liveWarmupSessionId,
+      startNow: liveWarmupStartNowMs,
+      stepDeltaMs: 1000 / 60,
+      renderScales: [1],
+      includeRgba: false,
+      compactSamples: true,
+      resumeRenderLoop: false,
+    })})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const frame = result.result.value;
+  if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
+    throw new Error(`controlled live warmup step failed: ${JSON.stringify(frame)}`);
+  }
+  liveWarmupStepIndex += 1;
+  return frame;
+}
+
+async function waitForRequestedLiveRoute() {
+  while (true) {
+    const state = await debugState();
+    if (state?.error) throw new Error(`live route failed during startup: ${state.error}`);
+    if (
+      state?.active === true
+      && state?.spatialStrataHybridSmokeSourceStatus === 'loaded'
+      && state?.hybridSmokeRepresentationEffective === 'spatial-strata'
+      && state?.hybridSmokeSourceEffective === 'live-coupled'
+      && state?.spatialStrataHybridSmokeDebug?.status === 'bound'
+      && state?.spatialStrataHybridSmokeDebug?.temporalHorizonProducts === 2
+    ) return state;
+    await advanceLiveCoupledWarmupStep();
+  }
+}
+
+async function inspectCoupledLiveSmokeProductTelemetry() {
+  const result = await wsRequest('Runtime.evaluate', {
+    expression: 'window.__kaminosVolumePrototype?.inspectCoupledLiveSmokeProductTelemetry?.()',
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  if (result.exceptionDetails) {
+    throw new Error(`live smoke telemetry evaluation failed: ${JSON.stringify(result.exceptionDetails)}`);
+  }
+  const telemetry = result.result.value;
+  if (!Array.isArray(telemetry) || telemetry.length !== 2) {
+    throw new Error(`live smoke telemetry is missing or partial: ${JSON.stringify(telemetry)}`);
+  }
+  for (const product of telemetry) {
+    if (
+      product?.identity !== 'packed-live-smoke-product-telemetry-v0'
+      || !(product?.nonzeroCounts?.total > 0)
+      || !(product?.extinctionMass?.total > 0)
+      || !Array.isArray(product?.occupiedBounds?.min)
+      || !Array.isArray(product?.occupiedBounds?.max)
+    ) {
+      throw new Error(`live smoke product is empty or unauthoritative: ${JSON.stringify(product)}`);
+    }
+  }
+  return telemetry;
+}
+
+async function waitForLiveFarSmokeEvidence() {
+  const startedAtMs = Date.now();
+  let pollCount = 0;
+  let lastRejectedEvidence = null;
+  while (true) {
+    await advanceLiveCoupledWarmupStep();
+    const state = await debugState();
+    if (state?.active !== true || state?.error) {
+      throw new Error(`live far-smoke warmup lost the active route: ${JSON.stringify(compactState(state))}`);
+    }
+    const domainTelemetry = summarizeLiveCoupledDomainTelemetry(state);
+    try {
+      const products = await inspectCoupledLiveSmokeProductTelemetry();
+      const evidence = assessCoupledLiveSmokeFarEvidence({ products, domainTelemetry });
+      return {
+        status: 'passed',
+        authority: 'state-driven-paused-exact-packed-far-warmup-v0',
+        pollCount,
+        elapsedMs: Date.now() - startedAtMs,
+        evidence,
+        productTokens: products.map(product => ({ ...product.phaseToken })),
+        counterTelemetry: domainTelemetry,
+        lastRejectedEvidence,
+      };
+    } catch (error) {
+      lastRejectedEvidence = {
+        message: error?.message || String(error),
+        simulatorStepCount: state?.simStepCount ?? null,
+        transferFrameCount: state?.smokeDomainTransferFrameCount ?? null,
+        farActiveCells: domainTelemetry.smokeDomainFarActiveCells,
+        farAdvectedActiveCells: domainTelemetry.smokeDomainFarAdvectedActiveCells,
+        lastReadbackFrame: domainTelemetry.smokeDomainTransferLastReadbackFrame,
+      };
+    }
+    pollCount += 1;
+  }
+}
+
 async function hideHud() {
   await wsRequest('Runtime.evaluate', {
     expression: `(() => {
@@ -516,7 +675,7 @@ async function captureSequence(config) {
     const frameEval = await wsRequest('Runtime.evaluate', {
       expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
         controlledStepFrameIndex: frameIndex,
-        advanceSim: !hybridOnly && frameIndex > 0,
+        advanceSim: (!hybridOnly || liveCoupledHybrid) && frameIndex > 0,
         sameBrowserSessionId,
         startNow: sequenceStartNowMs,
         stepDeltaMs: stepMs,
@@ -638,9 +797,11 @@ async function captureSequence(config) {
     label: config.label,
     sequenceKind: config.sequenceKind,
     sameBrowserSessionId,
-    sampleAuthority: hybridOnly
+    sampleAuthority: hybridOnly && !liveCoupledHybrid
       ? 'frozen-simulator-controlled-smoke-time-v0'
-      : 'controlled-step-sim-advance',
+      : (liveCoupledHybrid
+          ? 'frame-locked-controlled-live-coupled-near-far-cdp-canvas-v1'
+          : 'controlled-step-sim-advance'),
     frameCount,
     stepMs,
     sequenceDurationMs: (frameCount - 1) * stepMs,
@@ -648,6 +809,7 @@ async function captureSequence(config) {
     frames,
   };
   addMotionEnergy(sequence);
+  if (liveCoupledHybrid) addLiveSmokeDifferential(sequence);
   return sequence;
 }
 
@@ -709,6 +871,7 @@ async function captureRenderer({
     fallbackReason,
     requestedRoute,
     effectiveRoute: canvasCapture.effectiveRoute,
+    volumeEffectiveRoute: canvasCapture.effectiveRoute,
     rendererIdentity: canvasCapture.boundarySplatRendererIdentity || postState?.boundarySplatRendererIdentity || SPLAT_RENDERER,
     appliedModelIdentity: canvasCapture.boundarySplatAttributeModelIdentity ?? postState?.boundarySplatAttributeModelIdentity ?? null,
     sourceAuthority: postState?.boundarySplatSourceAuthority || SOURCE_AUTHORITY,
@@ -732,15 +895,19 @@ async function captureRenderer({
     boundarySplatCountAuthority: isSplat ? postState?.boundarySplatCountAuthority ?? null : null,
     boundarySplatCandidateCopyBytes: isSplat ? postState?.boundarySplatCopyBytesThisFrame ?? null : null,
     boundarySplatCandidateCopyDisposition: isSplat ? postState?.boundarySplatCopyDisposition ?? null : null,
-    hybridSmokeRepresentationRequested: postState?.hybridSmokeRepresentationRequested ?? null,
-    hybridSmokeRepresentationEffective: postState?.hybridSmokeRepresentationEffective ?? null,
-    spatialStrataHybridSmokeSourceStatus: postState?.spatialStrataHybridSmokeSourceStatus ?? null,
-    spatialStrataHybridSmokeFailureReason: postState?.spatialStrataHybridSmokeFailureReason ?? null,
-    spatialStrataHybridSmokeSourceLifecycle: postState?.spatialStrataHybridSmokeSourceLifecycle ?? null,
-    spatialStrataHybridSmokeConfigRequestedIdentity: postState?.spatialStrataHybridSmokeConfigRequestedIdentity ?? null,
-    spatialStrataHybridSmokeConfigEffectiveIdentity: postState?.spatialStrataHybridSmokeConfigEffectiveIdentity ?? null,
-    spatialStrataHybridSmokeRendererIdentity: postState?.spatialStrataHybridSmokeRendererIdentity ?? null,
-    spatialStrataHybridSmokeDebug: postState?.spatialStrataHybridSmokeDebug ?? null,
+    frameStateIdentity: canvasCapture.frameStateIdentity ?? null,
+    coupledPhaseStateToken: canvasCapture.coupledPhaseStateToken ?? null,
+    hybridSmokeRepresentationRequested: canvasCapture.hybridSmokeRepresentationRequested ?? null,
+    hybridSmokeRepresentationEffective: canvasCapture.hybridSmokeRepresentationEffective ?? null,
+    hybridSmokeSourceRequested: canvasCapture.hybridSmokeSourceRequested ?? null,
+    hybridSmokeSourceEffective: canvasCapture.hybridSmokeSourceEffective ?? null,
+    spatialStrataHybridSmokeSourceStatus: canvasCapture.spatialStrataHybridSmokeSourceStatus ?? null,
+    spatialStrataHybridSmokeFailureReason: canvasCapture.spatialStrataHybridSmokeFailureReason ?? null,
+    spatialStrataHybridSmokeSourceLifecycle: canvasCapture.spatialStrataHybridSmokeSourceLifecycle ?? null,
+    spatialStrataHybridSmokeConfigRequestedIdentity: canvasCapture.spatialStrataHybridSmokeConfigRequestedIdentity ?? null,
+    spatialStrataHybridSmokeConfigEffectiveIdentity: canvasCapture.spatialStrataHybridSmokeConfigEffectiveIdentity ?? null,
+    spatialStrataHybridSmokeRendererIdentity: canvasCapture.spatialStrataHybridSmokeRendererIdentity ?? null,
+    spatialStrataHybridSmokeDebug: canvasCapture.spatialStrataHybridSmokeDebug ?? null,
     image: {
       path: artifactPath(imagePath),
       basename: basename(imagePath),
@@ -755,6 +922,8 @@ async function captureRenderer({
       sampleAuthority: canvasCapture.sampleAuthority,
       imageAuthority: canvasCapture.imageAuthority,
       sameStateCaptureId: canvasCapture.sameStateCaptureId,
+      frameStateIdentity: canvasCapture.frameStateIdentity,
+      coupledPhaseStateToken: canvasCapture.coupledPhaseStateToken,
       baseFrameCount: canvasCapture.baseFrameCount,
       baseSimStepCount: canvasCapture.baseSimStepCount,
       frameCount: canvasCapture.frameCount,
@@ -783,6 +952,9 @@ async function captureRenderer({
       incrementalInstanceCost: canvasCapture.boundarySplatIncrementalInstanceCost,
     },
   };
+  if (isHybridSpatialStrataCapture(capture)) {
+    capture.effectiveRoute = deriveSpatialStrataHybridSmokeEffectiveRoute([capture]);
+  }
   validateCapture(capture);
   return capture;
 }
@@ -835,12 +1007,21 @@ function validateCapture(capture) {
       lifecycle,
     });
     const smokeDebug = capture.spatialStrataHybridSmokeDebug;
-    deriveSpatialStrataHybridSmokeEffectiveRoute([capture]);
+    const hybridSmokeEffectiveRoute = deriveSpatialStrataHybridSmokeEffectiveRoute([capture]);
+    if (capture.effectiveRoute !== hybridSmokeEffectiveRoute) {
+      throw new Error(`hybrid smoke public route mismatch: ${capture.effectiveRoute} != ${hybridSmokeEffectiveRoute}`);
+    }
     if (smokeDebug?.status !== 'bound' || smokeDebug?.temporalHorizonProducts !== 2) {
       throw new Error(`spatial strata phase plan is not bound to the explicit two-product horizon: ${JSON.stringify(smokeDebug)}`);
     }
     if (smokeDebug?.rejectedExtinctionMass !== 0 || !(smokeDebug?.drawInstanceCount > 0)) {
       throw new Error(`spatial strata accounting disagreement: ${JSON.stringify(smokeDebug)}`);
+    }
+    if (liveCoupledHybrid && (!capture.frameStateIdentity || !capture.coupledPhaseStateToken)) {
+      throw new Error(`frame state identity missing for live coupled capture: ${JSON.stringify({
+        frameStateIdentity: capture.frameStateIdentity,
+        coupledPhaseStateToken: capture.coupledPhaseStateToken,
+      })}`);
     }
   }
   if (capture.requestedRenderer.includes('analytic-splat')) {
@@ -918,15 +1099,35 @@ function rejectFalseClosure(report) {
         const hybrid = frame.captures.find(capture => capture.requestedRenderer === HYBRID_SPATIAL_STRATA_RENDERER);
         const flameControl = frame.captures.find(capture => capture.requestedRenderer === LEARNED_FLAME_CONTROL_RENDERER);
         if (!hybrid) throw new Error(`partial hybrid report for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
-        if (!flameControl) throw new Error(`missing frozen flame control for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
         validateCapture(hybrid);
+        if (!flameControl) throw new Error(`missing same-state flame control for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
         validateCapture(flameControl);
+        if (liveCoupledHybrid && hybrid.frameStateIdentity !== flameControl.frameStateIdentity) {
+          throw new Error(`hybrid/control frame state mismatch for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
+        }
         hashes.add(hybrid.image.sha256);
       }
     }
-    if (report.frozenDeterminism.ok !== true) throw new Error(`frozen determinism failed: ${JSON.stringify(report.frozenDeterminism)}`);
+    if (report.frozenDeterminism.ok !== true) {
+      throw new Error(`frozen determinism failed: ${JSON.stringify(report.frozenDeterminism)}`);
+    }
+    if (liveCoupledHybrid && (!Array.isArray(report.liveProductTelemetry) || report.liveProductTelemetry.length !== 2)) {
+      throw new Error(`missing live product telemetry: ${JSON.stringify(report.liveProductTelemetry)}`);
+    }
+    if (liveCoupledHybrid) {
+      const domain = report.liveCoupledDomainTelemetry;
+      if (domain?.smokeDomainTransferEncoded !== true) {
+        throw new Error(`coupled smoke transfer is not encoded: ${JSON.stringify(domain)}`);
+      }
+      if (report.liveFarSmokeEvidence?.status !== 'passed') {
+        throw new Error(`current packed far-smoke evidence is missing: ${JSON.stringify(report.liveFarSmokeEvidence)}`);
+      }
+    }
     try {
-      summarizeControlledHybridSmokeMotion(report.staticCamera);
+      if (liveCoupledHybrid) {
+        summarizePublishedLiveCoupledHybridSmokeMotion([report.staticCamera, report.grazingCamera]);
+      }
+      else summarizeControlledHybridSmokeMotion(report.staticCamera);
     } catch (error) {
       throw new Error(`cached or static hybrid output rejected: ${error?.message || String(error)}`);
     }
@@ -958,6 +1159,32 @@ function rejectFalseClosure(report) {
   if (report.candidateChurn.maxAbsDelta <= 0 && report.staticCamera.motionEnergy.maxMeanAbsDiff <= 0.1) {
     throw new Error('cached or static output rejected: sequence did not move in candidates or pixels');
   }
+}
+
+function summarizeLiveCoupledDomainTelemetry(state) {
+  const frameCount = Number(state?.frameCount ?? 0);
+  const lastReadbackFrame = Number(state?.smokeDomainTransferLastReadbackFrame);
+  const counterAgeFrames = Number.isFinite(lastReadbackFrame)
+    ? Math.max(0, frameCount - lastReadbackFrame)
+    : null;
+  return {
+    identity: 'live-coupled-domain-transfer-telemetry-v0',
+    smokeDomainMode: state?.smokeDomainMode ?? null,
+    smokeDomainHandoffStatus: state?.smokeDomainHandoffStatus ?? null,
+    smokeDomainTransferEncoded: state?.smokeDomainTransferEncoded ?? null,
+    smokeDomainTransferFrameCount: state?.smokeDomainTransferFrameCount ?? null,
+    smokeDomainTransferActiveCells: Number(state?.smokeDomainTransferActiveCells ?? 0),
+    smokeDomainFarActiveCells: Number(state?.smokeDomainFarActiveCells ?? 0),
+    smokeDomainFarAdvectedActiveCells: Number(state?.smokeDomainFarAdvectedActiveCells ?? 0),
+    smokeDomainFarHighestActiveLayer: Number(state?.smokeDomainFarHighestActiveLayer ?? 0),
+    smokeDomainFarTopActiveCells: Number(state?.smokeDomainFarTopActiveCells ?? 0),
+    smokeDomainFarOutflowCells: Number(state?.smokeDomainFarOutflowCells ?? 0),
+    smokeDomainFarSupportLifetimeFrames: Number(state?.smokeDomainFarSupportLifetimeFrames ?? 0),
+    smokeDomainTransferLastReadbackFrame: state?.smokeDomainTransferLastReadbackFrame ?? null,
+    frameCount: state?.frameCount ?? null,
+    counterAgeFrames,
+    counterTelemetryFreshness: counterAgeFrames === 0 ? 'current-supporting' : 'stale-supporting-only',
+  };
 }
 
 function summarizeAnalyticLearnedComparison(frames) {
@@ -1153,6 +1380,42 @@ function summarizeControlledHybridSmokeMotion(sequence) {
   });
 }
 
+function summarizeLiveCoupledHybridSmokeMotion(sequence) {
+  const captures = sequence.frames.map(frame => (
+    frame.captures.find(capture => capture.requestedRenderer === HYBRID_SPATIAL_STRATA_RENDERER)
+  ));
+  if (captures.some(capture => !capture)) throw new Error('missing live coupled hybrid capture');
+  const newestProductTicks = captures.map(capture => (
+    capture.spatialStrataHybridSmokeDebug?.productWriteTicks?.at(-1)
+  ));
+  return assessLiveCoupledSmokeMotion({
+    simulatorStepCounts: sequence.frames.map(frame => frame.baseSimStepCount),
+    newestProductTicks,
+    frameStateIdentities: captures.map(capture => capture.frameStateIdentity),
+    smokeContributionMeanAbsDiffs: sequence.smokeDifferential.smokeContributionMeanAbsDiffs,
+    smokeResidualMotionMeanAbsDiffs: sequence.smokeDifferential.smokeResidualMotionMeanAbsDiffs,
+  });
+}
+
+function summarizePublishedLiveCoupledHybridSmokeMotion(sequences) {
+  if (!Array.isArray(sequences) || sequences.length === 0) {
+    throw new Error('published live coupled smoke motion requires at least one sequence');
+  }
+  const summaries = {};
+  for (const sequence of sequences) {
+    if (!sequence?.label || Object.hasOwn(summaries, sequence.label)) {
+      throw new Error(`published live coupled smoke sequence label is invalid: ${sequence?.label}`);
+    }
+    summaries[sequence.label] = summarizeLiveCoupledHybridSmokeMotion(sequence);
+  }
+  return {
+    status: 'passed',
+    authority: 'all-published-camera-sequences-live-smoke-residual-motion-v0',
+    sequenceLabels: Object.keys(summaries),
+    ...summaries,
+  };
+}
+
 function isHybridSpatialStrataCapture(capture) {
   return capture?.requestedRenderer === HYBRID_SPATIAL_STRATA_RENDERER
     || capture?.requestedRenderer === HYBRID_SPATIAL_STRATA_DETERMINISM_REPEAT;
@@ -1205,6 +1468,34 @@ function addMotionEnergy(sequence) {
   };
 }
 
+function addLiveSmokeDifferential(sequence) {
+  const pairs = sequence.frames.map(frame => ({
+    hybrid: frame.captures.find(capture => capture.requestedRenderer === HYBRID_SPATIAL_STRATA_RENDERER),
+    flame: frame.captures.find(capture => capture.requestedRenderer === LEARNED_FLAME_CONTROL_RENDERER),
+  }));
+  if (pairs.some(pair => !pair.hybrid || !pair.flame)) {
+    throw new Error('live smoke differential requires hybrid and same-state flame-control captures');
+  }
+  for (const pair of pairs) {
+    if (pair.hybrid.frameStateIdentity !== pair.flame.frameStateIdentity) {
+      throw new Error(`live smoke differential frame state mismatch: ${pair.hybrid.frameStateIdentity} != ${pair.flame.frameStateIdentity}`);
+    }
+  }
+  const contributionDiffs = pairs.map(pair => imageDiff(pair.hybrid.image.path, pair.flame.image.path));
+  const residualMotionDiffs = [];
+  for (let index = 1; index < pairs.length; index += 1) {
+    residualMotionDiffs.push(smokeResidualImageDiff(pairs[index - 1], pairs[index]));
+  }
+  sequence.smokeDifferential = {
+    authority: 'same-state-hybrid-minus-flame-control-residual-v1',
+    frameStateIdentities: pairs.map(pair => pair.hybrid.frameStateIdentity),
+    contributionDiffs,
+    residualMotionDiffs,
+    smokeContributionMeanAbsDiffs: contributionDiffs.map(diff => diff.meanAbsDiff),
+    smokeResidualMotionMeanAbsDiffs: residualMotionDiffs.map(diff => diff.meanAbsDiff),
+  };
+}
+
 function compactSequenceEvidence(sequence) {
   return {
     label: sequence.label,
@@ -1213,6 +1504,7 @@ function compactSequenceEvidence(sequence) {
     stepMs: sequence.stepMs,
     sequenceDurationMs: sequence.sequenceDurationMs,
     motionEnergy: sequence.motionEnergy,
+    smokeDifferential: sequence.smokeDifferential ?? null,
     frames: sequence.frames.map(frame => {
       const capture = frame.captures.find(item => item.requestedRenderer === HYBRID_SPATIAL_STRATA_RENDERER);
       return {
@@ -1221,6 +1513,7 @@ function compactSequenceEvidence(sequence) {
         baseFrameCount: frame.baseFrameCount,
         baseSimStepCount: frame.baseSimStepCount,
         image: capture?.image ?? null,
+        frameStateIdentity: capture?.frameStateIdentity ?? null,
         smokeElapsedSeconds: capture?.spatialStrataHybridSmokeDebug?.lastElapsedSeconds ?? null,
       };
     }),
@@ -1351,6 +1644,45 @@ function imageDiff(pathA, pathB) {
   };
 }
 
+function smokeResidualImageDiff(previous, current) {
+  const previousHybrid = parsePngRgba(readBuffer(previous.hybrid.image.path));
+  const previousFlame = parsePngRgba(readBuffer(previous.flame.image.path));
+  const currentHybrid = parsePngRgba(readBuffer(current.hybrid.image.path));
+  const currentFlame = parsePngRgba(readBuffer(current.flame.image.path));
+  const width = Math.min(previousHybrid.width, previousFlame.width, currentHybrid.width, currentFlame.width);
+  const height = Math.min(previousHybrid.height, previousFlame.height, currentHybrid.height, currentFlame.height);
+  let total = 0;
+  let changed = 0;
+  let samples = 0;
+  for (let y = 0; y < height; y += 2) {
+    const ph = previousHybrid.rows[y];
+    const pf = previousFlame.rows[y];
+    const ch = currentHybrid.rows[y];
+    const cf = currentFlame.rows[y];
+    for (let x = 0; x < width; x += 2) {
+      const phi = x * previousHybrid.channels;
+      const pfi = x * previousFlame.channels;
+      const chi = x * currentHybrid.channels;
+      const cfi = x * currentFlame.channels;
+      const diff = (
+        Math.abs((ph[phi] - pf[pfi]) - (ch[chi] - cf[cfi]))
+        + Math.abs((ph[phi + 1] - pf[pfi + 1]) - (ch[chi + 1] - cf[cfi + 1]))
+        + Math.abs((ph[phi + 2] - pf[pfi + 2]) - (ch[chi + 2] - cf[cfi + 2]))
+      ) / 3;
+      total += diff;
+      if (diff > 3) changed += 1;
+      samples += 1;
+    }
+  }
+  return {
+    width,
+    height,
+    samples,
+    meanAbsDiff: samples ? total / samples : 0,
+    changedFraction: samples ? changed / samples : 0,
+  };
+}
+
 function readBuffer(path) {
   return readFileSync(path);
 }
@@ -1399,6 +1731,8 @@ function compactState(state) {
     boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
     hybridSmokeRepresentationRequested: state.hybridSmokeRepresentationRequested,
     hybridSmokeRepresentationEffective: state.hybridSmokeRepresentationEffective,
+    hybridSmokeSourceRequested: state.hybridSmokeSourceRequested,
+    hybridSmokeSourceEffective: state.hybridSmokeSourceEffective,
     spatialStrataHybridSmokeManifestUrl: state.spatialStrataHybridSmokeManifestUrl,
     spatialStrataHybridSmokeSourceStatus: state.spatialStrataHybridSmokeSourceStatus,
     spatialStrataHybridSmokeFailureReason: state.spatialStrataHybridSmokeFailureReason,

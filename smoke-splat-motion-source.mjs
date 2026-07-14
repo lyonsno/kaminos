@@ -267,6 +267,33 @@ export function selectSmokeSplatIndices(product, options = {}) {
 }
 
 function prepareProductUpload(product, fineLodFraction) {
+  if (product?.packedBuffer) {
+    if (fineLodFraction !== 1) {
+      throw new Error('live GPU product fine LOD requires a dedicated GPU repack and cannot be applied implicitly');
+    }
+    const total = requireInteger(product?.hierarchyCounts?.total, 'live GPU product total count');
+    const coarse = requireInteger(product?.hierarchyCounts?.coarse, 'live GPU product coarse count');
+    const fine = requireInteger(product?.hierarchyCounts?.fine, 'live GPU product fine count');
+    if (total <= 0 || coarse < 0 || fine < 0 || coarse + fine !== total || product.splatCount !== total) {
+      throw new Error('live GPU product hierarchy counts are inconsistent');
+    }
+    return {
+      productIdentity: requireIdentity(product.identity, 'live GPU product identity'),
+      selectedIndices: null,
+      selectedCount: total,
+      sourceCount: total,
+      coarseCount: coarse,
+      fineCount: fine,
+      sourceExtinctionMass: null,
+      representedExtinctionMass: null,
+      rejectedExtinctionMass: 0,
+      coarseMassCompensation: 0,
+      packed: null,
+      packedBuffer: product.packedBuffer,
+      productDevice: product.device,
+      productOwnership: product.ownership,
+    };
+  }
   const selectedIndices = selectSmokeSplatIndices(product, { fineLodFraction });
   const coarseIndices = selectedIndices.filter(index => product.splats[index].hierarchyRoleCode === 0);
   if (coarseIndices.length !== product.hierarchyCounts.coarse) throw new Error('coarseSplatsAlwaysPresent invariant failed');
@@ -499,6 +526,68 @@ export function assessControlledHybridSmokeMotion({
     maxMeanAbsDiff,
     sameTimeRepeatMeanAbsDiff: repeatDiff,
     maxFlameControlMeanAbsDiff,
+  };
+}
+
+export function assessLiveCoupledSmokeMotion({
+  simulatorStepCounts,
+  newestProductTicks,
+  frameStateIdentities,
+  smokeContributionMeanAbsDiffs,
+  smokeResidualMotionMeanAbsDiffs,
+  contributionThreshold = 0.02,
+  motionThreshold = 0.02,
+} = {}) {
+  if (!Array.isArray(simulatorStepCounts) || simulatorStepCounts.length < 2) {
+    throw new TypeError('simulatorStepCounts must contain at least two captures');
+  }
+  const frameCount = simulatorStepCounts.length;
+  if (!Array.isArray(newestProductTicks) || newestProductTicks.length !== frameCount) {
+    throw new TypeError('newestProductTicks must align with simulatorStepCounts');
+  }
+  if (!Array.isArray(frameStateIdentities) || frameStateIdentities.length !== frameCount) {
+    throw new TypeError('frame state identities must align with simulatorStepCounts');
+  }
+  if (!Array.isArray(smokeContributionMeanAbsDiffs) || smokeContributionMeanAbsDiffs.length !== frameCount) {
+    throw new TypeError('smokeContributionMeanAbsDiffs must describe every captured frame');
+  }
+  if (!Array.isArray(smokeResidualMotionMeanAbsDiffs)
+      || smokeResidualMotionMeanAbsDiffs.length !== frameCount - 1) {
+    throw new TypeError('smokeResidualMotionMeanAbsDiffs must describe every adjacent frame pair');
+  }
+
+  const steps = simulatorStepCounts.map((value, index) => requireInteger(value, `simulatorStepCounts[${index}]`));
+  const ticks = newestProductTicks.map((value, index) => requireInteger(value, `newestProductTicks[${index}]`));
+  const stateIds = frameStateIdentities.map((value, index) => requireIdentity(value, `frame state identity ${index}`));
+  for (let index = 1; index < frameCount; index += 1) {
+    if (!(steps[index] > steps[index - 1])) throw new Error('live coupled simulator did not advance');
+    if (!(ticks[index] > ticks[index - 1])) throw new Error('live smoke products did not advance');
+    if (stateIds[index] === stateIds[index - 1]) throw new Error('frame state identity did not advance');
+  }
+
+  const contributions = smokeContributionMeanAbsDiffs.map((value, index) => (
+    requireNonNegative(value, `smokeContributionMeanAbsDiffs[${index}]`)
+  ));
+  const minimumContribution = Math.min(...contributions);
+  if (!(minimumContribution > contributionThreshold)) {
+    throw new Error(`live smoke contribution is missing or composited away: ${minimumContribution} <= ${contributionThreshold}`);
+  }
+  const residualMotion = smokeResidualMotionMeanAbsDiffs.map((value, index) => (
+    requireNonNegative(value, `smokeResidualMotionMeanAbsDiffs[${index}]`)
+  ));
+  const maxResidualMotion = Math.max(...residualMotion);
+  if (!(maxResidualMotion > motionThreshold)) {
+    throw new Error(`live smoke residual did not move: ${maxResidualMotion} <= ${motionThreshold}`);
+  }
+
+  return {
+    status: 'passed',
+    authority: 'frame-locked-live-smoke-residual-motion-v1',
+    simulatorStepCounts: steps,
+    newestProductTicks: ticks,
+    frameStateIdentities: stateIds,
+    minimumSmokeContributionMeanAbsDiff: minimumContribution,
+    maxSmokeResidualMotionMeanAbsDiff: maxResidualMotion,
   };
 }
 

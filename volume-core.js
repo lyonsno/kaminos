@@ -23,6 +23,7 @@ import {
 import { loadSmokeSplatMotionSource } from './smoke-splat-motion-source.mjs';
 import {
   SPATIAL_STRATA_HYBRID_SMOKE_RENDERER_IDENTITY,
+  SPATIAL_STRATA_HYBRID_SMOKE_LIVE_ROUTE_IDENTITY,
   SPATIAL_STRATA_HYBRID_SMOKE_ROUTE_IDENTITY,
   createSpatialStrataHybridSmokeRenderer,
 } from './spatial-strata-hybrid-smoke-renderer.mjs';
@@ -30,6 +31,11 @@ import {
   createSpatialStrataHybridSmokeSourceLifecycle,
   createSpatialStrataHybridSmokeSourceRuntime,
 } from './spatial-strata-hybrid-smoke-source-lifecycle.mjs';
+import {
+  COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY,
+  createCoupledLiveSmokeHierarchyArchive,
+  createCoupledLiveSmokeHierarchyCompiler,
+} from './coupled-live-smoke-hierarchy.mjs';
 import {
   COUPLED_PHASE_STATE_FAR_LAYOUT,
   COUPLED_PHASE_STATE_HISTORY_AUTHORITY,
@@ -311,6 +317,11 @@ function normalizeBoundarySplatPhaseMode(value) {
 function normalizeHybridSmokeRepresentation(value) {
   const normalized = String(value || 'raymarch').toLowerCase().replace(/_/g, '-');
   return normalized === 'spatial-strata' ? 'spatial-strata' : 'raymarch';
+}
+
+function normalizeHybridSmokeSource(value) {
+  const normalized = String(value || 'offline-manifest').toLowerCase().replace(/_/g, '-');
+  return normalized === 'live-coupled' ? 'live-coupled' : 'offline-manifest';
 }
 
 function normalizeHybridSmokeFineLod(value) {
@@ -5679,6 +5690,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     smokeSplatSlotResolveReport: null,
     hybridSmokeRepresentationRequested: normalizeHybridSmokeRepresentation(controlsSnapshot.hybridSmokeRepresentation),
     hybridSmokeRepresentationEffective: 'raymarch',
+    hybridSmokeSourceRequested: normalizeHybridSmokeSource(controlsSnapshot.hybridSmokeSource),
+    hybridSmokeSourceEffective: null,
     spatialStrataHybridSmokeRouteIdentity: SPATIAL_STRATA_HYBRID_SMOKE_ROUTE_IDENTITY,
     spatialStrataHybridSmokeRendererIdentity: null,
     spatialStrataHybridSmokeManifestUrl: String(controlsSnapshot.hybridSmokeManifestUrl || ''),
@@ -5688,6 +5701,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     spatialStrataHybridSmokeConfigRequestedIdentity: null,
     spatialStrataHybridSmokeConfigEffectiveIdentity: null,
     spatialStrataHybridSmokeDebug: null,
+    coupledLiveSmokeHierarchyAuthority: null,
+    coupledLiveSmokeHierarchyArchive: null,
     hybridSplatLayer: {
       identity: HYBRID_SPLAT_LAYER_IDENTITY,
       format: 'rgba16float',
@@ -6119,14 +6134,31 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatReadbackPipeline = null;
   let boundarySplatHybridPipeline = null;
   let hybridSmokePipeline = null;
+  let coupledLiveSmokeHierarchyCompiler = null;
+  let coupledLiveSmokeHierarchyArchive = null;
   const spatialStrataHybridSmokeLifecycle = createSpatialStrataHybridSmokeSourceLifecycle({
     loadSource(config) {
+      if (config.sourceMode === 'live-coupled') {
+        if (!coupledLiveSmokeHierarchyArchive) throw new Error('live coupled smoke hierarchy archive is unavailable');
+        return { sourceMode: 'live-coupled' };
+      }
       return loadSmokeSplatMotionSource(config.manifestUrl, {
         instanceCount: normalizeBoundarySplatInstanceCount(controlsSnapshot.boundarySplatInstances),
         fineLodFraction: config.fineLodFraction,
       });
     },
     createRenderer(source, config) {
+      if (source.sourceMode === 'live-coupled') {
+        return createSpatialStrataHybridSmokeRenderer({
+          device,
+          productSource: () => coupledLiveSmokeHierarchyArchive.getConsecutiveProducts(),
+          fineLodFraction: 1,
+          requestedRoute: SPATIAL_STRATA_HYBRID_SMOKE_LIVE_ROUTE_IDENTITY,
+          effectiveRoute: SPATIAL_STRATA_HYBRID_SMOKE_LIVE_ROUTE_IDENTITY,
+          coarseCoverageScale: config.coarseCoverageScale,
+          motionRate: 0,
+        });
+      }
       return createSpatialStrataHybridSmokeRenderer({
         device,
         products: source.products,
@@ -7625,6 +7657,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
     if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
     device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
+    coupledLiveSmokeHierarchyCompiler = createCoupledLiveSmokeHierarchyCompiler({ device });
+    coupledLiveSmokeHierarchyArchive = createCoupledLiveSmokeHierarchyArchive({
+      device,
+      compileCurrent: (descriptor, options) => coupledLiveSmokeHierarchyCompiler.compileCurrent(descriptor, options),
+    });
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
@@ -9446,11 +9483,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function spatialStrataHybridSmokeConfig() {
+    const sourceMode = normalizeHybridSmokeSource(controlsSnapshot.hybridSmokeSource);
     return {
+      sourceMode,
       manifestUrl: String(controlsSnapshot.hybridSmokeManifestUrl || '').trim(),
-      fineLodFraction: normalizeHybridSmokeFineLod(controlsSnapshot.hybridSmokeFineLod),
+      fineLodFraction: sourceMode === 'live-coupled'
+        ? 1
+        : normalizeHybridSmokeFineLod(controlsSnapshot.hybridSmokeFineLod),
       coarseCoverageScale: normalizeHybridSmokeCoarseCoverage(controlsSnapshot.hybridSmokeCoarseCoverage),
-      motionRate: normalizeHybridSmokeMotionRate(controlsSnapshot.hybridSmokeMotionRate),
+      motionRate: sourceMode === 'live-coupled'
+        ? 0
+        : normalizeHybridSmokeMotionRate(controlsSnapshot.hybridSmokeMotionRate),
     };
   }
 
@@ -9463,18 +9506,31 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.spatialStrataHybridSmokeRendererIdentity = renderer
       ? SPATIAL_STRATA_HYBRID_SMOKE_RENDERER_IDENTITY
       : null;
+    state.hybridSmokeSourceEffective = renderer
+      ? normalizeHybridSmokeSource(controlsSnapshot.hybridSmokeSource)
+      : null;
     state.spatialStrataHybridSmokeDebug = renderer?.debugState?.() ?? null;
   }
 
   async function ensureSpatialStrataHybridSmokeRenderer() {
     state.hybridSmokeRepresentationRequested = normalizeHybridSmokeRepresentation(controlsSnapshot.hybridSmokeRepresentation);
+    state.hybridSmokeSourceRequested = normalizeHybridSmokeSource(controlsSnapshot.hybridSmokeSource);
     if (!spatialStrataHybridSmokeRequested()) {
       state.spatialStrataHybridSmokeSourceStatus = 'not-requested';
       return null;
     }
     const config = spatialStrataHybridSmokeConfig();
-    if (!config.manifestUrl) throw new Error('spatial-strata hybrid smoke requires volume_hybrid_smoke_manifest');
+    if (config.sourceMode === 'offline-manifest' && !config.manifestUrl) {
+      throw new Error('offline spatial-strata hybrid smoke requires volume_hybrid_smoke_manifest');
+    }
+    if (config.sourceMode === 'live-coupled'
+        && normalizeSmokeDomainControls(controlsSnapshot, gridSize).mode !== COUPLED_SMOKE_STRATEGY) {
+      throw new Error('live coupled spatial-strata smoke requires volume_smoke_domain_mode=coupled');
+    }
     state.spatialStrataHybridSmokeManifestUrl = config.manifestUrl;
+    state.spatialStrataHybridSmokeRouteIdentity = config.sourceMode === 'live-coupled'
+      ? SPATIAL_STRATA_HYBRID_SMOKE_LIVE_ROUTE_IDENTITY
+      : SPATIAL_STRATA_HYBRID_SMOKE_ROUTE_IDENTITY;
     state.spatialStrataHybridSmokeFailureReason = null;
     try {
       const renderer = await spatialStrataHybridSmokeRuntime.ensure(config);
@@ -9894,9 +9950,29 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatCompositionRequested = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
     if (!boundarySplatHybridRequested()) return false;
     const useSpatialStrataSmoke = spatialStrataHybridSmokeRequested();
+    const liveCoupledSmoke = useSpatialStrataSmoke
+      && normalizeHybridSmokeSource(controlsSnapshot.hybridSmokeSource) === 'live-coupled';
     const spatialStrataRenderer = useSpatialStrataSmoke
       ? spatialStrataHybridSmokeRuntime.currentRenderer()
       : null;
+    let liveArchiveState = null;
+    if (liveCoupledSmoke && spatialStrataRenderer) {
+      try {
+        liveArchiveState = coupledLiveSmokeHierarchyArchive.capture(
+          getCoupledSmokePhaseState({ historyOffset: 0 }),
+          { commandEncoder: encoder },
+        );
+        state.coupledLiveSmokeHierarchyAuthority = COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY;
+        state.coupledLiveSmokeHierarchyArchive = liveArchiveState;
+      } catch (error) {
+        state.hybridSmokeRepresentationEffective = 'failed-no-fallback';
+        state.hybridSmokeSourceEffective = null;
+        state.spatialStrataHybridSmokeFailureReason = error?.message || String(error);
+        state.coupledLiveSmokeHierarchyArchive = error?.report ?? null;
+        throw error;
+      }
+    }
+    const liveSmokeWarming = liveCoupledSmoke && liveArchiveState?.consecutiveProductCount !== 2;
     if (
       state.boundarySplatFallbackReason
       || !boundarySplatHybridPipeline
@@ -9928,7 +10004,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     splatPass.drawIndirect(boundarySplatIndirectBuffer, 0);
     splatPass.end();
 
-    if (useSpatialStrataSmoke) {
+    if (liveSmokeWarming) {
+      const warmingPass = encoder.beginRenderPass({
+        label: 'kaminos live coupled smoke warming clear pass',
+        colorAttachments: [
+          hybridSmokeFrontColorTexture,
+          hybridSmokeFrontIntervalTexture,
+          hybridSmokeBackColorTexture,
+          hybridSmokeBackIntervalTexture,
+        ].map(texture => ({
+          view: texture.createView(),
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        })),
+      });
+      warmingPass.end();
+      state.hybridSmokeRepresentationEffective = 'warming-no-smoke-no-fallback';
+      state.hybridSmokeSourceEffective = 'live-coupled';
+      state.hybridSmokePhaseAuthority = 'current-product-only-consecutive-history-warming-v0';
+      state.spatialStrataHybridSmokeDebug = {
+        ...spatialStrataRenderer.debugState(),
+        archive: liveArchiveState,
+      };
+    } else if (useSpatialStrataSmoke) {
       const cameraMatrix = camera.matrixWorld.elements;
       if (!Number.isFinite(state.renderPhaseTimeMs)) {
         throw new Error('spatial-strata hybrid smoke requires an explicit render phase timestamp');
@@ -9948,8 +10047,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         backInterval: hybridSmokeBackIntervalTexture,
       });
       state.hybridSmokeRepresentationEffective = 'spatial-strata';
+      state.hybridSmokeSourceEffective = liveCoupledSmoke ? 'live-coupled' : 'offline-manifest';
       state.hybridSmokePhaseAuthority = plan.temporalAuthority;
-      state.spatialStrataHybridSmokeDebug = spatialStrataRenderer.debugState();
+      state.spatialStrataHybridSmokeDebug = liveCoupledSmoke
+        ? { ...spatialStrataRenderer.debugState(), archive: liveArchiveState }
+        : spatialStrataRenderer.debugState();
     } else {
       const smokePass = encoder.beginRenderPass({
         label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} pass`,
@@ -9988,7 +10090,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       })),
     });
     const farSmokeBindGroup = smokeDomainTransferBindGroups[currentFluid]?.[currentSmokeDomainFarState];
-    if (state.smokeDomainMode === COUPLED_SMOKE_STRATEGY && smokeDomainLayerPipeline && farSmokeBindGroup) {
+    if (!liveCoupledSmoke
+        && state.smokeDomainMode === COUPLED_SMOKE_STRATEGY
+        && smokeDomainLayerPipeline
+        && farSmokeBindGroup) {
       farSmokePass.setPipeline(smokeDomainLayerPipeline);
       farSmokePass.setBindGroup(0, farSmokeBindGroup);
       farSmokePass.setBindGroup(1, hybridSmokeSplitBindGroup);
@@ -11852,6 +11957,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (advanceSim && !sampleLookFreeze) {
       encodeSim(encoder);
+      encodeSmokeDomainTransfer(encoder);
       encodeMajorant(encoder, { force: true });
     } else if (!sampleLookFreeze) {
       encodeMajorant(encoder, { force: true });
@@ -12110,7 +12216,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       : null;
     state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
     const boundarySplatGpuProfile = boundarySplatRequested()
-      ? await sampleBoundarySplatGpuProfile({ advanceSimulation: advanceSim })
+      ? await sampleBoundarySplatGpuProfile({ advanceSimulation: false })
       : state.boundarySplatGpuProfile;
     await buffer.mapAsync(GPUMapMode.READ);
     const data = new Uint8Array(buffer.getMappedRange());
@@ -12866,6 +12972,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         )
         : null;
       const canvasRect = canvas.getBoundingClientRect();
+      const liveCoupledFrame = normalizeHybridSmokeSource(controlsBefore.hybridSmokeSource) === 'live-coupled'
+        && normalizeSmokeDomainControls(controlsBefore, gridSize).mode === COUPLED_SMOKE_STRATEGY;
+      const coupledPhaseStateToken = liveCoupledFrame ? {
+        generation: smokeDomainTransferGeneration,
+        retainedHistoryEpoch: smokeDomainTransferGeneration,
+        writeTick: state.smokeDomainTransferFrameCount,
+      } : null;
+      const frameStateIdentity = liveCoupledFrame
+        ? `live-coupled-frame:${coupledPhaseStateToken.generation}:${coupledPhaseStateToken.retainedHistoryEpoch}:${coupledPhaseStateToken.writeTick}:sim-${state.simStepCount}:${sameStateCaptureId}`
+        : sameStateCaptureId;
       return {
         ok: true,
         sampleAuthority: 'render-only-frozen-sim-state',
@@ -12885,6 +13001,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         } : null,
         featureCaptureSourcePassApplied,
         sameStateCaptureId,
+        frameStateIdentity,
+        coupledPhaseStateToken,
         baseFrameCount,
         baseSimStepCount,
         frameCount: state.frameCount,
@@ -12928,6 +13046,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatPhaseSources: state.boundarySplatPhaseSources,
         boundarySplatInstanceDescriptors: state.boundarySplatInstanceDescriptors,
         boundarySplatIncrementalInstanceCost: state.boundarySplatIncrementalInstanceCost,
+        hybridSmokeRepresentationRequested: state.hybridSmokeRepresentationRequested,
+        hybridSmokeRepresentationEffective: state.hybridSmokeRepresentationEffective,
+        hybridSmokeSourceRequested: state.hybridSmokeSourceRequested,
+        hybridSmokeSourceEffective: state.hybridSmokeSourceEffective,
+        spatialStrataHybridSmokeSourceStatus: state.spatialStrataHybridSmokeSourceStatus,
+        spatialStrataHybridSmokeFailureReason: state.spatialStrataHybridSmokeFailureReason,
+        spatialStrataHybridSmokeSourceLifecycle: state.spatialStrataHybridSmokeSourceLifecycle,
+        spatialStrataHybridSmokeConfigRequestedIdentity: state.spatialStrataHybridSmokeConfigRequestedIdentity,
+        spatialStrataHybridSmokeConfigEffectiveIdentity: state.spatialStrataHybridSmokeConfigEffectiveIdentity,
+        spatialStrataHybridSmokeRendererIdentity: state.spatialStrataHybridSmokeRendererIdentity,
+        spatialStrataHybridSmokeDebug: state.spatialStrataHybridSmokeDebug,
       };
     } finally {
       if (options.restoreControls !== false) {
@@ -13062,6 +13191,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       state.boundarySplatCompositionRequested = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
       state.hybridSmokeRepresentationRequested = normalizeHybridSmokeRepresentation(controlsSnapshot.hybridSmokeRepresentation);
+      state.hybridSmokeSourceRequested = normalizeHybridSmokeSource(controlsSnapshot.hybridSmokeSource);
       state.spatialStrataHybridSmokeManifestUrl = String(controlsSnapshot.hybridSmokeManifestUrl || '');
       state.boundarySplatFieldLayout = normalizeBoundarySplatFieldLayout(controlsSnapshot.boundarySplatFieldLayout);
       state.boundarySplatFieldLayoutIdentity = state.boundarySplatFieldLayout === 'field'
@@ -13200,12 +13330,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     controlledStepSequence,
     renderFrozenScaleToCanvas,
     getCoupledSmokePhaseState,
+    inspectCoupledLiveSmokeProductTelemetry() {
+      if (!coupledLiveSmokeHierarchyArchive) throw new Error('live coupled smoke hierarchy archive is unavailable');
+      return coupledLiveSmokeHierarchyArchive.inspectConsecutiveProductTelemetry();
+    },
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       destroyHybridLayerTextures();
       spatialStrataHybridSmokeRuntime.dispose();
+      coupledLiveSmokeHierarchyArchive?.dispose();
+      coupledLiveSmokeHierarchyCompiler?.dispose();
       externalEmitterBuffer?.destroy();
       boundarySplatCameraBuffer?.destroy();
       boundarySplatCameraBuffer = null;

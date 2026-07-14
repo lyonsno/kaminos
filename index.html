@@ -16497,6 +16497,7 @@ function readVolumeControls() {
   const boundarySplatFieldLayout = normalizeBoundarySplatFieldLayout(boundarySplatFieldLayoutRouteValue(params));
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const hybridSmokeRepresentation = params.get('volume_hybrid_smoke_representation') || 'raymarch';
+  const hybridSmokeSource = params.get('volume_hybrid_smoke_source') || 'offline-manifest';
   const hybridSmokeManifestUrl = params.get('volume_hybrid_smoke_manifest') || '';
   const hybridSmokeFineLod = Number(params.get('volume_hybrid_smoke_fine_lod') ?? 1);
   const hybridSmokeMotionRate = Number(params.get('volume_hybrid_smoke_motion_rate') ?? 0.16);
@@ -16572,6 +16573,7 @@ function readVolumeControls() {
     boundarySplatFieldLayout,
     boundarySplatFeatureCapture,
     hybridSmokeRepresentation,
+    hybridSmokeSource,
     hybridSmokeManifestUrl,
     hybridSmokeFineLod,
     hybridSmokeMotionRate,

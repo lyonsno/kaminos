@@ -5,10 +5,13 @@ function finite(value, label) {
 }
 
 export function spatialStrataHybridSmokeConfigIdentity(config = {}) {
+  const sourceMode = String(config.sourceMode || 'offline-manifest').trim().toLowerCase();
+  if (!['offline-manifest', 'live-coupled'].includes(sourceMode)) throw new TypeError(`unsupported sourceMode ${sourceMode}`);
   const manifestUrl = String(config.manifestUrl || '').trim();
-  if (!manifestUrl) throw new TypeError('manifestUrl must be non-empty');
+  if (sourceMode === 'offline-manifest' && !manifestUrl) throw new TypeError('manifestUrl must be non-empty');
   return JSON.stringify({
-    manifestUrl,
+    sourceMode,
+    manifestUrl: manifestUrl || null,
     fineLodFraction: finite(config.fineLodFraction, 'fineLodFraction'),
     coarseCoverageScale: finite(config.coarseCoverageScale, 'coarseCoverageScale'),
     motionRate: finite(config.motionRate, 'motionRate'),
@@ -42,7 +45,11 @@ export function createSpatialStrataHybridSmokeSourceLifecycle({ loadSource, crea
 
   function ensure(config) {
     if (disposed) return Promise.reject(new Error('spatial-strata smoke source lifecycle is disposed'));
-    const snapshot = { ...config, manifestUrl: String(config?.manifestUrl || '').trim() };
+    const snapshot = {
+      ...config,
+      sourceMode: String(config?.sourceMode || 'offline-manifest').trim().toLowerCase(),
+      manifestUrl: String(config?.manifestUrl || '').trim(),
+    };
     const key = spatialStrataHybridSmokeConfigIdentity(snapshot);
     if (renderer && effectiveKey === key && status === 'loaded') return Promise.resolve(renderer);
     if (pending?.key === key) return pending.promise;

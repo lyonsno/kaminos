@@ -17,7 +17,9 @@ assert.match(
 const {
   COUPLED_SMOKE_ATTACHMENT_IDENTITY,
   COUPLED_SMOKE_DEPTH_CONTRACT,
+  COUPLED_SMOKE_FAR_RETENTION_THRESHOLD,
   COUPLED_SMOKE_OVERLAP_AUTHORITY,
+  retainFarSmokeCandidate,
   smokeDomainMetricVelocityScale,
   smokeDomainWorldContract,
 } = await import(domainModuleUrl);
@@ -25,6 +27,25 @@ const {
 assert.equal(COUPLED_SMOKE_ATTACHMENT_IDENTITY, 'coupled-near-far-raymarched-smoke-attachment-v0');
 assert.equal(COUPLED_SMOKE_OVERLAP_AUTHORITY, 'near-authoritative-overlap-far-residual-v0');
 assert.equal(COUPLED_SMOKE_DEPTH_CONTRACT, 'splat-depth-conditioned-front-back-near-far-smoke-intervals-v1');
+assert.equal(COUPLED_SMOKE_FAR_RETENTION_THRESHOLD, 0.0005);
+assert.equal(retainFarSmokeCandidate(0.006), 0.006, 'sub-cell interpolated smoke survives far transport');
+assert.equal(retainFarSmokeCandidate(0.0001), 0, 'the named floor still rejects numerical residue');
+assert.match(
+  domainSource,
+  /smokeCandidate\s*>\s*FAR_SMOKE_RETENTION_THRESHOLD/,
+  'far WGSL uses the same named retention boundary as the executable contract',
+);
+assert.match(
+  domainSource,
+  /if\s*\(smoke\s*>\s*FAR_SMOKE_RETENTION_THRESHOLD\)\s*\{\s*atomicAdd\(&transferCounters\[1\]/,
+  'far-support diagnostics count every retained and renderable smoke cell',
+);
+const farInputShaderSource = domainSource.match(/fn csSmokeDomainFarInput[\s\S]*?\n}\n\nstruct SmokeDomainVSOut/)?.[0] || '';
+assert.doesNotMatch(
+  farInputShaderSource,
+  /if\s*\(smoke\s*>\s*0\.01\)/,
+  'far diagnostics cannot silently apply a stronger threshold than transport and rendering',
+);
 
 assert.deepEqual(smokeDomainWorldContract(), {
   identity: 'explicit-2x-world-bounds-upper-quarter-overlap-v0',

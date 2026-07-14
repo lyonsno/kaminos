@@ -1,6 +1,7 @@
 import { isAbsolute, relative, resolve } from 'node:path';
 
-const ROUTE = 'spatial-strata-hybrid-smoke-v0';
+const OFFLINE_ROUTE = 'spatial-strata-hybrid-smoke-v0';
+const LIVE_ROUTE = 'spatial-strata-hybrid-smoke-live-coupled-v0';
 const RENDERER = 'phase-matched-spatial-strata-front-back-raster-v0';
 
 function strictNumber(params, name, label) {
@@ -17,10 +18,14 @@ export function parseSpatialStrataHybridSmokeWitnessRequest(url) {
   if (params.get('volume_hybrid_smoke_representation') !== 'spatial-strata') {
     throw new Error('hybrid smoke representation must be spatial-strata');
   }
+  const sourceMode = params.get('volume_hybrid_smoke_source') === 'live-coupled'
+    ? 'live-coupled'
+    : 'offline-manifest';
   const manifestUrl = String(params.get('volume_hybrid_smoke_manifest') || '').trim();
-  if (!manifestUrl) throw new Error('hybrid smoke manifest must be present');
+  if (sourceMode === 'offline-manifest' && !manifestUrl) throw new Error('hybrid smoke manifest must be present');
   return {
-    manifestUrl,
+    sourceMode,
+    manifestUrl: manifestUrl || null,
     fineLodFraction: strictNumber(params, 'volume_hybrid_smoke_fine_lod', 'fine LOD'),
     coarseCoverageScale: strictNumber(params, 'volume_hybrid_smoke_coarse_coverage', 'coarse coverage'),
     motionRate: strictNumber(params, 'volume_hybrid_smoke_motion_rate', 'motion rate'),
@@ -30,8 +35,10 @@ export function parseSpatialStrataHybridSmokeWitnessRequest(url) {
 function parseConfigIdentity(value, label) {
   try {
     const parsed = JSON.parse(String(value || ''));
+    const sourceMode = parsed.sourceMode === 'live-coupled' ? 'live-coupled' : 'offline-manifest';
     return {
-      manifestUrl: String(parsed.manifestUrl || ''),
+      sourceMode,
+      manifestUrl: sourceMode === 'live-coupled' ? null : String(parsed.manifestUrl || ''),
       fineLodFraction: Number(parsed.fineLodFraction),
       coarseCoverageScale: Number(parsed.coarseCoverageScale),
       motionRate: Number(parsed.motionRate),
@@ -48,7 +55,8 @@ export function validateSpatialStrataHybridSmokeWitnessConfig({ requested, lifec
   const lifecycleRequested = parseConfigIdentity(lifecycle.requestedConfigIdentity, 'requested config identity');
   const lifecycleEffective = parseConfigIdentity(lifecycle.effectiveConfigIdentity, 'effective config identity');
   const canonicalRequested = {
-    manifestUrl: String(requested?.manifestUrl || ''),
+    sourceMode: requested?.sourceMode === 'live-coupled' ? 'live-coupled' : 'offline-manifest',
+    manifestUrl: requested?.sourceMode === 'live-coupled' ? null : String(requested?.manifestUrl || ''),
     fineLodFraction: Number(requested?.fineLodFraction),
     coarseCoverageScale: Number(requested?.coarseCoverageScale),
     motionRate: Number(requested?.motionRate),
@@ -70,17 +78,19 @@ export function requirePositiveHybridWitnessWallDelay(value) {
 
 export function deriveSpatialStrataHybridSmokeEffectiveRoute(captures) {
   if (!Array.isArray(captures) || captures.length === 0) throw new Error('hybrid captures must be non-empty');
+  const firstDebug = captures[0]?.spatialStrataHybridSmokeDebug;
+  const route = firstDebug?.productSourceMode === 'live-owned-product-source' ? LIVE_ROUTE : OFFLINE_ROUTE;
   for (const capture of captures) {
     const debug = capture?.spatialStrataHybridSmokeDebug;
     if (
       debug?.identity !== RENDERER
-      || debug?.requestedRoute !== ROUTE
-      || debug?.effectiveRoute !== ROUTE
+      || debug?.requestedRoute !== route
+      || debug?.effectiveRoute !== route
     ) {
       throw new Error(`nested smoke route mismatch: ${JSON.stringify(debug)}`);
     }
   }
-  return ROUTE;
+  return route;
 }
 
 function requireWithin(root, target, label) {
