@@ -113,6 +113,8 @@ try {
         !exactDrawState
         || exactDrawState.authority !== 'gpu-indirect-post-submit-witness-readback'
         || exactDrawState.indirectDrawIdentity !== INDIRECT_DRAW
+        || exactDrawState.indirectCommandAuthority !== 'gpu-indirect-command-buffer-post-submit-readback-v0'
+        || exactDrawState.indirectCommandAgreement !== true
       ) {
         throw new Error(`exact-frame-draw-state-unavailable:${JSON.stringify(exactDrawState)}`);
       }
@@ -179,6 +181,9 @@ try {
         sourceCandidateCount: Number(exactDrawState.sourceCandidateCount),
         renderedInstanceCount: Number(exactDrawState.instanceCount),
         indirectDrawIdentity: exactDrawState.indirectDrawIdentity,
+        indirectCommand: exactDrawState.indirectCommand,
+        indirectCommandAgreement: exactDrawState.indirectCommandAgreement,
+        indirectCommandAuthority: exactDrawState.indirectCommandAuthority,
         tierGroups: exactDrawState.tierGroups,
         bufferIntegrity: state.boundarySplatBufferIntegrity,
         overflowCount: Number(exactDrawState.overflowCount),
@@ -492,6 +497,9 @@ function compactState(state) {
     sourceCandidateCount: state?.boundarySplatSourceCandidateCount,
     renderedInstanceCount: state?.boundarySplatInstanceCount,
     indirectDrawIdentity: state?.boundarySplatIndirectDrawIdentity,
+    indirectCommand: state?.boundarySplatIndirectCommand,
+    indirectCommandAgreement: state?.boundarySplatIndirectCommandAgreement,
+    indirectCommandAuthority: state?.boundarySplatIndirectCommandAuthority,
     phaseSourceIdentity: state?.boundarySplatPhaseSourceIdentity,
     phaseSourceCount: state?.boundarySplatPhaseSourceCount,
     historyWriteSlot: state?.boundarySplatHistoryWriteSlot,

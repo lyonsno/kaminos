@@ -20,6 +20,7 @@ const DEPTH_AUTHORITY = 'same-device-depth24plus-less-equal-v0';
 const FIXED_SUBSTRATE = 'operator-pretty-four-flame-substrate-v0';
 const ADAPTIVE_LOD = 'boundary-splat-projected-area-nested-tiers-v0';
 const INDIRECT_DRAW = 'boundary-splat-single-global-indirect-no-first-instance-v0';
+const INDIRECT_COMMAND_AUTHORITY = 'gpu-indirect-command-buffer-post-submit-readback-v0';
 const BUFFER_INTEGRITY = 'boundary-splat-buffer-integrity-v0';
 const ADAPTIVE_TIER_BUDGETS = new Set([0, 800, 1600, 3200, 6400, 12800]);
 const CAMERA_SWEEP_POSES = [
@@ -695,6 +696,8 @@ function validateAllocationEvidence(evidence, requestedLodMode, context) {
   const lodMode = evidence?.boundarySplatLodMode ?? evidence?.lodMode;
   const adaptiveLodIdentity = evidence?.boundarySplatAdaptiveLodIdentity ?? evidence?.adaptiveLodIdentity;
   const indirectDrawIdentity = evidence?.boundarySplatIndirectDrawIdentity ?? evidence?.indirectDrawIdentity;
+  const indirectCommandAuthority = evidence?.boundarySplatIndirectCommandAuthority ?? evidence?.indirectCommandAuthority;
+  const indirectCommandAgreement = evidence?.boundarySplatIndirectCommandAgreement ?? evidence?.indirectCommandAgreement;
   const groups = evidence?.boundarySplatTierGroups ?? evidence?.tierGroups;
   const sourceCandidateCount = Number(evidence?.boundarySplatSourceCandidateCount ?? evidence?.sourceCandidateCount);
   const requestedInstanceCount = Number(evidence?.boundarySplatRequestedInstanceCount ?? evidence?.requestedInstanceCount);
@@ -714,6 +717,14 @@ function validateAllocationEvidence(evidence, requestedLodMode, context) {
     throw new Error(`stale-or-default-indirect-draw:${context}:${JSON.stringify({
       expected: INDIRECT_DRAW,
       effective: indirectDrawIdentity,
+    })}`);
+  }
+  if (indirectCommandAuthority !== INDIRECT_COMMAND_AUTHORITY || indirectCommandAgreement !== true) {
+    throw new Error(`indirect-command-readback-disagreement:${context}:${JSON.stringify({
+      expectedAuthority: INDIRECT_COMMAND_AUTHORITY,
+      effectiveAuthority: indirectCommandAuthority,
+      agreement: indirectCommandAgreement,
+      command: evidence?.boundarySplatIndirectCommand ?? evidence?.indirectCommand,
     })}`);
   }
   if (!Number.isFinite(sourceCandidateCount) || sourceCandidateCount <= 0) {
@@ -918,6 +929,9 @@ function compactState(state) {
     lodMode: state?.boundarySplatLodMode,
     adaptiveLodIdentity: state?.boundarySplatAdaptiveLodIdentity,
     indirectDrawIdentity: state?.boundarySplatIndirectDrawIdentity,
+    indirectCommand: state?.boundarySplatIndirectCommand,
+    indirectCommandAgreement: state?.boundarySplatIndirectCommandAgreement,
+    indirectCommandAuthority: state?.boundarySplatIndirectCommandAuthority,
     tierGroups: state?.boundarySplatTierGroups,
     requestedTierGroups: state?.boundarySplatRequestedTierGroups,
     globalRenderedInstanceCount: state?.boundarySplatGlobalRenderedInstanceCount,

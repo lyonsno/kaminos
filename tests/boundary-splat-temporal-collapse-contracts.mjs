@@ -116,6 +116,8 @@ assert.match(witness, /validateBoundarySplatTemporalSequence/, 'completed report
 assert.match(witness, /sampleBoundarySplatCandidateGeometry/, 'operator-shaped candidates must preserve paused-frame source geometry before the simulator resumes');
 assert.match(witness, /const exactDrawState = pause\.exactDrawState/, 'sample accounting must bind to the pause-owned exact GPU draw state');
 assert.match(witness, /boundary-splat-single-global-indirect-no-first-instance-v0/, 'temporal witness must reject stale per-tier indirect firstInstance residency');
+assert.match(witness, /gpu-indirect-command-buffer-post-submit-readback-v0/, 'temporal witness must require physical indirect-command readback authority');
+assert.match(witness, /exactDrawState\.indirectCommandAgreement !== true/, 'temporal capture must reject disagreement between physical and logical draw commands');
 assert.match(witness, /boundarySplatIndirectDrawIdentity/, 'temporal reports must preserve the effective indirect draw identity');
 assert.match(witness, /sourceCandidateCount: Number\(exactDrawState\.sourceCandidateCount\)/, 'sample source count must not fall back to ambient telemetry');
 assert.match(witness, /nextLiveSampleAt = Date\.now\(\) \+ sampleMs/, 'each exact-frame sample must be followed by a full caller-owned live interval');

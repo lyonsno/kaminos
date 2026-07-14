@@ -5861,6 +5861,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatLodMode: normalizeBoundarySplatLodMode(controlsSnapshot.boundarySplatLodMode),
     boundarySplatAdaptiveLodIdentity: BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY,
     boundarySplatIndirectDrawIdentity: BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY,
+    boundarySplatIndirectCommand: null,
+    boundarySplatIndirectCommandAgreement: null,
+    boundarySplatIndirectCommandAuthority: null,
     boundarySplatTierGroups: [],
     boundarySplatRequestedTierGroups: [],
     boundarySplatGlobalRenderedInstanceCount: null,
@@ -7043,7 +7046,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatIndirectBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} indirect arguments`,
       size: BOUNDARY_SPLAT_DRAW_GROUP_COUNT * BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,
-      usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
@@ -9915,28 +9918,58 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function sampleBoundarySplatDrawState() {
-    if (!boundarySplatRequested() || !boundarySplatDrawBuffer || !boundarySplatDrawGroupBuffer) return null;
+    if (!boundarySplatRequested() || !boundarySplatDrawBuffer || !boundarySplatDrawGroupBuffer || !boundarySplatIndirectBuffer) return null;
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const drawStateBytes = 64;
+    const groupStateBytes = BOUNDARY_SPLAT_DRAW_GROUP_COUNT * BOUNDARY_SPLAT_DRAW_GROUP_STRIDE_BYTES;
+    const indirectCommandOffset = drawStateBytes + groupStateBytes;
     const readback = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness draw-state readback`,
-      size: 64 + BOUNDARY_SPLAT_DRAW_GROUP_COUNT * BOUNDARY_SPLAT_DRAW_GROUP_STRIDE_BYTES,
+      size: indirectCommandOffset + BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
     const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness draw-state encoder` });
-    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, readback, 0, 64);
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, readback, 0, drawStateBytes);
     encoder.copyBufferToBuffer(
       boundarySplatDrawGroupBuffer,
       0,
       readback,
-      64,
-      BOUNDARY_SPLAT_DRAW_GROUP_COUNT * BOUNDARY_SPLAT_DRAW_GROUP_STRIDE_BYTES,
+      drawStateBytes,
+      groupStateBytes,
+    );
+    encoder.copyBufferToBuffer(
+      boundarySplatIndirectBuffer,
+      0,
+      readback,
+      indirectCommandOffset,
+      BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,
     );
     device.queue.submit([encoder.finish()]);
     await readback.mapAsync(GPUMapMode.READ);
     const mappedRange = readback.getMappedRange();
     const drawState = new Uint32Array(mappedRange, 0, 16);
-    const groupState = new Uint32Array(mappedRange, 64, BOUNDARY_SPLAT_DRAW_GROUP_COUNT * 8);
+    const groupState = new Uint32Array(mappedRange, drawStateBytes, BOUNDARY_SPLAT_DRAW_GROUP_COUNT * 8);
+    const indirectState = new Uint32Array(mappedRange, indirectCommandOffset, 4);
     const tierGroups = boundarySplatTierGroupsFromReadback(groupState);
+    const indirectCommand = {
+      vertexCount: indirectState[0],
+      instanceCount: indirectState[1],
+      firstVertex: indirectState[2],
+      firstInstance: indirectState[3],
+    };
+    const logicalIndirectCommand = {
+      vertexCount: drawState[0],
+      instanceCount: drawState[1],
+      firstVertex: drawState[2],
+      firstInstance: drawState[3],
+    };
+    const indirectCommandAgreement = indirectCommand.vertexCount === 6
+      && indirectCommand.vertexCount === logicalIndirectCommand.vertexCount
+      && indirectCommand.instanceCount === logicalIndirectCommand.instanceCount
+      && indirectCommand.firstVertex === logicalIndirectCommand.firstVertex
+      && indirectCommand.firstInstance === logicalIndirectCommand.firstInstance
+      && indirectCommand.firstVertex === 0
+      && indirectCommand.firstInstance === 0;
     const result = {
       instanceCount: drawState[1],
       candidateCount: drawState[4],
@@ -9957,6 +9990,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lodMode: normalizeBoundarySplatLodMode(controlsSnapshot.boundarySplatLodMode),
       adaptiveLodIdentity: BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY,
       indirectDrawIdentity: BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY,
+      indirectCommand,
+      indirectCommandAgreement,
+      indirectCommandAuthority: 'gpu-indirect-command-buffer-post-submit-readback-v0',
       tierGroups,
       globalRenderedInstanceCount: drawState[1],
       phaseMode: normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode),
@@ -9970,6 +10006,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     readback.unmap();
     readback.destroy();
+    if (!indirectCommandAgreement) {
+      throw new Error(`boundary-splat-indirect-command-mismatch:${JSON.stringify({
+        expected: logicalIndirectCommand,
+        effective: indirectCommand,
+      })}`);
+    }
     state.boundarySplatInstanceCount = result.instanceCount;
     applyBoundarySplatTierGroupTelemetry(result.tierGroups, result.globalRenderedInstanceCount);
     state.boundarySplatCandidateCount = result.candidateCount;
@@ -9994,6 +10036,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatEffectiveHistoryWindowFrames = result.effectiveHistoryWindowFrames;
     state.boundarySplatPhaseModeIdentity = result.phaseModeIdentity;
     state.boundarySplatPhaseSourceIdentity = result.phaseSourceIdentity;
+    state.boundarySplatIndirectCommand = result.indirectCommand;
+    state.boundarySplatIndirectCommandAgreement = result.indirectCommandAgreement;
+    state.boundarySplatIndirectCommandAuthority = result.indirectCommandAuthority;
     return result;
   }
 
@@ -10048,6 +10093,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             lodMode: state.boundarySplatLodMode,
             adaptiveLodIdentity: state.boundarySplatAdaptiveLodIdentity,
             indirectDrawIdentity: state.boundarySplatIndirectDrawIdentity,
+            indirectCommand: state.boundarySplatIndirectCommand,
+            indirectCommandAgreement: state.boundarySplatIndirectCommandAgreement,
+            indirectCommandAuthority: state.boundarySplatIndirectCommandAuthority,
             tierGroups: state.boundarySplatTierGroups,
             globalRenderedInstanceCount: state.boundarySplatGlobalRenderedInstanceCount,
             historyArchiveCandidateCount: state.boundarySplatHistoryArchiveCandidateCount,
@@ -10135,6 +10183,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           lodMode: draw?.lodMode ?? null,
           adaptiveLodIdentity: draw?.adaptiveLodIdentity ?? null,
           indirectDrawIdentity: draw?.indirectDrawIdentity ?? null,
+          indirectCommand: draw?.indirectCommand ?? null,
+          indirectCommandAgreement: draw?.indirectCommandAgreement ?? null,
+          indirectCommandAuthority: draw?.indirectCommandAuthority ?? null,
           tierGroups: draw?.tierGroups ?? [],
           globalRenderedInstanceCount: draw?.globalRenderedInstanceCount ?? null,
           historyArchiveCandidateCount: draw?.historyArchiveCandidateCount ?? null,
@@ -10288,6 +10339,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           lodMode: draw?.lodMode ?? null,
           adaptiveLodIdentity: draw?.adaptiveLodIdentity ?? null,
           indirectDrawIdentity: draw?.indirectDrawIdentity ?? null,
+          indirectCommand: draw?.indirectCommand ?? null,
+          indirectCommandAgreement: draw?.indirectCommandAgreement ?? null,
+          indirectCommandAuthority: draw?.indirectCommandAuthority ?? null,
           tierGroups: draw?.tierGroups ?? [],
           globalRenderedInstanceCount: draw?.globalRenderedInstanceCount ?? null,
           historyArchiveCandidateCount: draw?.historyArchiveCandidateCount ?? null,
@@ -12478,6 +12532,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatLodMode: boundarySplatSample?.lodMode ?? state.boundarySplatLodMode,
       boundarySplatAdaptiveLodIdentity: boundarySplatSample?.adaptiveLodIdentity ?? state.boundarySplatAdaptiveLodIdentity,
       boundarySplatIndirectDrawIdentity: boundarySplatSample?.indirectDrawIdentity ?? state.boundarySplatIndirectDrawIdentity,
+      boundarySplatIndirectCommand: boundarySplatSample?.indirectCommand ?? state.boundarySplatIndirectCommand,
+      boundarySplatIndirectCommandAgreement: boundarySplatSample?.indirectCommandAgreement ?? state.boundarySplatIndirectCommandAgreement,
+      boundarySplatIndirectCommandAuthority: boundarySplatSample?.indirectCommandAuthority ?? state.boundarySplatIndirectCommandAuthority,
       boundarySplatTierGroups: boundarySplatSample?.tierGroups ?? state.boundarySplatTierGroups,
       boundarySplatRequestedTierGroups: state.boundarySplatRequestedTierGroups,
       boundarySplatGlobalRenderedInstanceCount: boundarySplatSample?.globalRenderedInstanceCount ?? state.boundarySplatGlobalRenderedInstanceCount,

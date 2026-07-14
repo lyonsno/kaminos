@@ -42,6 +42,8 @@ assert.match(witness, /stale-or-default-pbr-scene/, 'witness must fail when requ
 assert.match(witness, /fallback-route/, 'witness must reject fallback rendering');
 assert.match(witness, /blank-or-partial-native-capture/, 'witness must reject missing or blank visual output');
 assert.match(witness, /duplicated-simulation-authority/, 'witness must reject any PBR path that adds a simulator');
+assert.match(witness, /gpu-indirect-command-buffer-post-submit-readback-v0/, 'PBR evidence must require physical indirect-command readback authority');
+assert.match(witness, /indirect-command-readback-disagreement/, 'PBR evidence must fail when the physical draw command disagrees with logical allocation state');
 assert.match(witness, /failed-before-primary-output/, 'witness must durably report failure before primary output exists');
 
 console.log('boundary splat PBR fire-field contracts passed');
