@@ -168,13 +168,13 @@ await assert.rejects(
 );
 
 const sam31PackageContract = {
-  modelPackageSchema: 'kaminos.sam31-browser-tracker-model-package.v0',
-  invocationSchema: 'kaminos.sam31-browser-tracker-invocation.v0',
-  verificationSchema: 'kaminos.sam31-browser-tracker-verification.v0',
-  modelPackagePrefix: 'sam31-tracker-model-package:',
-  invocationPrefix: 'sam31-tracker-invocation:',
-  verificationPrefix: 'sam31-tracker-verification:',
-  evidenceSchema: 'kaminos.sam31-browser-tracker-package-invocation-evidence.v0',
+  modelPackageSchema: 'kaminos.sam31-browser-tracker-legacy-model-package.v0',
+  invocationSchema: 'kaminos.sam31-browser-tracker-legacy-invocation.v0',
+  verificationSchema: 'kaminos.sam31-browser-tracker-legacy-verification.v0',
+  modelPackagePrefix: 'sam31-tracker-legacy-model-package:',
+  invocationPrefix: 'sam31-tracker-legacy-invocation:',
+  verificationPrefix: 'sam31-tracker-legacy-verification:',
+  evidenceSchema: 'kaminos.sam31-browser-tracker-legacy-package-invocation-evidence.v0',
   modelPackageFields: ['packageId', 'model', 'source', 'routeIds', 'geometry', 'staticArtifacts'],
   invocationFields: ['invocationId', 'sourceImages', 'initialMask', 'session'],
   verificationFields: ['verificationId', 'verifiedPackageId', 'verifiedInvocationId', 'reference', 'tolerances', 'tensors'],
@@ -360,6 +360,21 @@ assert.throws(
   }),
   /invocation missing required identity field modelPackageId/,
   'a same-schema invocation must not omit package binding and authenticate against a substituted package',
+);
+
+const weakenedSameSchemaContract = {
+  ...SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
+  invocationFields: SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationFields
+    .filter(field => field !== 'modelPackageId'),
+};
+assert.throws(
+  () => resolveSam3BrowserPackageManifestSync(omittedBindingRoot, {
+    contract: weakenedSameSchemaContract,
+    readArtifactText: file => omittedBindingArtifacts.get(file),
+    sha256Text: text => `sha256:${sha256TextSync(text)}`,
+  }),
+  /SAM 3\.1 invocation contract must require modelPackageId/,
+  'the current SAM 3.1 invocation schema must not be weakened by a caller-supplied field list',
 );
 
 console.log('sam3.1 packet byte and temporal authority contracts passed');

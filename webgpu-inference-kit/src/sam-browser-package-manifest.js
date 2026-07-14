@@ -2,6 +2,10 @@ export const SAM3_BROWSER_MODEL_PACKAGE_SCHEMA = 'kaminos.sam3-browser-model-pac
 export const SAM3_BROWSER_INVOCATION_SCHEMA = 'kaminos.sam3-browser-invocation.v0';
 export const SAM3_BROWSER_VERIFICATION_SCHEMA = 'kaminos.sam3-browser-verification.v0';
 
+const REQUIRED_INVOCATION_IDENTITY_FIELDS = new Map([
+  ['kaminos.sam31-browser-tracker-invocation.v0', Object.freeze(['modelPackageId'])],
+]);
+
 const MODEL_PACKAGE_FIELDS = [
   'packageId',
   'model',
@@ -297,6 +301,15 @@ function validateRootAuthority(root, contract) {
   }
 }
 
+function validateContractAuthority(contract) {
+  const requiredFields = REQUIRED_INVOCATION_IDENTITY_FIELDS.get(contract.invocationSchema) || [];
+  for (const field of requiredFields) {
+    if (!contract.invocationFields.includes(field)) {
+      throw new Error(`SAM 3.1 invocation contract must require ${field}`);
+    }
+  }
+}
+
 function validateArtifactRef(ref, expectedSchema, label) {
   requireObject(ref, `${label} reference`);
   if (typeof ref.file !== 'string' || ref.file.length === 0) throw new Error(`${label} reference missing file`);
@@ -424,6 +437,7 @@ function isSplitManifest(root) {
 export async function resolveSam3BrowserPackageManifest(rootManifest, { readArtifactText, sha256Text, contract = SAM3_BROWSER_PACKAGE_CONTRACT }) {
   const root = requireObject(rootManifest, 'root manifest');
   if (!isSplitManifest(root)) return { manifest: root, evidence: null };
+  validateContractAuthority(contract);
   validateRootAuthority(root, contract);
   validateArtifactRef(root.modelPackage, contract.modelPackageSchema, 'model package');
   validateArtifactRef(root.invocation, contract.invocationSchema, 'invocation');
@@ -469,6 +483,7 @@ export async function resolveSam3BrowserPackageManifest(rootManifest, { readArti
 export function resolveSam3BrowserPackageManifestSync(rootManifest, { readArtifactText, sha256Text, contract = SAM3_BROWSER_PACKAGE_CONTRACT }) {
   const root = requireObject(rootManifest, 'root manifest');
   if (!isSplitManifest(root)) return { manifest: root, evidence: null };
+  validateContractAuthority(contract);
   validateRootAuthority(root, contract);
   validateArtifactRef(root.modelPackage, contract.modelPackageSchema, 'model package');
   validateArtifactRef(root.invocation, contract.invocationSchema, 'invocation');
