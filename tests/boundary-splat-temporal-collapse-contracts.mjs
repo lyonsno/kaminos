@@ -78,6 +78,13 @@ const advancingSequence = [
 const advancement = validateBoundarySplatTemporalSequence(advancingSequence, { requestedDurationMs: 500, sampleMs: 250 });
 assert.equal(advancement.ok, true, 'advancing distinct sequence must carry live temporal authority');
 assert.equal(advancement.distinctImageCount, 3, 'advancement must account for distinct retained frames');
+const delayedFirstCapture = validateBoundarySplatTemporalSequence([
+  { index: 0, elapsedMs: 268, frameCount: 400, simStepCount: 500, image: { sha256: 'd' } },
+  { index: 1, elapsedMs: 480, frameCount: 410, simStepCount: 510, image: { sha256: 'e' } },
+  { index: 2, elapsedMs: 723, frameCount: 420, simStepCount: 520, image: { sha256: 'f' } },
+], { requestedDurationMs: 1000, sampleMs: 500 });
+assert.equal(delayedFirstCapture.durationComplete, true, 'duration authority starts at sequence start, not after first screenshot latency');
+assert.equal(delayedFirstCapture.actualDurationMs, 723);
 assert.throws(
   () => validateBoundarySplatTemporalSequence(advancingSequence.map(sample => ({
     ...sample,

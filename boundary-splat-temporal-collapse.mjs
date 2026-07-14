@@ -216,7 +216,7 @@ export function validateBoundarySplatTemporalSequence(samples, options = {}) {
   const frameAdvance = frameCounts.at(-1) - frameCounts[0];
   const simStepAdvance = simStepCounts.at(-1) - simStepCounts[0];
   const distinctImageCount = new Set(imageHashes.filter(Boolean)).size;
-  const actualDurationMs = Number(last?.elapsedMs) - Number(first?.elapsedMs);
+  const actualDurationMs = Number(last?.elapsedMs);
   const durationComplete = Number.isFinite(actualDurationMs)
     && actualDurationMs >= Math.max(0, requestedDurationMs - sampleMs);
   if (
