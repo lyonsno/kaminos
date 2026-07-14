@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument("--checkpoint", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--source-root", default=str(Path.home() / "dev/sam3"))
     parser.add_argument("--seed", type=int, default=3167)
+    parser.add_argument("--mask-variant", type=int, default=0)
     parser.add_argument("--frame0-mode", choices=("propagation-decoder", "mask-conditioning"), default="propagation-decoder")
     parser.add_argument("--ingress-packet-dir")
     parser.add_argument("--expected-ingress-manifest-sha256")
@@ -289,11 +290,13 @@ def build_interactive_mask_proxy(video_module, state):
     return proxy
 
 
-def create_binary_mask_fixture():
+def create_binary_mask_fixture(variant=0):
+    if variant < 0:
+        raise ValueError("mask variant must be non-negative")
     masks = torch.zeros((16, 1, 8, 8), dtype=torch.float32)
     for object_index in range(7):
-        row = object_index % 4
-        column = (object_index * 3) % 4
+        row = (object_index + variant) % 4
+        column = (object_index * 3 + variant * 2) % 4
         masks[object_index, 0, row : row + 4, column : column + 4] = 1.0
     return masks
 
@@ -449,7 +452,7 @@ def main():
         }
     with torch.inference_mode():
         if args.frame0_mode == "mask-conditioning":
-            frame0_binary_masks = create_binary_mask_fixture()
+            frame0_binary_masks = create_binary_mask_fixture(args.mask_variant)
             interactive_high_res_features = [frame0_inputs["interactive_high0"], frame0_inputs["interactive_high1"]]
             frame0_outputs = video_module.VideoTrackingMultiplex._use_mask_as_output(
                 interactive_mask_proxy,
@@ -624,7 +627,7 @@ def main():
         "boundary": boundary,
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "reference": reference,
-        "fixture": {"seed": args.seed, "kind": "two-distinct-source-images-with-deterministic-mixed-object-mask" if two_image else "deterministic-two-frame-mixed-object-presence", "sourceFeaturesSynthetic": not two_image},
+        "fixture": {"seed": args.seed, "maskVariant": args.mask_variant, "kind": "two-distinct-source-images-with-deterministic-mixed-object-mask" if two_image else "deterministic-two-frame-mixed-object-presence", "sourceFeaturesSynthetic": not two_image},
         "imageIngress": image_ingress,
         "componentManifests": {"decoder": "/oracle/decoder/tensor-manifest.json", "memory": "/oracle/memory/tensor-manifest.json", "temporal": "/oracle/temporal/tensor-manifest.json"},
         "shape": {"batch": 1, "multiplexCount": 16, "queryHeight": 2, "queryWidth": 2, "queryTokens": 4, "memorySpatialTokens": 4, "numObjPtrTokens": 16, "memoryTokens": 20, "channels": 256, "maskHeight": 8, "maskWidth": 8},

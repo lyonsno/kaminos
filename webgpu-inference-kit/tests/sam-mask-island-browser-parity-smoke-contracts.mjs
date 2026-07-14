@@ -17,6 +17,15 @@ const routeSource = readFileSync(new URL('../src/sam-mask-decoder-island.js', im
 const smokeHtml = readFileSync(new URL('../smokes/sam-mask-island-parity.html', import.meta.url), 'utf8');
 const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', import.meta.url), 'utf8');
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
+const trackerWitness = readFileSync(new URL('../tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', import.meta.url), 'utf8');
+const trackerSmokeJs = readFileSync(new URL('../smokes/sam31-two-frame-tracker-parity.js', import.meta.url), 'utf8');
+const trackerOrchestratorPath = new URL('../smokes/sam31-two-image-tracker-orchestrator.js', import.meta.url);
+const trackerInvocationHtmlPath = new URL('../smokes/sam31-two-image-tracker-invocation.html', import.meta.url);
+assert.ok(existsSync(trackerOrchestratorPath), 'the two-invocation witness must have a parent-realm orchestrator');
+assert.ok(existsSync(trackerInvocationHtmlPath), 'the tracker invocation must run in a disposable child realm');
+const trackerOrchestrator = readFileSync(trackerOrchestratorPath, 'utf8');
+const trackerInvocationHtml = readFileSync(trackerInvocationHtmlPath, 'utf8');
+const trackerMainHtml = readFileSync(new URL('../smokes/sam31-two-image-tracker-parity.html', import.meta.url), 'utf8');
 const diagnosticReplay = readFileSync(new URL('../tools/sam-browser-diagnostic-mlx-replay.py', import.meta.url), 'utf8');
 const toleranceCalibration = JSON.parse(readFileSync(new URL('../tools/sam-gate-u-tolerance-calibration.json', import.meta.url), 'utf8'));
 const composedSamRouteFiles = [
@@ -192,6 +201,44 @@ assert.match(witness, /browserFpnDetrIngressEvidence:\s*lastState\?\.browserFpnD
 assert.match(witness, /imageFpnNeck browser DETR ingress evidence missing/, 'witness must assert browser FPN-derived DETR ingress evidence for image-FPN-neck packets');
 assert.match(witness, /--second-oracle-dir/, 'witness must support a second independently verified invocation packet');
 assert.match(witness, /dualInvocationEvidence/, 'witness must preserve same-package dual-invocation freshness evidence');
+assert.match(trackerWitness, /packetSource:\s*packageMode\s*\?\s*'browser-package'/, 'package witness report must identify the browser-package authority surface');
+assert.match(trackerWitness, /dualInvocationEvidence:\s*lastState\?\.dualInvocationEvidence/, 'package witness must promote dual-invocation evidence to the report authority surface');
+assert.match(trackerWitness, /invocations:\s*lastState\?\.invocations/, 'package witness must promote both invocation records to the report authority surface');
+assert.match(trackerMainHtml, /sam31-two-image-tracker-orchestrator\.js/, 'the public witness page must own cross-invocation orchestration');
+assert.match(trackerInvocationHtml, /sam31-two-frame-tracker-parity\.js/, 'each disposable child realm must run the exact tracker implementation');
+assert.match(trackerOrchestrator, /sam31SharedTrackerPackageCache/, 'the parent realm must retain one authenticated static package cache across children');
+assert.match(trackerOrchestrator, /iframe\.remove\(\)/, 'the first invocation realm must be destroyed before the second begins');
+assert.match(trackerOrchestrator, /globalThis\.gc\(\)/, 'the parent witness must collect the removed invocation realm before continuing');
+assert.match(trackerOrchestrator, /createSam31BrowserTrackerDualInvocationEvidence/, 'the parent must derive the dual-invocation gate from both child records');
+assert.match(trackerOrchestrator, /sam31TwoFrameTrackerParityState\s*=\s*\(options\s*=\s*\{\}\)/, 'the parent state hook must expose a bounded summary mode for CDP polling');
+assert.match(trackerWitness, /sam31TwoFrameTrackerParityState\?\.\(\{ summary: true \}\)/, 'the driver must poll bounded state rather than serializing completed invocation profiles repeatedly');
+assert.match(trackerOrchestrator, /options\.evidence\s*\?\s*createTerminalEvidenceState\(state\)/, 'the parent state hook must expose a compact terminal evidence projection');
+assert.match(trackerOrchestrator, /timings:\s*compactReceiptTimings\(receipt\.timings\)/, 'terminal receipt evidence must retain timing identity without returning full phase metadata graphs');
+assert.match(trackerWitness, /sam31TwoFrameTrackerParityState\?\.\(\{ evidence: true \}\)/, 'the driver must fetch the compact evidence projection after terminal status');
+assert.match(trackerOrchestrator, /statusElement\.textContent\s*=\s*JSON\.stringify\(createVisibleState\(state\),\s*null,\s*2\)/, 'the human-visible receipt must render a bounded truthful projection instead of the raw state graph');
+assert.match(trackerOrchestrator, /completedInvocationCount:\s*invocations\.length,\s*invocationIndex:\s*invocations\.length\s*-\s*1,\s*childStatus:\s*'passed'/, 'terminal parent state must report both completed invocations and no running child');
+assert.match(trackerOrchestrator, /dualInvocationPassed:\s*sourceState\.dualInvocationEvidence\?\.passed\s*\|\|\s*false/, 'the visible terminal receipt must surface the load-bearing dual-invocation gate');
+assert.match(trackerSmokeJs, /parent\.sam31SharedTrackerPackageCache/, 'child invocation loading must consume the parent-owned package cache');
+assert.match(trackerSmokeJs, /const invocationExecution = \{\}/, 'each tracker invocation must receive an isolated WebGPU execution context');
+assert.match(trackerSmokeJs, /runInvocation\(packageRoots\[index\],\s*index,\s*invocationExecution\)/, 'every package invocation must consume its own execution context');
+assert.match(trackerSmokeJs, /closeExecutionContext\(invocationExecution/, 'the dual loop must drain and destroy each invocation device before the next session');
+assert.match(
+  trackerSmokeJs,
+  /execution\.device\.destroy\(\);\s*await execution\.device\.lost;/,
+  'the next invocation must wait until intentional WebGPU device destruction is observed by the browser',
+);
+assert.match(trackerSmokeJs, /persistentStaticBacking:\s*params\.get\('staticBacking'\)\s*===\s*'opfs'/, 'OPFS package storage must be explicit rather than silently imposed on every same-page invocation');
+assert.match(trackerSmokeJs, /device\.lost\.then/, 'the repeated-invocation witness must surface WebGPU device loss instead of waiting for an opaque CDP timeout');
+assert.ok(
+  trackerSmokeJs.indexOf('if (execution.closing) return;') < trackerSmokeJs.indexOf('execution.deviceLoss = {'),
+  'intentional device destruction must be excluded before recording device-loss evidence',
+);
+assert.match(trackerSmokeJs, /between-invocation-checkpoint/, 'the dual witness must drain the queue and yield between complete tracker invocations');
+const betweenInvocationUpdate = trackerSmokeJs.match(/update\('running', 'between-invocation-checkpoint', [^\n]+/)?.[0] || '';
+assert.match(betweenInvocationUpdate, /\binvocations,/, 'a second-invocation failure report must retain every completed invocation record, not only a count');
+assert.match(trackerWitness, /staticBacking:\s*packageMode\s*\?\s*staticBacking/, 'the witness report must expose the effective static backing mode');
+assert.match(trackerWitness, /--js-flags=--expose-gc/, 'the parity witness must expose deterministic collection for large debug readbacks between invocations');
+assert.match(trackerWitness, /deviceLoss:\s*lastState\?\.deviceLoss/, 'the durable report must promote any WebGPU device-loss evidence');
 assert.match(witness, /staticHashVerificationFailureCount/, 'dual witness must reject any failed static package payload authentication');
 assert.match(witness, /staticHashVerificationCount\s*!==\s*firstCache\.staticNetworkLoadCount/, 'dual witness must prove every static network payload was authenticated before reuse');
 assert.equal(toleranceCalibration.acceptanceBudget.imagePatchEmbedCpuMaxAbsDiff, 0.000012, 'Gate U calibration must cover the grounded released-checkpoint CPU patch-embed residual');
@@ -252,6 +299,29 @@ assert.deepEqual(staticArtifactCache.evidence(), {
   staticHashVerificationCount: 2,
   staticHashVerificationFailureCount: 0,
 });
+const releasedStaticReads = [];
+const releasedStaticCache = createSam3BrowserStaticArtifactCache({
+  retainStaticValues: false,
+  fetchArrayBuffer: async url => {
+    releasedStaticReads.push(url);
+    return staticArrayBytes.buffer;
+  },
+  fetchText: async url => `text:${url}`,
+});
+releasedStaticCache.configure({
+  packageId: 'sam3-model-package:released',
+  artifacts: [{ url: '/weights/released.bin', kind: 'array-buffer', sha256: sha256Value(staticArrayBytes) }],
+});
+releasedStaticCache.configureInvocation({
+  invocationId: 'sam3-invocation:released',
+  artifacts: [{ url: '/invocation/released.bin', kind: 'array-buffer', sha256: sha256Value(staticArrayBytes) }],
+});
+await releasedStaticCache.fetchArray('/weights/released.bin', Uint8Array);
+await releasedStaticCache.fetchArray('/weights/released.bin', Uint8Array);
+assert.deepEqual(releasedStaticReads, ['/weights/released.bin', '/weights/released.bin'], 'releasable caches must reacquire a previously authenticated static value from their backing store');
+assert.equal(releasedStaticCache.evidence().staticNetworkLoadCount, 1);
+assert.equal(releasedStaticCache.evidence().staticCacheHitCount, 1);
+assert.equal(releasedStaticCache.evidence().staticHashVerificationCount, 2, 'reacquired backing-store bytes must be authenticated again');
 const corruptStaticCache = createSam3BrowserStaticArtifactCache({
   fetchArrayBuffer: async () => staticArrayBytes.buffer,
   fetchText: async () => staticTextValue,

@@ -15,7 +15,7 @@ export const SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT = Object.freeze({
   evidenceSchema: 'kaminos.sam31-browser-tracker-package-invocation-evidence.v0',
   modelPackageFields: Object.freeze(['packageId', 'model', 'source', 'routeIds', 'geometry', 'components', 'staticArtifacts', 'claims']),
   invocationFields: Object.freeze(['invocationId', 'sourceImages', 'initialMask', 'session', 'dynamicArtifacts']),
-  verificationFields: Object.freeze(['verificationId', 'verifiedPackageId', 'verifiedInvocationId', 'reference', 'tolerances', 'componentAuthorities', 'tensors']),
+  verificationFields: Object.freeze(['verificationId', 'verifiedPackageId', 'verifiedInvocationId', 'reference', 'stateTransition', 'tolerances', 'componentAuthorities', 'tensors']),
 });
 
 const PACKET_NAMES = Object.freeze(['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer']);
@@ -67,7 +67,7 @@ async function identity(prefix, value, fields, identityField) {
 }
 
 function componentMetadata(manifest) {
-  const excluded = new Set(['tensors', 'weights', 'attentionWeights', 'tolerances', 'createdAt', 'outputSummary', 'assemblyParity']);
+  const excluded = new Set(['tensors', 'weights', 'attentionWeights', 'tolerances', 'createdAt', 'outputSummary', 'assemblyParity', 'sourceImages', 'fixture', 'stateTransition', 'imageIngress']);
   return Object.fromEntries(Object.entries(manifest).filter(([key]) => !excluded.has(key)));
 }
 
@@ -117,7 +117,11 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
     for (const entry of manifest.tensors || []) {
       const key = `${packetName}:${entry.role}`;
       if (INVOCATION_TENSORS.has(key)) {
-        dynamicArtifacts.push({ ...addOwned(packetName, entry, 'invocation'), invocationRole: INVOCATION_TENSORS.get(key) });
+        dynamicArtifacts.push({
+          ...addOwned(packetName, entry, 'invocation'),
+          packetName,
+          invocationRole: INVOCATION_TENSORS.get(key),
+        });
       } else if (STATIC_TENSORS.has(key)) {
         staticTensors.push(addStatic(packetName, entry, 'tensor'));
       } else {
@@ -161,7 +165,13 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
     invocationId: 'pending',
     sourceImages: frameArtifacts.map((entry, frameIndex) => ({ frameIndex, role: entry.role, file: entry.file, sha256: entry.sha256, byteLength: entry.byteLength })),
     initialMask: { role: maskArtifact.role, file: maskArtifact.file, sha256: maskArtifact.sha256, byteLength: maskArtifact.byteLength },
-    session: { sessionId, conditioningFrameIndex: 0, propagationFrameIndices: [1] },
+    session: {
+      sessionId,
+      conditioningFrameIndex: 0,
+      propagationFrameIndices: [1],
+      conditioningObjects: episode.stateTransition?.conditioningObjects || Array.from({ length: 16 }, (_, index) => index),
+      maskVariant: episode.fixture?.maskVariant ?? 0,
+    },
     dynamicArtifacts: dynamicArtifacts.map(({ invocationRole, ...entry }) => ({ ...entry, invocationRole })),
   };
   invocation.invocationId = await identity(SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationPrefix, invocation, SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationFields, 'invocationId');
@@ -172,6 +182,7 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
     verifiedPackageId: modelPackage.packageId,
     verifiedInvocationId: invocation.invocationId,
     reference: episode.reference,
+    ...(episode.stateTransition ? { stateTransition: episode.stateTransition } : {}),
     tolerances: Object.fromEntries(PACKET_NAMES.map(name => [name, packets[name].tolerances || null])),
     componentAuthorities,
     tensors: verificationTensors,

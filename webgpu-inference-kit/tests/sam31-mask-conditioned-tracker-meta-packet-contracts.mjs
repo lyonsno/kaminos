@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 const root = new URL('../', import.meta.url);
 const exporter = new URL('../tools/sam31-two-frame-tracker-meta-packet.py', import.meta.url);
 const outDir = await mkdtemp(join(tmpdir(), 'sam31-mask-conditioned-meta-'));
+const variantOutDir = await mkdtemp(join(tmpdir(), 'sam31-mask-conditioned-meta-variant-'));
 const python = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
 const run = spawnSync(
   python,
@@ -77,5 +78,16 @@ assert.equal(manifest.stateTransition.noObjectMaskScore, null);
 assert.ok(byRole['frame-0-memory-features']);
 assert.ok(byRole['frame-1-memory-conditioned-features']);
 assert.ok(byRole['frame-1-selected-masks']);
+
+const variantRun = spawnSync(
+  python,
+  [exporter.pathname, '--out-dir', variantOutDir, '--frame0-mode', 'mask-conditioning', '--mask-variant', '1'],
+  { cwd: root.pathname, encoding: 'utf8', timeout: 240000 },
+);
+assert.equal(variantRun.status, 0, variantRun.stderr || variantRun.stdout);
+const variantManifest = JSON.parse(await readFile(join(variantOutDir, 'tensor-manifest.json'), 'utf8'));
+const variantMask = variantManifest.tensors.find(entry => entry.role === 'frame-0-binary-mask-inputs');
+assert.notEqual(variantMask.sha256, byRole['frame-0-binary-mask-inputs'].sha256, 'mask variants must produce distinct invocation-owned mask identities');
+assert.equal(variantManifest.fixture.maskVariant, 1);
 
 console.log('sam3.1 mask-conditioned tracker official meta-packet contracts passed');

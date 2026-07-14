@@ -275,6 +275,11 @@ assert.equal(packageProjection.verification.verificationId, repeatedProjection.v
 assert.equal(packageProjection.modelPackage.staticArtifacts.filter(entry => entry.sha256 === sharedWeight.sha256).length, 1, 'identical checkpoint bytes must be stored once');
 assert.equal(packageProjection.modelPackage.staticArtifacts.find(entry => entry.sha256 === sharedWeight.sha256).aliases.length, 2, 'deduplicated bytes must preserve both component aliases');
 assert.deepEqual(packageProjection.invocation.dynamicArtifacts.map(entry => entry.role).sort(), ['frame-0-binary-mask-inputs', 'frame-0-rgba', 'frame-1-rgba']);
+assert.deepEqual(
+  packageProjection.invocation.dynamicArtifacts.map(entry => `${entry.packetName}:${entry.role}`).sort(),
+  ['episode:frame-0-binary-mask-inputs', 'ingress:frame-0-rgba', 'ingress:frame-1-rgba'],
+  'invocation artifacts must carry their authoritative component ownership into the browser package',
+);
 assert.equal(packageProjection.verification.tensors.ingress.some(entry => entry.role === 'frame-0-rgba'), false, 'source images must not remain verification-owned');
 assert.equal(packageProjection.verification.tensors.episode.some(entry => entry.role === 'frame-0-binary-mask-inputs'), false, 'initial mask must not remain verification-owned');
 assert.equal(packageProjection.modelPackage.components.temporal.staticTensors.length, 3, 'temporal embeddings and pointer projection must be package-owned');

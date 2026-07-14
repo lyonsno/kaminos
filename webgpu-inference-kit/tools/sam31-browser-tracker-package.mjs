@@ -89,8 +89,11 @@ async function materialize(projection) {
     }
     if (targetExists) {
       const targetStat = await stat(target);
-      const targetSha256 = targetStat.size === artifact.byteLength ? await sha256File(target) : null;
-      evidence.hashVerificationCount += targetSha256 ? 1 : 0;
+      const sameAuthenticatedInode = targetStat.dev === sourceStat.dev && targetStat.ino === sourceStat.ino;
+      const targetSha256 = targetStat.size === artifact.byteLength
+        ? sameAuthenticatedInode ? sourceSha256 : await sha256File(target)
+        : null;
+      evidence.hashVerificationCount += targetSha256 && !sameAuthenticatedInode ? 1 : 0;
       if (targetSha256 !== artifact.sha256) {
         await unlink(target);
         targetExists = false;

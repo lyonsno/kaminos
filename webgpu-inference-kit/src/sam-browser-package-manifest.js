@@ -93,7 +93,13 @@ async function sha256Payload(value, kind) {
   return `sha256:${Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-export function createSam3BrowserStaticArtifactCache({ fetchArrayBuffer, fetchText }) {
+export function createSam3BrowserStaticArtifactCache({
+  fetchArrayBuffer,
+  fetchText,
+  fetchStaticArrayBuffer = fetchArrayBuffer,
+  fetchStaticText = fetchText,
+  retainStaticValues = true,
+}) {
   if (typeof fetchArrayBuffer !== 'function') throw new Error('fetchArrayBuffer must be a function');
   if (typeof fetchText !== 'function') throw new Error('fetchText must be a function');
   let packageId = null;
@@ -110,6 +116,7 @@ export function createSam3BrowserStaticArtifactCache({ fetchArrayBuffer, fetchTe
   let dynamicHashVerificationCount = 0;
   let dynamicHashVerificationFailureCount = 0;
   const staticLoads = new Map();
+  const verifiedStaticIdentities = new Set();
 
   function staticIdentity(url, kind) {
     const identity = staticArtifacts.urls.get(url);
@@ -117,7 +124,7 @@ export function createSam3BrowserStaticArtifactCache({ fetchArrayBuffer, fetchTe
   }
 
   async function loadVerifiedStatic(url, kind, identity) {
-    const value = kind === 'array-buffer' ? await fetchArrayBuffer(url) : await fetchText(url);
+    const value = kind === 'array-buffer' ? await fetchStaticArrayBuffer(url, identity) : await fetchStaticText(url, identity);
     staticHashVerificationCount += 1;
     const effectiveSha256 = await sha256Payload(value, kind);
     const expectedSha256 = identity.slice(kind.length + 1);
@@ -138,6 +145,29 @@ export function createSam3BrowserStaticArtifactCache({ fetchArrayBuffer, fetchTe
       throw new Error(`dynamic artifact hash mismatch for ${url}: ${effectiveSha256} !== ${expectedSha256}`);
     }
     return value;
+  }
+
+  async function acquireStatic(url, kind, identity) {
+    if (staticLoads.has(identity)) {
+      staticCacheHitCount += 1;
+      return staticLoads.get(identity);
+    }
+    if (verifiedStaticIdentities.has(identity)) {
+      staticCacheHitCount += 1;
+      return loadVerifiedStatic(url, kind, identity);
+    }
+    staticNetworkLoadCount += 1;
+    const pending = loadVerifiedStatic(url, kind, identity);
+    staticLoads.set(identity, pending);
+    try {
+      const value = await pending;
+      verifiedStaticIdentities.add(identity);
+      if (!retainStaticValues) staticLoads.delete(identity);
+      return value;
+    } catch (error) {
+      staticLoads.delete(identity);
+      throw error;
+    }
   }
 
   return {
@@ -176,14 +206,7 @@ export function createSam3BrowserStaticArtifactCache({ fetchArrayBuffer, fetchTe
           : await fetchArrayBuffer(url);
         return new Type(value);
       }
-      const key = identity;
-      if (staticLoads.has(key)) {
-        staticCacheHitCount += 1;
-      } else {
-        staticNetworkLoadCount += 1;
-        staticLoads.set(key, loadVerifiedStatic(url, 'array-buffer', identity));
-      }
-      return new Type(await staticLoads.get(key));
+      return new Type(await acquireStatic(url, 'array-buffer', identity));
     },
 
     async fetchText(url) {
@@ -195,14 +218,7 @@ export function createSam3BrowserStaticArtifactCache({ fetchArrayBuffer, fetchTe
           ? loadVerifiedDynamic(url, 'text', dynamicIdentity)
           : fetchText(url);
       }
-      const key = identity;
-      if (staticLoads.has(key)) {
-        staticCacheHitCount += 1;
-      } else {
-        staticNetworkLoadCount += 1;
-        staticLoads.set(key, loadVerifiedStatic(url, 'text', identity));
-      }
-      return staticLoads.get(key);
+      return acquireStatic(url, 'text', identity);
     },
 
     evidence() {

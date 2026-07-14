@@ -6,29 +6,40 @@ import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { verifySam31TwoFramePacketAuthority, verifySam31TwoImageIngressPacketAuthority } from '../src/sam31-packet-artifact.js';
+import { resolveSam3BrowserPackageManifestSync } from '../src/sam-browser-package-manifest.js';
+import { SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT } from '../src/sam31-browser-tracker-package.js';
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
 const root = resolve(new URL('..', import.meta.url).pathname);
 const packetDir = resolve(args.get('--packet-dir') || mkdtempSync(join(tmpdir(), 'kaminos-sam31-two-frame-')));
+const packageDirs = [args.get('--package-dir'), args.get('--second-package-dir')].filter(Boolean).map(path => resolve(path));
+const packageMode = packageDirs.length > 0;
+const packageRootFiles = [args.get('--package-root') || 'tracker-root.json', args.get('--second-package-root') || 'tracker-runtime-root.json'];
 const reportPath = resolve(args.get('--report') || '/tmp/kaminos-sam31-two-frame-tracker-webgpu.json');
 const screenshotPath = resolve(args.get('--screenshot') || '/tmp/kaminos-sam31-two-frame-tracker-webgpu.png');
 const debugPort = Number(args.get('--debug-port') || 9576);
 const serverPort = Number(args.get('--server-port') || 18576);
 const timeoutMs = Number(args.get('--timeout-ms') || 300000);
+const staticBacking = args.get('--static-backing') || 'memory';
+if (!['memory', 'opfs'].includes(staticBacking)) throw new Error(`unsupported --static-backing ${staticBacking}`);
 const reusePacket = args.get('--reuse-packet') === '1';
 const verifyOnly = args.get('--verify-only') === '1';
-const episodeMode = args.get('--episode-mode') || 'propagation-decoder';
+const episodeMode = packageMode ? 'two-image' : args.get('--episode-mode') || 'propagation-decoder';
 if (!['propagation-decoder', 'mask-conditioning', 'two-image'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
 const isTwoImage = episodeMode === 'two-image';
-const REPORT_SCHEMA = isTwoImage
+const REPORT_SCHEMA = packageMode
+  ? 'kaminos.sam31-browser-tracker-package.browser-smoke.v0'
+  : isTwoImage
   ? 'kaminos.sam31-two-image-tracker.browser-parity-smoke.v0'
   : 'kaminos.sam31-two-frame-tracker.browser-parity-smoke.v0';
 const episodeAuthorityName = isTwoImage ? 'twoImageEpisode' : episodeMode === 'mask-conditioning' ? 'conditionedEpisode' : 'episode';
 const POINTER_EXPECTED_MANIFEST_ARG = '--expected-pointer-manifest-sha256';
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const python = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
-const userDataDir = mkdtempSync(join(tmpdir(), `kaminos-sam31-two-frame-chrome-${process.pid}-`));
+const userDataDir = args.get('--user-data-dir')
+  ? resolve(args.get('--user-data-dir'))
+  : mkdtempSync(join(tmpdir(), `kaminos-sam31-two-frame-chrome-${process.pid}-`));
 const baseUrl = `http://127.0.0.1:${serverPort}/smokes/${isTwoImage ? 'sam31-two-image-tracker-parity.html' : 'sam31-two-frame-tracker-parity.html'}`;
 let url = baseUrl;
 const packetTools = {
@@ -56,6 +67,7 @@ let screenshotWritten = false;
 let pixelCheck = null;
 let viewportLayout = null;
 let packetAuthority = null;
+let packageAuthority = null;
 
 const delay = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
 function contentType(path) { const extension = extname(path); return extension === '.html' ? 'text/html; charset=utf-8' : extension === '.js' || extension === '.mjs' ? 'text/javascript; charset=utf-8' : extension === '.json' ? 'application/json; charset=utf-8' : extension === '.png' ? 'image/png' : 'application/octet-stream'; }
@@ -68,10 +80,15 @@ function writeReport(extra = {}) {
     url,
     packetDir,
     packetDirs,
-    packetSource: reusePacket ? 'caller-provided-existing' : 'generated',
+    packageDirs,
+    packageRootFiles: packageMode ? packageRootFiles.slice(0, packageDirs.length) : [],
+    userDataDir,
+    staticBacking: packageMode ? staticBacking : null,
+    packetSource: packageMode ? 'browser-package' : reusePacket ? 'caller-provided-existing' : 'generated',
     episodeMode,
     packetTools,
     packetAuthority,
+    packageAuthority,
     browserPacketAuthority: lastState?.packetAuthority || null,
     reportPath,
     screenshot: screenshotWritten ? screenshotPath : null,
@@ -91,6 +108,9 @@ function writeReport(extra = {}) {
     stateTransitionPassed: lastState?.evidence?.stateTransitionPassed || false,
     parityPassed: lastState?.evidence?.parityPassed || false,
     evidence: lastState?.evidence || null,
+    deviceLoss: lastState?.deviceLoss || null,
+    dualInvocationEvidence: lastState?.dualInvocationEvidence || null,
+    invocations: lastState?.invocations || null,
     reference: lastState?.manifest?.reference || null,
     lastState,
     stderrTail: stderr.slice(-4000),
@@ -137,6 +157,37 @@ async function verifyPacketAuthority() {
   return { passed: true, verifiedPackets, packets };
 }
 
+function verifyPackageAuthority() {
+  const roots = packageDirs.map((directory, index) => {
+    const rootFile = packageRootFiles[index];
+    const rootPath = resolve(directory, rootFile);
+    if (rootPath !== directory && !rootPath.startsWith(`${directory}/`)) throw new Error(`package root escapes package directory: ${rootFile}`);
+    if (!existsSync(rootPath)) throw new Error(`package root missing: ${rootPath}`);
+    const resolution = resolveSam3BrowserPackageManifestSync(JSON.parse(readFileSync(rootPath, 'utf8')), {
+      contract: SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
+      readArtifactText: file => {
+        const path = resolve(directory, file);
+        if (path !== directory && !path.startsWith(`${directory}/`)) throw new Error(`package artifact escapes package directory: ${file}`);
+        return readFileSync(path, 'utf8');
+      },
+      sha256Text: text => `sha256:${createHash('sha256').update(text).digest('hex')}`,
+    });
+    return {
+      directory,
+      rootFile,
+      packageId: resolution.manifest.packageId,
+      invocationId: resolution.manifest.invocationId,
+      verificationId: resolution.manifest.verificationId || null,
+      verificationAttached: resolution.evidence.verification.attached,
+      sourceImageSha256: resolution.manifest.sourceImages.map(image => image.sha256),
+      initialMaskSha256: resolution.manifest.initialMask.sha256,
+      resolution: resolution.evidence,
+    };
+  });
+  if (roots.some(root => root.packageId !== roots[0].packageId)) throw new Error('browser package roots do not share one model package identity');
+  return { passed: true, roots };
+}
+
 function generatePackets() {
   for (const [name, tool] of Object.entries(packetTools)) {
     const outDir = packetDirs[name];
@@ -170,9 +221,12 @@ function startServer() {
   server = createServer((request, response) => {
     try {
       const parsed = new URL(request.url, url);
+      const packageMatch = parsed.pathname.match(/^\/package\/(\d+)\/(.+)$/);
       const match = parsed.pathname.match(/^\/oracle\/(ingress|decoder|memory|temporal|episode|pointer)\/(.+)$/);
-      const base = match ? packetDirs[match[1]] : root;
-      const relative = match ? match[2] : parsed.pathname.slice(1);
+      const packageIndex = packageMatch ? Number(packageMatch[1]) : -1;
+      if (packageMatch && !packageDirs[packageIndex]) { response.writeHead(404); response.end(`missing package ${packageIndex}`); return; }
+      const base = packageMatch ? packageDirs[packageIndex] : match ? packetDirs[match[1]] : root;
+      const relative = packageMatch ? packageMatch[2] : match ? match[2] : parsed.pathname.slice(1);
       const path = resolve(base, relative || 'smokes/sam31-two-frame-tracker-parity.html');
       if (path !== base && !path.startsWith(`${base}/`)) { response.writeHead(403); response.end('forbidden'); return; }
       if (!existsSync(path)) { response.writeHead(404); response.end(`missing ${parsed.pathname}`); return; }
@@ -214,26 +268,41 @@ async function inspectPixels(socket, pngBase64, borderX, borderTop) {
 async function main() {
   let socket;
   try {
-    phase = 'generate_official_packets'; generatePackets();
-    phase = 'verify_packet_authority';
-    try {
-      packetAuthority = await verifyPacketAuthority();
-    } catch (error) {
-      packetAuthority = { passed: false, error: String(error?.message || error) };
-      throw error;
+    if (packageMode) {
+      phase = 'verify_package_authority';
+      try {
+        packageAuthority = verifyPackageAuthority();
+      } catch (error) {
+        packageAuthority = { passed: false, error: String(error?.message || error) };
+        throw error;
+      }
+    } else {
+      phase = 'generate_official_packets'; generatePackets();
+      phase = 'verify_packet_authority';
+      try {
+        packetAuthority = await verifyPacketAuthority();
+      } catch (error) {
+        packetAuthority = { passed: false, error: String(error?.message || error) };
+        throw error;
+      }
     }
     if (verifyOnly) {
       phase = 'write_authority_report';
       const value = writeReport({ ok: true, failure_phase: null });
-      process.stdout.write(`${JSON.stringify({ ok: true, reportPath, packetAuthority: value.packetAuthority }, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify({ ok: true, reportPath, packetAuthority: value.packetAuthority, packageAuthority: value.packageAuthority }, null, 2)}\n`);
       return;
     }
-    const browserParams = new URLSearchParams({ packetSource: reusePacket ? 'caller-provided-existing' : 'generated', episodeMode });
-    for (const name of Object.keys(packetTools)) browserParams.set(`expected-${name}-manifest-sha256`, expectedManifestSha256[name]);
+    const browserParams = new URLSearchParams({ packetSource: packageMode ? 'browser-package' : reusePacket ? 'caller-provided-existing' : 'generated', episodeMode });
+    if (packageMode) {
+      browserParams.set('staticBacking', staticBacking);
+      packageDirs.forEach((_, index) => browserParams.append('packageRoot', `/package/${index}/${packageRootFiles[index]}`));
+    } else {
+      for (const name of Object.keys(packetTools)) browserParams.set(`expected-${name}-manifest-sha256`, expectedManifestSha256[name]);
+    }
     url = `${baseUrl}?${browserParams}`;
     phase = 'start_server'; await startServer();
     phase = 'launch_chrome';
-    chromeProcess = spawn(chrome, [`--remote-debugging-port=${debugPort}`, `--user-data-dir=${userDataDir}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--enable-unsafe-webgpu', '--enable-features=Vulkan,WebGPU,WebGPUDeveloperFeatures', '--window-size=1000,560', '--headless=new', url], { stdio: ['ignore', 'ignore', 'pipe'] });
+    chromeProcess = spawn(chrome, [`--remote-debugging-port=${debugPort}`, `--user-data-dir=${userDataDir}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--enable-unsafe-webgpu', '--enable-features=Vulkan,WebGPU,WebGPUDeveloperFeatures', '--js-flags=--expose-gc', '--window-size=1000,560', '--headless=new', url], { stdio: ['ignore', 'ignore', 'pipe'] });
     const spawnError = new Promise((_, rejectSpawn) => chromeProcess.once('error', rejectSpawn));
     chromeProcess.stderr.on('data', chunk => { stderr += chunk.toString(); });
     browserVersion = await Promise.race([waitCdp(), spawnError]);
@@ -245,7 +314,15 @@ async function main() {
     await wsRequest(socket, 'Runtime.enable'); await wsRequest(socket, 'Page.enable');
     phase = 'wait_browser_parity';
     const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) { lastState = await evaluate(socket, 'window.sam31TwoFrameTrackerParityState?.() || null', Math.max(1, deadline - Date.now())); if (['passed', 'failed'].includes(lastState?.status)) break; await delay(250); }
+    while (Date.now() < deadline) {
+      lastState = await evaluate(socket, 'window.sam31TwoFrameTrackerParityState?.({ summary: true }) || null', Math.max(1, deadline - Date.now()));
+      if (['passed', 'failed'].includes(lastState?.status)) {
+        phase = 'read_browser_evidence';
+        lastState = await evaluate(socket, 'window.sam31TwoFrameTrackerParityState?.({ evidence: true }) || null', Math.max(1, deadline - Date.now()));
+        break;
+      }
+      await delay(250);
+    }
     if (lastState?.status !== 'passed') throw new Error(lastState?.error || `browser ended in ${lastState?.status}`);
     phase = 'capture_screenshot';
     viewportLayout = await evaluate(socket, `(() => { window.scrollTo(0,0); const h=document.querySelector('h1').getBoundingClientRect(),s=document.querySelector('#status').getBoundingClientRect(); return {innerWidth,innerHeight,scrollWidth:document.documentElement.scrollWidth,heading:{left:h.left,right:h.right,top:h.top},status:{left:s.left,right:s.right,top:s.top},layoutPassed:document.documentElement.scrollWidth<=innerWidth&&h.left>=0&&h.right<=innerWidth&&s.left>=0&&s.right<=innerWidth}; })()`);

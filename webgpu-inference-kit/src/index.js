@@ -327,6 +327,11 @@ export {
   SAM31_BROWSER_TRACKER_VERIFICATION_SCHEMA,
   createSam31BrowserTrackerPackageProjection,
 } from './sam31-browser-tracker-package.js';
+export {
+  createSam31BrowserTrackerDualInvocationEvidence,
+  createSam31BrowserTrackerPackageCache,
+  loadSam31BrowserTrackerPackageRuntime,
+} from './sam31-browser-tracker-package-runtime.js';
 
 export {
   SAM31_TEMPORAL_MEMORY_BANK_PHASE_PROGRAM_ROUTE_ID,

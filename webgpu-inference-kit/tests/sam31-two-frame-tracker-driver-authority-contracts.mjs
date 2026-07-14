@@ -8,6 +8,10 @@ import { SAM31_TWO_FRAME_PACKET_AUTHORITIES, SAM31_TWO_IMAGE_INGRESS_PACKET_AUTH
 
 const root = new URL('../', import.meta.url);
 const driver = new URL('../tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', import.meta.url);
+const driverSource = await readFile(driver, 'utf8');
+assert.match(driverSource, /args\.get\('--user-data-dir'\)/, 'the browser witness must accept a caller-owned profile for reusable package storage');
+assert.match(driverSource, /userDataDir,/, 'the durable report must expose the effective browser profile path');
+assert.match(driverSource, /args\.get\('--static-backing'\)/, 'the browser witness must expose retained-memory versus OPFS package storage');
 const packetDir = await mkdtemp(join(tmpdir(), 'sam31-two-frame-authority-'));
 const reportPath = join(packetDir, 'report.json');
 const pinnedReference = {
