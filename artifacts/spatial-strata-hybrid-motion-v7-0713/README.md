@@ -28,6 +28,7 @@ splat-count growth.
 - Worktree: `/private/tmp/kaminos-handy-live-splat-smoke-0713`
 - Branch: `cc/handy-live-splat-smoke-0713`
 - Source base at capture: `2ae19640fdcd0c7c2ab17cf0c62e54e222915ff9`
+- Reviewed implementation commit: `74ca43a`
 - Capture interval: `2026-07-14T01:43:31.847Z` to
   `2026-07-14T01:43:55.290Z`
 - Backend/device: `WebGPU:apple`
