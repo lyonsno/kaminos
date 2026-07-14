@@ -34,4 +34,4 @@ Output #0, null, to 'pipe:':
 [Parsed_psnr_0 @ 0x600002578480] PSNR r:21.532970 g:22.491757 b:23.690152 a:inf average:23.732621 min:21.138529 max:30.247203
 [Parsed_ssim_1 @ 0x600002578540] SSIM R:0.783981 (6.655072) G:0.822799 (7.515348) B:0.836162 (7.855854) All:0.814314 (7.312208)
 [out#0/null @ 0x600002578240] video:11KiB audio:0KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
-frame=   13 fps=0.0 q=-0.0 Lq=-0.0 size=N/A time=00:00:01.08 bitrate=N/A speed=6.36x elapsed=0:00:00.17    
+frame=   13 fps=0.0 q=-0.0 Lq=-0.0 size=N/A time=00:00:01.08 bitrate=N/A speed=6.36x elapsed=0:00:00.17

@@ -61,13 +61,14 @@ const referenceFrames = referencePositions.map((positions, index) => ({
   ...writeRows(`reference-${index}`, positions, 'intercepted-live-boundary-splat-buffer-post-compaction-v0'),
 }));
 const corpusPath = join(fixture, 'phase-corpus.json');
-writeFileSync(corpusPath, JSON.stringify({
+const corpusBytes = Buffer.from(JSON.stringify({
   schema: 'kaminos-boundary-splat-phase-candidate-corpus-v0',
   authority: 'live-simulator-controlled-step-selected-candidate-features-v0',
   requestedRoute: 'fixture://moving-phase',
   effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
   frames: referenceFrames,
 }));
+writeFileSync(corpusPath, corpusBytes);
 
 const predictionFrames = predictedPositions.map((positions, index) => ({
   step: index,
@@ -76,9 +77,17 @@ const predictionFrames = predictedPositions.map((positions, index) => ({
   ...writeRows(`prediction-${index}`, positions, 'learned-local-grid-transport-plus-residual-churn-v0'),
 }));
 const predictionsPath = join(fixture, 'transport-predictions.json');
-writeFileSync(predictionsPath, JSON.stringify({
+const modelPath = join(fixture, 'transport-model.json');
+const modelBytes = Buffer.from(JSON.stringify({
+  schema: 'kaminos-boundary-splat-phase-transport-model-v0',
+  fixture: true,
+}));
+writeFileSync(modelPath, modelBytes);
+const predictionDocument = {
   schema: 'kaminos-boundary-splat-phase-transport-predictions-v0',
   status: 'completed',
+  manifest: { path: corpusPath, bytes: corpusBytes.length, sha256: hash(corpusBytes) },
+  model: { path: modelPath, schema: 'kaminos-boundary-splat-phase-transport-model-v0', sha256: hash(modelBytes) },
   route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
   temporal: {
     authority: 'recurrent-one-controlled-step-local-grid-continuation-v0',
@@ -87,7 +96,52 @@ writeFileSync(predictionsPath, JSON.stringify({
     heldoutReferenceFrameIds: referenceFrames.map(frame => frame.id),
   },
   frames: predictionFrames,
-}));
+};
+
+function runWitness(document, label) {
+  const casePredictionsPath = join(fixture, `${label}-transport-predictions.json`);
+  const caseOutDir = join(fixture, label);
+  writeFileSync(casePredictionsPath, JSON.stringify(document));
+  const result = spawnSync(process.execPath, [
+    'boundary-splat-moving-phase-witness.mjs',
+    '--manifest', corpusPath,
+    '--predictions', casePredictionsPath,
+    '--out-dir', caseOutDir,
+    '--width', '96',
+    '--height', '72',
+    '--frames-per-step', '2',
+    '--fps', '6',
+    '--grid-step', '0.2',
+    '--partial-flow-debug-gain', '0.625',
+  ], { cwd: root, encoding: 'utf8' });
+  return { result, report: JSON.parse(readFileSync(join(caseOutDir, 'moving-phase-witness.json'), 'utf8')) };
+}
+
+function expectIdentityFailure(document, label, errorPattern) {
+  const { result, report } = runWitness(document, label);
+  assert.notEqual(result.status, 0, `${label} provenance lie was accepted`);
+  assert.equal(report.status, 'failed');
+  assert.equal(report.failurePhase, 'manifest-validation');
+  assert.match(report.error, errorPattern);
+}
+
+const missingManifest = structuredClone(predictionDocument);
+delete missingManifest.manifest;
+expectIdentityFailure(missingManifest, 'missing-manifest', /prediction corpus identity is missing/);
+
+const staleManifest = structuredClone(predictionDocument);
+staleManifest.manifest.sha256 = '0'.repeat(64);
+expectIdentityFailure(staleManifest, 'stale-manifest', /prediction corpus hash mismatch/);
+
+const missingModel = structuredClone(predictionDocument);
+delete missingModel.model;
+expectIdentityFailure(missingModel, 'missing-model', /prediction model identity is missing/);
+
+const staleModel = structuredClone(predictionDocument);
+staleModel.model.sha256 = 'f'.repeat(64);
+expectIdentityFailure(staleModel, 'stale-model', /prediction model hash mismatch/);
+
+writeFileSync(predictionsPath, JSON.stringify(predictionDocument));
 
 const result = spawnSync(process.execPath, [
   'boundary-splat-moving-phase-witness.mjs',
@@ -106,6 +160,9 @@ assert.equal(result.status, 0, result.stderr || result.stdout);
 const report = JSON.parse(readFileSync(join(outDir, 'moving-phase-witness.json'), 'utf8'));
 assert.equal(report.schema, 'kaminos-boundary-splat-moving-phase-witness-v0');
 assert.equal(report.status, 'completed');
+assert.equal(report.source.manifest.sha256, hash(corpusBytes));
+assert.equal(report.source.model.sha256, hash(modelBytes));
+assert.equal(report.source.model.schema, 'kaminos-boundary-splat-phase-transport-model-v0');
 assert.equal(report.playback.frameCount, 7);
 assert.equal(report.playback.requestedFps, 6);
 assert.equal(report.playback.effectiveFps, 6);

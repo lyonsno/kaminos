@@ -48,6 +48,10 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function isSha256(value) {
+  return /^[0-9a-f]{64}$/i.test(String(value));
+}
+
 function offsetLabel(index, controlledStepDeltaMs) {
   return `+${index} step${index === 1 ? '' : 's'} (${index * controlledStepDeltaMs} ms)`;
 }
@@ -295,6 +299,20 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
     if (manifest.schema !== 'kaminos-boundary-splat-phase-candidate-corpus-v0') throw new Error('phase corpus schema mismatch');
     if (manifest.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0') throw new Error('phase corpus effective route mismatch');
     if (predictions.schema !== 'kaminos-boundary-splat-phase-transport-predictions-v0' || predictions.status !== 'completed') throw new Error('transport predictions schema/status mismatch');
+    const manifestIdentity = predictions.manifest;
+    if (!manifestIdentity || typeof manifestIdentity.path !== 'string' || !manifestIdentity.path || !Number.isInteger(manifestIdentity.bytes) || !isSha256(manifestIdentity.sha256)) {
+      throw new Error('prediction corpus identity is missing or malformed');
+    }
+    if (manifestIdentity.bytes !== manifestBytes.byteLength) throw new Error('prediction corpus byte count mismatch');
+    if (manifestIdentity.sha256 !== sha256(manifestBytes)) throw new Error('prediction corpus hash mismatch');
+    const modelIdentity = predictions.model;
+    if (!modelIdentity || typeof modelIdentity.path !== 'string' || !modelIdentity.path || modelIdentity.schema !== 'kaminos-boundary-splat-phase-transport-model-v0' || !isSha256(modelIdentity.sha256)) {
+      throw new Error('prediction model identity is missing or malformed');
+    }
+    const modelBytes = await readFile(resolve(modelIdentity.path));
+    if (sha256(modelBytes) !== modelIdentity.sha256) throw new Error('prediction model hash mismatch');
+    const model = JSON.parse(modelBytes.toString('utf8'));
+    if (model.schema !== modelIdentity.schema) throw new Error('prediction model artifact schema mismatch');
     if (predictions.route?.backend !== 'mlx' || !/^Device\(gpu,\s*\d+\)$/i.test(String(predictions.route?.device)) || predictions.route?.fallbackReason !== null) {
       throw new Error('transport predictions require effective MLX GPU identity and null fallback');
     }
@@ -307,6 +325,7 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       manifestSha256: sha256(manifestBytes),
+      modelSha256: modelIdentity.sha256,
       predictionsSha256: sha256(predictionsBytes),
       effectiveRoute: manifest.effectiveRoute,
       effectiveBackend: predictions.route,
@@ -352,6 +371,7 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
       source: {
         manifest: { path: manifestPath, sha256: sha256(manifestBytes) },
         predictions: { path: predictionsPath, sha256: sha256(predictionsBytes) },
+        model: { path: resolve(modelIdentity.path), schema: modelIdentity.schema, sha256: modelIdentity.sha256 },
         requestedRoute: manifest.requestedRoute,
         effectiveRoute: manifest.effectiveRoute,
         backend: predictions.route,

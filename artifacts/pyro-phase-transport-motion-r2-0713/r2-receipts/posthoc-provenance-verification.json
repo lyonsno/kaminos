@@ -1,0 +1,48 @@
+{
+  "schema": "kaminos-boundary-splat-moving-phase-posthoc-provenance-v0",
+  "status": "passed-with-replay-limitation",
+  "reason": "the committed witness predates strict corpus/model identity rejection, so the exact identities consumed by that run were checked from retained hashes before review confirmation",
+  "witness": {
+    "path": "../moving-phase-witness.json",
+    "sha256": "ad488c6e742cdbe20b8dcabebb47cb24d72f182c03e0884a8dfdd58e4091fc3f",
+    "recordedCorpusSha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534",
+    "recordedPredictionsSha256": "fcab121ae28b934300d2b23d016ba6220f18622f6ed94b14e69bbf9f9f4622ba"
+  },
+  "predictions": {
+    "path": "transport-predictions.json",
+    "actualSha256": "fcab121ae28b934300d2b23d016ba6220f18622f6ed94b14e69bbf9f9f4622ba",
+    "witnessHashMatches": true,
+    "embeddedCorpusBytes": 102560,
+    "embeddedCorpusSha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534",
+    "embeddedModelSchema": "kaminos-boundary-splat-phase-transport-model-v0",
+    "embeddedModelSha256": "785ce32571aab2d5fe66b746f375bafcd57c85d5ab88442112fc3396b7af0747"
+  },
+  "corpus": {
+    "path": "/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+    "actualBytes": 102560,
+    "actualSha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534",
+    "witnessHashMatches": true,
+    "predictionHashMatches": true,
+    "predictionByteCountMatches": true
+  },
+  "model": {
+    "retainedPath": "transport-model.json",
+    "retainedActualSha256": "785ce32571aab2d5fe66b746f375bafcd57c85d5ab88442112fc3396b7af0747",
+    "originalPath": "/private/tmp/kaminos-phase-transport-full-r2-0713/transport-model.json",
+    "originalActualSha256": "785ce32571aab2d5fe66b746f375bafcd57c85d5ab88442112fc3396b7af0747",
+    "predictionHashMatchesRetained": true,
+    "predictionHashMatchesOriginal": true,
+    "schemaMatches": true
+  },
+  "claimBoundary": {
+    "established": "the pre-fix witness consumed a prediction manifest whose embedded corpus and model identities match the preserved corpus and model bytes",
+    "notEstablished": "independent replay of the original prediction tensors through the repaired witness",
+    "why": "the eight volatile recurrent .f32 payloads were intentionally pruned after rendering",
+    "regenerationRequiredForReplay": true
+  },
+  "verificationCommands": [
+    "jq '.source' ../moving-phase-witness.json",
+    "jq '{manifest,model}' transport-predictions.json",
+    "shasum -a 256 /tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json transport-model.json transport-predictions.json ../moving-phase-witness.json /private/tmp/kaminos-phase-transport-full-r2-0713/transport-model.json"
+  ]
+}
