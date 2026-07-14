@@ -428,8 +428,10 @@ function compileSharedMlxPhaseChurnModel(artifact, context) {
   if (artifact?.schema !== 'kaminos-phase-churn-shared-mlx-model-v0' || artifact.status !== 'completed') {
     throw new Error('shared MLX phase churn model requires completed kaminos-phase-churn-shared-mlx-model-v0 artifact');
   }
-  if (artifact.route?.backend !== 'mlx' || !artifact.route?.device || artifact.route?.fallbackReason !== null) {
-    throw new Error('shared MLX phase churn model requires effective MLX device identity and null fallback');
+  if (artifact.route?.backend !== 'mlx'
+    || !/^Device\(gpu,\s*\d+\)$/i.test(String(artifact.route?.device ?? ''))
+    || artifact.route?.fallbackReason !== null) {
+    throw new Error('shared MLX phase churn model requires effective MLX GPU device identity and null fallback');
   }
   if (artifact.manifest?.sha256 !== context.manifestSha256) {
     throw new Error(`shared MLX phase churn corpus mismatch: expected ${context.manifestSha256}, received ${artifact.manifest?.sha256}`);
@@ -1467,6 +1469,7 @@ async function runLocalGridOccupancyRenderWitness(context) {
     renderOptions,
     ridgeLambda,
     options,
+    recordFailureContext = () => {},
   } = context;
   const requestedFamily = String(options.phaseModelFamily || options.modelFamily || 'local-grid-occupancy-classifier-v0');
   const budgetedSupport = requestedFamily === 'dense-negative-budgeted-local-grid-occupancy-v0';
@@ -1516,6 +1519,12 @@ async function runLocalGridOccupancyRenderWitness(context) {
       targetFrameId: heldOutPair.targetFrameId,
       trainingOffsets,
       inputSize: localGridInputSize,
+    });
+    recordFailureContext('phase-model-support-scoring', {
+      sharedMlxModelIdentity: sharedMlxModel.artifact.identity,
+      sharedMlxModelDevice: sharedMlxModel.artifact.route.device,
+      sharedMlxInputFeatureCount: localGridInputSize,
+      trainingSiteCount: siteStats.size,
     });
   }
   const classifier = splitSupportHeads
@@ -1689,6 +1698,12 @@ async function runLocalGridOccupancyRenderWitness(context) {
       .sort(byProbability)
       .slice(0, Math.max(0, Math.min(supportBudget.effectiveBirthSupportBudget, supportBudget.targetSupportBudget - selectedKeys.size)))
       .forEach(row => selectedKeys.add(row.key));
+    recordFailureContext('phase-model-feature-prediction', {
+      predictionSiteCount: predictionSites.size,
+      selectedSupportCount: selectedKeys.size,
+      selectedSourceSupportCount: Array.from(selectedKeys).filter(key => sourceRows.has(key)).length,
+      selectedBirthSupportCount: Array.from(selectedKeys).filter(key => !sourceRows.has(key)).length,
+    });
   }
   const predictedRows = [];
   const predictedRowsByKey = new Map();
@@ -1733,6 +1748,11 @@ async function runLocalGridOccupancyRenderWitness(context) {
     predictedRowsByKey.set(key, { key, position: site.position, splat: row });
   }
   if (!predictedRows.length) {
+    recordFailureContext('phase-model-support-selection', {
+      predictionSiteCount: predictionSites.size,
+      selectedSupportCount: selectedKeys.size,
+      predictedRowCount: predictedRows.length,
+    });
     const splitDiagnostics = splitSupportHeads
       ? {
         predictionSiteCount: predictionSites.size,
@@ -1750,6 +1770,10 @@ async function runLocalGridOccupancyRenderWitness(context) {
       : null;
     throw new Error(`local-grid occupancy classifier predicted no visible candidate sites${splitDiagnostics ? `: ${JSON.stringify(splitDiagnostics)}` : ''}`);
   }
+  recordFailureContext('isolated-raster', {
+    predictedRowCount: predictedRows.length,
+    predictedDeathCount: predictedDeaths,
+  });
   const priorRows = [];
   for (const [key, site] of predictionSites) {
     const sourceRow = sourceRows.get(key);
@@ -1871,6 +1895,9 @@ async function runLocalGridOccupancyRenderWitness(context) {
   let partialFlowDebug = null;
   if (sharedMlxSupport) {
     const requestedGain = Number(options.partialFlowDebugGain ?? 0.625);
+    recordFailureContext('partial-flow-debug-validation', {
+      requestedPartialFlowDebugGain: requestedGain,
+    });
     if (!Number.isFinite(requestedGain) || requestedGain < 0.5 || requestedGain > 0.75) {
       throw new Error('partial flow-debug gain must be finite and within [0.50, 0.75]');
     }
@@ -1882,6 +1909,10 @@ async function runLocalGridOccupancyRenderWitness(context) {
       predicted: renderSupportFlowDebugMix(predictionRender, sourceRows, predictedRowsByKey, source.frame.camera, renderOptions, gridStep, requestedGain),
     };
   }
+  recordFailureContext('diagnostic-composition', {
+    effectivePartialFlowDebugGain: partialFlowDebug?.effectiveGain ?? null,
+    beautyRenderCount: 5,
+  });
   const exactMinusIdentityRender = renderResidualMapPng(exactRender, identityRender);
   const exactMinusPredictionRender = renderResidualMapPng(exactRender, predictionRender);
   const predictionMinusIdentityRender = renderResidualMapPng(predictionRender, identityRender);
@@ -1904,6 +1935,10 @@ async function runLocalGridOccupancyRenderWitness(context) {
     churnOverlay.render,
   ]);
   const offsetLabel = offset > 0 ? `p${offset}` : `m${Math.abs(offset)}`;
+  recordFailureContext('render-artifact-write', {
+    offsetLabel,
+    outputDirectory: outDir,
+  });
   const artifacts = {
     identity: await writeRenderArtifact(resolve(outDir, `phase-render-identity-${offsetLabel}.png`), identityRender),
     spatialPriorInterpolation: await writeRenderArtifact(resolve(outDir, `phase-render-spatial-prior-${offsetLabel}.png`), priorRender),
@@ -2289,6 +2324,11 @@ async function runLocalGridOccupancyRenderWitness(context) {
     },
     claimBoundary: 'isolated captured-splat raster; local-grid support models use training-observed world sites and zero-velocity advection baseline; partial flow-debug is a display-only stable-support diagnostic rather than vector flow; live runtime instancing is unchanged',
   };
+  recordFailureContext('report-write', {
+    completedArtifactCount: Object.keys(artifacts).length
+      + Object.keys(diagnosticArtifacts).length
+      + Object.keys(partialFlowDebugArtifacts ?? {}).length,
+  });
   await writeFile(reportPath, JSON.stringify(report, null, 2));
   return report;
 }
@@ -2299,6 +2339,10 @@ export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options
   const reportPath = resolve(String(options.report || `${outDir}/phase-render-witness.json`));
   let failurePhase = 'manifest-read';
   const lastTrustworthyEvidence = { manifestPath };
+  const recordFailureContext = (phase, evidence = {}) => {
+    failurePhase = phase;
+    Object.assign(lastTrustworthyEvidence, evidence);
+  };
   try {
     await mkdir(outDir, { recursive: true });
     const manifestBytes = await readFile(manifestPath);
@@ -2487,6 +2531,7 @@ export async function writeBoundarySplatPhaseRenderWitness(manifestFile, options
         renderOptions,
         ridgeLambda,
         options,
+        recordFailureContext,
       });
     }
     if (phaseModelFamily !== 'ridge-linear-offset-conditioned-v0') {

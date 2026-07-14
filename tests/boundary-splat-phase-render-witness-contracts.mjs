@@ -504,7 +504,7 @@ try {
     status: 'completed',
     route: {
       backend: 'mlx',
-      device: 'gpu',
+      device: 'Device(gpu, 0)',
       effectiveRunner: '/private/tmp/kaminos-mlx-residual-venv/bin/python',
       fallbackReason: null,
     },
@@ -666,13 +666,60 @@ try {
       height: 96,
       phaseModelFamily: 'shared-mlx-survival-birth-death-local-grid-v0',
     }),
-    /effective MLX device identity and null fallback/,
+    /effective MLX GPU device identity and null fallback/,
     'shared-trunk witness must reject a fallback-trained model artifact',
   );
   const fallbackFailure = JSON.parse(await readFile(fallbackReportPath, 'utf8'));
   assert.equal(fallbackFailure.status, 'failed');
   assert.equal(fallbackFailure.failurePhase, 'phase-model-artifact-validation');
   assert.equal(fallbackFailure.lastTrustworthyEvidence.requestedPhaseModelFamily, 'shared-mlx-survival-birth-death-local-grid-v0');
+
+  const cpuModelPath = join(root, 'cpu-shared-mlx-phase-churn-model.json');
+  await writeFile(cpuModelPath, JSON.stringify({
+    ...sharedTrunkModel,
+    route: { ...sharedTrunkModel.route, device: 'Device(cpu, 0)', fallbackReason: null },
+  }));
+  const cpuReportPath = join(root, 'cpu-shared-mlx-phase-churn-report.json');
+  await assert.rejects(
+    writeBoundarySplatPhaseRenderWitness(manifestPath, {
+      model: modelPath,
+      phaseModelArtifact: cpuModelPath,
+      offset: 3,
+      outDir: root,
+      report: cpuReportPath,
+      width: 96,
+      height: 96,
+      phaseModelFamily: 'shared-mlx-survival-birth-death-local-grid-v0',
+    }),
+    /effective MLX GPU device identity and null fallback/,
+    'shared-trunk witness must reject a CPU MLX artifact even when fallbackReason is null',
+  );
+  const cpuFailure = JSON.parse(await readFile(cpuReportPath, 'utf8'));
+  assert.equal(cpuFailure.status, 'failed');
+  assert.equal(cpuFailure.failurePhase, 'phase-model-artifact-validation');
+  assert.equal(cpuFailure.lastTrustworthyEvidence.phaseModelArtifactPath, cpuModelPath);
+
+  const invalidGainReportPath = join(root, 'invalid-gain-shared-mlx-phase-churn-report.json');
+  await assert.rejects(
+    writeBoundarySplatPhaseRenderWitness(manifestPath, {
+      model: modelPath,
+      phaseModelArtifact: sharedTrunkModelPath,
+      offset: 3,
+      outDir: root,
+      report: invalidGainReportPath,
+      width: 96,
+      height: 96,
+      phaseModelFamily: 'shared-mlx-survival-birth-death-local-grid-v0',
+      partialFlowDebugGain: 0.9,
+    }),
+    /partial flow-debug gain must be finite and within \[0\.50, 0\.75\]/,
+  );
+  const invalidGainFailure = JSON.parse(await readFile(invalidGainReportPath, 'utf8'));
+  assert.equal(invalidGainFailure.status, 'failed');
+  assert.equal(invalidGainFailure.failurePhase, 'partial-flow-debug-validation');
+  assert.equal(invalidGainFailure.lastTrustworthyEvidence.sharedMlxModelIdentity, sharedTrunkModel.identity);
+  assert.ok(invalidGainFailure.lastTrustworthyEvidence.selectedSupportCount > 0);
+  assert.equal(invalidGainFailure.lastTrustworthyEvidence.requestedPartialFlowDebugGain, 0.9);
 
   const staleCorpusModelPath = join(root, 'stale-corpus-shared-mlx-phase-churn-model.json');
   await writeFile(staleCorpusModelPath, JSON.stringify({
