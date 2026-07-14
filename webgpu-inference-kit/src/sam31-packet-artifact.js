@@ -411,6 +411,57 @@ function verifyTwoImageEpisodeIngressBindings({ authorityName, manifest, authent
   return { passed: true, bindingCount: Object.keys(TWO_IMAGE_EPISODE_INGRESS_BINDINGS).length };
 }
 
+function verifyTwoImageEpisodeGeometry({ authorityName, manifest, authenticatedIngress }) {
+  const ingress = authenticatedIngress.manifest.shape;
+  const episode = manifest.shape;
+  const expected = {
+    batch: 1,
+    multiplexCount: 16,
+    queryHeight: ingress?.patchHeight,
+    queryWidth: ingress?.patchWidth,
+    queryTokens: ingress?.patchTokens,
+    memorySpatialTokens: ingress?.patchTokens,
+    numObjPtrTokens: 16,
+    memoryTokens: ingress?.patchTokens + 16,
+    channels: 256,
+    maskHeight: ingress?.patchHeight * 4,
+    maskWidth: ingress?.patchWidth * 4,
+  };
+  for (const [field, value] of Object.entries(expected)) {
+    assertNamedEqual(authorityName, episode?.[field], value, `manifest.shape.${field}`);
+  }
+  assertNamedEqual(authorityName, ingress?.imageHeight, ingress?.patchHeight * ingress?.patchSize, 'authenticatedIngress.manifest.shape.imageHeight');
+  assertNamedEqual(authorityName, ingress?.imageWidth, ingress?.patchWidth * ingress?.patchSize, 'authenticatedIngress.manifest.shape.imageWidth');
+  return { passed: true, queryTokens: episode.queryTokens, memoryTokens: episode.memoryTokens };
+}
+
+function verifyInteractivePointerGeometry({ authorityName, manifest, authenticatedIngress }) {
+  const ingress = authenticatedIngress.manifest.shape;
+  const pointer = manifest.shape;
+  const expected = {
+    batch: 16,
+    queryTokens: 8,
+    sparsePromptTokens: 2,
+    imageHeight: ingress?.patchHeight,
+    imageWidth: ingress?.patchWidth,
+    imageTokens: ingress?.patchTokens,
+    channels: 256,
+    heads: 8,
+    attentionChannels: 128,
+    mlpHidden: 2048,
+    inputMaskHeight: ingress?.patchHeight * 4,
+    inputMaskWidth: ingress?.patchWidth * 4,
+    decoderMaskHeight: ingress?.patchHeight * 4,
+    decoderMaskWidth: ingress?.patchWidth * 4,
+    maskOutputs: 4,
+    layerCount: 2,
+  };
+  for (const [field, value] of Object.entries(expected)) {
+    assertNamedEqual(authorityName, pointer?.[field], value, `manifest.shape.${field}`);
+  }
+  return { passed: true, imageTokens: pointer.imageTokens };
+}
+
 export async function verifySam31TwoFramePacketAuthority({ name, authorityName = name, manifestText, manifest, referenceReceipt, expectedManifestSha256, authenticatedIngress = null }) {
   const expected = SAM31_TWO_FRAME_PACKET_AUTHORITIES[authorityName];
   if (!expected) throw new Error(`unknown two-frame packet authority name: ${authorityName}`);
@@ -452,7 +503,9 @@ export async function verifySam31TwoFramePacketAuthority({ name, authorityName =
   assertNamedJsonEqual(authorityName, referenceReceipt.shape, manifest.shape, 'referenceReceipt.shape');
   assertNamedJsonEqual(authorityName, referenceReceipt.plan, manifest.plan, 'referenceReceipt.plan');
   assertNamedJsonEqual(authorityName, referenceReceipt.checkpointAudit, manifest.checkpointAudit, 'referenceReceipt.checkpointAudit');
-  if (expected.shape) assertNamedJsonEqual(authorityName, manifest.shape, expected.shape, 'manifest.shape');
+  const ingressDerivedShape = authorityName === 'twoImageEpisode'
+    || (authorityName === 'pointer' && authenticatedIngress != null);
+  if (expected.shape && !ingressDerivedShape) assertNamedJsonEqual(authorityName, manifest.shape, expected.shape, 'manifest.shape');
   if (expected.plan) assertNamedJsonEqual(authorityName, manifest.plan, expected.plan, 'manifest.plan');
   if (expected.stateTransition) {
     assertNamedJsonEqual(authorityName, referenceReceipt.stateTransition, manifest.stateTransition, 'referenceReceipt.stateTransition');
@@ -467,6 +520,12 @@ export async function verifySam31TwoFramePacketAuthority({ name, authorityName =
   }
   const ingressBindings = authorityName === 'twoImageEpisode'
     ? verifyTwoImageEpisodeIngressBindings({ authorityName, manifest, authenticatedIngress })
+    : null;
+  const ingressGeometry = authorityName === 'twoImageEpisode'
+    ? verifyTwoImageEpisodeGeometry({ authorityName, manifest, authenticatedIngress })
+    : null;
+  const pointerGeometry = authorityName === 'pointer' && authenticatedIngress != null
+    ? verifyInteractivePointerGeometry({ authorityName, manifest, authenticatedIngress })
     : null;
 
   return {
@@ -487,6 +546,8 @@ export async function verifySam31TwoFramePacketAuthority({ name, authorityName =
     sourceCommit: manifest.reference.source.commit,
     sourceWorkingTreeClean: manifest.reference.source.workingTreeClean,
     ingressBindingsPassed: ingressBindings?.passed ?? null,
+    ingressGeometryPassed: ingressGeometry?.passed ?? null,
+    pointerGeometryPassed: pointerGeometry?.passed ?? null,
     ingressBindingCount: ingressBindings?.bindingCount ?? 0,
   };
 }

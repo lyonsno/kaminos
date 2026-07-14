@@ -26,6 +26,8 @@ const screenshotPath = resolve(args.get('--screenshot') || '/tmp/kaminos-sam31-i
 const debugPort = Number(args.get('--debug-port') || 9590);
 const serverPort = Number(args.get('--server-port') || 18590);
 const timeoutMs = Number(args.get('--timeout-ms') || 300000);
+const reusePacket = args.get('--reuse-packet') === '1';
+const requestedExpectedManifestSha256 = args.get('--expected-manifest-sha256') || null;
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const python = process.env.SAM31_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
 const packetTool = resolve(root, 'tools/sam31-interactive-pointer-meta-packet.py');
@@ -52,6 +54,8 @@ function report(extra = {}) {
   const value = {
     schema: 'kaminos.sam31-interactive-pointer.browser-parity-smoke.v0', ok: false,
     failure_phase: phase, requestedUrl, packetDir, packetTool, reportPath,
+    packetSource: reusePacket ? 'caller-provided-existing' : 'generated',
+    requestedExpectedManifestSha256,
     screenshot: screenshotWritten ? screenshotPath : null, primary_output_written: screenshotWritten,
     screenshotPixelCheck, viewportLayout, browserVersion, packetAuthority, lastState,
     adapterInfo: lastState?.adapterInfo || null, requestedRouteId: lastState?.requestedRouteId || null,
@@ -64,6 +68,10 @@ function report(extra = {}) {
   return value;
 }
 function generatePacket() {
+  if (reusePacket) {
+    if (!existsSync(join(packetDir, 'tensor-manifest.json'))) throw new Error(`reused packet manifest missing: ${packetDir}`);
+    return;
+  }
   mkdirSync(packetDir, { recursive: true });
   const result = spawnSync(python, [packetTool, '--out-dir', packetDir], { cwd: root, encoding: 'utf8', timeout: 240000 });
   if (result.status !== 0) throw new Error(`official packet generation failed: ${result.stderr || result.stdout}`);
@@ -78,6 +86,10 @@ function verifyPacketAuthority() {
   const receipt = JSON.parse(receiptBytes);
   const manifestSha256 = sha256(manifestBytes);
   const failures = [];
+  if (reusePacket && !requestedExpectedManifestSha256) throw new Error('--expected-manifest-sha256 is required with --reuse-packet=1');
+  if (requestedExpectedManifestSha256 && manifestSha256 !== requestedExpectedManifestSha256) {
+    failures.push(`requested manifest digest ${manifestSha256} !== ${requestedExpectedManifestSha256}`);
+  }
   if (manifest.schema !== EXPECTED.schema) failures.push(`schema=${manifest.schema}`);
   if (receipt.schema !== EXPECTED.receiptSchema || receipt.ok !== true) failures.push(`receipt=${receipt.schema}/${receipt.ok}`);
   if (manifest.routeId !== EXPECTED.routeId || receipt.routeId !== EXPECTED.routeId) failures.push('route identity');
@@ -96,7 +108,7 @@ function verifyPacketAuthority() {
   }
   if (failures.length > 0) throw new Error(`interactive pointer packet authority failed: ${failures.join(', ')}`);
   return {
-    passed: true, manifestSha256, expectedManifestSha256: manifestSha256,
+    passed: true, manifestSha256, expectedManifestSha256: requestedExpectedManifestSha256 || manifestSha256,
     referenceReceiptSha256: sha256(receiptBytes), schema: manifest.schema, routeId: manifest.routeId,
     boundary: manifest.boundary, mappedTensorCount: manifest.checkpointAudit.mappedTensorCount,
     tensorArtifactCount: manifest.tensors.length, weightArtifactCount: manifest.weights.length,

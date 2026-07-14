@@ -12,6 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 
 ROUTE_ID = "sam3.1.interactive-pointer.phase-program.webgpu-local.v0"
@@ -29,6 +30,8 @@ def parse_args():
     parser.add_argument("--checkpoint", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--source-root", default=str(Path.home() / "dev/sam3"))
     parser.add_argument("--seed", type=int, default=3167)
+    parser.add_argument("--ingress-dir")
+    parser.add_argument("--expected-ingress-manifest-sha256")
     return parser.parse_args()
 
 
@@ -78,6 +81,87 @@ def write_array(path: Path, value) -> dict:
     return {"file": path.name, "sha256": sha256_bytes(data), "byteLength": len(data), "dtype": "float32", "shape": list(array.shape)}
 
 
+def require_mapping(value, label: str) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def require_ingress_tensor(ingress_dir: Path, entries: dict, role: str, expected_shape: tuple[int, ...]) -> torch.Tensor:
+    entry = require_mapping(entries.get(role), f"ingress tensor {role}")
+    if entry.get("dtype") != "float32" or tuple(entry.get("shape", ())) != expected_shape:
+        raise ValueError(f"ingress tensor {role} shape/dtype mismatch: {entry.get('shape')} {entry.get('dtype')}")
+    path = ingress_dir / entry.get("file", "")
+    if not path.is_file() or path.parent != ingress_dir:
+        raise ValueError(f"ingress tensor {role} file is missing or escapes ingress directory")
+    data = path.read_bytes()
+    if len(data) != entry.get("byteLength") or sha256_bytes(data) != entry.get("sha256"):
+        raise ValueError(f"ingress tensor {role} byte authority mismatch")
+    return torch.from_numpy(np.frombuffer(data, dtype=np.float32).copy().reshape(expected_shape))
+
+
+def load_authenticated_ingress(ingress_dir: Path, expected_manifest_sha256: str) -> dict:
+    manifest_path = ingress_dir / "tensor-manifest.json"
+    receipt_path = ingress_dir / "reference-receipt.json"
+    manifest_bytes = manifest_path.read_bytes()
+    manifest_sha256 = sha256_bytes(manifest_bytes)
+    if manifest_sha256 != expected_manifest_sha256:
+        raise ValueError(f"ingress manifest digest mismatch: expected {expected_manifest_sha256}, got {manifest_sha256}")
+    manifest = require_mapping(json.loads(manifest_bytes), "ingress manifest")
+    receipt = require_mapping(json.loads(receipt_path.read_text(encoding="utf-8")), "ingress reference receipt")
+    if manifest.get("schema") != "kaminos.sam31-two-image-ingress-meta-packet.v0":
+        raise ValueError(f"unsupported ingress schema {manifest.get('schema')}")
+    if receipt.get("ok") is not True or receipt.get("schema") != "kaminos.sam31-two-image-ingress-meta-reference-receipt.v0":
+        raise ValueError("ingress reference receipt is not a successful official receipt")
+    if receipt.get("primaryOutputWritten") is not True or receipt.get("outputs", {}).get("tensorManifestSha256") != manifest_sha256:
+        raise ValueError("ingress reference receipt does not bind the requested manifest")
+    reference = require_mapping(manifest.get("reference"), "ingress reference")
+    if reference.get("model", {}).get("revision") != HF_REVISION:
+        raise ValueError("ingress model revision mismatch")
+    if reference.get("source", {}).get("commit") != SOURCE_COMMIT or reference.get("source", {}).get("clean") is not True:
+        raise ValueError("ingress source authority mismatch")
+    if reference.get("checkpoint", {}).get("sha256") != CHECKPOINT_SHA256:
+        raise ValueError("ingress checkpoint authority mismatch")
+    if receipt.get("reference") != reference or receipt.get("shape") != manifest.get("shape") or receipt.get("checkpointAudit") != manifest.get("checkpointAudit"):
+        raise ValueError("ingress receipt reference, shape, or checkpoint audit mismatch")
+    audit = require_mapping(manifest.get("checkpointAudit"), "ingress checkpoint audit")
+    if audit.get("allMappedOfficialKeysPresent") is not True or audit.get("allOfficialModuleLoadsAccepted") is not True:
+        raise ValueError("ingress checkpoint audit is incomplete")
+    shape = require_mapping(manifest.get("shape"), "ingress shape")
+    image_height = shape.get("patchHeight")
+    image_width = shape.get("patchWidth")
+    if not isinstance(image_height, int) or image_height <= 0 or not isinstance(image_width, int) or image_width <= 0:
+        raise ValueError("ingress patch geometry is invalid")
+    if shape.get("patchTokens") != image_height * image_width:
+        raise ValueError("ingress patch token geometry is inconsistent")
+    entries = {entry.get("role"): entry for entry in manifest.get("tensors", []) if isinstance(entry, dict)}
+    image_embedding = require_ingress_tensor(
+        ingress_dir, entries, "frame-0-interactive-feature-2", (1, image_height, image_width, 256),
+    ).permute(0, 3, 1, 2).contiguous()
+    high_resolution_s0 = require_ingress_tensor(
+        ingress_dir, entries, "frame-0-interactive-high-resolution-s0", (1, 32, image_height * 4, image_width * 4),
+    )
+    high_resolution_s1 = require_ingress_tensor(
+        ingress_dir, entries, "frame-0-interactive-high-resolution-s1", (1, 64, image_height * 2, image_width * 2),
+    )
+    bindings = {
+        "frame0ImageEmbedding": entries["frame-0-interactive-feature-2"]["sha256"],
+        "frame0HighResolutionS0": entries["frame-0-interactive-high-resolution-s0"]["sha256"],
+        "frame0HighResolutionS1": entries["frame-0-interactive-high-resolution-s1"]["sha256"],
+    }
+    return {
+        "manifest": manifest,
+        "manifestSha256": manifest_sha256,
+        "receiptSha256": sha256_file(receipt_path),
+        "imageHeight": image_height,
+        "imageWidth": image_width,
+        "imageEmbedding": image_embedding,
+        "highResolutionS0": high_resolution_s0,
+        "highResolutionS1": high_resolution_s1,
+        "bindings": bindings,
+    }
+
+
 def invalidate_primary_outputs(out_dir: Path):
     (out_dir / "tensor-manifest.json").unlink(missing_ok=True)
     for path in out_dir.glob("*.bin"):
@@ -93,7 +177,13 @@ def write_failure_receipt(args, error: Exception):
         "schema": "kaminos.sam31-interactive-pointer-meta-reference-receipt.v0",
         "failurePhase": FAILURE_PHASE,
         "error": f"{type(error).__name__}: {error}",
-        "requested": {"checkpoint": str(Path(args.checkpoint).resolve()), "sourceRoot": str(Path(args.source_root).resolve()), "seed": args.seed},
+        "requested": {
+            "checkpoint": str(Path(args.checkpoint).resolve()),
+            "sourceRoot": str(Path(args.source_root).resolve()),
+            "seed": args.seed,
+            "ingressDir": str(Path(args.ingress_dir).resolve()) if args.ingress_dir else None,
+            "expectedIngressManifestSha256": args.expected_ingress_manifest_sha256,
+        },
         "expected": {"modelRevision": HF_REVISION, "checkpointSha256": CHECKPOINT_SHA256, "sourceCommit": SOURCE_COMMIT},
         "lastTrustworthyEvidence": "No primary interactive pointer tensor packet was published.",
     }
@@ -109,6 +199,13 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     invalidate_primary_outputs(out_dir)
 
+    if bool(args.ingress_dir) != bool(args.expected_ingress_manifest_sha256):
+        raise ValueError("--ingress-dir and --expected-ingress-manifest-sha256 must be supplied together")
+    ingress = None
+    if args.ingress_dir:
+        FAILURE_PHASE = "ingress-authority-validation"
+        ingress = load_authenticated_ingress(Path(args.ingress_dir).resolve(), args.expected_ingress_manifest_sha256)
+
     FAILURE_PHASE = "identity-validation"
     if not checkpoint_path.is_file():
         raise FileNotFoundError(f"official checkpoint not found: {checkpoint_path}")
@@ -122,7 +219,15 @@ def main():
 
     FAILURE_PHASE = "checkpoint-load"
     state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
-    proxy = helper.build_interactive_mask_proxy(video_module, state)
+    image_height = ingress["imageHeight"] if ingress else 2
+    image_width = ingress["imageWidth"] if ingress else 2
+    if image_height != image_width:
+        raise ValueError("interactive pointer exporter currently requires square authenticated image geometry")
+    input_mask_height = image_height * 4
+    input_mask_width = image_width * 4
+    proxy = helper.build_interactive_mask_proxy(
+        video_module, state, image_embedding_size=image_height, input_image_size=input_mask_height,
+    )
     multiplex_state = multiplex_module.MultiplexState(
         assignments=[list(range(16))], device=torch.device("cpu"), dtype=torch.float32, allowed_bucket_capacity=16,
     )
@@ -155,9 +260,11 @@ def main():
     generator = torch.Generator(device="cpu").manual_seed(args.seed)
     random = lambda shape, scale: torch.randn(shape, generator=generator, dtype=torch.float32) * scale
     binary_masks = helper.create_binary_mask_fixture()
-    image_embedding = random((1, 256, 2, 2), 0.04)
-    high_resolution_s0 = random((1, 32, 8, 8), 0.03)
-    high_resolution_s1 = random((1, 64, 4, 4), 0.03)
+    if (input_mask_height, input_mask_width) != tuple(binary_masks.shape[-2:]):
+        binary_masks = F.interpolate(binary_masks, size=(input_mask_height, input_mask_width), mode="nearest")
+    image_embedding = ingress["imageEmbedding"] if ingress else random((1, 256, image_height, image_width), 0.04)
+    high_resolution_s0 = ingress["highResolutionS0"] if ingress else random((1, 32, image_height * 4, image_width * 4), 0.03)
+    high_resolution_s1 = ingress["highResolutionS1"] if ingress else random((1, 64, image_height * 2, image_width * 2), 0.03)
 
     FAILURE_PHASE = "official-interactive-pointer-execution"
     with torch.inference_mode():
@@ -181,9 +288,9 @@ def main():
     captures["final-no-object-projection"] = no_object_outputs[1]
 
     expected_shapes = {
-        "mask-downsample": (16, 1, 2, 2), "sparse-embeddings": (16, 2, 256),
-        "dense-embeddings": (16, 256, 2, 2), "image-position": (1, 256, 2, 2),
-        "decoder-masks": (16, 1, 8, 8), "decoder-ious": (16, 1),
+        "mask-downsample": (16, 1, image_height, image_width), "sparse-embeddings": (16, 2, 256),
+        "dense-embeddings": (16, 256, image_height, image_width), "image-position": (1, 256, image_height, image_width),
+        "decoder-masks": (16, 1, input_mask_height, input_mask_width), "decoder-ious": (16, 1),
         "sam-output-tokens": (16, 1, 256), "decoder-object-scores": (16, 1),
         "projected-pointers": (16, 256), "forward-object-pointers": (16, 256),
         "final-object-pointers": (16, 256),
@@ -237,9 +344,9 @@ def main():
         "framework": {"name": "torch", "version": torch.__version__, "device": "cpu"},
     }
     shape = {
-        "batch": 16, "queryTokens": 8, "sparsePromptTokens": 2, "imageHeight": 2, "imageWidth": 2,
-        "imageTokens": 4, "channels": 256, "heads": 8, "attentionChannels": 128, "mlpHidden": 2048,
-        "inputMaskHeight": 8, "inputMaskWidth": 8, "decoderMaskHeight": 8, "decoderMaskWidth": 8,
+        "batch": 16, "queryTokens": 8, "sparsePromptTokens": 2, "imageHeight": image_height, "imageWidth": image_width,
+        "imageTokens": image_height * image_width, "channels": 256, "heads": 8, "attentionChannels": 128, "mlpHidden": 2048,
+        "inputMaskHeight": input_mask_height, "inputMaskWidth": input_mask_width, "decoderMaskHeight": input_mask_height, "decoderMaskWidth": input_mask_width,
         "maskOutputs": 4, "layerCount": 2,
     }
     manifest = {
@@ -257,7 +364,19 @@ def main():
             "transformerClass": "TwoWayTransformer",
             "noObjectTransitionCount": len(no_object_outputs),
         },
-        "fixture": {"seed": args.seed, "kind": "deterministic-reduced-geometry-mixed-object-presence", "sourceFeaturesSynthetic": True},
+        "fixture": {
+            "seed": args.seed,
+            "kind": "authenticated-ingress-mixed-object-presence" if ingress else "deterministic-reduced-geometry-mixed-object-presence",
+            "sourceFeaturesSynthetic": ingress is None,
+            "initialMaskSynthetic": True,
+        },
+        "ingressAuthority": ({
+            "passed": True,
+            "schema": ingress["manifest"]["schema"],
+            "manifestSha256": ingress["manifestSha256"],
+            "referenceReceiptSha256": ingress["receiptSha256"],
+            "bindings": ingress["bindings"],
+        } if ingress else {"passed": False, "state": "not-attached"}),
         "tensorLayouts": {"image-embedding": "B,H,W,C-token-major", "expected-image-position": "B,H,W,C-token-major"},
         "shape": shape,
         "configuration": {
@@ -271,7 +390,10 @@ def main():
             "mappedTensorCount": len(weights), "allMappedOfficialKeysPresent": len(weights) == 158,
         },
         "outputSummary": {"appearingObjectCount": int(appearing.sum().item()), "absentObjectCount": int((~appearing).sum().item())},
-        "claims": {"fullProductionInteractiveGeometryExecuted": False, "fullImageBackboneExecuted": False},
+        "claims": {
+            "fullProductionInteractiveGeometryExecuted": image_height == 72 and image_width == 72,
+            "fullImageBackboneExecuted": ingress is not None,
+        },
         "tolerances": {"webGpuIntermediateMaxAbsDiff": 0.0005, "webGpuFinalMaxAbsDiff": 0.0015},
         "tensors": tensors,
         "weights": weights,
@@ -286,6 +408,7 @@ def main():
         "boundary": manifest["boundary"],
         "reference": reference,
         "shape": shape,
+        "ingressAuthority": manifest["ingressAuthority"],
         "checkpointAudit": manifest["checkpointAudit"],
         "outputs": {"tensorManifest": str(manifest_path), "tensorManifestSha256": sha256_bytes(manifest_text.encode("utf-8")), "referenceReceipt": str(receipt_path)},
     }

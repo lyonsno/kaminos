@@ -69,6 +69,70 @@ function weight(weights, key, length) {
   return value;
 }
 
+export function deriveSam31InteractivePointerGeometry(inputShape = {}) {
+  const shape = { ...inputShape };
+  const fixed = {
+    batch: 16,
+    queryTokens: 8,
+    sparsePromptTokens: 2,
+    channels: 256,
+    heads: 8,
+    attentionChannels: 128,
+    mlpHidden: 2048,
+    layerCount: 2,
+  };
+  for (const [key, expected] of Object.entries(fixed)) {
+    if (shape[key] !== expected) throw new Error(`shape.${key} must equal ${expected}`);
+  }
+  for (const key of ['imageHeight', 'imageWidth', 'imageTokens', 'inputMaskHeight', 'inputMaskWidth']) {
+    if (!Number.isInteger(shape[key]) || shape[key] <= 0) throw new Error(`shape.${key} must be a positive integer`);
+  }
+  if (shape.imageTokens !== shape.imageHeight * shape.imageWidth) {
+    throw new Error('shape.imageTokens must equal imageHeight * imageWidth');
+  }
+  if (shape.inputMaskHeight !== shape.imageHeight * 4 || shape.inputMaskWidth !== shape.imageWidth * 4) {
+    throw new Error('input mask geometry must be four times image geometry');
+  }
+  if (shape.inputMaskHeight % 4 !== 0 || shape.inputMaskWidth % 4 !== 0) {
+    throw new Error('input mask geometry must be divisible by four');
+  }
+  const maskPixels = shape.inputMaskHeight * shape.inputMaskWidth;
+  const promptIntermediateHeight = shape.inputMaskHeight / 2;
+  const promptIntermediateWidth = shape.inputMaskWidth / 2;
+  const promptIntermediatePixels = promptIntermediateHeight * promptIntermediateWidth;
+  const batch = fixed.batch;
+  const channels = fixed.channels;
+  return Object.freeze({
+    shape: Object.freeze({ ...shape }),
+    ...fixed,
+    imageHeight: shape.imageHeight,
+    imageWidth: shape.imageWidth,
+    imageTokens: shape.imageTokens,
+    inputMaskHeight: shape.inputMaskHeight,
+    inputMaskWidth: shape.inputMaskWidth,
+    maskPixels,
+    outerMaskHeight: shape.imageHeight,
+    outerMaskWidth: shape.imageWidth,
+    promptIntermediateHeight,
+    promptIntermediateWidth,
+    promptIntermediatePixels,
+    binaryMaskLength: batch * maskPixels,
+    imageEmbeddingLength: shape.imageTokens * channels,
+    outerMaskLength: batch * shape.imageTokens,
+    resizedMaskLength: batch * maskPixels,
+    promptConv0Length: batch * 4 * promptIntermediatePixels,
+    promptConv1Length: batch * 16 * shape.imageTokens,
+    denseEmbeddingLength: batch * channels * shape.imageTokens,
+    imagePositionLength: batch * shape.imageTokens * channels,
+    queryValueLength: batch * fixed.queryTokens * channels,
+    keyValueLength: batch * shape.imageTokens * channels,
+    queryAttentionLength: batch * fixed.queryTokens * fixed.attentionChannels,
+    keyAttentionLength: batch * shape.imageTokens * fixed.attentionChannels,
+    mlpLength: batch * fixed.queryTokens * fixed.mlpHidden,
+    pointerLength: batch * channels,
+  });
+}
+
 function projection(weights, prefix, inputChannels, outputChannels) {
   return {
     weight: weight(weights, `${prefix}.weight`, inputChannels * outputChannels),
@@ -244,37 +308,37 @@ function bilinearNchw(input, batch, channels, inputHeight, inputWidth, outputHei
   return output;
 }
 
-function promptEncode(binaryMasks, weights) {
-  const outer = conv2dNchw(binaryMasks, 16, 1, 8, 8, 1, 4, 4,
+function promptEncode(binaryMasks, weights, geometry) {
+  const outer = conv2dNchw(binaryMasks, geometry.batch, 1, geometry.inputMaskHeight, geometry.inputMaskWidth, 1, 4, 4,
     weight(weights, 'mask-downsample.weight', 16), weight(weights, 'mask-downsample.bias', 1));
-  const promptMasks = bilinearNchw(outer.values, 16, 1, 2, 2, 8, 8);
-  let dense = conv2dNchw(promptMasks, 16, 1, 8, 8, 4, 2, 2,
+  const promptMasks = bilinearNchw(outer.values, geometry.batch, 1, geometry.outerMaskHeight, geometry.outerMaskWidth, geometry.inputMaskHeight, geometry.inputMaskWidth);
+  let dense = conv2dNchw(promptMasks, geometry.batch, 1, geometry.inputMaskHeight, geometry.inputMaskWidth, 4, 2, 2,
     weight(weights, 'prompt.mask_downscaling.0.weight', 16), weight(weights, 'prompt.mask_downscaling.0.bias', 4));
-  dense.values = geluInPlace(layerNorm2d(dense.values, 16, 4, 4, 4,
+  dense.values = geluInPlace(layerNorm2d(dense.values, geometry.batch, 4, geometry.promptIntermediateHeight, geometry.promptIntermediateWidth,
     weight(weights, 'prompt.mask_downscaling.1.weight', 4), weight(weights, 'prompt.mask_downscaling.1.bias', 4)));
-  dense = conv2dNchw(dense.values, 16, 4, 4, 4, 16, 2, 2,
+  dense = conv2dNchw(dense.values, geometry.batch, 4, geometry.promptIntermediateHeight, geometry.promptIntermediateWidth, 16, 2, 2,
     weight(weights, 'prompt.mask_downscaling.3.weight', 16 * 4 * 4), weight(weights, 'prompt.mask_downscaling.3.bias', 16));
-  dense.values = geluInPlace(layerNorm2d(dense.values, 16, 16, 2, 2,
+  dense.values = geluInPlace(layerNorm2d(dense.values, geometry.batch, 16, geometry.imageHeight, geometry.imageWidth,
     weight(weights, 'prompt.mask_downscaling.4.weight', 16), weight(weights, 'prompt.mask_downscaling.4.bias', 16)));
-  dense = conv2dNchw(dense.values, 16, 16, 2, 2, 256, 1, 1,
+  dense = conv2dNchw(dense.values, geometry.batch, 16, geometry.imageHeight, geometry.imageWidth, 256, 1, 1,
     weight(weights, 'prompt.mask_downscaling.6.weight', 256 * 16), weight(weights, 'prompt.mask_downscaling.6.bias', 256));
-  const sparse = new Float32Array(16 * 2 * 256);
+  const sparse = new Float32Array(geometry.batch * geometry.sparsePromptTokens * geometry.channels);
   const notPoint = weight(weights, 'prompt.not_a_point_embed.weight', 256);
-  for (let item = 0; item < 16; item += 1) {
+  for (let item = 0; item < geometry.batch; item += 1) {
     sparse.set(notPoint, (item * 2) * 256);
     sparse.set(notPoint, (item * 2 + 1) * 256);
   }
   return { maskDownsample: outer.values, sparseEmbeddings: sparse, denseEmbeddings: dense.values };
 }
 
-function densePosition(weights) {
+function densePosition(weights, geometry) {
   const matrix = weight(weights, 'prompt.pe_layer.positional_encoding_gaussian_matrix', 256);
-  const output = new Float32Array(4 * 256);
-  for (let y = 0; y < 2; y += 1) {
-    for (let x = 0; x < 2; x += 1) {
-      const position = y * 2 + x;
-      const nx = 2 * ((x + 0.5) / 2) - 1;
-      const ny = 2 * ((y + 0.5) / 2) - 1;
+  const output = new Float32Array(geometry.imageTokens * geometry.channels);
+  for (let y = 0; y < geometry.imageHeight; y += 1) {
+    for (let x = 0; x < geometry.imageWidth; x += 1) {
+      const position = y * geometry.imageWidth + x;
+      const nx = 2 * ((x + 0.5) / geometry.imageWidth) - 1;
+      const ny = 2 * ((y + 0.5) / geometry.imageHeight) - 1;
       for (let feature = 0; feature < 128; feature += 1) {
         const angle = (nx * matrix[feature] + ny * matrix[128 + feature]) * 2 * Math.PI;
         output[position * 256 + feature] = Math.sin(angle);
@@ -294,17 +358,17 @@ function pointEmbeddingForItem(sparse, item, weights) {
   return output;
 }
 
-function imageKeysForItem(imageEmbedding, dense, item) {
-  const output = new Float32Array(4 * 256);
-  for (let position = 0; position < 4; position += 1) {
+function imageKeysForItem(imageEmbedding, dense, item, geometry) {
+  const output = new Float32Array(geometry.imageTokens * geometry.channels);
+  for (let position = 0; position < geometry.imageTokens; position += 1) {
     for (let channel = 0; channel < 256; channel += 1) {
-      output[position * 256 + channel] = imageEmbedding[position * 256 + channel] + dense[(item * 256 + channel) * 4 + position];
+      output[position * 256 + channel] = imageEmbedding[position * 256 + channel] + dense[(item * 256 + channel) * geometry.imageTokens + position];
     }
   }
   return output;
 }
 
-function runTransformerItem(point, initialKeys, imagePosition, weights) {
+function runTransformerItem(point, initialKeys, imagePosition, weights, geometry) {
   let queries = new Float32Array(point);
   let keys = new Float32Array(initialKeys);
   const layerQueries = [];
@@ -317,46 +381,44 @@ function runTransformerItem(point, initialKeys, imagePosition, weights) {
       const positioned = add(queries, point);
       queries = layerNorm(add(queries, attentionBlock({ queryInput: positioned, keyInput: positioned, valueInput: queries, queryTokens: 8, keyTokens: 8, weights, prefix: `${base}.self_attn`, internalChannels: 256 })), weights, `${base}.norm1`, 8);
     }
-    queries = layerNorm(add(queries, attentionBlock({ queryInput: add(queries, point), keyInput: add(keys, imagePosition), valueInput: keys, queryTokens: 8, keyTokens: 4, weights, prefix: `${base}.cross_attn_token_to_image`, internalChannels: 128 })), weights, `${base}.norm2`, 8);
+    queries = layerNorm(add(queries, attentionBlock({ queryInput: add(queries, point), keyInput: add(keys, imagePosition), valueInput: keys, queryTokens: 8, keyTokens: geometry.imageTokens, weights, prefix: `${base}.cross_attn_token_to_image`, internalChannels: 128 })), weights, `${base}.norm2`, 8);
     const hidden = linear(queries, projection(weights, `${base}.mlp.lin1`, 256, 2048), 8, true);
     queries = layerNorm(add(queries, linear(hidden, projection(weights, `${base}.mlp.lin2`, 2048, 256), 8)), weights, `${base}.norm3`, 8);
-    keys = layerNorm(add(keys, attentionBlock({ queryInput: add(keys, imagePosition), keyInput: add(queries, point), valueInput: queries, queryTokens: 4, keyTokens: 8, weights, prefix: `${base}.cross_attn_image_to_token`, internalChannels: 128 })), weights, `${base}.norm4`, 4);
+    keys = layerNorm(add(keys, attentionBlock({ queryInput: add(keys, imagePosition), keyInput: add(queries, point), valueInput: queries, queryTokens: geometry.imageTokens, keyTokens: 8, weights, prefix: `${base}.cross_attn_image_to_token`, internalChannels: 128 })), weights, `${base}.norm4`, geometry.imageTokens);
     layerQueries.push(new Float32Array(queries));
     layerKeys.push(new Float32Array(keys));
   }
-  queries = layerNorm(add(queries, attentionBlock({ queryInput: add(queries, point), keyInput: add(keys, imagePosition), valueInput: keys, queryTokens: 8, keyTokens: 4, weights, prefix: 'decoder.transformer.final_attn_token_to_image', internalChannels: 128 })), weights, 'decoder.transformer.norm_final_attn', 8);
+  queries = layerNorm(add(queries, attentionBlock({ queryInput: add(queries, point), keyInput: add(keys, imagePosition), valueInput: keys, queryTokens: 8, keyTokens: geometry.imageTokens, weights, prefix: 'decoder.transformer.final_attn_token_to_image', internalChannels: 128 })), weights, 'decoder.transformer.norm_final_attn', 8);
   return { queries, keys, layerQueries, layerKeys };
 }
 
 function normalizeInput(input = {}) {
   const shape = input.shape || {};
-  const fixed = { batch: 16, queryTokens: 8, sparsePromptTokens: 2, imageTokens: 4, channels: 256, heads: 8, attentionChannels: 128, mlpHidden: 2048, layerCount: 2 };
-  for (const [key, expected] of Object.entries(fixed)) if (shape[key] !== expected) throw new Error(`shape.${key} must equal ${expected}`);
-  if (shape.imageHeight !== 2 || shape.imageWidth !== 2 || shape.inputMaskHeight !== 8 || shape.inputMaskWidth !== 8) throw new Error('interactive pointer oracle requires witnessed 2x2 / 8x8 geometry');
+  const geometry = deriveSam31InteractivePointerGeometry(shape);
   const tensors = input.tensors || {};
   const binaryMasks = array(tensors.binaryMasks, 'tensors.binaryMasks');
   const imageEmbedding = array(tensors.imageEmbedding, 'tensors.imageEmbedding');
-  if (binaryMasks.length !== 16 * 8 * 8 || imageEmbedding.length !== 4 * 256) throw new Error('interactive pointer tensor length mismatch');
+  if (binaryMasks.length !== geometry.binaryMaskLength || imageEmbedding.length !== geometry.imageEmbeddingLength) throw new Error('interactive pointer tensor length mismatch');
   const weights = {};
   for (const [key, value] of Object.entries(input.weights || {})) weights[key] = array(value, `weights.${key}`);
-  return { shape, binaryMasks, imageEmbedding, weights };
+  return { shape, geometry, binaryMasks, imageEmbedding, weights };
 }
 
 export function createSam31InteractivePointerPhaseProgramCpuOracle(input = {}) {
-  const { shape, binaryMasks, imageEmbedding, weights } = normalizeInput(input);
-  const prompt = promptEncode(binaryMasks, weights);
-  const imagePosition = densePosition(weights);
+  const { shape, geometry, binaryMasks, imageEmbedding, weights } = normalizeInput(input);
+  const prompt = promptEncode(binaryMasks, weights, geometry);
+  const imagePosition = densePosition(weights, geometry);
   const layerQueries = [new Float32Array(16 * 8 * 256), new Float32Array(16 * 8 * 256)];
-  const layerKeys = [new Float32Array(16 * 4 * 256), new Float32Array(16 * 4 * 256)];
+  const layerKeys = [new Float32Array(geometry.keyValueLength), new Float32Array(geometry.keyValueLength)];
   const samOutputTokens = new Float32Array(16 * 256);
   const decoderObjectScores = new Float32Array(16);
   for (let item = 0; item < 16; item += 1) {
     const point = pointEmbeddingForItem(prompt.sparseEmbeddings, item, weights);
-    const keys = imageKeysForItem(imageEmbedding, prompt.denseEmbeddings, item);
-    const transformed = runTransformerItem(point, keys, imagePosition, weights);
+    const keys = imageKeysForItem(imageEmbedding, prompt.denseEmbeddings, item, geometry);
+    const transformed = runTransformerItem(point, keys, imagePosition, weights, geometry);
     for (let layer = 0; layer < 2; layer += 1) {
       layerQueries[layer].set(transformed.layerQueries[layer], item * 8 * 256);
-      layerKeys[layer].set(transformed.layerKeys[layer], item * 4 * 256);
+      layerKeys[layer].set(transformed.layerKeys[layer], item * geometry.imageTokens * 256);
     }
     samOutputTokens.set(transformed.queries.subarray(2 * 256, 3 * 256), item * 256);
     decoderObjectScores[item] = mlp(transformed.queries.subarray(0, 256), 1, weights, 'decoder.pred_obj_score_head', 1)[0];
@@ -372,7 +434,7 @@ export function createSam31InteractivePointerPhaseProgramCpuOracle(input = {}) {
   const finalObjectPointers = new Float32Array(projectedPointers.length);
   for (let item = 0; item < 16; item += 1) {
     let appearing = false;
-    for (let pixel = 0; pixel < 64; pixel += 1) appearing ||= binaryMasks[item * 64 + pixel] > 0;
+    for (let pixel = 0; pixel < geometry.maskPixels; pixel += 1) appearing ||= binaryMasks[item * geometry.maskPixels + pixel] > 0;
     const source = appearing ? forwardObjectPointers : finalNoObject;
     finalObjectPointers.set(source.subarray(item * 256, (item + 1) * 256), item * 256);
   }
@@ -447,23 +509,26 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
-const BILINEAR_2_TO_8_WGSL = `
+const BILINEAR_WGSL = `
+struct BilinearDims { batch: u32, input_height: u32, input_width: u32, output_height: u32, output_width: u32, total_output: u32, };
 @group(0) @binding(0) var<storage, read> input_values: array<f32>;
 @group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(2) var<uniform> dims: BilinearDims;
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
-  if (index >= 1024u) { return; }
-  let x = index % 8u;
-  let y = (index / 8u) % 8u;
-  let batch = index / 64u;
-  let source_x = clamp((f32(x) + 0.5) * 0.25 - 0.5, 0.0, 1.0);
-  let source_y = clamp((f32(y) + 0.5) * 0.25 - 0.5, 0.0, 1.0);
-  let x0 = u32(floor(source_x)); let x1 = min(1u, x0 + 1u); let wx = source_x - f32(x0);
-  let y0 = u32(floor(source_y)); let y1 = min(1u, y0 + 1u); let wy = source_y - f32(y0);
-  let base = batch * 4u;
-  let top = input_values[base + y0 * 2u + x0] * (1.0 - wx) + input_values[base + y0 * 2u + x1] * wx;
-  let bottom = input_values[base + y1 * 2u + x0] * (1.0 - wx) + input_values[base + y1 * 2u + x1] * wx;
+  if (index >= dims.total_output) { return; }
+  let output_plane = dims.output_height * dims.output_width;
+  let x = index % dims.output_width;
+  let y = (index / dims.output_width) % dims.output_height;
+  let batch = index / output_plane;
+  let source_x = clamp((f32(x) + 0.5) * f32(dims.input_width) / f32(dims.output_width) - 0.5, 0.0, f32(dims.input_width - 1u));
+  let source_y = clamp((f32(y) + 0.5) * f32(dims.input_height) / f32(dims.output_height) - 0.5, 0.0, f32(dims.input_height - 1u));
+  let x0 = u32(floor(source_x)); let x1 = min(dims.input_width - 1u, x0 + 1u); let wx = source_x - f32(x0);
+  let y0 = u32(floor(source_y)); let y1 = min(dims.input_height - 1u, y0 + 1u); let wy = source_y - f32(y0);
+  let base = batch * dims.input_height * dims.input_width;
+  let top = input_values[base + y0 * dims.input_width + x0] * (1.0 - wx) + input_values[base + y0 * dims.input_width + x1] * wx;
+  let bottom = input_values[base + y1 * dims.input_width + x0] * (1.0 - wx) + input_values[base + y1 * dims.input_width + x1] * wx;
   output_values[index] = top * (1.0 - wy) + bottom * wy;
 }
 `;
@@ -507,17 +572,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 `;
 
 const IMAGE_POSITION_WGSL = `
+struct ImagePositionDims { batch: u32, height: u32, width: u32, channels: u32, total: u32, };
 @group(0) @binding(0) var<storage, read> matrix: array<f32>;
 @group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(2) var<uniform> dims: ImagePositionDims;
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
-  if (index >= 16384u) { return; }
-  let channel = index % 256u;
-  let position = (index / 256u) % 4u;
-  let x = position % 2u; let y = position / 2u;
-  let nx = 2.0 * ((f32(x) + 0.5) / 2.0) - 1.0;
-  let ny = 2.0 * ((f32(y) + 0.5) / 2.0) - 1.0;
+  if (index >= dims.total) { return; }
+  let channel = index % dims.channels;
+  let position = (index / dims.channels) % (dims.height * dims.width);
+  let x = position % dims.width; let y = position / dims.width;
+  let nx = 2.0 * ((f32(x) + 0.5) / f32(dims.width)) - 1.0;
+  let ny = 2.0 * ((f32(y) + 0.5) / f32(dims.height)) - 1.0;
   let feature = channel % 128u;
   let angle = (nx * matrix[feature] + ny * matrix[128u + feature]) * 6.283185307179586;
   output_values[index] = select(cos(angle), sin(angle), channel < 128u);
@@ -534,7 +601,7 @@ const QUERY_SEED_WGSL = `
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
-  if (index >= 32768u) { return; }
+  if (index >= arrayLength(&point_values)) { return; }
   let channel = index % 256u;
   let token = (index / 256u) % 8u;
   var value = not_point[channel];
@@ -547,17 +614,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 `;
 
 const KEY_SEED_WGSL = `
+struct KeySeedDims { batch: u32, image_tokens: u32, channels: u32, total: u32, };
 @group(0) @binding(0) var<storage, read> image_values: array<f32>;
 @group(0) @binding(1) var<storage, read> dense_values: array<f32>;
 @group(0) @binding(2) var<storage, read_write> key_values: array<f32>;
+@group(0) @binding(3) var<uniform> dims: KeySeedDims;
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let index = gid.x;
-  if (index >= 16384u) { return; }
-  let channel = index % 256u;
-  let position = (index / 256u) % 4u;
-  let batch = index / 1024u;
-  key_values[index] = image_values[position * 256u + channel] + dense_values[(batch * 256u + channel) * 4u + position];
+  if (index >= dims.total) { return; }
+  let channel = index % dims.channels;
+  let position = (index / dims.channels) % dims.image_tokens;
+  let batch = index / (dims.image_tokens * dims.channels);
+  key_values[index] = image_values[position * dims.channels + channel] + dense_values[(batch * dims.channels + channel) * dims.image_tokens + position];
 }
 `;
 
@@ -602,22 +671,24 @@ const SCORE_BLEND_WGSL = `
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (gid.x >= 4096u) { return; }
+  if (gid.x >= arrayLength(&output_values)) { return; }
   output_values[gid.x] = select(absent_values[gid.x], present_values[gid.x], scores[gid.x / 256u] > 0.0);
 }
 `;
 
 const MASK_BLEND_WGSL = `
+struct MaskBlendDims { batch: u32, channels: u32, mask_pixels: u32, total: u32, };
 @group(0) @binding(0) var<storage, read> masks: array<f32>;
 @group(0) @binding(1) var<storage, read> present_values: array<f32>;
 @group(0) @binding(2) var<storage, read> absent_values: array<f32>;
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
+@group(0) @binding(4) var<uniform> dims: MaskBlendDims;
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (gid.x >= 4096u) { return; }
-  let batch = gid.x / 256u;
+  if (gid.x >= dims.total) { return; }
+  let batch = gid.x / dims.channels;
   var appearing = false;
-  for (var pixel = 0u; pixel < 64u; pixel = pixel + 1u) { appearing = appearing || masks[batch * 64u + pixel] > 0.0; }
+  for (var pixel = 0u; pixel < dims.mask_pixels; pixel = pixel + 1u) { appearing = appearing || masks[batch * dims.mask_pixels + pixel] > 0.0; }
   output_values[gid.x] = select(absent_values[gid.x], present_values[gid.x], appearing);
 }
 `;
@@ -672,7 +743,7 @@ export function createSam31InteractivePointerPhaseProgramRouteReceipt(input = {}
 export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   if (!input.request) throw new Error('request is required');
   const normalized = normalizeInput(input.tensors || {});
-  const { shape, binaryMasks, imageEmbedding, weights } = normalized;
+  const { shape, geometry, binaryMasks, imageEmbedding, weights } = normalized;
   const route = input.route || createSam31InteractivePointerPhaseProgramRouteDefinition({ kernel: input.kernel, model: input.model });
   const runtime = await createWebGpuInferenceRuntime({
     routeId: route.routeId,
@@ -692,47 +763,49 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
 
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
   const readonly = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
+  const attentionScratchLength = Math.max(geometry.queryAttentionLength, geometry.keyAttentionLength);
+  const projectedScratchLength = Math.max(geometry.queryValueLength, geometry.keyValueLength);
   let gpu;
   await runtime.runStage('interactive-pointer-load-tensors', async stage => {
     const create = (name, length, tensorUsage = usage) => stage.createTensor({ name: `sam31.interactive-pointer.${name}`, shape: [length], dtype: 'f32', usage: tensorUsage });
     gpu = {
-      binaryMasks: create('binary-masks', 1024, readonly),
-      imageEmbedding: create('image-embedding', 1024, readonly),
-      maskDownsample: create('mask-downsample', 64),
-      resizedMasks: create('resized-masks', 1024),
-      promptConv0: create('prompt-conv-0', 1024),
-      promptNorm0: create('prompt-norm-0', 1024),
-      promptGelu0: create('prompt-gelu-0', 1024),
-      promptConv1: create('prompt-conv-1', 1024),
-      promptNorm1: create('prompt-norm-1', 1024),
-      promptGelu1: create('prompt-gelu-1', 1024),
-      denseEmbedding: create('dense-embedding', 16384),
-      imagePosition: create('image-position', 16384),
-      point: create('point', 32768),
-      hiddenA: create('hidden-a', 32768),
-      hiddenB: create('hidden-b', 32768),
-      keyA: create('key-a', 16384),
-      keyB: create('key-b', 16384),
-      querySum: create('query-sum', 32768),
-      keySum: create('key-sum', 16384),
-      q: create('q', 32768),
-      k: create('k', 32768),
-      v: create('v', 32768),
-      attention: create('attention', 32768),
-      projected: create('projected', 32768),
-      mlp: create('mlp', 262144),
-      samTokens: create('sam-tokens', 4096),
-      objectTokens: create('object-tokens', 4096),
-      objectHiddenA: create('object-hidden-a', 4096),
-      objectHiddenB: create('object-hidden-b', 4096),
-      objectScores: create('object-scores', 16),
-      pointerA: create('pointer-a', 4096),
-      pointerB: create('pointer-b', 4096),
-      projectedPointers: create('projected-pointers', 4096),
-      firstNoObject: create('first-no-object', 4096),
-      forwardPointers: create('forward-pointers', 4096),
-      finalNoObject: create('final-no-object', 4096),
-      objectPointers: create('object-pointers', 4096),
+      binaryMasks: create('binary-masks', geometry.binaryMaskLength, readonly),
+      imageEmbedding: create('image-embedding', geometry.imageEmbeddingLength, readonly),
+      maskDownsample: create('mask-downsample', geometry.outerMaskLength),
+      resizedMasks: create('resized-masks', geometry.resizedMaskLength),
+      promptConv0: create('prompt-conv-0', geometry.promptConv0Length),
+      promptNorm0: create('prompt-norm-0', geometry.promptConv0Length),
+      promptGelu0: create('prompt-gelu-0', geometry.promptConv0Length),
+      promptConv1: create('prompt-conv-1', geometry.promptConv1Length),
+      promptNorm1: create('prompt-norm-1', geometry.promptConv1Length),
+      promptGelu1: create('prompt-gelu-1', geometry.promptConv1Length),
+      denseEmbedding: create('dense-embedding', geometry.denseEmbeddingLength),
+      imagePosition: create('image-position', geometry.imagePositionLength),
+      point: create('point', geometry.queryValueLength),
+      hiddenA: create('hidden-a', geometry.queryValueLength),
+      hiddenB: create('hidden-b', geometry.queryValueLength),
+      keyA: create('key-a', geometry.keyValueLength),
+      keyB: create('key-b', geometry.keyValueLength),
+      querySum: create('query-sum', geometry.queryValueLength),
+      keySum: create('key-sum', geometry.keyValueLength),
+      q: create('q', attentionScratchLength),
+      k: create('k', attentionScratchLength),
+      v: create('v', attentionScratchLength),
+      attention: create('attention', attentionScratchLength),
+      projected: create('projected', projectedScratchLength),
+      mlp: create('mlp', geometry.mlpLength),
+      samTokens: create('sam-tokens', geometry.pointerLength),
+      objectTokens: create('object-tokens', geometry.pointerLength),
+      objectHiddenA: create('object-hidden-a', geometry.pointerLength),
+      objectHiddenB: create('object-hidden-b', geometry.pointerLength),
+      objectScores: create('object-scores', geometry.batch),
+      pointerA: create('pointer-a', geometry.pointerLength),
+      pointerB: create('pointer-b', geometry.pointerLength),
+      projectedPointers: create('projected-pointers', geometry.pointerLength),
+      firstNoObject: create('first-no-object', geometry.pointerLength),
+      forwardPointers: create('forward-pointers', geometry.pointerLength),
+      finalNoObject: create('final-no-object', geometry.pointerLength),
+      objectPointers: create('object-pointers', geometry.pointerLength),
       weights: {},
       uniforms: {},
     };
@@ -749,38 +822,46 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
       { name: 'kernel', type: 'u32' }, { name: 'stride', type: 'u32' }, { name: 'total_output', type: 'u32' },
     ];
     const norm2dSchema = [{ name: 'batch', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'height', type: 'u32' }, { name: 'width', type: 'u32' }, { name: 'total_spatial', type: 'u32' }];
+    const bilinearSchema = [{ name: 'batch', type: 'u32' }, { name: 'input_height', type: 'u32' }, { name: 'input_width', type: 'u32' }, { name: 'output_height', type: 'u32' }, { name: 'output_width', type: 'u32' }, { name: 'total_output', type: 'u32' }];
+    const imagePositionSchema = [{ name: 'batch', type: 'u32' }, { name: 'height', type: 'u32' }, { name: 'width', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total', type: 'u32' }];
+    const keySeedSchema = [{ name: 'batch', type: 'u32' }, { name: 'image_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total', type: 'u32' }];
+    const maskBlendSchema = [{ name: 'batch', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'mask_pixels', type: 'u32' }, { name: 'total', type: 'u32' }];
     const linearSchema = [{ name: 'input_channels', type: 'u32' }, { name: 'output_channels', type: 'u32' }, { name: 'total_output', type: 'u32' }];
     const attentionSchema = [{ name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'key_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'heads', type: 'u32' }, { name: 'head_dim', type: 'u32' }];
     const normSchema = [{ name: 'total_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }];
     const addSchema = [{ name: 'total', type: 'u32' }, { name: 'scale', type: 'f32' }];
     const gatherSchema = [{ name: 'token_offset', type: 'u32' }, { name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total', type: 'u32' }];
     gpu.uniforms = {
-      outerConv: uniform('outer-conv', convSchema, { batch: 16, input_channels: 1, input_height: 8, input_width: 8, output_channels: 1, output_height: 2, output_width: 2, kernel: 4, stride: 4, total_output: 64 }),
-      promptConv0: uniform('prompt-conv-0', convSchema, { batch: 16, input_channels: 1, input_height: 8, input_width: 8, output_channels: 4, output_height: 4, output_width: 4, kernel: 2, stride: 2, total_output: 1024 }),
-      promptConv1: uniform('prompt-conv-1', convSchema, { batch: 16, input_channels: 4, input_height: 4, input_width: 4, output_channels: 16, output_height: 2, output_width: 2, kernel: 2, stride: 2, total_output: 1024 }),
-      promptConv2: uniform('prompt-conv-2', convSchema, { batch: 16, input_channels: 16, input_height: 2, input_width: 2, output_channels: 256, output_height: 2, output_width: 2, kernel: 1, stride: 1, total_output: 16384 }),
-      promptNorm0: uniform('prompt-norm-0', norm2dSchema, { batch: 16, channels: 4, height: 4, width: 4, total_spatial: 256 }),
-      promptNorm1: uniform('prompt-norm-1', norm2dSchema, { batch: 16, channels: 16, height: 2, width: 2, total_spatial: 64 }),
-      addQueries: uniform('add-queries', addSchema, { total: 32768, scale: 1 }),
-      addKeys: uniform('add-keys', addSchema, { total: 16384, scale: 1 }),
-      normQueries: uniform('norm-queries', normSchema, { total_tokens: 128, channels: 256 }),
-      normKeys: uniform('norm-keys', normSchema, { total_tokens: 64, channels: 256 }),
-      linearQ256: uniform('linear-q-256', linearSchema, { input_channels: 256, output_channels: 256, total_output: 32768 }),
-      linearK256: uniform('linear-k-256', linearSchema, { input_channels: 256, output_channels: 256, total_output: 16384 }),
-      linearQ128: uniform('linear-q-128', linearSchema, { input_channels: 256, output_channels: 128, total_output: 16384 }),
-      linearK128: uniform('linear-k-128', linearSchema, { input_channels: 256, output_channels: 128, total_output: 8192 }),
-      linearQFrom128: uniform('linear-q-from-128', linearSchema, { input_channels: 128, output_channels: 256, total_output: 32768 }),
-      linearKFrom128: uniform('linear-k-from-128', linearSchema, { input_channels: 128, output_channels: 256, total_output: 16384 }),
-      mlpIn: uniform('mlp-in', linearSchema, { input_channels: 256, output_channels: 2048, total_output: 262144 }),
-      mlpOut: uniform('mlp-out', linearSchema, { input_channels: 2048, output_channels: 256, total_output: 32768 }),
-      selfAttention: uniform('self-attention', attentionSchema, { batch: 16, query_tokens: 8, key_tokens: 8, channels: 256, heads: 8, head_dim: 32 }),
-      tokenImageAttention: uniform('token-image-attention', attentionSchema, { batch: 16, query_tokens: 8, key_tokens: 4, channels: 128, heads: 8, head_dim: 16 }),
-      imageTokenAttention: uniform('image-token-attention', attentionSchema, { batch: 16, query_tokens: 4, key_tokens: 8, channels: 128, heads: 8, head_dim: 16 }),
-      gatherObject: uniform('gather-object', gatherSchema, { token_offset: 0, batch: 16, query_tokens: 8, channels: 256, total: 4096 }),
-      gatherSam: uniform('gather-sam', gatherSchema, { token_offset: 2, batch: 16, query_tokens: 8, channels: 256, total: 4096 }),
-      headHidden: uniform('head-hidden', linearSchema, { input_channels: 256, output_channels: 256, total_output: 4096 }),
-      scoreOut: uniform('score-out', linearSchema, { input_channels: 256, output_channels: 1, total_output: 16 }),
-      pointer: uniform('pointer', linearSchema, { input_channels: 256, output_channels: 256, total_output: 4096 }),
+      outerConv: uniform('outer-conv', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.inputMaskHeight, input_width: geometry.inputMaskWidth, output_channels: 1, output_height: geometry.outerMaskHeight, output_width: geometry.outerMaskWidth, kernel: 4, stride: 4, total_output: geometry.outerMaskLength }),
+      resizePromptMask: uniform('resize-prompt-mask', bilinearSchema, { batch: geometry.batch, input_height: geometry.outerMaskHeight, input_width: geometry.outerMaskWidth, output_height: geometry.inputMaskHeight, output_width: geometry.inputMaskWidth, total_output: geometry.resizedMaskLength }),
+      promptConv0: uniform('prompt-conv-0', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.inputMaskHeight, input_width: geometry.inputMaskWidth, output_channels: 4, output_height: geometry.promptIntermediateHeight, output_width: geometry.promptIntermediateWidth, kernel: 2, stride: 2, total_output: geometry.promptConv0Length }),
+      promptConv1: uniform('prompt-conv-1', convSchema, { batch: geometry.batch, input_channels: 4, input_height: geometry.promptIntermediateHeight, input_width: geometry.promptIntermediateWidth, output_channels: 16, output_height: geometry.imageHeight, output_width: geometry.imageWidth, kernel: 2, stride: 2, total_output: geometry.promptConv1Length }),
+      promptConv2: uniform('prompt-conv-2', convSchema, { batch: geometry.batch, input_channels: 16, input_height: geometry.imageHeight, input_width: geometry.imageWidth, output_channels: 256, output_height: geometry.imageHeight, output_width: geometry.imageWidth, kernel: 1, stride: 1, total_output: geometry.denseEmbeddingLength }),
+      promptNorm0: uniform('prompt-norm-0', norm2dSchema, { batch: geometry.batch, channels: 4, height: geometry.promptIntermediateHeight, width: geometry.promptIntermediateWidth, total_spatial: geometry.batch * geometry.promptIntermediatePixels }),
+      promptNorm1: uniform('prompt-norm-1', norm2dSchema, { batch: geometry.batch, channels: 16, height: geometry.imageHeight, width: geometry.imageWidth, total_spatial: geometry.batch * geometry.imageTokens }),
+      imagePosition: uniform('image-position', imagePositionSchema, { batch: geometry.batch, height: geometry.imageHeight, width: geometry.imageWidth, channels: geometry.channels, total: geometry.imagePositionLength }),
+      keySeed: uniform('key-seed', keySeedSchema, { batch: geometry.batch, image_tokens: geometry.imageTokens, channels: geometry.channels, total: geometry.keyValueLength }),
+      maskBlend: uniform('mask-blend', maskBlendSchema, { batch: geometry.batch, channels: geometry.channels, mask_pixels: geometry.maskPixels, total: geometry.pointerLength }),
+      addQueries: uniform('add-queries', addSchema, { total: geometry.queryValueLength, scale: 1 }),
+      addKeys: uniform('add-keys', addSchema, { total: geometry.keyValueLength, scale: 1 }),
+      normQueries: uniform('norm-queries', normSchema, { total_tokens: geometry.batch * geometry.queryTokens, channels: 256 }),
+      normKeys: uniform('norm-keys', normSchema, { total_tokens: geometry.batch * geometry.imageTokens, channels: 256 }),
+      linearQ256: uniform('linear-q-256', linearSchema, { input_channels: 256, output_channels: 256, total_output: geometry.queryValueLength }),
+      linearK256: uniform('linear-k-256', linearSchema, { input_channels: 256, output_channels: 256, total_output: geometry.keyValueLength }),
+      linearQ128: uniform('linear-q-128', linearSchema, { input_channels: 256, output_channels: 128, total_output: geometry.queryAttentionLength }),
+      linearK128: uniform('linear-k-128', linearSchema, { input_channels: 256, output_channels: 128, total_output: geometry.keyAttentionLength }),
+      linearQFrom128: uniform('linear-q-from-128', linearSchema, { input_channels: 128, output_channels: 256, total_output: geometry.queryValueLength }),
+      linearKFrom128: uniform('linear-k-from-128', linearSchema, { input_channels: 128, output_channels: 256, total_output: geometry.keyValueLength }),
+      mlpIn: uniform('mlp-in', linearSchema, { input_channels: 256, output_channels: 2048, total_output: geometry.mlpLength }),
+      mlpOut: uniform('mlp-out', linearSchema, { input_channels: 2048, output_channels: 256, total_output: geometry.queryValueLength }),
+      selfAttention: uniform('self-attention', attentionSchema, { batch: geometry.batch, query_tokens: geometry.queryTokens, key_tokens: geometry.queryTokens, channels: 256, heads: 8, head_dim: 32 }),
+      tokenImageAttention: uniform('token-image-attention', attentionSchema, { batch: geometry.batch, query_tokens: geometry.queryTokens, key_tokens: geometry.imageTokens, channels: 128, heads: 8, head_dim: 16 }),
+      imageTokenAttention: uniform('image-token-attention', attentionSchema, { batch: geometry.batch, query_tokens: geometry.imageTokens, key_tokens: geometry.queryTokens, channels: 128, heads: 8, head_dim: 16 }),
+      gatherObject: uniform('gather-object', gatherSchema, { token_offset: 0, batch: geometry.batch, query_tokens: geometry.queryTokens, channels: geometry.channels, total: geometry.pointerLength }),
+      gatherSam: uniform('gather-sam', gatherSchema, { token_offset: 2, batch: geometry.batch, query_tokens: geometry.queryTokens, channels: geometry.channels, total: geometry.pointerLength }),
+      headHidden: uniform('head-hidden', linearSchema, { input_channels: geometry.channels, output_channels: geometry.channels, total_output: geometry.pointerLength }),
+      scoreOut: uniform('score-out', linearSchema, { input_channels: geometry.channels, output_channels: 1, total_output: geometry.batch }),
+      pointer: uniform('pointer', linearSchema, { input_channels: 256, output_channels: 256, total_output: geometry.pointerLength }),
     };
   });
 
@@ -798,7 +879,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   const dispatch = (name, kernel, total) => ({ name, kernel, dispatch: [workgroups(total)] });
 
   addKernel('outerMaskDownsample', CONV2D_WGSL, [tb('binaryMasks'), tb(w('mask-downsample.weight')), tb(w('mask-downsample.bias')), tb('maskDownsample', 'storage'), uniformBinding('outerConv')]);
-  addKernel('resizePromptMask', BILINEAR_2_TO_8_WGSL, [tb('maskDownsample'), tb('resizedMasks', 'storage')]);
+  addKernel('resizePromptMask', BILINEAR_WGSL, [tb('maskDownsample'), tb('resizedMasks', 'storage'), uniformBinding('resizePromptMask')]);
   addKernel('promptConv0Kernel', CONV2D_WGSL, [tb('resizedMasks'), tb(w('prompt.mask_downscaling.0.weight')), tb(w('prompt.mask_downscaling.0.bias')), tb('promptConv0', 'storage'), uniformBinding('promptConv0')]);
   addKernel('promptNorm0Kernel', LAYERNORM2D_WGSL, [tb('promptConv0'), tb(w('prompt.mask_downscaling.1.weight')), tb(w('prompt.mask_downscaling.1.bias')), tb('promptNorm0', 'storage'), uniformBinding('promptNorm0')]);
   addKernel('promptGelu0Kernel', GELU_WGSL, [tb('promptNorm0'), tb('promptGelu0', 'storage')]);
@@ -806,22 +887,22 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   addKernel('promptNorm1Kernel', LAYERNORM2D_WGSL, [tb('promptConv1'), tb(w('prompt.mask_downscaling.4.weight')), tb(w('prompt.mask_downscaling.4.bias')), tb('promptNorm1', 'storage'), uniformBinding('promptNorm1')]);
   addKernel('promptGelu1Kernel', GELU_WGSL, [tb('promptNorm1'), tb('promptGelu1', 'storage')]);
   addKernel('promptConv2Kernel', CONV2D_WGSL, [tb('promptGelu1'), tb(w('prompt.mask_downscaling.6.weight')), tb(w('prompt.mask_downscaling.6.bias')), tb('denseEmbedding', 'storage'), uniformBinding('promptConv2')]);
-  addKernel('imagePositionKernel', IMAGE_POSITION_WGSL, [tb(w('prompt.pe_layer.positional_encoding_gaussian_matrix')), tb('imagePosition', 'storage')]);
+  addKernel('imagePositionKernel', IMAGE_POSITION_WGSL, [tb(w('prompt.pe_layer.positional_encoding_gaussian_matrix')), tb('imagePosition', 'storage'), uniformBinding('imagePosition')]);
   addKernel('querySeedKernel', QUERY_SEED_WGSL, [tb(w('decoder.obj_score_token.weight')), tb(w('decoder.iou_token.weight')), tb(w('decoder.mask_tokens.weight')), tb(w('prompt.not_a_point_embed.weight')), tb('point', 'storage'), tb('hiddenA', 'storage')]);
-  addKernel('keySeedKernel', KEY_SEED_WGSL, [tb('imageEmbedding'), tb('denseEmbedding'), tb('keyA', 'storage')]);
+  addKernel('keySeedKernel', KEY_SEED_WGSL, [tb('imageEmbedding'), tb('denseEmbedding'), tb('keyA', 'storage'), uniformBinding('keySeed')]);
   phases.push(
-    { name: 'interactive-pointer-mask-downsample', kernel: 'outerMaskDownsample', dispatch: [1] },
-    { name: 'interactive-pointer-mask-resize', kernel: 'resizePromptMask', dispatch: [16] },
-    { name: 'interactive-pointer-prompt-conv-0', kernel: 'promptConv0Kernel', dispatch: [16] },
-    { name: 'interactive-pointer-prompt-norm-0', kernel: 'promptNorm0Kernel', dispatch: [4] },
-    { name: 'interactive-pointer-prompt-gelu-0', kernel: 'promptGelu0Kernel', dispatch: [16] },
-    { name: 'interactive-pointer-prompt-conv-1', kernel: 'promptConv1Kernel', dispatch: [16] },
-    { name: 'interactive-pointer-prompt-norm-1', kernel: 'promptNorm1Kernel', dispatch: [1] },
-    { name: 'interactive-pointer-prompt-gelu-1', kernel: 'promptGelu1Kernel', dispatch: [16] },
-    { name: 'interactive-pointer-prompt-encode', kernel: 'promptConv2Kernel', dispatch: [256], yieldAfter: true },
-    { name: 'interactive-pointer-image-position', kernel: 'imagePositionKernel', dispatch: [256] },
-    { name: 'interactive-pointer-query-seed', kernel: 'querySeedKernel', dispatch: [512] },
-    { name: 'interactive-pointer-key-seed', kernel: 'keySeedKernel', dispatch: [256] },
+    dispatch('interactive-pointer-mask-downsample', 'outerMaskDownsample', geometry.outerMaskLength),
+    dispatch('interactive-pointer-mask-resize', 'resizePromptMask', geometry.resizedMaskLength),
+    dispatch('interactive-pointer-prompt-conv-0', 'promptConv0Kernel', geometry.promptConv0Length),
+    dispatch('interactive-pointer-prompt-norm-0', 'promptNorm0Kernel', geometry.batch * geometry.promptIntermediatePixels),
+    dispatch('interactive-pointer-prompt-gelu-0', 'promptGelu0Kernel', geometry.promptConv0Length),
+    dispatch('interactive-pointer-prompt-conv-1', 'promptConv1Kernel', geometry.promptConv1Length),
+    dispatch('interactive-pointer-prompt-norm-1', 'promptNorm1Kernel', geometry.batch * geometry.imageTokens),
+    dispatch('interactive-pointer-prompt-gelu-1', 'promptGelu1Kernel', geometry.promptConv1Length),
+    { ...dispatch('interactive-pointer-prompt-encode', 'promptConv2Kernel', geometry.denseEmbeddingLength), yieldAfter: true },
+    dispatch('interactive-pointer-image-position', 'imagePositionKernel', geometry.imagePositionLength),
+    dispatch('interactive-pointer-query-seed', 'querySeedKernel', geometry.queryValueLength),
+    dispatch('interactive-pointer-key-seed', 'keySeedKernel', geometry.keyValueLength),
   );
 
   for (let layer = 0; layer < 2; layer += 1) {
@@ -829,7 +910,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     const selfInput = layer === 0 ? 'hiddenA' : 'querySum';
     if (layer === 1) {
       addOp(`layer${layer}SelfPosition`, 'hiddenA', 'point', 'querySum', 'addQueries');
-      phases.push({ name: `interactive-pointer-layer-${layer}-self-position`, kernel: `layer${layer}SelfPosition`, dispatch: [512] });
+      phases.push(dispatch(`interactive-pointer-layer-${layer}-self-position`, `layer${layer}SelfPosition`, geometry.queryValueLength));
     }
     linearKernel(`layer${layer}SelfQ`, selfInput, `${base}.self_attn.q_proj`, 'q', 'linearQ256');
     linearKernel(`layer${layer}SelfK`, selfInput, `${base}.self_attn.k_proj`, 'k', 'linearQ256');
@@ -842,13 +923,13 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
       normKernel(`layer${layer}Norm1`, 'hiddenB', `${base}.norm1`, 'hiddenA', 'normQueries');
     }
     phases.push(
-      dispatch(`interactive-pointer-layer-${layer}-self-q`, `layer${layer}SelfQ`, 32768),
-      dispatch(`interactive-pointer-layer-${layer}-self-k`, `layer${layer}SelfK`, 32768),
-      dispatch(`interactive-pointer-layer-${layer}-self-v`, `layer${layer}SelfV`, 32768),
-      { name: `interactive-pointer-layer-${layer}-self-attention`, kernel: `layer${layer}SelfAttention`, dispatch: [8, 8, 16], yieldAfter: true },
-      dispatch(`interactive-pointer-layer-${layer}-self-output`, `layer${layer}SelfOut`, 32768),
-      ...(layer === 0 ? [] : [{ name: `interactive-pointer-layer-${layer}-self-residual`, kernel: `layer${layer}SelfResidual`, dispatch: [512] }]),
-      { name: `interactive-pointer-layer-${layer}-norm-1`, kernel: `layer${layer}Norm1`, dispatch: [2] },
+      dispatch(`interactive-pointer-layer-${layer}-self-q`, `layer${layer}SelfQ`, geometry.queryValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-self-k`, `layer${layer}SelfK`, geometry.queryValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-self-v`, `layer${layer}SelfV`, geometry.queryValueLength),
+      { name: `interactive-pointer-layer-${layer}-self-attention`, kernel: `layer${layer}SelfAttention`, dispatch: [geometry.queryTokens, geometry.heads, geometry.batch], yieldAfter: true },
+      dispatch(`interactive-pointer-layer-${layer}-self-output`, `layer${layer}SelfOut`, geometry.queryValueLength),
+      ...(layer === 0 ? [] : [dispatch(`interactive-pointer-layer-${layer}-self-residual`, `layer${layer}SelfResidual`, geometry.queryValueLength)]),
+      dispatch(`interactive-pointer-layer-${layer}-norm-1`, `layer${layer}Norm1`, geometry.batch * geometry.queryTokens),
     );
 
     addOp(`layer${layer}QueryPosition`, 'hiddenA', 'point', 'querySum', 'addQueries');
@@ -861,20 +942,20 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     addOp(`layer${layer}TokenImageResidual`, 'hiddenA', 'projected', 'hiddenB', 'addQueries');
     normKernel(`layer${layer}Norm2`, 'hiddenB', `${base}.norm2`, 'hiddenA', 'normQueries');
     phases.push(
-      { name: `interactive-pointer-layer-${layer}-query-position`, kernel: `layer${layer}QueryPosition`, dispatch: [512] },
-      { name: `interactive-pointer-layer-${layer}-key-position`, kernel: `layer${layer}KeyPosition`, dispatch: [256] },
-      dispatch(`interactive-pointer-layer-${layer}-token-q`, `layer${layer}TokenQ`, 16384), dispatch(`interactive-pointer-layer-${layer}-image-k`, `layer${layer}ImageK`, 8192), dispatch(`interactive-pointer-layer-${layer}-image-v`, `layer${layer}ImageV`, 8192),
-      { name: `interactive-pointer-layer-${layer}-token-image-attention`, kernel: `layer${layer}TokenImageAttention`, dispatch: [8, 8, 16], yieldAfter: true },
-      dispatch(`interactive-pointer-layer-${layer}-token-image-output`, `layer${layer}TokenImageOut`, 32768),
-      { name: `interactive-pointer-layer-${layer}-token-image-residual`, kernel: `layer${layer}TokenImageResidual`, dispatch: [512] },
-      { name: `interactive-pointer-layer-${layer}-norm-2`, kernel: `layer${layer}Norm2`, dispatch: [2] },
+      dispatch(`interactive-pointer-layer-${layer}-query-position`, `layer${layer}QueryPosition`, geometry.queryValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-key-position`, `layer${layer}KeyPosition`, geometry.keyValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-token-q`, `layer${layer}TokenQ`, geometry.queryAttentionLength), dispatch(`interactive-pointer-layer-${layer}-image-k`, `layer${layer}ImageK`, geometry.keyAttentionLength), dispatch(`interactive-pointer-layer-${layer}-image-v`, `layer${layer}ImageV`, geometry.keyAttentionLength),
+      { name: `interactive-pointer-layer-${layer}-token-image-attention`, kernel: `layer${layer}TokenImageAttention`, dispatch: [geometry.queryTokens, geometry.heads, geometry.batch], yieldAfter: true },
+      dispatch(`interactive-pointer-layer-${layer}-token-image-output`, `layer${layer}TokenImageOut`, geometry.queryValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-token-image-residual`, `layer${layer}TokenImageResidual`, geometry.queryValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-norm-2`, `layer${layer}Norm2`, geometry.batch * geometry.queryTokens),
     );
 
     linearKernel(`layer${layer}MlpIn`, 'hiddenA', `${base}.mlp.lin1`, 'mlp', 'mlpIn', LINEAR_RELU_WGSL);
     linearKernel(`layer${layer}MlpOut`, 'mlp', `${base}.mlp.lin2`, 'projected', 'mlpOut');
     addOp(`layer${layer}MlpResidual`, 'hiddenA', 'projected', 'hiddenB', 'addQueries');
     normKernel(`layer${layer}Norm3`, 'hiddenB', `${base}.norm3`, 'hiddenA', 'normQueries');
-    phases.push(dispatch(`interactive-pointer-layer-${layer}-mlp-in`, `layer${layer}MlpIn`, 262144), dispatch(`interactive-pointer-layer-${layer}-mlp-out`, `layer${layer}MlpOut`, 32768), { name: `interactive-pointer-layer-${layer}-mlp-residual`, kernel: `layer${layer}MlpResidual`, dispatch: [512] }, { name: `interactive-pointer-layer-${layer}-norm-3`, kernel: `layer${layer}Norm3`, dispatch: [2], yieldAfter: true });
+    phases.push(dispatch(`interactive-pointer-layer-${layer}-mlp-in`, `layer${layer}MlpIn`, geometry.mlpLength), dispatch(`interactive-pointer-layer-${layer}-mlp-out`, `layer${layer}MlpOut`, geometry.queryValueLength), dispatch(`interactive-pointer-layer-${layer}-mlp-residual`, `layer${layer}MlpResidual`, geometry.queryValueLength), { ...dispatch(`interactive-pointer-layer-${layer}-norm-3`, `layer${layer}Norm3`, geometry.batch * geometry.queryTokens), yieldAfter: true });
 
     addOp(`layer${layer}ImagePosition`, 'keyA', 'imagePosition', 'keySum', 'addKeys');
     addOp(`layer${layer}TokenPosition`, 'hiddenA', 'point', 'querySum', 'addQueries');
@@ -886,13 +967,13 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     addOp(`layer${layer}ImageTokenResidual`, 'keyA', 'projected', 'keyB', 'addKeys');
     normKernel(`layer${layer}Norm4`, 'keyB', `${base}.norm4`, 'keyA', 'normKeys');
     phases.push(
-      { name: `interactive-pointer-layer-${layer}-image-position`, kernel: `layer${layer}ImagePosition`, dispatch: [256] },
-      { name: `interactive-pointer-layer-${layer}-token-position`, kernel: `layer${layer}TokenPosition`, dispatch: [512] },
-      dispatch(`interactive-pointer-layer-${layer}-image-q`, `layer${layer}ImageQ`, 8192), dispatch(`interactive-pointer-layer-${layer}-token-k`, `layer${layer}TokenK`, 16384), dispatch(`interactive-pointer-layer-${layer}-token-v`, `layer${layer}TokenV`, 16384),
-      { name: `interactive-pointer-layer-${layer}-image-token-attention`, kernel: `layer${layer}ImageTokenAttention`, dispatch: [4, 8, 16], yieldAfter: true },
-      dispatch(`interactive-pointer-layer-${layer}-image-token-output`, `layer${layer}ImageTokenOut`, 16384),
-      { name: `interactive-pointer-layer-${layer}-image-token-residual`, kernel: `layer${layer}ImageTokenResidual`, dispatch: [256] },
-      { name: `interactive-pointer-layer-${layer}-norm-4`, kernel: `layer${layer}Norm4`, dispatch: [1] },
+      dispatch(`interactive-pointer-layer-${layer}-image-position`, `layer${layer}ImagePosition`, geometry.keyValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-token-position`, `layer${layer}TokenPosition`, geometry.queryValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-image-q`, `layer${layer}ImageQ`, geometry.keyAttentionLength), dispatch(`interactive-pointer-layer-${layer}-token-k`, `layer${layer}TokenK`, geometry.queryAttentionLength), dispatch(`interactive-pointer-layer-${layer}-token-v`, `layer${layer}TokenV`, geometry.queryAttentionLength),
+      { name: `interactive-pointer-layer-${layer}-image-token-attention`, kernel: `layer${layer}ImageTokenAttention`, dispatch: [geometry.imageTokens, geometry.heads, geometry.batch], yieldAfter: true },
+      dispatch(`interactive-pointer-layer-${layer}-image-token-output`, `layer${layer}ImageTokenOut`, geometry.keyValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-image-token-residual`, `layer${layer}ImageTokenResidual`, geometry.keyValueLength),
+      dispatch(`interactive-pointer-layer-${layer}-norm-4`, `layer${layer}Norm4`, geometry.batch * geometry.imageTokens),
       { name: `interactive-pointer-layer-${layer}-readback`, readbacks: [{ name: `layer${layer}Queries`, tensor: 'hiddenA' }, { name: `layer${layer}Keys`, tensor: 'keyA' }] },
     );
   }
@@ -907,13 +988,13 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   addOp('finalResidual', 'hiddenA', 'projected', 'hiddenB', 'addQueries');
   normKernel('finalNorm', 'hiddenB', 'decoder.transformer.norm_final_attn', 'hiddenA', 'normQueries');
   phases.push(
-    { name: 'interactive-pointer-final-query-position', kernel: 'finalQueryPosition', dispatch: [512] },
-    { name: 'interactive-pointer-final-key-position', kernel: 'finalKeyPosition', dispatch: [256] },
-    dispatch('interactive-pointer-final-q', 'finalQ', 16384), dispatch('interactive-pointer-final-k', 'finalK', 8192), dispatch('interactive-pointer-final-v', 'finalV', 8192),
-    { name: 'interactive-pointer-final-attention', kernel: 'finalAttention', dispatch: [8, 8, 16], yieldAfter: true },
-    dispatch('interactive-pointer-final-output', 'finalOut', 32768),
-    { name: 'interactive-pointer-final-residual', kernel: 'finalResidual', dispatch: [512] },
-    { name: 'interactive-pointer-two-way-transformer', kernel: 'finalNorm', dispatch: [2], yieldAfter: true },
+    dispatch('interactive-pointer-final-query-position', 'finalQueryPosition', geometry.queryValueLength),
+    dispatch('interactive-pointer-final-key-position', 'finalKeyPosition', geometry.keyValueLength),
+    dispatch('interactive-pointer-final-q', 'finalQ', geometry.queryAttentionLength), dispatch('interactive-pointer-final-k', 'finalK', geometry.keyAttentionLength), dispatch('interactive-pointer-final-v', 'finalV', geometry.keyAttentionLength),
+    { name: 'interactive-pointer-final-attention', kernel: 'finalAttention', dispatch: [geometry.queryTokens, geometry.heads, geometry.batch], yieldAfter: true },
+    dispatch('interactive-pointer-final-output', 'finalOut', geometry.queryValueLength),
+    dispatch('interactive-pointer-final-residual', 'finalResidual', geometry.queryValueLength),
+    { ...dispatch('interactive-pointer-two-way-transformer', 'finalNorm', geometry.batch * geometry.queryTokens), yieldAfter: true },
   );
 
   addKernel('gatherObjectToken', TOKEN_GATHER_WGSL, [tb('hiddenA'), tb('objectTokens', 'storage'), uniformBinding('gatherObject')]);
@@ -927,17 +1008,17 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   linearKernel('noObjectFirst', 'projectedPointers', 'no-object-pointer', 'firstNoObject', 'pointer');
   addKernel('scoreBlend', SCORE_BLEND_WGSL, [tb('objectScores'), tb('projectedPointers'), tb('firstNoObject'), tb('forwardPointers', 'storage')]);
   linearKernel('noObjectFinal', 'forwardPointers', 'no-object-pointer', 'finalNoObject', 'pointer');
-  addKernel('maskBlend', MASK_BLEND_WGSL, [tb('binaryMasks'), tb('forwardPointers'), tb('finalNoObject'), tb('objectPointers', 'storage')]);
+  addKernel('maskBlend', MASK_BLEND_WGSL, [tb('binaryMasks'), tb('forwardPointers'), tb('finalNoObject'), tb('objectPointers', 'storage'), uniformBinding('maskBlend')]);
   phases.push(
     { name: 'interactive-pointer-gather-object-token', kernel: 'gatherObjectToken', dispatch: [64] },
     { name: 'interactive-pointer-gather-sam-token', kernel: 'gatherSamToken', dispatch: [64] },
-    dispatch('interactive-pointer-object-head-0', 'objectHead0', 4096), dispatch('interactive-pointer-object-head-1', 'objectHead1', 4096), dispatch('interactive-pointer-object-head-2', 'objectHead2', 16),
-    dispatch('interactive-pointer-projection-0', 'pointer0', 4096), dispatch('interactive-pointer-projection-1', 'pointer1', 4096),
-    { name: 'interactive-pointer-object-projection', kernel: 'pointer2', dispatch: [64], yieldAfter: true },
-    dispatch('interactive-pointer-first-no-object-linear', 'noObjectFirst', 4096),
-    { name: 'interactive-pointer-first-no-object-transition', kernel: 'scoreBlend', dispatch: [64] },
-    dispatch('interactive-pointer-final-no-object-linear', 'noObjectFinal', 4096),
-    { name: 'interactive-pointer-final-no-object-transition', kernel: 'maskBlend', dispatch: [64], yieldAfter: true },
+    dispatch('interactive-pointer-object-head-0', 'objectHead0', geometry.pointerLength), dispatch('interactive-pointer-object-head-1', 'objectHead1', geometry.pointerLength), dispatch('interactive-pointer-object-head-2', 'objectHead2', geometry.batch),
+    dispatch('interactive-pointer-projection-0', 'pointer0', geometry.pointerLength), dispatch('interactive-pointer-projection-1', 'pointer1', geometry.pointerLength),
+    { ...dispatch('interactive-pointer-object-projection', 'pointer2', geometry.pointerLength), yieldAfter: true },
+    dispatch('interactive-pointer-first-no-object-linear', 'noObjectFirst', geometry.pointerLength),
+    dispatch('interactive-pointer-first-no-object-transition', 'scoreBlend', geometry.pointerLength),
+    dispatch('interactive-pointer-final-no-object-linear', 'noObjectFinal', geometry.pointerLength),
+    { ...dispatch('interactive-pointer-final-no-object-transition', 'maskBlend', geometry.pointerLength), yieldAfter: true },
     { name: 'interactive-pointer-readback', readbacks: [
       { name: 'maskDownsample', tensor: 'maskDownsample' },
       { name: 'denseEmbeddings', tensor: 'denseEmbedding' },
@@ -956,7 +1037,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     uniforms: gpu.uniforms,
     kernels,
     phases,
-    metadata: { routeId: route.routeId, sourceBoundary: 'Meta PromptEncoder + MaskDecoder pointer subgraph + double no-object transition', batch: 16, queryTokens: 8, imageTokens: 4 },
+    metadata: { routeId: route.routeId, sourceBoundary: 'Meta PromptEncoder + MaskDecoder pointer subgraph + double no-object transition', batch: geometry.batch, queryTokens: geometry.queryTokens, imageTokens: geometry.imageTokens, imageHeight: geometry.imageHeight, imageWidth: geometry.imageWidth, inputMaskHeight: geometry.inputMaskHeight, inputMaskWidth: geometry.inputMaskWidth },
   });
   const run = await runtime.runProgram(program);
   const objectPointers = run.outputs.objectPointers;
@@ -964,7 +1045,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     objectPointers: {
       artifactId: roleArtifact(input.request.outputs, 'sam31-interactive-object-pointers').artifactId,
       sha256: await sha256Hex(objectPointers),
-      shape: [16, 256],
+      shape: [geometry.batch, geometry.channels],
     },
   };
   const receipt = createSam31InteractivePointerPhaseProgramRouteReceipt({
@@ -983,7 +1064,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     result.debugReadback = {
       maskDownsample: Array.from(new Float32Array(run.outputs.maskDownsample)),
       denseEmbeddings: Array.from(new Float32Array(run.outputs.denseEmbeddings)),
-      imagePosition: Array.from(new Float32Array(run.outputs.imagePosition)).slice(0, 1024),
+      imagePosition: Array.from(new Float32Array(run.outputs.imagePosition)).slice(0, geometry.imageEmbeddingLength),
       layerQueries: [0, 1].map(layer => Array.from(new Float32Array(run.outputs[`layer${layer}Queries`]))),
       layerKeys: [0, 1].map(layer => Array.from(new Float32Array(run.outputs[`layer${layer}Keys`]))),
       samOutputTokens: Array.from(new Float32Array(run.outputs.samOutputTokens)),

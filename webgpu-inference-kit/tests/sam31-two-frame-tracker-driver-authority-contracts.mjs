@@ -100,6 +100,21 @@ async function writeIngressPacket() {
       source: { commit: authority.sourceCommit, clean: true },
     },
     claims: { twoDistinctSourceImages: true, officialMetaViTExecuted: true, officialMetaTriNeckExecuted: true, officialMetaHighResolutionProjectionExecuted: true, packetOwnsImageEmbeddingsAtBrowserRuntime: false },
+    shape: {
+      batch: 1,
+      imageHeight: 28,
+      imageWidth: 28,
+      imageChannels: 3,
+      patchSize: 14,
+      patchHeight: 2,
+      patchWidth: 2,
+      patchTokens: 4,
+      fpnLevels: [
+        { level: 0, scaleFactor: 4, height: 8, width: 8 },
+        { level: 1, scaleFactor: 2, height: 4, width: 4 },
+        { level: 2, scaleFactor: 1, height: 2, width: 2 },
+      ],
+    },
     sourceImages,
     tensors,
   };

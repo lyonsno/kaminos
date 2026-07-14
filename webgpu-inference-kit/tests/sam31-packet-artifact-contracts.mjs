@@ -66,6 +66,19 @@ const ingressManifestSha256 = `sha256:${'1'.repeat(64)}`;
 const ingressManifest = {
   schema: 'kaminos.sam31-two-image-ingress-meta-packet.v0',
   boundary: 'sam31-two-distinct-raw-images-to-interactive-propagation-backbone-features',
+  shape: {
+    imageHeight: 56,
+    imageWidth: 56,
+    patchSize: 14,
+    patchHeight: 4,
+    patchWidth: 4,
+    patchTokens: 16,
+    fpnLevels: [
+      { level: 0, scaleFactor: 4, height: 16, width: 16 },
+      { level: 1, scaleFactor: 2, height: 8, width: 8 },
+      { level: 2, scaleFactor: 1, height: 4, width: 4 },
+    ],
+  },
   sourceImages: [
     { frameIndex: 0, originalSha256: `sha256:${'2'.repeat(64)}`, rgbaSha256: `sha256:${'3'.repeat(64)}` },
     { frameIndex: 1, originalSha256: `sha256:${'4'.repeat(64)}`, rgbaSha256: `sha256:${'5'.repeat(64)}` },
@@ -97,13 +110,23 @@ const twoImageReference = {
   model: { id: 'facebook/sam3.1', revision: 'daa63191845a41281374e725f4c9e51c7a824460', sha256: 'sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6' },
   source: { repository: 'facebookresearch/sam3', commit: '5dd401d1c5c1d5c3eedff06d41b77af824517619', workingTreeClean: true },
 };
-async function makeTwoImageEpisode(bindings) {
+const dynamicEpisodeShape = {
+  ...twoImageAuthority.shape,
+  queryHeight: 4,
+  queryWidth: 4,
+  queryTokens: 16,
+  memorySpatialTokens: 16,
+  memoryTokens: 32,
+  maskHeight: 16,
+  maskWidth: 16,
+};
+async function makeTwoImageEpisode(bindings, shape = dynamicEpisodeShape) {
   const episode = {
     schema: twoImageAuthority.manifestSchema,
     boundary: twoImageAuthority.boundary,
     mode: twoImageAuthority.mode,
     reference: twoImageReference,
-    shape: twoImageAuthority.shape,
+    shape,
     plan: twoImageAuthority.plan,
     checkpointAudit: { allMappedOfficialKeysPresent: true },
     stateTransition: twoImageAuthority.stateTransition,
@@ -165,6 +188,93 @@ await assert.rejects(
   }),
   /twoImageEpisode packet authority mismatch for manifest\.imageIngress\.bindings\.frame1HighResolutionS0/,
   'a coordinated episode manifest and receipt rewrite must not false-pass an ingress-owned high-resolution binding',
+);
+
+const wrongGeometryEpisode = await makeTwoImageEpisode(ingressBindings, {
+  ...dynamicEpisodeShape,
+  queryHeight: 2,
+  queryWidth: 2,
+  queryTokens: 4,
+  memorySpatialTokens: 4,
+  memoryTokens: 20,
+  maskHeight: 8,
+  maskWidth: 8,
+});
+await assert.rejects(
+  () => verifySam31TwoFramePacketAuthority({
+    name: 'episode',
+    authorityName: 'twoImageEpisode',
+    manifestText: wrongGeometryEpisode.text,
+    manifest: wrongGeometryEpisode.episode,
+    referenceReceipt: wrongGeometryEpisode.receipt,
+    expectedManifestSha256: wrongGeometryEpisode.sha,
+    authenticatedIngress,
+  }),
+  /twoImageEpisode packet authority mismatch for manifest\.shape\.queryHeight/,
+  'two-image authority must reject internally valid episode geometry that does not match the authenticated ingress',
+);
+
+const pointerAuthority = SAM31_TWO_FRAME_PACKET_AUTHORITIES.pointer;
+async function makePointerPacket(shape) {
+  const pointer = {
+    schema: pointerAuthority.manifestSchema,
+    routeId: pointerAuthority.routeId,
+    boundary: pointerAuthority.boundary,
+    reference: twoImageReference,
+    shape,
+    checkpointAudit: { mappedTensorCount: 158, allMappedOfficialKeysPresent: true },
+  };
+  const text = JSON.stringify(pointer, null, 2);
+  const digestBytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  const sha = `sha256:${Array.from(new Uint8Array(digestBytes), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+  return {
+    pointer,
+    text,
+    sha,
+    receipt: {
+      ok: true,
+      schema: pointerAuthority.receiptSchema,
+      routeId: pointerAuthority.routeId,
+      boundary: pointerAuthority.boundary,
+      reference: twoImageReference,
+      shape,
+      checkpointAudit: pointer.checkpointAudit,
+      outputs: { tensorManifestSha256: sha },
+    },
+  };
+}
+const dynamicPointerShape = {
+  ...pointerAuthority.shape,
+  imageHeight: 4,
+  imageWidth: 4,
+  imageTokens: 16,
+  inputMaskHeight: 16,
+  inputMaskWidth: 16,
+  decoderMaskHeight: 16,
+  decoderMaskWidth: 16,
+};
+const dynamicPointer = await makePointerPacket(dynamicPointerShape);
+assert.equal((await verifySam31TwoFramePacketAuthority({
+  name: 'pointer',
+  manifestText: dynamicPointer.text,
+  manifest: dynamicPointer.pointer,
+  referenceReceipt: dynamicPointer.receipt,
+  expectedManifestSha256: dynamicPointer.sha,
+  authenticatedIngress,
+})).passed, true, 'pointer authority must accept authenticated ingress-derived spatial geometry');
+
+const wrongPointer = await makePointerPacket({ ...dynamicPointerShape, inputMaskHeight: 8 });
+await assert.rejects(
+  () => verifySam31TwoFramePacketAuthority({
+    name: 'pointer',
+    manifestText: wrongPointer.text,
+    manifest: wrongPointer.pointer,
+    referenceReceipt: wrongPointer.receipt,
+    expectedManifestSha256: wrongPointer.sha,
+    authenticatedIngress,
+  }),
+  /pointer packet authority mismatch for manifest\.shape\.inputMaskHeight/,
+  'pointer authority must reject a mask geometry that does not match authenticated ingress',
 );
 
 const sam31PackageContract = {

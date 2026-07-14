@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -9,6 +10,20 @@ import { createSam31InteractivePointerPhaseProgramCpuOracle } from '../src/index
 const python = process.env.KAMINOS_TORCH_PYTHON || '/Users/noahlyons/dev/sf3d/.venv/bin/python';
 const tool = resolve('tools/sam31-interactive-pointer-meta-packet.py');
 const outDir = mkdtempSync(join(tmpdir(), 'kaminos-sam31-interactive-pointer-'));
+const dynamicOutDir = mkdtempSync(join(tmpdir(), 'kaminos-sam31-interactive-pointer-dynamic-'));
+const ingressDir = mkdtempSync(join(tmpdir(), 'kaminos-sam31-interactive-pointer-ingress-'));
+
+const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+
+function writeIngressTensor(role, shape) {
+  const length = shape.reduce((product, value) => product * value, 1);
+  const values = new Float32Array(length);
+  for (let index = 0; index < values.length; index += 1) values[index] = Math.sin(index * 0.031) * 0.02;
+  const bytes = Buffer.from(values.buffer, values.byteOffset, values.byteLength);
+  const file = `${role}.f32.bin`;
+  writeFileSync(join(ingressDir, file), bytes);
+  return { role, file, sha256: sha256(bytes), byteLength: bytes.byteLength, dtype: 'float32', shape };
+}
 
 function load(entry) {
   const bytes = readFileSync(join(outDir, entry.file));
@@ -73,8 +88,100 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
   assert.ok(maxAbs(oracle.projectedPointers, tensors['expected-projected-pointers']) < 0.00015);
   assert.ok(maxAbs(oracle.forwardObjectPointers, tensors['expected-forward-object-pointers']) < 0.00015);
   assert.ok(maxAbs(oracle.finalObjectPointers, tensors['expected-final-object-pointers']) < 0.00015);
+
+  const ingressManifest = {
+    schema: 'kaminos.sam31-two-image-ingress-meta-packet.v0',
+    reference: {
+      model: { id: 'facebook/sam3.1', revision: 'daa63191845a41281374e725f4c9e51c7a824460' },
+      source: { commit: '5dd401d1c5c1d5c3eedff06d41b77af824517619', clean: true },
+      checkpoint: { sha256: 'sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6' },
+    },
+    shape: {
+      batch: 1, imageHeight: 56, imageWidth: 56, patchSize: 14,
+      patchHeight: 4, patchWidth: 4, patchTokens: 16,
+      fpnHiddenSize: 256, decoderHighResolutionS0Channels: 32, decoderHighResolutionS1Channels: 64,
+    },
+    checkpointAudit: { allMappedOfficialKeysPresent: true, allOfficialModuleLoadsAccepted: true },
+    tensors: [
+      writeIngressTensor('frame-0-interactive-feature-2', [1, 4, 4, 256]),
+      writeIngressTensor('frame-0-interactive-high-resolution-s0', [1, 32, 16, 16]),
+      writeIngressTensor('frame-0-interactive-high-resolution-s1', [1, 64, 8, 8]),
+    ],
+  };
+  const ingressManifestBytes = Buffer.from(JSON.stringify(ingressManifest, null, 2));
+  const ingressManifestSha256 = sha256(ingressManifestBytes);
+  writeFileSync(join(ingressDir, 'tensor-manifest.json'), ingressManifestBytes);
+  writeFileSync(join(ingressDir, 'reference-receipt.json'), JSON.stringify({
+    ok: true,
+    schema: 'kaminos.sam31-two-image-ingress-meta-reference-receipt.v0',
+    reference: ingressManifest.reference,
+    shape: ingressManifest.shape,
+    checkpointAudit: ingressManifest.checkpointAudit,
+    primaryOutputWritten: true,
+    outputs: { tensorManifestSha256: ingressManifestSha256 },
+  }, null, 2));
+
+  const dynamicResult = spawnSync(python, [
+    tool,
+    '--out-dir', dynamicOutDir,
+    '--ingress-dir', ingressDir,
+    '--expected-ingress-manifest-sha256', ingressManifestSha256,
+  ], { encoding: 'utf8', timeout: 180_000 });
+  assert.equal(dynamicResult.status, 0, `dynamic official interactive pointer packet failed:\n${dynamicResult.stdout}\n${dynamicResult.stderr}`);
+  const dynamicManifest = JSON.parse(readFileSync(join(dynamicOutDir, 'tensor-manifest.json'), 'utf8'));
+  assert.deepEqual(
+    {
+      imageHeight: dynamicManifest.shape.imageHeight,
+      imageWidth: dynamicManifest.shape.imageWidth,
+      imageTokens: dynamicManifest.shape.imageTokens,
+      inputMaskHeight: dynamicManifest.shape.inputMaskHeight,
+      inputMaskWidth: dynamicManifest.shape.inputMaskWidth,
+    },
+    { imageHeight: 4, imageWidth: 4, imageTokens: 16, inputMaskHeight: 16, inputMaskWidth: 16 },
+  );
+  assert.equal(dynamicManifest.fixture.sourceFeaturesSynthetic, false);
+  assert.equal(dynamicManifest.ingressAuthority.passed, true);
+  assert.equal(dynamicManifest.ingressAuthority.manifestSha256, ingressManifestSha256);
+  assert.deepEqual(
+    Object.keys(dynamicManifest.ingressAuthority.bindings).sort(),
+    ['frame0HighResolutionS0', 'frame0HighResolutionS1', 'frame0ImageEmbedding'],
+  );
+  const dynamicEntries = Object.fromEntries(dynamicManifest.tensors.map(entry => [entry.role, entry]));
+  const dynamicTensors = Object.fromEntries(Object.entries(dynamicEntries).map(([role, entry]) => {
+    const bytes = readFileSync(join(dynamicOutDir, entry.file));
+    return [role, new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))];
+  }));
+  const dynamicWeights = {};
+  for (const entry of dynamicManifest.weights) {
+    const bytes = readFileSync(join(dynamicOutDir, entry.file));
+    dynamicWeights[`${entry.group}.${entry.localKey}`] = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+  }
+  const dynamicOracle = createSam31InteractivePointerPhaseProgramCpuOracle({
+    shape: dynamicManifest.shape,
+    tensors: {
+      binaryMasks: dynamicTensors['binary-mask-inputs'],
+      imageEmbedding: dynamicTensors['image-embedding'],
+    },
+    weights: dynamicWeights,
+  });
+  assert.ok(maxAbs(dynamicOracle.finalObjectPointers, dynamicTensors['expected-final-object-pointers']) < 0.00015);
+
+  const rejectedResult = spawnSync(python, [
+    tool,
+    '--out-dir', dynamicOutDir,
+    '--ingress-dir', ingressDir,
+    '--expected-ingress-manifest-sha256', `sha256:${'0'.repeat(64)}`,
+  ], { encoding: 'utf8', timeout: 180_000 });
+  assert.notEqual(rejectedResult.status, 0, 'wrong ingress authority must fail');
+  assert.equal(existsSync(join(dynamicOutDir, 'tensor-manifest.json')), false, 'failed rerun must invalidate stale primary output');
+  const failureReceipt = JSON.parse(readFileSync(join(dynamicOutDir, 'reference-receipt.json'), 'utf8'));
+  assert.equal(failureReceipt.ok, false);
+  assert.equal(failureReceipt.failurePhase, 'ingress-authority-validation');
+  assert.equal(failureReceipt.requested.expectedIngressManifestSha256, `sha256:${'0'.repeat(64)}`);
 } finally {
   rmSync(outDir, { recursive: true, force: true });
+  rmSync(dynamicOutDir, { recursive: true, force: true });
+  rmSync(ingressDir, { recursive: true, force: true });
 }
 
 console.log('sam3.1 official interactive pointer packet contracts passed');

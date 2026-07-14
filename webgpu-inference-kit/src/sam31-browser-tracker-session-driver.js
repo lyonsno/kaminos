@@ -149,6 +149,39 @@ async function loadAttentionWeights(manifest, loadFloat32) {
   return { layers, finalNorm: await norm('final-norm') };
 }
 
+export function deriveSam31BrowserTrackerExecutionContracts({
+  ingressShape,
+  episodeShape,
+  decoderShape,
+  memoryShape,
+}) {
+  const geometry = validateSam31BrowserTrackerGeometry(ingressShape, episodeShape);
+  if (!geometry) throw new Error('SAM 3.1 tracker execution requires authenticated spatial geometry');
+  if (decoderShape?.channels !== episodeShape.channels) throw new Error('decoder channels do not match the authenticated episode');
+  if (memoryShape?.featureChannels !== episodeShape.channels) throw new Error('memory channels do not match the authenticated episode');
+  if (memoryShape?.multiplexCount !== episodeShape.multiplexCount) throw new Error('memory multiplex count does not match the authenticated episode');
+  return Object.freeze({
+    geometry,
+    decoder: Object.freeze({
+      ...decoderShape,
+      imageHeight: geometry.queryHeight,
+      imageWidth: geometry.queryWidth,
+      imageTokens: geometry.queryTokens,
+      maskHeight: geometry.maskHeight,
+      maskWidth: geometry.maskWidth,
+    }),
+    memory: Object.freeze({
+      ...memoryShape,
+      featureHeight: geometry.queryHeight,
+      featureWidth: geometry.queryWidth,
+      maskHeight: geometry.maskHeight,
+      maskWidth: geometry.maskWidth,
+      resampledMaskHeight: geometry.queryHeight * 16,
+      resampledMaskWidth: geometry.queryWidth * 16,
+    }),
+  });
+}
+
 async function decoderInvocation({ frame, inputs, expected, manifest, weights, weightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag }) {
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const route = createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition({ model: { revision: manifest.reference.model.revision }, kernel: { profile: 'sam31-multiplex-mask-decoder-phase-program-v0', commit: commit } });
@@ -254,7 +287,14 @@ export async function runSam31BrowserTrackerPackageInvocation({
   if (!packetAuthority.passed) throw new Error(`SAM 3.1 tracker package authority failed: ${JSON.stringify(packetAuthority)}`);
   const { ingress, episode, decoder: decoderManifest, memory: memoryManifest, temporal: temporalManifest, pointer: pointerManifest } = packageRuntime.manifests || {};
   if (episode?.schema !== 'kaminos.sam31-two-image-tracker-meta-packet.v0') throw new Error(`unsupported two-image episode ${episode?.schema}`);
-  const executionGeometry = validateSam31BrowserTrackerGeometry(ingress.shape, episode.shape);
+  const executionContracts = deriveSam31BrowserTrackerExecutionContracts({
+    ingressShape: ingress.shape,
+    episodeShape: episode.shape,
+    decoderShape: decoderManifest.shape,
+    memoryShape: memoryManifest.shape.memory,
+  });
+  const executionGeometry = executionContracts.geometry;
+  const decoderExecutionManifest = { ...decoderManifest, shape: executionContracts.decoder };
   const episodeEntries = entryMap(episode.tensors);
   const episodeTensor = role => packageRuntime.loadFloat32(episodeEntries[role]);
   const expectedEpisodeTensor = role => verificationAttached ? episodeTensor(role) : Promise.resolve(null);
@@ -312,7 +352,7 @@ export async function runSam31BrowserTrackerPackageInvocation({
   suppression = { memoryInputMasks: frame0Producer.memoryInputMasks, suppressedAbsentMaskCount: 0, semanticsPassed: true };
   suppressionParity = frame0MaskConditioning.parity?.maskLogits ?? null;
   const conditioning = new Float32Array(episode.shape.multiplexCount).fill(1);
-  const memoryShape = memoryManifest.shape.memory;
+  const memoryShape = executionContracts.memory;
   const memoryRoute = createSam31MemoryEncoderPhaseProgramRouteDefinition({ model: { revision: episode.reference.model.revision }, kernel: { profile: 'sam31-memory-encoder-phase-program-v0', commit: commit } });
   const scoreOutput = frame0Producer.receipt.outputs.find(output => output.role === frame0Producer.scoreOutputRole);
   const memoryInputMaskHash = await sha256Bytes(frame0Producer.memoryInputMasks);
@@ -391,7 +431,7 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const frame1Inputs = { imageEmbedding: new Float32Array(frame1AttentionResult.debugReadback.memory), imagePosition: frame1Position, highResolutionS0: imageBackbone.frame1.highResolutionS0, highResolutionS1: imageBackbone.frame1.highResolutionS1, extraPerObjectEmbedding: await episodeTensor('frame-1-extra-per-object-embedding') };
   const frame1Expected = verificationAttached ? { selectedMasks: await expectedEpisodeTensor('frame-1-selected-masks'), objectScores: await expectedEpisodeTensor('frame-1-object-scores'), objectPointers: await expectedEpisodeTensor('frame-1-object-pointers') } : null;
   progress( 'frame-1-decoder', { frame1AttentionReceipt: frame1AttentionResult.receipt });
-  const frame1Decoder = await decoderInvocation({ frame: 1, inputs: frame1Inputs, expected: frame1Expected, manifest: decoderManifest, weights: decoderWeights, weightsHash: decoderWeightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag });
+  const frame1Decoder = await decoderInvocation({ frame: 1, inputs: frame1Inputs, expected: frame1Expected, manifest: decoderExecutionManifest, weights: decoderWeights, weightsHash: decoderWeightsHash, adapter, device, adapterInfo, errors, commit, userAgent, invocationTag });
   const frame1DecoderResult = frame1Decoder.result;
 
   const frame0Receipts = [frame0MaskConditioningResult.receipt, frame0InteractivePointerResult.receipt];

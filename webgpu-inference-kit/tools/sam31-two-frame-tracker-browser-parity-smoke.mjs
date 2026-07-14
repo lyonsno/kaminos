@@ -252,7 +252,7 @@ async function verifyPacketAuthority() {
         manifest,
         referenceReceipt: receipt,
         expectedManifestSha256: expectedDigest,
-        authenticatedIngress: name === 'episode' && isTwoImage
+        authenticatedIngress: ['episode', 'pointer'].includes(name) && isTwoImage
           ? { manifest: manifests.ingress, authority: packets.ingress }
           : null,
       });

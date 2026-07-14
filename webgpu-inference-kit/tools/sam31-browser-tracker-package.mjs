@@ -59,7 +59,9 @@ async function loadAndVerifyPackets() {
         manifest,
         referenceReceipt,
         expectedManifestSha256,
-        authenticatedIngress: name === 'episode' ? { manifest: packets.ingress, authority: authorities.ingress } : null,
+        authenticatedIngress: ['episode', 'pointer'].includes(name)
+          ? { manifest: packets.ingress, authority: authorities.ingress }
+          : null,
       });
     packets[name] = manifest;
   }

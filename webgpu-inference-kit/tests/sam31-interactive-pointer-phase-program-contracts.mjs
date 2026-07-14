@@ -9,6 +9,7 @@ const runnerUrl = new URL('../tools/sam31-interactive-pointer-browser-parity-smo
 
 for (const token of [
   'SAM31_INTERACTIVE_POINTER_PHASE_PROGRAM_ROUTE_ID',
+  'deriveSam31InteractivePointerGeometry',
   'createSam31InteractivePointerPhaseProgramCpuOracle',
   'createSam31InteractivePointerPhaseProgramRouteDefinition',
   'createSam31InteractivePointerPhaseProgramRouteReceipt',
@@ -37,6 +38,12 @@ for (const token of [
   assert.match(runnerSource, new RegExp(token), `interactive pointer runner must bind ${token}`);
   assert.match(smokeSource, new RegExp(token), `interactive pointer browser must bind ${token}`);
 }
+for (const token of [
+  "const reusePacket = args.get('--reuse-packet') === '1'",
+  "const requestedExpectedManifestSha256 = args.get('--expected-manifest-sha256') || null",
+  '--expected-manifest-sha256 is required with --reuse-packet=1',
+  "packetSource: reusePacket ? 'caller-provided-existing' : 'generated'",
+]) assert.ok(runnerSource.includes(token), `interactive pointer runner must preserve reused-packet authority through ${token}`);
 assert.ok(
   smokeSource.includes("tensors: { shape: manifest.shape, tensors: { binaryMasks: tensors['binary-mask-inputs'], imageEmbedding: tensors['image-embedding'] }, weights }"),
   'browser route invocation must preserve the shared oracle input envelope',
@@ -55,20 +62,64 @@ for (const token of [
 ]) assert.match(routeSource, new RegExp(token), `interactive pointer route must make ${token} load-bearing`);
 
 for (const token of [
-  "imagePosition: create('image-position', 16384)",
-  'let position = (index / 256u) % 4u',
+  'const geometry = deriveSam31InteractivePointerGeometry(shape)',
+  "imagePosition: create('image-position', geometry.imagePositionLength)",
+  "keyA: create('key-a', geometry.keyValueLength)",
+  "resizePromptMask: uniform('resize-prompt-mask'",
+  "imagePosition: uniform('image-position'",
+  "keySeed: uniform('key-seed'",
+  "maskBlend: uniform('mask-blend'",
+  'dispatch: [geometry.imageTokens, geometry.heads, geometry.batch]',
   'const dispatch = (name, kernel, total)',
-  'dispatch(`interactive-pointer-layer-${layer}-self-q`, `layer${layer}SelfQ`, 32768)',
-  "dispatch('interactive-pointer-final-q', 'finalQ', 16384)",
-  "dispatch('interactive-pointer-object-head-0', 'objectHead0', 4096)",
-  'slice(0, 1024)',
+  'dispatch(`interactive-pointer-layer-${layer}-self-q`, `layer${layer}SelfQ`, geometry.queryValueLength)',
+  "dispatch('interactive-pointer-final-q', 'finalQ', geometry.queryAttentionLength)",
+  "dispatch('interactive-pointer-object-head-0', 'objectHead0', geometry.pointerLength)",
 ]) assert.ok(routeSource.includes(token), `interactive pointer execution contract must include ${token}`);
+assert.doesNotMatch(routeSource, /slice\(0, 1024\)/, 'dynamic pointer parity must not truncate image-position readback to the reduced fixture length');
+assert.ok(
+  routeSource.includes('slice(0, geometry.imageEmbeddingLength)'),
+  'dynamic pointer parity must expose one unbatched Meta positional grid at the authenticated geometry',
+);
 
 const {
   SAM31_INTERACTIVE_POINTER_PHASE_PROGRAM_ROUTE_ID,
+  deriveSam31InteractivePointerGeometry,
   createSam31InteractivePointerPhaseProgramRouteDefinition,
   validateRouteDefinition,
 } = await import('../src/index.js');
+const largerGeometry = deriveSam31InteractivePointerGeometry({
+  batch: 16,
+  queryTokens: 8,
+  sparsePromptTokens: 2,
+  imageHeight: 4,
+  imageWidth: 4,
+  imageTokens: 16,
+  inputMaskHeight: 16,
+  inputMaskWidth: 16,
+  channels: 256,
+  heads: 8,
+  attentionChannels: 128,
+  mlpHidden: 2048,
+  layerCount: 2,
+});
+assert.deepEqual(
+  {
+    imageTokens: largerGeometry.imageTokens,
+    maskPixels: largerGeometry.maskPixels,
+    outerMaskHeight: largerGeometry.outerMaskHeight,
+    promptIntermediateHeight: largerGeometry.promptIntermediateHeight,
+    denseEmbeddingLength: largerGeometry.denseEmbeddingLength,
+    keyValueLength: largerGeometry.keyValueLength,
+  },
+  { imageTokens: 16, maskPixels: 256, outerMaskHeight: 4, promptIntermediateHeight: 8, denseEmbeddingLength: 65536, keyValueLength: 65536 },
+  'the pointer runtime must derive its larger buffer geometry from the authenticated query/mask shape',
+);
+assert.throws(
+  () => deriveSam31InteractivePointerGeometry({ ...largerGeometry.shape, inputMaskHeight: 8 }),
+  /input mask geometry must be four times image geometry/,
+  'a stale reduced mask must not compose with larger authenticated image features',
+);
+assert.doesNotMatch(routeSource, /requires witnessed 2x2 \/ 8x8 geometry/, 'the runtime must not retain the reduced-fixture geometry gate');
 const route = createSam31InteractivePointerPhaseProgramRouteDefinition({
   kernel: { profile: 'sam31-interactive-pointer-phase-program-v0', commit: 'abc1234' },
 });

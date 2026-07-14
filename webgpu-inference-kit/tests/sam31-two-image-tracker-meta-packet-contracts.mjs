@@ -77,6 +77,28 @@ assert.equal(manifest.claims.distinctInteractiveAndPropagationFeatures, true);
 assert.equal(manifest.claims.packetOwnsImageEmbeddingsAtBrowserRuntime, false);
 assert.equal(manifest.fixture.sourceFeaturesSynthetic, false);
 
+const queryHeight = ingressManifest.shape.patchHeight;
+const queryWidth = ingressManifest.shape.patchWidth;
+const queryTokens = queryHeight * queryWidth;
+const maskHeight = queryHeight * 4;
+const maskWidth = queryWidth * 4;
+assert.deepEqual(manifest.shape, {
+  batch: 1,
+  multiplexCount: 16,
+  queryHeight,
+  queryWidth,
+  queryTokens,
+  memorySpatialTokens: queryTokens,
+  numObjPtrTokens: 16,
+  memoryTokens: queryTokens + 16,
+  channels: 256,
+  maskHeight,
+  maskWidth,
+});
+assert.equal(manifest.claims.fullProductionInteractiveGeometryExecuted, queryHeight === 72 && queryWidth === 72);
+assert.deepEqual(manifest.claims.effectiveInteractiveImageEmbeddingSize, [queryHeight, queryWidth]);
+assert.deepEqual(manifest.claims.effectiveMaskInputSize, [maskHeight, maskWidth]);
+
 const forbiddenPacketOwnedRoles = [
   'frame-0-image-embedding', 'frame-0-image-position',
   'frame-0-high-resolution-s0', 'frame-0-high-resolution-s1',
@@ -98,6 +120,14 @@ for (const role of [
   assert.ok(entry, `composed packet is missing ${role}`);
   assert.equal((await stat(join(outDir, entry.file))).size, entry.byteLength, `${role} byte length must match`);
 }
+assert.deepEqual(tensorsByRole.get('frame-0-binary-mask-inputs').shape, [16, 1, maskHeight, maskWidth]);
+assert.deepEqual(tensorsByRole.get('frame-0-memory-input-masks').shape, [16, 1, maskHeight, maskWidth]);
+assert.deepEqual(tensorsByRole.get('frame-0-memory-features').shape, [1, queryHeight, queryWidth, 256]);
+assert.deepEqual(tensorsByRole.get('frame-0-memory-position').shape, [1, queryHeight, queryWidth, 256]);
+assert.deepEqual(tensorsByRole.get('frame-1-assembled-memory-image').shape, [1, queryTokens, 256]);
+assert.deepEqual(tensorsByRole.get('frame-1-assembled-memory').shape, [1, queryTokens + 16, 256]);
+assert.deepEqual(tensorsByRole.get('frame-1-memory-conditioned-features').shape, [1, queryHeight, queryWidth, 256]);
+assert.deepEqual(tensorsByRole.get('frame-1-selected-masks').shape, [16, 1, maskHeight, maskWidth]);
 
 const failureDir = await mkdtemp(join(tmpdir(), 'sam31-two-image-tracker-meta-failure-'));
 const failure = spawnSync(python, [

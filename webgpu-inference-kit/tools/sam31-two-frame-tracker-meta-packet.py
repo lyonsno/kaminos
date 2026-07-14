@@ -148,7 +148,7 @@ def require_identity(checkpoint_path: Path, source_root: Path):
     return checkpoint_sha, source_commit
 
 
-def build_memory_encoder(classes: dict, state: dict):
+def build_memory_encoder(classes: dict, state: dict, feature_height=2, feature_width=2):
     position_encoding = classes["PositionEmbeddingSine"](
         num_pos_feats=256,
         temperature=10000,
@@ -162,7 +162,7 @@ def build_memory_encoder(classes: dict, state: dict):
         stride=2,
         padding=1,
         total_stride=16,
-        interpol_size=[32, 32],
+        interpol_size=[feature_height * 16, feature_width * 16],
         multiplex_count=16,
         starting_out_chan=4,
         input_channel_multiplier=2,
@@ -210,11 +210,13 @@ def build_memory_proxy(encoder, state):
     )
 
 
-def build_interactive_mask_proxy(video_module, state):
+def build_interactive_mask_proxy(video_module, state, image_embedding_size=2, input_image_size=None):
+    if input_image_size is None:
+        input_image_size = image_embedding_size * 4
     prompt_encoder = video_module.PromptEncoder(
         embed_dim=256,
-        image_embedding_size=(2, 2),
-        input_image_size=(8, 8),
+        image_embedding_size=(image_embedding_size, image_embedding_size),
+        input_image_size=(input_image_size, input_image_size),
         mask_in_chans=16,
     )
     prompt_prefix = "tracker.model.interactive_sam_prompt_encoder."
@@ -269,8 +271,8 @@ def build_interactive_mask_proxy(video_module, state):
         module.eval()
     proxy = types.SimpleNamespace(
         hidden_dim=256,
-        sam_image_embedding_size=2,
-        image_size=8,
+        sam_image_embedding_size=image_embedding_size,
+        image_size=input_image_size,
         interactive_sam_prompt_encoder=prompt_encoder,
         interactive_sam_mask_decoder=interactive_decoder,
         interactive_mask_downsample=mask_downsample,
@@ -290,14 +292,20 @@ def build_interactive_mask_proxy(video_module, state):
     return proxy
 
 
-def create_binary_mask_fixture(variant=0):
+def create_binary_mask_fixture(variant=0, height=8, width=8):
     if variant < 0:
         raise ValueError("mask variant must be non-negative")
-    masks = torch.zeros((16, 1, 8, 8), dtype=torch.float32)
+    if height <= 0 or width <= 0:
+        raise ValueError("mask fixture geometry must be positive")
+    masks = torch.zeros((16, 1, height, width), dtype=torch.float32)
+    region_height = max(1, height // 2)
+    region_width = max(1, width // 2)
+    row_positions = max(1, height - region_height + 1)
+    column_positions = max(1, width - region_width + 1)
     for object_index in range(7):
-        row = (object_index + variant) % 4
-        column = (object_index * 3 + variant * 2) % 4
-        masks[object_index, 0, row : row + 4, column : column + 4] = 1.0
+        row = (object_index + variant) % row_positions
+        column = (object_index * 3 + variant * 2) % column_positions
+        masks[object_index, 0, row : row + region_height, column : column + region_width] = 1.0
     return masks
 
 
@@ -381,6 +389,13 @@ def main():
             ingress_packet_dir,
             args.expected_ingress_manifest_sha256,
         )
+    query_height = ingress_manifest["shape"]["patchHeight"] if ingress_manifest is not None else 2
+    query_width = ingress_manifest["shape"]["patchWidth"] if ingress_manifest is not None else 2
+    query_tokens = query_height * query_width
+    mask_height = query_height * 4
+    mask_width = query_width * 4
+    if ingress_manifest is not None and ingress_manifest["shape"].get("patchTokens") != query_tokens:
+        raise ValueError("ingress patch geometry is inconsistent")
     tool_root = Path(__file__).resolve().parent
     decoder_tool = load_tool("sam31_decoder_packet_tool", tool_root / "sam31-multiplex-mask-decoder-meta-packet.py")
     memory_tool = load_tool("sam31_memory_packet_tool", tool_root / "sam31-propagation-memory-meta-packet.py")
@@ -395,8 +410,12 @@ def main():
     FAILURE_PHASE = "checkpoint-load"
     state = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
     decoder, pointer_projection, no_object_projection = decoder_tool.build_decoder(transformer_module, decoder_module, state)
-    interactive_mask_proxy = build_interactive_mask_proxy(video_module, state) if args.frame0_mode == "mask-conditioning" else None
-    memory_encoder = build_memory_encoder(memory_classes, state)
+    if args.frame0_mode == "mask-conditioning" and query_height != query_width:
+        raise ValueError("mask-conditioned tracker currently requires square image feature geometry")
+    interactive_mask_proxy = build_interactive_mask_proxy(
+        video_module, state, image_embedding_size=query_height, input_image_size=mask_height,
+    ) if args.frame0_mode == "mask-conditioning" else None
+    memory_encoder = build_memory_encoder(memory_classes, state, feature_height=query_height, feature_width=query_width)
     memory_proxy = build_memory_proxy(memory_encoder, state)
     official_attention = temporal_tool.build_official_encoder(temporal_decoder_module)
     attention_prefix = "tracker.model.transformer.encoder."
@@ -452,7 +471,7 @@ def main():
         }
     with torch.inference_mode():
         if args.frame0_mode == "mask-conditioning":
-            frame0_binary_masks = create_binary_mask_fixture(args.mask_variant)
+            frame0_binary_masks = create_binary_mask_fixture(args.mask_variant, mask_height, mask_width)
             interactive_high_res_features = [frame0_inputs["interactive_high0"], frame0_inputs["interactive_high1"]]
             frame0_outputs = video_module.VideoTrackingMultiplex._use_mask_as_output(
                 interactive_mask_proxy,
@@ -488,9 +507,9 @@ def main():
         frame0_tokens = frame0_inputs["propagation_image"].flatten(2).permute(2, 0, 1)
         frame0_memory, frame0_memory_pos = video_module.VideoTrackingMultiplex._encode_new_memory(
             memory_proxy,
-            image=torch.zeros((1, 3, 8, 8), dtype=torch.float32),
+            image=torch.zeros((1, 3, mask_height, mask_width), dtype=torch.float32),
             current_vision_feats=[frame0_tokens],
-            feat_sizes=[(2, 2)],
+            feat_sizes=[(query_height, query_width)],
             pred_masks_high_res=frame0_memory_input_masks,
             object_score_logits=frame0["scores"],
             is_mask_from_pts=True,
@@ -523,7 +542,7 @@ def main():
                 current_vision_feats=[frame1_tokens],
                 current_vision_masks=[None],
                 current_vision_pos_embeds=[frame1_position_tokens],
-                feat_sizes=[(2, 2)],
+                feat_sizes=[(query_height, query_width)],
                 output_dict=output_dict,
                 num_frames=2,
                 track_in_reverse=False,
@@ -538,7 +557,7 @@ def main():
     captured = capturing_attention.inputs
     if captured is None or captured["num_obj_ptr_tokens"] != 16:
         raise RuntimeError("official frame-one attention did not consume exactly sixteen frame-zero pointers")
-    if tuple(captured["memory"].shape) != (20, 1, 256):
+    if tuple(captured["memory"].shape) != (query_tokens + 16, 1, 256):
         raise RuntimeError(f"official frame-one memory bank shape mismatch: {tuple(captured['memory'].shape)}")
 
     FAILURE_PHASE = "artifact-write"
@@ -630,7 +649,7 @@ def main():
         "fixture": {"seed": args.seed, "maskVariant": args.mask_variant, "kind": "two-distinct-source-images-with-deterministic-mixed-object-mask" if two_image else "deterministic-two-frame-mixed-object-presence", "sourceFeaturesSynthetic": not two_image},
         "imageIngress": image_ingress,
         "componentManifests": {"decoder": "/oracle/decoder/tensor-manifest.json", "memory": "/oracle/memory/tensor-manifest.json", "temporal": "/oracle/temporal/tensor-manifest.json"},
-        "shape": {"batch": 1, "multiplexCount": 16, "queryHeight": 2, "queryWidth": 2, "queryTokens": 4, "memorySpatialTokens": 4, "numObjPtrTokens": 16, "memoryTokens": 20, "channels": 256, "maskHeight": 8, "maskWidth": 8},
+        "shape": {"batch": 1, "multiplexCount": 16, "queryHeight": query_height, "queryWidth": query_width, "queryTokens": query_tokens, "memorySpatialTokens": query_tokens, "numObjPtrTokens": 16, "memoryTokens": query_tokens + 16, "channels": 256, "maskHeight": mask_height, "maskWidth": mask_width},
         "plan": {"frameIndex": 1, "numFrames": 2, "conditioningFrameIndices": [0], "nonConditioningFrameIndices": [], "selectedConditioningFrameIndices": [0], "spatialFrameIndices": [0], "spatialTemporalPositionIndices": [5], "pointerFrameIndices": [0], "pointerRelativePositions": [1], "numMaskmem": 7, "maxConditioningFrames": 4, "maxObjectPointerFrames": 2, "memoryTemporalStride": 1, "useMaskmemTemporalPositionV2": True, "trackInReverse": False},
         "stateTransition": {
             "frame0Kind": "conditioning",
@@ -653,9 +672,9 @@ def main():
             "officialInteractivePromptEncoderExecuted": mask_conditioned,
             "officialInteractiveMaskDecoderExecuted": mask_conditioned,
             "checkpointBackedInteractivePointers": mask_conditioned,
-            "fullProductionInteractiveGeometryExecuted": False,
-            "effectiveInteractiveImageEmbeddingSize": [2, 2] if mask_conditioned else None,
-            "effectiveMaskInputSize": [8, 8] if mask_conditioned else None,
+            "fullProductionInteractiveGeometryExecuted": query_height == 72 and query_width == 72,
+            "effectiveInteractiveImageEmbeddingSize": [query_height, query_width] if mask_conditioned else None,
+            "effectiveMaskInputSize": [mask_height, mask_width] if mask_conditioned else None,
             "officialMemoryMethodExecuted": True,
             "officialTemporalMethodExecuted": True,
             "officialMemoryAttentionExecuted": True,

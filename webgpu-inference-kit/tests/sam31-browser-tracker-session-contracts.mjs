@@ -3,7 +3,10 @@ import { readFile } from 'node:fs/promises';
 
 import * as kit from '../src/index.js';
 import { createSam31BrowserTrackerSessionForTest } from '../src/sam31-browser-tracker-session.js';
-import { createSam31BrowserTrackerPackageAuthority } from '../src/sam31-browser-tracker-session-driver.js';
+import {
+  createSam31BrowserTrackerPackageAuthority,
+  deriveSam31BrowserTrackerExecutionContracts,
+} from '../src/sam31-browser-tracker-session-driver.js';
 
 assert.equal(kit.SAM31_BROWSER_TRACKER_SESSION_SCHEMA, 'kaminos.sam31-browser-tracker-session.v0');
 assert.equal(typeof kit.createSam31BrowserTrackerSession, 'function', 'the inference kit must export the package-backed tracker session');
@@ -83,6 +86,77 @@ assert.equal(failedAuthority.passed, false, 'an attached but failed component re
 assert.deepEqual(failedAuthority.verifiedPackets, packetNames.filter(name => name !== 'pointer'));
 assert.equal(failedAuthority.componentVerificationState, 'failed');
 assert.equal(failedAuthority.componentVerificationPassed, false);
+
+const executionContracts = deriveSam31BrowserTrackerExecutionContracts({
+  ingressShape: {
+    imageHeight: 56,
+    imageWidth: 56,
+    patchSize: 14,
+    patchHeight: 4,
+    patchWidth: 4,
+    patchTokens: 16,
+    fpnLevels: [
+      { level: 0, scaleFactor: 4, height: 16, width: 16 },
+      { level: 1, scaleFactor: 2, height: 8, width: 8 },
+      { level: 2, scaleFactor: 1, height: 4, width: 4 },
+    ],
+  },
+  episodeShape: {
+    batch: 1,
+    multiplexCount: 16,
+    queryHeight: 4,
+    queryWidth: 4,
+    queryTokens: 16,
+    maskHeight: 16,
+    maskWidth: 16,
+    memorySpatialTokens: 16,
+    numObjPtrTokens: 16,
+    memoryTokens: 32,
+    channels: 256,
+  },
+  decoderShape: {
+    imageHeight: 2,
+    imageWidth: 2,
+    imageTokens: 4,
+    maskHeight: 8,
+    maskWidth: 8,
+    channels: 256,
+  },
+  memoryShape: {
+    featureHeight: 2,
+    featureWidth: 2,
+    featureChannels: 256,
+    maskHeight: 8,
+    maskWidth: 8,
+    resampledMaskHeight: 32,
+    resampledMaskWidth: 32,
+    multiplexCount: 16,
+    conditionChannels: true,
+  },
+});
+assert.deepEqual(
+  {
+    imageHeight: executionContracts.decoder.imageHeight,
+    imageWidth: executionContracts.decoder.imageWidth,
+    imageTokens: executionContracts.decoder.imageTokens,
+    maskHeight: executionContracts.decoder.maskHeight,
+    maskWidth: executionContracts.decoder.maskWidth,
+  },
+  { imageHeight: 4, imageWidth: 4, imageTokens: 16, maskHeight: 16, maskWidth: 16 },
+  'decoder execution geometry must come from the authenticated ingress and episode, not the component verification fixture',
+);
+assert.deepEqual(
+  {
+    featureHeight: executionContracts.memory.featureHeight,
+    featureWidth: executionContracts.memory.featureWidth,
+    maskHeight: executionContracts.memory.maskHeight,
+    maskWidth: executionContracts.memory.maskWidth,
+    resampledMaskHeight: executionContracts.memory.resampledMaskHeight,
+    resampledMaskWidth: executionContracts.memory.resampledMaskWidth,
+  },
+  { featureHeight: 4, featureWidth: 4, maskHeight: 16, maskWidth: 16, resampledMaskHeight: 64, resampledMaskWidth: 64 },
+  'memory execution geometry must preserve the official sixteen-fold mask-tower input ratio at the authenticated query size',
+);
 
 const lifecycle = [];
 let resolveLost;
@@ -213,8 +287,8 @@ assert.match(smokeSource, /runtimeSession:\s*\{/, 'package smoke must preserve p
 assert.match(smokeSource, /closeEvidence:\s*sessionClose/, 'package smoke must preserve session close evidence after awaiting device loss');
 assert.match(
   driverSource,
-  /validateSam31BrowserTrackerGeometry\(ingress\.shape, episode\.shape\)/,
-  'the tracker driver must derive every execution shape from the package-authenticated ingress and episode geometry',
+  /deriveSam31BrowserTrackerExecutionContracts\(\{\s*ingressShape: ingress\.shape,\s*episodeShape: episode\.shape,/,
+  'the tracker driver must derive component execution contracts from the package-authenticated ingress and episode geometry',
 );
 assert.doesNotMatch(driverSource, /shape:\s*\[16,\s*1,\s*8,\s*8\]/, 'the tracker driver must not stamp reduced mask geometry into route receipts');
 assert.doesNotMatch(driverSource, /shape:\s*\[1,\s*2,\s*2,\s*256\]/, 'the tracker driver must not stamp reduced feature geometry into route receipts');
