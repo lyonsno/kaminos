@@ -559,6 +559,11 @@ export function assessLiveCoupledSmokeMotion({
   const steps = simulatorStepCounts.map((value, index) => requireInteger(value, `simulatorStepCounts[${index}]`));
   const ticks = newestProductTicks.map((value, index) => requireInteger(value, `newestProductTicks[${index}]`));
   const stateIds = frameStateIdentities.map((value, index) => requireIdentity(value, `frame state identity ${index}`));
+  for (let index = 0; index < frameCount; index += 1) {
+    if (ticks[index] !== steps[index]) {
+      throw new Error(`live smoke product tick ${ticks[index]} does not match simulator step ${steps[index]} at frame ${index}`);
+    }
+  }
   for (let index = 1; index < frameCount; index += 1) {
     if (!(steps[index] > steps[index - 1])) throw new Error('live coupled simulator did not advance');
     if (!(ticks[index] > ticks[index - 1])) throw new Error('live smoke products did not advance');

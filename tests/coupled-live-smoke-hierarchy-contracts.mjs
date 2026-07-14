@@ -303,7 +303,7 @@ assert.equal(SPATIAL_STRATA_HYBRID_SMOKE_LIVE_OPTICAL_GAIN, 12);
 
 const acceptedLiveMotion = assessLiveCoupledSmokeMotion({
   simulatorStepCounts: [40, 41, 42],
-  newestProductTicks: [60, 61, 62],
+  newestProductTicks: [40, 41, 42],
   frameStateIdentities: ['state-40', 'state-41', 'state-42'],
   smokeContributionMeanAbsDiffs: [0.3, 0.35, 0.32],
   smokeResidualMotionMeanAbsDiffs: [0.18, 0.22],
@@ -312,8 +312,24 @@ assert.equal(acceptedLiveMotion.status, 'passed');
 assert.equal(acceptedLiveMotion.authority, 'frame-locked-live-smoke-residual-motion-v1');
 assert.throws(
   () => assessLiveCoupledSmokeMotion({
+    simulatorStepCounts: [63, 64, 65, 66],
+    newestProductTicks: [62, 63, 64, 65],
+    frameStateIdentities: [
+      'live-coupled-frame:1:1:63:sim-63:a',
+      'live-coupled-frame:1:1:64:sim-64:b',
+      'live-coupled-frame:1:1:65:sim-65:c',
+      'live-coupled-frame:1:1:66:sim-66:d',
+    ],
+    smokeContributionMeanAbsDiffs: [0.5, 0.5, 0.5, 0.5],
+    smokeResidualMotionMeanAbsDiffs: [0.5, 0.5, 0.5],
+  }),
+  /product tick.*simulator step/i,
+  'an advancing one-frame-stale product stream cannot certify current-frame smoke',
+);
+assert.throws(
+  () => assessLiveCoupledSmokeMotion({
     simulatorStepCounts: [40, 41],
-    newestProductTicks: [60, 61],
+    newestProductTicks: [40, 41],
     frameStateIdentities: [null, null],
     smokeContributionMeanAbsDiffs: [0.3, 0.4],
     smokeResidualMotionMeanAbsDiffs: [0.2],
@@ -324,7 +340,7 @@ assert.throws(
 assert.throws(
   () => assessLiveCoupledSmokeMotion({
     simulatorStepCounts: [40, 41],
-    newestProductTicks: [60, 61],
+    newestProductTicks: [40, 41],
     frameStateIdentities: ['state-40', 'state-41'],
     smokeContributionMeanAbsDiffs: [0, 0],
     smokeResidualMotionMeanAbsDiffs: [0],
@@ -335,7 +351,7 @@ assert.throws(
 assert.throws(
   () => assessLiveCoupledSmokeMotion({
     simulatorStepCounts: [40, 41],
-    newestProductTicks: [60, 61],
+    newestProductTicks: [40, 41],
     frameStateIdentities: ['state-40', 'state-41'],
     smokeContributionMeanAbsDiffs: [0.3, 0.4],
     smokeResidualMotionMeanAbsDiffs: [0],
