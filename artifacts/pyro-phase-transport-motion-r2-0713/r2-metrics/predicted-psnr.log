@@ -1,0 +1,13 @@
+n:1 mse_avg:47.78 mse_r:63.53 mse_g:63.53 mse_b:64.05 mse_a:0.00 psnr_avg:31.34 psnr_r:30.10 psnr_g:30.10 psnr_b:30.07 psnr_a:inf 
+n:2 mse_avg:67.35 mse_r:97.38 mse_g:89.57 mse_b:82.44 mse_a:0.00 psnr_avg:29.85 psnr_r:28.25 psnr_g:28.61 psnr_b:28.97 psnr_a:inf 
+n:3 mse_avg:120.02 mse_r:189.89 mse_g:159.58 mse_b:130.61 mse_a:0.00 psnr_avg:27.34 psnr_r:25.35 psnr_g:26.10 psnr_b:26.97 psnr_a:inf 
+n:4 mse_avg:198.13 mse_r:331.46 mse_g:261.40 mse_b:199.67 mse_a:0.00 psnr_avg:25.16 psnr_r:22.93 psnr_g:23.96 psnr_b:25.13 psnr_a:inf 
+n:5 mse_avg:297.78 mse_r:520.08 mse_g:388.62 mse_b:282.45 mse_a:0.00 psnr_avg:23.39 psnr_r:20.97 psnr_g:22.24 psnr_b:23.62 psnr_a:inf 
+n:6 mse_avg:323.72 mse_r:561.22 mse_g:436.18 mse_b:297.47 mse_a:0.00 psnr_avg:23.03 psnr_r:20.64 psnr_g:21.73 psnr_b:23.40 psnr_a:inf 
+n:7 mse_avg:369.68 mse_r:643.17 mse_g:507.52 mse_b:328.04 mse_a:0.00 psnr_avg:22.45 psnr_r:20.05 psnr_g:21.08 psnr_b:22.97 psnr_a:inf 
+n:8 mse_avg:433.25 mse_r:759.23 mse_g:599.72 mse_b:374.04 mse_a:0.00 psnr_avg:21.76 psnr_r:19.33 psnr_g:20.35 psnr_b:22.40 psnr_a:inf 
+n:9 mse_avg:512.16 mse_r:905.32 mse_g:707.98 mse_b:435.32 mse_a:0.00 psnr_avg:21.04 psnr_r:18.56 psnr_g:19.63 psnr_b:21.74 psnr_a:inf 
+n:10 mse_avg:542.29 mse_r:954.06 mse_g:761.87 mse_b:453.25 mse_a:0.00 psnr_avg:20.79 psnr_r:18.34 psnr_g:19.31 psnr_b:21.57 psnr_a:inf 
+n:11 mse_avg:589.32 mse_r:1037.97 mse_g:834.54 mse_b:484.75 mse_a:0.00 psnr_avg:20.43 psnr_r:17.97 psnr_g:18.92 psnr_b:21.28 psnr_a:inf 
+n:12 mse_avg:652.96 mse_r:1156.70 mse_g:925.74 mse_b:529.40 mse_a:0.00 psnr_avg:19.98 psnr_r:17.50 psnr_g:18.47 psnr_b:20.89 psnr_a:inf 
+n:13 mse_avg:732.79 mse_r:1307.03 mse_g:1036.01 mse_b:588.10 mse_a:0.00 psnr_avg:19.48 psnr_r:16.97 psnr_g:17.98 psnr_b:20.44 psnr_a:inf 

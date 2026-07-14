@@ -1,0 +1,244 @@
+{
+  "calibration": {
+    "birth": {
+      "authority": "training-residual-birth-f1-threshold-v0",
+      "fScore": 0.5096085224544876,
+      "falseNegative": 107869,
+      "falsePositive": 5510,
+      "precision": 0.9144688843700036,
+      "recall": 0.3532258064516129,
+      "sampleCount": 2413103,
+      "threshold": 0.8500000000000001,
+      "truePositive": 58911
+    },
+    "carrier": {
+      "accuracy": 0.473860359523452,
+      "movingClassAccuracy": 0.09029677704302592,
+      "movingFalseNegative": 222447,
+      "movingFalsePositive": 179952,
+      "movingPrecision": 0.1092896174863388,
+      "movingRecall": 0.09029677704302592,
+      "movingTruePositive": 22080,
+      "sampleCount": 785818
+    },
+    "targetSupport": {
+      "authority": "training-adjacent-target-source-count-ratio-median-v0",
+      "maximumRatio": 1.0159630536151358,
+      "medianRatio": 1.0014143530644317,
+      "minimumRatio": 0.9889103938902547,
+      "pairCount": 7,
+      "ratios": [
+        1.0026691028948123,
+        1.0159630536151358,
+        1.0070955659307326,
+        1.0014143530644317,
+        0.9889103938902547,
+        0.998532427874755,
+        0.9981742496165924
+      ]
+    }
+  },
+  "completedAt": 1783994490.135529,
+  "holdoutMetrics": [
+    {
+      "beatsIdentity": true,
+      "exactCount": 111227,
+      "identityIoU": 0.3312652720662733,
+      "predictionCount": 112305,
+      "predictionIoU": 0.3639231431029538,
+      "predictionToIdentityRatio": 1.0985852541468546,
+      "step": 1
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 110313,
+      "identityIoU": 0.23660468606687235,
+      "predictionCount": 112464,
+      "predictionIoU": 0.2692544354425187,
+      "predictionToIdentityRatio": 1.1379928264244878,
+      "step": 2
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 110550,
+      "identityIoU": 0.1904675355222221,
+      "predictionCount": 112623,
+      "predictionIoU": 0.22013132213286388,
+      "predictionToIdentityRatio": 1.1557419563880527,
+      "step": 3
+    }
+  ],
+  "manifest": {
+    "bytes": 102560,
+    "path": "/private/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+    "sha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534"
+  },
+  "model": {
+    "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/transport-model.json",
+    "sha256": "785ce32571aab2d5fe66b746f375bafcd57c85d5ab88442112fc3396b7af0747"
+  },
+  "predictions": {
+    "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/transport-predictions.json",
+    "sha256": "fcab121ae28b934300d2b23d016ba6220f18622f6ed94b14e69bbf9f9f4622ba"
+  },
+  "recurrent": [
+    {
+      "birthCandidateCount": 336430,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 2802,
+      "deathCount": 29503,
+      "predictedCount": 112305,
+      "selectedBirthCount": 32464,
+      "sourceCount": 112146,
+      "stableCarrierCount": 53814,
+      "step": 1,
+      "targetSupportBudget": 112305,
+      "thresholdQualifiedBirthCount": 994,
+      "transportedCarrierCount": 26027
+    },
+    {
+      "birthCandidateCount": 323552,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 3206,
+      "deathCount": 19940,
+      "predictedCount": 112464,
+      "selectedBirthCount": 23305,
+      "sourceCount": 112305,
+      "stableCarrierCount": 63371,
+      "step": 2,
+      "targetSupportBudget": 112464,
+      "thresholdQualifiedBirthCount": 1090,
+      "transportedCarrierCount": 25788
+    },
+    {
+      "birthCandidateCount": 333874,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 3549,
+      "deathCount": 15322,
+      "predictedCount": 112623,
+      "selectedBirthCount": 19030,
+      "sourceCount": 112464,
+      "stableCarrierCount": 66423,
+      "step": 3,
+      "targetSupportBudget": 112623,
+      "thresholdQualifiedBirthCount": 2246,
+      "transportedCarrierCount": 27170
+    }
+  ],
+  "route": {
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "effectiveRunner": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+    "fallbackReason": null
+  },
+  "schema": "kaminos-boundary-splat-phase-transport-training-v0",
+  "startedAt": 1783993074.342252,
+  "status": "completed",
+  "trainingPairs": [
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 23712,
+      "birthPositiveCount": 23712,
+      "birthSampleCount": 337453,
+      "carrierSampleCount": 111648,
+      "deathCount": 23414,
+      "sourceCount": 111648,
+      "sourceFrameId": "frame-0",
+      "stableCount": 50820,
+      "targetCount": 111946,
+      "targetFrameId": "frame-1",
+      "transportedCount": 37414
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 24375,
+      "birthPositiveCount": 24375,
+      "birthSampleCount": 344289,
+      "carrierSampleCount": 111946,
+      "deathCount": 22588,
+      "sourceCount": 111946,
+      "sourceFrameId": "frame-1",
+      "stableCount": 55664,
+      "targetCount": 113733,
+      "targetFrameId": "frame-2",
+      "transportedCount": 33694
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 26765,
+      "birthPositiveCount": 26765,
+      "birthSampleCount": 350807,
+      "carrierSampleCount": 113733,
+      "deathCount": 25958,
+      "sourceCount": 113733,
+      "sourceFrameId": "frame-2",
+      "stableCount": 49903,
+      "targetCount": 114540,
+      "targetFrameId": "frame-3",
+      "transportedCount": 37872
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 25716,
+      "birthPositiveCount": 25716,
+      "birthSampleCount": 353027,
+      "carrierSampleCount": 114540,
+      "deathCount": 25554,
+      "sourceCount": 114540,
+      "sourceFrameId": "frame-3",
+      "stableCount": 54258,
+      "targetCount": 114702,
+      "targetFrameId": "frame-4",
+      "transportedCount": 34728
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 22933,
+      "birthPositiveCount": 22933,
+      "birthSampleCount": 349491,
+      "carrierSampleCount": 114702,
+      "deathCount": 24205,
+      "sourceCount": 114702,
+      "sourceFrameId": "frame-4",
+      "stableCount": 55774,
+      "targetCount": 113430,
+      "targetFrameId": "frame-5",
+      "transportedCount": 34723
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 21680,
+      "birthPositiveCount": 21680,
+      "birthSampleCount": 340361,
+      "carrierSampleCount": 109705,
+      "deathCount": 21841,
+      "sourceCount": 109705,
+      "sourceFrameId": "frame-10",
+      "stableCount": 54968,
+      "targetCount": 109544,
+      "targetFrameId": "frame-11",
+      "transportedCount": 32896
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 21599,
+      "birthPositiveCount": 21599,
+      "birthSampleCount": 337675,
+      "carrierSampleCount": 109544,
+      "deathCount": 21799,
+      "sourceCount": 109544,
+      "sourceFrameId": "frame-11",
+      "stableCount": 54545,
+      "targetCount": 109344,
+      "targetFrameId": "frame-12",
+      "transportedCount": 33200
+    }
+  ]
+}

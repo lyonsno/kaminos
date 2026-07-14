@@ -1,0 +1,765 @@
+{
+  "schema": "kaminos-boundary-splat-moving-phase-witness-v0",
+  "status": "completed",
+  "source": {
+    "manifest": {
+      "path": "/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+      "sha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534"
+    },
+    "predictions": {
+      "path": "/private/tmp/kaminos-phase-transport-full-r1-0713/transport-predictions.json",
+      "sha256": "332b3d0e11e01a258c5d4a4989070019a2f61463edaac81d9812c04f9ffadaac"
+    },
+    "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=0.7&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=3.4&volume_fire_scale=1.3&volume_detail_scale=3.2&volume_plume_height=1.55&volume_wind_strength=1.5&volume_wind_angle=-140&volume_wind_height=-0.3&volume_input_radius=0.55&volume_flow_rate=1.7&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=operator-hero-basin-transfer-0713",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "backend": {
+      "backend": "mlx",
+      "device": "Device(gpu, 0)",
+      "effectiveRunner": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+      "fallbackReason": null
+    }
+  },
+  "playback": {
+    "authority": "finite-forward-heldout-phase-sequence-v0",
+    "requestedFps": 12,
+    "effectiveFps": 12,
+    "frameCount": 13,
+    "framesPerControlledStep": 4,
+    "controlledStepDeltaMs": 160,
+    "loops": false,
+    "resetDisclosure": "playback ends on the farthest held-out target and restarts only by explicit viewer action"
+  },
+  "roles": {
+    "reference": {
+      "authority": "exact-heldout-target-state-v0",
+      "frameHashes": [
+        "8908d5881d0b13ae5229b921ff345dff8dc931e0b2e28cbdcdd9dbc03e41d754",
+        "da3708acbd60b722fcf8dde4c9109d29b8b57a0950f727822730be9d300d3a17",
+        "abbe74e9acf8b838fbd380bc57654ae179615c9914fa1796c8d31aef7058a27a",
+        "8fdb49163361af0c526ab271d1d417336bfff0147dc39c2e36f3aa9d0d97b008",
+        "b7b37a0a85e8e8755baaf03d7e97a3914d8c69ba4d1ecae5fa4e9275d2bbad8d",
+        "350641fb7fed98fb035782f466f5bc8063490362b644403e6c3acf93967ea34e",
+        "ecbf7c2c5944af748fc9ff009ba6bb494f6b2102065b021f427b556f8ef86885",
+        "18a8c2fab20e024136fce4462efa34e5296331c778a176499ec83e5f985e76a5",
+        "dcf31da42dd6f2aaebf5a656853a73b1488666b6793371b63fd401a3532f8629",
+        "e4f41ce939ec60e9bcf50a881d0eae08b0ddf0c8ff5065a56d2e10a90fb083b4",
+        "21ef6b8d20068b7bbc8545f4e3e0ab3fdc439651652c0356a642847b399a56cf",
+        "19c6ec8672331a0669af21b92b62626ec55c69e9e530947445343d82f9238365",
+        "ad1850cf5e55a5a0dca94f8fc6c14ecd9908f8c3c1fd3bdf06af5af95a339121"
+      ],
+      "frameEvidence": [
+        {
+          "index": 0,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-000.png",
+          "sha256": "8908d5881d0b13ae5229b921ff345dff8dc931e0b2e28cbdcdd9dbc03e41d754",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 133694,
+          "projectedSplatCount": 133693,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 1,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-001.png",
+          "sha256": "da3708acbd60b722fcf8dde4c9109d29b8b57a0950f727822730be9d300d3a17",
+          "segment": 0,
+          "fraction": 0.25,
+          "inputSplatCount": 133694,
+          "projectedSplatCount": 133693,
+          "nonBackgroundPixelCount": 45623,
+          "maxLuminance": 1
+        },
+        {
+          "index": 2,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-002.png",
+          "sha256": "abbe74e9acf8b838fbd380bc57654ae179615c9914fa1796c8d31aef7058a27a",
+          "segment": 0,
+          "fraction": 0.5,
+          "inputSplatCount": 133694,
+          "projectedSplatCount": 133693,
+          "nonBackgroundPixelCount": 45629,
+          "maxLuminance": 1
+        },
+        {
+          "index": 3,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-003.png",
+          "sha256": "8fdb49163361af0c526ab271d1d417336bfff0147dc39c2e36f3aa9d0d97b008",
+          "segment": 0,
+          "fraction": 0.75,
+          "inputSplatCount": 133694,
+          "projectedSplatCount": 133693,
+          "nonBackgroundPixelCount": 45579,
+          "maxLuminance": 1
+        },
+        {
+          "index": 4,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-004.png",
+          "sha256": "b7b37a0a85e8e8755baaf03d7e97a3914d8c69ba4d1ecae5fa4e9275d2bbad8d",
+          "segment": 0,
+          "fraction": 1,
+          "inputSplatCount": 133694,
+          "projectedSplatCount": 133693,
+          "nonBackgroundPixelCount": 44837,
+          "maxLuminance": 1
+        },
+        {
+          "index": 5,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-005.png",
+          "sha256": "350641fb7fed98fb035782f466f5bc8063490362b644403e6c3acf93967ea34e",
+          "segment": 1,
+          "fraction": 0.25,
+          "inputSplatCount": 132170,
+          "projectedSplatCount": 132166,
+          "nonBackgroundPixelCount": 45669,
+          "maxLuminance": 1
+        },
+        {
+          "index": 6,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-006.png",
+          "sha256": "ecbf7c2c5944af748fc9ff009ba6bb494f6b2102065b021f427b556f8ef86885",
+          "segment": 1,
+          "fraction": 0.5,
+          "inputSplatCount": 132170,
+          "projectedSplatCount": 132166,
+          "nonBackgroundPixelCount": 45730,
+          "maxLuminance": 1
+        },
+        {
+          "index": 7,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-007.png",
+          "sha256": "18a8c2fab20e024136fce4462efa34e5296331c778a176499ec83e5f985e76a5",
+          "segment": 1,
+          "fraction": 0.75,
+          "inputSplatCount": 132170,
+          "projectedSplatCount": 132166,
+          "nonBackgroundPixelCount": 45691,
+          "maxLuminance": 1
+        },
+        {
+          "index": 8,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-008.png",
+          "sha256": "dcf31da42dd6f2aaebf5a656853a73b1488666b6793371b63fd401a3532f8629",
+          "segment": 1,
+          "fraction": 1,
+          "inputSplatCount": 132170,
+          "projectedSplatCount": 132165,
+          "nonBackgroundPixelCount": 44841,
+          "maxLuminance": 1
+        },
+        {
+          "index": 9,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-009.png",
+          "sha256": "e4f41ce939ec60e9bcf50a881d0eae08b0ddf0c8ff5065a56d2e10a90fb083b4",
+          "segment": 2,
+          "fraction": 0.25,
+          "inputSplatCount": 132209,
+          "projectedSplatCount": 132205,
+          "nonBackgroundPixelCount": 45715,
+          "maxLuminance": 1
+        },
+        {
+          "index": 10,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-010.png",
+          "sha256": "21ef6b8d20068b7bbc8545f4e3e0ab3fdc439651652c0356a642847b399a56cf",
+          "segment": 2,
+          "fraction": 0.5,
+          "inputSplatCount": 132209,
+          "projectedSplatCount": 132205,
+          "nonBackgroundPixelCount": 45783,
+          "maxLuminance": 1
+        },
+        {
+          "index": 11,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-011.png",
+          "sha256": "19c6ec8672331a0669af21b92b62626ec55c69e9e530947445343d82f9238365",
+          "segment": 2,
+          "fraction": 0.75,
+          "inputSplatCount": 132209,
+          "projectedSplatCount": 132205,
+          "nonBackgroundPixelCount": 45768,
+          "maxLuminance": 1
+        },
+        {
+          "index": 12,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-012.png",
+          "sha256": "ad1850cf5e55a5a0dca94f8fc6c14ecd9908f8c3c1fd3bdf06af5af95a339121",
+          "segment": 2,
+          "fraction": 1,
+          "inputSplatCount": 132209,
+          "projectedSplatCount": 132205,
+          "nonBackgroundPixelCount": 45240,
+          "maxLuminance": 1
+        }
+      ]
+    },
+    "control": {
+      "authority": "copied-current-zero-velocity-v0",
+      "frameHashes": [
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+        "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56"
+      ],
+      "frameEvidence": [
+        {
+          "index": 0,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-000.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 1,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-001.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 2,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-002.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 3,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-003.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 4,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-004.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 5,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-005.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 6,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-006.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 7,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-007.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 8,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-008.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 9,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-009.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 10,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-010.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 11,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-011.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 12,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-012.png",
+          "sha256": "7b45827541d3e563665d49911170a3afa1878e6da739075c6df4e2236814ab56",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112146,
+          "projectedSplatCount": 112146,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        }
+      ]
+    },
+    "predicted": {
+      "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+      "frameHashes": [
+        "a3752b03507e1e71791d9af6ce5ae7b2e418a6dd9563b88ee0be73e99401499a",
+        "0959afd59617e2aab382fd202f975076008b8dec2b832551d6643664640c6e09",
+        "1104487955f427e284045fec6e4300b6686020b919a3b41af7c4ec06f50a9445",
+        "d8a590b8532c247b59acc3b84cb7537e4ace255d685114df53a95f5b13449137",
+        "ecae523035448f435f910d68f8e949e87c38ede8568807a6c28c5d96c1b3c576",
+        "7e8475facb0fadbcf7f82dd0747c47b0376018c63ac011b535e36b5aa39def74",
+        "9e23c6facb778307f457c4e98bd1940102c0baae78d860928c9dd9ee001bb2b5",
+        "9dc0e92272a77f92cd14bd0c82d62de893fa922ca391c9c4e41db2f79edbdf57",
+        "3b752ca4163b75db04f7a5c1bc590f4739f7e256c0a46a23e431120c8df3efe7",
+        "6333623556ea4a709a30acd48bcde0aa673b8a79d16e59ab0a24039db7936938",
+        "01fe0742da2192523bd2cf48e4fabb61c730227c5f3bf48256ee59fbf9486190",
+        "d0a99fec4c5c7e85ec43cbbae4261ee5bf7ad94b6ede7efcc3eefe777f6bd76d",
+        "5247b8705a96872094f994ce5d0b2e44a6ca8c11cf27b1646f6d42035cf826d9"
+      ],
+      "frameEvidence": [
+        {
+          "index": 0,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-000.png",
+          "sha256": "a3752b03507e1e71791d9af6ce5ae7b2e418a6dd9563b88ee0be73e99401499a",
+          "segment": 0,
+          "fraction": 0,
+          "inputSplatCount": 112901,
+          "projectedSplatCount": 112901,
+          "nonBackgroundPixelCount": 44733,
+          "maxLuminance": 1
+        },
+        {
+          "index": 1,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-001.png",
+          "sha256": "0959afd59617e2aab382fd202f975076008b8dec2b832551d6643664640c6e09",
+          "segment": 0,
+          "fraction": 0.25,
+          "inputSplatCount": 112901,
+          "projectedSplatCount": 112901,
+          "nonBackgroundPixelCount": 44665,
+          "maxLuminance": 1
+        },
+        {
+          "index": 2,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-002.png",
+          "sha256": "1104487955f427e284045fec6e4300b6686020b919a3b41af7c4ec06f50a9445",
+          "segment": 0,
+          "fraction": 0.5,
+          "inputSplatCount": 112901,
+          "projectedSplatCount": 112901,
+          "nonBackgroundPixelCount": 44609,
+          "maxLuminance": 1
+        },
+        {
+          "index": 3,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-003.png",
+          "sha256": "d8a590b8532c247b59acc3b84cb7537e4ace255d685114df53a95f5b13449137",
+          "segment": 0,
+          "fraction": 0.75,
+          "inputSplatCount": 112901,
+          "projectedSplatCount": 112901,
+          "nonBackgroundPixelCount": 44465,
+          "maxLuminance": 1
+        },
+        {
+          "index": 4,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-004.png",
+          "sha256": "ecae523035448f435f910d68f8e949e87c38ede8568807a6c28c5d96c1b3c576",
+          "segment": 0,
+          "fraction": 1,
+          "inputSplatCount": 112901,
+          "projectedSplatCount": 112901,
+          "nonBackgroundPixelCount": 41705,
+          "maxLuminance": 1
+        },
+        {
+          "index": 5,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-005.png",
+          "sha256": "7e8475facb0fadbcf7f82dd0747c47b0376018c63ac011b535e36b5aa39def74",
+          "segment": 1,
+          "fraction": 0.25,
+          "inputSplatCount": 81748,
+          "projectedSplatCount": 81748,
+          "nonBackgroundPixelCount": 41699,
+          "maxLuminance": 1
+        },
+        {
+          "index": 6,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-006.png",
+          "sha256": "9e23c6facb778307f457c4e98bd1940102c0baae78d860928c9dd9ee001bb2b5",
+          "segment": 1,
+          "fraction": 0.5,
+          "inputSplatCount": 81748,
+          "projectedSplatCount": 81748,
+          "nonBackgroundPixelCount": 41670,
+          "maxLuminance": 1
+        },
+        {
+          "index": 7,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-007.png",
+          "sha256": "9dc0e92272a77f92cd14bd0c82d62de893fa922ca391c9c4e41db2f79edbdf57",
+          "segment": 1,
+          "fraction": 0.75,
+          "inputSplatCount": 81748,
+          "projectedSplatCount": 81748,
+          "nonBackgroundPixelCount": 41562,
+          "maxLuminance": 1
+        },
+        {
+          "index": 8,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-008.png",
+          "sha256": "3b752ca4163b75db04f7a5c1bc590f4739f7e256c0a46a23e431120c8df3efe7",
+          "segment": 1,
+          "fraction": 1,
+          "inputSplatCount": 81748,
+          "projectedSplatCount": 81748,
+          "nonBackgroundPixelCount": 39666,
+          "maxLuminance": 1
+        },
+        {
+          "index": 9,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-009.png",
+          "sha256": "6333623556ea4a709a30acd48bcde0aa673b8a79d16e59ab0a24039db7936938",
+          "segment": 2,
+          "fraction": 0.25,
+          "inputSplatCount": 71968,
+          "projectedSplatCount": 71968,
+          "nonBackgroundPixelCount": 39698,
+          "maxLuminance": 1
+        },
+        {
+          "index": 10,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-010.png",
+          "sha256": "01fe0742da2192523bd2cf48e4fabb61c730227c5f3bf48256ee59fbf9486190",
+          "segment": 2,
+          "fraction": 0.5,
+          "inputSplatCount": 71968,
+          "projectedSplatCount": 71968,
+          "nonBackgroundPixelCount": 39685,
+          "maxLuminance": 1
+        },
+        {
+          "index": 11,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-011.png",
+          "sha256": "d0a99fec4c5c7e85ec43cbbae4261ee5bf7ad94b6ede7efcc3eefe777f6bd76d",
+          "segment": 2,
+          "fraction": 0.75,
+          "inputSplatCount": 71968,
+          "projectedSplatCount": 71968,
+          "nonBackgroundPixelCount": 39596,
+          "maxLuminance": 1
+        },
+        {
+          "index": 12,
+          "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-012.png",
+          "sha256": "5247b8705a96872094f994ce5d0b2e44a6ca8c11cf27b1646f6d42035cf826d9",
+          "segment": 2,
+          "fraction": 1,
+          "inputSplatCount": 71968,
+          "projectedSplatCount": 71968,
+          "nonBackgroundPixelCount": 38229,
+          "maxLuminance": 1
+        }
+      ]
+    }
+  },
+  "partialFlowDebug": {
+    "authority": "display-only-support-flow-debug-mix-v0",
+    "requestedGain": 0.625,
+    "effectiveGain": 0.625,
+    "roles": [
+      "reference",
+      "control",
+      "predicted"
+    ],
+    "frameCount": 13,
+    "effectiveFps": 12,
+    "frameHashes": {
+      "reference": [
+        "3e61605faa66e4d4af853e82dc90bf50c0c215e98c55d09c5ff2f0dbe13c86aa",
+        "228274d4fcacfaae048acf0045db24fc9a4781f39541087319f07aea40c63779",
+        "0fec156bc74c0e9103a113f0c532da373d89bf8cfd7ac42d750aaa9d7b9cc5d6",
+        "dfd6a21f118dfd3eed076f0565029c8cc23baf55f1a0451dcfeef2050544f077",
+        "153a30ce9374ae55008ac657dec5aa84cebb184c98f2e738d30d9b059f4d1bb6",
+        "0a9eb63ad721bf1a7f3f4586c79f5816330730d3be7719cdc0b678b4a4db2df8",
+        "4f4bc6ccd36e709d18f5cae52075bcd98fb86917fdfe1ed3a59e302c7ee9c7d4",
+        "2805d3d054dbb89861babc4c731bff50b805beba13e42c85d968b27de0edda2b",
+        "06be4afaaf90a06888345169bcbd7421372d953641ee9e8b962c5d3ed568ba2c",
+        "805e09f21a9ebe72af5294727ae4e74e6dddcec45462b3eecb4b23d43cdd6c01",
+        "b177fa0c9d1a615d0953eb5fb966e8ba8190a8250129c26a1b6ded27dc6ed2de",
+        "83a933694a3e96e9a7296be8f637fde9a1b817b18eb1975c71a37e9ec583b86b",
+        "ddf0b7ffbfd68ebcbb7c0eebf131ea46b817ce9df2233f8d7667ae0f416fd33e"
+      ],
+      "control": [
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140",
+        "e96c829fbd043f1fa0042ce4d3321f77372da2c6028aeb72cdbf0432e30e9140"
+      ],
+      "predicted": [
+        "648b761e1856675dc50cdd7e5497f9561412fce8003f72ddbb5f0fbcc884efa8",
+        "36acabdd471ea3a04f10b1e97df2b80960580c77dda287e71139402c31b55c1b",
+        "61dc90a8926c2052177cef43582c689abdb0b1a5451a708c44b3692f482a9fa7",
+        "af32cc2d33a4214da11c61abcfa48eb837a9bd3bdc01784e5bea95d122024ead",
+        "48aef13ef051587db81c3c3acef0877510296c195671220ec73c312b3ca839ea",
+        "64b3a31f2d0dc0617b062750df01e8fb79a36bbe13794e7983ab89e773bd9ed2",
+        "7a7c7ece619a1d6227468b613b291e1292639cf3f9e4086ad4150dc6ba14f133",
+        "6eff65473bd8039e6ffd94b67b71ca7997d351abf70d556250600c462e2258e2",
+        "d7d9fbf92b31c50755874a1ae9cbd4c152582392331197049db6cdd480db35af",
+        "9f90bd0d8256f1be1ee80c781378ec6f0abecbc4bdf374c3cbd781a161413cfd",
+        "c451c91053a854f05fd6c94338edb7603e5136b5afe9b0b1bdc7060d1118b0a5",
+        "f29dfc7f7ba32772343b6c2e4dc0243e3876930859f8c987a7fce9af5642b6b7",
+        "4c7f0dad499b6f47a6086b98250c99614982be980c18378a3349b74d96757ecb"
+      ]
+    },
+    "stateMutation": false
+  },
+  "discreteOffsets": [
+    {
+      "step": 0,
+      "label": "+0 steps (0 ms)",
+      "referenceFrameId": "frame-6"
+    },
+    {
+      "step": 1,
+      "label": "+1 step (160 ms)",
+      "referenceFrameId": "frame-7"
+    },
+    {
+      "step": 2,
+      "label": "+2 steps (320 ms)",
+      "referenceFrameId": "frame-8"
+    },
+    {
+      "step": 3,
+      "label": "+3 steps (480 ms)",
+      "referenceFrameId": "frame-9"
+    }
+  ],
+  "correspondence": {
+    "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+    "referenceSegments": [
+      {
+        "segment": 0,
+        "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+        "stableCount": 55583,
+        "transportedCount": 34096,
+        "birthCount": 21548,
+        "deathCount": 22467,
+        "ambiguityCount": 0
+      },
+      {
+        "segment": 1,
+        "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+        "stableCount": 55993,
+        "transportedCount": 33377,
+        "birthCount": 20943,
+        "deathCount": 21857,
+        "ambiguityCount": 0
+      },
+      {
+        "segment": 2,
+        "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+        "stableCount": 51757,
+        "transportedCount": 36897,
+        "birthCount": 21896,
+        "deathCount": 21659,
+        "ambiguityCount": 0
+      }
+    ],
+    "predictedSegments": [
+      {
+        "segment": 0,
+        "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+        "stableCount": 53814,
+        "transportedCount": 26134,
+        "birthCount": 755,
+        "deathCount": 32198,
+        "ambiguityCount": 18
+      },
+      {
+        "segment": 1,
+        "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+        "stableCount": 49582,
+        "transportedCount": 19637,
+        "birthCount": 1045,
+        "deathCount": 11484,
+        "ambiguityCount": 73
+      },
+      {
+        "segment": 2,
+        "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+        "stableCount": 46912,
+        "transportedCount": 15778,
+        "birthCount": 1704,
+        "deathCount": 7574,
+        "ambiguityCount": 200
+      }
+    ]
+  },
+  "render": {
+    "authority": "isolated-cpu-projected-boundary-splat-raster-v0",
+    "width": 320,
+    "height": 240,
+    "gridStep": 0.0125
+  },
+  "artifacts": {
+    "beautyComparison": {
+      "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty-comparison.mp4",
+      "bytes": 89601,
+      "sha256": "7ce441315d4a0e26419e4c6d3b7ddbdc71dd71dd03e80cd0daac8c1d8706968d",
+      "probe": {
+        "width": 960,
+        "height": 240,
+        "fps": 12,
+        "frameCount": 13,
+        "duration": 1.083333
+      },
+      "command": [
+        "ffmpeg",
+        "-y",
+        "-framerate",
+        "12",
+        "-i",
+        "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/reference/frame-%03d.png",
+        "-framerate",
+        "12",
+        "-i",
+        "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/control/frame-%03d.png",
+        "-framerate",
+        "12",
+        "-i",
+        "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty/predicted/frame-%03d.png",
+        "-filter_complex",
+        "[0:v][1:v][2:v]hstack=inputs=3[out]",
+        "-map",
+        "[out]",
+        "-frames:v",
+        "13",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "slow",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/beauty-comparison.mp4"
+      ]
+    },
+    "partialDebugComparison": {
+      "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/partial-flow-debug-comparison.mp4",
+      "bytes": 105878,
+      "sha256": "8e8fb2df175de0f98515b644ab41d63e655ffc189ad164780ef9b65b3d31c125",
+      "probe": {
+        "width": 960,
+        "height": 240,
+        "fps": 12,
+        "frameCount": 13,
+        "duration": 1.083333
+      },
+      "command": [
+        "ffmpeg",
+        "-y",
+        "-framerate",
+        "12",
+        "-i",
+        "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/partial-debug/reference/frame-%03d.png",
+        "-framerate",
+        "12",
+        "-i",
+        "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/partial-debug/control/frame-%03d.png",
+        "-framerate",
+        "12",
+        "-i",
+        "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/partial-debug/predicted/frame-%03d.png",
+        "-filter_complex",
+        "[0:v][1:v][2:v]hstack=inputs=3[out]",
+        "-map",
+        "[out]",
+        "-frames:v",
+        "13",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "slow",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-motion-0713/partial-flow-debug-comparison.mp4"
+      ]
+    }
+  },
+  "claimBoundary": "Motion plausibility and held-out support behavior under an isolated recurrent local-grid predictor; this does not establish hero-fire fidelity, analytical raymarch agreement, live runtime integration, or long-horizon stability."
+}

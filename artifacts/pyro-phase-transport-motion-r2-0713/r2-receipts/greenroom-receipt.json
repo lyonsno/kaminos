@@ -1,0 +1,33 @@
+{
+  "job_id": "5665109f63a0",
+  "job_type": "kaminos_phase_transport_mlx_train",
+  "status": "done",
+  "input_path": "/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-transport-full-r2-0713",
+  "effective_route": "/private/tmp/kaminos-mlx-residual-venv/bin/python -u boundary-splat-phase-transport-mlx.py --manifest /tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json --out-dir /private/tmp/kaminos-phase-transport-full-r2-0713 --holdout-start 6 --holdout-steps 3 --grid-size 160 --hidden-size 64 --epochs 8 --batch-size 4096 --learning-rate 0.0015 --weight-decay 0.0001 --seed 713",
+  "effective_cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "batch_size": "4096",
+    "epochs": "8",
+    "grid_size": "160",
+    "hidden_size": "64",
+    "holdout_start": "6",
+    "holdout_steps": "3",
+    "learning_rate": "0.0015",
+    "seed": "713",
+    "weight_decay": "0.0001"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1783993072.512223,
+  "finished_at": 1783994490.582863,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}

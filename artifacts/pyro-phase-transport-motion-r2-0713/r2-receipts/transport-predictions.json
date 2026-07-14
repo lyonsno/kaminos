@@ -1,0 +1,201 @@
+{
+  "claimBoundary": "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration",
+  "frames": [
+    {
+      "candidates": {
+        "bytes": 7177344,
+        "count": 112146,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/prediction-step-00.features.f32",
+        "sha256": "81f7046776e8bf2f90ed83eb0da549f0c74e76f44e7ae8b70376a7710f1fa03a",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-6",
+      "referenceFrameId": "frame-6",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 5383008,
+        "count": 112146,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/prediction-step-00.splats.f32",
+        "sha256": "b4544142595cc3399ecee7a6674c3fd4d17e9bcd5b4d8948fcabd0e4c2607385",
+        "strideFloats": 12
+      },
+      "step": 0
+    },
+    {
+      "candidates": {
+        "bytes": 7187520,
+        "count": 112305,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/prediction-step-01.features.f32",
+        "sha256": "f63d78268b0b75bd76da79a451331a41456ab2499616801296b95dfde61376a2",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-6",
+      "referenceFrameId": "frame-7",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 5390640,
+        "count": 112305,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/prediction-step-01.splats.f32",
+        "sha256": "8ddecaca7ee227d37277a4114038a9d7ac9a2e25f389ebaedac52bfb28d23c49",
+        "strideFloats": 12
+      },
+      "step": 1
+    },
+    {
+      "candidates": {
+        "bytes": 7197696,
+        "count": 112464,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/prediction-step-02.features.f32",
+        "sha256": "b14de1338878d5387a4daa170adc71b0e2997ef29fac072ea7f2501b7a50885e",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-6",
+      "referenceFrameId": "frame-8",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 5398272,
+        "count": 112464,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/prediction-step-02.splats.f32",
+        "sha256": "3413dd15315ff9579e7ac897b8c23921e0b5abf75896a4217ad3aa0bd399c14f",
+        "strideFloats": 12
+      },
+      "step": 2
+    },
+    {
+      "candidates": {
+        "bytes": 7207872,
+        "count": 112623,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/prediction-step-03.features.f32",
+        "sha256": "cf1eed6ce2b6f5e678564ebfe5106c01257ad2ada56fc486e8dc23c0a8371e89",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-6",
+      "referenceFrameId": "frame-9",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 5405904,
+        "count": 112623,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/prediction-step-03.splats.f32",
+        "sha256": "949cdc8dafd1cbdd010647966c154a4944fbe771583b9a52ae7f793f017d57c1",
+        "strideFloats": 12
+      },
+      "step": 3
+    }
+  ],
+  "manifest": {
+    "bytes": 102560,
+    "path": "/private/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+    "sha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534"
+  },
+  "model": {
+    "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/transport-model.json",
+    "schema": "kaminos-boundary-splat-phase-transport-model-v0",
+    "sha256": "785ce32571aab2d5fe66b746f375bafcd57c85d5ab88442112fc3396b7af0747"
+  },
+  "recurrent": [
+    {
+      "birthCandidateCount": 336430,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 2802,
+      "deathCount": 29503,
+      "predictedCount": 112305,
+      "selectedBirthCount": 32464,
+      "sourceCount": 112146,
+      "stableCarrierCount": 53814,
+      "step": 1,
+      "targetSupportBudget": 112305,
+      "thresholdQualifiedBirthCount": 994,
+      "transportedCarrierCount": 26027
+    },
+    {
+      "birthCandidateCount": 323552,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 3206,
+      "deathCount": 19940,
+      "predictedCount": 112464,
+      "selectedBirthCount": 23305,
+      "sourceCount": 112305,
+      "stableCarrierCount": 63371,
+      "step": 2,
+      "targetSupportBudget": 112464,
+      "thresholdQualifiedBirthCount": 1090,
+      "transportedCarrierCount": 25788
+    },
+    {
+      "birthCandidateCount": 333874,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 3549,
+      "deathCount": 15322,
+      "predictedCount": 112623,
+      "selectedBirthCount": 19030,
+      "sourceCount": 112464,
+      "stableCarrierCount": 66423,
+      "step": 3,
+      "targetSupportBudget": 112623,
+      "thresholdQualifiedBirthCount": 2246,
+      "transportedCarrierCount": 27170
+    }
+  ],
+  "route": {
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "effectiveRunner": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+    "fallbackReason": null
+  },
+  "schema": "kaminos-boundary-splat-phase-transport-predictions-v0",
+  "status": "completed",
+  "supportMetrics": [
+    {
+      "beatsIdentity": true,
+      "exactCount": 111227,
+      "identityIoU": 0.3312652720662733,
+      "predictionCount": 112305,
+      "predictionIoU": 0.3639231431029538,
+      "predictionToIdentityRatio": 1.0985852541468546,
+      "step": 1
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 110313,
+      "identityIoU": 0.23660468606687235,
+      "predictionCount": 112464,
+      "predictionIoU": 0.2692544354425187,
+      "predictionToIdentityRatio": 1.1379928264244878,
+      "step": 2
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 110550,
+      "identityIoU": 0.1904675355222221,
+      "predictionCount": 112623,
+      "predictionIoU": 0.22013132213286388,
+      "predictionToIdentityRatio": 1.1557419563880527,
+      "step": 3
+    }
+  ],
+  "temporal": {
+    "authority": "recurrent-one-controlled-step-local-grid-continuation-v0",
+    "controlledStepDeltaMs": 160,
+    "heldoutReferenceFrameIds": [
+      "frame-6",
+      "frame-7",
+      "frame-8",
+      "frame-9"
+    ],
+    "sourceFrameId": "frame-6",
+    "trainingFrameIdsExcluded": [
+      "frame-6",
+      "frame-7",
+      "frame-8",
+      "frame-9"
+    ]
+  }
+}
