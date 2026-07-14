@@ -160,6 +160,203 @@ export function buildBoundedTransportCorrespondence(sourceSites, targetSites, op
   };
 }
 
+function finitePositiveScale(values, length, label) {
+  const scale = finiteVector(values ?? Array(length).fill(1), length, label);
+  if (scale.some(value => value <= 0)) throw new Error(`${label} must be positive`);
+  return scale;
+}
+
+function normalizedStateMse(source, target, candidateScale, splatScale) {
+  let squared = 0;
+  let count = 0;
+  for (let index = 0; index < 16; index += 1) {
+    const delta = (source.candidate[index] - target.candidate[index]) / candidateScale[index];
+    squared += delta * delta;
+    count += 1;
+  }
+  for (let index = 3; index < 12; index += 1) {
+    const delta = (source.splat[index] - target.splat[index]) / splatScale[index - 3];
+    squared += delta * delta;
+    count += 1;
+  }
+  return squared / count;
+}
+
+export function partitionMotionCohorts(sourceSites, targetSites, options = {}) {
+  const gridStep = Number(options.gridStep);
+  const stableChangeBinCount = Math.floor(Number(options.stableChangeBinCount ?? 4));
+  if (!Number.isInteger(stableChangeBinCount) || stableChangeBinCount < 2) {
+    throw new Error('stable change bin count must be an integer of at least two');
+  }
+  const candidateScale = finitePositiveScale(options.candidateScale, 16, 'candidate scale');
+  const splatScale = finitePositiveScale(options.splatScale, 9, 'splat scale');
+  const source = validateSites(sourceSites, 'source');
+  const target = validateSites(targetSites, 'target');
+  const correspondence = buildBoundedTransportCorrespondence(sourceSites, targetSites, {
+    gridStep,
+    radiusCells: options.radiusCells ?? 1,
+  });
+  const stableRows = correspondence.matches
+    .filter(match => match.kind === 'stable')
+    .map(match => ({
+      ...match,
+      changeScore: Math.sqrt(normalizedStateMse(
+        source[match.sourceIndex], target[match.targetIndex], candidateScale, splatScale,
+      )),
+      targetKey: target[match.targetIndex].key,
+    }))
+    .sort((left, right) => left.changeScore - right.changeScore || left.targetKey.localeCompare(right.targetKey));
+  const targetCohorts = Array.from({ length: stableChangeBinCount }, (_, index) => ({
+    id: `stable-q${index + 1}`,
+    semantics: `stable world-position sites in exact state-change rank bin ${index + 1}/${stableChangeBinCount}`,
+    targetIndices: [],
+    sourceIndices: [],
+    changeScores: [],
+  }));
+  for (let rank = 0; rank < stableRows.length; rank += 1) {
+    const row = stableRows[rank];
+    const bin = Math.min(stableChangeBinCount - 1, Math.floor(rank * stableChangeBinCount / stableRows.length));
+    targetCohorts[bin].targetIndices.push(row.targetIndex);
+    targetCohorts[bin].sourceIndices.push(row.sourceIndex);
+    targetCohorts[bin].changeScores.push(row.changeScore);
+  }
+  const transported = correspondence.matches.filter(match => match.kind === 'transported');
+  targetCohorts.push({
+    id: 'transported',
+    semantics: 'exact target sites assigned a source carrier displaced within the bounded local grid',
+    targetIndices: transported.map(match => match.targetIndex),
+    sourceIndices: transported.map(match => match.sourceIndex),
+    changeScores: transported.map(match => match.distanceCells),
+  });
+  targetCohorts.push({
+    id: 'birth',
+    semantics: 'exact target support with no assigned source carrier inside the bounded local grid',
+    targetIndices: [...correspondence.births],
+    sourceIndices: [],
+    changeScores: [],
+  });
+  for (const cohort of targetCohorts) {
+    cohort.count = cohort.targetIndices.length;
+    cohort.minimumChangeScore = cohort.changeScores.length
+      ? cohort.changeScores.reduce((minimum, value) => Math.min(minimum, value), Infinity)
+      : null;
+    cohort.maximumChangeScore = cohort.changeScores.length
+      ? cohort.changeScores.reduce((maximum, value) => Math.max(maximum, value), -Infinity)
+      : null;
+    delete cohort.changeScores;
+  }
+  const targetIndexToCohort = Array(target.length).fill(null);
+  for (const cohort of targetCohorts) {
+    for (const targetIndex of cohort.targetIndices) {
+      if (targetIndexToCohort[targetIndex] !== null) throw new Error('motion target cohorts overlap');
+      targetIndexToCohort[targetIndex] = cohort.id;
+    }
+  }
+  if (targetIndexToCohort.some(value => value === null)) throw new Error('motion target cohorts are incomplete');
+  const firstMotionBin = Math.floor(stableChangeBinCount / 2) + 1;
+  return {
+    authority: 'exact-adjacent-state-change-and-bounded-transport-cohorts-v0',
+    correspondenceAuthority: correspondence.authority,
+    gridStep,
+    stableChangeBinCount,
+    normalization: {
+      authority: 'caller-declared-positive-channel-scale-v0',
+      candidateScale,
+      splatScale,
+    },
+    targetCohorts,
+    targetIndexToCohort,
+    targetKeys: target.map(row => row.key),
+    motionBearingCohortIds: [
+      ...Array.from(
+        { length: stableChangeBinCount - firstMotionBin + 1 },
+        (_, index) => `stable-q${firstMotionBin + index}`,
+      ),
+      'transported',
+      'birth',
+    ],
+    death: {
+      id: 'death',
+      semantics: 'exact source support with no assigned target inside the bounded local grid',
+      sourceIndices: [...correspondence.deaths],
+      count: correspondence.deaths.length,
+    },
+    counts: {
+      source: source.length,
+      target: target.length,
+      stable: correspondence.stableCount,
+      transported: correspondence.transportedCount,
+      birth: correspondence.births.length,
+      death: correspondence.deaths.length,
+    },
+  };
+}
+
+function evaluateTargetCohort(cohort, target, candidate, candidateScale, splatScale) {
+  const byKey = new Map(candidate.map(row => [row.key, row]));
+  let squared = 0;
+  let matched = 0;
+  for (const targetIndex of cohort.targetIndices) {
+    const targetRow = target[targetIndex];
+    const candidateRow = byKey.get(targetRow.key);
+    if (!candidateRow) continue;
+    squared += normalizedStateMse(candidateRow, targetRow, candidateScale, splatScale);
+    matched += 1;
+  }
+  return {
+    supportCount: matched,
+    supportRecall: matched / Math.max(1, cohort.count),
+    meanStateMse: matched ? squared / matched : null,
+  };
+}
+
+function cohortBeatsControl(prediction, control) {
+  if (prediction.supportRecall !== control.supportRecall) return prediction.supportRecall > control.supportRecall;
+  if (prediction.meanStateMse === null) return false;
+  if (control.meanStateMse === null) return true;
+  return prediction.meanStateMse < control.meanStateMse;
+}
+
+export function evaluateMotionCohorts(partition, sourceSites, targetSites, predictionSites, controlSites) {
+  if (partition?.authority !== 'exact-adjacent-state-change-and-bounded-transport-cohorts-v0') {
+    throw new Error('motion cohort partition authority mismatch');
+  }
+  validateSites(sourceSites, 'source');
+  const target = validateSites(targetSites, 'target');
+  const prediction = validateSites(predictionSites, 'prediction');
+  const control = validateSites(controlSites, 'control');
+  const candidateScale = finitePositiveScale(partition.normalization?.candidateScale, 16, 'candidate scale');
+  const splatScale = finitePositiveScale(partition.normalization?.splatScale, 9, 'splat scale');
+  const cohorts = {};
+  for (const cohort of partition.targetCohorts) {
+    const predictionMetrics = evaluateTargetCohort(cohort, target, prediction, candidateScale, splatScale);
+    const controlMetrics = evaluateTargetCohort(cohort, target, control, candidateScale, splatScale);
+    cohorts[cohort.id] = {
+      count: cohort.count,
+      prediction: predictionMetrics,
+      control: controlMetrics,
+      predictionBeatsControl: cohortBeatsControl(predictionMetrics, controlMetrics),
+    };
+  }
+  const evaluatedMotionCohorts = partition.motionBearingCohortIds.filter(id => cohorts[id]?.count > 0);
+  const predictionBeatsControlOnMotionBearingCohorts = evaluatedMotionCohorts.length > 0
+    && evaluatedMotionCohorts.every(id => cohorts[id].predictionBeatsControl);
+  return {
+    authority: 'paired-exact-key-motion-cohort-prediction-versus-control-v0',
+    cohorts,
+    death: partition.death,
+    claimGate: {
+      authority: 'motion-bearing-cohorts-cannot-be-closed-by-aggregate-support-v0',
+      evaluatedMotionCohorts,
+      predictionBeatsControlOnMotionBearingCohorts,
+      aggregateSupportCanCloseClaim: false,
+      reason: predictionBeatsControlOnMotionBearingCohorts
+        ? 'prediction beats control on every populated motion-bearing cohort; visual rollout evidence remains required'
+        : 'aggregate support cannot close the claim because one or more motion-bearing cohorts fail to beat control',
+    },
+  };
+}
+
 export function interpolateTransportRows(sourceSites, targetSites, matches, fraction) {
   const amount = Number(fraction);
   if (!Number.isFinite(amount) || amount < 0 || amount > 1) {

@@ -268,7 +268,7 @@ async function* streamControlSequence(sourceDoc, splatAuthority, frameCount, deb
   for (let index = 0; index < frameCount; index += 1) yield { segment: 0, fraction: 0, rows };
 }
 
-function addBitmapLabel(rendered, label) {
+export function addBitmapLabel(rendered, label) {
   const rgba = Buffer.from(rendered.rgba);
   const barHeight = Math.min(12, rendered.height);
   for (let y = 0; y < barHeight; y += 1) {
