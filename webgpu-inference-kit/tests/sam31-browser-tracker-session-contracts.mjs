@@ -115,6 +115,9 @@ for (const [name, value] of Object.entries({
   packageRuntime,
   executionContext: { adapter: {}, device, errors: [] },
   executeInvocation: async () => completeInvocationResult(),
+  modelPackageRuntime: {},
+  callerInvocationRuntime: {},
+  decodeImage: async () => ({ rgba: new Uint8Array(4), width: 1, height: 1 }),
 })) {
   await assert.rejects(
     () => kit.createSam31BrowserTrackerSession({ packageRoot: '/fake-root.json', cache: {}, [name]: value }),

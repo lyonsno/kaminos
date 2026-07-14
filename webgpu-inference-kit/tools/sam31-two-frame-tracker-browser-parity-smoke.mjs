@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { verifySam31TwoFramePacketAuthority, verifySam31TwoImageIngressPacketAuthority } from '../src/sam31-packet-artifact.js';
-import { resolveSam3BrowserPackageManifestSync } from '../src/sam-browser-package-manifest.js';
+import { canonicalSam3IdentityJson, resolveSam3BrowserPackageManifestSync } from '../src/sam-browser-package-manifest.js';
 import { SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT } from '../src/sam31-browser-tracker-package.js';
 
 const args = new Map();
@@ -15,7 +15,12 @@ const root = resolve(new URL('..', import.meta.url).pathname);
 const packetDir = resolve(args.get('--packet-dir') || mkdtempSync(join(tmpdir(), 'kaminos-sam31-two-frame-')));
 const packageDirs = [args.get('--package-dir'), args.get('--second-package-dir')].filter(Boolean).map(path => resolve(path));
 const packageMode = packageDirs.length > 0;
-const packageRootFiles = [args.get('--package-root') || 'tracker-root.json', args.get('--second-package-root') || 'tracker-runtime-root.json'];
+const callerInputs = args.get('--caller-inputs') === '1';
+if (callerInputs && packageDirs.length !== 2) throw new Error('--caller-inputs requires exactly two package directories');
+const packageRootFiles = [
+  args.get('--package-root') || (callerInputs ? 'tracker-model-root.json' : 'tracker-root.json'),
+  args.get('--second-package-root') || (callerInputs ? 'tracker-model-root.json' : 'tracker-runtime-root.json'),
+];
 const reportPath = resolve(args.get('--report') || '/tmp/kaminos-sam31-two-frame-tracker-webgpu.json');
 const screenshotPath = resolve(args.get('--screenshot') || '/tmp/kaminos-sam31-two-frame-tracker-webgpu.png');
 const debugPort = Number(args.get('--debug-port') || 9576);
@@ -28,7 +33,9 @@ const verifyOnly = args.get('--verify-only') === '1';
 const episodeMode = packageMode ? 'two-image' : args.get('--episode-mode') || 'propagation-decoder';
 if (!['propagation-decoder', 'mask-conditioning', 'two-image'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
 const isTwoImage = episodeMode === 'two-image';
-const REPORT_SCHEMA = packageMode
+const REPORT_SCHEMA = callerInputs
+  ? 'kaminos.sam31-browser-tracker-caller-input.browser-smoke.v0'
+  : packageMode
   ? 'kaminos.sam31-browser-tracker-package.browser-smoke.v0'
   : isTwoImage
   ? 'kaminos.sam31-two-image-tracker.browser-parity-smoke.v0'
@@ -68,9 +75,53 @@ let pixelCheck = null;
 let viewportLayout = null;
 let packetAuthority = null;
 let packageAuthority = null;
+const callerRequestEvidence = {
+  schema: 'kaminos.sam31-browser-tracker-caller-request-evidence.v0',
+  callerInputMode: callerInputs,
+  callerRequests: [],
+  packageRequests: [],
+  dynamicPackageRequests: [],
+};
 
 const delay = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
 function contentType(path) { const extension = extname(path); return extension === '.html' ? 'text/html; charset=utf-8' : extension === '.js' || extension === '.mjs' ? 'text/javascript; charset=utf-8' : extension === '.json' ? 'application/json; charset=utf-8' : extension === '.png' ? 'image/png' : 'application/octet-stream'; }
+
+function sha256File(path) {
+  return `sha256:${createHash('sha256').update(readFileSync(path)).digest('hex')}`;
+}
+
+function loadCallerInput(index) {
+  const directory = packageDirs[index];
+  const invocation = JSON.parse(readFileSync(join(directory, 'sam31-invocation.json'), 'utf8'));
+  const sourceRoot = resolve(args.get('--source-root') || '/Users/noahlyons/dev/sam3');
+  const framePaths = index === 0
+    ? [resolve(args.get('--caller-frame-0') || join(sourceRoot, 'assets/videos/0001/0.jpg')), resolve(args.get('--caller-frame-1') || join(sourceRoot, 'assets/videos/0001/1.jpg'))]
+    : [resolve(args.get('--second-caller-frame-0') || join(sourceRoot, 'assets/videos/0001/2.jpg')), resolve(args.get('--second-caller-frame-1') || join(sourceRoot, 'assets/videos/0001/3.jpg'))];
+  const maskPath = resolve(directory, invocation.initialMask.file);
+  for (const path of [...framePaths, maskPath]) if (!existsSync(path)) throw new Error(`caller input missing: ${path}`);
+  const authority = {
+    encodedSourceImageSha256: framePaths.map(sha256File),
+    rgbaSourceImageSha256: invocation.sourceImages.map(image => image.rgbaSha256),
+    initialMaskSha256: sha256File(maskPath),
+  };
+  if (JSON.stringify(authority.encodedSourceImageSha256) !== JSON.stringify(invocation.sourceImages.map(image => image.originalSha256))) {
+    throw new Error(`caller ${index} encoded images do not match the authenticated ingress authority`);
+  }
+  if (authority.initialMaskSha256 !== invocation.initialMask.sha256) throw new Error(`caller ${index} mask does not match invocation authority`);
+  return {
+    framePaths,
+    maskPath,
+    metadata: {
+      schema: 'kaminos.sam31-browser-tracker-caller-preload.v0',
+      frameUrls: [`/caller/${index}/frame-0`, `/caller/${index}/frame-1`],
+      maskUrl: `/caller/${index}/mask`,
+      session: invocation.session,
+      authority,
+    },
+  };
+}
+
+const callerInputEntries = callerInputs ? packageDirs.map((_, index) => loadCallerInput(index)) : [];
 
 function writeReport(extra = {}) {
   const value = {
@@ -89,6 +140,7 @@ function writeReport(extra = {}) {
     packetTools,
     packetAuthority,
     packageAuthority,
+    callerRequestEvidence,
     browserPacketAuthority: lastState?.packetAuthority || null,
     reportPath,
     screenshot: screenshotWritten ? screenshotPath : null,
@@ -163,7 +215,35 @@ function verifyPackageAuthority() {
     const rootPath = resolve(directory, rootFile);
     if (rootPath !== directory && !rootPath.startsWith(`${directory}/`)) throw new Error(`package root escapes package directory: ${rootFile}`);
     if (!existsSync(rootPath)) throw new Error(`package root missing: ${rootPath}`);
-    const resolution = resolveSam3BrowserPackageManifestSync(JSON.parse(readFileSync(rootPath, 'utf8')), {
+    const rootManifest = JSON.parse(readFileSync(rootPath, 'utf8'));
+    if (callerInputs) {
+      if (Object.hasOwn(rootManifest, 'invocation') || Object.hasOwn(rootManifest, 'verification')) {
+        throw new Error(`caller model root ${rootFile} contains invocation authority`);
+      }
+      const ref = rootManifest.modelPackage;
+      const modelPackagePath = resolve(directory, ref?.file || '');
+      if (!ref || modelPackagePath === directory || !modelPackagePath.startsWith(`${directory}/`) || !existsSync(modelPackagePath)) {
+        throw new Error(`caller model root ${rootFile} has an invalid model-package reference`);
+      }
+      const modelPackageText = readFileSync(modelPackagePath, 'utf8');
+      const effectiveSha256 = `sha256:${createHash('sha256').update(modelPackageText).digest('hex')}`;
+      if (effectiveSha256 !== ref.sha256) throw new Error(`caller model-package hash mismatch: ${effectiveSha256} !== ${ref.sha256}`);
+      const modelPackage = JSON.parse(modelPackageText);
+      const identityContract = Object.fromEntries(SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.modelPackageFields
+        .filter(field => field !== 'packageId' && Object.hasOwn(modelPackage, field))
+        .map(field => [field, modelPackage[field]]));
+      const expectedPackageId = `${SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.modelPackagePrefix}sha256:${createHash('sha256').update(canonicalSam3IdentityJson(identityContract)).digest('hex')}`;
+      if (modelPackage.packageId !== expectedPackageId) throw new Error(`caller model-package identity mismatch: ${modelPackage.packageId} !== ${expectedPackageId}`);
+      return {
+        directory,
+        rootFile,
+        packageId: modelPackage.packageId,
+        modelOnly: true,
+        modelPackage: { ...ref, effectiveSha256 },
+        staticArtifactCount: modelPackage.staticArtifacts.length,
+      };
+    }
+    const resolution = resolveSam3BrowserPackageManifestSync(rootManifest, {
       contract: SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
       readArtifactText: file => {
         const path = resolve(directory, file);
@@ -224,9 +304,31 @@ function startServer() {
     try {
       const parsed = new URL(request.url, url);
       const packageMatch = parsed.pathname.match(/^\/package\/(\d+)\/(.+)$/);
+      const callerMatch = parsed.pathname.match(/^\/caller\/(\d+)\/(metadata\.json|frame-0|frame-1|mask)$/);
       const match = parsed.pathname.match(/^\/oracle\/(ingress|decoder|memory|temporal|episode|pointer)\/(.+)$/);
       const packageIndex = packageMatch ? Number(packageMatch[1]) : -1;
       if (packageMatch && !packageDirs[packageIndex]) { response.writeHead(404); response.end(`missing package ${packageIndex}`); return; }
+      if (packageMatch) {
+        callerRequestEvidence.packageRequests.push(parsed.pathname);
+        if (/\/(?:invocation|verification)\//.test(parsed.pathname) || /sam31-(?:invocation|verification)\.json$/.test(parsed.pathname)) {
+          callerRequestEvidence.dynamicPackageRequests.push(parsed.pathname);
+        }
+      }
+      if (callerMatch) {
+        const index = Number(callerMatch[1]);
+        const entry = callerInputEntries[index];
+        if (!entry) { response.writeHead(404); response.end(`missing caller input ${index}`); return; }
+        callerRequestEvidence.callerRequests.push(parsed.pathname);
+        if (callerMatch[2] === 'metadata.json') {
+          response.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+          response.end(JSON.stringify(entry.metadata));
+          return;
+        }
+        const callerPath = callerMatch[2] === 'frame-0' ? entry.framePaths[0] : callerMatch[2] === 'frame-1' ? entry.framePaths[1] : entry.maskPath;
+        response.writeHead(200, { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' });
+        response.end(readFileSync(callerPath));
+        return;
+      }
       const base = packageMatch ? packageDirs[packageIndex] : match ? packetDirs[match[1]] : root;
       const relative = packageMatch ? packageMatch[2] : match ? match[2] : parsed.pathname.slice(1);
       const path = resolve(base, relative || 'smokes/sam31-two-frame-tracker-parity.html');
@@ -299,6 +401,7 @@ async function main() {
     const browserParams = new URLSearchParams({ packetSource: packageMode ? 'browser-package' : reusePacket ? 'caller-provided-existing' : 'generated', episodeMode });
     if (packageMode) {
       browserParams.set('staticBacking', staticBacking);
+      if (callerInputs) browserParams.set('callerInput', '1');
       packageDirs.forEach((_, index) => browserParams.append('packageRoot', `/package/${index}/${packageRootFiles[index]}`));
     } else {
       for (const name of Object.keys(packetTools)) browserParams.set(`expected-${name}-manifest-sha256`, expectedManifestSha256[name]);
@@ -328,6 +431,21 @@ async function main() {
       await delay(250);
     }
     if (lastState?.status !== 'passed') throw new Error(lastState?.error || `browser ended in ${lastState?.status}`);
+    if (callerInputs) {
+      const expectedCallerRequests = callerInputEntries.flatMap((_, index) => [
+        `/caller/${index}/metadata.json`,
+        `/caller/${index}/frame-0`,
+        `/caller/${index}/frame-1`,
+        `/caller/${index}/mask`,
+      ]);
+      callerRequestEvidence.expectedCallerRequests = expectedCallerRequests;
+      callerRequestEvidence.callerPreloadsPassed = callerRequestEvidence.callerRequests.length === expectedCallerRequests.length
+        && new Set(callerRequestEvidence.callerRequests).size === expectedCallerRequests.length
+        && expectedCallerRequests.every(path => callerRequestEvidence.callerRequests.includes(path));
+      callerRequestEvidence.noDynamicPackageRequests = callerRequestEvidence.dynamicPackageRequests.length === 0;
+      callerRequestEvidence.passed = callerRequestEvidence.callerPreloadsPassed && callerRequestEvidence.noDynamicPackageRequests;
+      if (!callerRequestEvidence.passed) throw new Error(`caller request evidence failed: ${JSON.stringify(callerRequestEvidence)}`);
+    }
     phase = 'capture_screenshot';
     viewportLayout = await evaluate(socket, `(() => { const statusElement=document.querySelector('#status'); window.scrollTo(0,0); statusElement.scrollTo(0, 0); const h=document.querySelector('h1').getBoundingClientRect(),s=statusElement.getBoundingClientRect(); return {innerWidth,innerHeight,scrollWidth:document.documentElement.scrollWidth,scrollX,scrollY,statusScrollLeft:statusElement.scrollLeft,statusScrollTop:statusElement.scrollTop,heading:{left:h.left,right:h.right,top:h.top,bottom:h.bottom},status:{left:s.left,right:s.right,top:s.top,bottom:s.bottom},layoutPassed:scrollX===0&&scrollY===0&&statusElement.scrollLeft===0&&statusElement.scrollTop===0&&document.documentElement.scrollWidth<=innerWidth&&h.left>=0&&h.right<=innerWidth&&h.top>=0&&h.bottom<=innerHeight&&s.left>=0&&s.right<=innerWidth&&s.top>=0}; })()`);
     if (!viewportLayout.layoutPassed) throw new Error(`receipt surface clipped: ${JSON.stringify(viewportLayout)}`);

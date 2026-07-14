@@ -232,15 +232,17 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
     invocation: { file: 'sam31-invocation.json', sha256: await sha256Text(invocationText), schema: invocation.schema },
     verification: { file: 'sam31-verification.json', sha256: await sha256Text(verificationText), schema: verification.schema },
   };
+  const modelRoot = { schema: SAM31_BROWSER_TRACKER_ROOT_SCHEMA, modelPackage: refs.modelPackage };
   const root = { schema: SAM31_BROWSER_TRACKER_ROOT_SCHEMA, modelPackage: refs.modelPackage, invocation: refs.invocation, verification: refs.verification };
   const runtimeRoot = { schema: SAM31_BROWSER_TRACKER_ROOT_SCHEMA, modelPackage: refs.modelPackage, invocation: refs.invocation };
   return {
+    modelRoot,
     root,
     runtimeRoot,
     modelPackage,
     invocation,
     verification,
-    texts: { root: canonicalText(root), runtimeRoot: canonicalText(runtimeRoot), modelPackage: modelPackageText, invocation: invocationText, verification: verificationText },
+    texts: { modelRoot: canonicalText(modelRoot), root: canonicalText(root), runtimeRoot: canonicalText(runtimeRoot), modelPackage: modelPackageText, invocation: invocationText, verification: verificationText },
     materialization,
   };
 }

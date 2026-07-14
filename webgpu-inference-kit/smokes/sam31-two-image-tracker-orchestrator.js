@@ -1,4 +1,5 @@
 import {
+  createSam31BrowserTrackerCallerDualInvocationEvidence,
   createSam31BrowserTrackerDualInvocationEvidence,
   createSam31BrowserTrackerPackageCache,
 } from '../src/index.js';
@@ -7,6 +8,7 @@ const statusElement = document.querySelector('#status');
 const params = new URLSearchParams(location.search);
 const packageRoots = params.getAll('packageRoot');
 const packageMode = packageRoots.length > 0;
+const callerInput = params.get('callerInput') === '1';
 const staticBacking = params.get('staticBacking') || 'memory';
 const childRoots = packageMode ? packageRoots : [null];
 const delay = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
@@ -65,7 +67,7 @@ function createVisibleState(sourceState) {
     const cache = runtime.cacheEvidence || {};
     const backing = cache.backingStore || {};
     const realRoutes = (invocation.receipts || []).filter(receipt => receipt.status === 'real').length;
-    return `#${index + 1} ${invocation.verificationAttached ? 'verified' : 'runtime-only'}; invocation=${shortIdentity(runtime.invocationId)}; realm=${shortIdentity(invocation.executionRealmId)}; routes=${realRoutes}/${(invocation.receipts || []).length} real; static-origin=${backing.staticOriginNetworkLoadCount ?? 'n/a'}; static-hits=${backing.staticBackingStoreHitCount ?? 'n/a'}; dynamic-reads=${cache.dynamicNetworkLoadCount ?? 'n/a'}; passed=${invocation.evidence?.passed === true}`;
+    return `#${index + 1} ${invocation.verificationAttached ? 'verified' : callerInput ? 'caller-owned' : 'runtime-only'}; invocation=${shortIdentity(runtime.invocationId)}; realm=${shortIdentity(invocation.executionRealmId)}; routes=${realRoutes}/${(invocation.receipts || []).length} real; static-origin=${backing.staticOriginNetworkLoadCount ?? 'n/a'}; static-hits=${backing.staticBackingStoreHitCount ?? 'n/a'}; dynamic-reads=${cache.dynamicNetworkLoadCount ?? 'n/a'}; caller-reads=${runtime.inputEvidence?.callerArtifactReadCount ?? 'n/a'}; passed=${invocation.evidence?.passed === true}`;
   });
   const dual = sourceState.dualInvocationEvidence;
   return {
@@ -78,7 +80,7 @@ function createVisibleState(sourceState) {
     invocationReceipts,
     realmCheckpointPassed: (sourceState.betweenInvocationCheckpoints || []).every(checkpoint => checkpoint.passed && checkpoint.realmRemoved),
     dualInvocationPassed: sourceState.dualInvocationEvidence?.passed || false,
-    dualGate: dual ? `same-package=${dual.sameModelPackage}; distinct-encoded=${dual.distinctEncodedSourceImages}; distinct-rgba=${dual.distinctRgbaSourceImages}; distinct-invocations=${dual.distinctInvocationIds}; verification-free-second=${dual.secondVerificationFree}; real-route-chains=${dual.bothRouteChainsReal}; no-second-static-load=${dual.noSecondStaticNetworkLoads}; fresh-dynamic-reads=${dual.freshSecondDynamicReadsObserved}; state-shape=${dual.trackerStateShapePassed}; causal-state=${dual.distinctCausalTrackerState}; state-isolated=${dual.stateIsolationPassed}; distinct-realms=${dual.distinctExecutionRealms}; no-device-loss=${dual.noDeviceLoss}` : null,
+    dualGate: dual ? `same-package=${dual.sameModelPackage}; distinct-encoded=${dual.distinctEncodedSourceImages}; distinct-rgba=${dual.distinctRgbaSourceImages}; distinct-invocations=${dual.distinctInvocationIds}; caller-mode=${dual.bothVerificationFree ?? false}; real-route-chains=${dual.bothRouteChainsReal}; no-second-static-load=${dual.noSecondStaticNetworkLoads}; no-dynamic-origin=${dual.noDynamicOriginFetches ?? false}; caller-input-authority=${dual.callerInputAuthorityPassed ?? false}; state-shape=${dual.trackerStateShapePassed}; causal-state=${dual.distinctCausalTrackerState}; state-isolated=${dual.stateIsolationPassed}; distinct-realms=${dual.distinctExecutionRealms}; no-device-loss=${dual.noDeviceLoss}` : null,
     deviceLoss: sourceState.deviceLoss || null,
   };
 }
@@ -143,7 +145,7 @@ async function runChild(packageRoot, invocationIndex, completedInvocationCount) 
     }
     const finalState = clone(childState);
     const invocation = finalState.invocations?.at(-1) || finalState;
-    return { ...invocation, executionRealmId };
+    return { ...invocation, invocationIndex, executionRealmId };
   } finally {
     iframe.remove();
     if (typeof globalThis.gc === 'function') globalThis.gc();
@@ -180,7 +182,9 @@ async function run() {
   }
   const final = invocations.at(-1);
   const dualInvocationEvidence = invocations.length === 2
-    ? createSam31BrowserTrackerDualInvocationEvidence({ invocations, betweenInvocationCheckpoints })
+    ? (callerInput
+      ? createSam31BrowserTrackerCallerDualInvocationEvidence({ invocations, betweenInvocationCheckpoints })
+      : createSam31BrowserTrackerDualInvocationEvidence({ invocations, betweenInvocationCheckpoints }))
     : null;
   if (dualInvocationEvidence && !dualInvocationEvidence.passed) {
     throw Object.assign(new Error(`dual tracker invocation evidence failed: ${JSON.stringify(dualInvocationEvidence)}`), {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   createSam31BrowserTrackerPackageCache,
+  loadSam31BrowserTrackerModelPackageRuntime,
   loadSam31BrowserTrackerPackageRuntime,
 } from '../src/sam31-browser-tracker-package-runtime.js';
 import * as trackerPackageRuntime from '../src/sam31-browser-tracker-package-runtime.js';
@@ -62,6 +63,7 @@ async function fixture(dynamicOffset, sessionId) {
   };
   const projection = await createSam31BrowserTrackerPackageProjection({ packets, sessionId, componentAuthorities: { ingress: { passed: true }, episode: { ingressBindingsPassed: true } } });
   const files = new Map([
+    ['tracker-model-root.json', new TextEncoder().encode(projection.texts.modelRoot)],
     ['tracker-root.json', new TextEncoder().encode(projection.texts.root)],
     ['tracker-runtime-root.json', new TextEncoder().encode(projection.texts.runtimeRoot)],
     ['sam31-model-package.json', new TextEncoder().encode(projection.texts.modelPackage)],
@@ -99,6 +101,32 @@ const fetchImpl = async url => {
   };
 };
 const cache = createSam31BrowserTrackerPackageCache({ fetchImpl });
+const modelOnlyReads = [];
+const modelOnlyFetch = async url => {
+  modelOnlyReads.push(new URL(url).pathname);
+  return fetchImpl(url);
+};
+const modelOnlyCache = createSam31BrowserTrackerPackageCache({ fetchImpl: modelOnlyFetch });
+const modelOnlyRuntime = await loadSam31BrowserTrackerModelPackageRuntime({
+  rootUrl: 'https://example.test/one/tracker-model-root.json',
+  pageUrl: 'https://example.test/smoke.html',
+  fetchImpl: modelOnlyFetch,
+  cache: modelOnlyCache,
+});
+assert.equal(modelOnlyRuntime.packageId, first.projection.modelPackage.packageId);
+assert.equal(modelOnlyRuntime.modelPackage.schema, 'kaminos.sam31-browser-tracker-model-package.v0');
+assert.equal(modelOnlyRuntime.packageResolution.modelPackage.sha256, first.projection.root.modelPackage.sha256);
+assert.equal(modelOnlyRuntime.cacheEvidence().dynamicNetworkLoadCount, 0);
+assert.equal(modelOnlyReads.some(path => path.endsWith('/sam31-invocation.json')), false, 'model-only loading must not fetch a prebuilt invocation manifest');
+assert.equal(modelOnlyReads.some(path => path.endsWith('/sam31-verification.json')), false, 'model-only loading must not fetch verification');
+await modelOnlyRuntime.loadFloat32(modelOnlyRuntime.modelPackage.components.decoder.weights[0]);
+assert.equal(modelOnlyRuntime.cacheEvidence().staticNetworkLoadCount, 1);
+await assert.rejects(
+  () => loadSam31BrowserTrackerModelPackageRuntime({ rootUrl: 'https://example.test/one/tracker-root.json', pageUrl: 'https://example.test/smoke.html', fetchImpl: modelOnlyFetch, cache: createSam31BrowserTrackerPackageCache({ fetchImpl: modelOnlyFetch }) }),
+  /model-only root must not contain invocation or verification references/,
+  'a model-only public route must reject a root whose authority surface still carries invocation state',
+);
+
 const firstRuntime = await loadSam31BrowserTrackerPackageRuntime({ rootUrl: 'https://example.test/one/tracker-root.json', pageUrl: 'https://example.test/smoke.html', fetchImpl, cache });
 assert.equal(firstRuntime.verificationAttached, true);
 assert.deepEqual(firstRuntime.encodedSourceImageSha256, first.projection.invocation.sourceImages.map(image => image.originalSha256));

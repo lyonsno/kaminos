@@ -334,6 +334,12 @@ export {
 } from './sam31-browser-tracker-package-runtime.js';
 
 export {
+  createSam31BrowserTrackerCallerDualInvocationEvidence,
+  createSam31BrowserTrackerCallerInvocationRuntime,
+  decodeSam31BrowserTrackerSourceImage,
+} from './sam31-browser-tracker-caller-invocation.js';
+
+export {
   SAM31_BROWSER_TRACKER_SESSION_SCHEMA,
   createSam31BrowserTrackerSession,
 } from './sam31-browser-tracker-session.js';

@@ -1,9 +1,14 @@
 import {
+  canonicalSam3IdentityJson,
   createSam3BrowserStaticArtifactCache,
   resolveSam3BrowserArtifactUrl,
   resolveSam3BrowserPackageManifest,
 } from './sam-browser-package-manifest.js';
-import { SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT } from './sam31-browser-tracker-package.js';
+import {
+  SAM31_BROWSER_TRACKER_MODEL_PACKAGE_SCHEMA,
+  SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
+  SAM31_BROWSER_TRACKER_ROOT_SCHEMA,
+} from './sam31-browser-tracker-package.js';
 
 const PACKET_NAMES = Object.freeze(['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer']);
 
@@ -153,6 +158,78 @@ export function createSam31BrowserTrackerPackageCache({
     return { ...evidence, backingStore: effectiveBackingEvidence };
   };
   return cache;
+}
+
+export async function loadSam31BrowserTrackerModelPackageRuntime({
+  rootUrl,
+  pageUrl = globalThis.location?.href,
+  fetchImpl = globalThis.fetch,
+  cache,
+}) {
+  const fetcher = requireFetch(fetchImpl);
+  if (!cache || typeof cache.configure !== 'function' || typeof cache.fetchArray !== 'function') {
+    throw new Error('a shared SAM 3.1 browser tracker package cache is required');
+  }
+  const effectiveRootUrl = new URL(rootUrl, pageUrl).toString();
+  const rootText = await responseText(fetcher, effectiveRootUrl);
+  const root = JSON.parse(rootText);
+  if (!root || typeof root !== 'object' || Array.isArray(root)) throw new Error('tracker model root must be an object');
+  if (root.schema !== SAM31_BROWSER_TRACKER_ROOT_SCHEMA) throw new Error(`unsupported tracker model root ${root.schema || 'missing'}`);
+  if (Object.hasOwn(root, 'invocation') || Object.hasOwn(root, 'verification')) {
+    throw new Error('tracker model-only root must not contain invocation or verification references');
+  }
+  for (const field of SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.modelPackageFields) {
+    if (Object.hasOwn(root, field)) throw new Error(`tracker model root duplicates model-package field ${field}`);
+  }
+  const ref = root.modelPackage;
+  if (!ref || typeof ref.file !== 'string' || !ref.file || typeof ref.sha256 !== 'string' || ref.schema !== SAM31_BROWSER_TRACKER_MODEL_PACKAGE_SCHEMA) {
+    throw new Error('tracker model root has an invalid model-package reference');
+  }
+  const modelPackageUrl = resolveSam3BrowserArtifactUrl(ref.file, effectiveRootUrl, pageUrl);
+  const modelPackageText = await responseText(fetcher, modelPackageUrl);
+  const effectiveSha256 = await sha256Text(modelPackageText);
+  if (effectiveSha256 !== ref.sha256) throw new Error(`tracker model-package hash mismatch: ${effectiveSha256} !== ${ref.sha256}`);
+  const modelPackage = JSON.parse(modelPackageText);
+  if (modelPackage?.schema !== SAM31_BROWSER_TRACKER_MODEL_PACKAGE_SCHEMA) throw new Error(`unsupported tracker model package ${modelPackage?.schema || 'missing'}`);
+  const identityContract = Object.fromEntries(SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.modelPackageFields
+    .filter(field => field !== 'packageId' && Object.hasOwn(modelPackage, field))
+    .map(field => [field, modelPackage[field]]));
+  const expectedPackageId = `${SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.modelPackagePrefix}${await sha256Text(canonicalSam3IdentityJson(identityContract))}`;
+  if (modelPackage.packageId !== expectedPackageId) throw new Error(`tracker model-package identity mismatch: ${modelPackage.packageId || 'missing'} !== ${expectedPackageId}`);
+  const artifactUrl = file => resolveSam3BrowserArtifactUrl(file, modelPackageUrl, pageUrl);
+  const declared = new Map();
+  for (const entry of modelPackage.staticArtifacts || []) {
+    if (!entry?.file || !entry?.sha256 || !Number.isInteger(entry?.byteLength)) throw new Error('tracker static artifact entry is incomplete');
+    const url = artifactUrl(entry.file);
+    const identity = `${entry.sha256}:${entry.byteLength}`;
+    if (declared.has(url) && declared.get(url) !== identity) throw new Error(`package artifact identity conflict for ${url}`);
+    declared.set(url, identity);
+  }
+  cache.configure({
+    packageId: modelPackage.packageId,
+    artifacts: modelPackage.staticArtifacts.map(entry => ({ url: artifactUrl(entry.file), sha256: entry.sha256, kind: 'array-buffer' })),
+  });
+  async function load(entry, Type) {
+    if (!entry?.file || !entry?.sha256 || !Number.isInteger(entry?.byteLength)) throw new Error('tracker static artifact entry is incomplete');
+    const url = artifactUrl(entry.file);
+    if (declared.get(url) !== `${entry.sha256}:${entry.byteLength}`) throw new Error(`${entry.role || entry.file} is not declared by the authenticated model package`);
+    const values = await cache.fetchArray(url, Type);
+    if (values.byteLength !== entry.byteLength) throw new Error(`${entry.role || entry.file} byte length mismatch`);
+    return values;
+  }
+  return {
+    rootUrl: effectiveRootUrl,
+    packageId: modelPackage.packageId,
+    modelPackage,
+    packageResolution: {
+      schema: 'kaminos.sam31-browser-tracker-model-package-evidence.v0',
+      packageId: modelPackage.packageId,
+      modelPackage: { ...ref, effectiveSha256 },
+    },
+    loadFloat32: entry => load(entry, Float32Array),
+    loadUint8: entry => load(entry, Uint8Array),
+    cacheEvidence: () => cache.evidence(),
+  };
 }
 
 export async function loadSam31BrowserTrackerPackageRuntime({

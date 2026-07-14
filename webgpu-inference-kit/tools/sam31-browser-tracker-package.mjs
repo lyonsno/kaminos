@@ -130,6 +130,7 @@ async function main() {
     await writeAtomic(join(outDir, 'sam31-model-package.json'), projection.texts.modelPackage);
     await writeAtomic(join(outDir, 'sam31-invocation.json'), projection.texts.invocation);
     await writeAtomic(join(outDir, 'sam31-verification.json'), projection.texts.verification);
+    await writeAtomic(join(outDir, 'tracker-model-root.json'), projection.texts.modelRoot);
     await writeAtomic(join(outDir, 'tracker-root.json'), projection.texts.root);
     await writeAtomic(join(outDir, 'tracker-runtime-root.json'), projection.texts.runtimeRoot);
     const report = {
@@ -146,7 +147,7 @@ async function main() {
       dynamicArtifactCount: projection.invocation.dynamicArtifacts.length,
       verificationTensorCount: Object.values(projection.verification.tensors).reduce((total, entries) => total + entries.length, 0),
       materialization,
-      roots: { verified: 'tracker-root.json', runtime: 'tracker-runtime-root.json' },
+      roots: { model: 'tracker-model-root.json', verified: 'tracker-root.json', runtime: 'tracker-runtime-root.json' },
     };
     await writeAtomic(reportPath, `${JSON.stringify(report, null, 2)}\n`);
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

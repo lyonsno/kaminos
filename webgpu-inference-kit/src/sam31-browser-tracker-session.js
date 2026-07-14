@@ -1,5 +1,12 @@
 import { classifySam31MemoryAttentionAdapter } from './sam31-memory-attention-evidence.js';
-import { loadSam31BrowserTrackerPackageRuntime } from './sam31-browser-tracker-package-runtime.js';
+import {
+  loadSam31BrowserTrackerModelPackageRuntime,
+  loadSam31BrowserTrackerPackageRuntime,
+} from './sam31-browser-tracker-package-runtime.js';
+import {
+  createSam31BrowserTrackerCallerInvocationRuntime,
+  decodeSam31BrowserTrackerSourceImage,
+} from './sam31-browser-tracker-caller-invocation.js';
 import { runSam31BrowserTrackerPackageInvocation } from './sam31-browser-tracker-session-driver.js';
 
 export const SAM31_BROWSER_TRACKER_SESSION_SCHEMA = 'kaminos.sam31-browser-tracker-session.v0';
@@ -93,11 +100,15 @@ function createSession({ runtime, execution, driver, userAgent, commit, onProgre
 }
 
 export async function createSam31BrowserTrackerSession(options = {}) {
-  for (const name of ['packageRuntime', 'executionContext', 'executeInvocation']) {
+  for (const name of ['packageRuntime', 'executionContext', 'executeInvocation', 'modelPackageRuntime', 'callerInvocationRuntime', 'decodeImage']) {
     if (Object.hasOwn(options, name)) throw new Error(`public tracker session does not accept ${name}`);
   }
   const {
     packageRoot = null,
+    modelPackageRoot = null,
+    sourceImages = null,
+    initialMask = null,
+    session: invocationSession = null,
     pageUrl = globalThis.location?.href,
     cache = null,
     gpu = globalThis.navigator?.gpu,
@@ -105,8 +116,25 @@ export async function createSam31BrowserTrackerSession(options = {}) {
     commit = null,
     onProgress = () => {},
   } = options;
-  if (!packageRoot || !cache) throw new Error('package root and shared cache are required');
-  const runtime = await loadSam31BrowserTrackerPackageRuntime({ rootUrl: packageRoot, pageUrl, cache });
+  if (!cache) throw new Error('package root and shared cache are required');
+  if (Boolean(packageRoot) === Boolean(modelPackageRoot)) throw new Error('exactly one packageRoot or modelPackageRoot is required');
+  if (packageRoot && (sourceImages != null || initialMask != null || invocationSession != null)) {
+    throw new Error('prebuilt packageRoot cannot be combined with caller invocation inputs');
+  }
+  let runtime;
+  if (modelPackageRoot) {
+    if (!sourceImages || !initialMask || !invocationSession) throw new Error('modelPackageRoot requires caller sourceImages, initialMask, and session');
+    const modelPackageRuntime = await loadSam31BrowserTrackerModelPackageRuntime({ rootUrl: modelPackageRoot, pageUrl, cache });
+    runtime = await createSam31BrowserTrackerCallerInvocationRuntime({
+      modelPackageRuntime,
+      sourceImages,
+      initialMask,
+      session: invocationSession,
+      decodeImage: decodeSam31BrowserTrackerSourceImage,
+    });
+  } else {
+    runtime = await loadSam31BrowserTrackerPackageRuntime({ rootUrl: packageRoot, pageUrl, cache });
+  }
   const execution = await acquireExecutionContext(gpu);
   return createSession({ runtime, execution, driver: runSam31BrowserTrackerPackageInvocation, userAgent, commit, onProgress });
 }

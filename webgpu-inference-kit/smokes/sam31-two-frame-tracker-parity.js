@@ -1,5 +1,6 @@
 import {
   classifySam31MemoryAttentionAdapter,
+  createSam31BrowserTrackerCallerDualInvocationEvidence,
   createSam31BrowserTrackerDualInvocationEvidence,
   createSam31BrowserTrackerPackageCache,
   createSam31BrowserTrackerSession,
@@ -31,6 +32,9 @@ const statusElement = document.querySelector('#status');
 const params = new URLSearchParams(location.search);
 const packageRoots = params.getAll('packageRoot');
 const packageMode = packageRoots.length > 0;
+const callerInput = params.get('callerInput') === '1';
+const callerInputIndex = Number(params.get('invocationIndex') || 0);
+if (!Number.isInteger(callerInputIndex) || callerInputIndex < 0) throw new Error(`invalid caller invocation index ${params.get('invocationIndex')}`);
 const inheritedPackageCache = globalThis.parent !== globalThis ? parent.sam31SharedTrackerPackageCache : null;
 const packageCache = packageMode ? inheritedPackageCache || createSam31BrowserTrackerPackageCache({
   persistentStaticBacking: params.get('staticBacking') === 'opfs',
@@ -66,6 +70,12 @@ async function fetchJson(url) {
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
   return response.json();
+}
+
+async function fetchBytes(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
+  return new Uint8Array(await response.arrayBuffer());
 }
 
 async function fetchText(url) {
@@ -641,15 +651,48 @@ async function run() {
     const invocations = [];
     const betweenInvocationCheckpoints = [];
     for (let index = 0; index < packageRoots.length; index += 1) {
+      let callerMetadata = null;
+      let callerSourceImages = null;
+      let callerInitialMask = null;
+      let callerEncodedDigests = null;
+      let callerMaskDigest = null;
+      if (callerInput) {
+        callerMetadata = await fetchJson(`/caller/${callerInputIndex}/metadata.json`);
+        callerSourceImages = await Promise.all(callerMetadata.frameUrls.map(fetchBytes));
+        const maskBytes = await fetchBytes(callerMetadata.maskUrl);
+        if (maskBytes.byteLength % Float32Array.BYTES_PER_ELEMENT !== 0) throw new Error('caller mask byte length is not Float32 aligned');
+        callerInitialMask = new Float32Array(maskBytes.buffer.slice(maskBytes.byteOffset, maskBytes.byteOffset + maskBytes.byteLength));
+        callerEncodedDigests = await Promise.all(callerSourceImages.map(sha256Bytes));
+        callerMaskDigest = await sha256Bytes(maskBytes);
+        if (JSON.stringify(callerEncodedDigests) !== JSON.stringify(callerMetadata.authority.encodedSourceImageSha256)
+            || callerMaskDigest !== callerMetadata.authority.initialMaskSha256) {
+          throw new Error('caller preload bytes do not match the terminal witness authority');
+        }
+      }
       const session = await createSam31BrowserTrackerSession({
-        packageRoot: packageRoots[index],
+        ...(callerInput ? {
+          modelPackageRoot: packageRoots[index],
+          sourceImages: callerSourceImages,
+          initialMask: callerInitialMask,
+          session: callerMetadata.session,
+        } : { packageRoot: packageRoots[index] }),
         pageUrl: location.href,
         cache: packageCache,
         commit: params.get('commit') || null,
         onProgress: phase => update('running', phase, { episodeMode, invocationIndex: index }),
       });
       activeSession = session;
-      const invocation = await session.run();
+      let invocation = await session.run();
+      if (callerInput) {
+        const callerInputAuthority = {
+          encodedSourceImagesPassed: JSON.stringify(invocation.packageRuntime.encodedSourceImageSha256) === JSON.stringify(callerEncodedDigests),
+          rgbaSourceImagesPassed: JSON.stringify(invocation.packageRuntime.rgbaSourceImageSha256) === JSON.stringify(callerMetadata.authority.rgbaSourceImageSha256),
+          initialMaskPassed: invocation.packageRuntime.initialMaskSha256 === callerMaskDigest,
+        };
+        callerInputAuthority.passed = Object.values(callerInputAuthority).every(Boolean);
+        if (!callerInputAuthority.passed) throw new Error(`caller browser input authority failed: ${JSON.stringify(callerInputAuthority)}`);
+        invocation = { ...invocation, callerInputAuthority };
+      }
       const sessionClose = await session.close();
       const gcObserved = index + 1 < packageRoots.length && typeof globalThis.gc === 'function';
       if (gcObserved) globalThis.gc();
@@ -679,7 +722,9 @@ async function run() {
     const final = invocations.at(-1);
     let dualInvocationEvidence = null;
     if (invocations.length >= 2) {
-      dualInvocationEvidence = createSam31BrowserTrackerDualInvocationEvidence({ invocations, betweenInvocationCheckpoints });
+      dualInvocationEvidence = callerInput
+        ? createSam31BrowserTrackerCallerDualInvocationEvidence({ invocations, betweenInvocationCheckpoints })
+        : createSam31BrowserTrackerDualInvocationEvidence({ invocations, betweenInvocationCheckpoints });
       if (!dualInvocationEvidence.passed) throw Object.assign(new Error(`dual tracker invocation evidence failed: ${JSON.stringify(dualInvocationEvidence)}`), { evidenceState: { ...final, invocations, dualInvocationEvidence } });
     }
     update('passed', 'complete', { ...final, invocations, betweenInvocationCheckpoints, dualInvocationEvidence, deviceLoss: null });
