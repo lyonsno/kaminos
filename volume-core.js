@@ -543,6 +543,7 @@ function normalizeScalarActivityReceiverControls(snapshot = {}) {
     curlNoiseGain: clampFinite(snapshot.oracleActivityCurlNoise, 0, 3, 0),
     vorticityGain: clampFinite(snapshot.oracleActivityVorticity, 0, 3, 0),
     materialGain: clampFinite(snapshot.oracleActivityMaterial, 0, 3, 0),
+    fireDetailGain: clampFinite(snapshot.oracleActivityFireDetail, -2, 2, 0),
   };
 }
 
@@ -1464,6 +1465,29 @@ fn rawTruthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
 
 fn truthOracleActivityCueAtCell(c: vec3<i32>) -> f32 {
   return rawTruthOracleActivityCueAtCell(c) * clamp(u.oracle_activity_controls.x, 0.0, 1.0);
+}
+
+fn scalarActivityCueIndex(c: vec3<i32>) -> u32 {
+  let safe = clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1));
+  return u32(safe.x) + u32(safe.y) * GRID + u32(safe.z) * GRID * GRID;
+}
+
+fn renderOnlyScalarActivityCueHighPassAtCell(c: vec3<i32>) -> f32 {
+  if (u.oracle_activity_controls2.y < 0.5) {
+    return 0.0;
+  }
+  let safe = clamp(c, vec3<i32>(0), vec3<i32>(i32(GRID) - 1));
+  let centerIdx = u32(safe.x) + u32(safe.y) * GRID + u32(safe.z) * GRID * GRID;
+  let centerCue = clamp(oracleActivityCue[centerIdx], 0.0, 1.0);
+  let neighborMean = (
+    clamp(oracleActivityCue[scalarActivityCueIndex(safe + vec3<i32>(-1, 0, 0))], 0.0, 1.0)
+      + clamp(oracleActivityCue[scalarActivityCueIndex(safe + vec3<i32>(1, 0, 0))], 0.0, 1.0)
+      + clamp(oracleActivityCue[scalarActivityCueIndex(safe + vec3<i32>(0, -1, 0))], 0.0, 1.0)
+      + clamp(oracleActivityCue[scalarActivityCueIndex(safe + vec3<i32>(0, 1, 0))], 0.0, 1.0)
+      + clamp(oracleActivityCue[scalarActivityCueIndex(safe + vec3<i32>(0, 0, -1))], 0.0, 1.0)
+      + clamp(oracleActivityCue[scalarActivityCueIndex(safe + vec3<i32>(0, 0, 1))], 0.0, 1.0)
+  ) / 6.0;
+  return clamp((centerCue - neighborMean) * 3.2, -1.0, 1.0);
 }
 
 fn oracleActivityCurlNoiseForce(c: vec3<i32>, p: vec3<f32>, time: f32, cue: f32, gain: f32) -> vec3<f32> {
@@ -3890,6 +3914,9 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     let adaptiveRays = clamp(u.radiance_controls.w, 0.0, 1.0);
     let occupancySkipStrength = clamp(u.occupancy_controls.x, 0.0, 1.0);
     let sampleCell = vec3<i32>(floor(clamp((p * 0.5 + vec3<f32>(0.5)) * f32(GRID), vec3<f32>(0.0), vec3<f32>(f32(GRID) - 1.0))));
+    let oracleFireDetailGain = clamp(u.oracle_activity_controls2.z, -2.0, 2.0);
+    let oracleFireDetailHighPass = renderOnlyScalarActivityCueHighPassAtCell(sampleCell);
+    let oracleFireDetailColorGain = clamp(1.0 + oracleFireDetailGain * oracleFireDetailHighPass * 0.40, 0.35, 1.65);
     let curlDebug = curlMagnitudeAtCell(sampleCell);
     let divDebug = abs(divergenceAtCell(sampleCell));
     let microTextureSignal = clamp(microSmoke * 1.55 + interfaceShred * 2.45 + fireLick * 1.30 + emberFleck * 0.55, 0.0, 2.4);
@@ -4261,10 +4288,11 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       vec3<f32>(0.28, 0.38, 0.42) * 0.62,
       canonicalSmokeOnlyRender
     );
-    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
+    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper * oracleFireDetailColorGain;
     let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
       * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
-      * flameBodyAuthority;
+      * flameBodyAuthority
+      * oracleFireDetailColorGain;
     let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
     let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
     let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
@@ -7714,7 +7742,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[319] = scalarActivityReceiver.materialGain;
     uniforms[320] = scalarActivityReceiver.display;
     uniforms[321] = externalCueActive ? 1 : 0;
-    uniforms[322] = oracleActivityCueUpload.grid || 0;
+    uniforms[322] = scalarActivityReceiver.fireDetailGain;
     uniforms[323] = oracleActivityCueUpload.externalCueCellCount || 0;
     uniforms.set(previousViewProj.elements, 324);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
@@ -11853,6 +11881,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ...(boundarySplatCompositionRequestedRaw === 'raymarch-only-v0' ? { boundarySplatMode: 'off' } : {}),
     };
     const boundarySplatCompositionRequested = boundarySplatCompositionRequestedRaw;
+    const oracleActivityFireDetailRequested = Object.hasOwn(controlOverrides, 'oracleActivityFireDetail')
+      ? Number(controlOverrides.oracleActivityFireDetail)
+      : 0;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
     const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
@@ -11863,6 +11894,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...controlOverrides,
         renderScale,
       });
+      const oracleActivityFireDetailEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).fireDetailGain;
       resetTemporalHistory('same-state-render-scale-canvas-capture');
       updateUniforms(fixedNow);
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
@@ -11954,6 +11986,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sampleAuthority: 'render-only-frozen-sim-state',
         imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
         controlOverrides,
+        oracleActivityFireDetailRequested,
+        oracleActivityFireDetailEffective,
+        oracleActivityFireDetailApplicationIdentity: 'render-only-external-carrier-high-pass-fire-color-v0',
         boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionRequested,
         boundarySplatCompositionEffective,

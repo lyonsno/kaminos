@@ -683,6 +683,25 @@ assert.match(core, /TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY\s*=\s*'truth-high-diagno
 assert.match(core, /oracle_activity_controls:\s*vec4<f32>/, 'fluid uniforms carry scalar activity receiver hook controls');
 assert.match(core, /oracle_activity_controls2:\s*vec4<f32>/, 'fluid uniforms carry scalar activity cue source/display controls');
 assert.match(core, /truthOracleActivityCueAtCell/, 'fluid shader samples a named scalar activity cue field');
+assert.match(
+  core,
+  /fireDetailGain:\s*clampFinite\(snapshot\.oracleActivityFireDetail,\s*-2,\s*2,\s*0\)/,
+  'render-only scalar activity fire detail gain is signed, bounded, and inert by default',
+);
+assert.match(
+  core,
+  /fn renderOnlyScalarActivityCueHighPassAtCell[\s\S]*?oracle_activity_controls2\.y[\s\S]*?oracleActivityCue\[centerIdx\][\s\S]*?neighborMean[\s\S]*?centerCue - neighborMean/,
+  'render-only fire detail consumes an uploaded external cue through local six-neighbor high-pass contrast',
+);
+assert.match(core, /uniforms\[322\]\s*=\s*scalarActivityReceiver\.fireDetailGain/, 'render-only fire detail gain reaches a dedicated shader uniform slot');
+assert.match(
+  core,
+  /oracleFireDetailColorGain[\s\S]*?let flameCol =[\s\S]*?oracleFireDetailColorGain[\s\S]*?let baseRadianceEmission =[\s\S]*?oracleFireDetailColorGain/,
+  'render-only cue contrast modulates fire color and radiance emission',
+);
+assert.doesNotMatch(core, /stockFireAlpha[\s\S]{0,800}?oracleFireDetail/, 'render-only cue contrast does not enter fire alpha or broaden support');
+assert.match(core, /oracleActivityFireDetailRequested/, 'frozen render receipt records requested fire-detail gain');
+assert.match(core, /oracleActivityFireDetailEffective/, 'frozen render receipt records effective bounded fire-detail gain');
 assert.match(core, /oracleActivityCurlNoiseForce/, 'fluid shader exposes scalar activity gated curl-noise force hook');
 assert.match(core, /oracleActivityVorticityConfinement/, 'fluid shader exposes scalar activity gated vorticity confinement hook');
 assert.match(core, /oracleActivityMaterialBirth/, 'fluid shader exposes scalar activity gated material/interface birth hook');

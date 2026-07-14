@@ -625,6 +625,12 @@ async function main() {
       const oracleActivityDisplay = Object.hasOwn(renderControlOverrides, 'oracleActivityDisplay')
         ? renderControlOverrides.oracleActivityDisplay
         : 1;
+      const oracleActivityFireDetail = Object.hasOwn(renderControlOverrides, 'oracleActivityFireDetail')
+        ? Number(renderControlOverrides.oracleActivityFireDetail)
+        : 0;
+      if (!Number.isFinite(oracleActivityFireDetail) || oracleActivityFireDetail < -2 || oracleActivityFireDetail > 2) {
+        throw new Error(`scalar activity cue fire-detail gain is outside [-2, 2]: ${renderControlOverrides.oracleActivityFireDetail}`);
+      }
       renderControlOverrides = {
         ...renderControlOverrides,
         oracleActivityCue: 0,
@@ -632,6 +638,7 @@ async function main() {
         oracleActivityCurlNoise: 0,
         oracleActivityVorticity: 0,
         oracleActivityMaterial: 0,
+        oracleActivityFireDetail,
       };
     }
     const resolved = resolveSourceCapture();
@@ -841,6 +848,18 @@ async function main() {
         }
         if (renderCompositionExplicit && renderReceipt.boundarySplatCompositionEffective !== renderComposition) {
           throw new Error(`requested render composition was not effective: ${renderComposition} != ${renderReceipt.boundarySplatCompositionEffective || '(missing)'}`);
+        }
+        if (scalarActivityCue) {
+          const requestedFireDetail = Number(renderControlOverrides.oracleActivityFireDetail || 0);
+          if (
+            renderReceipt.oracleActivityFireDetailRequested !== requestedFireDetail
+            || renderReceipt.oracleActivityFireDetailEffective !== requestedFireDetail
+          ) {
+            throw new Error(`scalar-activity-fire-detail-gain-mismatch: requested=${requestedFireDetail} receipt=${JSON.stringify({
+              oracleActivityFireDetailRequested: renderReceipt.oracleActivityFireDetailRequested,
+              oracleActivityFireDetailEffective: renderReceipt.oracleActivityFireDetailEffective,
+            })}`);
+          }
         }
         phase = 'post-render-canvas-geometry';
         const postRenderCanvasMount = await evaluateByValue(ws, `(() => {
