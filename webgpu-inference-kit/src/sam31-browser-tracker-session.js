@@ -1,5 +1,6 @@
 import { classifySam31MemoryAttentionAdapter } from './sam31-memory-attention-evidence.js';
 import { loadSam31BrowserTrackerPackageRuntime } from './sam31-browser-tracker-package-runtime.js';
+import { runSam31BrowserTrackerPackageInvocation } from './sam31-browser-tracker-session-driver.js';
 
 export const SAM31_BROWSER_TRACKER_SESSION_SCHEMA = 'kaminos.sam31-browser-tracker-session.v0';
 
@@ -26,27 +27,12 @@ async function acquireExecutionContext(gpu) {
   return { adapter, device, errors: [] };
 }
 
-export async function createSam31BrowserTrackerSession({
-  packageRoot = null,
-  pageUrl = globalThis.location?.href,
-  cache = null,
-  packageRuntime = null,
-  executionContext = null,
-  executeInvocation = null,
-  gpu = globalThis.navigator?.gpu,
-  userAgent = globalThis.navigator?.userAgent || 'unknown-browser',
-  commit = null,
-  onProgress = () => {},
-} = {}) {
-  if (!packageRuntime && (!packageRoot || !cache)) throw new Error('package root and shared cache are required');
-  const runtime = packageRuntime || await loadSam31BrowserTrackerPackageRuntime({ rootUrl: packageRoot, pageUrl, cache });
-  const execution = executionContext || await acquireExecutionContext(gpu);
+function createSession({ runtime, execution, driver, userAgent, commit, onProgress }) {
   if (!execution?.adapter || !execution?.device) throw new Error('execution context requires an adapter and device');
   if (!Array.isArray(execution.errors)) execution.errors = [];
   const { adapter, device } = execution;
   const adapterInfo = execution.adapterInfo || adapterIdentity(adapter);
   execution.adapterInfo = adapterInfo;
-  const driver = executeInvocation || (await import('./sam31-browser-tracker-session-driver.js')).runSam31BrowserTrackerPackageInvocation;
   let status = 'open';
   let closeEvidence = null;
   let intentionalClose = false;
@@ -60,8 +46,6 @@ export async function createSam31BrowserTrackerSession({
 
   const session = {
     schema: SAM31_BROWSER_TRACKER_SESSION_SCHEMA,
-    packageRuntime: runtime,
-    execution,
     adapterInfo,
     get status() { return status; },
     get deviceLoss() { return deviceLoss; },
@@ -106,4 +90,36 @@ export async function createSam31BrowserTrackerSession({
     },
   };
   return session;
+}
+
+export async function createSam31BrowserTrackerSession(options = {}) {
+  for (const name of ['packageRuntime', 'executionContext', 'executeInvocation']) {
+    if (Object.hasOwn(options, name)) throw new Error(`public tracker session does not accept ${name}`);
+  }
+  const {
+    packageRoot = null,
+    pageUrl = globalThis.location?.href,
+    cache = null,
+    gpu = globalThis.navigator?.gpu,
+    userAgent = globalThis.navigator?.userAgent || 'unknown-browser',
+    commit = null,
+    onProgress = () => {},
+  } = options;
+  if (!packageRoot || !cache) throw new Error('package root and shared cache are required');
+  const runtime = await loadSam31BrowserTrackerPackageRuntime({ rootUrl: packageRoot, pageUrl, cache });
+  const execution = await acquireExecutionContext(gpu);
+  return createSession({ runtime, execution, driver: runSam31BrowserTrackerPackageInvocation, userAgent, commit, onProgress });
+}
+
+export function createSam31BrowserTrackerSessionForTest({
+  packageRuntime,
+  executionContext,
+  executeInvocation,
+  userAgent = 'test-browser',
+  commit = null,
+  onProgress = () => {},
+} = {}) {
+  if (!packageRuntime) throw new Error('test tracker session requires a package runtime');
+  if (typeof executeInvocation !== 'function') throw new Error('test tracker session requires an invocation driver');
+  return createSession({ runtime: packageRuntime, execution: executionContext, driver: executeInvocation, userAgent, commit, onProgress });
 }

@@ -2,11 +2,87 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 import * as kit from '../src/index.js';
+import { createSam31BrowserTrackerSessionForTest } from '../src/sam31-browser-tracker-session.js';
+import { createSam31BrowserTrackerPackageAuthority } from '../src/sam31-browser-tracker-session-driver.js';
 
 assert.equal(kit.SAM31_BROWSER_TRACKER_SESSION_SCHEMA, 'kaminos.sam31-browser-tracker-session.v0');
 assert.equal(typeof kit.createSam31BrowserTrackerSession, 'function', 'the inference kit must export the package-backed tracker session');
 assert.equal(typeof kit.runSam31TwoImageBackbone, 'function', 'the inference kit must export the promoted two-image backbone');
 assert.equal(typeof kit.runSam31BrowserTrackerPackageInvocation, 'function', 'the inference kit must export the package-backed invocation driver');
+assert.equal(kit.createSam31BrowserTrackerSessionForTest, undefined, 'the lifecycle test seam must not be part of the package API');
+assert.equal(kit.createSam31BrowserTrackerPackageAuthority, undefined, 'the raw runtime authority helper must not be part of the package API');
+
+function packageRuntimeAuthorityFixture({ verificationAttached, componentAuthorities = null }) {
+  const packageId = 'sam31-tracker-model-package:test';
+  const invocationId = 'sam31-tracker-invocation:test';
+  const verificationId = verificationAttached ? 'sam31-tracker-verification:test' : null;
+  return {
+    packageId,
+    invocationId,
+    verificationId,
+    verificationAttached,
+    componentAuthorities,
+    packageResolution: {
+      schema: 'kaminos.sam31-browser-tracker-package-invocation-evidence.v0',
+      packageId,
+      invocationId,
+      modelPackage: {
+        schema: 'kaminos.sam31-browser-tracker-model-package.v0',
+        sha256: 'sha256:model',
+        effectiveSha256: 'sha256:model',
+      },
+      invocation: {
+        schema: 'kaminos.sam31-browser-tracker-invocation.v0',
+        sha256: 'sha256:invocation',
+        effectiveSha256: 'sha256:invocation',
+      },
+      verification: verificationAttached
+        ? {
+            attached: true,
+            schema: 'kaminos.sam31-browser-tracker-verification.v0',
+            sha256: 'sha256:verification',
+            effectiveSha256: 'sha256:verification',
+          }
+        : { attached: false },
+    },
+  };
+}
+
+const packetNames = ['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer'];
+const verificationFreeAuthority = createSam31BrowserTrackerPackageAuthority(
+  packageRuntimeAuthorityFixture({ verificationAttached: false }),
+);
+assert.equal(verificationFreeAuthority.passed, true, 'authenticated package and invocation roots must authorize verification-free execution');
+assert.deepEqual(verificationFreeAuthority.executablePackets, packetNames);
+assert.deepEqual(verificationFreeAuthority.verifiedPackets, [], 'verification-free execution must not claim component verification');
+assert.equal(verificationFreeAuthority.componentVerificationState, 'not-attached');
+assert.equal(verificationFreeAuthority.componentVerificationPassed, null);
+assert.equal(verificationFreeAuthority.pointerPacketDigestState, 'not-applicable');
+assert.equal(verificationFreeAuthority.pointerPacketInputDigestPassed, null);
+assert.equal(verificationFreeAuthority.pointerPacketOutputDigestPassed, null);
+
+const verifiedComponents = Object.fromEntries(packetNames.map(name => [name, { passed: true, name }]));
+const verifiedAuthority = createSam31BrowserTrackerPackageAuthority(
+  packageRuntimeAuthorityFixture({ verificationAttached: true, componentAuthorities: verifiedComponents }),
+);
+assert.equal(verifiedAuthority.passed, true);
+assert.deepEqual(verifiedAuthority.executablePackets, packetNames);
+assert.deepEqual(verifiedAuthority.verifiedPackets, packetNames);
+assert.equal(verifiedAuthority.componentVerificationState, 'verified');
+assert.equal(verifiedAuthority.componentVerificationPassed, true);
+assert.equal(verifiedAuthority.pointerPacketDigestState, 'not-applicable');
+assert.equal(verifiedAuthority.pointerPacketInputDigestPassed, null);
+assert.equal(verifiedAuthority.pointerPacketOutputDigestPassed, null);
+
+const failedComponents = structuredClone(verifiedComponents);
+failedComponents.pointer.passed = false;
+const failedAuthority = createSam31BrowserTrackerPackageAuthority(
+  packageRuntimeAuthorityFixture({ verificationAttached: true, componentAuthorities: failedComponents }),
+);
+assert.equal(failedAuthority.passed, false, 'an attached but failed component receipt must block execution authority');
+assert.deepEqual(failedAuthority.verifiedPackets, packetNames.filter(name => name !== 'pointer'));
+assert.equal(failedAuthority.componentVerificationState, 'failed');
+assert.equal(failedAuthority.componentVerificationPassed, false);
 
 const lifecycle = [];
 let resolveLost;
@@ -35,7 +111,19 @@ const completeInvocationResult = () => ({
   effectiveRouteIds: Array.from({ length: 19 }, (_, index) => `route-${index}`),
 });
 let invocationRuns = 0;
-const session = await kit.createSam31BrowserTrackerSession({
+for (const [name, value] of Object.entries({
+  packageRuntime,
+  executionContext: { adapter: {}, device, errors: [] },
+  executeInvocation: async () => completeInvocationResult(),
+})) {
+  await assert.rejects(
+    () => kit.createSam31BrowserTrackerSession({ packageRoot: '/fake-root.json', cache: {}, [name]: value }),
+    new RegExp(`public tracker session does not accept ${name}`),
+    `the public session must reject caller-owned ${name} injection before package loading`,
+  );
+}
+
+const session = createSam31BrowserTrackerSessionForTest({
   packageRuntime,
   executionContext: { adapter: { info: { vendor: 'test', architecture: 'test' } }, device, errors: [] },
   executeInvocation: async input => {
@@ -47,7 +135,8 @@ const session = await kit.createSam31BrowserTrackerSession({
 });
 assert.equal(session.schema, kit.SAM31_BROWSER_TRACKER_SESSION_SCHEMA);
 assert.equal(session.status, 'open');
-assert.equal(session.packageRuntime, packageRuntime);
+assert.equal('packageRuntime' in session, false, 'the session must not expose mutable package authority');
+assert.equal('execution' in session, false, 'the session must not expose its mutable WebGPU execution context');
 assert.deepEqual(await session.run(), completeInvocationResult());
 assert.equal(session.status, 'completed');
 await assert.rejects(() => session.run(), /already executed/);
@@ -72,7 +161,7 @@ const unexpectedLossDevice = {
   lost: new Promise(resolve => { resolveUnexpectedLoss = resolve; }),
   destroy() {},
 };
-const unexpectedLossSession = await kit.createSam31BrowserTrackerSession({
+const unexpectedLossSession = createSam31BrowserTrackerSessionForTest({
   packageRuntime,
   executionContext: { adapter: { info: { vendor: 'test', architecture: 'test' } }, device: unexpectedLossDevice, errors: [] },
   executeInvocation: async () => completeInvocationResult(),
@@ -91,7 +180,7 @@ const incompleteDevice = {
   lost: new Promise(resolve => { resolveIncompleteLost = resolve; }),
   destroy() { resolveIncompleteLost({ reason: 'destroyed', message: 'test close' }); },
 };
-const incompleteSession = await kit.createSam31BrowserTrackerSession({
+const incompleteSession = createSam31BrowserTrackerSessionForTest({
   packageRuntime,
   executionContext: { adapter: { info: { vendor: 'test', architecture: 'test' } }, device: incompleteDevice, errors: [] },
   executeInvocation: async () => ({ ...completeInvocationResult(), receipts: Array.from({ length: 18 }, (_, index) => ({ index })) }),
@@ -104,12 +193,12 @@ await assert.rejects(
 assert.equal(incompleteSession.status, 'failed');
 await incompleteSession.close();
 
-await assert.rejects(
-  () => kit.createSam31BrowserTrackerSession({ packageRuntime, executionContext: {} }),
+assert.throws(
+  () => createSam31BrowserTrackerSessionForTest({ packageRuntime, executionContext: {}, executeInvocation: async () => completeInvocationResult() }),
   /execution context requires an adapter and device/,
 );
 await assert.rejects(
-  () => kit.createSam31BrowserTrackerSession({ executionContext: { adapter: {}, device } }),
+  () => kit.createSam31BrowserTrackerSession(),
   /package root and shared cache are required/,
 );
 

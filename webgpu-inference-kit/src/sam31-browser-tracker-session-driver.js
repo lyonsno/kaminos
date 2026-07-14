@@ -8,6 +8,60 @@ import { createSam31MultiplexMaskDecoderPhaseProgramRouteDefinition, runSam31Mul
 import { createSam31TemporalMemoryBankPhaseProgramRouteDefinition, runSam31TemporalMemoryBankPhaseProgramRoute } from './sam31-temporal-memory-bank-phase-program.js';
 import { runSam31TwoImageBackbone } from './sam31-two-image-backbone.js';
 
+const TRACKER_PACKET_NAMES = Object.freeze(['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer']);
+
+function resolvedArtifactPassed(artifact, schema) {
+  return artifact?.schema === schema
+    && typeof artifact.sha256 === 'string'
+    && artifact.sha256 === artifact.effectiveSha256;
+}
+
+export function createSam31BrowserTrackerPackageAuthority(packageRuntime) {
+  const verificationAttached = packageRuntime?.verificationAttached === true;
+  const resolution = packageRuntime?.packageResolution;
+  const packageExecutionAuthorityPassed = resolution?.schema === 'kaminos.sam31-browser-tracker-package-invocation-evidence.v0'
+    && resolution.packageId === packageRuntime?.packageId
+    && resolution.invocationId === packageRuntime?.invocationId
+    && resolvedArtifactPassed(resolution.modelPackage, 'kaminos.sam31-browser-tracker-model-package.v0')
+    && resolvedArtifactPassed(resolution.invocation, 'kaminos.sam31-browser-tracker-invocation.v0')
+    && resolution.verification?.attached === verificationAttached
+    && (verificationAttached
+      ? packageRuntime?.verificationId != null
+        && resolvedArtifactPassed(resolution.verification, 'kaminos.sam31-browser-tracker-verification.v0')
+      : packageRuntime?.verificationId == null);
+  const packets = packageRuntime?.componentAuthorities || {};
+  const verifiedPackets = verificationAttached
+    ? TRACKER_PACKET_NAMES.filter(name => packets[name]?.passed === true)
+    : [];
+  const componentVerificationPassed = verificationAttached
+    ? verifiedPackets.length === TRACKER_PACKET_NAMES.length
+    : null;
+  const componentVerificationState = verificationAttached
+    ? componentVerificationPassed ? 'verified' : 'failed'
+    : 'not-attached';
+  const componentVerificationGatePassed = !verificationAttached || componentVerificationPassed === true;
+  return {
+    passed: packageExecutionAuthorityPassed && componentVerificationGatePassed,
+    packetSource: 'browser-package',
+    authorityKind: 'authenticated-package-invocation',
+    executablePackets: [...TRACKER_PACKET_NAMES],
+    verifiedPackets,
+    packets,
+    packageId: packageRuntime?.packageId ?? null,
+    invocationId: packageRuntime?.invocationId ?? null,
+    verificationId: packageRuntime?.verificationId ?? null,
+    verificationAttached,
+    packageResolution: resolution ?? null,
+    packageExecutionAuthorityPassed,
+    componentVerificationState,
+    componentVerificationPassed,
+    componentVerificationGatePassed,
+    pointerPacketDigestState: 'not-applicable',
+    pointerPacketInputDigestPassed: null,
+    pointerPacketOutputDigestPassed: null,
+  };
+}
+
 async function sha256Bytes(values) {
   const digest = await crypto.subtle.digest('SHA-256', values.buffer.slice(values.byteOffset, values.byteOffset + values.byteLength));
   return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
@@ -195,14 +249,8 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const invocationIndex = packageRuntime.session?.invocationIndex ?? 0;
   const scopedOutputId = value => scopedArtifactId(value, invocationTag);
   const verificationAttached = packageRuntime.verificationAttached === true;
-  const packetAuthority = {
-    passed: true, packetSource: 'browser-package',
-    verifiedPackets: ['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer'],
-    packets: packageRuntime.componentAuthorities || {},
-    packageId: packageRuntime.packageId, invocationId: packageRuntime.invocationId,
-    verificationId: packageRuntime.verificationId, verificationAttached,
-    packageResolution: packageRuntime.packageResolution,
-  };
+  const packetAuthority = createSam31BrowserTrackerPackageAuthority(packageRuntime);
+  if (!packetAuthority.passed) throw new Error(`SAM 3.1 tracker package authority failed: ${JSON.stringify(packetAuthority)}`);
   const { ingress, episode, decoder: decoderManifest, memory: memoryManifest, temporal: temporalManifest, pointer: pointerManifest } = packageRuntime.manifests || {};
   if (episode?.schema !== 'kaminos.sam31-two-image-tracker-meta-packet.v0') throw new Error(`unsupported two-image episode ${episode?.schema}`);
   const episodeEntries = entryMap(episode.tensors);
@@ -210,8 +258,7 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const expectedEpisodeTensor = role => verificationAttached ? episodeTensor(role) : Promise.resolve(null);
   const temporalEntries = entryMap(temporalManifest.tensors);
   const temporalTensor = role => packageRuntime.loadFloat32(temporalEntries[role]);
-  const pointerPacketInputDigestPassed = true;
-  const pointerPacketOutputDigestPassed = true;
+  const { pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed } = packetAuthority;
   progress('execution-context-bound', { packetAuthority, adapterInfo });
   if (verificationAttached && packetAuthority.packets.episode?.ingressBindingsPassed !== true) throw new Error('two-image episode does not bind the complete authenticated ingress packet');
   const imageBackbone = await runSam31TwoImageBackbone({ packageRuntime, adapter, device, errors, commit, userAgent, update: phase => progress(phase, { adapterInfo, packetAuthority }) });
@@ -386,9 +433,22 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const frame0ProducerParityPassed = !verificationAttached
     || (maximums.frame0MaskConditioning <= frame0Tolerance && pointerParityPassed);
   const parityPassed = !verificationAttached || ((imageBackbone?.parityPassed ?? true) && suppressionParity <= frame0Tolerance && frame0ProducerParityPassed && maximums.frame0Memory <= episode.tolerances.memoryMaxAbsDiff && maximums.temporalBank <= episode.tolerances.bankMaxAbsDiff && maximums.frame1Attention <= episode.tolerances.conditionedMaxAbsDiff && maximums.frame1Decoder <= episode.tolerances.decoderMaxAbsDiff);
-  const packetAuthorityPassed = packetAuthority.passed === true && packetAuthority.verifiedPackets.length === 6;
   const ingressBindingsPassed = !verificationAttached || packetAuthority.packets.episode?.ingressBindingsPassed === true;
-  const evidence = { packetAuthorityPassed, ingressBindingsPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, adapterPassed: adapterInfo.isFallbackAdapter === false, routeChainPassed, persistentStatePassed, stateTransitionPassed, parityPassed, verificationContractPassed: verificationAttached ? parityPassed : packageRuntime.packageResolution?.verification?.attached === false, errorsPassed: errors.length === 0 };
+  const evidence = {
+    packageExecutionAuthorityPassed: packetAuthority.packageExecutionAuthorityPassed,
+    componentVerificationGatePassed: packetAuthority.componentVerificationGatePassed,
+    pointerPacketDigestContractPassed: packetAuthority.pointerPacketDigestState === 'not-applicable'
+      && pointerPacketInputDigestPassed === null
+      && pointerPacketOutputDigestPassed === null,
+    ingressBindingsPassed,
+    adapterPassed: adapterInfo.isFallbackAdapter === false,
+    routeChainPassed,
+    persistentStatePassed,
+    stateTransitionPassed,
+    parityPassed,
+    verificationContractPassed: verificationAttached ? parityPassed : packageRuntime.packageResolution?.verification?.attached === false,
+    errorsPassed: errors.length === 0,
+  };
   evidence.passed = Object.values(evidence).every(Boolean);
   const referenceStateTransition = episode.stateTransition;
   const effectiveStateTransition = {
