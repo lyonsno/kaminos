@@ -21,7 +21,11 @@ const SOURCE_AUTHORITY = SPLAT_SOURCE_AUTHORITY;
 const RAYMARCH_RENDERER = 'matched-raymarch';
 const INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
 const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-deterministic-gpu-hash-thinning-v0';
-const ALIGNED_BUDGET_PAIR = [6400, 1600];
+const ALIGNED_BUDGET_PAIRS = [
+  [6400, 1600],
+  [6400, 3200],
+];
+const DEFAULT_ALIGNED_BUDGET_PAIR = ALIGNED_BUDGET_PAIRS[0];
 const ALIGNED_BUDGET_INSTANCE_COUNT = 100;
 const MIN_ALIGNED_BUDGET_MOTION_MEAN_ABS_DIFF = 0.5;
 const MIN_ALIGNED_BUDGET_MOTION_CHANGED_FRACTION = 0.02;
@@ -119,7 +123,7 @@ try {
   if (alignedBudgetPair) {
     failurePhase = 'aligned-budget-capture';
     const alignedBudgetPairReport = await captureAlignedBudgetPair([staticCamera, grazingCamera]);
-    const budgetQualityComparisons = summarizeAlignedBudgetQuality(alignedBudgetPairReport.sequences);
+    const budgetQualityComparisons = summarizeAlignedBudgetQuality(alignedBudgetPairReport.sequences, alignedBudgetPairReport.budgetPair);
     const sequenceCertification = certifyAlignedBudgetSequence(alignedBudgetPairReport, budgetQualityComparisons);
     failurePhase = 'aligned-budget-false-closure-validation';
     const report = {
@@ -288,10 +292,35 @@ function parseArgs(argv) {
 function parseAlignedBudgetPair(value) {
   if (!value) return null;
   const budgets = String(value).split(/[,/]/).map(part => Number(part.trim())).filter(Number.isFinite);
-  if (budgets.length !== 2 || budgets[0] !== ALIGNED_BUDGET_PAIR[0] || budgets[1] !== ALIGNED_BUDGET_PAIR[1]) {
-    throw new Error('aligned-budget-pair requires exact 6400/1600 budgets');
+  if (!isSupportedAlignedBudgetPair(budgets)) {
+    throw new Error(unsupportedAlignedBudgetPairMessage());
   }
   return budgets;
+}
+
+function isSupportedAlignedBudgetPair(budgets) {
+  return Array.isArray(budgets)
+    && ALIGNED_BUDGET_PAIRS.some(pair => pair.length === budgets.length
+      && pair.every((budget, index) => Number(budgets[index]) === budget));
+}
+
+function supportedAlignedBudgetPairLabel() {
+  return ALIGNED_BUDGET_PAIRS.map(pair => pair.join('/')).join(' or ');
+}
+
+function unsupportedAlignedBudgetPairMessage() {
+  return 'aligned-budget-pair requires supported 6400/1600 or 6400/3200 budgets';
+}
+
+function expectedAlignedBudgetPair(value = null) {
+  if (isSupportedAlignedBudgetPair(value)) return value.map(Number);
+  if (isSupportedAlignedBudgetPair(value?.budgetPair)) return value.budgetPair.map(Number);
+  const inferredPair = [
+    Number(value?.baselineBudget),
+    Number(value?.testBudget),
+  ];
+  if (isSupportedAlignedBudgetPair(inferredPair)) return inferredPair;
+  return alignedBudgetPair || DEFAULT_ALIGNED_BUDGET_PAIR;
 }
 
 function defaultChromePath() {
@@ -750,7 +779,7 @@ async function captureAlignedBudgetSequence(config) {
     effectiveRoute,
     frames,
   };
-  addAlignedBudgetMotionEnergy(sequence);
+  addAlignedBudgetMotionEnergy(sequence, alignedBudgetPair);
   return sequence;
 }
 
@@ -1227,8 +1256,9 @@ function rejectFalseClosure(report) {
 function rejectAlignedBudgetFalseClosure(report) {
   const pair = report.alignedBudgetPair;
   if (!pair?.sequences?.length) throw new Error('aligned-budget blank/partial evidence rejected: missing sequences');
-  if (pair.baselineBudget !== ALIGNED_BUDGET_PAIR[0] || pair.testBudget !== ALIGNED_BUDGET_PAIR[1]) {
-    throw new Error('aligned-budget-pair requires exact 6400/1600 budgets');
+  const expectedPair = expectedAlignedBudgetPair(pair);
+  if (pair.baselineBudget !== expectedPair[0] || pair.testBudget !== expectedPair[1]) {
+    throw new Error(unsupportedAlignedBudgetPairMessage());
   }
   if (!report.budgetQualityComparisons || Number(report.budgetQualityComparisons.comparisonCount) <= 0) {
     throw new Error('aligned-budget quality summary missing');
@@ -1241,14 +1271,14 @@ function rejectAlignedBudgetFalseClosure(report) {
       if (!frame.budgetCaptures || frame.budgetCaptures.length !== 2 || !frame.raymarch) {
         throw new Error(`aligned-budget blank/partial evidence rejected for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
       }
-      const baseline = frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === ALIGNED_BUDGET_PAIR[0]);
-      const test = frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === ALIGNED_BUDGET_PAIR[1]);
+      const baseline = frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === expectedPair[0]);
+      const test = frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === expectedPair[1]);
       if (!baseline || !test) {
         throw new Error(`aligned-budget stale requested/effective budget for ${sequence.label} frame ${frame.controlledStepFrameIndex}`);
       }
       for (const capture of [baseline, test]) {
         validateCapture(capture);
-        validateAlignedBudgetCapture(capture);
+        validateAlignedBudgetCapture(capture, expectedPair);
       }
       validateCapture(frame.raymarch);
       if (baseline.canvasCapture.sameStateCaptureId !== test.canvasCapture.sameStateCaptureId
@@ -1266,13 +1296,13 @@ function rejectAlignedBudgetFalseClosure(report) {
   }
 }
 
-function validateAlignedBudgetCapture(capture) {
+function validateAlignedBudgetCapture(capture, expectedPair = expectedAlignedBudgetPair()) {
   const requested = Number(capture.boundarySplatRequestedCandidateBudget);
   const effective = Number(capture.boundarySplatEffectiveCandidateBudget);
   const selected = Number(capture.boundarySplatSelectedCandidateCount);
   const sourceCount = Number(capture.boundarySplatSourceCandidateCount ?? capture.boundarySplatCandidateCount);
   const expectedEffective = Math.min(sourceCount, requested);
-  if (!ALIGNED_BUDGET_PAIR.includes(requested)
+  if (!expectedPair.includes(requested)
     || effective !== expectedEffective
     || selected !== effective) {
     throw new Error(`aligned-budget stale requested/effective budget: ${JSON.stringify({
@@ -1339,7 +1369,7 @@ function compareAlignedBudgetCaptures(baseline, test) {
   };
 }
 
-function summarizeAlignedBudgetQuality(sequences) {
+function summarizeAlignedBudgetQuality(sequences, budgetPair = expectedAlignedBudgetPair()) {
   const comparisons = sequences.flatMap(sequence => sequence.frames.map(frame => ({
     sequenceLabel: sequence.label,
     controlledStepFrameIndex: frame.controlledStepFrameIndex,
@@ -1350,8 +1380,8 @@ function summarizeAlignedBudgetQuality(sequences) {
   return {
     authority: 'aligned-budget-paired-sequence-quality-summary-v0',
     comparisonCount: comparisons.length,
-    baselineBudget: ALIGNED_BUDGET_PAIR[0],
-    testBudget: ALIGNED_BUDGET_PAIR[1],
+    baselineBudget: budgetPair[0],
+    testBudget: budgetPair[1],
     retainedLightRatioMean: average(finite('retainedLightRatio')),
     coverageRetainedRatioMean: average(finite('coverageRetainedRatio')),
     structuralMeanAbsDiffMean: average(finite('structuralMeanAbsDiff')),
@@ -1370,6 +1400,7 @@ function certifyAlignedBudgetSequence(pair, qualitySummary) {
       certifiedFramePairCount: 0,
     };
   }
+  const expectedPair = expectedAlignedBudgetPair(pair);
   const sequences = Array.isArray(pair?.sequences) ? pair.sequences : [];
   const sequenceCertifications = sequences.map(sequence => {
     const baselineDiffs = sequence.motionEnergy?.baselineDiffs || {};
@@ -1396,8 +1427,8 @@ function certifyAlignedBudgetSequence(pair, qualitySummary) {
   const certifiedFramePairCount = qualitySummary.comparisons.filter(comparison => (
     Number.isFinite(Number(comparison.structuralMeanAbsDiff))
     && Number.isFinite(Number(comparison.costRatio))
-    && comparison.baselineBudget === ALIGNED_BUDGET_PAIR[0]
-    && comparison.testBudget === ALIGNED_BUDGET_PAIR[1]
+    && comparison.baselineBudget === expectedPair[0]
+    && comparison.testBudget === expectedPair[1]
   )).length;
   const certifiedMotionSequenceCount = sequenceCertifications.filter(certification => certification.liveMotionCertified).length;
   const ok = certifiedMotionSequenceCount > 0
@@ -1406,8 +1437,8 @@ function certifyAlignedBudgetSequence(pair, qualitySummary) {
   return {
     ok,
     authority: 'aligned-budget-learned-sequence-certification-v0',
-    baselineBudget: ALIGNED_BUDGET_PAIR[0],
-    testBudget: ALIGNED_BUDGET_PAIR[1],
+    baselineBudget: expectedPair[0],
+    testBudget: expectedPair[1],
     requestedInstanceCount: pair?.requestedInstanceCount ?? null,
     minMotionMeanAbsDiff: MIN_ALIGNED_BUDGET_MOTION_MEAN_ABS_DIFF,
     minMotionChangedFraction: MIN_ALIGNED_BUDGET_MOTION_CHANGED_FRACTION,
@@ -1627,17 +1658,17 @@ function addMotionEnergy(sequence) {
   };
 }
 
-function addAlignedBudgetMotionEnergy(sequence) {
+function addAlignedBudgetMotionEnergy(sequence, budgetPair = expectedAlignedBudgetPair()) {
   const baselineCaptures = sequence.frames
-    .map(frame => frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === ALIGNED_BUDGET_PAIR[0]))
+    .map(frame => frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === budgetPair[0]))
     .filter(Boolean);
   const testCaptures = sequence.frames
-    .map(frame => frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === ALIGNED_BUDGET_PAIR[1]))
+    .map(frame => frame.budgetCaptures.find(capture => capture.boundarySplatRequestedCandidateBudget === budgetPair[1]))
     .filter(Boolean);
   sequence.motionEnergy = {
     authority: 'adjacent-frame-cdp-png-diff-aligned-budget-v0',
-    baselineBudget: ALIGNED_BUDGET_PAIR[0],
-    testBudget: ALIGNED_BUDGET_PAIR[1],
+    baselineBudget: budgetPair[0],
+    testBudget: budgetPair[1],
     baselineDiffs: adjacentImageDiffs(baselineCaptures),
     testDiffs: adjacentImageDiffs(testCaptures),
   };

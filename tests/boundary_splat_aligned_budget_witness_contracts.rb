@@ -13,10 +13,12 @@ class BoundarySplatAlignedBudgetWitnessContracts < Minitest::Test
     assert_match(/kaminos\.volume\.boundary-splat-aligned-budget-pair\.v0/, @witness)
     assert_match(/volume_boundary_splat_aligned_budget_pair/, @witness)
     assert_match(/parseAlignedBudgetPair/, @witness)
-    assert_match(/ALIGNED_BUDGET_PAIR\s*=\s*\[6400,\s*1600\]/, @witness)
+    assert_match(/ALIGNED_BUDGET_PAIRS[\s\S]*\[6400,\s*1600\][\s\S]*\[6400,\s*3200\]/, @witness)
+    assert_match(/isSupportedAlignedBudgetPair/, @witness)
     assert_match(/ALIGNED_BUDGET_INSTANCE_COUNT\s*=\s*100/, @witness)
     assert_match(/aligned-budget-pair requires exact 100 instances/, @witness)
-    assert_match(/aligned-budget-pair requires exact 6400\/1600 budgets/, @witness)
+    assert_match(/aligned-budget-pair requires supported 6400\/1600 or 6400\/3200 budgets/, @witness)
+    assert_match(/expectedAlignedBudgetPair/, @witness)
   end
 
   def test_pair_captures_same_state_budgets_and_costs
@@ -69,6 +71,7 @@ class BoundarySplatAlignedBudgetWitnessContracts < Minitest::Test
     assert_match(/aligned-budget fallback rejected/, @witness)
     assert_match(/aligned-budget copy\/overflow rejected/, @witness)
     assert_match(/aligned-budget blank\/partial evidence rejected/, @witness)
+    assert_match(/validateAlignedBudgetCapture\(capture,\s*expectedPair\)/, @witness)
   end
 
   def test_aligned_pair_certifies_its_own_sequence_motion_not_analytic_repeat_noise
