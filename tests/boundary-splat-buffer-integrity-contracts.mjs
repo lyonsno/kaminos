@@ -8,6 +8,21 @@ const core = await import('../volume-core.js');
 assert.equal(typeof core.boundarySplatBufferIntegrity, 'function', 'runtime must expose a deterministic buffer-integrity audit instead of equating zero compaction overflow with all buffers being safe');
 assert.equal(typeof core.boundarySplatHistoryAgeFrames, 'function', 'runtime must expose exact physical history age under a stride-compressed ring');
 assert.equal(typeof core.boundarySplatDeviceCandidateCapacity, 'function', 'capacity growth must preflight the physical history allocation against WebGPU device limits');
+assert.equal(typeof core.summarizeBoundarySplatCandidateGeometry, 'function', 'runtime must expose deterministic candidate geometry diagnostics for broad-footprint triage');
+
+const candidateRows = new Float32Array([
+  -1, 0, 1, 0.5, 1, 0.5, 0.25, 0.125, 0.25, 0.25, 0.5, 0.5,
+  1, 1, -1, 0.75, 0.8, 0.4, 0.2, 0.25, 0.5, 0.75, 0.75, 0.75,
+]);
+const geometry = core.summarizeBoundarySplatCandidateGeometry(candidateRows, 2);
+assert.equal(geometry.identity, 'boundary-splat-candidate-geometry-summary-v0');
+assert.equal(geometry.validCandidateCount, 2);
+assert.deepEqual(geometry.position.min, [-1, 0, -1]);
+assert.deepEqual(geometry.position.max, [1, 1, 1]);
+assert.deepEqual(geometry.position.mean, [0, 0.5, 0]);
+assert.deepEqual(geometry.radius.max, [0.5, 0.75]);
+assert.equal(geometry.support.mean, 0.625);
+assert.equal(geometry.opacity.mean, 0.1875);
 
 assert.equal(core.boundarySplatDeviceCandidateCapacity({
   maxBufferSize: 268_435_456,
@@ -106,6 +121,7 @@ assert.match(coreSource, /boundarySplatBufferIntegrity:\s*bufferIntegrity/, 'deb
 assert.match(coreSource, /function ensureBoundarySplatBuffers\(\)[\s\S]*boundarySplatCapacity\s*=\s*Math\.min\([\s\S]*boundarySplatDeviceCandidateCapacity/, 'initial and rebuilt history allocation must apply the device candidate ceiling before createBuffer');
 assert.match(coreSource, /boundarySplatPhysicalHistoryAgeFrames/, 'runtime telemetry must distinguish physical frame age from nominal slot-stride labels');
 assert.match(coreSource, /boundarySplatBufferIntegrityFailureReason/, 'runtime must fail loud when a non-compaction buffer invariant is violated');
+assert.match(coreSource, /sampleBoundarySplatCandidateGeometry/, 'prototype must expose bounded paused-frame candidate geometry readback');
 assert.match(witnessSource, /boundary-splat-buffer-integrity-v0/, 'PBR witness must require the exact buffer-integrity identity');
 assert.match(witnessSource, /boundarySplatBufferIntegrity\?\.ok !== true/, 'PBR witness must reject missing or failed integrity instead of trusting zero compaction overflow');
 assert.match(witnessSource, /boundarySplatBufferIntegrityFailureReason/, 'PBR witness must preserve the effective non-compaction failure reason');

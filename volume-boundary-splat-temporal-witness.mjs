@@ -137,6 +137,16 @@ try {
       if (metrics.litPixels <= 200 || metrics.litHeightRatio <= 0 || metrics.litWidthRatio <= 0) {
         throw new Error(`blank-or-partial-live-canvas:${JSON.stringify(metrics)}`);
       }
+      let candidateGeometry = null;
+      if (metrics.largestLitComponentFraction >= 0.5) {
+        candidateGeometry = await evaluate(
+          'window.__kaminosVolumePrototype.sampleBoundarySplatCandidateGeometry()',
+          true,
+        );
+        if (candidateGeometry?.ok !== true) {
+          throw new Error(`collapse-candidate-geometry-readback-failed:${JSON.stringify(candidateGeometry)}`);
+        }
+      }
       const frameCount = Number(state.frameCount);
       const historyWriteSlot = Number(state.boundarySplatHistoryWriteSlot);
       const imageName = `temporal-frame-${String(sampleIndex).padStart(4, '0')}-f${frameCount}-slot${historyWriteSlot}.png`;
@@ -164,6 +174,7 @@ try {
         candidateCopyBytes: Number(state.boundarySplatCopyBytesThisFrame),
         fallbackReason: state.boundarySplatFallbackReason,
         capturePause: pause,
+        candidateGeometry,
         metrics,
         image: {
           path: imagePath,

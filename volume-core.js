@@ -376,6 +376,83 @@ export function boundarySplatBufferIntegrity(options = {}) {
   };
 }
 
+export function summarizeBoundarySplatCandidateGeometry(rows, requestedCandidateCount) {
+  const stride = BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES / Float32Array.BYTES_PER_ELEMENT;
+  const availableCount = Math.floor((rows?.length || 0) / stride);
+  const candidateCount = Math.max(0, Math.min(
+    availableCount,
+    Math.floor(Number(requestedCandidateCount) || 0),
+  ));
+  const positions = [[], [], []];
+  const radii = [[], []];
+  const supports = [];
+  const opacities = [];
+  let invalidCandidateCount = 0;
+  for (let index = 0; index < candidateCount; index += 1) {
+    const offset = index * stride;
+    const values = [
+      rows[offset], rows[offset + 1], rows[offset + 2], rows[offset + 3],
+      rows[offset + 7], rows[offset + 8], rows[offset + 9],
+    ].map(Number);
+    if (!values.every(Number.isFinite) || values[3] <= 0 || values[5] < 0 || values[6] < 0) {
+      invalidCandidateCount += 1;
+      continue;
+    }
+    positions[0].push(values[0]);
+    positions[1].push(values[1]);
+    positions[2].push(values[2]);
+    supports.push(values[3]);
+    opacities.push(values[4]);
+    radii[0].push(values[5]);
+    radii[1].push(values[6]);
+  }
+  const validCandidateCount = supports.length;
+  return {
+    identity: 'boundary-splat-candidate-geometry-summary-v0',
+    authority: 'paused-current-live-candidate-prefix-gpu-readback-v0',
+    requestedCandidateCount: Math.max(0, Math.floor(Number(requestedCandidateCount) || 0)),
+    availableCandidateCount: availableCount,
+    validCandidateCount,
+    invalidCandidateCount,
+    position: vectorSummary(positions),
+    radius: vectorSummary(radii),
+    support: scalarSummary(supports),
+    opacity: scalarSummary(opacities),
+  };
+}
+
+function vectorSummary(axes) {
+  const summaries = axes.map(scalarSummary);
+  return {
+    min: summaries.map(summary => summary.min),
+    max: summaries.map(summary => summary.max),
+    mean: summaries.map(summary => summary.mean),
+    p05: summaries.map(summary => summary.p05),
+    p50: summaries.map(summary => summary.p50),
+    p95: summaries.map(summary => summary.p95),
+    standardDeviation: summaries.map(summary => summary.standardDeviation),
+  };
+}
+
+function scalarSummary(values) {
+  if (!values.length) {
+    return { min: null, max: null, mean: null, p05: null, p50: null, p95: null, standardDeviation: null };
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const mean = sorted.reduce((sum, value) => sum + value, 0) / sorted.length;
+  const percentile = fraction => sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * fraction))];
+  const variance = sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) / sorted.length;
+  return {
+    min: sorted[0],
+    max: sorted.at(-1),
+    mean,
+    p05: percentile(0.05),
+    p50: percentile(0.5),
+    p95: percentile(0.95),
+    standardDeviation: Math.sqrt(variance),
+  };
+}
+
 export function boundarySplatProjectedDiameterPx(transform, viewProjElements, viewportWidth, viewportHeight) {
   const translate = transform?.translate || [0, 0, 0];
   const scale = Math.max(0, Number(transform?.scale) || 0);
@@ -6221,6 +6298,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let lastTemporalControlSignature = '';
   let format = null;
   let raf = 0;
+  let boundarySplatWitnessPaused = false;
   const timingSamples = {
     rafDelta: [],
     cpuFrame: [],
@@ -10327,10 +10405,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!state.active || !device || !boundarySplatRequested()) {
       return { ok: false, reason: 'inactive-or-boundary-splat-route-unavailable' };
     }
+    if (boundarySplatWitnessPaused) return { ok: false, reason: 'witness-frame-already-paused' };
     cancelAnimationFrame(raf);
     raf = 0;
-    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-    if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    boundarySplatWitnessPaused = true;
+    try {
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    } catch (error) {
+      boundarySplatWitnessPaused = false;
+      if (state.active) raf = requestAnimationFrame(render);
+      throw error;
+    }
     return {
       identity: 'boundary-splat-exact-frame-witness-pause-v0',
       ok: true,
@@ -10345,7 +10431,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function resumeBoundarySplatWitnessFrame() {
     if (!state.active || !device) return { ok: false, reason: 'inactive' };
+    if (!boundarySplatWitnessPaused) return { ok: false, reason: 'witness-frame-not-paused' };
     cancelAnimationFrame(raf);
+    boundarySplatWitnessPaused = false;
     raf = requestAnimationFrame(render);
     return {
       identity: 'boundary-splat-exact-frame-witness-resume-v0',
@@ -10354,6 +10442,46 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
     };
+  }
+
+  async function sampleBoundarySplatCandidateGeometry() {
+    if (!boundarySplatWitnessPaused) {
+      return { ok: false, reason: 'exact-frame-witness-pause-required' };
+    }
+    const sourceCandidateCount = Math.max(0, Math.min(
+      boundarySplatCapacity,
+      Math.floor(Number(state.boundarySplatSourceCandidateCount) || 0),
+    ));
+    if (!sourceCandidateCount) return { ok: false, reason: 'source-candidate-count-unavailable' };
+    const readbackBytes = sourceCandidateCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+    const readback = device.createBuffer({
+      label: 'kaminos paused candidate geometry diagnostic readback',
+      size: readbackBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    let mapped = false;
+    try {
+      const encoder = device.createCommandEncoder({ label: 'kaminos paused candidate geometry diagnostic copy' });
+      encoder.copyBufferToBuffer(boundarySplatBuffer, 0, readback, 0, readbackBytes);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      mapped = true;
+      const rows = new Float32Array(readback.getMappedRange().slice(0));
+      const summary = summarizeBoundarySplatCandidateGeometry(rows, sourceCandidateCount);
+      return {
+        identity: 'boundary-splat-paused-candidate-geometry-readback-v0',
+        ok: summary.validCandidateCount === sourceCandidateCount && summary.invalidCandidateCount === 0,
+        authority: 'on-trigger-paused-current-live-candidate-prefix-gpu-readback-v0',
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        sourceCandidateCount,
+        readbackBytes,
+        summary,
+      };
+    } finally {
+      if (mapped) readback.unmap();
+      readback.destroy();
+    }
   }
 
   async function sampleBoundarySplatFeatureCapture(instanceCount) {
@@ -13030,6 +13158,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     primeBoundarySplatLiveHistory,
     captureBoundarySplatWitnessFrame,
     resumeBoundarySplatWitnessFrame,
+    sampleBoundarySplatCandidateGeometry,
     sampleBoundarySplatInstanceCostLadder,
     sampleBoundarySplatPbrCostLadder,
     sampleBoundarySplatLiveCadence,

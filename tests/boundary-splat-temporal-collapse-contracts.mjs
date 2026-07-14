@@ -106,6 +106,7 @@ assert.match(witness, /captureBoundarySplatWitnessFrame/, 'witness must freeze a
 assert.match(witness, /resumeBoundarySplatWitnessFrame/, 'witness must resume the same live simulator after every frozen capture');
 assert.match(witness, /document\.visibilityState/, 'witness must fail when the supposedly live page is hidden');
 assert.match(witness, /validateBoundarySplatTemporalSequence/, 'completed report must prove temporal and image advancement');
+assert.match(witness, /sampleBoundarySplatCandidateGeometry/, 'operator-shaped candidates must preserve paused-frame source geometry before the simulator resumes');
 assert.match(witness, /lastTrustworthyEvidence/, 'failure before completion must still leave a durable report');
 assert.match(witness, /requestedEffectiveRouteAgreement/, 'report must preserve requested/effective route agreement');
 assert.doesNotMatch(witness, /slice\(0,\s*\d+\)/, 'witness must not silently retain only a capped prefix of the sequence');
