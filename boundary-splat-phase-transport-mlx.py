@@ -22,6 +22,7 @@ CORRESPONDENCE_AUTHORITY = "stable-site-first-bounded-local-grid-feature-corresp
 ARCHITECTURE_AUTHORITY = "shared-two-layer-relu-carrier-displacement-and-residual-birth-heads-v0"
 LEGACY_OBJECTIVE_FAMILY = "population-weighted-carrier-and-residual-birth-v0"
 MOTION_BALANCED_OBJECTIVE_FAMILY = "motion-balanced-static-scaffold-v0"
+EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY = "motion-balanced-eulerian-destination-occupancy-v0"
 FEATURES = (
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.density", "material.heat", "material.fuel", "material.detail",
@@ -36,6 +37,10 @@ DISPLACEMENTS = tuple(
 )
 DEATH_CLASS = len(DISPLACEMENTS)
 CARRIER_COHORTS = ("stable-q1", "stable-q2", "stable-q3", "stable-q4", "transported", "death")
+EULERIAN_DESTINATION_COHORTS = (
+    "stable-q1", "stable-q2", "stable-q3", "stable-q4",
+    "transported", "birth", "death", "empty",
+)
 POSITION_PRECISION = 6
 DENSE_GRID_MAX_CELLS_PER_SOURCE = 256
 DENSE_GRID_MIN_CELL_BUDGET = 4096
@@ -336,6 +341,95 @@ def build_pair_dataset(source, target, grid_step, radius_cells=1):
     }
 
 
+def eulerian_destination_universe(source, grid_step, plan=None):
+    return sorted(set(source["keys"]) | set(prediction_universe(source, grid_step, plan)))
+
+
+def local_destination_donors(destination_key, source, grid_step):
+    donors = []
+    for class_index, delta in enumerate(DISPLACEMENTS):
+        source_key = offset_key(destination_key, tuple(-value for value in delta), grid_step)
+        source_index = source["index"].get(source_key)
+        if source_index is not None:
+            donors.append((class_index, source_index))
+    return donors
+
+
+def build_eulerian_pair_dataset(source, target, grid_step, radius_cells=1):
+    correspondence = build_correspondence(source, target, grid_step, radius_cells)
+    source_cohorts, _ = carrier_motion_cohorts(source, target, correspondence)
+    matched_targets = {
+        target_index: (source_index, delta, kind)
+        for source_index, target_index, delta, kind, _ in correspondence["matches"]
+    }
+    destination_keys = eulerian_destination_universe(source, grid_step)
+    destination_key_set = set(destination_keys)
+    carrier_labels = np.full(len(destination_keys), DEATH_CLASS, dtype=np.int32)
+    occupancy_labels = np.zeros(len(destination_keys), dtype=np.float32)
+    destination_cohorts = np.full(len(destination_keys), "empty", dtype="<U12")
+    source_destination_mask = np.zeros(len(destination_keys), dtype=bool)
+
+    for destination_index, key in enumerate(destination_keys):
+        direct_source_index = source["index"].get(key)
+        source_destination_mask[destination_index] = direct_source_index is not None
+        target_index = target["index"].get(key)
+        if target_index is None:
+            if direct_source_index is not None:
+                destination_cohorts[destination_index] = "death"
+            continue
+        occupancy_labels[destination_index] = 1.0
+        matched = matched_targets.get(target_index)
+        if matched is not None:
+            source_index, delta, kind = matched
+            carrier_labels[destination_index] = displacement_class(delta)
+            destination_cohorts[destination_index] = (
+                "transported" if kind == "transported" else source_cohorts[source_index]
+            )
+            continue
+        donors = local_destination_donors(key, source, grid_step)
+        if not donors:
+            raise ValueError("supported Eulerian birth has no local attribute donor")
+        class_index, _ = min(
+            donors,
+            key=lambda row: (
+                feature_distance(source["candidates"][row[1]], target["candidates"][target_index]),
+                source["keys"][row[1]],
+            ),
+        )
+        carrier_labels[destination_index] = class_index
+        destination_cohorts[destination_index] = "birth"
+
+    unsupported_birth_count = sum(
+        1
+        for target_index in correspondence["births"]
+        if target["keys"][target_index] not in destination_key_set
+    )
+    cohort_counts = {
+        cohort: int(np.sum(destination_cohorts == cohort))
+        for cohort in EULERIAN_DESTINATION_COHORTS
+    }
+    if np.any(~np.isin(destination_cohorts, EULERIAN_DESTINATION_COHORTS)):
+        raise ValueError("Eulerian destination cohorts are incomplete")
+    destination_inputs = make_directional_inputs(destination_keys, source, grid_step)
+    birth_mask = ~source_destination_mask
+    return {
+        "correspondence": correspondence,
+        "destinationKeys": destination_keys,
+        "destinationInputs": destination_inputs,
+        "destinationCohorts": destination_cohorts,
+        "occupancyLabels": occupancy_labels,
+        "sourceDestinationMask": source_destination_mask,
+        "unsupportedBirthCount": unsupported_birth_count,
+        "carrierInputs": destination_inputs,
+        "carrierLabels": carrier_labels,
+        "carrierCohorts": destination_cohorts,
+        "cohortCounts": cohort_counts,
+        "birthInputs": destination_inputs[birth_mask],
+        "birthLabels": occupancy_labels[birth_mask],
+        "birthKeys": [key for key, include in zip(destination_keys, birth_mask) if include],
+    }
+
+
 def build_motion_sampling_pools(cohorts):
     cohorts = np.asarray(cohorts)
     pools = {}
@@ -356,6 +450,35 @@ def sample_motion_balanced_indices(rng, pools, batch_size):
     sampled = []
     for cohort_index, cohort in enumerate(CARRIER_COHORTS):
         indices = pools[cohort]
+        count = base + (1 if cohort_index < remainder else 0)
+        sampled.append(rng.choice(indices, size=count, replace=True))
+    result = np.concatenate(sampled).astype(np.int64)
+    rng.shuffle(result)
+    return result
+
+
+def build_eulerian_sampling_pools(cohorts):
+    cohorts = np.asarray(cohorts)
+    pools = {}
+    for cohort in EULERIAN_DESTINATION_COHORTS:
+        indices = np.flatnonzero(cohorts == cohort)
+        if not len(indices):
+            raise ValueError(f"Eulerian balanced sampling requires populated cohort {cohort}")
+        pools[cohort] = indices
+    return pools
+
+
+def sample_eulerian_balanced_indices(rng, pools, batch_size):
+    if tuple(pools) != EULERIAN_DESTINATION_COHORTS:
+        raise ValueError("Eulerian balanced sampling pools are incomplete or out of order")
+    if batch_size < len(pools):
+        raise ValueError("Eulerian balanced batch must contain at least one row per destination cohort")
+    base, remainder = divmod(int(batch_size), len(pools))
+    sampled = []
+    for cohort_index, cohort in enumerate(EULERIAN_DESTINATION_COHORTS):
+        indices = pools[cohort]
+        if not len(indices):
+            raise ValueError(f"Eulerian balanced sampling requires populated cohort {cohort}")
         count = base + (1 if cohort_index < remainder else 0)
         sampled.append(rng.choice(indices, size=count, replace=True))
     result = np.concatenate(sampled).astype(np.int64)
@@ -508,6 +631,82 @@ def calibrate_action_margin(probabilities, labels):
     return best
 
 
+def calibrate_destination_death_margin(probabilities, labels, inputs, source_destination_mask):
+    probabilities = np.asarray(probabilities, dtype=np.float32)
+    labels = np.asarray(labels, dtype=np.int32)
+    inputs = np.asarray(inputs, dtype=np.float32)
+    source_destination_mask = np.asarray(source_destination_mask, dtype=bool)
+    if (
+        probabilities.shape != (len(labels), DEATH_CLASS + 1)
+        or inputs.shape != (len(labels), 64)
+        or source_destination_mask.shape != (len(labels),)
+    ):
+        raise ValueError("Eulerian death calibration rows do not align")
+    selected_probabilities = probabilities[source_destination_mask]
+    selected_labels = labels[source_destination_mask]
+    selected_inputs = inputs[source_destination_mask]
+    if not len(selected_labels) or not np.any(selected_labels == DEATH_CLASS):
+        raise ValueError("Eulerian death calibration requires source-cell death examples")
+    valid_probabilities = np.full((len(selected_labels), DEATH_CLASS), -np.inf, dtype=np.float32)
+    for class_index, delta in enumerate(DISPLACEMENTS):
+        inverse_class = displacement_class(tuple(-value for value in delta))
+        valid = selected_inputs[:, 21 + inverse_class] > 0.5
+        valid_probabilities[valid, class_index] = selected_probabilities[valid, class_index]
+    best_valid = np.max(valid_probabilities, axis=1)
+    if np.any(~np.isfinite(best_valid)):
+        raise ValueError("Eulerian death calibration found a source cell without a valid donor")
+    margins = selected_probabilities[:, DEATH_CLASS] - best_valid
+    truth = selected_labels == DEATH_CLASS
+    order = np.argsort(-margins, kind="stable")
+    sorted_margins = margins[order]
+    sorted_truth = truth[order].astype(np.int64)
+    cumulative_true = np.cumsum(sorted_truth)
+    group_ends = np.flatnonzero(np.r_[sorted_margins[1:] != sorted_margins[:-1], True])
+    total_true = int(np.sum(truth))
+    candidate_ends = [int(end) for end in group_ends if float(sorted_margins[end]) > 0.0]
+    predicted_at_zero = margins >= 0.0
+    zero_tp = int(np.sum(predicted_at_zero & truth))
+    zero_fp = int(np.sum(predicted_at_zero & ~truth))
+    zero_fn = total_true - zero_tp
+    zero_precision = zero_tp / max(1, zero_tp + zero_fp)
+    zero_recall = zero_tp / max(1, zero_tp + zero_fn)
+    best = {
+        "authority": "training-eulerian-source-death-margin-f1-v0",
+        "algorithmAuthority": "descending-margin-cumulative-confusion-v0",
+        "thresholdCandidateCount": len(candidate_ends) + 1,
+        "threshold": 0.0,
+        "precision": zero_precision,
+        "recall": zero_recall,
+        "fScore": 2 * zero_precision * zero_recall / max(1e-12, zero_precision + zero_recall),
+        "truePositive": zero_tp,
+        "falsePositive": zero_fp,
+        "falseNegative": zero_fn,
+        "sampleCount": len(selected_labels),
+    }
+    for end in candidate_ends:
+        predicted_count = end + 1
+        tp = int(cumulative_true[end])
+        fp = predicted_count - tp
+        fn = total_true - tp
+        precision = tp / max(1, tp + fp)
+        recall = tp / max(1, tp + fn)
+        row = {
+            **best,
+            "threshold": float(sorted_margins[end]),
+            "precision": precision,
+            "recall": recall,
+            "fScore": 2 * precision * recall / max(1e-12, precision + recall),
+            "truePositive": tp,
+            "falsePositive": fp,
+            "falseNegative": fn,
+        }
+        if (row["fScore"], row["precision"], row["threshold"]) > (
+            best["fScore"], best["precision"], best["threshold"]
+        ):
+            best = row
+    return best
+
+
 def calibrate_target_support_ratio(pair_rows):
     ratios = []
     for row in pair_rows:
@@ -638,7 +837,11 @@ def validate_frozen_model_document(document):
     if not math.isfinite(float(target_support.get("medianRatio", math.nan))) or float(target_support["medianRatio"]) <= 0:
         raise ValueError("frozen model target support calibration mismatch")
     objective_family = document.get("training", {}).get("objectiveFamily", LEGACY_OBJECTIVE_FAMILY)
-    if objective_family not in (LEGACY_OBJECTIVE_FAMILY, MOTION_BALANCED_OBJECTIVE_FAMILY):
+    if objective_family not in (
+        LEGACY_OBJECTIVE_FAMILY,
+        MOTION_BALANCED_OBJECTIVE_FAMILY,
+        EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+    ):
         raise ValueError("frozen model objective family mismatch")
     composition_authority = "carrier-argmax-with-ranked-residual-birth-v0"
     if objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY:
@@ -653,6 +856,18 @@ def validate_frozen_model_document(document):
         if float(action["threshold"]) < 0:
             raise ValueError("frozen motion-balanced model action calibration threshold must be nonnegative")
         composition_authority = "copied-static-scaffold-with-calibrated-carrier-actions-v0"
+    elif objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+        destination_death = document.get("calibration", {}).get("destinationDeath", {})
+        if (
+            destination_death.get("authority") != "training-eulerian-source-death-margin-f1-v0"
+            or not math.isfinite(float(destination_death.get("threshold", math.nan)))
+            or not math.isfinite(float(destination_death.get("precision", math.nan)))
+            or not math.isfinite(float(destination_death.get("recall", math.nan)))
+        ):
+            raise ValueError("frozen Eulerian model destination death calibration mismatch")
+        if float(destination_death["threshold"]) < 0:
+            raise ValueError("frozen Eulerian model destination death calibration threshold must be nonnegative")
+        composition_authority = "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0"
     return {
         "hiddenSize": hidden_size,
         "mean": mean,
@@ -746,6 +961,126 @@ def compose_static_scaffold_claims(source, carrier_probabilities, grid_step, act
     }
 
 
+def compose_eulerian_destination_occupancy(
+    source,
+    destination_keys,
+    carrier_probabilities,
+    occupancy_probabilities,
+    grid_step,
+    death_margin_threshold,
+    birth_threshold,
+    target_support_ratio,
+    destination_inputs=None,
+):
+    destination_keys = [stable_key(key) for key in destination_keys]
+    carrier_probabilities = np.asarray(carrier_probabilities, dtype=np.float32)
+    occupancy_probabilities = np.asarray(occupancy_probabilities, dtype=np.float32)
+    if carrier_probabilities.shape != (len(destination_keys), DEATH_CLASS + 1):
+        raise ValueError("Eulerian carrier probabilities do not align with destination cells")
+    if occupancy_probabilities.shape != (len(destination_keys),):
+        raise ValueError("Eulerian occupancy probabilities do not align with destination cells")
+    if (
+        not math.isfinite(death_margin_threshold)
+        or death_margin_threshold < 0
+        or not math.isfinite(birth_threshold)
+        or not 0 <= birth_threshold <= 1
+        or not math.isfinite(target_support_ratio)
+        or target_support_ratio <= 0
+    ):
+        raise ValueError("Eulerian composition calibration is invalid")
+
+    destination_inputs = (
+        make_directional_inputs(destination_keys, source, grid_step)
+        if destination_inputs is None
+        else np.asarray(destination_inputs, dtype=np.float32)
+    )
+    if destination_inputs.shape != (len(destination_keys), 64):
+        raise ValueError("Eulerian destination inputs do not align with destination cells")
+    inverse_classes = np.asarray([
+        displacement_class(tuple(-value for value in delta))
+        for delta in DISPLACEMENTS
+    ], dtype=np.int32)
+    valid_donors = destination_inputs[:, 21 + inverse_classes] > 0.5
+    donor_probabilities = np.where(valid_donors, carrier_probabilities[:, :DEATH_CLASS], -np.inf)
+    best_classes = np.argmax(donor_probabilities, axis=1)
+    best_scores = np.take_along_axis(donor_probabilities, best_classes[:, None], axis=1).squeeze(1)
+    has_donor = np.isfinite(best_scores)
+    source_present = destination_inputs[:, 4] > 0.5
+    death_margins = carrier_probabilities[:, DEATH_CLASS] - best_scores
+    activated_deaths = source_present & has_donor & (death_margins >= death_margin_threshold)
+    scaffold_rows = np.flatnonzero(source_present & has_donor & ~activated_deaths)
+    birth_rows = np.flatnonzero(
+        ~source_present & has_donor & (occupancy_probabilities >= birth_threshold)
+    )
+
+    claims = {}
+    for destination_index in scaffold_rows:
+        key = destination_keys[destination_index]
+        class_index = int(best_classes[destination_index])
+        donor_key = offset_key(key, tuple(-value for value in DISPLACEMENTS[class_index]), grid_step)
+        source_index = source["index"].get(donor_key)
+        if source_index is None:
+            raise ValueError("Eulerian scaffold selected a missing attribute donor")
+        claims[key] = (float(best_scores[destination_index]), source_index, class_index, "scaffold")
+
+    birth_candidates = []
+    for destination_index in birth_rows:
+        key = destination_keys[destination_index]
+        class_index = int(best_classes[destination_index])
+        donor_key = offset_key(key, tuple(-value for value in DISPLACEMENTS[class_index]), grid_step)
+        source_index = source["index"].get(donor_key)
+        if source_index is None:
+            raise ValueError("Eulerian birth selected a missing attribute donor")
+        birth_candidates.append((
+            float(occupancy_probabilities[destination_index]),
+            key,
+            source_index,
+            class_index,
+        ))
+
+    target_support_budget = max(1, round(len(source["keys"]) * target_support_ratio))
+    birth_budget = max(0, target_support_budget - len(claims))
+    birth_candidates.sort(key=lambda row: (-row[0], row[1]))
+    for occupancy, key, source_index, class_index in birth_candidates[:birth_budget]:
+        claims[key] = (occupancy, source_index, class_index, "birth")
+
+    rows = []
+    features = []
+    stable_attribute_count = 0
+    transported_attribute_count = 0
+    selected_birth_count = 0
+    if not claims:
+        raise ValueError("Eulerian composition removed all support")
+    for target_key, (_, source_index, class_index, kind) in sorted(claims.items()):
+        row = source["splats"][source_index].copy()
+        row[:3] = target_key
+        rows.append(row)
+        features.append(source["candidates"][source_index].copy())
+        if DISPLACEMENTS[class_index] == (0, 0, 0):
+            stable_attribute_count += 1
+        else:
+            transported_attribute_count += 1
+        if kind == "birth":
+            selected_birth_count += 1
+    result = index_frame(np.asarray(features, dtype=np.float32), np.asarray(rows, dtype=np.float32))
+    return result, {
+        "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+        "sourceCount": len(source["keys"]),
+        "predictedCount": len(result["keys"]),
+        "destinationCandidateCount": len(destination_keys),
+        "defaultStaticCount": len(scaffold_rows),
+        "activatedDeathCount": int(np.sum(activated_deaths)),
+        "stableAttributeCount": stable_attribute_count,
+        "transportedAttributeCount": transported_attribute_count,
+        "invalidDonorCount": int(np.sum(~has_donor)),
+        "birthThreshold": float(birth_threshold),
+        "deathMarginThreshold": float(death_margin_threshold),
+        "targetSupportBudget": target_support_budget,
+        "thresholdQualifiedBirthCount": len(birth_rows),
+        "selectedBirthCount": selected_birth_count,
+    }
+
+
 def recurrent_predict(
     model,
     source,
@@ -756,8 +1091,33 @@ def recurrent_predict(
     target_support_calibration,
     batch_size,
     action_calibration=None,
+    destination_death_calibration=None,
 ):
     grid_plan = local_grid_plan(source, grid_step)
+    if destination_death_calibration is not None:
+        destination_keys = eulerian_destination_universe(source, grid_step, grid_plan)
+        destination_inputs = make_directional_inputs(destination_keys, source, grid_step, grid_plan)
+        carrier_probabilities, occupancy_probabilities = predict_model(
+            model, destination_inputs, input_mean, input_scale, batch_size,
+        )
+        result, accounting = compose_eulerian_destination_occupancy(
+            source,
+            destination_keys,
+            carrier_probabilities,
+            occupancy_probabilities,
+            grid_step,
+            float(destination_death_calibration["threshold"]),
+            float(birth_calibration["threshold"]),
+            float(target_support_calibration["medianRatio"]),
+            destination_inputs,
+        )
+        accounting["gridLookup"] = {
+            "authority": grid_plan["authority"],
+            "strategy": grid_plan["strategy"],
+            "boundingVolumeCells": grid_plan["boundingVolumeCells"],
+            "denseCellBudget": grid_plan["denseCellBudget"],
+        }
+        return result, accounting
     carrier_inputs = make_directional_inputs(source["keys"], source, grid_step, grid_plan)
     carrier_probabilities, _ = predict_model(model, carrier_inputs, input_mean, input_scale, batch_size)
     scaffold_accounting = None
@@ -940,7 +1300,11 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=713)
     parser.add_argument(
         "--objective-family",
-        choices=(LEGACY_OBJECTIVE_FAMILY, MOTION_BALANCED_OBJECTIVE_FAMILY),
+        choices=(
+            LEGACY_OBJECTIVE_FAMILY,
+            MOTION_BALANCED_OBJECTIVE_FAMILY,
+            EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+        ),
         default=LEGACY_OBJECTIVE_FAMILY,
     )
     return parser.parse_args()
@@ -1041,6 +1405,11 @@ def main():
                 if objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
                 else None
             )
+            destination_death_calibration = (
+                frozen_model_document["calibration"]["destinationDeath"]
+                if objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
+                else None
+            )
             for step_index in range(1, len(inference_docs)):
                 predicted, recurrent = recurrent_predict(
                     frozen_model,
@@ -1052,6 +1421,7 @@ def main():
                     target_support_calibration,
                     args.batch_size,
                     action_calibration,
+                    destination_death_calibration,
                 )
                 exact = frames[inference_docs[step_index]["id"]]
                 recurrent_rows.append({"step": step_index, **recurrent})
@@ -1111,7 +1481,11 @@ def main():
         datasets = []
         pair_reports = []
         for left, right in training_pairs:
-            dataset = build_pair_dataset(frames[left["id"]], frames[right["id"]], grid_step)
+            dataset = (
+                build_eulerian_pair_dataset(frames[left["id"]], frames[right["id"]], grid_step)
+                if args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
+                else build_pair_dataset(frames[left["id"]], frames[right["id"]], grid_step)
+            )
             datasets.append(dataset)
             pair_reports.append({
                 "sourceFrameId": left["id"], "targetFrameId": right["id"],
@@ -1122,12 +1496,23 @@ def main():
                 "birthSampleCount": len(dataset["birthLabels"]),
                 "birthPositiveCount": int(np.sum(dataset["birthLabels"])),
                 "carrierCohorts": dataset["cohortCounts"],
+                **(
+                    {"unsupportedBirthCount": dataset["unsupportedBirthCount"]}
+                    if args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
+                    else {}
+                ),
             })
         carrier_inputs = np.concatenate([dataset["carrierInputs"] for dataset in datasets])
         carrier_labels = np.concatenate([dataset["carrierLabels"] for dataset in datasets])
         carrier_cohorts = np.concatenate([dataset["carrierCohorts"] for dataset in datasets])
         birth_inputs = np.concatenate([dataset["birthInputs"] for dataset in datasets])
         birth_labels = np.concatenate([dataset["birthLabels"] for dataset in datasets])
+        source_destination_mask = (
+            np.concatenate([dataset["sourceDestinationMask"] for dataset in datasets])
+            if args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
+            else None
+        )
+        raw_carrier_inputs = carrier_inputs
         all_inputs = np.concatenate((carrier_inputs, birth_inputs))
         input_mean = np.mean(all_inputs, axis=0, dtype=np.float64).astype(np.float32)
         input_scale = np.std(all_inputs, axis=0, dtype=np.float64).astype(np.float32)
@@ -1139,6 +1524,11 @@ def main():
             class_weights = np.ones(DEATH_CLASS + 1, dtype=np.float32)
             birth_positive_weight = 1.0
             carrier_sampling_pools = build_motion_sampling_pools(carrier_cohorts)
+            birth_sampling_pools = build_binary_sampling_pools(birth_labels)
+        elif args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+            class_weights = np.ones(DEATH_CLASS + 1, dtype=np.float32)
+            birth_positive_weight = 1.0
+            carrier_sampling_pools = build_eulerian_sampling_pools(carrier_cohorts)
             birth_sampling_pools = build_binary_sampling_pools(birth_labels)
         else:
             class_weights = np.sqrt(np.sum(class_counts) / np.maximum(class_counts, 1.0))
@@ -1163,6 +1553,9 @@ def main():
         for step in range(step_count):
             if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY:
                 carrier_indices = sample_motion_balanced_indices(rng, carrier_sampling_pools, args.batch_size)
+                birth_indices = sample_binary_balanced_indices(rng, birth_sampling_pools, args.batch_size)
+            elif args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+                carrier_indices = sample_eulerian_balanced_indices(rng, carrier_sampling_pools, args.batch_size)
                 birth_indices = sample_binary_balanced_indices(rng, birth_sampling_pools, args.batch_size)
             else:
                 carrier_indices = rng.integers(0, len(carrier_inputs), size=min(args.batch_size, len(carrier_inputs)))
@@ -1194,6 +1587,16 @@ def main():
         action_calibration = (
             calibrate_action_margin(carrier_probabilities, carrier_labels)
             if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
+            else None
+        )
+        destination_death_calibration = (
+            calibrate_destination_death_margin(
+                carrier_probabilities,
+                carrier_labels,
+                raw_carrier_inputs,
+                source_destination_mask,
+            )
+            if args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
             else None
         )
         failure_phase = "model-write"
@@ -1234,16 +1637,27 @@ def main():
                 "carrierSamplingAuthority": (
                     "uniform-with-replacement-across-q1-q4-transported-death-v0"
                     if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
-                    else "population-random-with-replacement-v0"
+                    else (
+                        "uniform-with-replacement-across-eulerian-q1-q4-transported-birth-death-empty-v0"
+                        if args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
+                        else "population-random-with-replacement-v0"
+                    )
                 ),
                 "birthSamplingAuthority": (
                     "balanced-positive-negative-with-replacement-v0"
-                    if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
+                    if args.objective_family in (
+                        MOTION_BALANCED_OBJECTIVE_FAMILY,
+                        EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+                    )
                     else "population-random-with-positive-loss-weight-v0"
                 ),
                 "carrierCohortCounts": {
                     cohort: int(np.sum(carrier_cohorts == cohort))
-                    for cohort in CARRIER_COHORTS
+                    for cohort in (
+                        EULERIAN_DESTINATION_COHORTS
+                        if args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
+                        else CARRIER_COHORTS
+                    )
                 },
             },
             "calibration": {
@@ -1251,6 +1665,11 @@ def main():
                 "birth": {"authority": "training-residual-birth-f1-threshold-v0", **birth_calibration},
                 "targetSupport": target_support_calibration,
                 **({"carrierAction": action_calibration} if action_calibration is not None else {}),
+                **(
+                    {"destinationDeath": destination_death_calibration}
+                    if destination_death_calibration is not None
+                    else {}
+                ),
             },
             "correspondence": {
                 "authority": CORRESPONDENCE_AUTHORITY,
@@ -1279,6 +1698,7 @@ def main():
                 target_support_calibration,
                 args.batch_size,
                 action_calibration,
+                destination_death_calibration,
             )
             exact = frames[holdout_docs[step_index]["id"]]
             recurrent_rows.append({"step": step_index, **recurrent})

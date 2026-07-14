@@ -229,6 +229,105 @@ class TransportDatasetContracts(unittest.TestCase):
         self.assertEqual(int(np.sum(birth_labels[birth_sampled] > 0.5)), 6)
         self.assertEqual(int(np.sum(birth_labels[birth_sampled] <= 0.5)), 6)
 
+    def test_eulerian_dataset_labels_destination_occupancy_and_supported_births(self):
+        source = frame([
+            ((0.0, 0.0, 0.0), 0.0),
+            ((0.0, 3.0, 0.0), 0.0),
+            ((0.0, 6.0, 0.0), 0.0),
+            ((0.0, 9.0, 0.0), 0.0),
+            ((0.0, 12.0, 0.0), 0.5),
+            ((9.0, 9.0, 9.0), 0.5),
+        ])
+        target = frame([
+            ((0.0, 0.0, 0.0), 0.001),
+            ((0.0, 3.0, 0.0), 0.01),
+            ((0.0, 6.0, 0.0), 0.1),
+            ((0.0, 9.0, 0.0), 1.0),
+            ((1.0, 12.0, 0.0), 0.51),
+            ((1.0, 0.0, 0.0), 2.0),
+            ((20.0, 20.0, 20.0), 3.0),
+        ])
+        dataset = MODULE.build_eulerian_pair_dataset(source, target, grid_step=1.0)
+        destination_index = {key: index for index, key in enumerate(dataset["destinationKeys"])}
+        stable_class = MODULE.displacement_class((0, 0, 0))
+        right_class = MODULE.displacement_class((1, 0, 0))
+
+        self.assertEqual(dataset["destinationInputs"].shape[1], 64)
+        self.assertEqual(dataset["destinationInputs"].shape[0], len(dataset["destinationKeys"]))
+        self.assertEqual(len(dataset["birthInputs"]), int(np.sum(~dataset["sourceDestinationMask"])))
+        self.assertEqual(int(np.sum(dataset["birthLabels"])), 2)
+        self.assertEqual(dataset["carrierLabels"][destination_index[(0.0, 0.0, 0.0)]], stable_class)
+        self.assertEqual(dataset["carrierLabels"][destination_index[(1.0, 12.0, 0.0)]], right_class)
+        self.assertEqual(dataset["carrierLabels"][destination_index[(1.0, 0.0, 0.0)]], right_class)
+        self.assertEqual(dataset["carrierLabels"][destination_index[(0.0, 12.0, 0.0)]], MODULE.DEATH_CLASS)
+        self.assertEqual(dataset["destinationCohorts"][destination_index[(1.0, 12.0, 0.0)]], "transported")
+        self.assertEqual(dataset["destinationCohorts"][destination_index[(1.0, 0.0, 0.0)]], "birth")
+        self.assertEqual(dataset["destinationCohorts"][destination_index[(0.0, 12.0, 0.0)]], "death")
+        self.assertIn("empty", dataset["destinationCohorts"])
+        self.assertEqual(dataset["occupancyLabels"][destination_index[(1.0, 0.0, 0.0)]], 1.0)
+        self.assertNotIn((20.0, 20.0, 20.0), destination_index)
+        self.assertEqual(dataset["unsupportedBirthCount"], 1)
+        for cohort in MODULE.EULERIAN_DESTINATION_COHORTS:
+            self.assertGreater(dataset["cohortCounts"][cohort], 0)
+
+    def test_eulerian_sampler_spends_equal_batch_on_each_destination_cohort(self):
+        cohorts = np.asarray([
+            cohort
+            for cohort_index, cohort in enumerate(MODULE.EULERIAN_DESTINATION_COHORTS)
+            for _ in range(cohort_index + 1)
+        ])
+        pools = MODULE.build_eulerian_sampling_pools(cohorts)
+        sampled = MODULE.sample_eulerian_balanced_indices(
+            np.random.default_rng(713),
+            pools,
+            batch_size=16,
+        )
+        self.assertEqual(
+            {cohort: int(np.sum(cohorts[sampled] == cohort)) for cohort in MODULE.EULERIAN_DESTINATION_COHORTS},
+            {cohort: 2 for cohort in MODULE.EULERIAN_DESTINATION_COHORTS},
+        )
+
+    def test_eulerian_composer_preserves_uncertain_scaffold_and_adds_confident_birth(self):
+        source = frame([
+            ((0.0, 0.0, 0.0), 1.0),
+            ((2.0, 0.0, 0.0), 2.0),
+        ])
+        destination_keys = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0), (3.0, 0.0, 0.0)]
+        probabilities = np.zeros((4, MODULE.DEATH_CLASS + 1), dtype=np.float32)
+        stable_class = MODULE.displacement_class((0, 0, 0))
+        right_class = MODULE.displacement_class((1, 0, 0))
+        probabilities[0, stable_class] = 0.40
+        probabilities[0, MODULE.DEATH_CLASS] = 0.45
+        probabilities[1, right_class] = 0.80
+        probabilities[1, MODULE.DEATH_CLASS] = 0.10
+        probabilities[2, stable_class] = 0.05
+        probabilities[2, MODULE.DEATH_CLASS] = 0.90
+        probabilities[3, right_class] = 0.80
+        probabilities[3, MODULE.DEATH_CLASS] = 0.10
+        occupancy = np.asarray([1.0, 0.90, 0.0, 0.60], dtype=np.float32)
+
+        predicted, accounting = MODULE.compose_eulerian_destination_occupancy(
+            source,
+            destination_keys,
+            probabilities,
+            occupancy,
+            grid_step=1.0,
+            death_margin_threshold=0.10,
+            birth_threshold=0.70,
+            target_support_ratio=1.0,
+        )
+        self.assertEqual(set(predicted["keys"]), {(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)})
+        birth_index = predicted["index"][(1.0, 0.0, 0.0)]
+        self.assertAlmostEqual(float(predicted["splats"][birth_index, 7]), 0.8)
+        self.assertEqual(accounting["defaultStaticCount"], 1)
+        self.assertEqual(accounting["activatedDeathCount"], 1)
+        self.assertEqual(accounting["selectedBirthCount"], 1)
+        self.assertEqual(accounting["transportedAttributeCount"], 1)
+        self.assertEqual(
+            accounting["compositionAuthority"],
+            "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+        )
+
     def test_action_margin_calibration_separates_static_and_motion(self):
         probabilities = np.zeros((4, MODULE.DEATH_CLASS + 1), dtype=np.float32)
         stable_class = MODULE.displacement_class((0, 0, 0))
@@ -256,6 +355,27 @@ class TransportDatasetContracts(unittest.TestCase):
             0.0,
             "learned actions may not override the static scaffold while stable-copy probability is higher",
         )
+
+    def test_eulerian_death_margin_calibration_uses_only_valid_local_donors(self):
+        stable_class = MODULE.displacement_class((0, 0, 0))
+        invalid_class = MODULE.displacement_class((1, 0, 0))
+        probabilities = np.zeros((4, MODULE.DEATH_CLASS + 1), dtype=np.float32)
+        probabilities[:, stable_class] = [0.60, 0.55, 0.10, 0.15]
+        probabilities[:, invalid_class] = 0.99
+        probabilities[:, MODULE.DEATH_CLASS] = [0.50, 0.35, 0.90, 0.85]
+        labels = np.asarray([stable_class, stable_class, MODULE.DEATH_CLASS, MODULE.DEATH_CLASS], dtype=np.int32)
+        inputs = np.zeros((4, 64), dtype=np.float32)
+        inputs[:, 21 + stable_class] = 1.0
+        calibration = MODULE.calibrate_destination_death_margin(
+            probabilities,
+            labels,
+            inputs,
+            np.ones(4, dtype=bool),
+        )
+        self.assertEqual(calibration["authority"], "training-eulerian-source-death-margin-f1-v0")
+        self.assertEqual(calibration["precision"], 1.0)
+        self.assertEqual(calibration["recall"], 1.0)
+        self.assertGreater(calibration["threshold"], 0.0)
 
     def test_static_scaffold_keeps_uncertain_support_and_applies_confident_motion(self):
         source = frame([
@@ -333,6 +453,36 @@ class TransportDatasetContracts(unittest.TestCase):
 
         hostile = copy.deepcopy(model_document)
         hostile["calibration"]["carrierAction"]["threshold"] = -0.01
+        with self.assertRaisesRegex(ValueError, "nonnegative"):
+            MODULE.validate_frozen_model_document(hostile)
+
+    def test_eulerian_artifact_reuses_deployed_schema_but_requires_death_calibration(self):
+        model_document = frozen_model_document()
+        model_document["training"] = {"objectiveFamily": MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY}
+        model_document["calibration"]["destinationDeath"] = {
+            "authority": "training-eulerian-source-death-margin-f1-v0",
+            "threshold": 0.20,
+            "precision": 0.8,
+            "recall": 0.7,
+        }
+        validated = MODULE.validate_frozen_model_document(model_document)
+        self.assertEqual(model_document["schema"], MODULE.MODEL_SCHEMA)
+        self.assertEqual(model_document["input"]["authority"], MODULE.INPUT_AUTHORITY)
+        self.assertEqual(model_document["architecture"]["authority"], MODULE.ARCHITECTURE_AUTHORITY)
+        self.assertEqual(len(model_document["architecture"]["layers"]), 4)
+        self.assertEqual(validated["objectiveFamily"], MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY)
+        self.assertEqual(
+            validated["compositionAuthority"],
+            "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+        )
+
+        hostile = copy.deepcopy(model_document)
+        del hostile["calibration"]["destinationDeath"]
+        with self.assertRaisesRegex(ValueError, "destination death calibration"):
+            MODULE.validate_frozen_model_document(hostile)
+
+        hostile = copy.deepcopy(model_document)
+        hostile["calibration"]["destinationDeath"]["threshold"] = -0.01
         with self.assertRaisesRegex(ValueError, "nonnegative"):
             MODULE.validate_frozen_model_document(hostile)
 
