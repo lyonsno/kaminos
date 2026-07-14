@@ -574,6 +574,11 @@ function manifestEvidence(path, keys = []) {
     status: manifest.status,
     failurePhase: manifest.failurePhase,
   };
-  for (const key of keys) evidence[key] = manifest[key] ?? null;
+  for (const key of keys) {
+    if (!Object.hasOwn(manifest, key) || manifest[key] == null) {
+      throw new Error(`${manifest.schema || 'manifest'} missing required evidence key: ${key}`);
+    }
+    evidence[key] = manifest[key];
+  }
   return evidence;
 }

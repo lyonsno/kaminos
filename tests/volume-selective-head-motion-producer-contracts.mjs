@@ -132,6 +132,11 @@ assert.match(
   /manifestEvidence\(calibratedManifestPath, \['channelMetrics', 'checkpointTransfer', 'support', 'residualBlend'\]\)/,
   'calibrated frame receipt retains the same metrics and predicted-support evidence before deleting field binaries',
 );
+assert.match(
+  producerSource,
+  /if \(!Object\.hasOwn\(manifest, key\) \|\| manifest\[key\] == null\) \{[\s\S]*missing required evidence key/,
+  'requested evidence keys are required and non-null before ephemeral field binaries are deleted',
+);
 
 const targeted = run([
   '--frame-count', '1',
