@@ -5413,7 +5413,7 @@ fn archiveBoundarySplatHistory(@builtin(global_invocation_id) gid: vec3<u32>) {
   let candidateIndex = gid.x;
   if (candidateIndex >= boundarySplatDraw.capacity) { return; }
   let targetIndex = boundarySplatDraw.historyWriteSlot * boundarySplatDraw.capacity + candidateIndex;
-  if (candidateIndex < boundarySplatDraw.selectedCandidateCount) {
+  if (candidateIndex < boundarySplatDraw.sourceCandidateCount) {
     let selectedSourceCandidateIndex = boundarySplatNestedSourceIndex(candidateIndex, boundarySplatDraw.sourceCandidateCount);
     boundarySplatHistory[targetIndex] = boundarySplats[selectedSourceCandidateIndex];
     return;
@@ -5693,6 +5693,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatAdaptiveLodIdentity: BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY,
     boundarySplatTierGroups: [],
     boundarySplatGlobalRenderedInstanceCount: null,
+    boundarySplatHistoryArchiveCandidateCount: null,
     boundarySplatRequestedCandidateBudget: normalizeBoundarySplatCandidateBudget(controlsSnapshot.boundarySplatCandidateBudget),
     boundarySplatTelemetryRequestedCandidateBudget: null,
     boundarySplatSelectorTelemetryFrameCount: null,
@@ -9621,6 +9622,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatOverflowCount = overflowCount;
       state.boundarySplatRequestedInstanceCount = drawState[7];
       state.boundarySplatSourceCandidateCount = drawState[8];
+      state.boundarySplatHistoryArchiveCandidateCount = drawState[8];
       state.boundarySplatPhaseSourceCount = drawState[9];
       state.boundarySplatHistoryWriteSlot = drawState[10];
       state.boundarySplatHistorySlots = drawState[11];
@@ -9679,6 +9681,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       overflowCount: drawState[5],
       requestedInstanceCount: drawState[7],
       sourceCandidateCount: drawState[8],
+      historyArchiveCandidateCount: drawState[8],
       phaseSourceCount: drawState[9],
       historyWriteSlot: drawState[10],
       historySlots: drawState[11],
@@ -9710,6 +9713,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatOverflowCount = result.overflowCount;
     state.boundarySplatRequestedInstanceCount = result.requestedInstanceCount;
     state.boundarySplatSourceCandidateCount = result.sourceCandidateCount;
+    state.boundarySplatHistoryArchiveCandidateCount = result.historyArchiveCandidateCount;
     state.boundarySplatPhaseSourceCount = result.phaseSourceCount;
     state.boundarySplatSelectorPolicyId = result.selectorPolicyId;
     state.boundarySplatSelectorPolicyIdentity = result.selectorPolicyIdentity;
@@ -9781,6 +9785,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             adaptiveLodIdentity: state.boundarySplatAdaptiveLodIdentity,
             tierGroups: state.boundarySplatTierGroups,
             globalRenderedInstanceCount: state.boundarySplatGlobalRenderedInstanceCount,
+            historyArchiveCandidateCount: state.boundarySplatHistoryArchiveCandidateCount,
             requestedInstanceCount: state.boundarySplatRequestedInstanceCount,
             queueDoneMs: state.timing?.queueDoneMs ?? null,
             queueDoneP95Ms: state.timing?.queueDoneP95Ms ?? null,
@@ -9865,6 +9870,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           adaptiveLodIdentity: draw?.adaptiveLodIdentity ?? null,
           tierGroups: draw?.tierGroups ?? [],
           globalRenderedInstanceCount: draw?.globalRenderedInstanceCount ?? null,
+          historyArchiveCandidateCount: draw?.historyArchiveCandidateCount ?? null,
           overflowCount: draw?.overflowCount ?? null,
           phaseSourceCount: draw?.phaseSourceCount ?? null,
           timestampStatus,
@@ -10014,6 +10020,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           adaptiveLodIdentity: draw?.adaptiveLodIdentity ?? null,
           tierGroups: draw?.tierGroups ?? [],
           globalRenderedInstanceCount: draw?.globalRenderedInstanceCount ?? null,
+          historyArchiveCandidateCount: draw?.historyArchiveCandidateCount ?? null,
           overflowCount: draw?.overflowCount ?? null,
           phaseSourceCount: draw?.phaseSourceCount ?? null,
           timestampStatus: profiles.every(profile => profile.timestampStatus === 'available') ? 'available' : 'unsupported',
@@ -12101,6 +12108,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatAdaptiveLodIdentity: boundarySplatSample?.adaptiveLodIdentity ?? state.boundarySplatAdaptiveLodIdentity,
       boundarySplatTierGroups: boundarySplatSample?.tierGroups ?? state.boundarySplatTierGroups,
       boundarySplatGlobalRenderedInstanceCount: boundarySplatSample?.globalRenderedInstanceCount ?? state.boundarySplatGlobalRenderedInstanceCount,
+      boundarySplatHistoryArchiveCandidateCount: boundarySplatSample?.historyArchiveCandidateCount ?? state.boundarySplatHistoryArchiveCandidateCount,
       boundarySplatRequestedCandidateBudget: boundarySplatSample?.requestedCandidateBudget ?? state.boundarySplatRequestedCandidateBudget,
       boundarySplatEffectiveCandidateBudget: boundarySplatSample?.effectiveCandidateBudget ?? state.boundarySplatEffectiveCandidateBudget,
       boundarySplatSelectedCandidateCount: boundarySplatSample?.selectedCandidateCount ?? state.boundarySplatSelectedCandidateCount,
@@ -12534,6 +12542,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatAdaptiveLodIdentity: state.boundarySplatAdaptiveLodIdentity,
         boundarySplatTierGroups: state.boundarySplatTierGroups,
         boundarySplatGlobalRenderedInstanceCount: state.boundarySplatGlobalRenderedInstanceCount,
+        boundarySplatHistoryArchiveCandidateCount: state.boundarySplatHistoryArchiveCandidateCount,
         boundarySplatRequestedCandidateBudget: state.boundarySplatRequestedCandidateBudget,
         boundarySplatTelemetryRequestedCandidateBudget: state.boundarySplatTelemetryRequestedCandidateBudget,
         boundarySplatSelectorTelemetryFrameCount: state.boundarySplatSelectorTelemetryFrameCount,

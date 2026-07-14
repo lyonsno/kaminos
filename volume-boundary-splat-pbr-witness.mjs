@@ -520,6 +520,7 @@ async function waitForBoundarySplatTelemetry() {
       && typeof state?.boundarySplatLodMode === 'string'
       && Array.isArray(state?.boundarySplatTierGroups)
       && Number.isFinite(Number(state?.boundarySplatGlobalRenderedInstanceCount))
+      && Number(state?.boundarySplatHistoryArchiveCandidateCount) === Number(state?.boundarySplatSourceCandidateCount)
       && Number(state?.boundarySplatTelemetryRequestedCandidateBudget) === Number(state?.boundarySplatRequestedCandidateBudget)
     ) return state;
     await delay(125);
@@ -682,11 +683,17 @@ function validateAllocationEvidence(evidence, requestedLodMode, context) {
   const globalRenderedInstanceCount = Number(
     evidence?.boundarySplatGlobalRenderedInstanceCount ?? evidence?.globalRenderedInstanceCount,
   );
+  const historyArchiveCandidateCount = Number(
+    evidence?.boundarySplatHistoryArchiveCandidateCount ?? evidence?.historyArchiveCandidateCount,
+  );
   if (lodMode !== requestedLodMode) {
     throw new Error(`stale-or-default-adaptive-lod:${context}:${JSON.stringify({ requestedLodMode, lodMode })}`);
   }
   if (!Number.isFinite(sourceCandidateCount) || sourceCandidateCount <= 0) {
     throw new Error(`adaptive-lod-allocation-mismatch:${context}:missing-source-count`);
+  }
+  if (historyArchiveCandidateCount !== sourceCandidateCount) {
+    throw new Error(`adaptive-lod-allocation-mismatch:${context}:stale-history-prefix:${historyArchiveCandidateCount}:${sourceCandidateCount}`);
   }
   if (requestedLodMode === 'fixed') {
     const requestedBudget = Number(evidence?.boundarySplatRequestedCandidateBudget ?? evidence?.requestedCandidateBudget);
@@ -885,6 +892,7 @@ function compactState(state) {
     adaptiveLodIdentity: state?.boundarySplatAdaptiveLodIdentity,
     tierGroups: state?.boundarySplatTierGroups,
     globalRenderedInstanceCount: state?.boundarySplatGlobalRenderedInstanceCount,
+    historyArchiveCandidateCount: state?.boundarySplatHistoryArchiveCandidateCount,
     phaseModeIdentity: state?.boundarySplatPhaseModeIdentity,
     phaseSourceCount: state?.boundarySplatPhaseSourceCount,
     historyDepth: state?.boundarySplatHistoryDepth,
