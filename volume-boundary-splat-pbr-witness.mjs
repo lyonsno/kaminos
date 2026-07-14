@@ -19,6 +19,7 @@ const PBR_SCENE = 'boundary-splat-pbr-fire-field-v0';
 const DEPTH_AUTHORITY = 'same-device-depth24plus-less-equal-v0';
 const FIXED_SUBSTRATE = 'operator-pretty-four-flame-substrate-v0';
 const ADAPTIVE_LOD = 'boundary-splat-projected-area-nested-tiers-v0';
+const BUFFER_INTEGRITY = 'boundary-splat-buffer-integrity-v0';
 const ADAPTIVE_TIER_BUDGETS = new Set([0, 800, 1600, 3200, 6400, 12800]);
 const CAMERA_SWEEP_POSES = [
   { identity: 'left-arc', position: [-5.15, 1.85, 7.65], target: [0.12, -0.48, 0.05] },
@@ -248,6 +249,8 @@ try {
     selectedCandidateCount: capture.boundarySplatSelectedCandidateCount,
     sourceCandidateCount: capture.boundarySplatSourceCandidateCount,
     phaseSourceCount: capture.boundarySplatPhaseSourceCount,
+    boundarySplatBufferIntegrity: capture.boundarySplatBufferIntegrity,
+    boundarySplatBufferIntegrityFailureReason: capture.boundarySplatBufferIntegrityFailureReason,
   };
   lastTrustworthyEvidence.composedCapture = composedCaptureEvidence;
   lastTrustworthyEvidence.finalState = compactState(finalState);
@@ -562,6 +565,16 @@ function validateEffectiveState(state, cameraState, pageUrl) {
   if (state?.boundarySplatFallbackReason != null) mismatches.push(['fallback', null, state?.boundarySplatFallbackReason]);
   if (Number(state?.boundarySplatOverflowCount || 0) !== 0) mismatches.push(['overflow', 0, state?.boundarySplatOverflowCount]);
   if (Number(state?.boundarySplatCopyBytesThisFrame) !== 0) mismatches.push(['copyBytes', 0, state?.boundarySplatCopyBytesThisFrame]);
+  if (
+    state?.boundarySplatBufferIntegrity?.identity !== BUFFER_INTEGRITY
+    || state?.boundarySplatBufferIntegrity?.ok !== true
+    || state?.boundarySplatBufferIntegrityFailureReason != null
+  ) {
+    throw new Error(`boundary-splat-buffer-integrity-failed:${JSON.stringify({
+      integrity: state?.boundarySplatBufferIntegrity,
+      boundarySplatBufferIntegrityFailureReason: state?.boundarySplatBufferIntegrityFailureReason,
+    })}`);
+  }
   if (Number(state?.boundarySplatRequestedCandidateBudget) !== requestedCandidateBudget) mismatches.push(['requestedCandidateBudget', requestedCandidateBudget, state?.boundarySplatRequestedCandidateBudget]);
   if (cameraState?.identity !== CAMERA) mismatches.push(['camera', CAMERA, cameraState?.identity]);
   if (cameraState?.authority !== 'url-owned-effective-camera-pose') mismatches.push(['cameraAuthority', 'url-owned-effective-camera-pose', cameraState?.authority]);
@@ -903,6 +916,9 @@ function compactState(state) {
     historyDepth: state?.boundarySplatHistoryDepth,
     historyFrameStride: state?.boundarySplatHistoryFrameStride,
     effectiveHistoryWindowFrames: state?.boundarySplatEffectiveHistoryWindowFrames,
+    physicalHistoryWindowFrames: state?.boundarySplatPhysicalHistoryWindowFrames,
+    boundarySplatBufferIntegrity: state?.boundarySplatBufferIntegrity,
+    boundarySplatBufferIntegrityFailureReason: state?.boundarySplatBufferIntegrityFailureReason,
     overflowCount: state?.boundarySplatOverflowCount,
     candidateCopyBytes: state?.boundarySplatCopyBytesThisFrame,
     fallbackReason: state?.boundarySplatFallbackReason,
