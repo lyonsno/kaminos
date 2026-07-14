@@ -360,6 +360,7 @@ assert.equal(frozenTransfer.status, 'captured');
 assert.equal(frozenTransfer.failurePhase, null);
 assert.equal(frozenTransfer.transfer.targetDataUsedForTraining, false);
 assert.equal(frozenTransfer.transfer.targetDataUsedForCalibration, false);
+assert.equal(frozenTransfer.transfer.targetLabelsUsedForModelSelection, false);
 assert.equal(frozenTransfer.transfer.distinctReplay, true);
 assert.equal(frozenTransfer.transfer.sourceReplay.completedSteps, 12);
 assert.equal(frozenTransfer.transfer.targetReplay.completedSteps, 13);
@@ -374,6 +375,8 @@ assert.equal(typeof frozenTransfer.channel.ungated.metrics.rmse, 'number');
 assert.equal(typeof frozenTransfer.channel.constantResidual.metrics.rmse, 'number');
 assert.equal(typeof frozenTransfer.channel.constantResidual.improvementVsLow.rmseReductionFraction, 'number');
 assert.equal(frozenTransfer.channel.constantResidual.scale, carrierChannel.calibratedResidual.calibration.constantControl.scale);
+assert.equal(frozenTransfer.split.targetTest.samplingIdentity, 'reproduced-probe-rng-sequence-without-fit-v0');
+assert.equal(frozenTransfer.split.targetTest.sameSamplingContractAsSourceProbe, true);
 
 const corruptFrozenHeadsPath = join(fixtureRoot, 'frozen-heads-corrupt.npz');
 const frozenHeadBytes = readFileSync(carrierReport.channelHeadArtifact.path);

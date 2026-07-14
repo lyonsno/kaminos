@@ -203,6 +203,7 @@ def main() -> int:
     evidence: dict[str, Any] = {
         "targetDataUsedForTraining": False,
         "targetDataUsedForCalibration": False,
+        "targetLabelsUsedForModelSelection": False,
     }
     try:
         source_path = Path(args.source_probe_manifest).resolve()
@@ -276,21 +277,51 @@ def main() -> int:
         block_size = int(source_split.get("spatialBlockSize") or 0)
         seed = int(source_split.get("hashSeed") or 0)
         roles, split_receipt = SUPPORT.spatial_split(high_grid, block_size, seed)
-        test_pool = np.flatnonzero(roles == 0)
+        pools = {
+            "test": np.flatnonzero(roles == 0),
+            "validation": np.flatnonzero(roles == 1),
+            "train": np.flatnonzero(roles == 2),
+        }
+        test_pool = pools["test"]
         positive_count = int(np.count_nonzero(labels[test_pool]))
         if positive_count == 0 or positive_count == test_pool.size:
             raise TransferFailure(phase, "target test split lacks both classes", {
                 "poolCount": int(test_pool.size), "positiveCount": positive_count,
             })
+        source_roles = source_split.get("roles") or {}
+        if any(role not in source_roles for role in ["train", "validation", "test"]):
+            raise TransferFailure(phase, "source probe lacks exact sampling counts", {"sourceRoles": source_roles})
+        source_train_count = int(source_roles["train"].get("sampleCount") or 0)
+        source_train_positive = int(source_roles["train"].get("samplePositiveCount") or 0)
+        source_validation_count = int(source_roles["validation"].get("sampleCount") or 0)
+        source_test_count = int(source_roles["test"].get("sampleCount") or 0)
+        if min(source_train_count, source_validation_count, source_test_count) <= 0:
+            raise TransferFailure(phase, "source probe sampling counts are invalid", {"sourceRoles": source_roles})
+        train_positive_fraction = source_train_positive / source_train_count
         rng = np.random.default_rng(seed)
-        test_indexes = SUPPORT.sample_uniform(test_pool, args.test_samples, rng)
+        SUPPORT.sample_balanced(
+            pools["train"], labels, source_train_count, train_positive_fraction, rng,
+        )
+        SUPPORT.sample_uniform(pools["validation"], source_validation_count, rng)
+        effective_test_samples = min(int(args.test_samples), source_test_count)
+        if effective_test_samples != source_test_count:
+            raise TransferFailure(phase, "test sample override would break source sampling identity", {
+                "requestedTestSamples": int(args.test_samples),
+                "sourceTestSamples": source_test_count,
+                "effectiveTestSamples": effective_test_samples,
+            })
+        test_indexes = SUPPORT.sample_uniform(test_pool, effective_test_samples, rng)
         split_receipt["targetTest"] = {
+            "samplingIdentity": "reproduced-probe-rng-sequence-without-fit-v0",
+            "sameSamplingContractAsSourceProbe": True,
             "poolCount": int(test_pool.size),
             "poolPositiveCount": positive_count,
             "sampleCount": int(test_indexes.size),
             "samplePositiveCount": int(np.count_nonzero(labels[test_indexes])),
             "targetDataUsedForTraining": False,
             "targetDataUsedForCalibration": False,
+            "targetLabelsUsedForModelSelection": False,
+            "targetLabelsUsedForEvaluationSampling": True,
         }
 
         phase = "target-feature-build"
@@ -337,6 +368,7 @@ def main() -> int:
                 "distinctReplay": replay_key(source_replay) != replay_key(target_replay),
                 "targetDataUsedForTraining": False,
                 "targetDataUsedForCalibration": False,
+                "targetLabelsUsedForModelSelection": False,
                 "targetUse": "held spatial test metrics only",
             },
             "source": {
