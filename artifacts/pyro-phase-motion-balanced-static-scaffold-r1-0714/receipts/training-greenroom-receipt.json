@@ -1,0 +1,34 @@
+{
+  "job_id": "0693c27c064b",
+  "job_type": "kaminos_phase_transport_motion_balanced_mlx_train",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-transport-motion-balanced-full-r1-0714",
+  "effective_route": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-transport-mlx.py --manifest /private/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json --out-dir /private/tmp/kaminos-phase-transport-motion-balanced-full-r1-0714 --holdout-start 6 --holdout-steps 3 --grid-size 160 --hidden-size 64 --epochs 8 --batch-size 4096 --learning-rate 0.0015 --weight-decay 0.0001 --seed 713 --objective-family motion-balanced-static-scaffold-v0",
+  "effective_cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "batch_size": "4096",
+    "epochs": "1",
+    "grid_size": "160",
+    "hidden_size": "64",
+    "holdout_start": "6",
+    "holdout_steps": "3",
+    "learning_rate": "0.0015",
+    "objective_family": "motion-balanced-static-scaffold-v0",
+    "seed": "713",
+    "weight_decay": "0.0001"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784004481.49767,
+  "finished_at": 1784004776.6217759,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}

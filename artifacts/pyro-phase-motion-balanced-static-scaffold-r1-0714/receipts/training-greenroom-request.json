@@ -1,0 +1,18 @@
+{
+  "job_type": "kaminos_phase_transport_motion_balanced_mlx_train",
+  "input_path": "/private/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-transport-motion-balanced-full-r1-0714",
+  "params": {
+    "epochs": "8",
+    "holdout_start": "6",
+    "holdout_steps": "3",
+    "hidden_size": "64",
+    "batch_size": "4096",
+    "learning_rate": "0.0015",
+    "weight_decay": "0.0001",
+    "seed": "713",
+    "objective_family": "motion-balanced-static-scaffold-v0"
+  },
+  "job_id": "0693c27c064b",
+  "submitted_at": 1784004480.406416
+}

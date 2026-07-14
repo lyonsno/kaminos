@@ -1,0 +1,2439 @@
+{
+  "completedAt": 1784004929.432389,
+  "holdoutMetrics": [
+    {
+      "beatsIdentity": true,
+      "exactCount": 67910,
+      "identityIoU": 0.2525084227773993,
+      "predictionCount": 68251,
+      "predictionIoU": 0.2977107239525752,
+      "predictionToIdentityRatio": 1.179013043121434,
+      "step": 1
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68751,
+      "identityIoU": 0.17211030538599179,
+      "predictionCount": 68348,
+      "predictionIoU": 0.21003159697092727,
+      "predictionToIdentityRatio": 1.2203313247274148,
+      "step": 2
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69217,
+      "identityIoU": 0.1405087672688629,
+      "predictionCount": 68445,
+      "predictionIoU": 0.17175104695107418,
+      "predictionToIdentityRatio": 1.2223511051266238,
+      "step": 3
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69991,
+      "identityIoU": 0.12585674351890336,
+      "predictionCount": 68542,
+      "predictionIoU": 0.152731781191233,
+      "predictionToIdentityRatio": 1.213536731691243,
+      "step": 4
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69564,
+      "identityIoU": 0.11918441647095154,
+      "predictionCount": 68639,
+      "predictionIoU": 0.14391305787312939,
+      "predictionToIdentityRatio": 1.2074821703574383,
+      "step": 5
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69227,
+      "identityIoU": 0.11556638246041413,
+      "predictionCount": 68736,
+      "predictionIoU": 0.13641455659709065,
+      "predictionToIdentityRatio": 1.1803999891042518,
+      "step": 6
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69684,
+      "identityIoU": 0.11350857918376579,
+      "predictionCount": 68833,
+      "predictionIoU": 0.13384247663015897,
+      "predictionToIdentityRatio": 1.1791397407368955,
+      "step": 7
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69430,
+      "identityIoU": 0.11084646686474615,
+      "predictionCount": 68930,
+      "predictionIoU": 0.13001363922215597,
+      "predictionToIdentityRatio": 1.1729164031975636,
+      "step": 8
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69665,
+      "identityIoU": 0.11077081788581192,
+      "predictionCount": 69027,
+      "predictionIoU": 0.12885293136145726,
+      "predictionToIdentityRatio": 1.1632389633006528,
+      "step": 9
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70603,
+      "identityIoU": 0.11335061100368288,
+      "predictionCount": 69125,
+      "predictionIoU": 0.1311901427264558,
+      "predictionToIdentityRatio": 1.1573836397070087,
+      "step": 10
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71312,
+      "identityIoU": 0.11338453186869332,
+      "predictionCount": 69223,
+      "predictionIoU": 0.12964808771281128,
+      "predictionToIdentityRatio": 1.143437165335323,
+      "step": 11
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71842,
+      "identityIoU": 0.10974855729596043,
+      "predictionCount": 69321,
+      "predictionIoU": 0.1272028938059457,
+      "predictionToIdentityRatio": 1.1590393253454434,
+      "step": 12
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72581,
+      "identityIoU": 0.10713751897857879,
+      "predictionCount": 69419,
+      "predictionIoU": 0.12495741798505866,
+      "predictionToIdentityRatio": 1.1663273442988988,
+      "step": 13
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72920,
+      "identityIoU": 0.10960358659745163,
+      "predictionCount": 69517,
+      "predictionIoU": 0.12518366379650842,
+      "predictionToIdentityRatio": 1.1421493372865503,
+      "step": 14
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72562,
+      "identityIoU": 0.1122290899318674,
+      "predictionCount": 69615,
+      "predictionIoU": 0.12769973904835932,
+      "predictionToIdentityRatio": 1.1378488333629357,
+      "step": 15
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72239,
+      "identityIoU": 0.11608938636309434,
+      "predictionCount": 69713,
+      "predictionIoU": 0.1301280979563241,
+      "predictionToIdentityRatio": 1.1209301903734825,
+      "step": 16
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72232,
+      "identityIoU": 0.11437711346425566,
+      "predictionCount": 69812,
+      "predictionIoU": 0.13093257111919682,
+      "predictionToIdentityRatio": 1.1447444961103599,
+      "step": 17
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71766,
+      "identityIoU": 0.11692862787671725,
+      "predictionCount": 69911,
+      "predictionIoU": 0.1329990563472642,
+      "predictionToIdentityRatio": 1.1374379291228036,
+      "step": 18
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71289,
+      "identityIoU": 0.12304495594607219,
+      "predictionCount": 70010,
+      "predictionIoU": 0.13829632971353076,
+      "predictionToIdentityRatio": 1.123949605655862,
+      "step": 19
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70901,
+      "identityIoU": 0.12755726738293127,
+      "predictionCount": 70109,
+      "predictionIoU": 0.1421420529559942,
+      "predictionToIdentityRatio": 1.1143391189878573,
+      "step": 20
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70975,
+      "identityIoU": 0.13232577255821146,
+      "predictionCount": 70208,
+      "predictionIoU": 0.1486884498974843,
+      "predictionToIdentityRatio": 1.1236545007290606,
+      "step": 21
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70856,
+      "identityIoU": 0.13486705145684172,
+      "predictionCount": 70307,
+      "predictionIoU": 0.1536223593347771,
+      "predictionToIdentityRatio": 1.1390651584307618,
+      "step": 22
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70991,
+      "identityIoU": 0.13542227662178702,
+      "predictionCount": 70406,
+      "predictionIoU": 0.15469482417887534,
+      "predictionToIdentityRatio": 1.1423144554784992,
+      "step": 23
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71320,
+      "identityIoU": 0.13788405371449083,
+      "predictionCount": 70506,
+      "predictionIoU": 0.1548408110088755,
+      "predictionToIdentityRatio": 1.1229783781197507,
+      "step": 24
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70845,
+      "identityIoU": 0.1354632118088174,
+      "predictionCount": 70606,
+      "predictionIoU": 0.1533744832478535,
+      "predictionToIdentityRatio": 1.1322224034102684,
+      "step": 25
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71466,
+      "identityIoU": 0.1286426798806858,
+      "predictionCount": 70706,
+      "predictionIoU": 0.14788141067045601,
+      "predictionToIdentityRatio": 1.1495516947222635,
+      "step": 26
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71015,
+      "identityIoU": 0.1252425614489004,
+      "predictionCount": 70806,
+      "predictionIoU": 0.1432383194144391,
+      "predictionToIdentityRatio": 1.14368723984363,
+      "step": 27
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70902,
+      "identityIoU": 0.1236929292929293,
+      "predictionCount": 70906,
+      "predictionIoU": 0.140981285100494,
+      "predictionToIdentityRatio": 1.1397683433191437,
+      "step": 28
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70292,
+      "identityIoU": 0.11957787481804949,
+      "predictionCount": 71006,
+      "predictionIoU": 0.13776582467046194,
+      "predictionToIdentityRatio": 1.1521012970006983,
+      "step": 29
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69413,
+      "identityIoU": 0.11603455968847605,
+      "predictionCount": 71106,
+      "predictionIoU": 0.1351493266768453,
+      "predictionToIdentityRatio": 1.1647333952891934,
+      "step": 30
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69509,
+      "identityIoU": 0.11114339677466221,
+      "predictionCount": 71207,
+      "predictionIoU": 0.13151229083072669,
+      "predictionToIdentityRatio": 1.183266794493976,
+      "step": 31
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69425,
+      "identityIoU": 0.10953402474233455,
+      "predictionCount": 71308,
+      "predictionIoU": 0.12999526268035938,
+      "predictionToIdentityRatio": 1.1868025756029452,
+      "step": 32
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69083,
+      "identityIoU": 0.11123886639676113,
+      "predictionCount": 71409,
+      "predictionIoU": 0.12946586487442518,
+      "predictionToIdentityRatio": 1.163854586693224,
+      "step": 33
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68150,
+      "identityIoU": 0.11388505258684797,
+      "predictionCount": 71510,
+      "predictionIoU": 0.12980730337987606,
+      "predictionToIdentityRatio": 1.1398098383533333,
+      "step": 34
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 67970,
+      "identityIoU": 0.11598907990850735,
+      "predictionCount": 71611,
+      "predictionIoU": 0.13050345028671398,
+      "predictionToIdentityRatio": 1.1251356626818285,
+      "step": 35
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68011,
+      "identityIoU": 0.11303111052984355,
+      "predictionCount": 71712,
+      "predictionIoU": 0.1278898934452696,
+      "predictionToIdentityRatio": 1.1314574619834679,
+      "step": 36
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68342,
+      "identityIoU": 0.11248125448262372,
+      "predictionCount": 71813,
+      "predictionIoU": 0.125029098002071,
+      "predictionToIdentityRatio": 1.1115549748903777,
+      "step": 37
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68735,
+      "identityIoU": 0.11561155300560699,
+      "predictionCount": 71915,
+      "predictionIoU": 0.125713325276326,
+      "predictionToIdentityRatio": 1.0873768408787752,
+      "step": 38
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69898,
+      "identityIoU": 0.11594050602214857,
+      "predictionCount": 72017,
+      "predictionIoU": 0.12880902951774167,
+      "predictionToIdentityRatio": 1.110992473097666,
+      "step": 39
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69779,
+      "identityIoU": 0.11993959175719783,
+      "predictionCount": 72119,
+      "predictionIoU": 0.133370607028754,
+      "predictionToIdentityRatio": 1.1119814989761305,
+      "step": 40
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69780,
+      "identityIoU": 0.12094886714559698,
+      "predictionCount": 72221,
+      "predictionIoU": 0.13550837631442164,
+      "predictionToIdentityRatio": 1.1203773918055642,
+      "step": 41
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70309,
+      "identityIoU": 0.12525700725715352,
+      "predictionCount": 72323,
+      "predictionIoU": 0.13816051963804082,
+      "predictionToIdentityRatio": 1.1030162915707886,
+      "step": 42
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69863,
+      "identityIoU": 0.12734015094586207,
+      "predictionCount": 72425,
+      "predictionIoU": 0.14331629865329604,
+      "predictionToIdentityRatio": 1.1254604112588662,
+      "step": 43
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70470,
+      "identityIoU": 0.12570546916236958,
+      "predictionCount": 72527,
+      "predictionIoU": 0.14187495009183104,
+      "predictionToIdentityRatio": 1.1286298920580446,
+      "step": 44
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70358,
+      "identityIoU": 0.1251157501421493,
+      "predictionCount": 72630,
+      "predictionIoU": 0.13902895606802884,
+      "predictionToIdentityRatio": 1.1112026736048193,
+      "step": 45
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70362,
+      "identityIoU": 0.12460014613948202,
+      "predictionCount": 72733,
+      "predictionIoU": 0.1381224697563808,
+      "predictionToIdentityRatio": 1.108525744438224,
+      "step": 46
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69483,
+      "identityIoU": 0.12228373871706852,
+      "predictionCount": 72836,
+      "predictionIoU": 0.13682402747823308,
+      "predictionToIdentityRatio": 1.1189061514941643,
+      "step": 47
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68438,
+      "identityIoU": 0.12124147328501186,
+      "predictionCount": 72939,
+      "predictionIoU": 0.13887881936892305,
+      "predictionToIdentityRatio": 1.145472878265424,
+      "step": 48
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68489,
+      "identityIoU": 0.11917964174850319,
+      "predictionCount": 73042,
+      "predictionIoU": 0.13546363300868058,
+      "predictionToIdentityRatio": 1.1366340007510713,
+      "step": 49
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68293,
+      "identityIoU": 0.11763838605573121,
+      "predictionCount": 73145,
+      "predictionIoU": 0.1308526288857618,
+      "predictionToIdentityRatio": 1.112329344809018,
+      "step": 50
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69071,
+      "identityIoU": 0.1171662568995555,
+      "predictionCount": 73248,
+      "predictionIoU": 0.129014088976328,
+      "predictionToIdentityRatio": 1.1011198308308972,
+      "step": 51
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69097,
+      "identityIoU": 0.11666883624056236,
+      "predictionCount": 73352,
+      "predictionIoU": 0.12723747724934714,
+      "predictionToIdentityRatio": 1.0905866669227164,
+      "step": 52
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69640,
+      "identityIoU": 0.11859302193431072,
+      "predictionCount": 73456,
+      "predictionIoU": 0.12962202785057944,
+      "predictionToIdentityRatio": 1.0929987762886904,
+      "step": 53
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69780,
+      "identityIoU": 0.12118576561052136,
+      "predictionCount": 73560,
+      "predictionIoU": 0.1333554722709806,
+      "predictionToIdentityRatio": 1.1004219150586665,
+      "step": 54
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69851,
+      "identityIoU": 0.11773805570629065,
+      "predictionCount": 73664,
+      "predictionIoU": 0.13453283477078506,
+      "predictionToIdentityRatio": 1.1426452896962276,
+      "step": 55
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69646,
+      "identityIoU": 0.11756214265439358,
+      "predictionCount": 73768,
+      "predictionIoU": 0.13396747080358343,
+      "predictionToIdentityRatio": 1.139546011826425,
+      "step": 56
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68839,
+      "identityIoU": 0.1142252948352989,
+      "predictionCount": 73872,
+      "predictionIoU": 0.13128918976765572,
+      "predictionToIdentityRatio": 1.1493880576711244,
+      "step": 57
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69304,
+      "identityIoU": 0.11400252852697096,
+      "predictionCount": 73976,
+      "predictionIoU": 0.13053907334932457,
+      "predictionToIdentityRatio": 1.1450541934115204,
+      "step": 58
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69994,
+      "identityIoU": 0.11323400243358019,
+      "predictionCount": 74081,
+      "predictionIoU": 0.13062960550581107,
+      "predictionToIdentityRatio": 1.1536252600665127,
+      "step": 59
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69873,
+      "identityIoU": 0.11489127976478951,
+      "predictionCount": 74186,
+      "predictionIoU": 0.13056615027232346,
+      "predictionToIdentityRatio": 1.1364322039028918,
+      "step": 60
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69809,
+      "identityIoU": 0.11826736806270416,
+      "predictionCount": 74291,
+      "predictionIoU": 0.13109208078556348,
+      "predictionToIdentityRatio": 1.1084383032525065,
+      "step": 61
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69275,
+      "identityIoU": 0.12072480550617325,
+      "predictionCount": 74396,
+      "predictionIoU": 0.13301630863379704,
+      "predictionToIdentityRatio": 1.101814230108619,
+      "step": 62
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69160,
+      "identityIoU": 0.12188207227301323,
+      "predictionCount": 74501,
+      "predictionIoU": 0.134727180815772,
+      "predictionToIdentityRatio": 1.1053896467561366,
+      "step": 63
+    }
+  ],
+  "manifest": {
+    "bytes": 420484,
+    "path": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-transport-crosswind-motion-r1-0714/receipts/phase-corpus.json",
+    "sha256": "672399fab2e404105a3b2ffff3563a3c491921a80edf11dbbd72082f09aa8850"
+  },
+  "mode": "frozen-model-inference",
+  "model": {
+    "path": "/private/tmp/kaminos-phase-transport-motion-balanced-full-r1-0714/transport-model.json",
+    "schema": "kaminos-boundary-splat-phase-transport-model-v0",
+    "sha256": "e42237bb1d081b52c786ac63319c2860c9fd41441490dbb86396d44577ee538f"
+  },
+  "modelTrainingManifest": {
+    "bytes": 102560,
+    "path": "/private/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+    "sha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534"
+  },
+  "predictions": {
+    "path": "/private/tmp/kaminos-phase-transport-motion-balanced-crosswind-r1-0714/transport-predictions.json",
+    "sha256": "0e71e0f782da3dbcfbc184a76263cb6daa8bc606fc5825266a05dc0253a38e17"
+  },
+  "recurrent": [
+    {
+      "birthCandidateCount": 216035,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 14920,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2799696,
+        "denseCellBudget": 17447680,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 68251,
+      "selectedBirthCount": 15016,
+      "sourceCount": 68155,
+      "stableCarrierCount": 53192,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 14963,
+        "activatedDeathCount": 14920,
+        "activatedTransportCount": 43,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 53192
+      },
+      "step": 1,
+      "targetSupportBudget": 68251,
+      "thresholdQualifiedBirthCount": 2003,
+      "transportedCarrierCount": 43
+    },
+    {
+      "birthCandidateCount": 194570,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 7066,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2780520,
+        "denseCellBudget": 17472256,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 68348,
+      "selectedBirthCount": 7163,
+      "sourceCount": 68251,
+      "stableCarrierCount": 61164,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 7087,
+        "activatedDeathCount": 7066,
+        "activatedTransportCount": 21,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 61164
+      },
+      "step": 2,
+      "targetSupportBudget": 68348,
+      "thresholdQualifiedBirthCount": 2572,
+      "transportedCarrierCount": 21
+    },
+    {
+      "birthCandidateCount": 190362,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 3739,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2681775,
+        "denseCellBudget": 17497088,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 68445,
+      "selectedBirthCount": 3836,
+      "sourceCount": 68348,
+      "stableCarrierCount": 64598,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 3750,
+        "activatedDeathCount": 3739,
+        "activatedTransportCount": 11,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 64598
+      },
+      "step": 3,
+      "targetSupportBudget": 68445,
+      "thresholdQualifiedBirthCount": 4000,
+      "transportedCarrierCount": 11
+    },
+    {
+      "birthCandidateCount": 190279,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 1967,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2680268,
+        "denseCellBudget": 17521920,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 68542,
+      "selectedBirthCount": 2064,
+      "sourceCount": 68445,
+      "stableCarrierCount": 66468,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 1977,
+        "activatedDeathCount": 1967,
+        "activatedTransportCount": 10,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 66468
+      },
+      "step": 4,
+      "targetSupportBudget": 68542,
+      "thresholdQualifiedBirthCount": 5229,
+      "transportedCarrierCount": 10
+    },
+    {
+      "birthCandidateCount": 191335,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 1034,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2680268,
+        "denseCellBudget": 17546752,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 68639,
+      "selectedBirthCount": 1131,
+      "sourceCount": 68542,
+      "stableCarrierCount": 67504,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 1038,
+        "activatedDeathCount": 1034,
+        "activatedTransportCount": 4,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 67504
+      },
+      "step": 5,
+      "targetSupportBudget": 68639,
+      "thresholdQualifiedBirthCount": 6128,
+      "transportedCarrierCount": 4
+    },
+    {
+      "birthCandidateCount": 192299,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 547,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2680268,
+        "denseCellBudget": 17571584,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 68736,
+      "selectedBirthCount": 644,
+      "sourceCount": 68639,
+      "stableCarrierCount": 68091,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 548,
+        "activatedDeathCount": 547,
+        "activatedTransportCount": 1,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 68091
+      },
+      "step": 6,
+      "targetSupportBudget": 68736,
+      "thresholdQualifiedBirthCount": 6840,
+      "transportedCarrierCount": 1
+    },
+    {
+      "birthCandidateCount": 193272,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 290,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2680268,
+        "denseCellBudget": 17596416,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 68833,
+      "selectedBirthCount": 387,
+      "sourceCount": 68736,
+      "stableCarrierCount": 68446,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 290,
+        "activatedDeathCount": 290,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 68446
+      },
+      "step": 7,
+      "targetSupportBudget": 68833,
+      "thresholdQualifiedBirthCount": 7511,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 193911,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 141,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2680268,
+        "denseCellBudget": 17621248,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 68930,
+      "selectedBirthCount": 238,
+      "sourceCount": 68833,
+      "stableCarrierCount": 68692,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 141,
+        "activatedDeathCount": 141,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 68692
+      },
+      "step": 8,
+      "targetSupportBudget": 68930,
+      "thresholdQualifiedBirthCount": 7986,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 194404,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 85,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17646080,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69027,
+      "selectedBirthCount": 182,
+      "sourceCount": 68930,
+      "stableCarrierCount": 68845,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 85,
+        "activatedDeathCount": 85,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 68845
+      },
+      "step": 9,
+      "targetSupportBudget": 69027,
+      "thresholdQualifiedBirthCount": 8289,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 195065,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 51,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17670912,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69125,
+      "selectedBirthCount": 149,
+      "sourceCount": 69027,
+      "stableCarrierCount": 68976,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 51,
+        "activatedDeathCount": 51,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 68976
+      },
+      "step": 10,
+      "targetSupportBudget": 69125,
+      "thresholdQualifiedBirthCount": 8655,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 195585,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 33,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17696000,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69223,
+      "selectedBirthCount": 131,
+      "sourceCount": 69125,
+      "stableCarrierCount": 69092,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 33,
+        "activatedDeathCount": 33,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69092
+      },
+      "step": 11,
+      "targetSupportBudget": 69223,
+      "thresholdQualifiedBirthCount": 8884,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 196090,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 26,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17721088,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69321,
+      "selectedBirthCount": 124,
+      "sourceCount": 69223,
+      "stableCarrierCount": 69197,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 26,
+        "activatedDeathCount": 26,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69197
+      },
+      "step": 12,
+      "targetSupportBudget": 69321,
+      "thresholdQualifiedBirthCount": 9150,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 196562,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 16,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17746176,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69419,
+      "selectedBirthCount": 114,
+      "sourceCount": 69321,
+      "stableCarrierCount": 69305,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 16,
+        "activatedDeathCount": 16,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69305
+      },
+      "step": 13,
+      "targetSupportBudget": 69419,
+      "thresholdQualifiedBirthCount": 9353,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 197013,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 16,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17771264,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69517,
+      "selectedBirthCount": 114,
+      "sourceCount": 69419,
+      "stableCarrierCount": 69403,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 16,
+        "activatedDeathCount": 16,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69403
+      },
+      "step": 14,
+      "targetSupportBudget": 69517,
+      "thresholdQualifiedBirthCount": 9554,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 197423,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 16,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17796352,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69615,
+      "selectedBirthCount": 114,
+      "sourceCount": 69517,
+      "stableCarrierCount": 69501,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 16,
+        "activatedDeathCount": 16,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69501
+      },
+      "step": 15,
+      "targetSupportBudget": 69615,
+      "thresholdQualifiedBirthCount": 9742,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 197886,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 20,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17821440,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69713,
+      "selectedBirthCount": 118,
+      "sourceCount": 69615,
+      "stableCarrierCount": 69595,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 20,
+        "activatedDeathCount": 20,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69595
+      },
+      "step": 16,
+      "targetSupportBudget": 69713,
+      "thresholdQualifiedBirthCount": 9973,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 198336,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 19,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17846528,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69812,
+      "selectedBirthCount": 118,
+      "sourceCount": 69713,
+      "stableCarrierCount": 69694,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 19,
+        "activatedDeathCount": 19,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69694
+      },
+      "step": 17,
+      "targetSupportBudget": 69812,
+      "thresholdQualifiedBirthCount": 10191,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 198794,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 19,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17871872,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 69911,
+      "selectedBirthCount": 118,
+      "sourceCount": 69812,
+      "stableCarrierCount": 69793,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 19,
+        "activatedDeathCount": 19,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69793
+      },
+      "step": 18,
+      "targetSupportBudget": 69911,
+      "thresholdQualifiedBirthCount": 10443,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 199213,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 18,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17897216,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70010,
+      "selectedBirthCount": 117,
+      "sourceCount": 69911,
+      "stableCarrierCount": 69893,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 18,
+        "activatedDeathCount": 18,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69893
+      },
+      "step": 19,
+      "targetSupportBudget": 70010,
+      "thresholdQualifiedBirthCount": 10669,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 199598,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 21,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17922560,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70109,
+      "selectedBirthCount": 120,
+      "sourceCount": 70010,
+      "stableCarrierCount": 69989,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 21,
+        "activatedDeathCount": 21,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 69989
+      },
+      "step": 20,
+      "targetSupportBudget": 70109,
+      "thresholdQualifiedBirthCount": 10910,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 200092,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 18,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17947904,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70208,
+      "selectedBirthCount": 117,
+      "sourceCount": 70109,
+      "stableCarrierCount": 70091,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 18,
+        "activatedDeathCount": 18,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70091
+      },
+      "step": 21,
+      "targetSupportBudget": 70208,
+      "thresholdQualifiedBirthCount": 11189,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 200531,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 19,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17973248,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70307,
+      "selectedBirthCount": 118,
+      "sourceCount": 70208,
+      "stableCarrierCount": 70189,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 19,
+        "activatedDeathCount": 19,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70189
+      },
+      "step": 22,
+      "targetSupportBudget": 70307,
+      "thresholdQualifiedBirthCount": 11411,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 201020,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 22,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 17998592,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70406,
+      "selectedBirthCount": 121,
+      "sourceCount": 70307,
+      "stableCarrierCount": 70285,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 22,
+        "activatedDeathCount": 22,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70285
+      },
+      "step": 23,
+      "targetSupportBudget": 70406,
+      "thresholdQualifiedBirthCount": 11691,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 201483,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 24,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18023936,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70506,
+      "selectedBirthCount": 124,
+      "sourceCount": 70406,
+      "stableCarrierCount": 70382,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 24,
+        "activatedDeathCount": 24,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70382
+      },
+      "step": 24,
+      "targetSupportBudget": 70506,
+      "thresholdQualifiedBirthCount": 11964,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 201921,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 26,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18049536,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70606,
+      "selectedBirthCount": 126,
+      "sourceCount": 70506,
+      "stableCarrierCount": 70480,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 26,
+        "activatedDeathCount": 26,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70480
+      },
+      "step": 25,
+      "targetSupportBudget": 70606,
+      "thresholdQualifiedBirthCount": 12224,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 202359,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 32,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18075136,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70706,
+      "selectedBirthCount": 132,
+      "sourceCount": 70606,
+      "stableCarrierCount": 70574,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 32,
+        "activatedDeathCount": 32,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70574
+      },
+      "step": 26,
+      "targetSupportBudget": 70706,
+      "thresholdQualifiedBirthCount": 12465,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 202814,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 38,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18100736,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70806,
+      "selectedBirthCount": 138,
+      "sourceCount": 70706,
+      "stableCarrierCount": 70668,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 38,
+        "activatedDeathCount": 38,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70668
+      },
+      "step": 27,
+      "targetSupportBudget": 70806,
+      "thresholdQualifiedBirthCount": 12710,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 203236,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 38,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18126336,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 70906,
+      "selectedBirthCount": 138,
+      "sourceCount": 70806,
+      "stableCarrierCount": 70768,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 38,
+        "activatedDeathCount": 38,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70768
+      },
+      "step": 28,
+      "targetSupportBudget": 70906,
+      "thresholdQualifiedBirthCount": 12927,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 203640,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 46,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18151936,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71006,
+      "selectedBirthCount": 146,
+      "sourceCount": 70906,
+      "stableCarrierCount": 70860,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 46,
+        "activatedDeathCount": 46,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70860
+      },
+      "step": 29,
+      "targetSupportBudget": 71006,
+      "thresholdQualifiedBirthCount": 13137,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 204091,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 49,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18177536,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71106,
+      "selectedBirthCount": 149,
+      "sourceCount": 71006,
+      "stableCarrierCount": 70957,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 49,
+        "activatedDeathCount": 49,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 70957
+      },
+      "step": 30,
+      "targetSupportBudget": 71106,
+      "thresholdQualifiedBirthCount": 13365,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 204519,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 53,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18203136,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71207,
+      "selectedBirthCount": 154,
+      "sourceCount": 71106,
+      "stableCarrierCount": 71053,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 53,
+        "activatedDeathCount": 53,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71053
+      },
+      "step": 31,
+      "targetSupportBudget": 71207,
+      "thresholdQualifiedBirthCount": 13620,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 204986,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 55,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18228992,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71308,
+      "selectedBirthCount": 156,
+      "sourceCount": 71207,
+      "stableCarrierCount": 71152,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 55,
+        "activatedDeathCount": 55,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71152
+      },
+      "step": 32,
+      "targetSupportBudget": 71308,
+      "thresholdQualifiedBirthCount": 13896,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 205412,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 62,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18254848,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71409,
+      "selectedBirthCount": 163,
+      "sourceCount": 71308,
+      "stableCarrierCount": 71246,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 62,
+        "activatedDeathCount": 62,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71246
+      },
+      "step": 33,
+      "targetSupportBudget": 71409,
+      "thresholdQualifiedBirthCount": 14110,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 205865,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 58,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18280704,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71510,
+      "selectedBirthCount": 159,
+      "sourceCount": 71409,
+      "stableCarrierCount": 71351,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 58,
+        "activatedDeathCount": 58,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71351
+      },
+      "step": 34,
+      "targetSupportBudget": 71510,
+      "thresholdQualifiedBirthCount": 14377,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 206305,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 62,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18306560,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71611,
+      "selectedBirthCount": 163,
+      "sourceCount": 71510,
+      "stableCarrierCount": 71448,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 62,
+        "activatedDeathCount": 62,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71448
+      },
+      "step": 35,
+      "targetSupportBudget": 71611,
+      "thresholdQualifiedBirthCount": 14620,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 206823,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 63,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18332416,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71712,
+      "selectedBirthCount": 164,
+      "sourceCount": 71611,
+      "stableCarrierCount": 71548,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 63,
+        "activatedDeathCount": 63,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71548
+      },
+      "step": 36,
+      "targetSupportBudget": 71712,
+      "thresholdQualifiedBirthCount": 14958,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 207311,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 67,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18358272,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71813,
+      "selectedBirthCount": 168,
+      "sourceCount": 71712,
+      "stableCarrierCount": 71645,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 67,
+        "activatedDeathCount": 67,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71645
+      },
+      "step": 37,
+      "targetSupportBudget": 71813,
+      "thresholdQualifiedBirthCount": 15216,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 207777,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 66,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18384128,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 71915,
+      "selectedBirthCount": 168,
+      "sourceCount": 71813,
+      "stableCarrierCount": 71747,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 66,
+        "activatedDeathCount": 66,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71747
+      },
+      "step": 38,
+      "targetSupportBudget": 71915,
+      "thresholdQualifiedBirthCount": 15488,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 208254,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 68,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18410240,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72017,
+      "selectedBirthCount": 170,
+      "sourceCount": 71915,
+      "stableCarrierCount": 71847,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 68,
+        "activatedDeathCount": 68,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71847
+      },
+      "step": 39,
+      "targetSupportBudget": 72017,
+      "thresholdQualifiedBirthCount": 15751,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 208695,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 68,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18436352,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72119,
+      "selectedBirthCount": 170,
+      "sourceCount": 72017,
+      "stableCarrierCount": 71949,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 68,
+        "activatedDeathCount": 68,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 71949
+      },
+      "step": 40,
+      "targetSupportBudget": 72119,
+      "thresholdQualifiedBirthCount": 16009,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 209180,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 74,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18462464,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72221,
+      "selectedBirthCount": 176,
+      "sourceCount": 72119,
+      "stableCarrierCount": 72045,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 74,
+        "activatedDeathCount": 74,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72045
+      },
+      "step": 41,
+      "targetSupportBudget": 72221,
+      "thresholdQualifiedBirthCount": 16260,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 209604,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 79,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18488576,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72323,
+      "selectedBirthCount": 181,
+      "sourceCount": 72221,
+      "stableCarrierCount": 72142,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 79,
+        "activatedDeathCount": 79,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72142
+      },
+      "step": 42,
+      "targetSupportBudget": 72323,
+      "thresholdQualifiedBirthCount": 16496,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 210049,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 83,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18514688,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72425,
+      "selectedBirthCount": 185,
+      "sourceCount": 72323,
+      "stableCarrierCount": 72240,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 83,
+        "activatedDeathCount": 83,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72240
+      },
+      "step": 43,
+      "targetSupportBudget": 72425,
+      "thresholdQualifiedBirthCount": 16731,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 210452,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 88,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18540800,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72527,
+      "selectedBirthCount": 190,
+      "sourceCount": 72425,
+      "stableCarrierCount": 72337,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 88,
+        "activatedDeathCount": 88,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72337
+      },
+      "step": 44,
+      "targetSupportBudget": 72527,
+      "thresholdQualifiedBirthCount": 16928,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 210905,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 93,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18566912,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72630,
+      "selectedBirthCount": 196,
+      "sourceCount": 72527,
+      "stableCarrierCount": 72434,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 93,
+        "activatedDeathCount": 93,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72434
+      },
+      "step": 45,
+      "targetSupportBudget": 72630,
+      "thresholdQualifiedBirthCount": 17213,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 211328,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 100,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18593280,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72733,
+      "selectedBirthCount": 203,
+      "sourceCount": 72630,
+      "stableCarrierCount": 72530,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 100,
+        "activatedDeathCount": 100,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72530
+      },
+      "step": 46,
+      "targetSupportBudget": 72733,
+      "thresholdQualifiedBirthCount": 17419,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 211802,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 103,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18619648,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72836,
+      "selectedBirthCount": 206,
+      "sourceCount": 72733,
+      "stableCarrierCount": 72630,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 103,
+        "activatedDeathCount": 103,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72630
+      },
+      "step": 47,
+      "targetSupportBudget": 72836,
+      "thresholdQualifiedBirthCount": 17692,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 212208,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 110,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18646016,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 72939,
+      "selectedBirthCount": 213,
+      "sourceCount": 72836,
+      "stableCarrierCount": 72726,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 110,
+        "activatedDeathCount": 110,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72726
+      },
+      "step": 48,
+      "targetSupportBudget": 72939,
+      "thresholdQualifiedBirthCount": 17914,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 212634,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 114,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18672384,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73042,
+      "selectedBirthCount": 217,
+      "sourceCount": 72939,
+      "stableCarrierCount": 72825,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 114,
+        "activatedDeathCount": 114,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72825
+      },
+      "step": 49,
+      "targetSupportBudget": 73042,
+      "thresholdQualifiedBirthCount": 18141,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 213037,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 122,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18698752,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73145,
+      "selectedBirthCount": 225,
+      "sourceCount": 73042,
+      "stableCarrierCount": 72920,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 122,
+        "activatedDeathCount": 122,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 72920
+      },
+      "step": 50,
+      "targetSupportBudget": 73145,
+      "thresholdQualifiedBirthCount": 18351,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 213471,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 126,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18725120,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73248,
+      "selectedBirthCount": 229,
+      "sourceCount": 73145,
+      "stableCarrierCount": 73019,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 126,
+        "activatedDeathCount": 126,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73019
+      },
+      "step": 51,
+      "targetSupportBudget": 73248,
+      "thresholdQualifiedBirthCount": 18573,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 213906,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 143,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18751488,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73352,
+      "selectedBirthCount": 247,
+      "sourceCount": 73248,
+      "stableCarrierCount": 73105,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 143,
+        "activatedDeathCount": 143,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73105
+      },
+      "step": 52,
+      "targetSupportBudget": 73352,
+      "thresholdQualifiedBirthCount": 18806,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 214442,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 144,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18778112,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73456,
+      "selectedBirthCount": 248,
+      "sourceCount": 73352,
+      "stableCarrierCount": 73208,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 144,
+        "activatedDeathCount": 144,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73208
+      },
+      "step": 53,
+      "targetSupportBudget": 73456,
+      "thresholdQualifiedBirthCount": 19134,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 214915,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 154,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18804736,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73560,
+      "selectedBirthCount": 258,
+      "sourceCount": 73456,
+      "stableCarrierCount": 73302,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 154,
+        "activatedDeathCount": 154,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73302
+      },
+      "step": 54,
+      "targetSupportBudget": 73560,
+      "thresholdQualifiedBirthCount": 19405,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 215409,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 165,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18831360,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73664,
+      "selectedBirthCount": 269,
+      "sourceCount": 73560,
+      "stableCarrierCount": 73395,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 165,
+        "activatedDeathCount": 165,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73395
+      },
+      "step": 55,
+      "targetSupportBudget": 73664,
+      "thresholdQualifiedBirthCount": 19662,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 215939,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 171,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18857984,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73768,
+      "selectedBirthCount": 275,
+      "sourceCount": 73664,
+      "stableCarrierCount": 73493,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 171,
+        "activatedDeathCount": 171,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73493
+      },
+      "step": 56,
+      "targetSupportBudget": 73768,
+      "thresholdQualifiedBirthCount": 19958,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 216503,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 168,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18884608,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73872,
+      "selectedBirthCount": 272,
+      "sourceCount": 73768,
+      "stableCarrierCount": 73600,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 168,
+        "activatedDeathCount": 168,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73600
+      },
+      "step": 57,
+      "targetSupportBudget": 73872,
+      "thresholdQualifiedBirthCount": 20262,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 216967,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 180,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18911232,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 73976,
+      "selectedBirthCount": 284,
+      "sourceCount": 73872,
+      "stableCarrierCount": 73692,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 180,
+        "activatedDeathCount": 180,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73692
+      },
+      "step": 58,
+      "targetSupportBudget": 73976,
+      "thresholdQualifiedBirthCount": 20550,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 217510,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 191,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18937856,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 74081,
+      "selectedBirthCount": 296,
+      "sourceCount": 73976,
+      "stableCarrierCount": 73785,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 191,
+        "activatedDeathCount": 191,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73785
+      },
+      "step": 59,
+      "targetSupportBudget": 74081,
+      "thresholdQualifiedBirthCount": 20816,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 218029,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 192,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18964736,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 74186,
+      "selectedBirthCount": 297,
+      "sourceCount": 74081,
+      "stableCarrierCount": 73889,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 192,
+        "activatedDeathCount": 192,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73889
+      },
+      "step": 60,
+      "targetSupportBudget": 74186,
+      "thresholdQualifiedBirthCount": 21139,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 218493,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 203,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 18991616,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 74291,
+      "selectedBirthCount": 308,
+      "sourceCount": 74186,
+      "stableCarrierCount": 73983,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 203,
+        "activatedDeathCount": 203,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 73983
+      },
+      "step": 61,
+      "targetSupportBudget": 74291,
+      "thresholdQualifiedBirthCount": 21360,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 218966,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 201,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 19018496,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 74396,
+      "selectedBirthCount": 306,
+      "sourceCount": 74291,
+      "stableCarrierCount": 74090,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 201,
+        "activatedDeathCount": 201,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 74090
+      },
+      "step": 62,
+      "targetSupportBudget": 74396,
+      "thresholdQualifiedBirthCount": 21632,
+      "transportedCarrierCount": 0
+    },
+    {
+      "birthCandidateCount": 219358,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 0,
+      "deathCount": 207,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2700270,
+        "denseCellBudget": 19045376,
+        "strategy": "dense-bounded-grid"
+      },
+      "predictedCount": 74501,
+      "selectedBirthCount": 312,
+      "sourceCount": 74396,
+      "stableCarrierCount": 74189,
+      "staticScaffold": {
+        "actionMarginThreshold": 7.450580596923828e-06,
+        "activatedActionCount": 207,
+        "activatedDeathCount": 207,
+        "activatedTransportCount": 0,
+        "collisionCount": 0,
+        "compositionAuthority": "copied-static-scaffold-with-calibrated-carrier-actions-v0",
+        "defaultStaticCount": 74189
+      },
+      "step": 63,
+      "targetSupportBudget": 74501,
+      "thresholdQualifiedBirthCount": 21826,
+      "transportedCarrierCount": 0
+    }
+  ],
+  "rolloutGate": {
+    "aggregateOrEarlyStepCanCloseClaim": false,
+    "allStepsBeatIdentity": true,
+    "authority": "every-recurrent-step-support-advantage-gate-v0",
+    "beatStepCount": 63,
+    "evaluatedStepCount": 63,
+    "firstIdentityLossStep": null,
+    "minimumPredictionToIdentityRatio": 1.0873768408787752
+  },
+  "route": {
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+    "fallbackReason": null
+  },
+  "schema": "kaminos-boundary-splat-phase-transport-training-v0",
+  "startedAt": 1784004844.9581828,
+  "status": "completed"
+}
