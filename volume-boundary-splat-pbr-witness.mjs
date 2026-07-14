@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { inflateSync as zlibInflateSync } from 'node:zlib';
 
@@ -40,9 +40,12 @@ const steadySamples = Math.max(1, Math.floor(Number(args.get('--steady-samples')
 const cadenceMs = Math.max(1, Math.floor(Number(args.get('--cadence-ms') || 12000)));
 const browserContinuity = String(args.get('--browser-continuity') || 'unverified-existing');
 const requestedBrowserProfilePath = String(args.get('--browser-profile') || '');
+const chrome = String(args.get('--chrome') || process.env.CHROME || defaultChromePath());
+const windowSize = String(args.get('--window-size') || '1280,960');
 const runStartedAt = new Date().toISOString();
 
 let ws = null;
+let browserSession = null;
 let browserPageId = null;
 let browserPageUrl = null;
 let browserVersion = null;
@@ -56,7 +59,22 @@ try {
   if (!BROWSER_CONTINUITY_MODES.has(browserContinuity)) {
     throw new Error(`invalid --browser-continuity ${JSON.stringify(browserContinuity)}`);
   }
-  browserProcessIdentity = discoverBrowserProcessIdentity(port);
+  mkdirSync(outDir, { recursive: true });
+  try {
+    browserProcessIdentity = discoverBrowserProcessIdentity(port);
+  } catch (error) {
+    failurePhase = 'browser-launch';
+    browserSession = await launchBrowser();
+    lastTrustworthyEvidence.browserLaunch = {
+      mode: browserSession.mode,
+      chrome,
+      port,
+      browserProfilePath: requestedBrowserProfilePath || browserSession.browserProfilePath,
+      windowSize,
+    };
+    await waitForCdp();
+    browserProcessIdentity = discoverBrowserProcessIdentity(port);
+  }
   if (
     requestedBrowserProfilePath
     && resolve(requestedBrowserProfilePath) !== resolve(browserProcessIdentity.browserProfilePath)
@@ -66,7 +84,6 @@ try {
       effective: browserProcessIdentity.browserProfilePath,
     })}`);
   }
-  mkdirSync(outDir, { recursive: true });
   failurePhase = 'connect-existing-browser';
   const version = await cdpFetch('/json/version');
   browserVersion = version.Browser;
@@ -265,7 +282,7 @@ try {
     requestedEffectiveRouteAgreement: finalState.effectiveRoute === EFFECTIVE_ROUTE,
     browser: {
       identity: 'boundary-splat-pbr-single-cdp-browser-v0',
-      mode: 'connected-existing',
+      mode: browserSession ? 'self-launched' : 'connected-existing',
       port,
       version: browserVersion,
       pageId: page.id,
@@ -349,7 +366,7 @@ try {
     requestedRoute,
     browser: {
       identity: 'boundary-splat-pbr-single-cdp-browser-v0',
-      mode: 'connected-existing',
+      mode: browserSession ? 'self-launched' : 'connected-existing',
       port,
       version: browserVersion,
       pageId: browserPageId,
@@ -417,6 +434,36 @@ function classifyFalseClosure(phase, error) {
   return phase;
 }
 
+function defaultChromePath() {
+  const candidates = [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    'google-chrome',
+  ];
+  return candidates.find(candidate => candidate.includes('/') ? existsSync(candidate) : true) || candidates[0];
+}
+
+async function launchBrowser() {
+  const browserProfilePath = requestedBrowserProfilePath || resolve(outDir, 'chrome-profile');
+  const proc = spawn(chrome, [
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${browserProfilePath}`,
+    '--no-first-run',
+    '--enable-unsafe-webgpu',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    `--window-size=${windowSize}`,
+    'about:blank',
+  ], { stdio: 'ignore', detached: true });
+  proc.unref();
+  return {
+    identity: 'boundary-splat-pbr-single-cdp-browser-v0',
+    mode: 'self-launched',
+    process: proc,
+    browserProfilePath,
+  };
+}
+
 function discoverBrowserProcessIdentity(chromePort) {
   const rows = execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,command='], { encoding: 'utf8' }).split('\n');
   const marker = `--remote-debugging-port=${chromePort}`;
@@ -444,6 +491,17 @@ async function cdpFetch(path) {
   const response = await fetch(`http://127.0.0.1:${port}${path}`);
   if (!response.ok) throw new Error(`CDP ${path} failed with ${response.status}`);
   return response.json();
+}
+
+async function waitForCdp() {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    try {
+      return await cdpFetch('/json/version');
+    } catch {
+      await delay(100);
+    }
+  }
+  throw new Error('Chrome DevTools endpoint did not open');
 }
 
 async function findPage() {

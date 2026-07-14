@@ -62,4 +62,12 @@ class BoundarySplatSmartSelectorContracts < Minitest::Test
     assert_match(/boundarySplatAdaptiveLodIdentity[\s\S]*boundarySplatTierGroups[\s\S]*boundarySplatGlobalRenderedInstanceCount/, motion_witness)
     assert_match(/smart-selector|lod mode|boundarySplatLodMode/, motion_witness)
   end
+
+  def test_pbr_witness_launches_child_owned_browser_inside_greenroom_job
+    assert_match(/function launchBrowser/, pbr_witness)
+    assert_match(/failurePhase\s*=\s*'browser-launch'/, pbr_witness)
+    assert_match(/--enable-unsafe-webgpu/, pbr_witness)
+    assert_match(/mode:\s*browserSession\s*\?\s*'self-launched'/, pbr_witness)
+    assert_match(/browserProcessIdentity\s*=\s*discoverBrowserProcessIdentity\(port\)/, pbr_witness)
+  end
 end
