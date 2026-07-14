@@ -97,6 +97,51 @@ const projectedInfeasible = core.boundarySplatPopulationAllocationPlan(descripto
 assert.equal(projectedInfeasible.ok, false);
 assert.ok(projectedInfeasible.reasons.includes('projected-work-limit-below-population-minimum'));
 
+for (const candidateDrawLimit of [0, -1]) {
+  const zeroCandidatePlan = core.boundarySplatPopulationAllocationPlan(descriptors, {
+    sourceCandidateCount: 10000,
+    candidateDrawLimit,
+    projectedWorkLimit: 1_000_000_000,
+    requestedHistoryDepth: 16,
+    historyCandidateCapacity: 1000,
+    candidateStrideBytes: 48,
+    historyMemoryLimitBytes: 16 * 1000 * 48,
+  });
+  assert.equal(zeroCandidatePlan.ok, false, 'explicit non-positive candidate limits must not become unbounded');
+  assert.ok(zeroCandidatePlan.reasons.includes('candidate-draw-limit-below-population-minimum'));
+  assert.equal(zeroCandidatePlan.constraints.candidateDrawLimit, candidateDrawLimit, 'evidence must preserve the explicit candidate limit');
+}
+
+for (const projectedWorkLimit of [0, -1]) {
+  const zeroProjectedPlan = core.boundarySplatPopulationAllocationPlan(descriptors, {
+    sourceCandidateCount: 10000,
+    candidateDrawLimit: 100000,
+    projectedWorkLimit,
+    requestedHistoryDepth: 16,
+    historyCandidateCapacity: 1000,
+    candidateStrideBytes: 48,
+    historyMemoryLimitBytes: 16 * 1000 * 48,
+  });
+  assert.equal(zeroProjectedPlan.ok, false, 'explicit non-positive projected-work limits must not become unbounded');
+  assert.ok(zeroProjectedPlan.reasons.includes('projected-work-limit-below-population-minimum'));
+  assert.equal(zeroProjectedPlan.constraints.projectedWorkLimit, projectedWorkLimit, 'evidence must preserve the explicit projected-work limit');
+}
+
+for (const historyMemoryLimitBytes of [0, -1]) {
+  const zeroHistoryPlan = core.boundarySplatPopulationAllocationPlan(descriptors, {
+    sourceCandidateCount: 10000,
+    candidateDrawLimit: 100000,
+    projectedWorkLimit: 1_000_000_000,
+    requestedHistoryDepth: 16,
+    historyCandidateCapacity: 1000,
+    candidateStrideBytes: 48,
+    historyMemoryLimitBytes,
+  });
+  assert.equal(zeroHistoryPlan.ok, false, 'explicit non-positive history limits must not become unbounded');
+  assert.ok(zeroHistoryPlan.reasons.includes('history-memory-limit-below-minimum-depth'));
+  assert.equal(zeroHistoryPlan.constraints.historyMemoryLimitBytes, historyMemoryLimitBytes, 'evidence must preserve the explicit history limit');
+}
+
 assert.match(
   coreSource,
   /BOUNDARY_SPLAT_POPULATION_ALLOCATOR_IDENTITY\s*=\s*'boundary-splat-global-marginal-utility-population-v0'/,

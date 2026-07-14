@@ -248,8 +248,9 @@ export function boundarySplatApplyBudgetCeiling(requestedTier, candidateCeiling)
 }
 
 function boundarySplatPositiveLimit(value) {
+  if (value === undefined || value === null || value === '') return Number.POSITIVE_INFINITY;
   const numeric = Number(value);
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : Number.POSITIVE_INFINITY;
+  return Number.isFinite(numeric) ? numeric : Number.POSITIVE_INFINITY;
 }
 
 function boundarySplatProjectedAreaPx(projectedDiameterPx) {
