@@ -1,0 +1,3027 @@
+{
+  "claimBoundary": "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration",
+  "frames": [
+    {
+      "candidates": {
+        "bytes": 4361920,
+        "count": 68155,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-00.features.f32",
+        "sha256": "58f24ed3c07e66355363ebc39115f7c656f8ecc108d5b42d41d48442f5f40754",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-0",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3271440,
+        "count": 68155,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-00.splats.f32",
+        "sha256": "231acdbebc530844e039c34f02d435b52358822f617980e62728996abbce7e15",
+        "strideFloats": 12
+      },
+      "step": 0
+    },
+    {
+      "candidates": {
+        "bytes": 4368064,
+        "count": 68251,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-01.features.f32",
+        "sha256": "6e64bd221313a8bc92baabd39026e499f5afb28e7a066677ad3daa4fc8e23ecb",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-1",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3276048,
+        "count": 68251,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-01.splats.f32",
+        "sha256": "8f74d09cadf3b0bedc83df767828d10e0ec8ba9d0f6636c17280234db32e745f",
+        "strideFloats": 12
+      },
+      "step": 1
+    },
+    {
+      "candidates": {
+        "bytes": 4374272,
+        "count": 68348,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-02.features.f32",
+        "sha256": "ceb91335cd3e2ae683c49e930378880abd270581e9810e9ae08423a2aa2ccc36",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-2",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3280704,
+        "count": 68348,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-02.splats.f32",
+        "sha256": "b248eb25c07ec30c65b16e20e13ebe2198df08632b1202640abe0c2536c868fd",
+        "strideFloats": 12
+      },
+      "step": 2
+    },
+    {
+      "candidates": {
+        "bytes": 4380480,
+        "count": 68445,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-03.features.f32",
+        "sha256": "0ef8ba3789a0db3b5090fb068bd8ed58e8f94e124d6a815647ae7650abb4cdad",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-3",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3285360,
+        "count": 68445,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-03.splats.f32",
+        "sha256": "053cb01eacdfe6181968cf10b6bac9ff28943cbcc676af43a9aa4f9e695ab101",
+        "strideFloats": 12
+      },
+      "step": 3
+    },
+    {
+      "candidates": {
+        "bytes": 4386688,
+        "count": 68542,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-04.features.f32",
+        "sha256": "ff5fe2de32c170757c3979891d3e1de116f0501e896b7edaa0066a347191fe75",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-4",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3290016,
+        "count": 68542,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-04.splats.f32",
+        "sha256": "8704526376202cc5b93a0048518f438bb60383d4061ae4491f78d305a7b4be63",
+        "strideFloats": 12
+      },
+      "step": 4
+    },
+    {
+      "candidates": {
+        "bytes": 4392896,
+        "count": 68639,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-05.features.f32",
+        "sha256": "963a7d3f4446bac98152ecf387ff4d0882f368aea8ae099a9ba1df0afafb890d",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-5",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3294672,
+        "count": 68639,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-05.splats.f32",
+        "sha256": "285e906415b8412d59a9b6f1710076daf98f07e9943e91885d7459bc9381ccaa",
+        "strideFloats": 12
+      },
+      "step": 5
+    },
+    {
+      "candidates": {
+        "bytes": 4399104,
+        "count": 68736,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-06.features.f32",
+        "sha256": "9c42a1eb082b93e203e964a799a48a7f849950d0c1b3de0b58c2def16359fdb5",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-6",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3299328,
+        "count": 68736,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-06.splats.f32",
+        "sha256": "7a844b178e5e03c63b6da87f328c532a403020a017e44e7512d649aca77c3fc9",
+        "strideFloats": 12
+      },
+      "step": 6
+    },
+    {
+      "candidates": {
+        "bytes": 4405312,
+        "count": 68833,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-07.features.f32",
+        "sha256": "8e853192462e0426f94306533264610bc5d70c52a2cd9dfb3099aa1999d128e7",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-7",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3303984,
+        "count": 68833,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-07.splats.f32",
+        "sha256": "b77764265fb1cc967fd28959b6799582a62faa3e328a0b90764a62970949dd5d",
+        "strideFloats": 12
+      },
+      "step": 7
+    },
+    {
+      "candidates": {
+        "bytes": 4411520,
+        "count": 68930,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-08.features.f32",
+        "sha256": "324391726af77909fd80e28cb7fd07ec6d645de7d3121597fb24c3c5267ba938",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-8",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3308640,
+        "count": 68930,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-08.splats.f32",
+        "sha256": "14172391de85807275b4ca783d16970c1fb712e04cc1b65561d09f540e090a09",
+        "strideFloats": 12
+      },
+      "step": 8
+    },
+    {
+      "candidates": {
+        "bytes": 4417728,
+        "count": 69027,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-09.features.f32",
+        "sha256": "6e8da51514cc65ebec0b6f8e9938a66602268a673b16a2dfda8e473e53e0e864",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-9",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3313296,
+        "count": 69027,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-09.splats.f32",
+        "sha256": "71f25ec33fff5f909b84309e3c361252db75c18022a292a868e0bff6c8ba7ea2",
+        "strideFloats": 12
+      },
+      "step": 9
+    },
+    {
+      "candidates": {
+        "bytes": 4424000,
+        "count": 69125,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-10.features.f32",
+        "sha256": "f696558bb40a345e09076015b14fc95fb8c4d9ac76cc6247d1f778897b4a1222",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-10",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3318000,
+        "count": 69125,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-10.splats.f32",
+        "sha256": "e3bd5b37ad74ab0df827ee52595dd0ee75ef5e30aa3cf08071020be002e02c8f",
+        "strideFloats": 12
+      },
+      "step": 10
+    },
+    {
+      "candidates": {
+        "bytes": 4430272,
+        "count": 69223,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-11.features.f32",
+        "sha256": "15e465cbdb9454534521e3c7faddd5008793bdd211954752ce9bcf211b5a9ddd",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-11",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3322704,
+        "count": 69223,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-11.splats.f32",
+        "sha256": "38434de215fb421179571246fdf3782f3d3e9a528b2c519ef7f4d10f1d45cf59",
+        "strideFloats": 12
+      },
+      "step": 11
+    },
+    {
+      "candidates": {
+        "bytes": 4436544,
+        "count": 69321,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-12.features.f32",
+        "sha256": "ee6c5916ca149ba58f4c795d2a9d9868df68a27edd440aea39721746aeb2d4ba",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-12",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3327408,
+        "count": 69321,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-12.splats.f32",
+        "sha256": "33aa419bba1342996e12c45f84f14120728af5bcc64128ebfe157df534635699",
+        "strideFloats": 12
+      },
+      "step": 12
+    },
+    {
+      "candidates": {
+        "bytes": 4442816,
+        "count": 69419,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-13.features.f32",
+        "sha256": "6e7cc9473f303633e80e7ea243386a171a3e17ad3f4e4784593738462a49171f",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-13",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3332112,
+        "count": 69419,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-13.splats.f32",
+        "sha256": "aca9627a599b7e8074a97ecf8641183204c50f4bcb9957df7b2c757ccc04fc0d",
+        "strideFloats": 12
+      },
+      "step": 13
+    },
+    {
+      "candidates": {
+        "bytes": 4449088,
+        "count": 69517,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-14.features.f32",
+        "sha256": "4b435b830e04a8be811058c217048dbca9335020f50fa00a20864b5bfcb89840",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-14",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3336816,
+        "count": 69517,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-14.splats.f32",
+        "sha256": "83fe62a8e4902d97e0f4b08ff5547c6ce6a51814546bbf58841e0dbe1f3aa3c3",
+        "strideFloats": 12
+      },
+      "step": 14
+    },
+    {
+      "candidates": {
+        "bytes": 4455360,
+        "count": 69615,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-15.features.f32",
+        "sha256": "a1de89543630f2652e904b28596bc57696e85d2adad6f14bc625832d3e593a10",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-15",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3341520,
+        "count": 69615,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-15.splats.f32",
+        "sha256": "758df130f12225ff3bcc3f1b688aca57f7307445cd0a85a45a0f803a5ae3f6b0",
+        "strideFloats": 12
+      },
+      "step": 15
+    },
+    {
+      "candidates": {
+        "bytes": 4461632,
+        "count": 69713,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-16.features.f32",
+        "sha256": "6b017d4a77fc58c0b4d346963ffc07e2d7ecf167b91a87de3ef79986bd3052a0",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-16",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3346224,
+        "count": 69713,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-16.splats.f32",
+        "sha256": "c5f2ab1b404f617d4641eabf0e2ce474885a76366139452615a8ecd8e600265d",
+        "strideFloats": 12
+      },
+      "step": 16
+    },
+    {
+      "candidates": {
+        "bytes": 4467968,
+        "count": 69812,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-17.features.f32",
+        "sha256": "f579cc38726644706db463f7d2212541975e906d877901bfae638efceefb8313",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-17",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3350976,
+        "count": 69812,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-17.splats.f32",
+        "sha256": "ae534207880dbc8d047136a99eefc96b818da36e42e0c8201544514c055f8acb",
+        "strideFloats": 12
+      },
+      "step": 17
+    },
+    {
+      "candidates": {
+        "bytes": 4474304,
+        "count": 69911,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-18.features.f32",
+        "sha256": "69458b4de1a38df6c11f1e6c26c103bdf41409434c8f6d816396f38cef7fdeb6",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-18",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3355728,
+        "count": 69911,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-18.splats.f32",
+        "sha256": "98c555ad8fc07b95a39c32c713f9288356b33324803b2f7cdd8a1e72f803526d",
+        "strideFloats": 12
+      },
+      "step": 18
+    },
+    {
+      "candidates": {
+        "bytes": 4480640,
+        "count": 70010,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-19.features.f32",
+        "sha256": "d476a10c29e2d67b24956fa6f2a783bf0c003566bc4dc05178b9d7ebf7ed2bdd",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-19",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3360480,
+        "count": 70010,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-19.splats.f32",
+        "sha256": "88f99f66ffdabb8e88170a85e3d4145c32390159abdd267c9e259f2a56bbbf93",
+        "strideFloats": 12
+      },
+      "step": 19
+    },
+    {
+      "candidates": {
+        "bytes": 4486976,
+        "count": 70109,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-20.features.f32",
+        "sha256": "4f989cbe78375a0f02dd3ff1d379abdf4924cc5c05605ffbd6b7ef3a3b2a837e",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-20",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3365232,
+        "count": 70109,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-20.splats.f32",
+        "sha256": "1edefff17ca9f20db7988c7fddd84f7f433769f312c055fc01850f240008bdb3",
+        "strideFloats": 12
+      },
+      "step": 20
+    },
+    {
+      "candidates": {
+        "bytes": 4493312,
+        "count": 70208,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-21.features.f32",
+        "sha256": "7150b399aa3f1f0cad94910292e96cf8c846c8f66d98eda73206163a6dc91608",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-21",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3369984,
+        "count": 70208,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-21.splats.f32",
+        "sha256": "6d143cc335e6362c68c7e8369abfd09ba1993e45b5a4a3152a668ad9a31974cc",
+        "strideFloats": 12
+      },
+      "step": 21
+    },
+    {
+      "candidates": {
+        "bytes": 4499648,
+        "count": 70307,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-22.features.f32",
+        "sha256": "3b0563ee9d5e1af721f75793eccdde9833ef4cc849d184522c9a491ff5d73061",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-22",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3374736,
+        "count": 70307,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-22.splats.f32",
+        "sha256": "989d30889749da6c14590c45c9860b5f825e36b536a49826f59a5e6ab0c4c4ee",
+        "strideFloats": 12
+      },
+      "step": 22
+    },
+    {
+      "candidates": {
+        "bytes": 4505984,
+        "count": 70406,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-23.features.f32",
+        "sha256": "a503494ea63dec0b7e6859f19250d70ad71c859186ec6c2c8e105bfb8554c029",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-23",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3379488,
+        "count": 70406,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-23.splats.f32",
+        "sha256": "684b202c2d697f7cd576f567e665cb9e4557cb0be131fb02930fb4a7d2cade0d",
+        "strideFloats": 12
+      },
+      "step": 23
+    },
+    {
+      "candidates": {
+        "bytes": 4512384,
+        "count": 70506,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-24.features.f32",
+        "sha256": "578864dbb31e1ccaa3258366794851c422221cefd52aa53768ef57c795f39027",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-24",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3384288,
+        "count": 70506,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-24.splats.f32",
+        "sha256": "fc00a33ee718edfdd25540485e5450ea6bf719cad8bb891fb60df8f3a3af20ce",
+        "strideFloats": 12
+      },
+      "step": 24
+    },
+    {
+      "candidates": {
+        "bytes": 4518784,
+        "count": 70606,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-25.features.f32",
+        "sha256": "fe0cb84319d562c7dd3780f89b2ec4e81b89a4cde46466e8f095fd5f2bc0b984",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-25",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3389088,
+        "count": 70606,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-25.splats.f32",
+        "sha256": "e20c8969fc63a1a060c1b2c4bcc35a63bf004e8978827760489f9aa86ba13398",
+        "strideFloats": 12
+      },
+      "step": 25
+    },
+    {
+      "candidates": {
+        "bytes": 4525184,
+        "count": 70706,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-26.features.f32",
+        "sha256": "d3682a5fb8a771455576a88b694365d4ebd7d5e848ff9ae2d3f984f8374fcc60",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-26",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3393888,
+        "count": 70706,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-26.splats.f32",
+        "sha256": "fbbff0805bfc6c42c0d3c5aaffc373205fd0fa63fb8a20a0b330aa8e06a6f417",
+        "strideFloats": 12
+      },
+      "step": 26
+    },
+    {
+      "candidates": {
+        "bytes": 4531584,
+        "count": 70806,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-27.features.f32",
+        "sha256": "268eddfd9a50b7aa2dcd47becaf1c8a0612b404430a3aca7d02a561f02e73ce0",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-27",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3398688,
+        "count": 70806,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-27.splats.f32",
+        "sha256": "f5143cfd836aab392c3115fc44dbde3066869ca89267413ab20212e03b6f7674",
+        "strideFloats": 12
+      },
+      "step": 27
+    },
+    {
+      "candidates": {
+        "bytes": 4537984,
+        "count": 70906,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-28.features.f32",
+        "sha256": "1cab8ec18ee8368463d0940fe5a55964d5ea550526edaab18e5c1aec4d13a804",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-28",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3403488,
+        "count": 70906,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-28.splats.f32",
+        "sha256": "3c53b92baabe32b3014d1512fd14de12e6252428b213b449ae0d3a105a7bd564",
+        "strideFloats": 12
+      },
+      "step": 28
+    },
+    {
+      "candidates": {
+        "bytes": 4544384,
+        "count": 71006,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-29.features.f32",
+        "sha256": "eb4fdd53b3f16fadfc48e95ff08ad51f857413bd68c384f3a8b6aecdfaad00fd",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-29",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3408288,
+        "count": 71006,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-29.splats.f32",
+        "sha256": "4016e1d0c4e35f4935312428b77125ca300d564a4cea1d9583b63bbe1b50afc2",
+        "strideFloats": 12
+      },
+      "step": 29
+    },
+    {
+      "candidates": {
+        "bytes": 4550784,
+        "count": 71106,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-30.features.f32",
+        "sha256": "fddaa6ef72d117493115a95b9876814400a94c01ae6d7203a93f3cd89f95d96b",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-30",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3413088,
+        "count": 71106,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-30.splats.f32",
+        "sha256": "0a8d5750d5a4c840f2bbd5d98356a8d81594ed98a8c22c2cc8c42678b76f8c2b",
+        "strideFloats": 12
+      },
+      "step": 30
+    },
+    {
+      "candidates": {
+        "bytes": 4557248,
+        "count": 71207,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-31.features.f32",
+        "sha256": "c648f42d909cd2e85f1c9161fc42e9f7f150a2adfbe371f49bd288d0b508c8c8",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-31",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3417936,
+        "count": 71207,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-31.splats.f32",
+        "sha256": "017c9faeec6e358d8782479b97e647aebd9432d5618cc231520e2ebfd02dd2a1",
+        "strideFloats": 12
+      },
+      "step": 31
+    },
+    {
+      "candidates": {
+        "bytes": 4563712,
+        "count": 71308,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-32.features.f32",
+        "sha256": "ce1cd2c12e5eb0b7f1a440962a7cee4e206400ea6b3b2fa852dbd79ba5995dfd",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-32",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3422784,
+        "count": 71308,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-32.splats.f32",
+        "sha256": "f8868a0945d905be88c4071fab52ca7127b871b91883fffc3d317f100dcf443a",
+        "strideFloats": 12
+      },
+      "step": 32
+    },
+    {
+      "candidates": {
+        "bytes": 4570176,
+        "count": 71409,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-33.features.f32",
+        "sha256": "dde9a5195b865b6519864665af9dee19b97afce1895d316a06d5da52f097e274",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-33",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3427632,
+        "count": 71409,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-33.splats.f32",
+        "sha256": "7fdd5f2a4eae494c18b107c05a9ae767238c0c8457887196d697b0bae0aa5741",
+        "strideFloats": 12
+      },
+      "step": 33
+    },
+    {
+      "candidates": {
+        "bytes": 4576640,
+        "count": 71510,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-34.features.f32",
+        "sha256": "f7f545aab3ad517dc1b9cc339094903f133db1d20b32fbe89034609a20469002",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-34",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3432480,
+        "count": 71510,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-34.splats.f32",
+        "sha256": "2d5b199d0ff20735bc646d31f000f407374098fbe059b6516a41e3dc97a73f9a",
+        "strideFloats": 12
+      },
+      "step": 34
+    },
+    {
+      "candidates": {
+        "bytes": 4583104,
+        "count": 71611,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-35.features.f32",
+        "sha256": "d0fdfd9091102636071c36f441b324aca09889b94b6e24c5865f2d097c5e7076",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-35",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3437328,
+        "count": 71611,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-35.splats.f32",
+        "sha256": "0a1859559044dd8aa411ae3f24df9515618371120cd52db9a1e076c496220119",
+        "strideFloats": 12
+      },
+      "step": 35
+    },
+    {
+      "candidates": {
+        "bytes": 4589568,
+        "count": 71712,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-36.features.f32",
+        "sha256": "14c57e84bba665b3c2db1647e507b315dbdacee24c90a110be456f702ffc919f",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-36",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3442176,
+        "count": 71712,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-36.splats.f32",
+        "sha256": "d20915012d5ef792e72224176f8290ff0e6d51cf2aac24d076a7c33ce7b537fd",
+        "strideFloats": 12
+      },
+      "step": 36
+    },
+    {
+      "candidates": {
+        "bytes": 4596032,
+        "count": 71813,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-37.features.f32",
+        "sha256": "db8310e533ee8b97a81584e35c3b1cda5a8c910dc942498ea8168df7890a0f8f",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-37",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3447024,
+        "count": 71813,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-37.splats.f32",
+        "sha256": "d2cb3a36bdca618dd69ab921dc749b2d4ee4e8e39bca39eeaee1a9612a55ded1",
+        "strideFloats": 12
+      },
+      "step": 37
+    },
+    {
+      "candidates": {
+        "bytes": 4602560,
+        "count": 71915,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-38.features.f32",
+        "sha256": "76998e5d74928b3ae9d4468d563c5dff2358ca2ae1cade17531370c63df58495",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-38",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3451920,
+        "count": 71915,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-38.splats.f32",
+        "sha256": "1aff516b85dd730bfea0e9e5e73f7569bfac6257307b3597527faec6579e0af7",
+        "strideFloats": 12
+      },
+      "step": 38
+    },
+    {
+      "candidates": {
+        "bytes": 4609088,
+        "count": 72017,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-39.features.f32",
+        "sha256": "e61c2cebed49c7abc680fd48d226f62c870543077d16ef07f5b1a484d8e9433d",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-39",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3456816,
+        "count": 72017,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-39.splats.f32",
+        "sha256": "9df984062fc7f2697c384f743bcac52e2ae5eaa4d67e16decb0a953e21377fac",
+        "strideFloats": 12
+      },
+      "step": 39
+    },
+    {
+      "candidates": {
+        "bytes": 4615616,
+        "count": 72119,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-40.features.f32",
+        "sha256": "f8dc3de7480a344b086b2cfad7197f96f669014ad0ca74e9d1251655a52f7932",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-40",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3461712,
+        "count": 72119,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-40.splats.f32",
+        "sha256": "e0c84036597d8c3de131bd6867422552755a390bb0860085997808fc760f521d",
+        "strideFloats": 12
+      },
+      "step": 40
+    },
+    {
+      "candidates": {
+        "bytes": 4622144,
+        "count": 72221,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-41.features.f32",
+        "sha256": "097706ead74cfa799c5340f5866f3dac861a86dbc1fbaa500e3dd109073a55fe",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-41",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3466608,
+        "count": 72221,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-41.splats.f32",
+        "sha256": "4c8a2f7c2ea8395325a12886f19415095259662c7986c5d705b266714864b498",
+        "strideFloats": 12
+      },
+      "step": 41
+    },
+    {
+      "candidates": {
+        "bytes": 4628672,
+        "count": 72323,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-42.features.f32",
+        "sha256": "5da8716cc06668264197c4ea0ad8308126b061fb0fddbb6603cfe53ae9859db5",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-42",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3471504,
+        "count": 72323,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-42.splats.f32",
+        "sha256": "0d17a3246d1c9063016dd9fe11ff744bc1e657b2c1e51e65c2e937f881708c71",
+        "strideFloats": 12
+      },
+      "step": 42
+    },
+    {
+      "candidates": {
+        "bytes": 4635200,
+        "count": 72425,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-43.features.f32",
+        "sha256": "90fb720ddd6b1c218248b9cd75b35c4a0ad2fa7f27e7a65593e491b1cfc69fea",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-43",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3476400,
+        "count": 72425,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-43.splats.f32",
+        "sha256": "8f8666c8dca1de9ccc5c449f7620ebdcae6921b8d5941372c164f245fc688f83",
+        "strideFloats": 12
+      },
+      "step": 43
+    },
+    {
+      "candidates": {
+        "bytes": 4641728,
+        "count": 72527,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-44.features.f32",
+        "sha256": "07a9484e0427956e79c8b3ca1b1e53287a5f992836336666490072d5432ce266",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-44",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3481296,
+        "count": 72527,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-44.splats.f32",
+        "sha256": "f43d898ea89470668b1334331ddd4861c1d3c7cd920c4276418349c3552beb5a",
+        "strideFloats": 12
+      },
+      "step": 44
+    },
+    {
+      "candidates": {
+        "bytes": 4648320,
+        "count": 72630,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-45.features.f32",
+        "sha256": "b4818595b1e9f0cf66a8f5421a6d64ecce19f1c259c509027f2debb5614a4670",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-45",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3486240,
+        "count": 72630,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-45.splats.f32",
+        "sha256": "beddcff4e5eade4dec87ec02f96e5468b28f3ebea5b5060ac33d1045e2dc912e",
+        "strideFloats": 12
+      },
+      "step": 45
+    },
+    {
+      "candidates": {
+        "bytes": 4654912,
+        "count": 72733,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-46.features.f32",
+        "sha256": "7e1e6ff06609c77a4cc026b476f4f85654909fc6541485e468f5a9dd079e3b06",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-46",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3491184,
+        "count": 72733,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-46.splats.f32",
+        "sha256": "28436d1f1724d877502c39e487bdeeacaaa987ef6034f22348de7e5d4f626e42",
+        "strideFloats": 12
+      },
+      "step": 46
+    },
+    {
+      "candidates": {
+        "bytes": 4661504,
+        "count": 72836,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-47.features.f32",
+        "sha256": "9be0decfc21fce00341e3ce50158e0b70e93d7edff649ea33fbe519866186229",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-47",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3496128,
+        "count": 72836,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-47.splats.f32",
+        "sha256": "6f9b502988b9eb3f4d27736b48d7d40fee9473b37e2001ec0b53db1ae25b0655",
+        "strideFloats": 12
+      },
+      "step": 47
+    },
+    {
+      "candidates": {
+        "bytes": 4668096,
+        "count": 72939,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-48.features.f32",
+        "sha256": "3cc2d42a52d0fdab190fe01b8d82ff817d9df8510a2ec5eabde0baa69259a0bb",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-48",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3501072,
+        "count": 72939,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-48.splats.f32",
+        "sha256": "731a8533848f3f8778ae5ba3d01cca8328bb003e69d61f7cf7e91df41878fa44",
+        "strideFloats": 12
+      },
+      "step": 48
+    },
+    {
+      "candidates": {
+        "bytes": 4674688,
+        "count": 73042,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-49.features.f32",
+        "sha256": "4f1b49fe13403bc2d3616de990caae4b99b8333d0637b688e3202f08ec0f0c35",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-49",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3506016,
+        "count": 73042,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-49.splats.f32",
+        "sha256": "3a3ca5da4fb0ed4a16e6317cfa58ca7b50c83d2a9b276d64ba30108dee40852b",
+        "strideFloats": 12
+      },
+      "step": 49
+    },
+    {
+      "candidates": {
+        "bytes": 4681280,
+        "count": 73145,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-50.features.f32",
+        "sha256": "ba9f29f10074121ab0d4db6ba89cf2958efa3b3c17e22cbc6a67529976b50db3",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-50",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3510960,
+        "count": 73145,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-50.splats.f32",
+        "sha256": "8014fd6eb31767ca0f2ff646420ae188dbaba16a8478c9216320d59d6e00eb8e",
+        "strideFloats": 12
+      },
+      "step": 50
+    },
+    {
+      "candidates": {
+        "bytes": 4687872,
+        "count": 73248,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-51.features.f32",
+        "sha256": "ec8948170f19e39d2386ab7139dd9fd490c01f7e7d546580387b6be357731ce8",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-51",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3515904,
+        "count": 73248,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-51.splats.f32",
+        "sha256": "5584645a5b5860ab5ba407445aa19341a772caf7a2dcea913f4437b5f65f2d49",
+        "strideFloats": 12
+      },
+      "step": 51
+    },
+    {
+      "candidates": {
+        "bytes": 4694528,
+        "count": 73352,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-52.features.f32",
+        "sha256": "d1cc5ba12a67822f2332bcbcc35cf47423422acd720388ffc7f446e3b5b81877",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-52",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3520896,
+        "count": 73352,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-52.splats.f32",
+        "sha256": "50f9e13e719d9d3722416ec18cd1dc834d89c8b0cbbfa460ffa6bb4bf57aecdc",
+        "strideFloats": 12
+      },
+      "step": 52
+    },
+    {
+      "candidates": {
+        "bytes": 4701184,
+        "count": 73456,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-53.features.f32",
+        "sha256": "26eae11bacac1f1c3d64758ae167b5af85f8c5a80fe5c3eae1d0c7912c726cbd",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-53",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3525888,
+        "count": 73456,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-53.splats.f32",
+        "sha256": "10b244c76cc4117ab17e82d3f6f85bef485f012adbcf81e19411579664d9fb13",
+        "strideFloats": 12
+      },
+      "step": 53
+    },
+    {
+      "candidates": {
+        "bytes": 4707840,
+        "count": 73560,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-54.features.f32",
+        "sha256": "77dbd09df9d963e15d163100e95051c361388af2545071ef729149d531e4c379",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-54",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3530880,
+        "count": 73560,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-54.splats.f32",
+        "sha256": "293b0b25e3971501cf726a5af209e3e09250e57a248cff5a313228656983d29f",
+        "strideFloats": 12
+      },
+      "step": 54
+    },
+    {
+      "candidates": {
+        "bytes": 4714496,
+        "count": 73664,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-55.features.f32",
+        "sha256": "899753f70577ab04ea76df5ac584adb75747444b274bd9c359820491045c61c4",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-55",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3535872,
+        "count": 73664,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-55.splats.f32",
+        "sha256": "f5f7e994f16bd8a25e465f3785d6cd69fb79076e80d0393f586ed93556b477f1",
+        "strideFloats": 12
+      },
+      "step": 55
+    },
+    {
+      "candidates": {
+        "bytes": 4721152,
+        "count": 73768,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-56.features.f32",
+        "sha256": "a21924ba9e551c77270e6dee2f89b23307627b15859071d64b1ab34c1633109a",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-56",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3540864,
+        "count": 73768,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-56.splats.f32",
+        "sha256": "fbf9e0c9641c207b02437444c1a9c174fe11bc5a91d1aad585cf58719fe7ef96",
+        "strideFloats": 12
+      },
+      "step": 56
+    },
+    {
+      "candidates": {
+        "bytes": 4727808,
+        "count": 73872,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-57.features.f32",
+        "sha256": "cb676bd2e876436ac641ef7bd179067ba402173526a3cc2dbe37095e2854b6b3",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-57",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3545856,
+        "count": 73872,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-57.splats.f32",
+        "sha256": "aa10778c221f4db026d559aa3667874cc38bcbfb1583c087f71f41295f3f74ee",
+        "strideFloats": 12
+      },
+      "step": 57
+    },
+    {
+      "candidates": {
+        "bytes": 4734464,
+        "count": 73976,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-58.features.f32",
+        "sha256": "7a282ba0cf53ade162d429242132cf7601edf0665dadf0fa66fad63cd6edd3fa",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-58",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3550848,
+        "count": 73976,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-58.splats.f32",
+        "sha256": "eb9224e0e5800c2c878abe53b80bfc64eea94ca56106a84408e226aabbf3d4d5",
+        "strideFloats": 12
+      },
+      "step": 58
+    },
+    {
+      "candidates": {
+        "bytes": 4741184,
+        "count": 74081,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-59.features.f32",
+        "sha256": "f2713dccdb51ba9fe9ced4ec72d55c432c76c4a9102b172dcdbf35730289367c",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-59",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3555888,
+        "count": 74081,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-59.splats.f32",
+        "sha256": "23ab2b98882b5cd40d9b728c376968820b1528c2532a8af10fecccd724d92a65",
+        "strideFloats": 12
+      },
+      "step": 59
+    },
+    {
+      "candidates": {
+        "bytes": 4747904,
+        "count": 74186,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-60.features.f32",
+        "sha256": "8846328a3784593fd2f6caaf65919174f6f5b59dc5e584bac5a9e0d57c65344a",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-60",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3560928,
+        "count": 74186,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-60.splats.f32",
+        "sha256": "f0ee2bbb471336f4b95f072afe0d2cf77e91da50beeedce81f707570692ef629",
+        "strideFloats": 12
+      },
+      "step": 60
+    },
+    {
+      "candidates": {
+        "bytes": 4754624,
+        "count": 74291,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-61.features.f32",
+        "sha256": "0f351dfa644b92576b5bf76bf0a144d737c1d1cad386038cc266ea38b9099345",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-61",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3565968,
+        "count": 74291,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-61.splats.f32",
+        "sha256": "a900c0d5a6cfa9e903333e82eb105b4a1fa4523f3d123f39efbd9151ce07d211",
+        "strideFloats": 12
+      },
+      "step": 61
+    },
+    {
+      "candidates": {
+        "bytes": 4761344,
+        "count": 74396,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-62.features.f32",
+        "sha256": "cb03e3d3e47f84db577792e6c2e7d038d149eb33eb43a05d7b253f93ae13bf07",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-62",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3571008,
+        "count": 74396,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-62.splats.f32",
+        "sha256": "bb3c2dce5fbafdefaf5fe1f1d654507b6077f44fc23a3c2f41a5e13c7832879b",
+        "strideFloats": 12
+      },
+      "step": 62
+    },
+    {
+      "candidates": {
+        "bytes": 4768064,
+        "count": 74501,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-63.features.f32",
+        "sha256": "a4a9618013697e3ab1185475c2c2676962067ac7bbc337e231a23bea18544bbf",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-63",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3576048,
+        "count": 74501,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-crosswind-r1-0714/prediction-step-63.splats.f32",
+        "sha256": "df12ea0379856927216a8000e8e95d947dab9fe151af18c79198bd4d1e8513fd",
+        "strideFloats": 12
+      },
+      "step": 63
+    }
+  ],
+  "manifest": {
+    "bytes": 420484,
+    "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+    "sha256": "672399fab2e404105a3b2ffff3563a3c491921a80edf11dbbd72082f09aa8850"
+  },
+  "model": {
+    "path": "/private/tmp/kaminos-phase-transport-full-r2-0713/transport-model.json",
+    "schema": "kaminos-boundary-splat-phase-transport-model-v0",
+    "sha256": "785ce32571aab2d5fe66b746f375bafcd57c85d5ab88442112fc3396b7af0747"
+  },
+  "modelTrainingManifest": {
+    "bytes": 102560,
+    "path": "/private/tmp/kaminos-phase-lag-tiger-world-key-r8-0713/phase-corpus.json",
+    "sha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534"
+  },
+  "recurrent": [
+    {
+      "birthCandidateCount": 216035,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1144,
+      "deathCount": 21274,
+      "predictedCount": 68251,
+      "selectedBirthCount": 22514,
+      "sourceCount": 68155,
+      "stableCarrierCount": 31910,
+      "step": 1,
+      "targetSupportBudget": 68251,
+      "thresholdQualifiedBirthCount": 881,
+      "transportedCarrierCount": 13827
+    },
+    {
+      "birthCandidateCount": 205726,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1477,
+      "deathCount": 13973,
+      "predictedCount": 68348,
+      "selectedBirthCount": 15547,
+      "sourceCount": 68251,
+      "stableCarrierCount": 38651,
+      "step": 2,
+      "targetSupportBudget": 68348,
+      "thresholdQualifiedBirthCount": 1190,
+      "transportedCarrierCount": 14150
+    },
+    {
+      "birthCandidateCount": 204101,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1556,
+      "deathCount": 9397,
+      "predictedCount": 68445,
+      "selectedBirthCount": 11050,
+      "sourceCount": 68348,
+      "stableCarrierCount": 42613,
+      "step": 3,
+      "targetSupportBudget": 68445,
+      "thresholdQualifiedBirthCount": 1880,
+      "transportedCarrierCount": 14782
+    },
+    {
+      "birthCandidateCount": 204194,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1508,
+      "deathCount": 6845,
+      "predictedCount": 68542,
+      "selectedBirthCount": 8450,
+      "sourceCount": 68445,
+      "stableCarrierCount": 45039,
+      "step": 4,
+      "targetSupportBudget": 68542,
+      "thresholdQualifiedBirthCount": 2783,
+      "transportedCarrierCount": 15053
+    },
+    {
+      "birthCandidateCount": 207517,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1515,
+      "deathCount": 5366,
+      "predictedCount": 68639,
+      "selectedBirthCount": 6978,
+      "sourceCount": 68542,
+      "stableCarrierCount": 46837,
+      "step": 5,
+      "targetSupportBudget": 68639,
+      "thresholdQualifiedBirthCount": 4122,
+      "transportedCarrierCount": 14824
+    },
+    {
+      "birthCandidateCount": 210777,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1477,
+      "deathCount": 4341,
+      "predictedCount": 68736,
+      "selectedBirthCount": 5915,
+      "sourceCount": 68639,
+      "stableCarrierCount": 47910,
+      "step": 6,
+      "targetSupportBudget": 68736,
+      "thresholdQualifiedBirthCount": 5611,
+      "transportedCarrierCount": 14911
+    },
+    {
+      "birthCandidateCount": 213996,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1441,
+      "deathCount": 3485,
+      "predictedCount": 68833,
+      "selectedBirthCount": 5023,
+      "sourceCount": 68736,
+      "stableCarrierCount": 48896,
+      "step": 7,
+      "targetSupportBudget": 68833,
+      "thresholdQualifiedBirthCount": 7310,
+      "transportedCarrierCount": 14914
+    },
+    {
+      "birthCandidateCount": 217619,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1360,
+      "deathCount": 2979,
+      "predictedCount": 68930,
+      "selectedBirthCount": 4436,
+      "sourceCount": 68833,
+      "stableCarrierCount": 49697,
+      "step": 8,
+      "targetSupportBudget": 68930,
+      "thresholdQualifiedBirthCount": 9074,
+      "transportedCarrierCount": 14797
+    },
+    {
+      "birthCandidateCount": 221201,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1317,
+      "deathCount": 2463,
+      "predictedCount": 69027,
+      "selectedBirthCount": 3877,
+      "sourceCount": 68930,
+      "stableCarrierCount": 50268,
+      "step": 9,
+      "targetSupportBudget": 69027,
+      "thresholdQualifiedBirthCount": 11018,
+      "transportedCarrierCount": 14882
+    },
+    {
+      "birthCandidateCount": 224694,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1281,
+      "deathCount": 2177,
+      "predictedCount": 69125,
+      "selectedBirthCount": 3556,
+      "sourceCount": 69027,
+      "stableCarrierCount": 50858,
+      "step": 10,
+      "targetSupportBudget": 69125,
+      "thresholdQualifiedBirthCount": 13135,
+      "transportedCarrierCount": 14711
+    },
+    {
+      "birthCandidateCount": 228788,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1295,
+      "deathCount": 1857,
+      "predictedCount": 69223,
+      "selectedBirthCount": 3250,
+      "sourceCount": 69125,
+      "stableCarrierCount": 51227,
+      "step": 11,
+      "targetSupportBudget": 69223,
+      "thresholdQualifiedBirthCount": 15127,
+      "transportedCarrierCount": 14746
+    },
+    {
+      "birthCandidateCount": 233261,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1277,
+      "deathCount": 1637,
+      "predictedCount": 69321,
+      "selectedBirthCount": 3012,
+      "sourceCount": 69223,
+      "stableCarrierCount": 51568,
+      "step": 12,
+      "targetSupportBudget": 69321,
+      "thresholdQualifiedBirthCount": 17347,
+      "transportedCarrierCount": 14741
+    },
+    {
+      "birthCandidateCount": 237774,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1266,
+      "deathCount": 1426,
+      "predictedCount": 69419,
+      "selectedBirthCount": 2790,
+      "sourceCount": 69321,
+      "stableCarrierCount": 51850,
+      "step": 13,
+      "targetSupportBudget": 69419,
+      "thresholdQualifiedBirthCount": 19626,
+      "transportedCarrierCount": 14779
+    },
+    {
+      "birthCandidateCount": 242815,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1242,
+      "deathCount": 1261,
+      "predictedCount": 69517,
+      "selectedBirthCount": 2601,
+      "sourceCount": 69419,
+      "stableCarrierCount": 52167,
+      "step": 14,
+      "targetSupportBudget": 69517,
+      "thresholdQualifiedBirthCount": 21877,
+      "transportedCarrierCount": 14749
+    },
+    {
+      "birthCandidateCount": 248131,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1213,
+      "deathCount": 1126,
+      "predictedCount": 69615,
+      "selectedBirthCount": 2437,
+      "sourceCount": 69517,
+      "stableCarrierCount": 52369,
+      "step": 15,
+      "targetSupportBudget": 69615,
+      "thresholdQualifiedBirthCount": 24431,
+      "transportedCarrierCount": 14809
+    },
+    {
+      "birthCandidateCount": 252732,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1207,
+      "deathCount": 1010,
+      "predictedCount": 69713,
+      "selectedBirthCount": 2315,
+      "sourceCount": 69615,
+      "stableCarrierCount": 52444,
+      "step": 16,
+      "targetSupportBudget": 69713,
+      "thresholdQualifiedBirthCount": 26920,
+      "transportedCarrierCount": 14954
+    },
+    {
+      "birthCandidateCount": 257755,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1164,
+      "deathCount": 987,
+      "predictedCount": 69812,
+      "selectedBirthCount": 2250,
+      "sourceCount": 69713,
+      "stableCarrierCount": 52641,
+      "step": 17,
+      "targetSupportBudget": 69812,
+      "thresholdQualifiedBirthCount": 29253,
+      "transportedCarrierCount": 14921
+    },
+    {
+      "birthCandidateCount": 262178,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1109,
+      "deathCount": 959,
+      "predictedCount": 69911,
+      "selectedBirthCount": 2167,
+      "sourceCount": 69812,
+      "stableCarrierCount": 52876,
+      "step": 18,
+      "targetSupportBudget": 69911,
+      "thresholdQualifiedBirthCount": 31667,
+      "transportedCarrierCount": 14868
+    },
+    {
+      "birthCandidateCount": 266436,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1198,
+      "deathCount": 898,
+      "predictedCount": 70010,
+      "selectedBirthCount": 2195,
+      "sourceCount": 69911,
+      "stableCarrierCount": 52910,
+      "step": 19,
+      "targetSupportBudget": 70010,
+      "thresholdQualifiedBirthCount": 34192,
+      "transportedCarrierCount": 14905
+    },
+    {
+      "birthCandidateCount": 270646,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1112,
+      "deathCount": 794,
+      "predictedCount": 70109,
+      "selectedBirthCount": 2005,
+      "sourceCount": 70010,
+      "stableCarrierCount": 52929,
+      "step": 20,
+      "targetSupportBudget": 70109,
+      "thresholdQualifiedBirthCount": 36505,
+      "transportedCarrierCount": 15175
+    },
+    {
+      "birthCandidateCount": 274650,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1155,
+      "deathCount": 732,
+      "predictedCount": 70208,
+      "selectedBirthCount": 1986,
+      "sourceCount": 70109,
+      "stableCarrierCount": 52904,
+      "step": 21,
+      "targetSupportBudget": 70208,
+      "thresholdQualifiedBirthCount": 39052,
+      "transportedCarrierCount": 15318
+    },
+    {
+      "birthCandidateCount": 278401,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1147,
+      "deathCount": 738,
+      "predictedCount": 70307,
+      "selectedBirthCount": 1984,
+      "sourceCount": 70208,
+      "stableCarrierCount": 53090,
+      "step": 22,
+      "targetSupportBudget": 70307,
+      "thresholdQualifiedBirthCount": 41287,
+      "transportedCarrierCount": 15233
+    },
+    {
+      "birthCandidateCount": 282545,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1115,
+      "deathCount": 713,
+      "predictedCount": 70406,
+      "selectedBirthCount": 1927,
+      "sourceCount": 70307,
+      "stableCarrierCount": 53106,
+      "step": 23,
+      "targetSupportBudget": 70406,
+      "thresholdQualifiedBirthCount": 43867,
+      "transportedCarrierCount": 15373
+    },
+    {
+      "birthCandidateCount": 286185,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1163,
+      "deathCount": 701,
+      "predictedCount": 70506,
+      "selectedBirthCount": 1964,
+      "sourceCount": 70406,
+      "stableCarrierCount": 53069,
+      "step": 24,
+      "targetSupportBudget": 70506,
+      "thresholdQualifiedBirthCount": 46414,
+      "transportedCarrierCount": 15473
+    },
+    {
+      "birthCandidateCount": 289893,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1083,
+      "deathCount": 698,
+      "predictedCount": 70606,
+      "selectedBirthCount": 1881,
+      "sourceCount": 70506,
+      "stableCarrierCount": 53256,
+      "step": 25,
+      "targetSupportBudget": 70606,
+      "thresholdQualifiedBirthCount": 48904,
+      "transportedCarrierCount": 15469
+    },
+    {
+      "birthCandidateCount": 293347,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1164,
+      "deathCount": 624,
+      "predictedCount": 70706,
+      "selectedBirthCount": 1888,
+      "sourceCount": 70606,
+      "stableCarrierCount": 53378,
+      "step": 26,
+      "targetSupportBudget": 70706,
+      "thresholdQualifiedBirthCount": 51150,
+      "transportedCarrierCount": 15440
+    },
+    {
+      "birthCandidateCount": 297011,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1027,
+      "deathCount": 623,
+      "predictedCount": 70806,
+      "selectedBirthCount": 1750,
+      "sourceCount": 70706,
+      "stableCarrierCount": 53539,
+      "step": 27,
+      "targetSupportBudget": 70806,
+      "thresholdQualifiedBirthCount": 54104,
+      "transportedCarrierCount": 15517
+    },
+    {
+      "birthCandidateCount": 300167,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1082,
+      "deathCount": 604,
+      "predictedCount": 70906,
+      "selectedBirthCount": 1786,
+      "sourceCount": 70806,
+      "stableCarrierCount": 53557,
+      "step": 28,
+      "targetSupportBudget": 70906,
+      "thresholdQualifiedBirthCount": 56059,
+      "transportedCarrierCount": 15563
+    },
+    {
+      "birthCandidateCount": 303420,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1076,
+      "deathCount": 626,
+      "predictedCount": 71006,
+      "selectedBirthCount": 1802,
+      "sourceCount": 70906,
+      "stableCarrierCount": 53696,
+      "step": 29,
+      "targetSupportBudget": 71006,
+      "thresholdQualifiedBirthCount": 58480,
+      "transportedCarrierCount": 15508
+    },
+    {
+      "birthCandidateCount": 306154,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1083,
+      "deathCount": 621,
+      "predictedCount": 71106,
+      "selectedBirthCount": 1804,
+      "sourceCount": 71006,
+      "stableCarrierCount": 53695,
+      "step": 30,
+      "targetSupportBudget": 71106,
+      "thresholdQualifiedBirthCount": 60402,
+      "transportedCarrierCount": 15607
+    },
+    {
+      "birthCandidateCount": 309205,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1030,
+      "deathCount": 590,
+      "predictedCount": 71207,
+      "selectedBirthCount": 1721,
+      "sourceCount": 71106,
+      "stableCarrierCount": 53780,
+      "step": 31,
+      "targetSupportBudget": 71207,
+      "thresholdQualifiedBirthCount": 62930,
+      "transportedCarrierCount": 15706
+    },
+    {
+      "birthCandidateCount": 312641,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1086,
+      "deathCount": 586,
+      "predictedCount": 71308,
+      "selectedBirthCount": 1773,
+      "sourceCount": 71207,
+      "stableCarrierCount": 53881,
+      "step": 32,
+      "targetSupportBudget": 71308,
+      "thresholdQualifiedBirthCount": 65097,
+      "transportedCarrierCount": 15654
+    },
+    {
+      "birthCandidateCount": 315796,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1080,
+      "deathCount": 573,
+      "predictedCount": 71409,
+      "selectedBirthCount": 1754,
+      "sourceCount": 71308,
+      "stableCarrierCount": 53907,
+      "step": 33,
+      "targetSupportBudget": 71409,
+      "thresholdQualifiedBirthCount": 67404,
+      "transportedCarrierCount": 15748
+    },
+    {
+      "birthCandidateCount": 319167,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1081,
+      "deathCount": 543,
+      "predictedCount": 71510,
+      "selectedBirthCount": 1725,
+      "sourceCount": 71409,
+      "stableCarrierCount": 53885,
+      "step": 34,
+      "targetSupportBudget": 71510,
+      "thresholdQualifiedBirthCount": 70028,
+      "transportedCarrierCount": 15900
+    },
+    {
+      "birthCandidateCount": 321745,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1094,
+      "deathCount": 533,
+      "predictedCount": 71611,
+      "selectedBirthCount": 1728,
+      "sourceCount": 71510,
+      "stableCarrierCount": 54075,
+      "step": 35,
+      "targetSupportBudget": 71611,
+      "thresholdQualifiedBirthCount": 72245,
+      "transportedCarrierCount": 15808
+    },
+    {
+      "birthCandidateCount": 324930,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1058,
+      "deathCount": 518,
+      "predictedCount": 71712,
+      "selectedBirthCount": 1677,
+      "sourceCount": 71611,
+      "stableCarrierCount": 54097,
+      "step": 36,
+      "targetSupportBudget": 71712,
+      "thresholdQualifiedBirthCount": 74766,
+      "transportedCarrierCount": 15938
+    },
+    {
+      "birthCandidateCount": 328402,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1054,
+      "deathCount": 524,
+      "predictedCount": 71813,
+      "selectedBirthCount": 1679,
+      "sourceCount": 71712,
+      "stableCarrierCount": 54112,
+      "step": 37,
+      "targetSupportBudget": 71813,
+      "thresholdQualifiedBirthCount": 77167,
+      "transportedCarrierCount": 16022
+    },
+    {
+      "birthCandidateCount": 331553,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1019,
+      "deathCount": 539,
+      "predictedCount": 71915,
+      "selectedBirthCount": 1660,
+      "sourceCount": 71813,
+      "stableCarrierCount": 54161,
+      "step": 38,
+      "targetSupportBudget": 71915,
+      "thresholdQualifiedBirthCount": 79902,
+      "transportedCarrierCount": 16094
+    },
+    {
+      "birthCandidateCount": 334753,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1005,
+      "deathCount": 510,
+      "predictedCount": 72017,
+      "selectedBirthCount": 1617,
+      "sourceCount": 71915,
+      "stableCarrierCount": 54186,
+      "step": 39,
+      "targetSupportBudget": 72017,
+      "thresholdQualifiedBirthCount": 82538,
+      "transportedCarrierCount": 16214
+    },
+    {
+      "birthCandidateCount": 337449,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1027,
+      "deathCount": 454,
+      "predictedCount": 72119,
+      "selectedBirthCount": 1583,
+      "sourceCount": 72017,
+      "stableCarrierCount": 54216,
+      "step": 40,
+      "targetSupportBudget": 72119,
+      "thresholdQualifiedBirthCount": 84823,
+      "transportedCarrierCount": 16320
+    },
+    {
+      "birthCandidateCount": 340246,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1031,
+      "deathCount": 426,
+      "predictedCount": 72221,
+      "selectedBirthCount": 1559,
+      "sourceCount": 72119,
+      "stableCarrierCount": 54250,
+      "step": 41,
+      "targetSupportBudget": 72221,
+      "thresholdQualifiedBirthCount": 87262,
+      "transportedCarrierCount": 16412
+    },
+    {
+      "birthCandidateCount": 342953,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1079,
+      "deathCount": 424,
+      "predictedCount": 72323,
+      "selectedBirthCount": 1605,
+      "sourceCount": 72221,
+      "stableCarrierCount": 54354,
+      "step": 42,
+      "targetSupportBudget": 72323,
+      "thresholdQualifiedBirthCount": 89631,
+      "transportedCarrierCount": 16364
+    },
+    {
+      "birthCandidateCount": 345319,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1048,
+      "deathCount": 389,
+      "predictedCount": 72425,
+      "selectedBirthCount": 1539,
+      "sourceCount": 72323,
+      "stableCarrierCount": 54431,
+      "step": 43,
+      "targetSupportBudget": 72425,
+      "thresholdQualifiedBirthCount": 92052,
+      "transportedCarrierCount": 16455
+    },
+    {
+      "birthCandidateCount": 347758,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1028,
+      "deathCount": 396,
+      "predictedCount": 72527,
+      "selectedBirthCount": 1526,
+      "sourceCount": 72425,
+      "stableCarrierCount": 54535,
+      "step": 44,
+      "targetSupportBudget": 72527,
+      "thresholdQualifiedBirthCount": 94388,
+      "transportedCarrierCount": 16466
+    },
+    {
+      "birthCandidateCount": 350314,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1013,
+      "deathCount": 379,
+      "predictedCount": 72630,
+      "selectedBirthCount": 1495,
+      "sourceCount": 72527,
+      "stableCarrierCount": 54480,
+      "step": 45,
+      "targetSupportBudget": 72630,
+      "thresholdQualifiedBirthCount": 96488,
+      "transportedCarrierCount": 16655
+    },
+    {
+      "birthCandidateCount": 352877,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 998,
+      "deathCount": 377,
+      "predictedCount": 72733,
+      "selectedBirthCount": 1478,
+      "sourceCount": 72630,
+      "stableCarrierCount": 54576,
+      "step": 46,
+      "targetSupportBudget": 72733,
+      "thresholdQualifiedBirthCount": 98888,
+      "transportedCarrierCount": 16679
+    },
+    {
+      "birthCandidateCount": 354779,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1045,
+      "deathCount": 350,
+      "predictedCount": 72836,
+      "selectedBirthCount": 1498,
+      "sourceCount": 72733,
+      "stableCarrierCount": 54643,
+      "step": 47,
+      "targetSupportBudget": 72836,
+      "thresholdQualifiedBirthCount": 101008,
+      "transportedCarrierCount": 16695
+    },
+    {
+      "birthCandidateCount": 357059,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1058,
+      "deathCount": 336,
+      "predictedCount": 72939,
+      "selectedBirthCount": 1497,
+      "sourceCount": 72836,
+      "stableCarrierCount": 54662,
+      "step": 48,
+      "targetSupportBudget": 72939,
+      "thresholdQualifiedBirthCount": 103333,
+      "transportedCarrierCount": 16780
+    },
+    {
+      "birthCandidateCount": 359801,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1077,
+      "deathCount": 318,
+      "predictedCount": 73042,
+      "selectedBirthCount": 1498,
+      "sourceCount": 72939,
+      "stableCarrierCount": 54677,
+      "step": 49,
+      "targetSupportBudget": 73042,
+      "thresholdQualifiedBirthCount": 105708,
+      "transportedCarrierCount": 16867
+    },
+    {
+      "birthCandidateCount": 362281,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1077,
+      "deathCount": 318,
+      "predictedCount": 73145,
+      "selectedBirthCount": 1498,
+      "sourceCount": 73042,
+      "stableCarrierCount": 54772,
+      "step": 50,
+      "targetSupportBudget": 73145,
+      "thresholdQualifiedBirthCount": 108256,
+      "transportedCarrierCount": 16875
+    },
+    {
+      "birthCandidateCount": 364623,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1107,
+      "deathCount": 289,
+      "predictedCount": 73248,
+      "selectedBirthCount": 1499,
+      "sourceCount": 73145,
+      "stableCarrierCount": 54816,
+      "step": 51,
+      "targetSupportBudget": 73248,
+      "thresholdQualifiedBirthCount": 110570,
+      "transportedCarrierCount": 16933
+    },
+    {
+      "birthCandidateCount": 367283,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1094,
+      "deathCount": 283,
+      "predictedCount": 73352,
+      "selectedBirthCount": 1481,
+      "sourceCount": 73248,
+      "stableCarrierCount": 54854,
+      "step": 52,
+      "targetSupportBudget": 73352,
+      "thresholdQualifiedBirthCount": 113303,
+      "transportedCarrierCount": 17017
+    },
+    {
+      "birthCandidateCount": 369311,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1062,
+      "deathCount": 292,
+      "predictedCount": 73456,
+      "selectedBirthCount": 1458,
+      "sourceCount": 73352,
+      "stableCarrierCount": 54901,
+      "step": 53,
+      "targetSupportBudget": 73456,
+      "thresholdQualifiedBirthCount": 115473,
+      "transportedCarrierCount": 17097
+    },
+    {
+      "birthCandidateCount": 370914,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1105,
+      "deathCount": 285,
+      "predictedCount": 73560,
+      "selectedBirthCount": 1494,
+      "sourceCount": 73456,
+      "stableCarrierCount": 54900,
+      "step": 54,
+      "targetSupportBudget": 73560,
+      "thresholdQualifiedBirthCount": 117515,
+      "transportedCarrierCount": 17166
+    },
+    {
+      "birthCandidateCount": 372987,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1086,
+      "deathCount": 264,
+      "predictedCount": 73664,
+      "selectedBirthCount": 1454,
+      "sourceCount": 73560,
+      "stableCarrierCount": 54945,
+      "step": 55,
+      "targetSupportBudget": 73664,
+      "thresholdQualifiedBirthCount": 120135,
+      "transportedCarrierCount": 17265
+    },
+    {
+      "birthCandidateCount": 375150,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1085,
+      "deathCount": 261,
+      "predictedCount": 73768,
+      "selectedBirthCount": 1450,
+      "sourceCount": 73664,
+      "stableCarrierCount": 54969,
+      "step": 56,
+      "targetSupportBudget": 73768,
+      "thresholdQualifiedBirthCount": 122711,
+      "transportedCarrierCount": 17349
+    },
+    {
+      "birthCandidateCount": 377537,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1092,
+      "deathCount": 247,
+      "predictedCount": 73872,
+      "selectedBirthCount": 1443,
+      "sourceCount": 73768,
+      "stableCarrierCount": 55089,
+      "step": 57,
+      "targetSupportBudget": 73872,
+      "thresholdQualifiedBirthCount": 124985,
+      "transportedCarrierCount": 17340
+    },
+    {
+      "birthCandidateCount": 379695,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1070,
+      "deathCount": 214,
+      "predictedCount": 73976,
+      "selectedBirthCount": 1388,
+      "sourceCount": 73872,
+      "stableCarrierCount": 55081,
+      "step": 58,
+      "targetSupportBudget": 73976,
+      "thresholdQualifiedBirthCount": 127452,
+      "transportedCarrierCount": 17507
+    },
+    {
+      "birthCandidateCount": 381484,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1121,
+      "deathCount": 188,
+      "predictedCount": 74081,
+      "selectedBirthCount": 1414,
+      "sourceCount": 73976,
+      "stableCarrierCount": 55084,
+      "step": 59,
+      "targetSupportBudget": 74081,
+      "thresholdQualifiedBirthCount": 129604,
+      "transportedCarrierCount": 17583
+    },
+    {
+      "birthCandidateCount": 383482,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1105,
+      "deathCount": 187,
+      "predictedCount": 74186,
+      "selectedBirthCount": 1397,
+      "sourceCount": 74081,
+      "stableCarrierCount": 55121,
+      "step": 60,
+      "targetSupportBudget": 74186,
+      "thresholdQualifiedBirthCount": 131947,
+      "transportedCarrierCount": 17668
+    },
+    {
+      "birthCandidateCount": 385015,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1107,
+      "deathCount": 185,
+      "predictedCount": 74291,
+      "selectedBirthCount": 1397,
+      "sourceCount": 74186,
+      "stableCarrierCount": 55224,
+      "step": 61,
+      "targetSupportBudget": 74291,
+      "thresholdQualifiedBirthCount": 134018,
+      "transportedCarrierCount": 17670
+    },
+    {
+      "birthCandidateCount": 386526,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1114,
+      "deathCount": 165,
+      "predictedCount": 74396,
+      "selectedBirthCount": 1384,
+      "sourceCount": 74291,
+      "stableCarrierCount": 55258,
+      "step": 62,
+      "targetSupportBudget": 74396,
+      "thresholdQualifiedBirthCount": 136127,
+      "transportedCarrierCount": 17754
+    },
+    {
+      "birthCandidateCount": 388283,
+      "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
+      "collisionCount": 1123,
+      "deathCount": 163,
+      "predictedCount": 74501,
+      "selectedBirthCount": 1391,
+      "sourceCount": 74396,
+      "stableCarrierCount": 55323,
+      "step": 63,
+      "targetSupportBudget": 74501,
+      "thresholdQualifiedBirthCount": 138531,
+      "transportedCarrierCount": 17787
+    }
+  ],
+  "route": {
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "effectiveRunner": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+    "fallbackReason": null
+  },
+  "schema": "kaminos-boundary-splat-phase-transport-predictions-v0",
+  "status": "completed",
+  "supportMetrics": [
+    {
+      "beatsIdentity": true,
+      "exactCount": 67910,
+      "identityIoU": 0.2525084227773993,
+      "predictionCount": 68251,
+      "predictionIoU": 0.2921565836298932,
+      "predictionToIdentityRatio": 1.1570171815117867,
+      "step": 1
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68751,
+      "identityIoU": 0.17211030538599179,
+      "predictionCount": 68348,
+      "predictionIoU": 0.2088686282635723,
+      "predictionToIdentityRatio": 1.2135742121608735,
+      "step": 2
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69217,
+      "identityIoU": 0.1405087672688629,
+      "predictionCount": 68445,
+      "predictionIoU": 0.17370916035741082,
+      "predictionToIdentityRatio": 1.2362869857438796,
+      "step": 3
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69991,
+      "identityIoU": 0.12585674351890336,
+      "predictionCount": 68542,
+      "predictionIoU": 0.15408582353774253,
+      "predictionToIdentityRatio": 1.224295331577519,
+      "step": 4
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69564,
+      "identityIoU": 0.11918441647095154,
+      "predictionCount": 68639,
+      "predictionIoU": 0.14277799828008203,
+      "predictionToIdentityRatio": 1.1979586132796218,
+      "step": 5
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69227,
+      "identityIoU": 0.11556638246041413,
+      "predictionCount": 68736,
+      "predictionIoU": 0.13534843148227393,
+      "predictionToIdentityRatio": 1.1711747707308906,
+      "step": 6
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69684,
+      "identityIoU": 0.11350857918376579,
+      "predictionCount": 68833,
+      "predictionIoU": 0.12878831093690155,
+      "predictionToIdentityRatio": 1.1346130121882547,
+      "step": 7
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69430,
+      "identityIoU": 0.11084646686474615,
+      "predictionCount": 68930,
+      "predictionIoU": 0.1229425705288446,
+      "predictionToIdentityRatio": 1.1091248463413632,
+      "step": 8
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69665,
+      "identityIoU": 0.11077081788581192,
+      "predictionCount": 69027,
+      "predictionIoU": 0.11998320332057431,
+      "predictionToIdentityRatio": 1.083166176891995,
+      "step": 9
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70603,
+      "identityIoU": 0.11335061100368288,
+      "predictionCount": 69125,
+      "predictionIoU": 0.11931941073273894,
+      "predictionToIdentityRatio": 1.0526578522709695,
+      "step": 10
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71312,
+      "identityIoU": 0.11338453186869332,
+      "predictionCount": 69223,
+      "predictionIoU": 0.11729023230668935,
+      "predictionToIdentityRatio": 1.03444650141978,
+      "step": 11
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71842,
+      "identityIoU": 0.10974855729596043,
+      "predictionCount": 69321,
+      "predictionIoU": 0.11516372397993443,
+      "predictionToIdentityRatio": 1.0493415751185762,
+      "step": 12
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72581,
+      "identityIoU": 0.10713751897857879,
+      "predictionCount": 69419,
+      "predictionIoU": 0.10964374184372777,
+      "predictionToIdentityRatio": 1.0233925788933949,
+      "step": 13
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 72920,
+      "identityIoU": 0.10960358659745163,
+      "predictionCount": 69517,
+      "predictionIoU": 0.1089855884894775,
+      "predictionToIdentityRatio": 0.9943615156478054,
+      "step": 14
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 72562,
+      "identityIoU": 0.1122290899318674,
+      "predictionCount": 69615,
+      "predictionIoU": 0.10940572427354162,
+      "predictionToIdentityRatio": 0.9748428356672961,
+      "step": 15
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 72239,
+      "identityIoU": 0.11608938636309434,
+      "predictionCount": 69713,
+      "predictionIoU": 0.10917330832942647,
+      "predictionToIdentityRatio": 0.9404245448241378,
+      "step": 16
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 72232,
+      "identityIoU": 0.11437711346425566,
+      "predictionCount": 69812,
+      "predictionIoU": 0.10970141091545445,
+      "predictionToIdentityRatio": 0.9591202959474717,
+      "step": 17
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 71766,
+      "identityIoU": 0.11692862787671725,
+      "predictionCount": 69911,
+      "predictionIoU": 0.1113664888609978,
+      "predictionToIdentityRatio": 0.9524313325425845,
+      "step": 18
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 71289,
+      "identityIoU": 0.12304495594607219,
+      "predictionCount": 70010,
+      "predictionIoU": 0.11221397479593523,
+      "predictionToIdentityRatio": 0.9119754152711149,
+      "step": 19
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70901,
+      "identityIoU": 0.12755726738293127,
+      "predictionCount": 70109,
+      "predictionIoU": 0.11300545412927313,
+      "predictionToIdentityRatio": 0.885919371336381,
+      "step": 20
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70975,
+      "identityIoU": 0.13232577255821146,
+      "predictionCount": 70208,
+      "predictionIoU": 0.11561255452304191,
+      "predictionToIdentityRatio": 0.8736964257826855,
+      "step": 21
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70856,
+      "identityIoU": 0.13486705145684172,
+      "predictionCount": 70307,
+      "predictionIoU": 0.11841511048432461,
+      "predictionToIdentityRatio": 0.8780136379137655,
+      "step": 22
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70991,
+      "identityIoU": 0.13542227662178702,
+      "predictionCount": 70406,
+      "predictionIoU": 0.11997623762376237,
+      "predictionToIdentityRatio": 0.8859416679195035,
+      "step": 23
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 71320,
+      "identityIoU": 0.13788405371449083,
+      "predictionCount": 70506,
+      "predictionIoU": 0.11822819342274365,
+      "predictionToIdentityRatio": 0.857446457641523,
+      "step": 24
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70845,
+      "identityIoU": 0.1354632118088174,
+      "predictionCount": 70606,
+      "predictionIoU": 0.11566734497499724,
+      "predictionToIdentityRatio": 0.8538653663272169,
+      "step": 25
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 71466,
+      "identityIoU": 0.1286426798806858,
+      "predictionCount": 70706,
+      "predictionIoU": 0.11542444688529735,
+      "predictionToIdentityRatio": 0.897248463669692,
+      "step": 26
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 71015,
+      "identityIoU": 0.1252425614489004,
+      "predictionCount": 70806,
+      "predictionIoU": 0.11326456920371766,
+      "predictionToIdentityRatio": 0.9043616474574435,
+      "step": 27
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70902,
+      "identityIoU": 0.1236929292929293,
+      "predictionCount": 70906,
+      "predictionIoU": 0.10981718006511396,
+      "predictionToIdentityRatio": 0.8878209990891652,
+      "step": 28
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70292,
+      "identityIoU": 0.11957787481804949,
+      "predictionCount": 71006,
+      "predictionIoU": 0.10782860951036889,
+      "predictionToIdentityRatio": 0.9017438190337606,
+      "step": 29
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69413,
+      "identityIoU": 0.11603455968847605,
+      "predictionCount": 71106,
+      "predictionIoU": 0.10483940716279436,
+      "predictionToIdentityRatio": 0.9035188089157412,
+      "step": 30
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69509,
+      "identityIoU": 0.11114339677466221,
+      "predictionCount": 71207,
+      "predictionIoU": 0.10397527125518778,
+      "predictionToIdentityRatio": 0.9355056105221666,
+      "step": 31
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69425,
+      "identityIoU": 0.10953402474233455,
+      "predictionCount": 71308,
+      "predictionIoU": 0.10198184936065587,
+      "predictionToIdentityRatio": 0.9310517859683851,
+      "step": 32
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69083,
+      "identityIoU": 0.11123886639676113,
+      "predictionCount": 71409,
+      "predictionIoU": 0.10007751877285434,
+      "predictionToIdentityRatio": 0.8996632383496515,
+      "step": 33
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 68150,
+      "identityIoU": 0.11388505258684797,
+      "predictionCount": 71510,
+      "predictionIoU": 0.09928687247138832,
+      "predictionToIdentityRatio": 0.8718165397137857,
+      "step": 34
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 67970,
+      "identityIoU": 0.11598907990850735,
+      "predictionCount": 71611,
+      "predictionIoU": 0.10010245901639345,
+      "predictionToIdentityRatio": 0.8630334777666542,
+      "step": 35
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 68011,
+      "identityIoU": 0.11303111052984355,
+      "predictionCount": 71712,
+      "predictionIoU": 0.09954907808897248,
+      "predictionToIdentityRatio": 0.8807228171281976,
+      "step": 36
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 68342,
+      "identityIoU": 0.11248125448262372,
+      "predictionCount": 71813,
+      "predictionIoU": 0.09767081231790983,
+      "predictionToIdentityRatio": 0.8683296853965846,
+      "step": 37
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 68735,
+      "identityIoU": 0.11561155300560699,
+      "predictionCount": 71915,
+      "predictionIoU": 0.09743061570031912,
+      "predictionToIdentityRatio": 0.8427411722044239,
+      "step": 38
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69898,
+      "identityIoU": 0.11594050602214857,
+      "predictionCount": 72017,
+      "predictionIoU": 0.09886408511231387,
+      "predictionToIdentityRatio": 0.8527139349678832,
+      "step": 39
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69779,
+      "identityIoU": 0.11993959175719783,
+      "predictionCount": 72119,
+      "predictionIoU": 0.09946459426162822,
+      "predictionToIdentityRatio": 0.8292890846500579,
+      "step": 40
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69780,
+      "identityIoU": 0.12094886714559698,
+      "predictionCount": 72221,
+      "predictionIoU": 0.09884080849351534,
+      "predictionToIdentityRatio": 0.8172115276989887,
+      "step": 41
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70309,
+      "identityIoU": 0.12525700725715352,
+      "predictionCount": 72323,
+      "predictionIoU": 0.10081886871087992,
+      "predictionToIdentityRatio": 0.8048960367055399,
+      "step": 42
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69863,
+      "identityIoU": 0.12734015094586207,
+      "predictionCount": 72425,
+      "predictionIoU": 0.102452252740867,
+      "predictionToIdentityRatio": 0.8045557664245583,
+      "step": 43
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70470,
+      "identityIoU": 0.12570546916236958,
+      "predictionCount": 72527,
+      "predictionIoU": 0.10377220133844836,
+      "predictionToIdentityRatio": 0.8255185874562805,
+      "step": 44
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70358,
+      "identityIoU": 0.1251157501421493,
+      "predictionCount": 72630,
+      "predictionIoU": 0.10390723312926063,
+      "predictionToIdentityRatio": 0.8304888314317521,
+      "step": 45
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 70362,
+      "identityIoU": 0.12460014613948202,
+      "predictionCount": 72733,
+      "predictionIoU": 0.10331932611126103,
+      "predictionToIdentityRatio": 0.8292071021778863,
+      "step": 46
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69483,
+      "identityIoU": 0.12228373871706852,
+      "predictionCount": 72836,
+      "predictionIoU": 0.10227395944669052,
+      "predictionToIdentityRatio": 0.8363659838968841,
+      "step": 47
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 68438,
+      "identityIoU": 0.12124147328501186,
+      "predictionCount": 72939,
+      "predictionIoU": 0.10194235295951613,
+      "predictionToIdentityRatio": 0.8408208032895825,
+      "step": 48
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 68489,
+      "identityIoU": 0.11917964174850319,
+      "predictionCount": 73042,
+      "predictionIoU": 0.1006120084296968,
+      "predictionToIdentityRatio": 0.8442046557079905,
+      "step": 49
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 68293,
+      "identityIoU": 0.11763838605573121,
+      "predictionCount": 73145,
+      "predictionIoU": 0.09818080175164799,
+      "predictionToIdentityRatio": 0.8345983402486907,
+      "step": 50
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69071,
+      "identityIoU": 0.1171662568995555,
+      "predictionCount": 73248,
+      "predictionIoU": 0.09643148795858307,
+      "predictionToIdentityRatio": 0.8230312251184403,
+      "step": 51
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69097,
+      "identityIoU": 0.11666883624056236,
+      "predictionCount": 73352,
+      "predictionIoU": 0.09480989601346522,
+      "predictionToIdentityRatio": 0.8126411393868226,
+      "step": 52
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69640,
+      "identityIoU": 0.11859302193431072,
+      "predictionCount": 73456,
+      "predictionIoU": 0.0940813970380225,
+      "predictionToIdentityRatio": 0.793313092992391,
+      "step": 53
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69780,
+      "identityIoU": 0.12118576561052136,
+      "predictionCount": 73560,
+      "predictionIoU": 0.09360575565914657,
+      "predictionToIdentityRatio": 0.7724154333437632,
+      "step": 54
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69851,
+      "identityIoU": 0.11773805570629065,
+      "predictionCount": 73664,
+      "predictionIoU": 0.09433142194839261,
+      "predictionToIdentityRatio": 0.8011973816156076,
+      "step": 55
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69646,
+      "identityIoU": 0.11756214265439358,
+      "predictionCount": 73768,
+      "predictionIoU": 0.09456282818414947,
+      "predictionToIdentityRatio": 0.8043646198431672,
+      "step": 56
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 68839,
+      "identityIoU": 0.1142252948352989,
+      "predictionCount": 73872,
+      "predictionIoU": 0.09554369938202895,
+      "predictionToIdentityRatio": 0.8364495755497336,
+      "step": 57
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69304,
+      "identityIoU": 0.11400252852697096,
+      "predictionCount": 73976,
+      "predictionIoU": 0.09414972012432131,
+      "predictionToIdentityRatio": 0.8258564203867388,
+      "step": 58
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69994,
+      "identityIoU": 0.11323400243358019,
+      "predictionCount": 74081,
+      "predictionIoU": 0.09498620579584578,
+      "predictionToIdentityRatio": 0.8388487888305631,
+      "step": 59
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69873,
+      "identityIoU": 0.11489127976478951,
+      "predictionCount": 74186,
+      "predictionIoU": 0.09683191082754053,
+      "predictionToIdentityRatio": 0.8428134060807668,
+      "step": 60
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69809,
+      "identityIoU": 0.11826736806270416,
+      "predictionCount": 74291,
+      "predictionIoU": 0.09710230992949918,
+      "predictionToIdentityRatio": 0.8210405923467962,
+      "step": 61
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69275,
+      "identityIoU": 0.12072480550617325,
+      "predictionCount": 74396,
+      "predictionIoU": 0.096917779457462,
+      "predictionToIdentityRatio": 0.8027992180323381,
+      "step": 62
+    },
+    {
+      "beatsIdentity": false,
+      "exactCount": 69160,
+      "identityIoU": 0.12188207227301323,
+      "predictionCount": 74501,
+      "predictionIoU": 0.09799830325820283,
+      "predictionToIdentityRatio": 0.8040419844412288,
+      "step": 63
+    }
+  ],
+  "temporal": {
+    "authority": "frozen-model-recurrent-one-controlled-step-local-grid-continuation-v0",
+    "controlledStepDeltaMs": 160,
+    "heldoutReferenceFrameIds": [
+      "frame-0",
+      "frame-1",
+      "frame-2",
+      "frame-3",
+      "frame-4",
+      "frame-5",
+      "frame-6",
+      "frame-7",
+      "frame-8",
+      "frame-9",
+      "frame-10",
+      "frame-11",
+      "frame-12",
+      "frame-13",
+      "frame-14",
+      "frame-15",
+      "frame-16",
+      "frame-17",
+      "frame-18",
+      "frame-19",
+      "frame-20",
+      "frame-21",
+      "frame-22",
+      "frame-23",
+      "frame-24",
+      "frame-25",
+      "frame-26",
+      "frame-27",
+      "frame-28",
+      "frame-29",
+      "frame-30",
+      "frame-31",
+      "frame-32",
+      "frame-33",
+      "frame-34",
+      "frame-35",
+      "frame-36",
+      "frame-37",
+      "frame-38",
+      "frame-39",
+      "frame-40",
+      "frame-41",
+      "frame-42",
+      "frame-43",
+      "frame-44",
+      "frame-45",
+      "frame-46",
+      "frame-47",
+      "frame-48",
+      "frame-49",
+      "frame-50",
+      "frame-51",
+      "frame-52",
+      "frame-53",
+      "frame-54",
+      "frame-55",
+      "frame-56",
+      "frame-57",
+      "frame-58",
+      "frame-59",
+      "frame-60",
+      "frame-61",
+      "frame-62",
+      "frame-63"
+    ],
+    "inferenceCorpusSeenDuringTraining": false,
+    "sourceFrameId": "frame-0",
+    "trainingFrameIdsExcluded": [
+      "frame-0",
+      "frame-1",
+      "frame-2",
+      "frame-3",
+      "frame-4",
+      "frame-5",
+      "frame-6",
+      "frame-7",
+      "frame-8",
+      "frame-9",
+      "frame-10",
+      "frame-11",
+      "frame-12",
+      "frame-13",
+      "frame-14",
+      "frame-15",
+      "frame-16",
+      "frame-17",
+      "frame-18",
+      "frame-19",
+      "frame-20",
+      "frame-21",
+      "frame-22",
+      "frame-23",
+      "frame-24",
+      "frame-25",
+      "frame-26",
+      "frame-27",
+      "frame-28",
+      "frame-29",
+      "frame-30",
+      "frame-31",
+      "frame-32",
+      "frame-33",
+      "frame-34",
+      "frame-35",
+      "frame-36",
+      "frame-37",
+      "frame-38",
+      "frame-39",
+      "frame-40",
+      "frame-41",
+      "frame-42",
+      "frame-43",
+      "frame-44",
+      "frame-45",
+      "frame-46",
+      "frame-47",
+      "frame-48",
+      "frame-49",
+      "frame-50",
+      "frame-51",
+      "frame-52",
+      "frame-53",
+      "frame-54",
+      "frame-55",
+      "frame-56",
+      "frame-57",
+      "frame-58",
+      "frame-59",
+      "frame-60",
+      "frame-61",
+      "frame-62",
+      "frame-63"
+    ]
+  }
+}

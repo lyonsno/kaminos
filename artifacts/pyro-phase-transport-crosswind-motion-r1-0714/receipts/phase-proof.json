@@ -1,0 +1,103 @@
+{
+  "schema": "kaminos-boundary-splat-phase-proof-v0",
+  "manifestPath": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+  "corpusIdentity": "sha256:672399fab2e404105a3b2ffff3563a3c491921a80edf11dbbd72082f09aa8850",
+  "manifestSha256": "672399fab2e404105a3b2ffff3563a3c491921a80edf11dbbd72082f09aa8850",
+  "alignment": {
+    "schema": "kaminos-boundary-splat-temporal-alignment-v0",
+    "identityKey": "world-position-stable-key",
+    "alignmentMethod": "world-position-stable-key",
+    "offsetSteps": [
+      -6,
+      -3,
+      -1,
+      1,
+      3,
+      6
+    ],
+    "pairCount": 6,
+    "positiveOffsetCount": 3,
+    "negativeOffsetCount": 3,
+    "easyOffsetCount": 2,
+    "hardOffsetCount": 2,
+    "totalBirths": 293410,
+    "totalDeaths": 292905,
+    "totalMatchedSlots": 123645,
+    "totalStableSupport": 123645
+  },
+  "model": {
+    "family": "ridge-linear-offset-conditioned-v0",
+    "sampleAlignment": "world-position-stable-key",
+    "inputFeatures": [
+      "bias",
+      "offsetSteps/maxAbsOffset",
+      "source[16]"
+    ],
+    "outputFeatures": "target[16]",
+    "ridgeLambda": 0.001,
+    "trainSampleCount": 98916,
+    "holdoutSampleCount": 24729,
+    "maxAbsOffsetSteps": 6
+  },
+  "identityBaseline": {
+    "mse": 0.03448132181195314
+  },
+  "phaseConditionedModel": {
+    "mse": 0.02365736238175337
+  },
+  "advantage": {
+    "mse": 0.01082395943019977,
+    "modelToIdentityRatio": 0.6860920967812904,
+    "beatsIdentity": true
+  },
+  "perOffset": [
+    {
+      "offsetSteps": -6,
+      "sampleCount": 2918,
+      "identityMse": 0.04449066657590908,
+      "modelMse": 0.030384112929872326,
+      "advantageMse": 0.014106553646036754,
+      "modelToIdentityRatio": 0.6829322927322647
+    },
+    {
+      "offsetSteps": -3,
+      "sampleCount": 3514,
+      "identityMse": 0.03485508965092581,
+      "modelMse": 0.0228411905364176,
+      "advantageMse": 0.012013899114508213,
+      "modelToIdentityRatio": 0.6553186569069949
+    },
+    {
+      "offsetSteps": -1,
+      "sampleCount": 5875,
+      "identityMse": 0.028662281249472805,
+      "modelMse": 0.019933406161568062,
+      "advantageMse": 0.008728875087904745,
+      "modelToIdentityRatio": 0.6954577686287515
+    },
+    {
+      "offsetSteps": 1,
+      "sampleCount": 5929,
+      "identityMse": 0.028045426175679435,
+      "modelMse": 0.0207121775538248,
+      "advantageMse": 0.007333248621854633,
+      "modelToIdentityRatio": 0.7385224750760281
+    },
+    {
+      "offsetSteps": 3,
+      "sampleCount": 3541,
+      "identityMse": 0.03699059881851093,
+      "modelMse": 0.024370728715135175,
+      "advantageMse": 0.012619870103375754,
+      "modelToIdentityRatio": 0.6588357445822021
+    },
+    {
+      "offsetSteps": 6,
+      "sampleCount": 2952,
+      "identityMse": 0.045639604482834044,
+      "modelMse": 0.030450581628695045,
+      "advantageMse": 0.015189022854138996,
+      "modelToIdentityRatio": 0.6671964398847521
+    }
+  ]
+}

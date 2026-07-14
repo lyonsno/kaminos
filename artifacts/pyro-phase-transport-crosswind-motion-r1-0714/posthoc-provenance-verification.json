@@ -1,0 +1,25 @@
+{
+  "schema": "kaminos-phase-crosswind-motion-posthoc-provenance-v0",
+  "status": "verified_with_disclosed_boundary",
+  "render_code_head": "b1514c5",
+  "validation_repair_head": "f6f82288737380d58fb621f5284bb3f4a8d12eed",
+  "artifacts": {
+    "inference_manifest_sha256": "672399fab2e404105a3b2ffff3563a3c491921a80edf11dbbd72082f09aa8850",
+    "model_training_manifest_sha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534",
+    "model_sha256": "785ce32571aab2d5fe66b746f375bafcd57c85d5ab88442112fc3396b7af0747",
+    "predictions_sha256": "10b7dbfd76643bec6847a790ea1a6e5c642f4c46923f6defb4e654948dd1f72e",
+    "beauty_mp4_sha256": "f66e5af3df671a5eb13a20798e1e9aeaef92895e003cfdd128ead6c5e8c76b3f",
+    "partial_flow_debug_mp4_sha256": "992002708e5ed8926d38a933986f643a9d824917680ad53ae59431c324e763e6"
+  },
+  "checks": {
+    "moving_witness_manifest_hash_matches_inference_report": true,
+    "moving_witness_prediction_hash_matches_inference_report": true,
+    "moving_witness_model_hash_matches_inference_report": true,
+    "prediction_model_training_manifest_matches_model_training_manifest": true,
+    "inference_manifest_was_not_seen_during_model_training": true,
+    "validation_repair_rejects_schema_only_fake_model": true,
+    "validation_repair_rejects_prediction_cadence_substitution": true,
+    "validation_repair_bounds_dense_grid_allocation_with_exact_sparse_fallback": true
+  },
+  "boundary": "The pre-repair pixels are hash-bound to genuine completed artifacts. This verification is not an independent tensor-to-frame replay."
+}
