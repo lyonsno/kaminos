@@ -390,6 +390,34 @@ def compose_selected_splat_bake_layers(payload):
     }
 
 
+def write_splat_bake_depth_capture(body, width, height, depth_format):
+    if depth_format != "r32float-ndc":
+        raise ValueError("Bake depth capture format must be r32float-ndc")
+    width = int(width)
+    height = int(height)
+    if width <= 0 or height <= 0:
+        raise ValueError("Bake depth capture dimensions must be positive")
+    expected_bytes = width * height * 4
+    if len(body) != expected_bytes:
+        raise ValueError(f"Bake depth capture must contain exactly {expected_bytes} bytes")
+    output_root = (BROWSE_ROOTS["scratch"] / "selected-splat-bake-captures").resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    token = f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:10]}"
+    output_path = output_root / f"selected-splat-depth-{token}.f32"
+    output_path.write_bytes(body)
+    rel_path = output_path.relative_to(BROWSE_ROOTS["scratch"].resolve()).as_posix()
+    return {
+        "schema": "kaminos.selected-splat-bake-depth-frame.v0",
+        "ok": True,
+        "path": str(output_path),
+        "source": "/api/read?" + urlencode({"root": "scratch", "path": rel_path}),
+        "width": width,
+        "height": height,
+        "format": depth_format,
+        "bytes": len(body),
+    }
+
+
 def _default_pipeline_out_dir(pipeline_id):
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "-", pipeline_id or "pipeline").strip("-") or "pipeline"
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -1078,6 +1106,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_compose_splat_bake_layers()
         elif parsed.path == "/api/capture-splat-bake-view":
             self.handle_capture_splat_bake_view()
+        elif parsed.path == "/api/capture-splat-bake-depth":
+            self.handle_capture_splat_bake_depth(parse_qs(parsed.query))
         elif parsed.path == "/api/ingest-splat":
             self.handle_ingest_splat(parse_qs(parsed.query))
         elif parsed.path == "/api/splat-correction":
@@ -1227,6 +1257,20 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "source": "/api/read?" + urlencode({"root": "scratch", "path": rel_path}),
             "bytes": len(body),
         })
+
+    def handle_capture_splat_bake_depth(self, params):
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            result = write_splat_bake_depth_capture(
+                self.rfile.read(length),
+                width=(params.get("width") or [""])[0],
+                height=(params.get("height") or [""])[0],
+                depth_format=(params.get("format") or [""])[0],
+            )
+        except (TypeError, ValueError) as error:
+            self.send_json({"error": str(error)}, 400)
+            return
+        self.send_json(result)
 
     def handle_save_scene(self):
         """Save a scene JSON to the scenes directory.

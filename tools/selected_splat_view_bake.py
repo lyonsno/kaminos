@@ -20,7 +20,7 @@ LAYER_SCHEMA = "kaminos.selected-view-pbr-layer.v0"
 ADAPTER_REPORT_SCHEMA = "kaminos.selected-splat-view-bake-adapter-report.v0"
 
 
-def project_positions(positions, view, projection, width, height):
+def project_positions_with_depth(positions, view, projection, width, height):
     """Project asset-local positions to top-left-origin image pixels."""
     positions = np.asarray(positions, dtype=np.float32)
     view = np.asarray(view, dtype=np.float32).reshape(4, 4)
@@ -39,7 +39,36 @@ def project_positions(positions, view, projection, width, height):
     visible &= (ndc[:, 2] >= -1.0) & (ndc[:, 2] <= 1.0)
     pixel_x = (ndc[:, 0] * 0.5 + 0.5) * float(width)
     pixel_y = (1.0 - (ndc[:, 1] * 0.5 + 0.5)) * float(height)
-    return np.stack([pixel_x, pixel_y], axis=1), visible
+    return np.stack([pixel_x, pixel_y], axis=1), ndc[:, 2], visible
+
+
+def project_positions(positions, view, projection, width, height):
+    uv, _, visible = project_positions_with_depth(
+        positions, view, projection, width, height
+    )
+    return uv, visible
+
+
+def renderer_depth_coverage(
+    uv,
+    ndc_depth,
+    visible,
+    depth_frame,
+    ndc_tolerance=0.005,
+):
+    """Select projected splat centers represented by the renderer depth surface."""
+    depth_frame = np.asarray(depth_frame, dtype=np.float32)
+    if depth_frame.ndim != 2:
+        raise ValueError("renderer depth frame must be a 2D float32 array")
+    height, width = depth_frame.shape
+    pixel_x = np.clip(np.rint(uv[:, 0]).astype(np.int64), 0, width - 1)
+    pixel_y = np.clip(np.rint(uv[:, 1]).astype(np.int64), 0, height - 1)
+    surface_depth = depth_frame[pixel_y, pixel_x]
+    represented = np.asarray(visible, dtype=bool).copy()
+    represented &= np.isfinite(ndc_depth) & np.isfinite(surface_depth)
+    represented &= surface_depth > 0.0
+    represented &= np.abs(ndc_depth - surface_depth) <= float(ndc_tolerance)
+    return represented.astype(np.float32)
 
 
 def _normalize_vectors(vectors, fallback=None):
@@ -52,6 +81,20 @@ def _normalize_vectors(vectors, fallback=None):
     else:
         result[~valid] = np.asarray(fallback, dtype=np.float32)[~valid]
     return result
+
+
+def lotus_camera_normals_to_asset(camera_normals, asset_to_camera):
+    """Convert Lotus output vectors into raw asset-local normals.
+
+    Lotus's emitted Z orientation is opposite the renderer-facing convention
+    established by the trusted baked-normal assets.  The transpose maps a
+    camera-space normal back through the asset-to-camera point transform; the
+    final normalization removes any uniform scene scale in that transform.
+    """
+    camera_normals = np.asarray(camera_normals, dtype=np.float32).copy()
+    asset_to_camera = np.asarray(asset_to_camera, dtype=np.float32).reshape(4, 4)
+    camera_normals[:, 2] *= -1.0
+    return _normalize_vectors((asset_to_camera[:3, :3].T @ camera_normals.T).T)
 
 
 def compose_material_layers(base, layers):
@@ -159,7 +202,22 @@ def _load_selected_view(input_path, context, image_path):
     from PIL import Image
     image_path.parent.mkdir(parents=True, exist_ok=True)
     Image.open(capture_path).convert("RGB").save(image_path)
-    return load_ply(input_path), view, projection
+    depth_capture = capture.get("depth") or {}
+    depth_path = Path(str(depth_capture.get("path") or "")).expanduser()
+    depth_width = int(depth_capture.get("width") or 0)
+    depth_height = int(depth_capture.get("height") or 0)
+    if depth_capture.get("format") != "r32float-ndc":
+        raise ValueError("sourceViewCapture depth must use r32float-ndc")
+    if depth_width <= 0 or depth_height <= 0 or not depth_path.is_file():
+        raise FileNotFoundError("request context lacks a readable renderer depth capture")
+    depth_values = np.fromfile(depth_path, dtype=np.float32)
+    expected_values = depth_width * depth_height
+    if depth_values.size != expected_values:
+        raise ValueError(
+            f"renderer depth capture contains {depth_values.size} floats; expected {expected_values}"
+        )
+    depth_frame = depth_values.reshape(depth_height, depth_width)
+    return load_ply(input_path), view, projection, depth_frame, depth_path
 
 
 def _run_lotus(image_path, normal_map_path):
@@ -213,27 +271,30 @@ np.save(output, normals.astype(np.float32))
     return np.load(normal_map_path)
 
 
-def _sample_normal_layer(cloud, view, projection, normal_map):
+def _sample_normal_layer(cloud, view, projection, normal_map, depth_frame):
     height, width = normal_map.shape[:2]
     uv, visible = project_positions(cloud.positions, view, projection, width, height)
     pixel_x = np.clip(np.rint(uv[:, 0]).astype(np.int64), 0, width - 1)
     pixel_y = np.clip(np.rint(uv[:, 1]).astype(np.int64), 0, height - 1)
 
-    points = np.concatenate(
-        [cloud.positions, np.ones((cloud.num_points, 1), dtype=np.float32)], axis=1
+    depth_height, depth_width = depth_frame.shape
+    depth_uv, ndc_depth, depth_visible = project_positions_with_depth(
+        cloud.positions,
+        view,
+        projection,
+        depth_width,
+        depth_height,
     )
-    camera_points = (view @ points.T).T
-    depth = -camera_points[:, 2]
-    visible &= depth > 1e-4
-    linear_pixel = pixel_y * width + pixel_x
-    nearest_depth = np.full(width * height, np.inf, dtype=np.float32)
-    np.minimum.at(nearest_depth, linear_pixel[visible], depth[visible])
-    surface = visible & (depth <= nearest_depth[linear_pixel] * 1.01 + 1e-4)
-    coverage = surface.astype(np.float32)
+    coverage = renderer_depth_coverage(
+        depth_uv,
+        ndc_depth,
+        depth_visible,
+        depth_frame,
+    )
+    surface = coverage > 0.0
 
     camera_normals = normal_map[pixel_y, pixel_x]
-    asset_normals = (view[:3, :3].T @ camera_normals.T).T
-    asset_normals = _normalize_vectors(asset_normals)
+    asset_normals = lotus_camera_normals_to_asset(camera_normals, view)
     asset_normals[~surface] = 0.0
     return asset_normals.astype(np.float32), coverage.astype(np.float32)
 
@@ -246,11 +307,15 @@ def bake_layer(input_path, output_path, report_path):
     image_path = output_path.with_suffix(".source-view.png")
     normal_map_path = output_path.with_suffix(".lotus-normal.npy")
     _emit_progress("selected-view:render", "Rendering selected splat from the effective Kaminos camera", 0.1)
-    cloud, view, projection = _load_selected_view(Path(input_path), context, image_path)
+    cloud, view, projection, depth_frame, depth_path = _load_selected_view(
+        Path(input_path), context, image_path
+    )
     _emit_progress("selected-view:lotus", "Running Lotus-D normal inference", 0.35)
     normal_map = _run_lotus(image_path, normal_map_path)
     _emit_progress("selected-view:project", "Projecting Lotus-D normals back to covered splats", 0.85)
-    normals, coverage = _sample_normal_layer(cloud, view, projection, normal_map)
+    normals, coverage = _sample_normal_layer(
+        cloud, view, projection, normal_map, depth_frame
+    )
     np.savez_compressed(
         output_path,
         schema=np.asarray(LAYER_SCHEMA),
@@ -272,6 +337,10 @@ def bake_layer(input_path, output_path, report_path):
         "output": {"path": str(output_path), "sha256": _sha256(output_path)},
         "channels": ["normal"],
         "coverage": {
+            "authority": "renderer-gbuffer-r32float-ndc",
+            "depthPath": str(depth_path),
+            "depthSha256": _sha256(depth_path),
+            "ndcTolerance": 0.005,
             "coveredSplats": int(np.count_nonzero(coverage)),
             "totalSplats": int(cloud.num_points),
             "max": float(coverage.max(initial=0.0)),
@@ -279,7 +348,7 @@ def bake_layer(input_path, output_path, report_path):
         "frameContract": {
             "projection": "host-projection-times-effective-asset-to-camera-view",
             "imageOrigin": "top-left",
-            "lotusNormalConvention": "camera-space-x-right-y-up-z-toward-camera",
+            "lotusNormalConvention": "camera-space-with-z-negated-before-asset-transform",
             "outputNormalFrame": "raw-asset-local",
             "verticalFlip": "none-beyond-standard-ndc-to-top-left-image-mapping",
         },

@@ -585,9 +585,30 @@ def test_selected_view_bake_pipeline_run_forwards_request_context():
         source = source_root / "selected-source.ply"
         source.write_text("ply\nformat ascii 1.0\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\nend_header\n0 0 0\n")
         out_dir = root / "selected-view-pipeline-run"
+        adapter = root / "mock-selected-view-bake-adapter.py"
+        adapter.write_text("""#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+args = dict(zip(sys.argv[1::2], sys.argv[2::2]))
+output = Path(args['--output'])
+report = Path(args['--report'])
+output.parent.mkdir(parents=True, exist_ok=True)
+report.parent.mkdir(parents=True, exist_ok=True)
+output.write_bytes(b'mock selected-view per-splat layer payload\\n')
+report.write_text(json.dumps({
+    'schema': 'mock.selected-splat-view-bake-adapter-report.v0',
+    'ok': True,
+    'backend': {'modelFamily': 'Lotus-D', 'runtime': 'mock-adapter'},
+    'output': {'path': str(output)},
+}, indent=2) + '\\n')
+""")
+        adapter.chmod(0o755)
 
         previous_browse = dict(BROWSE_ROOTS)
+        previous_adapter = os.environ.get("KAMINOS_SELECTED_SPLAT_VIEW_BAKE_COMMAND")
         BROWSE_ROOTS["selected-view-test"] = source_root
+        os.environ["KAMINOS_SELECTED_SPLAT_VIEW_BAKE_COMMAND"] = str(adapter)
         try:
             result = serve.run_pipeline_witness({
                 "pipelineId": "selected-splat-view-bake-layer-v0",
@@ -610,6 +631,10 @@ def test_selected_view_bake_pipeline_run_forwards_request_context():
         finally:
             BROWSE_ROOTS.clear()
             BROWSE_ROOTS.update(previous_browse)
+            if previous_adapter is None:
+                os.environ.pop("KAMINOS_SELECTED_SPLAT_VIEW_BAKE_COMMAND", None)
+            else:
+                os.environ["KAMINOS_SELECTED_SPLAT_VIEW_BAKE_COMMAND"] = previous_adapter
 
         assert result["schema"] == "kaminos.pipeline-run-result.v0"
         assert result["ok"] is True
@@ -625,7 +650,52 @@ def test_selected_view_bake_pipeline_run_forwards_request_context():
         assert layer_receipt["schema"] == "kaminos.selected-splat-view-bake-layer.pipeline-receipt.v0"
         assert layer_receipt["pipeline"]["routeId"] == "selected-splat.view-bake-layer.v0"
         assert layer_receipt["requestContext"]["layerId"] == "layer-server-contract"
-        assert layer_receipt["outputAuthority"] == "pipeline-receipt-only"
+        assert layer_receipt["outputAuthority"] == "model-baked-layer-payload"
+
+
+def test_splat_bake_depth_capture_writes_exact_r32float_frame():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        previous_scratch = BROWSE_ROOTS["scratch"]
+        BROWSE_ROOTS["scratch"] = Path(tmp)
+        try:
+            values = bytes(range(4 * 3 * 4))
+            result = serve.write_splat_bake_depth_capture(
+                values,
+                width=4,
+                height=3,
+                depth_format="r32float-ndc",
+            )
+        finally:
+            BROWSE_ROOTS["scratch"] = previous_scratch
+
+        output = Path(result["path"])
+        assert result["schema"] == "kaminos.selected-splat-bake-depth-frame.v0"
+        assert result["width"] == 4
+        assert result["height"] == 3
+        assert result["format"] == "r32float-ndc"
+        assert result["bytes"] == 48
+        assert output.read_bytes() == values
+        assert result["source"].startswith("/api/read?root=scratch")
+
+
+def test_splat_bake_depth_capture_rejects_partial_frame():
+    with TemporaryDirectory(dir="/tmp") as tmp:
+        previous_scratch = BROWSE_ROOTS["scratch"]
+        BROWSE_ROOTS["scratch"] = Path(tmp)
+        try:
+            try:
+                serve.write_splat_bake_depth_capture(
+                    b"partial",
+                    width=4,
+                    height=3,
+                    depth_format="r32float-ndc",
+                )
+            except ValueError as error:
+                assert "exactly 48 bytes" in str(error)
+            else:
+                raise AssertionError("partial depth frames must fail loud")
+        finally:
+            BROWSE_ROOTS["scratch"] = previous_scratch
 
 
 def test_pipeline_run_rejects_sources_outside_declared_roots():
@@ -687,5 +757,7 @@ if __name__ == "__main__":
     test_image_asset_index_declares_local_image_roots()
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()
     test_selected_view_bake_pipeline_run_forwards_request_context()
+    test_splat_bake_depth_capture_writes_exact_r32float_frame()
+    test_splat_bake_depth_capture_rejects_partial_frame()
     test_pipeline_run_rejects_sources_outside_declared_roots()
     test_pipeline_run_rejects_excluded_api_read_roots()

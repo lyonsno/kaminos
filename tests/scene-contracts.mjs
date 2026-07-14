@@ -15,6 +15,10 @@ assert.match(index, /let activeSceneObjectId\s*=\s*null/, 'workbench tracks the 
 assert.match(index, /function registerSceneObject\(/, 'load paths register authored objects instead of only replacing currentMesh');
 assert.match(index, /function serializeSceneObject\(/, 'scene save serializes each object independently');
 assert.match(index, /function loadSceneObjects\(/, 'scene load restores multiple objects from one scene file');
+assert.match(index, /function serializeSplatBakeLayers\(/, 'scene save has an explicit durable bake-layer serializer');
+assert.match(index, /splatBakeLayers:\s*serializeSplatBakeLayers\(/, 'scene objects persist bake-layer payload refs and tuning state');
+assert.match(index, /function rehydrateSplatBakeLayers\(/, 'scene load has an explicit bake-layer rehydration path');
+assert.match(index, /await rehydrateSplatBakeLayers\(/, 'scene load recomposes persisted enabled layers rather than leaving stale UI-only records');
 assert.match(index, /function sceneObjectTransformState\(/, 'scene object transforms use a shared state serializer');
 assert.match(index, /function applySceneObjectTransformState\(/, 'scene object transforms use a shared state applier');
 assert.match(index, /window\.kaminosSceneObjectDebugState/, 'browser witnesses can inspect live scene object transform state');
@@ -344,6 +348,8 @@ assert.match(index, /requestContext:\s*selectedSplatViewBakeLayerPipelineRequest
 assert.match(index, /sourceAssetViewMatrix/, 'selected-splat Bake View must capture the raw source asset-to-camera matrix rather than the scene renderer pretransformed frame');
 assert.match(index, /captureSelectedSplatBakeSourceView/, 'selected-splat Bake View must capture the exact hybrid source-radiance canvas instead of substituting an approximate color harvester');
 assert.match(index, /\/api\/capture-splat-bake-view/, 'selected-splat Bake View must preserve its captured model input under a server-owned route');
+assert.match(index, /captureDepthFrame\(\)/, 'selected-splat Bake View must capture the renderer-owned G-buffer depth surface');
+assert.match(index, /\/api\/capture-splat-bake-depth/, 'selected-splat Bake View must preserve the paired depth frame under a server-owned route');
 assert.match(index, /selectedSplatViewBakeLayerPipelineOutputRefs/, 'selected-splat Bake View must preserve returned pipeline artifact refs on the layer receipt');
 assert.match(index, /pipelineResultSummary/, 'selected-splat Bake View must store effective route/result identity on the candidate layer');
 assert.match(index, /window\.kaminosCreateSelectedSplatViewBakeLayer/, 'browser witnesses can create selected-splat view bake layers without DOM inference');

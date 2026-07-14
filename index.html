@@ -4466,6 +4466,25 @@ function ensureSelectedSplatBakeLayerList(record) {
   return record.splatBakeLayers;
 }
 
+function serializeSplatBakeLayers(record) {
+  const layers = Array.isArray(record?.splatBakeLayers) ? record.splatBakeLayers : [];
+  return JSON.parse(JSON.stringify(layers));
+}
+
+async function rehydrateSplatBakeLayers(record, persistedLayers) {
+  record.splatBakeLayers = Array.isArray(persistedLayers)
+    ? JSON.parse(JSON.stringify(persistedLayers))
+    : [];
+  if (record.object?.userData?.kaminosSceneObject) {
+    record.object.userData.kaminosSceneObject.splatBakeLayers = serializeSplatBakeLayers(record);
+  }
+  if (!selectedSplatBakeLayerCompositeInputs(record).length) {
+    applySelectedSplatBakeLayerPreview(record);
+    return null;
+  }
+  return scheduleSelectedSplatBakeLayerComposite(record);
+}
+
 function selectedSplatBakeLayerPreviewContribution(record = selectedSplatRecord()) {
   const layers = record ? ensureSelectedSplatBakeLayerList(record) : [];
   const enabledLayers = layers.filter(layer => layer?.enabled !== false && layer?.payloadRef?.path);
@@ -4624,27 +4643,53 @@ async function captureSelectedSplatBakeSourceView() {
   if (!(canvas instanceof HTMLCanvasElement) || hybridSplatOverlayState.status !== 'rendering') {
     throw new Error('Start the Hybrid Renderer before baking the selected view');
   }
+  const handle = hybridSplatOverlayState.handle;
+  if (typeof handle?.captureDepthFrame !== 'function') {
+    throw new Error('Hybrid Renderer package does not expose depth capture');
+  }
   const sourceInput = document.getElementById('hybrid-control-preview-source-color');
   const previousSourceRadiance = sourceInput instanceof HTMLInputElement ? sourceInput.checked : true;
-  if (sourceInput instanceof HTMLInputElement) sourceInput.checked = true;
-  publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
-  await nextAnimationFrame();
-  await nextAnimationFrame();
-  const blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(value => value ? resolve(value) : reject(new Error('Hybrid Renderer canvas produced no PNG capture')), 'image/png');
-  });
-  if (sourceInput instanceof HTMLInputElement) sourceInput.checked = previousSourceRadiance;
-  publishHybridSplatRendererControls(hybridSplatOverlayState.handle);
-  const response = await fetch('/api/capture-splat-bake-view', {
-    method: 'POST',
-    headers: { 'Content-Type': 'image/png' },
-    body: blob,
-  });
-  const result = await response.json();
-  if (!response.ok || result?.ok !== true || !result?.path) {
-    throw new Error(result?.error || `Bake view capture failed (${response.status})`);
+  try {
+    if (sourceInput instanceof HTMLInputElement) sourceInput.checked = false;
+    publishHybridSplatRendererControls(handle);
+    await nextAnimationFrame();
+    await nextAnimationFrame();
+    const depthFrame = await handle.captureDepthFrame();
+    const depthResponse = await fetch('/api/capture-splat-bake-depth?' + new URLSearchParams({
+      width: String(depthFrame.width),
+      height: String(depthFrame.height),
+      format: depthFrame.format,
+    }), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: depthFrame.data,
+    });
+    const depthResult = await depthResponse.json();
+    if (!depthResponse.ok || depthResult?.ok !== true || !depthResult?.path) {
+      throw new Error(depthResult?.error || `Bake depth capture failed (${depthResponse.status})`);
+    }
+
+    if (sourceInput instanceof HTMLInputElement) sourceInput.checked = true;
+    publishHybridSplatRendererControls(handle);
+    await nextAnimationFrame();
+    await nextAnimationFrame();
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(value => value ? resolve(value) : reject(new Error('Hybrid Renderer canvas produced no PNG capture')), 'image/png');
+    });
+    const response = await fetch('/api/capture-splat-bake-view', {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/png' },
+      body: blob,
+    });
+    const result = await response.json();
+    if (!response.ok || result?.ok !== true || !result?.path) {
+      throw new Error(result?.error || `Bake view capture failed (${response.status})`);
+    }
+    return { ...result, depth: depthResult };
+  } finally {
+    if (sourceInput instanceof HTMLInputElement) sourceInput.checked = previousSourceRadiance;
+    publishHybridSplatRendererControls(handle);
   }
-  return result;
 }
 
 function selectedSplatViewBakeLayerPipelineArtifactRecords(result) {
@@ -6192,6 +6237,9 @@ function registerSceneObject(object, metadata = {}) {
     renderHandoffSchema: metadata.renderHandoffSchema ?? null,
     assetSmokeLink: metadata.assetSmokeLink ?? null,
     sceneTransform,
+    splatBakeLayers: Array.isArray(metadata.splatBakeLayers)
+      ? JSON.parse(JSON.stringify(metadata.splatBakeLayers))
+      : [],
   };
   object.userData.kaminosSceneObject = {
     id: record.id,
@@ -6208,6 +6256,7 @@ function registerSceneObject(object, metadata = {}) {
     renderHandoffSchema: record.renderHandoffSchema,
     assetSmokeLink: record.assetSmokeLink,
     sceneTransform: record.sceneTransform,
+    splatBakeLayers: serializeSplatBakeLayers(record),
   };
   sceneObjects = sceneObjects.filter(obj => obj.id !== id);
   sceneObjects.push(record);
@@ -19866,6 +19915,7 @@ function serializeSceneObject(entry) {
     renderRoute: metadata.renderRoute ?? entry.renderRoute ?? null,
     renderCapabilities: metadata.renderCapabilities ?? entry.renderCapabilities ?? null,
     renderHandoffSchema: metadata.renderHandoffSchema ?? entry.renderHandoffSchema ?? null,
+    splatBakeLayers: serializeSplatBakeLayers(entry),
   };
 }
 
@@ -19936,6 +19986,9 @@ async function loadSceneObjects(records, activeId, groups = [], activeGroupId = 
       applyMaterialStateToObject(object, record.materials);
       const entry = sceneObjects.find(sceneObject => sceneObject.id === record.id);
       if (entry && record.groupId) setSceneObjectGroupId(entry, record.groupId);
+      if (entry?.type === 'splat') {
+        await rehydrateSplatBakeLayers(entry, record.splatBakeLayers);
+      }
       loaded.push(record.id);
     }
   } catch (e) {

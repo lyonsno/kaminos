@@ -12,6 +12,58 @@ SPEC.loader.exec_module(MODULE)
 
 
 class SelectedSplatViewBakeMathTests(unittest.TestCase):
+    def test_renderer_depth_coverage_rejects_hidden_center_at_same_pixel(self):
+        uv = np.array([[4.0, 3.0], [4.0, 3.0]], dtype=np.float32)
+        ndc_depth = np.array([0.25, 0.75], dtype=np.float32)
+        visible = np.array([True, True])
+        depth_frame = np.zeros((8, 8), dtype=np.float32)
+        depth_frame[3, 4] = 0.25
+
+        coverage = MODULE.renderer_depth_coverage(
+            uv,
+            ndc_depth,
+            visible,
+            depth_frame,
+            ndc_tolerance=0.01,
+        )
+
+        np.testing.assert_array_equal(coverage, [1.0, 0.0])
+
+    def test_renderer_depth_coverage_rejects_background_and_nonfinite_depth(self):
+        uv = np.array([[1.0, 1.0], [2.0, 2.0]], dtype=np.float32)
+        ndc_depth = np.array([0.0, np.nan], dtype=np.float32)
+        visible = np.array([True, True])
+        depth_frame = np.zeros((4, 4), dtype=np.float32)
+
+        coverage = MODULE.renderer_depth_coverage(
+            uv,
+            ndc_depth,
+            visible,
+            depth_frame,
+        )
+
+        np.testing.assert_array_equal(coverage, [0.0, 0.0])
+
+    def test_lotus_camera_normals_negate_z_before_asset_transform(self):
+        asset_to_camera = np.array([
+            [0.0, 0.0, 2.0, 0.0],
+            [0.0, 2.0, 0.0, 0.0],
+            [-2.0, 0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ], dtype=np.float32)
+        lotus_normals = np.array([
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0],
+        ], dtype=np.float32)
+
+        asset_normals = MODULE.lotus_camera_normals_to_asset(
+            lotus_normals,
+            asset_to_camera,
+        )
+
+        np.testing.assert_allclose(asset_normals[0], [1.0, 0.0, 0.0], atol=1e-6)
+        np.testing.assert_allclose(asset_normals[1], [0.0, 0.0, 1.0], atol=1e-6)
+
     def test_projection_maps_positive_camera_y_to_top_rows(self):
         positions = np.array([
             [0.0, 0.5, -2.0],
