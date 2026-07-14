@@ -63,4 +63,25 @@ assert.equal(malformedFailure.status, 'failed', 'malformed input must still leav
 assert.equal(malformedFailure.failurePhase, 'startup', 'malformed input failure must identify startup');
 assert.match(malformedFailure.error, /--frames must be a positive integer/, 'malformed report must retain the rejected input');
 
+function runAdversarialFixture(name, expectedError) {
+  const root = mkdtempSync(join(tmpdir(), `kaminos-history-depth-${name}-`));
+  const report = join(root, 'report.json');
+  const result = spawnSync(process.execPath, [
+    witnessUrl.pathname,
+    '--url', 'http://127.0.0.1:1/fire/?kaminos_volume_smoke=1',
+    '--out-dir', root,
+    '--report', report,
+    '--contract-fixture', name,
+  ], { encoding: 'utf8' });
+  assert.notEqual(result.status, 0, `${name} fixture must be rejected`);
+  const failureReport = JSON.parse(readFileSync(report, 'utf8'));
+  assert.equal(failureReport.status, 'failed', `${name} fixture must leave a durable failed report`);
+  assert.equal(failureReport.failurePhase, 'contract-fixture', `${name} fixture must identify its failure phase`);
+  assert.match(failureReport.error, expectedError, `${name} fixture must preserve the false-closure reason`);
+}
+
+runAdversarialFixture('route-substitution', /requested-effective-route-disagreement/);
+runAdversarialFixture('periodic-motion', /cached-or-periodic-motion/);
+runAdversarialFixture('stalled-clocks', /stalled-live-clock/);
+
 console.log('boundary splat history depth motion witness contracts passed');

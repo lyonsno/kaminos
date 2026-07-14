@@ -24,6 +24,7 @@ const CAMERA = {
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRoute = String(args.get('--url') || '');
+const contractFixture = String(args.get('--contract-fixture') || '');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-boundary-splat-history-depth-motion-witness'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/history-depth-motion-report.json`));
 const chrome = String(args.get('--chrome') || process.env.CHROME || defaultChromePath());
@@ -53,6 +54,11 @@ try {
   hydrateInputs();
   validateStartup();
   mkdirSync(outDir, { recursive: true });
+  if (contractFixture) {
+    failurePhase = 'contract-fixture';
+    runContractFixture(contractFixture);
+    throw new Error(`contract-fixture-did-not-reject:${contractFixture}`);
+  }
   if (await isCdpEndpointOpen()) throw new Error(`CDP debug port already in use before launch: ${port}`);
   browserSession = await launchBrowser();
   failurePhase = 'connect-single-browser';
@@ -117,7 +123,8 @@ try {
       intendedDurationMs: (frameCount - 1) * frameIntervalMs,
       warmupSamples,
       steadySamples,
-      nonLooping: true,
+      nonLoopingEncoding: true,
+      operatorMotionAcceptance: 'pending-direct-visual-smoke',
     },
     historyDepthRows,
     falseClosureChecks: {
@@ -131,6 +138,8 @@ try {
       noCandidateCopy: historyDepthRows.every(row => row.maxCandidateCopyBytes === 0),
       noBlankFrames: historyDepthRows.every(row => row.motion.distinctFrameHashCount > 1),
       noCachedMotion: historyDepthRows.every(row => row.motion.meanAdjacentPixelDelta > 0),
+      noObservedExactPeriod: historyDepthRows.every(row => row.motion.observedExactPeriodFrames === null),
+      liveRenderAndSimClocks: historyDepthRows.every(row => row.cadence.allFrameDeltasPositive && row.cadence.allSimStepDeltasPositive),
       completeVideos: historyDepthRows.every(row => row.video.nbFrames === frameCount),
     },
     claimBoundary: 'Serial same-browser truthful GPU-history depth and selection witness from one live simulator. Motion quality requires direct operator smoke. Still diversity, pixel deltas, timing, and memory are supporting evidence only. This is not learned prediction, independent per-instance simulation, prerecorded looping motion, or runtime uptake.',
@@ -310,6 +319,7 @@ async function captureHistoryDepth(requestedDepth, expectedSubstrate) {
   }
   const perSourceReuse = summarizePerSourceReuse(frames, requestedDepth);
   const cadence = summarizeCadence(frames);
+  validateLiveMotion(frames, motion, cadence);
 
   failurePhase = `${label}:video-encode`;
   const videoPath = resolve(rowDir, `${label}-motion.mp4`);
@@ -534,6 +544,8 @@ function summarizeCadence(frames) {
     wallDeltasMs,
     frameDeltas,
     simStepDeltas,
+    allFrameDeltasPositive: frameDeltas.every(delta => delta > 0),
+    allSimStepDeltasPositive: simStepDeltas.every(delta => delta > 0),
   };
 }
 
@@ -545,6 +557,7 @@ function summarizeMotion(frames) {
   return {
     authority: 'consecutive-live-canvas-png-delta-v0',
     distinctFrameHashCount: new Set(frames.map(frame => frame.sha256)).size,
+    observedExactPeriodFrames: detectExactPeriod(frames.map(frame => frame.sha256)),
     meanAdjacentPixelDelta: mean(diffs.map(diff => diff.meanAbsDiff)),
     changedPixelFraction: mean(diffs.map(diff => diff.changedFraction)),
     diffs,
@@ -586,8 +599,37 @@ function probeVideo(videoPath) {
     frameRate: stream.r_frame_rate,
     nbFrames: Number(stream.nb_frames),
     durationSeconds: Number(parsed.format?.duration),
-    nonLooping: true,
+    nonLoopingEncoding: true,
+    periodicMotionAuthority: 'bounded-capture-exact-frame-hash-period-check-v0',
+    operatorMotionAcceptance: 'pending-direct-visual-smoke',
   };
+}
+
+function validateLiveMotion(frames, motion, cadence) {
+  if (motion.observedExactPeriodFrames !== null) {
+    throw new Error(`cached-or-periodic-motion:${JSON.stringify({ periodFrames: motion.observedExactPeriodFrames })}`);
+  }
+  if (!cadence.allFrameDeltasPositive || !cadence.allSimStepDeltasPositive) {
+    throw new Error(`stalled-live-clock:${JSON.stringify({ frameDeltas: cadence.frameDeltas, simStepDeltas: cadence.simStepDeltas })}`);
+  }
+  if (motion.distinctFrameHashCount < 2 || motion.meanAdjacentPixelDelta <= 0) {
+    throw new Error(`cached-or-static-motion:${JSON.stringify(motion)}`);
+  }
+  if (frames.length !== frameCount) throw new Error(`partial-frame-sequence:${frames.length}/${frameCount}`);
+}
+
+function detectExactPeriod(hashes) {
+  for (let period = 1; period <= Math.floor(hashes.length / 2); period += 1) {
+    let periodic = true;
+    for (let index = period; index < hashes.length; index += 1) {
+      if (hashes[index] !== hashes[index % period]) {
+        periodic = false;
+        break;
+      }
+    }
+    if (periodic) return period;
+  }
+  return null;
 }
 
 function rejectFalseClosure(report) {
@@ -740,10 +782,19 @@ async function targetIsReachable(targetPageId) {
 }
 
 function sameCanonicalRoute(requested, effective) {
-  const requestedEntries = canonicalRouteEntries(requested);
-  const effectiveEntries = canonicalRouteEntries(effective);
-  return requestedEntries.length === effectiveEntries.length
-    && JSON.stringify(requestedEntries) === JSON.stringify(effectiveEntries);
+  return deepEqual(canonicalRouteIdentity(requested), canonicalRouteIdentity(effective));
+}
+
+function canonicalRouteIdentity(value) {
+  const route = new URL(value);
+  return {
+    protocol: route.protocol,
+    hostname: route.hostname,
+    port: route.port || defaultPort(route.protocol),
+    pathname: route.pathname,
+    searchParams: canonicalRouteEntries(value),
+    hash: route.hash,
+  };
 }
 
 function canonicalRouteEntries(value) {
@@ -751,6 +802,53 @@ function canonicalRouteEntries(value) {
   return [...route.searchParams.entries()].sort(([aKey, aValue], [bKey, bValue]) => (
     aKey.localeCompare(bKey) || aValue.localeCompare(bValue)
   ));
+}
+
+function defaultPort(protocol) {
+  if (protocol === 'http:') return '80';
+  if (protocol === 'https:') return '443';
+  return '';
+}
+
+function runContractFixture(name) {
+  if (name === 'route-substitution') {
+    const requested = 'http://127.0.0.1:8139/fire/?a=1&b=2';
+    const effective = 'http://127.0.0.1:8140/other/?b=2&a=1';
+    if (sameCanonicalRoute(requested, effective)) throw new Error('route-substitution-was-accepted');
+    throw new Error(`requested-effective-route-disagreement:${JSON.stringify({ requested, effective })}`);
+  }
+  if (name === 'periodic-motion') {
+    const frames = fixtureFrames(['a', 'b', 'a', 'b'], [1, 2, 3, 4], [11, 12, 13, 14]);
+    const cadence = summarizeCadence(frames);
+    const motion = {
+      distinctFrameHashCount: 2,
+      observedExactPeriodFrames: detectExactPeriod(frames.map(frame => frame.sha256)),
+      meanAdjacentPixelDelta: 1,
+    };
+    validateLiveMotion(frames, motion, cadence);
+    return;
+  }
+  if (name === 'stalled-clocks') {
+    const frames = fixtureFrames(['a', 'b', 'c', 'd'], [1, 1, 1, 1], [11, 11, 11, 11]);
+    const cadence = summarizeCadence(frames);
+    const motion = {
+      distinctFrameHashCount: 4,
+      observedExactPeriodFrames: null,
+      meanAdjacentPixelDelta: 1,
+    };
+    validateLiveMotion(frames, motion, cadence);
+    return;
+  }
+  throw new Error(`unknown-contract-fixture:${name}`);
+}
+
+function fixtureFrames(hashes, frameCounts, simStepCounts) {
+  return hashes.map((sha, index) => ({
+    sha256: sha,
+    elapsedWallMs: index * 160,
+    frameCount: frameCounts[index],
+    simStepCount: simStepCounts[index],
+  }));
 }
 
 function clipFromCanvas(rect = {}) {
