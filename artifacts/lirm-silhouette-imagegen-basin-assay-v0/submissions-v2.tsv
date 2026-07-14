@@ -1,0 +1,18 @@
+job_id	shape	stance	seed	output_dir
+c2a8af167268	local-shape-004	preserve-gestalt	713041	cells/local-shape-004-preserve-gestalt
+10fc134b6ff5	local-shape-004	lineage-seed	713042	cells/local-shape-004-lineage-seed
+14d2630423a4	local-shape-013	preserve-gestalt	713131	cells/local-shape-013-preserve-gestalt
+49d780afc43b	local-shape-013	lineage-seed	713132	cells/local-shape-013-lineage-seed
+af82a4ff7004	local-shape-022	preserve-gestalt	713221	cells/local-shape-022-preserve-gestalt
+ec3cb271ed19	local-shape-022	lineage-seed	713222	cells/local-shape-022-lineage-seed
+255b0b00e339	local-shape-031	preserve-gestalt	713311	cells/local-shape-031-preserve-gestalt
+8da580baa67f	local-shape-031	lineage-seed	713312	cells/local-shape-031-lineage-seed
+aac7829b9a7e	local-shape-043	preserve-gestalt	713431	cells/local-shape-043-preserve-gestalt
+57d13d044d1c	local-shape-043	lineage-seed	713432	cells/local-shape-043-lineage-seed
+c847242fc73c	local-shape-061	preserve-gestalt	713611	cells/local-shape-061-preserve-gestalt
+144c4e3eeaef	local-shape-061	lineage-seed	713612	cells/local-shape-061-lineage-seed
+2444f5f22a73	local-shape-069	preserve-gestalt	713691	cells/local-shape-069-preserve-gestalt
+e3a84ed58eb9	local-shape-069	lineage-seed	713692	cells/local-shape-069-lineage-seed
+543a49d7aa01	local-shape-073	preserve-gestalt	713731	cells/local-shape-073-preserve-gestalt
+8efc394a6dd8	local-shape-073	lineage-seed	713732	cells/local-shape-073-lineage-seed
+

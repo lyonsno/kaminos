@@ -1,0 +1,10 @@
+Failure phase: primary-output validation after Greenroom execution.
+
+`gpu-greenroom submit -p` consumes one parameter list. Repeating `-p` retained only the final list, leaving `{prompt_file}` unsubstituted and every other requested override at its default. The effective route and stdout exposed the mismatch:
+
+- effective route contained `--prompt-file {prompt_file}`;
+- stdout said `Prompt file does not exist: {prompt_file}`;
+- the mflux wrapper nevertheless exited zero;
+- Greenroom therefore recorded `done` while no `output.png` existed.
+
+No image from this attempt was accepted. The rerun passes every `key=value` pair after one `-p`, then requires a non-empty primary output before visual inspection.

@@ -1,0 +1,36 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-basin-assay.v0",
+  "purpose": "Map gestalt adherence versus model-prior invention across heterogeneous, identity-free Digi-derived silhouette descendants.",
+  "sourceCorpus": "../lirm-silhouette-archetype-corpus-digiapi-full-v0",
+  "sourceShapeSpace": "../lirm-silhouette-local-shape-space-digiapi-full-v0",
+  "sourceConditioning": "../lirm-silhouette-extrusion-conditioning-digiapi-v0",
+  "sourceRoute": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+  "model": "flux2-klein-9b",
+  "quantize": 4,
+  "width": 512,
+  "height": 512,
+  "steps": 8,
+  "guidance": 1.0,
+  "shapes": [
+    "local-shape-018",
+    "local-shape-032",
+    "local-shape-033",
+    "local-shape-039",
+    "local-shape-067",
+    "local-shape-073",
+    "local-shape-085",
+    "local-shape-091"
+  ],
+  "stances": {
+    "preserve-gestalt": "prompts/preserve-gestalt.txt",
+    "lineage-seed": "prompts/lineage-seed.txt"
+  },
+  "seedRule": "714000 + shape numeric id * 10 + stance index",
+  "acceptance": {
+    "routeIdentity": "Greenroom receipt proves the effective mflux Flux2 edit runner and effective parameters.",
+    "visual": "One coherent organism; source gestalt remains legible or the departure discovers a useful adjacent creature basin; no icon or symbol collapse.",
+    "downstream": "Only visually inspected strong cells may become Trellis candidates."
+  }
+}
+

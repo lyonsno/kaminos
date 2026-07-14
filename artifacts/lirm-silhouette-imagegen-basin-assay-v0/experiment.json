@@ -1,0 +1,33 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-basin-assay.v0",
+  "purpose": "Map gestalt adherence versus model-prior invention from actual 3D silhouette-extrusion scaffolds.",
+  "sourceRoute": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+  "model": "flux2-klein-9b",
+  "quantize": 4,
+  "width": 512,
+  "height": 512,
+  "steps": 8,
+  "guidance": 1.0,
+  "shapes": [
+    "local-shape-004",
+    "local-shape-013",
+    "local-shape-022",
+    "local-shape-031",
+    "local-shape-043",
+    "local-shape-061",
+    "local-shape-069",
+    "local-shape-073"
+  ],
+  "stances": {
+    "preserve-gestalt": "prompts/preserve-gestalt.txt",
+    "lineage-seed": "prompts/lineage-seed.txt"
+  },
+  "seedRule": "713000 + shape numeric id * 10 + stance index",
+  "acceptance": {
+    "routeIdentity": "receipt proves mflux Flux2 edit runner and requested effective parameters",
+    "visual": "one coherent organism; source gestalt legible or useful generative departure; no icon/symbol collapse",
+    "downstream": "strong cells become Trellis candidates only after visual inspection"
+  }
+}
+
