@@ -572,6 +572,13 @@ function validateRequestedFirePresentation({ requestedPresentation, firingId, ex
   if (requestedPresentation !== 'hybrid-smoke-preview') return [];
   const failures = [];
   const hybridMode = 'learned-splat-flame-raymarched-smoke';
+  const compositorIdentity = 'splat-depth-conditioned-front-back-smoke-compositor-v1';
+  const compositorApproximation = 'splat-depth-conditioned-raymarched-front-back-smoke-intervals';
+  const depthSplit = 'per-pixel-transformed-splat-depth-raymarch-split-v1';
+  const phaseAuthority = 'shared-current-single-simulator-no-instance-smoke-history';
+  const splatLayerIdentity = 'premultiplied-hdr-splat-radiance-alpha-linear-depth-moments-v0';
+  const smokeLayerIdentity = 'raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1';
+  const smokeIntervals = ['front-of-splat-depth', 'back-of-splat-depth'];
   if (!expected) failures.push('expected-presentation-missing');
   if (expected && expected.effectiveMode !== hybridMode) failures.push('expected-presentation-mode-mismatch');
   if (expected?.firingId && expected.firingId !== firingId) failures.push('expected-presentation-firing-id-mismatch');
@@ -580,6 +587,32 @@ function validateRequestedFirePresentation({ requestedPresentation, firingId, ex
   if (effective.requestedMode !== hybridMode) failures.push('requested-presentation-mode-mismatch');
   if (effective.effectiveMode !== hybridMode) failures.push('effective-presentation-mode-mismatch');
   if (effective.fallbackReason) failures.push('effective-presentation-fallback-present');
+  if (effective.hybridSplatSmokeCompositorIdentity !== compositorIdentity) {
+    failures.push('effective-presentation-compositor-identity-mismatch');
+  }
+  if (effective.hybridSplatSmokeApproximation !== compositorApproximation) {
+    failures.push('effective-presentation-compositor-approximation-mismatch');
+  }
+  if (effective.splatDepthConditionedSmokeSplit !== depthSplit) {
+    failures.push('effective-presentation-depth-split-mismatch');
+  }
+  if (effective.hybridSmokePhaseAuthority !== phaseAuthority) {
+    failures.push('effective-presentation-phase-authority-mismatch');
+  }
+  if (effective.hybridSplatLayer?.identity !== splatLayerIdentity) {
+    failures.push('effective-presentation-splat-layer-missing');
+  }
+  if (effective.hybridSmokeLayer?.identity !== smokeLayerIdentity) {
+    failures.push('effective-presentation-smoke-layer-missing');
+  }
+  if (!Array.isArray(effective.hybridSmokeLayer?.intervals)
+    || effective.hybridSmokeLayer.intervals.length !== smokeIntervals.length
+    || effective.hybridSmokeLayer.intervals.some((interval, index) => interval !== smokeIntervals[index])) {
+    failures.push('effective-presentation-smoke-intervals-mismatch');
+  }
+  if (effective.hybridSmokeLayer?.opticalComposition !== 'front-smoke>splat>back-smoke') {
+    failures.push('effective-presentation-optical-composition-mismatch');
+  }
   const candidateEvidencePresent = Number.isFinite(effective.candidateCount)
     && Number.isFinite(effective.candidateCapacity)
     && effective.candidateCount >= 0

@@ -152,6 +152,18 @@ const learnedHybridPresentation = {
   candidateOverflow: 0,
   candidateCopyBytes: 0,
   fallbackReason: null,
+  hybridSplatSmokeCompositorIdentity: 'splat-depth-conditioned-front-back-smoke-compositor-v1',
+  hybridSplatSmokeApproximation: 'splat-depth-conditioned-raymarched-front-back-smoke-intervals',
+  splatDepthConditionedSmokeSplit: 'per-pixel-transformed-splat-depth-raymarch-split-v1',
+  hybridSmokePhaseAuthority: 'shared-current-single-simulator-no-instance-smoke-history',
+  hybridSplatLayer: {
+    identity: 'premultiplied-hdr-splat-radiance-alpha-linear-depth-moments-v0',
+  },
+  hybridSmokeLayer: {
+    identity: 'raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1',
+    intervals: ['front-of-splat-depth', 'back-of-splat-depth'],
+    opticalComposition: 'front-smoke>splat>back-smoke',
+  },
   raster: {
     radius: 0.8,
     sharpness: 6.5,
@@ -322,6 +334,12 @@ const hybrid = episodeHarness({
     flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
     smokeRendererIdentity: 'native-3d-compute-fluid-raymarch-v0',
     learnedModelIdentity: learnedHybridPresentation.learnedModelIdentity,
+    hybridSplatSmokeCompositorIdentity: learnedHybridPresentation.hybridSplatSmokeCompositorIdentity,
+    hybridSplatSmokeApproximation: learnedHybridPresentation.hybridSplatSmokeApproximation,
+    splatDepthConditionedSmokeSplit: learnedHybridPresentation.splatDepthConditionedSmokeSplit,
+    hybridSmokePhaseAuthority: learnedHybridPresentation.hybridSmokePhaseAuthority,
+    hybridSplatLayer: learnedHybridPresentation.hybridSplatLayer,
+    hybridSmokeLayer: learnedHybridPresentation.hybridSmokeLayer,
     requireNoFallback: true,
     requireZeroOverflow: true,
     requireCandidateEvidence: true,
@@ -336,6 +354,12 @@ assert.equal(hybridReport.status, 'verified');
 assert.equal(hybridReport.effectiveFirePresentation.schema, 'kaminos.kiln-fire-presentation.v0');
 assert.equal(hybridReport.effectiveFirePresentation.effectiveMode, 'learned-splat-flame-raymarched-smoke');
 assert.equal(hybridReport.effectiveFirePresentation.candidateOverflow, 0);
+assert.equal(hybridReport.effectiveFirePresentation.hybridSplatSmokeCompositorIdentity, learnedHybridPresentation.hybridSplatSmokeCompositorIdentity);
+assert.equal(hybridReport.effectiveFirePresentation.hybridSplatSmokeApproximation, learnedHybridPresentation.hybridSplatSmokeApproximation);
+assert.equal(hybridReport.effectiveFirePresentation.splatDepthConditionedSmokeSplit, learnedHybridPresentation.splatDepthConditionedSmokeSplit);
+assert.equal(hybridReport.effectiveFirePresentation.hybridSmokePhaseAuthority, learnedHybridPresentation.hybridSmokePhaseAuthority);
+assert.deepEqual(hybridReport.effectiveFirePresentation.hybridSplatLayer, learnedHybridPresentation.hybridSplatLayer);
+assert.deepEqual(hybridReport.effectiveFirePresentation.hybridSmokeLayer, learnedHybridPresentation.hybridSmokeLayer);
 assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.identity, 'foreground-kiln-fire-episode-hooks-v0');
 assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.firingId, 'firing-0713-a');
 assert.equal(hybridReport.effectiveFirePresentation.fireEpisodeHooks.routeIdentity.compositionRequested, 'hybrid-smoke');
@@ -598,6 +622,118 @@ const partialCandidateReport = partialCandidateEvidence.episode.finish({ phase: 
 assert.equal(partialCandidateReport.status, 'invalid');
 assert.ok(partialCandidateReport.failures.includes('effective-fire-presentation-mismatch'));
 assert.equal(partialCandidateReport.firePresentationMismatchSamples[0].reasons.includes('candidate-evidence-missing'), true);
+
+const callerOwnedExpectedPresentation = {
+  ...learnedHybridPresentation,
+  hybridSplatLayer: { ...learnedHybridPresentation.hybridSplatLayer },
+  hybridSmokeLayer: {
+    ...learnedHybridPresentation.hybridSmokeLayer,
+    intervals: [...learnedHybridPresentation.hybridSmokeLayer.intervals],
+  },
+  requireNoFallback: true,
+  requireZeroOverflow: true,
+  requireCandidateEvidence: true,
+  requireTimingAuthority: true,
+  requireFireEpisodeHooks: true,
+};
+const legacyCompositorPresentation = {
+  ...learnedHybridPresentation,
+  hybridSplatSmokeCompositorIdentity: 'single-representative-depth-splat-smoke-compositor-v0',
+  hybridSmokeLayer: {
+    ...learnedHybridPresentation.hybridSmokeLayer,
+    intervals: ['front-of-splat-depth'],
+  },
+};
+const mutableExpectationEpisode = episodeHarness({
+  firePresentation: legacyCompositorPresentation,
+  expectedFirePresentation: callerOwnedExpectedPresentation,
+});
+mutableExpectationEpisode.episode.start();
+callerOwnedExpectedPresentation.hybridSplatSmokeCompositorIdentity = legacyCompositorPresentation.hybridSplatSmokeCompositorIdentity;
+callerOwnedExpectedPresentation.hybridSmokeLayer.intervals.splice(1, 1);
+mutableExpectationEpisode.advance();
+const mutableExpectationReport = mutableExpectationEpisode.episode.finish({ phase: 'complete' });
+assert.equal(mutableExpectationReport.status, 'invalid');
+assert.ok(mutableExpectationReport.failures.includes('effective-fire-presentation-mismatch'));
+assert.ok(mutableExpectationReport.firePresentationMismatchSamples.some(sample => (
+  sample.reasons.includes('hybrid-splat-smoke-compositor-identity-mismatch')
+  && sample.reasons.includes('hybrid-smoke-intervals-mismatch')
+)));
+assert.equal(
+  mutableExpectationReport.expectedFirePresentation.hybridSplatSmokeCompositorIdentity,
+  learnedHybridPresentation.hybridSplatSmokeCompositorIdentity,
+);
+assert.deepEqual(
+  mutableExpectationReport.expectedFirePresentation.hybridSmokeLayer.intervals,
+  learnedHybridPresentation.hybridSmokeLayer.intervals,
+);
+
+const returnedMismatchAliasEpisode = episodeHarness({
+  firePresentation: {
+    ...learnedHybridPresentation,
+    hybridSmokeLayer: {
+      ...learnedHybridPresentation.hybridSmokeLayer,
+      intervals: ['front-of-splat-depth'],
+    },
+  },
+  expectedFirePresentation: {
+    ...learnedHybridPresentation,
+    hybridSplatLayer: { ...learnedHybridPresentation.hybridSplatLayer },
+    hybridSmokeLayer: {
+      ...learnedHybridPresentation.hybridSmokeLayer,
+      intervals: [...learnedHybridPresentation.hybridSmokeLayer.intervals],
+    },
+  },
+});
+returnedMismatchAliasEpisode.episode.start();
+returnedMismatchAliasEpisode.advance();
+const firstMismatchAliasReport = returnedMismatchAliasEpisode.episode.finish({ phase: 'complete' });
+assert.equal(firstMismatchAliasReport.status, 'invalid');
+assert.ok(firstMismatchAliasReport.firePresentationMismatchSamples.every(sample => (
+  sample.reasons.includes('hybrid-smoke-intervals-mismatch')
+)));
+for (const sample of firstMismatchAliasReport.firePresentationMismatchSamples) {
+  sample.firePresentation.hybridSmokeLayer.intervals.push('back-of-splat-depth');
+}
+const secondMismatchAliasReport = returnedMismatchAliasEpisode.episode.report({ phase: 'complete' });
+assert.equal(secondMismatchAliasReport.status, 'invalid');
+assert.ok(secondMismatchAliasReport.failures.includes('effective-fire-presentation-mismatch'));
+assert.ok(secondMismatchAliasReport.firePresentationMismatchSamples.every(sample => (
+  sample.reasons.includes('hybrid-smoke-intervals-mismatch')
+)));
+
+for (const [effectiveCandidateEvidence, expectedReason] of [
+  [{ candidateCopyBytes: 4096 }, 'candidate-copy-present'],
+  [{ candidateCount: 0 }, 'candidate-set-empty'],
+]) {
+  const candidateAuthorityEpisode = episodeHarness({
+    firePresentation: {
+      ...learnedHybridPresentation,
+      ...effectiveCandidateEvidence,
+    },
+    expectedFirePresentation: {
+      ...learnedHybridPresentation,
+      hybridSplatLayer: { ...learnedHybridPresentation.hybridSplatLayer },
+      hybridSmokeLayer: {
+        ...learnedHybridPresentation.hybridSmokeLayer,
+        intervals: [...learnedHybridPresentation.hybridSmokeLayer.intervals],
+      },
+      requireNoFallback: true,
+      requireZeroOverflow: true,
+      requireCandidateEvidence: true,
+      requireZeroCandidateCopy: true,
+      requireNonEmptyCandidateSet: true,
+    },
+  });
+  candidateAuthorityEpisode.episode.start();
+  candidateAuthorityEpisode.advance();
+  const candidateAuthorityReport = candidateAuthorityEpisode.episode.finish({ phase: 'complete' });
+  assert.equal(candidateAuthorityReport.status, 'invalid');
+  assert.ok(candidateAuthorityReport.failures.includes('effective-fire-presentation-mismatch'));
+  assert.ok(candidateAuthorityReport.firePresentationMismatchSamples.every(sample => (
+    sample.reasons.includes(expectedReason)
+  )));
+}
 
 const identityOnlyHooks = episodeHarness({
   firePresentation: {

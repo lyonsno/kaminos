@@ -44,6 +44,18 @@ const hybridState = {
   boundarySplatCompositionRequested: 'hybrid-smoke',
   boundarySplatCompositionEffective: 'hybrid-smoke',
   boundarySplatCompositionFallbackReason: null,
+  hybridSplatSmokeCompositorIdentity: 'splat-depth-conditioned-front-back-smoke-compositor-v1',
+  hybridSplatSmokeApproximation: 'splat-depth-conditioned-raymarched-front-back-smoke-intervals',
+  splatDepthConditionedSmokeSplit: 'per-pixel-transformed-splat-depth-raymarch-split-v1',
+  hybridSmokePhaseAuthority: 'shared-current-single-simulator-no-instance-smoke-history',
+  hybridSplatLayer: {
+    identity: 'premultiplied-hdr-splat-radiance-alpha-linear-depth-moments-v0',
+  },
+  hybridSmokeLayer: {
+    identity: 'raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1',
+    intervals: ['front-of-splat-depth', 'back-of-splat-depth'],
+    opticalComposition: 'front-smoke>splat>back-smoke',
+  },
   boundarySplatRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
   boundarySplatAttributeModelIdentity: 'sha256:model-0713',
   boundarySidecarIdentity: 'baked-boundary-sidecar-v0',
@@ -76,6 +88,15 @@ assert.equal(presentation.candidateCapacity, 2048);
 assert.equal(presentation.candidateOverflow, 0);
 assert.equal(presentation.candidateCopyBytes, 0);
 assert.equal(presentation.fallbackReason, null);
+assert.equal(presentation.hybridSplatSmokeCompositorIdentity, hybridState.hybridSplatSmokeCompositorIdentity);
+assert.equal(presentation.hybridSplatSmokeApproximation, hybridState.hybridSplatSmokeApproximation);
+assert.equal(presentation.splatDepthConditionedSmokeSplit, hybridState.splatDepthConditionedSmokeSplit);
+assert.equal(presentation.hybridSmokePhaseAuthority, hybridState.hybridSmokePhaseAuthority);
+assert.deepEqual(presentation.hybridSplatLayer, hybridState.hybridSplatLayer);
+assert.deepEqual(presentation.hybridSmokeLayer, hybridState.hybridSmokeLayer);
+assert.notEqual(presentation.hybridSplatLayer, hybridState.hybridSplatLayer);
+assert.notEqual(presentation.hybridSmokeLayer, hybridState.hybridSmokeLayer);
+assert.notEqual(presentation.hybridSmokeLayer.intervals, hybridState.hybridSmokeLayer.intervals);
 assert.equal(presentation.raster.radius, 0.8);
 assert.equal(presentation.raster.sharpness, 6.5);
 assert.equal(presentation.timing.authority, 'boundary-splat-stage-gpu-timestamp-profile-v0');
@@ -103,7 +124,15 @@ assert.equal(expected.effectiveMode, 'learned-splat-flame-raymarched-smoke');
 assert.equal(expected.requireNoFallback, true);
 assert.equal(expected.requireZeroOverflow, true);
 assert.equal(expected.requireCandidateEvidence, true);
+assert.equal(expected.requireZeroCandidateCopy, true);
+assert.equal(expected.requireNonEmptyCandidateSet, true);
 assert.equal(expected.requireFireEpisodeHooks, true);
+assert.equal(expected.hybridSplatSmokeCompositorIdentity, hybridState.hybridSplatSmokeCompositorIdentity);
+assert.equal(expected.hybridSplatSmokeApproximation, hybridState.hybridSplatSmokeApproximation);
+assert.equal(expected.splatDepthConditionedSmokeSplit, hybridState.splatDepthConditionedSmokeSplit);
+assert.equal(expected.hybridSmokePhaseAuthority, hybridState.hybridSmokePhaseAuthority);
+assert.deepEqual(expected.hybridSplatLayer, hybridState.hybridSplatLayer);
+assert.deepEqual(expected.hybridSmokeLayer, hybridState.hybridSmokeLayer);
 
 assert.throws(
   () => createKilnFirePresentation({ firingId: '', state: hybridState }),
@@ -115,6 +144,7 @@ let readinessNow = 0;
 let readinessFrame = 0;
 const readinessStates = [
   { ...hybridState, boundarySplatCandidateCount: null, boundarySplatOverflowCount: null },
+  { ...hybridState, boundarySplatCandidateCount: 0 },
   hybridState,
 ];
 const readyPresentation = await waitForHybridKilnFirePresentation({
@@ -129,7 +159,7 @@ const readyPresentation = await waitForHybridKilnFirePresentation({
   timeoutMs: 100,
 });
 assert.equal(readyPresentation.candidateCount, 1200);
-assert.equal(readinessFrame, 1, 'readiness waits only until effective candidate evidence exists');
+assert.equal(readinessFrame, 2, 'readiness waits until the effective candidate set is nonempty');
 
 await assert.rejects(
   () => waitForHybridKilnFirePresentation({

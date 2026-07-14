@@ -2896,7 +2896,11 @@ import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNo
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
-import { createForegroundKilnHeartbeatEpisode, foregroundKilnStartAllowsPipeline } from './lib/foreground-kiln-heartbeat.mjs';
+import {
+  createForegroundKilnHeartbeatEpisode,
+  firePresentationMismatchReasons,
+  foregroundKilnStartAllowsPipeline,
+} from './lib/foreground-kiln-heartbeat.mjs';
 import {
   HYBRID_KILN_FIRE_PRESENTATION_MODE,
   createExpectedHybridKilnFirePresentation,
@@ -18222,6 +18226,9 @@ function classifyKilnFiringEvidence({
         failures.push('fire-presentation-effective-mode-mismatch');
       }
       if (effectivePresentation?.fallbackReason) failures.push('fire-presentation-fallback-present');
+      for (const reason of firePresentationMismatchReasons(expectedPresentation, effectivePresentation)) {
+        failures.push(`fire-presentation-${reason}`);
+      }
     }
     if (required) {
       const correlation = heartbeat.sharpDutyCorrelation;

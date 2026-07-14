@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
+import { firePresentationMismatchReasons } from '../lib/foreground-kiln-heartbeat.mjs';
+
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 const firingEvidenceClassifierSource = index.match(
@@ -10,6 +12,7 @@ const firingEvidenceClassifierSource = index.match(
 assert.ok(firingEvidenceClassifierSource, 'Generate route must expose a testable firing-evidence classifier');
 const classifyKilnFiringEvidence = vm.runInNewContext(
   `(${firingEvidenceClassifierSource[0].replace(/^function /, 'function ')})`,
+  { firePresentationMismatchReasons },
 );
 const validFiringEvidence = classifyKilnFiringEvidence({
   required: true,
@@ -80,6 +83,80 @@ const hybridExpectationMissing = classifyKilnFiringEvidence({
 });
 assert.equal(hybridExpectationMissing.ok, false);
 assert.ok(hybridExpectationMissing.failures.includes('fire-presentation-expectation-missing'));
+
+const exactHybridExpectedPresentation = {
+  firingId: 'firing-current',
+  effectiveMode: 'learned-splat-flame-raymarched-smoke',
+  hybridSplatSmokeCompositorIdentity: 'splat-depth-conditioned-front-back-smoke-compositor-v1',
+  hybridSplatSmokeApproximation: 'splat-depth-conditioned-raymarched-front-back-smoke-intervals',
+  splatDepthConditionedSmokeSplit: 'per-pixel-transformed-splat-depth-raymarch-split-v1',
+  hybridSmokePhaseAuthority: 'shared-current-single-simulator-no-instance-smoke-history',
+  hybridSplatLayer: {
+    identity: 'premultiplied-hdr-splat-radiance-alpha-linear-depth-moments-v0',
+  },
+  hybridSmokeLayer: {
+    identity: 'raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1',
+    intervals: ['front-of-splat-depth', 'back-of-splat-depth'],
+    opticalComposition: 'front-smoke>splat>back-smoke',
+  },
+  requireNoFallback: true,
+  requireZeroOverflow: true,
+  requireCandidateEvidence: true,
+  requireZeroCandidateCopy: true,
+  requireNonEmptyCandidateSet: true,
+};
+const wrongHybridCompositorEvidence = classifyKilnFiringEvidence({
+  firingId: 'firing-current',
+  requiredPresentationMode: 'learned-splat-flame-raymarched-smoke',
+  heartbeat: {
+    status: 'verified',
+    firingId: 'firing-current',
+    expectedFirePresentation: exactHybridExpectedPresentation,
+    effectiveFirePresentation: {
+      ...exactHybridExpectedPresentation,
+      schema: 'kaminos.kiln-fire-presentation.v0',
+      hybridSplatSmokeCompositorIdentity: 'single-representative-depth-splat-smoke-compositor-v0',
+      hybridSmokeLayer: {
+        ...exactHybridExpectedPresentation.hybridSmokeLayer,
+        intervals: ['front-of-splat-depth'],
+      },
+      candidateCount: 2048,
+      candidateCapacity: 4096,
+      candidateOverflow: 0,
+      fallbackReason: null,
+    },
+  },
+});
+assert.equal(wrongHybridCompositorEvidence.ok, false);
+assert.ok(wrongHybridCompositorEvidence.failures.includes('fire-presentation-hybrid-splat-smoke-compositor-identity-mismatch'));
+assert.ok(wrongHybridCompositorEvidence.failures.includes('fire-presentation-hybrid-smoke-intervals-mismatch'));
+
+for (const [effectiveCandidateEvidence, expectedFailure] of [
+  [{ candidateCopyBytes: 4096 }, 'fire-presentation-candidate-copy-present'],
+  [{ candidateCount: 0 }, 'fire-presentation-candidate-set-empty'],
+]) {
+  const candidateAuthorityEvidence = classifyKilnFiringEvidence({
+    firingId: 'firing-current',
+    requiredPresentationMode: 'learned-splat-flame-raymarched-smoke',
+    heartbeat: {
+      status: 'verified',
+      firingId: 'firing-current',
+      expectedFirePresentation: exactHybridExpectedPresentation,
+      effectiveFirePresentation: {
+        ...exactHybridExpectedPresentation,
+        schema: 'kaminos.kiln-fire-presentation.v0',
+        candidateCount: 2048,
+        candidateCapacity: 4096,
+        candidateOverflow: 0,
+        candidateCopyBytes: 0,
+        fallbackReason: null,
+        ...effectiveCandidateEvidence,
+      },
+    },
+  });
+  assert.equal(candidateAuthorityEvidence.ok, false);
+  assert.ok(candidateAuthorityEvidence.failures.includes(expectedFailure));
+}
 
 const nonLoadableClassifierSource = index.match(
   /function classifyKilnNonLoadableResult\([\s\S]*?\n}\n(?=\nasync function runKilnRouteBenchRoute)/,

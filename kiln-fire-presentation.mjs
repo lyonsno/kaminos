@@ -1,6 +1,22 @@
+import {
+  HYBRID_SMOKE_LAYER_IDENTITY,
+  HYBRID_SPLAT_LAYER_IDENTITY,
+  HYBRID_SPLAT_SMOKE_APPROXIMATION,
+  HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
+} from './hybrid-splat-smoke-compositor.mjs';
+
+export {
+  HYBRID_SMOKE_LAYER_IDENTITY,
+  HYBRID_SPLAT_LAYER_IDENTITY,
+  HYBRID_SPLAT_SMOKE_APPROXIMATION,
+  HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
+};
+
 export const KILN_FIRE_PRESENTATION_SCHEMA = 'kaminos.kiln-fire-presentation.v0';
 export const HYBRID_KILN_FIRE_PRESENTATION_MODE = 'learned-splat-flame-raymarched-smoke';
 export const RAYMARCHED_KILN_FIRE_PRESENTATION_MODE = 'raymarched-fire-smoke';
+export const HYBRID_SPLAT_DEPTH_SPLIT = 'per-pixel-transformed-splat-depth-raymarch-split-v1';
+export const HYBRID_SMOKE_PHASE_AUTHORITY = 'shared-current-single-simulator-no-instance-smoke-history';
 
 function finiteOrNull(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -41,6 +57,13 @@ function timingEvidence(state) {
   };
 }
 
+function cloneLayer(value) {
+  if (!value || typeof value !== 'object') return null;
+  const clone = { ...value };
+  if (Array.isArray(value.intervals)) clone.intervals = [...value.intervals];
+  return clone;
+}
+
 export function createKilnFirePresentation({ firingId, state } = {}) {
   const exactId = exactFiringId(firingId);
   const effectiveHybrid = hybridEffective(state);
@@ -70,6 +93,12 @@ export function createKilnFirePresentation({ firingId, state } = {}) {
     candidateOverflow: finiteOrNull(state?.boundarySplatOverflowCount),
     candidateCopyBytes: finiteOrNull(state?.boundarySplatCopyBytesThisFrame),
     fallbackReason,
+    hybridSplatSmokeCompositorIdentity: state?.hybridSplatSmokeCompositorIdentity || null,
+    hybridSplatSmokeApproximation: state?.hybridSplatSmokeApproximation || null,
+    splatDepthConditionedSmokeSplit: state?.splatDepthConditionedSmokeSplit || null,
+    hybridSmokePhaseAuthority: state?.hybridSmokePhaseAuthority || null,
+    hybridSplatLayer: cloneLayer(state?.hybridSplatLayer),
+    hybridSmokeLayer: cloneLayer(state?.hybridSmokeLayer),
     raster: {
       radius: finiteOrNull(state?.boundarySplatRadius ?? state?.controls?.boundarySplatRadius),
       sharpness: finiteOrNull(state?.boundarySplatSharpness ?? state?.controls?.boundarySplatSharpness),
@@ -89,9 +118,23 @@ export function createExpectedHybridKilnFirePresentation({ firingId, learnedMode
     learnedModelIdentity: learnedModelIdentity || null,
     sourceSidecarIdentity: 'baked-boundary-sidecar-v0',
     sourceSidecarAuthority: 'live-baked-sidecar-plus-fluid-material-v0',
+    hybridSplatSmokeCompositorIdentity: HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
+    hybridSplatSmokeApproximation: HYBRID_SPLAT_SMOKE_APPROXIMATION,
+    splatDepthConditionedSmokeSplit: HYBRID_SPLAT_DEPTH_SPLIT,
+    hybridSmokePhaseAuthority: HYBRID_SMOKE_PHASE_AUTHORITY,
+    hybridSplatLayer: {
+      identity: HYBRID_SPLAT_LAYER_IDENTITY,
+    },
+    hybridSmokeLayer: {
+      identity: HYBRID_SMOKE_LAYER_IDENTITY,
+      intervals: ['front-of-splat-depth', 'back-of-splat-depth'],
+      opticalComposition: 'front-smoke>splat>back-smoke',
+    },
     requireNoFallback: true,
     requireZeroOverflow: true,
     requireCandidateEvidence: true,
+    requireZeroCandidateCopy: true,
+    requireNonEmptyCandidateSet: true,
     requireFireEpisodeHooks: true,
   };
 }
@@ -119,6 +162,7 @@ export async function waitForHybridKilnFirePresentation({
     if (hardFallback) throw new Error(`Hybrid flame preview could not start: ${hardFallback}`);
     const presentation = createKilnFirePresentation({ firingId: exactId, state });
     const candidateEvidencePresent = Number.isFinite(presentation.candidateCount)
+      && presentation.candidateCount > 0
       && Number.isFinite(presentation.candidateCapacity)
       && Number.isFinite(presentation.candidateOverflow)
       && Number.isFinite(presentation.candidateCopyBytes);

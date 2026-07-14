@@ -442,6 +442,18 @@ const hybridPresentation = {
   requestedMode: 'learned-splat-flame-raymarched-smoke',
   effectiveMode: 'learned-splat-flame-raymarched-smoke',
   fallbackReason: null,
+  hybridSplatSmokeCompositorIdentity: 'splat-depth-conditioned-front-back-smoke-compositor-v1',
+  hybridSplatSmokeApproximation: 'splat-depth-conditioned-raymarched-front-back-smoke-intervals',
+  splatDepthConditionedSmokeSplit: 'per-pixel-transformed-splat-depth-raymarch-split-v1',
+  hybridSmokePhaseAuthority: 'shared-current-single-simulator-no-instance-smoke-history',
+  hybridSplatLayer: {
+    identity: 'premultiplied-hdr-splat-radiance-alpha-linear-depth-moments-v0',
+  },
+  hybridSmokeLayer: {
+    identity: 'raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1',
+    intervals: ['front-of-splat-depth', 'back-of-splat-depth'],
+    opticalComposition: 'front-smoke>splat>back-smoke',
+  },
   candidateCount: 512,
   candidateCapacity: 2048,
   candidateOverflow: 0,
@@ -473,6 +485,14 @@ for (const [effective, expectedFailure] of [
   [{ ...hybridPresentation, candidateCount: 0 }, 'effective-presentation-candidate-empty'],
   [{ ...hybridPresentation, candidateOverflow: 1 }, 'effective-presentation-candidate-overflow'],
   [{ ...hybridPresentation, candidateCopyBytes: 4096 }, 'effective-presentation-cpu-copy-present'],
+  [{ ...hybridPresentation, hybridSplatSmokeCompositorIdentity: 'single-representative-depth-splat-smoke-compositor-v0' }, 'effective-presentation-compositor-identity-mismatch'],
+  [{ ...hybridPresentation, hybridSplatSmokeApproximation: 'single-representative-depth-no-interpenetration-split' }, 'effective-presentation-compositor-approximation-mismatch'],
+  [{ ...hybridPresentation, splatDepthConditionedSmokeSplit: 'single-representative-depth-no-interpenetration-split' }, 'effective-presentation-depth-split-mismatch'],
+  [{ ...hybridPresentation, hybridSmokePhaseAuthority: 'phase-matched-instance-smoke-history' }, 'effective-presentation-phase-authority-mismatch'],
+  [{ ...hybridPresentation, hybridSplatLayer: null }, 'effective-presentation-splat-layer-missing'],
+  [{ ...hybridPresentation, hybridSmokeLayer: null }, 'effective-presentation-smoke-layer-missing'],
+  [{ ...hybridPresentation, hybridSmokeLayer: { ...hybridPresentation.hybridSmokeLayer, intervals: ['front-of-splat-depth'] } }, 'effective-presentation-smoke-intervals-mismatch'],
+  [{ ...hybridPresentation, hybridSmokeLayer: { ...hybridPresentation.hybridSmokeLayer, opticalComposition: 'smoke>splat' } }, 'effective-presentation-optical-composition-mismatch'],
 ]) {
   assert.ok(
     validateRequestedFirePresentation({
