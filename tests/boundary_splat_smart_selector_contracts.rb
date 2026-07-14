@@ -70,4 +70,25 @@ class BoundarySplatSmartSelectorContracts < Minitest::Test
     assert_match(/mode:\s*browserSession\s*\?\s*'self-launched'/, pbr_witness)
     assert_match(/browserProcessIdentity\s*=\s*discoverBrowserProcessIdentity\(port\)/, pbr_witness)
   end
+
+  def test_adaptive_lod_does_not_depend_on_indirect_first_instance_residency
+    assert_match(/BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY\s*=\s*'boundary-splat-single-global-indirect-no-first-instance-v0'/, core)
+
+    compaction = core[/function encodeBoundarySplats\([\s\S]*?\n  function encodeBoundarySplatPbrScene/, 0]
+    refute_nil(compaction, 'compaction path must be present')
+    assert_match(/copyBufferToBuffer\(\s*boundarySplatDrawBuffer,\s*0,\s*boundarySplatIndirectBuffer,\s*0,\s*BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,?\s*\)/, compaction)
+    refute_match(/copyBufferToBuffer\(\s*boundarySplatDrawGroupBuffer[\s\S]*boundarySplatIndirectBuffer/, compaction,
+      'adaptive LOD must not copy per-tier firstInstance values into indirect draw commands')
+
+    renderer = core[/function encodeBoundarySplatDraw\([\s\S]*?\n  function encodeBoundarySplatTelemetry/, 0]
+    refute_nil(renderer, 'splat render path must be present')
+    assert_match(/pass\.drawIndirect\(boundarySplatIndirectBuffer,\s*0\)/, renderer)
+    refute_match(/for\s*\(let groupIndex = 0; groupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; groupIndex \+= 1\)[\s\S]*pass\.drawIndirect/, renderer,
+      'renderer must issue one global indirect draw so tier residency is decoded in shader, not by fragile indirect firstInstance')
+
+    assert_match(/indirectDrawIdentity:\s*BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY/, core,
+      'draw-state and PBR ladder evidence must publish the indirect draw identity that protects adaptive residency')
+    assert_match(/indirectDrawIdentity:\s*draw\?\.indirectDrawIdentity/, core,
+      'PBR ladder rows must preserve the effective indirect draw identity from GPU draw-state readback')
+  end
 end

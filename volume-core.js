@@ -24,6 +24,7 @@ const BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY = 'boundary-splat-pbr-fire-field-v0
 const BOUNDARY_SPLAT_PBR_FIXED_SUBSTRATE_IDENTITY = 'operator-pretty-four-flame-substrate-v0';
 const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-nested-permutation-prefix-v0';
 const BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY = 'boundary-splat-projected-area-nested-tiers-v0';
+const BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY = 'boundary-splat-single-global-indirect-no-first-instance-v0';
 const BOUNDARY_SPLAT_SELECTOR_POLICY_CODE = 2;
 const BOUNDARY_SPLAT_SELECTOR_BUDGETS = [0, 12800, 6400, 3200, 1600, 800];
 const BOUNDARY_SPLAT_ADAPTIVE_TIER_BUDGETS = [800, 1600, 3200, 6400, 12800, 0];
@@ -9238,6 +9239,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const phaseSourceCount = Math.max(1, Math.min(historyDepth, state.boundarySplatPhaseSourceCount || 1));
     state.boundarySplatSelectorPolicyIdentity = BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY;
     state.boundarySplatSelectorPolicyId = BOUNDARY_SPLAT_SELECTOR_POLICY_CODE;
+    state.boundarySplatIndirectDrawIdentity = BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY;
     state.boundarySplatRequestedCandidateBudget = requestedCandidateBudget;
     state.boundarySplatLodMode = lodMode;
     state.boundarySplatAdaptiveLodIdentity = BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY;
@@ -9287,15 +9289,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatCopyBytesThisFrame = 0;
     state.boundarySplatCopyDisposition = makeBoundarySplatCopyDisposition(0, state.boundarySplatRendererIdentity);
     hooks.afterCandidateCopy?.();
-    for (let groupIndex = 0; groupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; groupIndex += 1) {
-      encoder.copyBufferToBuffer(
-        boundarySplatDrawGroupBuffer,
-        groupIndex * BOUNDARY_SPLAT_DRAW_GROUP_STRIDE_BYTES,
-        boundarySplatIndirectBuffer,
-        groupIndex * BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,
-        BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,
-      );
-    }
+    encoder.copyBufferToBuffer(
+      boundarySplatDrawBuffer,
+      0,
+      boundarySplatIndirectBuffer,
+      0,
+      BOUNDARY_SPLAT_INDIRECT_STRIDE_BYTES,
+    );
     hooks.afterIndirectSetup?.();
     state.boundarySplatFallbackReason = null;
     return true;
@@ -9355,9 +9355,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pass.setPipeline(targetPipeline);
     pass.setBindGroup(0, boundarySplatRenderBindGroup);
-    for (let groupIndex = 0; groupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; groupIndex += 1) {
-      pass.drawIndirect(boundarySplatIndirectBuffer, groupIndex * 16);
-    }
+    pass.drawIndirect(boundarySplatIndirectBuffer, 0);
     pass.end();
     state.boundarySplatFrameCount += 1;
     state.volumeReconstructionStyle = state.boundarySplatRendererIdentity;
@@ -9707,6 +9705,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       selectedCandidateCount: drawState[15],
       lodMode: normalizeBoundarySplatLodMode(controlsSnapshot.boundarySplatLodMode),
       adaptiveLodIdentity: BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY,
+      indirectDrawIdentity: BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY,
       tierGroups,
       globalRenderedInstanceCount: drawState[1],
       phaseMode: normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode),
@@ -9797,6 +9796,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             renderedInstanceCount: state.boundarySplatInstanceCount,
             lodMode: state.boundarySplatLodMode,
             adaptiveLodIdentity: state.boundarySplatAdaptiveLodIdentity,
+            indirectDrawIdentity: state.boundarySplatIndirectDrawIdentity,
             tierGroups: state.boundarySplatTierGroups,
             globalRenderedInstanceCount: state.boundarySplatGlobalRenderedInstanceCount,
             historyArchiveCandidateCount: state.boundarySplatHistoryArchiveCandidateCount,
@@ -9882,6 +9882,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           renderedInstanceCount: draw?.instanceCount ?? null,
           lodMode: draw?.lodMode ?? null,
           adaptiveLodIdentity: draw?.adaptiveLodIdentity ?? null,
+          indirectDrawIdentity: draw?.indirectDrawIdentity ?? null,
           tierGroups: draw?.tierGroups ?? [],
           globalRenderedInstanceCount: draw?.globalRenderedInstanceCount ?? null,
           historyArchiveCandidateCount: draw?.historyArchiveCandidateCount ?? null,
@@ -9928,6 +9929,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       compositionIdentity: state.boundarySplatCompositionIdentity,
       lodMode: state.boundarySplatLodMode,
       adaptiveLodIdentity: state.boundarySplatAdaptiveLodIdentity,
+      indirectDrawIdentity: state.boundarySplatIndirectDrawIdentity,
     };
     state.boundarySplatInstanceCostLadder = result;
     return result;
@@ -10006,6 +10008,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             renderedInstanceCount: 0,
             lodMode: normalizeBoundarySplatLodMode(controlsSnapshot.boundarySplatLodMode),
             adaptiveLodIdentity: BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY,
+            indirectDrawIdentity: BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY,
             tierGroups: [],
             globalRenderedInstanceCount: 0,
             timestampStatus: profiles.every(profile => profile.timestampStatus === 'available') ? 'available' : 'unsupported',
@@ -10032,6 +10035,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           renderedInstanceCount: draw?.instanceCount ?? null,
           lodMode: draw?.lodMode ?? null,
           adaptiveLodIdentity: draw?.adaptiveLodIdentity ?? null,
+          indirectDrawIdentity: draw?.indirectDrawIdentity ?? null,
           tierGroups: draw?.tierGroups ?? [],
           globalRenderedInstanceCount: draw?.globalRenderedInstanceCount ?? null,
           historyArchiveCandidateCount: draw?.historyArchiveCandidateCount ?? null,
@@ -10071,6 +10075,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       requestedCandidateBudget: normalizeBoundarySplatCandidateBudget(controlsBefore.boundarySplatCandidateBudget),
       lodMode: normalizeBoundarySplatLodMode(controlsBefore.boundarySplatLodMode),
       adaptiveLodIdentity: BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY,
+      indirectDrawIdentity: BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY,
       rows,
       effectiveRoute: state.effectiveRoute,
       backend: state.backend,
