@@ -2,13 +2,14 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const root = resolve(import.meta.dirname, '..');
 const probePath = join(root, 'volume-exact-basin-support-probe.py');
 const composerPath = join(root, 'volume-exact-basin-selective-compose.py');
+const phaseAlignedPackerPath = join(root, 'volume-phase-aligned-corpus-contract.py');
 
 assert.ok(existsSync(probePath), 'exact-basin support classifier probe exists');
 const source = readFileSync(probePath, 'utf8');
@@ -23,6 +24,10 @@ assert.match(source, /clamped-central-difference-matching-volume-core-wgsl-v0/, 
 assert.match(source, /full-low-context-ridge-residual-control-v0/, 'carrier probe preserves a calibrated linear-context control');
 assert.match(source, /native-low-derived-neighborhood-flow-context-v0/, 'carrier probe gives both controls free low-grid derivative context');
 assert.match(source, /validation-selected-support-conditioned-residual-gate-v0/, 'carrier probe calibrates residual weighting on validation data');
+assert.ok(existsSync(phaseAlignedPackerPath), 'phase-aligned corpus packer exists beside the carrier probe');
+const phaseAlignedPackerSource = existsSync(phaseAlignedPackerPath) ? readFileSync(phaseAlignedPackerPath, 'utf8') : '';
+assert.match(phaseAlignedPackerSource, /kaminos\.volume\.full-grid-field-pair\.v0/, 'phase-aligned packer emits the carrier probe pair schema directly');
+assert.match(phaseAlignedPackerSource, /pair-manifest\.json/, 'phase-aligned packer writes a canonical pair manifest without operator transcription');
 assert.ok(existsSync(composerPath), 'exact-basin selective-head composer exists');
 const composerSource = readFileSync(composerPath, 'utf8');
 assert.match(composerSource, /kaminos\.volume\.exact-basin-selective-composition\.v0/, 'composer emits a stable manifest schema');
@@ -194,6 +199,36 @@ function fullGridManifest(path, splats) {
 
 const fullGridPath = join(fixtureRoot, 'full-grid.json');
 fullGridManifest(fullGridPath, splatDesc);
+const packedPairDir = join(fixtureRoot, 'phase-aligned-pair');
+execFileSync('python3', [
+  phaseAlignedPackerPath,
+  '--high-manifest', fullGridPath,
+  '--out-dir', packedPairDir,
+  '--target-grid', String(lowGrid),
+  '--source-note', 'carrier probe contract fixture',
+], { stdio: 'pipe' });
+const packedCorpus = JSON.parse(readFileSync(join(packedPairDir, 'manifest.json'), 'utf8'));
+const packedPairPath = join(packedPairDir, 'pair-manifest.json');
+const packedPair = JSON.parse(readFileSync(packedPairPath, 'utf8'));
+const packedBundleReceipt = JSON.parse(readFileSync(join(packedPairDir, 'pair-bundle-receipt.json'), 'utf8'));
+assert.equal(packedPair.schema, 'kaminos.volume.full-grid-field-pair.v0');
+assert.equal(packedPair.status, 'captured');
+assert.equal(packedPair.failurePhase, null);
+assert.equal(packedPair.lowGrid, lowGrid);
+assert.equal(packedPair.highGrid, highGrid);
+assert.equal(packedPair.source.phaseAlignedCorpusSha256, sha256(readFileSync(join(packedPairDir, 'manifest.json'))));
+assert.equal(packedPair.low.fluid.sourceSha256, highFluidDesc.sha256);
+assert.equal(packedPair.low.front.sourceSha256, highFrontDesc.sha256);
+assert.equal(packedPair.high.fluid.sha256, highFluidDesc.sha256);
+assert.equal(packedPair.high.front.sha256, highFrontDesc.sha256);
+assert.equal(realpathSync(packedCorpus.probePair.path), realpathSync(packedPairPath));
+assert.equal(
+  realpathSync(packedCorpus.probePair.bundleReceiptPath),
+  realpathSync(join(packedPairDir, 'pair-bundle-receipt.json')),
+);
+assert.equal(packedBundleReceipt.corpus.sha256, sha256(readFileSync(join(packedPairDir, 'manifest.json'))));
+assert.equal(packedBundleReceipt.pair.sha256, sha256(readFileSync(packedPairPath)));
+assert.equal(packedPair.source.phaseAlignedCorpusSha256, packedBundleReceipt.corpus.sha256);
 const outDir = join(fixtureRoot, 'valid-out');
 execFileSync('python3', [
   probePath,
@@ -234,7 +269,7 @@ assert.deepEqual(preview.rowOrder, ['truthHigh', 'lowUpsampled', 'linearContext'
 const carrierOutDir = join(fixtureRoot, 'carrier-out');
 execFileSync('python3', [
   probePath,
-  '--pair-manifest', pairPath,
+  '--pair-manifest', packedPairPath,
   '--full-grid-manifest', fullGridPath,
   '--out-dir', carrierOutDir,
   '--channels', 'fireFlowVisibilityCarrier',
