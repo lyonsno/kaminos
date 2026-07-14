@@ -23,6 +23,21 @@ let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
 let sharedBrowserPid = null;
 
+process.on('SIGINT', () => {
+  writeJson(manifestPath, {
+    schema: SCHEMA,
+    identity: 'streamed-phase-aligned-selective-head-motion-production-v0',
+    status: 'failed',
+    failurePhase: 'interrupted',
+    error: 'operator interrupted producer execution',
+    lastTrustworthyEvidence,
+  });
+  if (sharedBrowserPid) {
+    try { process.kill(sharedBrowserPid, 'SIGTERM'); } catch {}
+  }
+  process.exit(130);
+});
+
 try {
   mkdirSync(outDir, { recursive: true });
   const sourceCapturePath = requiredPath('--source-capture');
@@ -266,7 +281,7 @@ function buildFramePlan(context, frameIndex) {
     '--reuse-browser',
     '--keep-browser-open',
     '--window-size', context.windowSize,
-    '--chunk-floats', '1048576',
+    '--chunk-floats', '262144',
   ];
   const highArgs = [
     join(scriptRoot, 'volume-full-grid-field-export.mjs'),

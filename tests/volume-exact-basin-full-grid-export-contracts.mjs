@@ -37,6 +37,7 @@ assert.match(exporter, /deterministicReplay/, 'exporter preserves deterministic 
 assert.match(exporter, /boundarySidecar/, 'exporter drains the active boundary-sidecar field authority');
 assert.match(exporter, /boundary-splats\.f32/, 'exporter drains the effective compact learned-splat output');
 assert.match(exporter, /failurePhase/, 'exporter writes a durable failure phase');
+assert.match(exporter, /onClose[\s\S]*rejectRequest[\s\S]*addEventListener\('close'/, 'CDP requests reject when a renderer target closes instead of hanging forever');
 assert.match(exporter, /boundarySplatComposition:\s*renderComposition/, 'imported render invocation passes the requested composition to the frozen renderer');
 assert.match(exporter, /controlOverrides:\s*renderControlOverrides/, 'imported render invocation passes structured control overrides to the frozen renderer');
 assert.match(exporter, /renderCompositionExplicit[\s\S]*boundarySplatCompositionEffective\s*!==\s*renderComposition/, 'an explicitly requested hybrid composition fails loud when the renderer reports another effective composition');

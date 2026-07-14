@@ -101,6 +101,7 @@ assert.deepEqual(manifest.frames[0].roles, [
   'selectiveCalibratedResidual',
 ]);
 assert.equal(manifest.frames[0].commands.highExport.includes('--deterministic-replay-steps 97'), true);
+assert.match(manifest.frames[0].commands.highExport, /--chunk-floats 262144/, 'producer uses the previously witnessed CDP transfer chunk instead of the renderer-resetting oversized chunk');
 assert.equal(manifest.frames[1].commands.highExport.includes('--deterministic-replay-steps 98'), true);
 assert.match(manifest.frames[0].commands.selectiveFullResidual, /--residual-scale 1/);
 assert.match(manifest.frames[0].commands.selectiveCalibratedResidual, /--residual-scale 0\.5/);
@@ -112,6 +113,7 @@ assert.equal(manifest.retention.ephemeralFieldArtifactsDeletedAfterFrameReceipt,
 assert.equal(manifest.temporalAuthority, 'consecutive-phase-aligned-per-frame-frozen-model-application-v0');
 assert.equal(manifest.recurrentPrediction, false);
 assert.equal(manifest.staticSidecarOverMovingMaterial, false);
+assert.match(readFileSync(producer, 'utf8'), /process\.on\('SIGINT'[\s\S]*interrupted/, 'operator interruption leaves a durable failed producer manifest');
 
 const badStart = run(['--start-step', '98'], 'bad-start');
 assert.notEqual(badStart.result.status, 0, 'sequence cannot skip the first post-training step');

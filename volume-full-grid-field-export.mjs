@@ -297,14 +297,29 @@ function wsRequest(ws, method, params = {}) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveRequest, rejectRequest) => {
+    const cleanup = () => {
+      ws.removeEventListener('message', onMessage);
+      ws.removeEventListener('close', onClose);
+      ws.removeEventListener('error', onError);
+    };
     const onMessage = event => {
       const message = JSON.parse(String(event.data));
       if (message.id !== id) return;
-      ws.removeEventListener('message', onMessage);
+      cleanup();
       if (message.error) rejectRequest(new Error(`${method}: ${message.error.message}`));
       else resolveRequest(message.result);
     };
+    const onClose = () => {
+      cleanup();
+      rejectRequest(new Error(`${method}: CDP WebSocket closed before response`));
+    };
+    const onError = () => {
+      cleanup();
+      rejectRequest(new Error(`${method}: CDP WebSocket error before response`));
+    };
     ws.addEventListener('message', onMessage);
+    ws.addEventListener('close', onClose, { once: true });
+    ws.addEventListener('error', onError, { once: true });
   });
 }
 
