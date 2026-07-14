@@ -67,6 +67,9 @@ const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
+const COMBUSTION_FRONT_RECEIVER_SUPPORT_IDENTITY = 'combustion-front-receiver-support-v0';
+const COMBUSTION_FRONT_RECEIVER_SUPPORT_AUTHORITY = 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0';
+const COMBUSTION_FRONT_RECEIVER_SUPPORT_CONSUMER = 'tier2-opt-in-receiver-buffer-light-pass-v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 90, 96, 128, 160];
@@ -1123,6 +1126,84 @@ function smoothstep01(edge0, edge1, value) {
   if (edge0 === edge1) return value >= edge1 ? 1 : 0;
   const t = clampFinite((value - edge0) / (edge1 - edge0), 0, 1, 0);
   return t * t * (3 - 2 * t);
+}
+
+function buildCombustionFrontReceiverSupport(metrics = {}) {
+  const atlas = metrics.reactionFrontAtlas || {};
+  const stageStats = atlas.stageStats || {};
+  const stageStat = (stage, field) => clampFinite(stageStats[stage]?.[field], 0, 1, 0);
+  const combustionFrontMean = clampFinite(metrics.combustionFrontMean, 0, 10, 0);
+  const frontTopologyMean = clampFinite(metrics.frontTopologyMean, 0, 10, 0);
+  const radianceMean = clampFinite(metrics.radianceMean, 0, 10, 0);
+  const fireLayerMean = clampFinite(metrics.fireLayerMean, 0, 10, 0);
+  const emissionDetailMean = clampFinite(metrics.emissionDetailMean, 0, 10, 0);
+  const reactionPotentialMean = stageStat('reactionPotential', 'mean');
+  const combustionFrontSupportMean = stageStat('combustionFrontSupport', 'mean');
+  const flameSupportMean = stageStat('flameSupport', 'mean');
+  const shellCandidateMean = stageStat('shellCandidate', 'mean');
+  const supportScalar = clampFinite(
+    combustionFrontMean * 5.6 +
+    frontTopologyMean * 4.8 +
+    combustionFrontSupportMean * 0.92 +
+    reactionPotentialMean * 0.72 +
+    shellCandidateMean * 0.78 +
+    flameSupportMean * 0.34 +
+    radianceMean * 0.16 +
+    fireLayerMean * 0.10,
+    0,
+    1,
+    0
+  );
+  const activeVoxelRatio = Math.max(
+    stageStat('combustionFrontSupport', 'activeVoxelRatio'),
+    stageStat('reactionPotential', 'activeVoxelRatio'),
+    stageStat('shellCandidate', 'activeVoxelRatio')
+  );
+  return {
+    identity: COMBUSTION_FRONT_RECEIVER_SUPPORT_IDENTITY,
+    authority: COMBUSTION_FRONT_RECEIVER_SUPPORT_AUTHORITY,
+    intendedConsumer: COMBUSTION_FRONT_RECEIVER_SUPPORT_CONSUMER,
+    supportRole: 'lighting-input-not-rendered-receiver-light',
+    receiverMaskAuthority: 'opt-in-receiver-buffer-required-v0',
+    supportSpace: 'simulation-grid-summary',
+    supportScalar,
+    activeVoxelRatio,
+    sourceFields: {
+      combustionFrontMean,
+      frontTopologyMean,
+      radianceMean,
+      fireLayerMean,
+      emissionDetailMean,
+      combustionFrontSupportMean,
+      reactionPotentialMean,
+      flameSupportMean,
+      shellCandidateMean,
+    },
+    suggestedEmitterCentroid: {
+      x: clampFinite(metrics.fireCenterX, -1, 1, 0),
+      y: clampFinite(metrics.fireCenterY, -1, 1, 0),
+      z: clampFinite(metrics.fireCenterZ, -1, 1, 0),
+      authority: 'fire-weighted-sim-readback-centroid-diagnostic',
+    },
+    verticalSupport: {
+      sourceY: clampFinite(metrics.sourceY, -1, 1, 0),
+      frontTopologyCenterHeight: clampFinite(metrics.frontTopologyCenterHeight, -2, 2, 0),
+      frontTopologyHeightSpread: clampFinite(metrics.frontTopologyHeightSpread, 0, 2, 0),
+      combustionFrontRisingBodyRatio: clampFinite(metrics.combustionFrontRisingBodyRatio, 0, 1, 0),
+      frontTopologyRisingBodyRatio: clampFinite(metrics.frontTopologyRisingBodyRatio, 0, 1, 0),
+    },
+    atlas: {
+      schema: atlas.schema || null,
+      identity: atlas.identity || null,
+      stageIdentity: atlas.stageIdentity || null,
+      mode: atlas.mode || null,
+      coordinateSpace: atlas.coordinateSpace || null,
+    },
+    futureAcceleration: {
+      identity: 'planned-spatial-support-laplacian-integral-raymarch-v0',
+      status: 'expected-upstream-acceleration-not-required-for-receipt',
+    },
+  };
 }
 
 function normalizeReactionFrontAtlasControls(controls = {}) {
@@ -12749,6 +12830,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const frontTopologyFlameDetailCoupling = frontTopologyWeightSum > 0 ? frontTopologyFlameDetailCouplingSum / frontTopologyWeightSum : 0;
     const frontTopologyFireLickCoupling = frontTopologyWeightSum > 0 ? frontTopologyFireLickCouplingSum / frontTopologyWeightSum : 0;
     const frontTopologyVisibleTransferLoss = Math.max(0, frontTopologyRisingBodyRatio - fireRisingBodyRatio) * (1 - Math.min(1, frontTopologyFlameDetailCoupling));
+    const receiverSupport = buildCombustionFrontReceiverSupport({
+      reactionFrontAtlas,
+      sourceY: sourceYNorm,
+      combustionFrontMean: combustionFrontSum / Math.max(1, samples),
+      frontTopologyMean: frontTopologySum / Math.max(1, samples),
+      radianceMean: radianceSum / Math.max(1, samples),
+      fireLayerMean: fireLayerSum / Math.max(1, samples),
+      emissionDetailMean: emissionDetailSum / Math.max(1, samples),
+      fireCenterX,
+      fireCenterY,
+      fireCenterZ,
+      frontTopologyCenterHeight,
+      frontTopologyHeightSpread,
+      combustionFrontRisingBodyRatio,
+      frontTopologyRisingBodyRatio,
+    });
     return {
       grid: gridSize,
       gridLabel: state.simGridLabel,
@@ -12805,6 +12902,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       canonicalSmokeFieldSlice,
       reactionFrontStageIdentity: REACTION_FRONT_STAGE_IDENTITY,
       reactionFrontAtlas,
+      receiverSupport,
       emissionDetailCurlContact,
       emissionDetailVerticalCoherence,
       emissionDetailBodyBreadth,

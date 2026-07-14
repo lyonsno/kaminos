@@ -179,6 +179,11 @@ assert.equal(crossingBackInterval.fallbackReason, 'smoke-back-interval-crosses-s
 
 assert.match(page, /volume-boundary-splat-composition/, 'operator cockpit exposes splat-only versus hybrid-smoke composition');
 assert.match(page, /volume_boundary_splat_composition/, 'composition mode is preserved in the URL route');
+assert.doesNotMatch(
+  page,
+  /params\.has\('volume_boundary_splat_composition'\)\s*&&\s*boundarySplatFieldLayoutRouteValue\(params\)\s*===\s*'proof'/,
+  'hybrid-smoke composition routes must apply independently of the legacy field-layout alias gate',
+);
 assert.match(core, /HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY/, 'runtime names the hybrid compositor identity');
 assert.match(core, /HYBRID_SMOKE_RENDERER_IDENTITY\s*=\s*'native-3d-compute-fluid-raymarch-smoke-only-v0'/, 'runtime names independent smoke authority');
 assert.match(core, /boundarySplatHybridFs/, 'splat raster emits a dedicated hybrid radiance and depth-moment layer');

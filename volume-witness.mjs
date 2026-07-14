@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { deflateSync, inflateSync as zlibInflateSync } from 'node:zlib';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
@@ -162,7 +162,7 @@ const controlledStepDir = resolve(args.get('--controlled-step-dir') || renderSca
 const controlledStepPrefix = String(args.get('--controlled-step-prefix') || 'controlled-step-sequence');
 const freezeIntegrityProbeRequested = args.has('--freeze-integrity-probe') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe') || '1').toLowerCase());
 const freezeIntegrityProbeOnly = freezeIntegrityProbeRequested && args.has('--freeze-integrity-probe-only') && !['0', 'false', 'no'].includes(String(args.get('--freeze-integrity-probe-only') || '1').toLowerCase());
-const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume']);
+const VALID_EVIDENCE_MODES = new Set(['fire-volume', 'performance', 'pyro-material', 'no-fire-volume', 'receiver-support', 'receiver-light-isolate', 'receiver-light-brick-wall']);
 const evidenceMode = args.get('--evidence-mode') || 'fire-volume';
 if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
   throw new Error(`Unknown witness evidence mode: ${evidenceMode}`);
@@ -170,11 +170,19 @@ if (!VALID_EVIDENCE_MODES.has(evidenceMode)) {
 const expectsPerformanceVolumeEvidence = evidenceMode === 'performance';
 const expectsPyroMaterialEvidence = evidenceMode === 'pyro-material';
 const expectsNoFireVolumeEvidence = evidenceMode === 'no-fire-volume';
+const expectsReceiverSupportEvidence = evidenceMode === 'receiver-support';
+const expectsReceiverLightIsolateEvidence = evidenceMode === 'receiver-light-isolate';
+const expectsReceiverLightBrickWallEvidence = evidenceMode === 'receiver-light-brick-wall';
+const expectsRenderedReceiverLightEvidence = expectsReceiverLightIsolateEvidence || expectsReceiverLightBrickWallEvidence;
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
   ? 'no-fire-volume-signal'
-  : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'));
+  : (expectsRenderedReceiverLightEvidence
+      ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate')
+      : (expectsReceiverSupportEvidence
+      ? 'receiver-support-sim-readback'
+      : (expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : (expectsPerformanceVolumeEvidence ? 'performance-volume-signal' : 'fire-volume'))));
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_PRESSURE2 = 'tall-plume-pressure2-v0';
 const TALL_PLUME_PRESSURE_ITERATION_STRATEGY_INACTIVE = 'inactive';
 const TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY = 'tall-plume-spatial-pressure-tiers-v0';
@@ -238,6 +246,11 @@ function normalizeRuntimeQuality(value) {
   if (['impostor', 'imposter', 'emergency', 'fallback', 'prerender'].includes(normalized)) return 'impostor';
   if (normalized === 'auto') return 'auto';
   return 'live_high';
+}
+
+function normalizeVolumeSceneContext(value) {
+  const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
+  return normalized === 'brick_wall' ? 'brick_wall' : 'none';
 }
 
 function runtimeQualityFromPressure(requested, gpuPressure) {
@@ -505,7 +518,44 @@ function expectedTallPlumePressureTierStrategy(volumeScene, pressureStrategy) {
     : TALL_PLUME_SPATIAL_PRESSURE_TIER_STRATEGY_INACTIVE;
 }
 
-const routeParams = buildRouteParamsForWitness(url, captureReplay);
+const routeParams = new URL(url).searchParams;
+const expectedVolumeSceneContext = normalizeVolumeSceneContext(routeParams.get('volume_scene_context'));
+const expectsVolumeBrickWallSceneContext = expectedVolumeSceneContext === 'brick_wall';
+const BRICK_WALL_GREENROOM_SOURCE_PATH = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb';
+const BRICK_WALL_STATIC_ROUTE_PATH = 'local-assets/greenroom/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb';
+const BRICK_WALL_STATIC_ROUTE_URL = '/local-assets/greenroom/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb';
+
+function ensureBrickWallLocalAssetMount() {
+  const mountPath = resolve(BRICK_WALL_STATIC_ROUTE_PATH);
+  if (!existsSync(BRICK_WALL_GREENROOM_SOURCE_PATH)) {
+    throw new Error(`brick-wall Greenroom GLB source is missing: ${BRICK_WALL_GREENROOM_SOURCE_PATH}`);
+  }
+  mkdirSync(dirname(mountPath), { recursive: true });
+  if (existsSync(mountPath)) {
+    const stat = lstatSync(mountPath);
+    if (stat.isSymbolicLink()) {
+      const target = readlinkSync(mountPath);
+      if (target !== BRICK_WALL_GREENROOM_SOURCE_PATH) {
+        unlinkSync(mountPath);
+        symlinkSync(BRICK_WALL_GREENROOM_SOURCE_PATH, mountPath);
+      }
+    } else if (!stat.isFile() || stat.size <= 0) {
+      throw new Error(`brick-wall local static mount is not a usable file or symlink: ${mountPath}`);
+    }
+  } else {
+    symlinkSync(BRICK_WALL_GREENROOM_SOURCE_PATH, mountPath);
+  }
+  const mountedStat = lstatSync(mountPath);
+  return {
+    identity: 'brick-wall-greenroom-local-static-mount-v0',
+    accepted: true,
+    sourcePath: BRICK_WALL_GREENROOM_SOURCE_PATH,
+    mountPath,
+    routeUrl: BRICK_WALL_STATIC_ROUTE_URL,
+    mountKind: mountedStat.isSymbolicLink() ? 'symlink' : 'file',
+    sourceSizeBytes: lstatSync(BRICK_WALL_GREENROOM_SOURCE_PATH).size,
+  };
+}
 const VOLUME_SCENE_PRESETS = {
   canonical_plume: {
     fireScale: 0.86,
@@ -2265,7 +2315,17 @@ async function main() {
 
   let phase = 'launch';
   let identityFrameRecovery = null;
+  let receiverLightDebug = null;
+  let receiverLightEvidence = null;
+  let sceneContextDebug = null;
+  let sceneContextEvidence = null;
+  let sceneContextLocalAssetMount = null;
   try {
+    if (expectsVolumeBrickWallSceneContext) {
+      phase = 'brick-wall-local-asset-mount';
+      sceneContextLocalAssetMount = ensureBrickWallLocalAssetMount();
+    }
+    phase = 'launch';
     await waitForCdp();
     phase = 'target';
     const targets = await cdpFetch('/json/list');
@@ -2329,6 +2389,126 @@ async function main() {
     const bridge = bridgeEval.result.value;
     assert.equal(bridge?.identity, 'volume-main-renderer-bridge-v0', 'wrong volume main-renderer bridge identity');
     assert.equal(bridge?.textureSource, 'kaminos-volume-canvas', 'volume bridge is not sourcing the native volume canvas');
+    if (expectsVolumeBrickWallSceneContext) {
+      for (let i = 0; i < 80; i++) {
+        const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumeSceneContext?.debugState?.() ?? null',
+          returnByValue: true,
+        });
+        sceneContextDebug = sceneContextEval.result.value || null;
+        if (sceneContextDebug?.loadState === 'loaded' || sceneContextDebug?.loadState === 'failed') break;
+        await delay(250);
+      }
+    } else {
+      const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumeSceneContext?.debugState?.() ?? null',
+        returnByValue: true,
+      });
+      sceneContextDebug = sceneContextEval.result.value || null;
+    }
+    sceneContextEvidence = {
+      identity: expectsVolumeBrickWallSceneContext ? 'volume-scene-context-brick-wall-v0' : null,
+      accepted: Boolean(
+        sceneContextDebug &&
+        sceneContextDebug.identity === 'volume-scene-context-brick-wall-v0' &&
+        sceneContextDebug.effectiveContext === 'brick_wall' &&
+        sceneContextDebug.visible === true &&
+        sceneContextDebug.assetIdentity === 'trellis-fast8-350k-4k-brick-wall-glb-v0' &&
+        sceneContextDebug.backgroundTruth === 'greenroom-glb-three-meshes-not-image-plate-v0' &&
+        sceneContextDebug.ambientOcclusion === false &&
+        sceneContextDebug.globalGroundPlaneSuppressed === true &&
+        sceneContextDebug.loadState === 'loaded' &&
+        sceneContextDebug.assetEffectiveServedUrl === BRICK_WALL_STATIC_ROUTE_URL &&
+        Number(sceneContextDebug.meshCount || 0) >= 2
+      ),
+      expectedContext: expectedVolumeSceneContext,
+      localAssetMount: sceneContextLocalAssetMount,
+      debug: sceneContextDebug,
+      bridgeSceneContext: bridge?.sceneContext || null,
+    };
+    if (expectsVolumeBrickWallSceneContext) {
+      if (!sceneContextEvidence.accepted) {
+        throw new Error(`brick-wall scene context receipt not accepted: ${JSON.stringify(sceneContextEvidence)}`);
+      }
+      if (
+        bridge?.sceneContextCssComposite !== true ||
+        bridge?.nativeCanvasMixBlendMode !== 'screen' ||
+        bridge?.nativeCanvasOpacity === '0' ||
+        bridge?.sceneContext?.effectiveContext !== 'brick_wall'
+      ) {
+        throw new Error(`volume bridge did not truthfully report brick-wall scene-context CSS screen composition: ${JSON.stringify(bridge)}`);
+      }
+    }
+    const receiverLightEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+      returnByValue: true,
+    });
+    receiverLightDebug = receiverLightEval.result.value || null;
+    let receiverLightDebugLater = null;
+    receiverLightEvidence = {
+      identity: expectsRenderedReceiverLightEvidence ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate') : null,
+      accepted: Boolean(
+        receiverLightDebug &&
+        receiverLightDebug.identity === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
+        receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+        receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
+        receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
+        receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
+        receiverLightDebug.dynamicEnvelopeIdentity === 'tier2-live-debug-receiver-envelope-v1' &&
+        receiverLightDebug.requestedEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+        receiverLightDebug.effectiveEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+        receiverLightDebug.splatMomentEnvelopeAccepted === true &&
+        receiverLightDebug.cpuReadbackAuthority === false &&
+        receiverLightDebug.hiddenThreeLightAuthority === false &&
+        receiverLightDebug.canvasBridgeAuthority === false &&
+        Number(receiverLightDebug.receiverCount || 0) > 0 &&
+        Number(receiverLightDebug.receiverRenderFrameCount || 0) > 0 &&
+        Number(receiverLightDebug.lastRenderTargetSize?.width || 0) > 0 &&
+        Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
+      ),
+      dynamicEnvelopeAccepted: false,
+      debug: receiverLightDebug,
+      debugLater: null,
+    };
+    if (expectsRenderedReceiverLightEvidence) {
+      if (!receiverLightDebug || receiverLightDebug.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0') {
+        throw new Error(`wrong rendered Tier 2 receiver-light identity: ${JSON.stringify(receiverLightDebug)}`);
+      }
+      if (
+        receiverLightDebug.requestedEnvelopeSource !== 'gpu-splat-radiance-coverage-depth-moments-v0' ||
+        receiverLightDebug.effectiveEnvelopeSource !== 'gpu-splat-radiance-coverage-depth-moments-v0' ||
+        receiverLightDebug.splatMomentEnvelopeAccepted !== true
+      ) {
+        throw new Error(`Tier 2 receiver-light did not consume splat-moment envelope authority: ${JSON.stringify(receiverLightDebug)}`);
+      }
+      const expectedIsolate = expectsReceiverLightIsolateEvidence;
+      if (!receiverLightEvidence.accepted || receiverLightDebug.active !== true || receiverLightDebug.isolate !== expectedIsolate) {
+        throw new Error(`Tier 2 receiver-light receipt not accepted: ${JSON.stringify(receiverLightEvidence)}`);
+      }
+      await delay(420);
+      const receiverLightLaterEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+        returnByValue: true,
+      });
+      receiverLightDebugLater = receiverLightLaterEval.result.value || null;
+      const startCenter = receiverLightDebug.lastEnvelopeCenter || {};
+      const laterCenter = receiverLightDebugLater?.lastEnvelopeCenter || {};
+      const centerDelta = Math.hypot(
+        Number(laterCenter.x || 0) - Number(startCenter.x || 0),
+        Number(laterCenter.y || 0) - Number(startCenter.y || 0)
+      );
+      receiverLightEvidence.dynamicEnvelopeAccepted = Boolean(
+        receiverLightDebugLater &&
+        Number(receiverLightDebugLater.lastEnvelopeRevision || 0) > Number(receiverLightDebug.lastEnvelopeRevision || 0) &&
+        Number(receiverLightDebugLater.dynamicEnvelopeFrameCount || 0) >= Number(receiverLightDebug.dynamicEnvelopeFrameCount || 0) &&
+        (centerDelta > 0.0005 || Number(receiverLightDebugLater.lastEnvelopeMotionMagnitude || 0) > 0.0005)
+      );
+      receiverLightEvidence.debugLater = receiverLightDebugLater;
+      receiverLightEvidence.envelopeCenterDelta = centerDelta;
+      if (!receiverLightEvidence.dynamicEnvelopeAccepted) {
+        throw new Error(`stale receiver-light envelope: ${JSON.stringify(receiverLightEvidence)}`);
+      }
+    }
     if ((state.frameCount || 0) <= 5 || (state.displayWidth || 0) <= 0 || (state.displayHeight || 0) <= 0) {
       await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
       for (let i = 0; i < 40; i++) {
@@ -2345,6 +2525,82 @@ async function main() {
       state.frameCount > 5,
       `volume route did not render enough frames (${state.frameCount || 0} frames at ${state.displayWidth || 0}x${state.displayHeight || 0})`,
     );
+    if (expectsRenderedReceiverLightEvidence && !isCaptureReplay) {
+      phase = 'receiver-light-rendered-evidence';
+      const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+      });
+      const screenshotBuffer = Buffer.from(pageShot.data || '', 'base64');
+      if (screenshotBuffer.length === 0) {
+        throw new Error('receiver-light rendered evidence screenshot was empty');
+      }
+      writeFileSync(out, screenshotBuffer);
+      if (fullScreenshot) writeFileSync(fullScreenshot, screenshotBuffer);
+      const screenshotMetrics = measureScreenshot(screenshotBuffer);
+      if (screenshotMetrics.litPixels < 500 || screenshotMetrics.meanLuma < 2.0) {
+        throw new Error(`receiver-light rendered evidence screenshot missing visible signal: ${JSON.stringify(screenshotMetrics)}`);
+      }
+      if (screenshotMetrics.meanLuma > 94 || screenshotMetrics.litPixels > 610000) {
+        throw new Error(`receiver-light rendered evidence overexposed: ${JSON.stringify(screenshotMetrics)}`);
+      }
+      const refreshedStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+        returnByValue: true,
+      });
+      state = refreshedStateEval.result.value || state;
+      const refreshedBridgeEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumeBridge?.debugState?.()',
+        returnByValue: true,
+      });
+      const refreshedSceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.__kaminosVolumeSceneContext?.debugState?.() ?? null',
+        returnByValue: true,
+      });
+      const refreshedReceiverLightEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+        returnByValue: true,
+      });
+      const report = {
+        identity: 'kaminos-volume-witness-report-v0',
+        requestedRoute: url,
+        windowSize,
+        settleMs,
+        evidenceMode,
+        visualEvidenceMode,
+        phase,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        active: state.active,
+        state,
+        volumeBridge: refreshedBridgeEval.result.value || bridge,
+        receiverLightEvidence: {
+          ...receiverLightEvidence,
+          debug: refreshedReceiverLightEval.result.value || receiverLightEvidence.debug,
+        },
+        sceneContextEvidence: {
+          ...sceneContextEvidence,
+          debug: refreshedSceneContextEval.result.value || sceneContextEvidence.debug,
+        },
+        sceneContextLocalAssetMount,
+        identityFrameRecovery,
+        screenshotMetrics,
+        screenshot: out,
+        fullScreenshot: fullScreenshot || null,
+        browserSession: {
+          identity: browserSession.identity,
+          mode: browserSession.mode,
+          port: browserSession.port,
+          userDataDir: browserSession.userDataDir,
+          keepBrowserOpen: browserSession.keepBrowserOpen,
+        },
+      };
+      writeFileSync(reportPath, JSON.stringify(report, null, 2));
+      ws.close();
+      closeBrowserSession(browserSession);
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
     if (isCaptureReplay) {
       assertCaptureReplayControls({
         captureReplay,
@@ -3007,6 +3263,19 @@ async function main() {
     ) {
       throw new Error(`GPU sim readback does not expose live front topology sidecar evidence: ${JSON.stringify(sample.simReadback)}`);
     }
+    const receiverSupport = sample.simReadback.receiverSupport;
+    if (
+      !receiverSupport ||
+      receiverSupport.identity !== 'combustion-front-receiver-support-v0' ||
+      receiverSupport.authority !== 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' ||
+      receiverSupport.intendedConsumer !== 'tier2-opt-in-receiver-buffer-light-pass-v0' ||
+      receiverSupport.supportRole !== 'lighting-input-not-rendered-receiver-light' ||
+      receiverSupport.receiverMaskAuthority !== 'opt-in-receiver-buffer-required-v0' ||
+      !Number.isFinite(receiverSupport.supportScalar) ||
+      !Number.isFinite(receiverSupport.activeVoxelRatio)
+    ) {
+      throw new Error(`GPU sim readback does not expose receiver-light support authority: ${JSON.stringify(receiverSupport)}`);
+    }
     if (!sample.majorantReadback || sample.majorantReadback.grid !== expectedMajorantGrid || sample.majorantReadback.occupiedBricks < 2 || sample.majorantReadback.importanceMax <= 0.01) {
       throw new Error(`GPU majorant readback does not show a live coarse occupancy field: ${JSON.stringify(sample.majorantReadback)}`);
     }
@@ -3034,13 +3303,13 @@ async function main() {
     const acceptsRawCarrierPyroPaint =
       expectsPyroMaterialEvidence &&
       pyroRawCarrierPaintEvidence.acceptsLowStockFireLayer;
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && (!Number.isFinite(sample.simReadback.fireLayerMean) || sample.simReadback.fireLayerMean <= 0.0005) && !acceptsRawCarrierPyroPaint) {
       throw new Error(`GPU sim readback does not show a transported fire layer or raw-carrier Pyro paint evidence: ${JSON.stringify({
         simReadback: sample.simReadback,
         pyroRawCarrierPaintEvidence,
       })}`);
     }
-    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) && !boundaryFireReadbackEvidence.acceptsZeroRadiance) {
+    if (!expectsCanonicalPlumeProof && !expectsFuelStarvedTallPlume && !expectsNoFireVolumeEvidence && !expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && (!Number.isFinite(sample.simReadback.radianceMean) || sample.simReadback.radianceMean <= 0.0005) && !boundaryFireReadbackEvidence.acceptsZeroRadiance) {
       throw new Error(`GPU sim readback does not show fire radiance or boundary-fire topology/emission evidence: ${JSON.stringify({
         simReadback: sample.simReadback,
         boundaryFireReadbackEvidence,
@@ -3071,7 +3340,7 @@ async function main() {
             extinctionMean: sample.simReadback.extinctionMean,
           })}`);
         }
-      } else if (
+      } else if (!expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && (
         sample.simReadback.fuelMean <= 0.0005 ||
         sample.simReadback.reactionMean <= 0.0005 ||
         sample.simReadback.fuelConsumptionMean <= 0.00001 ||
@@ -3079,7 +3348,7 @@ async function main() {
           sample.simReadback.fireFuelOverlapRatio <= 0.01 &&
           !boundaryFireReadbackEvidence.acceptsZeroRadiance
         )
-      ) {
+      )) {
         throw new Error(`tall plume fire was not supported by live fuel/reaction evidence: ${JSON.stringify(sample.simReadback)}`);
       }
     }
@@ -3430,6 +3699,7 @@ async function main() {
       reactionMean: sample.simReadback?.reactionMean ?? 0,
       fuelConsumptionMean: sample.simReadback?.fuelConsumptionMean ?? 0,
       fireFuelOverlapRatio: sample.simReadback?.fireFuelOverlapRatio ?? 0,
+      receiverSupport: sample.simReadback?.receiverSupport ?? null,
       smokeVisualRiseDisplacement: sample.simReadback?.smokeVisualRiseDisplacement ?? 0,
       risingSmokeVisualRiseDisplacement: sample.simReadback?.risingSmokeVisualRiseDisplacement ?? 0,
       fireVisualRiseDisplacement: sample.simReadback?.fireVisualRiseDisplacement ?? 0,
@@ -3465,6 +3735,24 @@ async function main() {
       plumeFieldColumnCoherence: sample.simReadback?.plumeFieldColumnCoherence ?? 0,
       plumeFieldBinCenterSpread: sample.simReadback?.plumeFieldBinCenterSpread ?? 0,
       sourceRelativeVisualHeightBins: sample.simReadback?.sourceRelativeVisualHeightBins ?? [],
+    };
+    const receiverSupportEvidence = {
+      identity: expectsReceiverSupportEvidence ? 'receiver-support-sim-readback' : null,
+      accepted: Boolean(
+        receiverSupport &&
+        receiverSupport.identity === 'combustion-front-receiver-support-v0' &&
+        receiverSupport.authority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
+        receiverSupport.intendedConsumer === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
+        receiverSupport.supportRole === 'lighting-input-not-rendered-receiver-light' &&
+        receiverSupport.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+        Number.isFinite(receiverSupport.supportScalar) &&
+        Number.isFinite(receiverSupport.activeVoxelRatio)
+      ),
+      supportScalar: receiverSupport?.supportScalar ?? null,
+      activeVoxelRatio: receiverSupport?.activeVoxelRatio ?? null,
+      authority: receiverSupport?.authority ?? null,
+      intendedConsumer: receiverSupport?.intendedConsumer ?? null,
+      supportRole: receiverSupport?.supportRole ?? null,
     };
     writeRgbaPng(out, sample.preview.width, sample.preview.height, sample.preview.rgba);
     const captureBackend = 'webgpu-copy-src-readback';
@@ -3504,6 +3792,17 @@ async function main() {
     } else if (expectsNoFireMainRendererVolume) {
       if (mainRendererMetrics.litPixels < 650 || mainRendererMetrics.meanLuma < 1.5) {
         throw new Error(`main renderer screenshot missing bridged no-fire volume signal: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (expectsReceiverSupportEvidence) {
+      if (mainRendererMetrics.litPixels < 250 || mainRendererMetrics.meanLuma < 1.0) {
+        throw new Error(`main renderer screenshot missing receiver-support route output: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (expectsRenderedReceiverLightEvidence) {
+      if (!receiverLightEvidence.accepted) {
+        throw new Error(`receiver-light evidence mode missing accepted rendered receiver-light receipt: ${JSON.stringify(receiverLightEvidence)}`);
+      }
+      if (mainRendererMetrics.litPixels < 500 || mainRendererMetrics.meanLuma < 2.0) {
+        throw new Error(`main renderer screenshot missing rendered receiver-light signal: ${JSON.stringify(mainRendererMetrics)}`);
       }
     } else if (expectsPyroMaterialEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
@@ -3572,6 +3871,25 @@ async function main() {
     } else if (expectsSnuffVisualEvidence) {
       if (metrics.litPixels < 350 || metrics.smokeLikePixels < 120 || metrics.meanLuma < 1.5) {
         throw new Error(`snuff route did not preserve vapor/smoke volume evidence: ${JSON.stringify(metrics)}`);
+      }
+    } else if (expectsReceiverSupportEvidence) {
+      const receiverSupportSignalPixels =
+        Number(metrics.litPixels || 0) +
+        Number(metrics.smokeLikePixels || 0) +
+        Number(metrics.fireLikePixels || 0) +
+        Number(metrics.emissiveLikePixels || 0);
+      if (!receiverSupportEvidence.accepted) {
+        throw new Error(`receiver-support evidence mode missing accepted receiver-support receipt: ${JSON.stringify(receiverSupportEvidence)}`);
+      }
+      if (metrics.litPixels < 220 || receiverSupportSignalPixels < 350 || metrics.meanLuma < 1.0) {
+        throw new Error(`blank frame or missing receiver-support volume signal: ${JSON.stringify({
+          ...metrics,
+          receiverSupportSignalPixels,
+        })}`);
+      }
+    } else if (expectsRenderedReceiverLightEvidence) {
+      if (!receiverLightEvidence.accepted) {
+        throw new Error(`receiver-light evidence missing accepted rendered receiver-light receipt: ${JSON.stringify(receiverLightEvidence)}`);
       }
     } else if (expectsPyroMaterialEvidence) {
       const coupling = sample.pyroMaterialRendererCoupling || state.pyroMaterialRendererCoupling || {};
@@ -4204,6 +4522,14 @@ async function main() {
         path: fieldSliceOut || null,
       };
     }
+    if (simReadbackReport.reactionFrontAtlas?.rgba) {
+      const { rgba, ...atlasMetadata } = simReadbackReport.reactionFrontAtlas;
+      simReadbackReport.reactionFrontAtlas = {
+        ...atlasMetadata,
+        rgbaLength: rgba.length,
+        rgbaOmitted: true,
+      };
+    }
     const report = {
       requestedRoute: url,
       captureReplay: isCaptureReplay ? {
@@ -4222,6 +4548,10 @@ async function main() {
       evidenceMode,
       visualEvidenceMode,
       noFireEvidenceMode: expectsNoFireVolumeEvidence ? 'no-fire-volume-signal' : null,
+      receiverSupportEvidence,
+      receiverLightEvidence,
+      sceneContextEvidence,
+      sceneContextLocalAssetMount,
       pyroMaterialEvidenceMode: expectsPyroMaterialEvidence ? 'pyro-material-coupled-volume-signal' : null,
       pyroRawCarrierPaintEvidence,
       boundaryFireReadbackEvidence,
@@ -4444,6 +4774,11 @@ async function main() {
       expectsCanonicalFireEvidence,
       expectsNoFireVolumeEvidence,
       expectsPyroMaterialEvidence,
+      expectsReceiverLightIsolateEvidence,
+      expectsReceiverLightBrickWallEvidence,
+      expectsRenderedReceiverLightEvidence,
+      expectedVolumeSceneContext,
+      sceneContextEvidence,
       timing: sample.timing || stateTiming,
       fireEpisodeHooks: sample.fireEpisodeHooks || stateFireEpisodeHooks,
       timingEvidenceSource: (sample.timing || stateTiming).timingEvidenceSource,
@@ -4458,6 +4793,7 @@ async function main() {
       expectsBonfireZeroDrift,
       expectsBonfireConvectionProof,
       screenshot: out,
+      receiverLightEvidence,
       mainRendererScreenshot,
       mainRendererCaptureBackend: 'cdp-page-capture',
       fullScreenshot: fullScreenshotPath || null,
@@ -4495,6 +4831,56 @@ async function main() {
           returnByValue: true,
         });
         state = stateEval.result.value || null;
+        const receiverLightEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+          returnByValue: true,
+        });
+        const sceneContextEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.__kaminosVolumeSceneContext?.debugState?.() ?? null',
+          returnByValue: true,
+        });
+        sceneContextDebug = sceneContextEval.result.value || sceneContextDebug;
+        sceneContextEvidence = sceneContextDebug ? {
+          identity: expectsVolumeBrickWallSceneContext ? 'volume-scene-context-brick-wall-v0' : null,
+          accepted: Boolean(
+            sceneContextDebug.identity === 'volume-scene-context-brick-wall-v0' &&
+            sceneContextDebug.effectiveContext === 'brick_wall' &&
+            sceneContextDebug.visible === true &&
+            sceneContextDebug.assetIdentity === 'trellis-fast8-350k-4k-brick-wall-glb-v0' &&
+            sceneContextDebug.backgroundTruth === 'greenroom-glb-three-meshes-not-image-plate-v0' &&
+            sceneContextDebug.loadState === 'loaded' &&
+            sceneContextDebug.assetEffectiveServedUrl === BRICK_WALL_STATIC_ROUTE_URL
+          ),
+          expectedContext: expectedVolumeSceneContext,
+          localAssetMount: sceneContextLocalAssetMount,
+          debug: sceneContextDebug,
+        } : sceneContextEvidence;
+        receiverLightDebug = receiverLightEval.result.value || receiverLightDebug;
+        receiverLightEvidence = receiverLightDebug ? {
+          identity: expectsRenderedReceiverLightEvidence ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate') : null,
+          accepted: Boolean(
+            receiverLightDebug.identity === 'tier2-opt-in-receiver-buffer-light-pass-v0' &&
+            receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
+            receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
+            receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
+            receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
+            receiverLightDebug.dynamicEnvelopeIdentity === 'tier2-live-debug-receiver-envelope-v1' &&
+            receiverLightDebug.requestedEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+            receiverLightDebug.effectiveEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+            receiverLightDebug.splatMomentEnvelopeAccepted === true &&
+            receiverLightDebug.cpuReadbackAuthority === false &&
+            receiverLightDebug.hiddenThreeLightAuthority === false &&
+            receiverLightDebug.canvasBridgeAuthority === false &&
+            Number(receiverLightDebug.receiverCount || 0) > 0 &&
+            Number(receiverLightDebug.receiverRenderFrameCount || 0) > 0 &&
+            Number(receiverLightDebug.lastRenderTargetSize?.width || 0) > 0 &&
+            Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
+          ),
+          dynamicEnvelopeAccepted: receiverLightEvidence?.dynamicEnvelopeAccepted ?? false,
+          debugLater: receiverLightEvidence?.debugLater ?? null,
+          envelopeCenterDelta: receiverLightEvidence?.envelopeCenterDelta ?? null,
+          debug: receiverLightDebug,
+        } : receiverLightEvidence;
         ws.close();
       }
     } catch {
@@ -4519,6 +4905,9 @@ async function main() {
       phase,
       error: err?.message || String(err),
       state,
+      receiverLightEvidence,
+      sceneContextEvidence,
+      sceneContextLocalAssetMount,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
       browserSession: {

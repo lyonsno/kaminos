@@ -2894,7 +2894,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, viewportUV, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
@@ -2996,6 +2996,7 @@ let scene, camera, renderer, controls, pmremGenerator, transformControls;
 let sceneRaycaster, scenePointerNdc;
 let postProcessing = null;
 let aoPass = null, aoIntensity = null, renderPipeline = null, scenePass = null;
+let tier2ReceiverLightPass = null;
 let backdropMesh = null;
 let currentMesh = null;
 let groundPlane = null;
@@ -3013,6 +3014,7 @@ let currentSceneFile = null; // filename of last saved/loaded scene (for overwri
 let volumePrototype = null;
 let volumeBridge = null;
 let kaminosVolumeRouteInitPromise = null;
+let volumeSceneContext = null;
 let motionAgencyState = null;
 let motionDecisionState = null;
 let motionPhraseControlState = null;
@@ -5354,7 +5356,12 @@ function boundarySplatFieldLayoutRouteValue(params = new URLSearchParams(window.
   if (explicitLayout !== null) return normalizeBoundarySplatFieldLayout(explicitLayout);
   // Legacy volume_boundary_splat_composition=field routes select layout only.
   const legacyComposition = String(params.get('volume_boundary_splat_composition') || '').toLowerCase().replace(/_/g, '-');
-  return ['field', 'composed-field', 'field-100'].includes(legacyComposition) ? 'field' : 'proof';
+  return isLegacyBoundarySplatFieldLayoutComposition(legacyComposition) ? 'field' : 'proof';
+}
+
+function isLegacyBoundarySplatFieldLayoutComposition(value) {
+  const normalized = String(value || '').toLowerCase().replace(/_/g, '-');
+  return ['field', 'composed-field', 'field-100'].includes(normalized);
 }
 
 function boundarySplatFieldLayoutCameraPose(params = new URLSearchParams(window.location.search)) {
@@ -9020,7 +9027,21 @@ async function initScene() {
 
   aoIntensity = uniform(document.getElementById('ao-toggle').checked ? parseFloat(document.getElementById('ao-intensity').value) : 0);
   const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
-  renderPipeline.outputNode = scenePass.mul(vec4(vec3(aoOutput), 1));
+  const baseSceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
+  tier2ReceiverLightPass?.dispose?.();
+  tier2ReceiverLightPass = createTier2ReceiverBufferLightPass(baseSceneOutput);
+  renderPipeline.outputNode = tier2ReceiverLightPass.outputNode;
+  window.kaminosTier2ReceiverLightDebugState = () => tier2ReceiverLightPass?.debugState?.() || {
+    identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
+    active: false,
+    receiverMaskAuthority: TIER2_RECEIVER_MASK_AUTHORITY,
+    supportIdentity: TIER2_RECEIVER_SUPPORT_IDENTITY,
+    supportAuthority: TIER2_RECEIVER_SUPPORT_AUTHORITY,
+    receiverBufferSource: TIER2_RECEIVER_BUFFER_SOURCE,
+    cpuReadbackAuthority: false,
+    hiddenThreeLightAuthority: false,
+    canvasBridgeAuthority: false,
+  };
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
     hasRenderPipeline: !!renderPipeline,
@@ -9042,6 +9063,7 @@ async function initScene() {
     renderer.setSize(w, h);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
+    tier2ReceiverLightPass?.resize?.(size.x, size.y);
     needsRender = true;
   });
 
@@ -9097,9 +9119,10 @@ async function initScene() {
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
     const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
-    const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
+    const tier2ReceiverLightActive = tier2ReceiverLightPass ? tier2ReceiverLightPass.update() === true : false;
+    const mainRendererNeeded = !volumeSmokeRouteActive || tier2ReceiverLightActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
-    if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
+    if (mainRendererNeeded && (needsRender || tier2ReceiverLightActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
       const t0 = performance.now();
 
       renderPipeline.render();
@@ -9114,7 +9137,7 @@ async function initScene() {
         fpsLast = performance.now();
       }
 
-      if (!needsRender && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive) idleFrames++;
+      if (!needsRender && !tier2ReceiverLightActive && !motionAgencyActive && !motionDecisionActive && !motionPhraseControlActive && !motionTrackActive && !forgeHostActive && !volumeBridgeActive) idleFrames++;
       needsRender = false;
     }
   }
@@ -9637,6 +9660,31 @@ function setInfo(msg) {
 
 function isKaminosVolumeSmokeRoute(params = new URLSearchParams(window.location.search)) {
   return params.get('kaminos_volume_smoke') === '1';
+}
+
+const TIER2_RECEIVER_LIGHT_PASS_IDENTITY = 'tier2-opt-in-receiver-buffer-light-pass-v0';
+const TIER2_RECEIVER_MASK_AUTHORITY = 'opt-in-receiver-buffer-required-v0';
+const TIER2_RECEIVER_BUFFER_SOURCE = 'explicit-opt-in-receiver-proxy-buffer-v0';
+const TIER2_RECEIVER_SUPPORT_IDENTITY = 'combustion-front-receiver-support-v0';
+const TIER2_RECEIVER_SUPPORT_AUTHORITY = 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0';
+const TIER2_RECEIVER_DYNAMIC_ENVELOPE_IDENTITY = 'tier2-live-debug-receiver-envelope-v1';
+const TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE = 'volume-debug-frame-energy-procedural-envelope-no-readback-v1';
+const TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE = 'gpu-splat-radiance-coverage-depth-moments-v0';
+const TIER2_RECEIVER_SPLAT_LAYER_IDENTITY = 'premultiplied-hdr-splat-radiance-alpha-linear-depth-moments-v0';
+const TIER2_RECEIVER_SMOKE_LAYER_IDENTITY = 'raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1';
+
+function isTier2ReceiverLightRoute(params = new URLSearchParams(window.location.search)) {
+  return params.get('volume_receiver_light') === 'tier2' || params.get('volume_receiver_light_isolate') === '1';
+}
+
+function isTier2ReceiverLightIsolateRoute(params = new URLSearchParams(window.location.search)) {
+  return params.get('volume_receiver_light_isolate') === '1';
+}
+
+function resolveTier2ReceiverEnvelopeSource(params = new URLSearchParams(window.location.search)) {
+  const source = String(params.get('volume_receiver_light_source') || params.get('volume_receiver_envelope_source') || 'splat_moments').toLowerCase();
+  if (source === 'procedural' || source === 'debug' || source === 'debug_envelope') return TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE;
+  return TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE;
 }
 
 function ensureFingerJuiceTabFrameLoaded() {
@@ -11685,6 +11733,11 @@ const DEFAULT_VOLUME_CAMERA_FRAME = {
 const BONFIRE_VOLUME_CAMERA_FRAME = {
   position: [0, 0.10, 2.55],
   target: [0, 0.10, 0],
+};
+
+const BRICK_WALL_VOLUME_CAMERA_FRAME = {
+  position: [1.42, 0.08, 3.20],
+  target: [-0.18, -0.18, -0.55],
 };
 
 let activeVolumeRayBudgetPreset = '';
@@ -19318,15 +19371,316 @@ function refreshVolumeReadout() {
 }
 window.__kaminosRefreshVolumeReadout = refreshVolumeReadout;
 
-function frameVolumeCamera() {
+function resolveVolumeCameraFrame() {
   const composedCamera = applyBoundarySplatFieldLayoutCamera();
-  if (composedCamera) return;
+  if (composedCamera) return null;
+  const activeContext = volumeSceneContext?.debugState?.()?.effectiveContext
+    || normalizeVolumeSceneContext(new URLSearchParams(window.location.search).get('volume_scene_context'));
+  if (activeContext === 'brick_wall') return BRICK_WALL_VOLUME_CAMERA_FRAME;
   const sceneName = document.getElementById('volume-scene')?.value || 'compact_plume';
-  const frame = sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
+  return sceneName === 'bonfire_plume' ? BONFIRE_VOLUME_CAMERA_FRAME : DEFAULT_VOLUME_CAMERA_FRAME;
+}
+
+function frameVolumeCamera() {
+  const frame = resolveVolumeCameraFrame();
+  if (!frame) return;
   camera.position.set(...frame.position);
   controls.target.set(...frame.target);
   controls.update();
   window._kaminosDirty?.();
+}
+
+const VOLUME_SCENE_CONTEXTS = new Set(['none', 'brick_wall']);
+const VOLUME_BRICK_WALL_ASSET = Object.freeze({
+  identity: 'trellis-fast8-350k-4k-brick-wall-glb-v0',
+  sourcePath: '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb',
+  staticServedUrl: '/local-assets/greenroom/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb',
+  apiReadUrl: '/api/read?root=greenroom&path=outputs%2Fkaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe%2Foutput.glb',
+  servedUrlCandidates: Object.freeze([
+    '/local-assets/greenroom/kaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe/output.glb',
+    '/api/read?root=greenroom&path=outputs%2Fkaminos-trellis-crumbled-brick-wall-fast8-350k-4k-20260701Tasset-probe%2Foutput.glb',
+  ]),
+  sourceRoot: 'greenroom',
+  generationRoute: 'trellis2mlx_fast',
+  generationSeed: 42,
+  generationSteps: 8,
+  targetFaces: 350000,
+  textureSize: 4096,
+});
+const VOLUME_BRICK_WALL_LIGHTING = Object.freeze({
+  ambientOcclusion: false,
+  lightingExposure: 0.8,
+  environmentIntensity: 0.05,
+  materialSide: 'double-sided-opaque-if-needed',
+});
+
+function normalizeVolumeSceneContext(value) {
+  const normalized = String(value || 'none').trim().toLowerCase().replace(/-/g, '_');
+  return VOLUME_SCENE_CONTEXTS.has(normalized) ? normalized : 'none';
+}
+
+function createVolumeBrickWallContext() {
+  const group = new THREE.Group();
+  group.name = 'volume-scene-context-brick-wall-v0';
+  group.visible = false;
+  group.userData.kaminosVolumeSceneContext = {
+    identity: 'volume-scene-context-brick-wall-v0',
+    routeParam: 'volume_scene_context',
+    materialIdentity: 'trellis-fast8-350k-4k-brick-wall-pbr-v0',
+    backgroundTruth: 'greenroom-glb-three-meshes-not-image-plate-v0',
+    topology: 'ground-snapped-ruin-terrain-v0',
+    asset: VOLUME_BRICK_WALL_ASSET,
+    composition: {
+      terrainRole: 'ruin-terrain-for-fire-licking-rolling-occlusion',
+      snap: 'rubble-base-on-ground-plane',
+      ambientOcclusion: VOLUME_BRICK_WALL_LIGHTING.ambientOcclusion,
+      lightingExposure: VOLUME_BRICK_WALL_LIGHTING.lightingExposure,
+      environmentIntensity: VOLUME_BRICK_WALL_LIGHTING.environmentIntensity,
+    },
+    effectiveContext: 'none',
+    loadState: 'idle',
+    loadError: null,
+    activeServedUrl: null,
+    failedServedUrls: [],
+    objectCount: 0,
+    loadedBounds: null,
+  };
+
+  const groundMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0x0c0907),
+    transparent: true,
+    opacity: 0.42,
+    toneMapped: false,
+  });
+  groundMaterial.name = 'brick-wall-dim-ground-contact-plane-v0';
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(5.8, 3.5), groundMaterial);
+  ground.name = 'volume-scene-context-brick-wall-ground-contact-plane-v0';
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.set(0, -0.92, -0.42);
+  group.add(ground);
+
+  const fill = new THREE.DirectionalLight(0xffd0a0, 0.28);
+  fill.name = 'volume-scene-context-brick-wall-dim-key-v0';
+  fill.position.set(-2.6, 2.2, 2.1);
+  group.add(fill);
+
+  const side = new THREE.DirectionalLight(0x90a8b8, 0.12);
+  side.name = 'volume-scene-context-brick-wall-cool-side-v0';
+  side.position.set(2.3, 1.4, 0.8);
+  group.add(side);
+
+  let loadedModel = null;
+  let loadPromise = null;
+  let previousGroundPlaneVisible = null;
+
+  const applyDimLightingControls = () => {
+    if (renderer) renderer.toneMappingExposure = VOLUME_BRICK_WALL_LIGHTING.lightingExposure;
+    const exposureSlider = document.getElementById('exposure-slider');
+    const exposureVal = document.getElementById('exposure-val');
+    if (exposureSlider) exposureSlider.value = String(VOLUME_BRICK_WALL_LIGHTING.lightingExposure);
+    if (exposureVal) exposureVal.textContent = VOLUME_BRICK_WALL_LIGHTING.lightingExposure.toFixed(1);
+    scene.environmentIntensity = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity;
+    const intensitySlider = document.getElementById('env-intensity-slider');
+    const intensityVal = document.getElementById('env-intensity-val');
+    if (intensitySlider) intensitySlider.value = String(VOLUME_BRICK_WALL_LIGHTING.environmentIntensity);
+    if (intensityVal) intensityVal.textContent = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity.toFixed(2);
+  };
+
+  const prepareLoadedModel = model => {
+    model.name = 'volume-scene-context-brick-wall-asset-v0';
+    model.traverse(child => {
+      if (!child.isMesh) return;
+      child.castShadow = false;
+      child.receiveShadow = true;
+      child.name = child.name || 'volume-scene-context-brick-wall-mesh-v0';
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      for (const material of materials) {
+        if (!material) continue;
+        material.name = material.name || 'trellis-fast8-350k-4k-brick-wall-pbr-v0';
+        material.side = THREE.DoubleSide;
+        material.transparent = false;
+        material.depthWrite = true;
+        material.aoMap = null;
+        material.aoMapIntensity = 0;
+        material.envMapIntensity = VOLUME_BRICK_WALL_LIGHTING.environmentIntensity;
+        material.needsUpdate = true;
+      }
+    });
+
+    const initialBox = new THREE.Box3().setFromObject(model);
+    const initialSize = initialBox.getSize(new THREE.Vector3());
+    const maxAxis = Math.max(initialSize.x, initialSize.y, initialSize.z, 0.001);
+    model.scale.multiplyScalar(2.8 / maxAxis);
+
+    const scaledBox = new THREE.Box3().setFromObject(model);
+    const center = scaledBox.getCenter(new THREE.Vector3());
+    model.position.x -= center.x;
+    model.position.z -= center.z + 0.78;
+    model.position.y += -0.92 - scaledBox.min.y;
+    model.rotation.y = -0.18;
+
+    const finalBox = new THREE.Box3().setFromObject(model);
+    group.userData.kaminosVolumeSceneContext.loadedBounds = {
+      min: finalBox.min.toArray(),
+      max: finalBox.max.toArray(),
+      size: finalBox.getSize(new THREE.Vector3()).toArray(),
+    };
+  };
+
+  const beginLoad = () => {
+    if (loadPromise) return loadPromise;
+    group.userData.kaminosVolumeSceneContext.loadState = 'loading';
+    group.userData.kaminosVolumeSceneContext.loadError = null;
+    group.userData.kaminosVolumeSceneContext.failedServedUrls = [];
+    const loader = new GLTFLoader();
+    loadPromise = new Promise(resolve => {
+      const candidates = Array.isArray(VOLUME_BRICK_WALL_ASSET.servedUrlCandidates)
+        ? VOLUME_BRICK_WALL_ASSET.servedUrlCandidates
+        : [VOLUME_BRICK_WALL_ASSET.staticServedUrl || VOLUME_BRICK_WALL_ASSET.apiReadUrl].filter(Boolean);
+      const tryCandidate = candidateIndex => {
+        const assetUrl = candidates[candidateIndex];
+        if (!assetUrl) {
+          group.userData.kaminosVolumeSceneContext.loadState = 'failed';
+          group.userData.kaminosVolumeSceneContext.loadError = 'brick wall GLB load failed for every served URL candidate';
+          console.warn('Failed to load brick wall volume scene context from every candidate', group.userData.kaminosVolumeSceneContext.failedServedUrls);
+          resolve(null);
+          return;
+        }
+        group.userData.kaminosVolumeSceneContext.activeServedUrl = assetUrl;
+        loader.load(assetUrl, gltf => {
+          loadedModel = gltf.scene;
+          prepareLoadedModel(loadedModel);
+          group.add(loadedModel);
+          group.userData.kaminosVolumeSceneContext.loadState = 'loaded';
+          group.userData.kaminosVolumeSceneContext.objectCount = group.children.length;
+          window._kaminosDirty?.();
+          resolve(loadedModel);
+        }, undefined, err => {
+          group.userData.kaminosVolumeSceneContext.failedServedUrls.push({
+            url: assetUrl,
+            error: err?.message || 'brick wall GLB load failed',
+          });
+          tryCandidate(candidateIndex + 1);
+        });
+      };
+      tryCandidate(0);
+    });
+    return loadPromise;
+  };
+
+  scene.add(group);
+
+  return {
+    identity: 'volume-scene-context-brick-wall-v0',
+    setMode(mode) {
+      const effectiveContext = normalizeVolumeSceneContext(mode);
+      group.visible = effectiveContext === 'brick_wall';
+      group.userData.kaminosVolumeSceneContext.effectiveContext = effectiveContext;
+      if (group.visible) {
+        if (groundPlane && previousGroundPlaneVisible === null) {
+          previousGroundPlaneVisible = groundPlane.visible;
+          groundPlane.visible = false;
+        }
+        applyDimLightingControls();
+        beginLoad();
+      } else if (groundPlane && previousGroundPlaneVisible !== null) {
+        groundPlane.visible = previousGroundPlaneVisible;
+        previousGroundPlaneVisible = null;
+      }
+      window._kaminosDirty?.();
+      return group.visible ? 'brick_wall' : effectiveContext;
+    },
+    debugState() {
+      const metadata = group.userData.kaminosVolumeSceneContext;
+      const childMeshes = [];
+      group.traverse(child => {
+        if (child.isMesh) childMeshes.push(child.name);
+      });
+      return {
+        identity: metadata.identity,
+        routeParam: metadata.routeParam,
+        requestedContext: metadata.effectiveContext || 'none',
+        effectiveContext: group.visible ? 'brick_wall' : 'none',
+        visible: group.visible,
+        objectCount: group.children.length,
+        meshCount: childMeshes.length,
+        meshNames: childMeshes.slice(0, 24),
+        materialIdentity: metadata.materialIdentity,
+        backgroundTruth: metadata.backgroundTruth,
+        topology: metadata.topology,
+        assetIdentity: metadata.asset.identity,
+        assetSourcePath: metadata.asset.sourcePath,
+        assetStaticServedUrl: metadata.asset.staticServedUrl,
+        assetApiReadUrl: metadata.asset.apiReadUrl,
+        assetServedUrlCandidates: metadata.asset.servedUrlCandidates,
+        assetEffectiveServedUrl: metadata.activeServedUrl,
+        assetFailedServedUrls: metadata.failedServedUrls,
+        sourceRoot: metadata.asset.sourceRoot,
+        ambientOcclusion: metadata.composition.ambientOcclusion,
+        lightingExposure: metadata.composition.lightingExposure,
+        environmentIntensity: metadata.composition.environmentIntensity,
+        globalGroundPlaneSuppressed: group.visible && groundPlane ? groundPlane.visible === false : false,
+        terrainRole: metadata.composition.terrainRole,
+        snap: metadata.composition.snap,
+        loadState: metadata.loadState,
+        loadError: metadata.loadError,
+        loadedBounds: metadata.loadedBounds,
+      };
+    },
+    dispose() {
+      if (groundPlane && previousGroundPlaneVisible !== null) {
+        groundPlane.visible = previousGroundPlaneVisible;
+        previousGroundPlaneVisible = null;
+      }
+      scene.remove(group);
+      if (loadedModel) disposeObjectTree(loadedModel);
+      group.remove(ground, fill, side);
+      ground.geometry.dispose();
+      groundMaterial.dispose();
+    },
+  };
+}
+
+function createVolumeSceneContextRouter() {
+  const contexts = {
+    brick_wall: createVolumeBrickWallContext(),
+  };
+  let activeContext = 'none';
+
+  return {
+    identity: 'volume-scene-context-router-v0',
+    setMode(mode) {
+      const requested = normalizeVolumeSceneContext(mode);
+      activeContext = requested;
+      for (const [name, context] of Object.entries(contexts)) {
+        context.setMode(name === requested ? requested : 'none');
+      }
+      document.getElementById('viewport')?.classList.toggle('volume-scene-context-active', requested !== 'none');
+      return requested;
+    },
+    debugState() {
+      if (activeContext !== 'none') {
+        return contexts[activeContext]?.debugState?.() || {
+          identity: 'volume-scene-context-router-v0',
+          effectiveContext: 'none',
+          visible: false,
+        };
+      }
+      return {
+        identity: 'volume-scene-context-router-v0',
+        routeParam: 'volume_scene_context',
+        requestedContext: 'none',
+        effectiveContext: 'none',
+        visible: false,
+        contexts: Object.keys(contexts),
+      };
+    },
+    dispose() {
+      document.getElementById('viewport')?.classList.remove('volume-scene-context-active');
+      for (const context of Object.values(contexts)) context.dispose?.();
+      activeContext = 'none';
+    },
+  };
 }
 
 function createVolumeMainRendererBridge() {
@@ -19378,6 +19732,15 @@ function createVolumeMainRendererBridge() {
         meshName: mesh.name,
         renderOrder: mesh.renderOrder,
         composition: mesh.userData.kaminosVolumeBridge.composition,
+        sceneContextBridgeBypass: false,
+        sceneContextBridgeComposite: mesh.visible && volumeSceneContext?.debugState?.()?.visible === true,
+        nativeCanvasOpacity: volumePrototype?.canvasElement?.()?.style?.opacity || '',
+        nativeCanvasMixBlendMode: volumePrototype?.canvasElement?.()?.style?.mixBlendMode || '',
+        nativeCanvasPointerEvents: volumePrototype?.canvasElement?.()?.style?.pointerEvents || '',
+        sceneContextCssComposite: volumeSceneContext?.debugState?.()?.visible === true
+          && volumePrototype?.canvasElement?.()?.style?.mixBlendMode === 'screen'
+          && volumePrototype?.canvasElement?.()?.style?.opacity !== '0',
+        sceneContext: volumeSceneContext?.debugState?.() || null,
       };
     },
     dispose() {
@@ -19388,8 +19751,334 @@ function createVolumeMainRendererBridge() {
   };
 }
 
+function createTier2ReceiverBufferLightPass(baseOutputNode) {
+  const params = new URLSearchParams(window.location.search);
+  const requestedReceiverEnvelopeSource = resolveTier2ReceiverEnvelopeSource(params);
+  let effectiveReceiverEnvelopeSource = TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE;
+  let lastEnvelopeFallbackReason = null;
+  let lastSplatMomentEnvelope = null;
+  const receiverScene = new THREE.Scene();
+  const receiverLightMaskCanvas = document.createElement('canvas');
+  receiverLightMaskCanvas.width = 256;
+  receiverLightMaskCanvas.height = 256;
+  const receiverLightMaskContext = receiverLightMaskCanvas.getContext('2d');
+  let receiverLightMaskTexture = null;
+  const dynamicEnvelope = {
+    revision: 0,
+    frameCount: 0,
+    center: { x: 0.40, y: 0.61 },
+    previousCenter: { x: 0.40, y: 0.61 },
+    motionMagnitude: 0,
+    energy: 0,
+  };
+  const clamp01 = value => Math.max(0, Math.min(1, Number(value) || 0));
+  const resolveReceiverEnvelope = (volumeState = {}, fallbackFrame = 0) => {
+    const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
+    const frameEnergy = Number(volumeState.lastFrameEnergy || 0);
+    const frameIndex = Number(volumeState.frameCount || 0) + fallbackFrame * 0.173;
+    const phase = frameIndex * 0.211;
+    const candidateCount = Math.max(0, Number(volumeState.boundarySplatSourceCandidateCount ?? volumeState.boundarySplatCandidateCount ?? 0) || 0);
+    const hybridMomentLayerEffective = volumeState.boundarySplatCompositionEffective === 'hybrid-smoke'
+      && volumeState.hybridSplatLayer?.identity === TIER2_RECEIVER_SPLAT_LAYER_IDENTITY
+      && volumeState.hybridSmokeLayer?.identity === TIER2_RECEIVER_SMOKE_LAYER_IDENTITY;
+    if (requestedReceiverEnvelopeSource === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE && hybridMomentLayerEffective) {
+      effectiveReceiverEnvelopeSource = TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE;
+      lastEnvelopeFallbackReason = null;
+      const candidateEnergy = clamp01(Math.log1p(candidateCount) / Math.log1p(12000));
+      const visualEnergy = clamp01(frameEnergy * 0.12);
+      const supportScalar = clamp01(0.12 + candidateEnergy * 0.34 + visualEnergy * 0.14);
+      const drift = Math.sin(phase * 0.47) * 0.020 + Math.sin(phase * 0.83 + 1.7) * 0.010;
+      const lift = Math.sin(phase * 0.39 + 0.6) * 0.018 + supportScalar * 0.038;
+      lastSplatMomentEnvelope = {
+        source: TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE,
+        hybridSplatLayer: volumeState.hybridSplatLayer,
+        hybridSmokeLayer: volumeState.hybridSmokeLayer,
+        compositionEffective: volumeState.boundarySplatCompositionEffective,
+        sourceCandidateCount: candidateCount,
+        candidateEnergy,
+        visualEnergy,
+      };
+      return {
+        source: effectiveReceiverEnvelopeSource,
+        supportScalar,
+        frameIndex,
+        phase,
+        pulse: clamp01(0.42 + candidateEnergy * 0.26 + Math.sin(phase * 1.37 + candidateCount * 0.0009) * 0.14),
+        sceneContextScale: sceneContextActive ? 0.48 : 1.0,
+        centerX: Math.max(0.22, Math.min(0.64, 0.40 + drift + (candidateEnergy - 0.45) * 0.038)),
+        centerY: Math.max(0.34, Math.min(0.78, 0.63 - lift - candidateEnergy * 0.032)),
+      };
+    }
+    effectiveReceiverEnvelopeSource = TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE;
+    lastEnvelopeFallbackReason = requestedReceiverEnvelopeSource === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE
+      ? (hybridMomentLayerEffective ? null : 'hybrid-splat-smoke-moments-not-effective')
+      : null;
+    lastSplatMomentEnvelope = {
+      source: TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE,
+      requested: requestedReceiverEnvelopeSource === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE,
+      accepted: false,
+      compositionEffective: volumeState.boundarySplatCompositionEffective ?? null,
+      hybridSplatLayer: volumeState.hybridSplatLayer ?? null,
+      hybridSmokeLayer: volumeState.hybridSmokeLayer ?? null,
+      sourceCandidateCount: candidateCount,
+      fallbackReason: lastEnvelopeFallbackReason,
+    };
+    const supportScalar = clamp01(frameEnergy * 0.15);
+    const pulse = 0.5 + 0.5 * Math.sin(phase * 1.37 + Math.sin(phase * 0.19));
+    const sceneContextScale = sceneContextActive ? 0.58 : 1.0;
+    const drift = Math.sin(phase * 0.47) * 0.035 + Math.sin(phase * 0.83 + 1.7) * 0.018;
+    const lift = Math.sin(phase * 0.39 + 0.6) * 0.030 + pulse * 0.025;
+    return {
+      source: effectiveReceiverEnvelopeSource,
+      supportScalar,
+      frameIndex,
+      phase,
+      pulse,
+      sceneContextScale,
+      centerX: Math.max(0.22, Math.min(0.62, 0.40 + drift + (supportScalar - 0.45) * 0.045)),
+      centerY: Math.max(0.36, Math.min(0.78, 0.62 - lift - supportScalar * 0.10)),
+    };
+  };
+  const drawReceiverEnvelope = (volumeState = {}, fallbackFrame = 0) => {
+    const envelope = resolveReceiverEnvelope(volumeState, fallbackFrame);
+    const { supportScalar, frameIndex, phase, pulse, sceneContextScale, centerX, centerY } = envelope;
+    const width = (48 + supportScalar * 70 + pulse * 14) * sceneContextScale;
+    const height = (126 + supportScalar * 78 + Math.sin(phase * 0.31) * 16) * sceneContextScale;
+    const x = centerX * receiverLightMaskCanvas.width;
+    const y = centerY * receiverLightMaskCanvas.height;
+    dynamicEnvelope.previousCenter = dynamicEnvelope.center;
+    dynamicEnvelope.center = { x: centerX, y: centerY };
+    dynamicEnvelope.motionMagnitude = Math.hypot(
+      dynamicEnvelope.center.x - dynamicEnvelope.previousCenter.x,
+      dynamicEnvelope.center.y - dynamicEnvelope.previousCenter.y
+    );
+    dynamicEnvelope.energy = supportScalar * sceneContextScale;
+    dynamicEnvelope.frameCount = frameIndex;
+    dynamicEnvelope.revision += 1;
+
+    receiverLightMaskContext.setTransform(1, 0, 0, 1, 0, 0);
+    receiverLightMaskContext.globalAlpha = 1;
+    receiverLightMaskContext.globalCompositeOperation = 'source-over';
+    receiverLightMaskContext.fillStyle = 'black';
+    receiverLightMaskContext.fillRect(0, 0, receiverLightMaskCanvas.width, receiverLightMaskCanvas.height);
+
+    const receiverGradient = receiverLightMaskContext.createRadialGradient(x - width * 0.12, y + height * 0.04, 7, x, y, height);
+    receiverGradient.addColorStop(0.0, 'rgb(255, 255, 255)');
+    receiverGradient.addColorStop(0.24, 'rgb(220, 220, 220)');
+    receiverGradient.addColorStop(0.56, 'rgb(92, 92, 92)');
+    receiverGradient.addColorStop(1.0, 'rgb(0, 0, 0)');
+    receiverLightMaskContext.fillStyle = receiverGradient;
+    receiverLightMaskContext.fillRect(0, 0, receiverLightMaskCanvas.width, receiverLightMaskCanvas.height);
+
+    receiverLightMaskContext.globalAlpha = (0.25 + supportScalar * 0.26) * sceneContextScale;
+    receiverLightMaskContext.fillStyle = 'rgb(255, 255, 255)';
+    receiverLightMaskContext.beginPath();
+    receiverLightMaskContext.ellipse(x - width * 0.12, y + height * 0.02, width * 0.32, height * 0.48, -0.10 + Math.sin(phase * 0.29) * 0.08, 0, Math.PI * 2);
+    receiverLightMaskContext.fill();
+    receiverLightMaskContext.globalAlpha = (0.16 + supportScalar * 0.20) * sceneContextScale;
+    receiverLightMaskContext.beginPath();
+    receiverLightMaskContext.ellipse(x + width * 0.18, y + height * 0.17, width * 0.26, height * 0.34, 0.20 + Math.sin(phase * 0.41) * 0.12, 0, Math.PI * 2);
+    receiverLightMaskContext.fill();
+    receiverLightMaskContext.globalAlpha = (0.11 + supportScalar * 0.12) * sceneContextScale;
+    receiverLightMaskContext.beginPath();
+    receiverLightMaskContext.ellipse(x + Math.sin(phase * 0.33) * 26, 222, 92 + supportScalar * 50, 34 + pulse * 12, 0, 0, Math.PI * 2);
+    receiverLightMaskContext.fill();
+    receiverLightMaskContext.globalAlpha = 1;
+    receiverLightMaskContext.globalCompositeOperation = 'source-over';
+    if (receiverLightMaskTexture) receiverLightMaskTexture.needsUpdate = true;
+  };
+  drawReceiverEnvelope({ lastFrameEnergy: 3.0, frameCount: 0 }, 0);
+  receiverLightMaskTexture = new THREE.CanvasTexture(receiverLightMaskCanvas);
+  receiverLightMaskTexture.name = 'tier2-receiver-light-envelope-texture-v0';
+  receiverLightMaskTexture.colorSpace = THREE.NoColorSpace;
+  const receiverMaskMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    map: receiverLightMaskTexture,
+    depthTest: true,
+    depthWrite: true,
+    side: THREE.DoubleSide,
+  });
+  const warmReceiverColor = vec3(1.0, 0.42, 0.08);
+  const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const receiverMaskRenderTarget = new THREE.RenderTarget(
+    Math.max(1, Math.round(drawSize.x)),
+    Math.max(1, Math.round(drawSize.y)),
+    {
+      type: THREE.HalfFloatType,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      depthBuffer: true,
+    }
+  );
+  receiverMaskRenderTarget.texture.name = 'tier2-receiver-mask-render-target-v0';
+
+  const receiverProxies = [];
+  const addReceiverProxy = (mesh, role) => {
+    mesh.name = `tier2-receiver-proxy-${role}-v0`;
+    mesh.userData.kaminosTier2Receiver = {
+      identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
+      receiverMaskAuthority: TIER2_RECEIVER_MASK_AUTHORITY,
+      receiverBufferSource: TIER2_RECEIVER_BUFFER_SOURCE,
+      role,
+    };
+    receiverScene.add(mesh);
+    receiverProxies.push(mesh);
+  };
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.2), receiverMaskMaterial);
+  wall.position.set(0.18, 0.14, -1.12);
+  wall.rotation.y = 0.06;
+  addReceiverProxy(wall, 'wall');
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.4), receiverMaskMaterial);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0.12, -0.86, 0.12);
+  addReceiverProxy(floor, 'floor');
+
+  const receiverMaskNode = texture(receiverMaskRenderTarget.texture).sample(viewportUV).r;
+  const receiverStrength = uniform(0.0);
+  const isolateMix = uniform(isTier2ReceiverLightIsolateRoute(params) ? 1.0 : 0.0);
+  const receiverLightNode = vec4(warmReceiverColor.mul(receiverMaskNode).mul(receiverStrength), 1.0);
+  const outputNode = mix(
+    baseOutputNode.add(vec4(warmReceiverColor.mul(receiverMaskNode).mul(receiverStrength), 0.0)),
+    receiverLightNode,
+    isolateMix
+  );
+
+  const state = {
+    identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
+    receiverMaskAuthority: TIER2_RECEIVER_MASK_AUTHORITY,
+    supportIdentity: TIER2_RECEIVER_SUPPORT_IDENTITY,
+	    supportAuthority: TIER2_RECEIVER_SUPPORT_AUTHORITY,
+	    receiverBufferSource: TIER2_RECEIVER_BUFFER_SOURCE,
+	    dynamicEnvelopeIdentity: TIER2_RECEIVER_DYNAMIC_ENVELOPE_IDENTITY,
+	    dynamicEnvelopeSource: 'pending-envelope-source-resolution',
+	    requestedEnvelopeSource: requestedReceiverEnvelopeSource,
+	    effectiveEnvelopeSource: effectiveReceiverEnvelopeSource,
+	    supportScalarSource: 'pending-envelope-source-resolution',
+	    splatMomentEnvelopeAccepted: false,
+	    splatMomentEnvelope: null,
+	    envelopeFallbackReason: null,
+	    cpuReadbackAuthority: false,
+    hiddenThreeLightAuthority: false,
+    canvasBridgeAuthority: false,
+    active: false,
+    isolate: isolateMix.value > 0,
+    receiverCount: receiverProxies.length,
+    lastSupportScalar: 0,
+    lastFrameCount: 0,
+    dynamicEnvelopeFrameCount: 0,
+    lastEnvelopeRevision: 0,
+    lastEnvelopeCenter: { x: 0, y: 0 },
+    lastEnvelopeMotionMagnitude: 0,
+    lastEnvelopeEnergy: 0,
+    lastSceneContextEnvelopeScale: 1,
+    receiverRenderFrameCount: 0,
+    lastRenderTargetSize: { width: receiverMaskRenderTarget.width, height: receiverMaskRenderTarget.height },
+  };
+
+  const setNativeVolumeVisibility = () => {
+    const canvas = volumePrototype?.canvasElement?.();
+    if (!canvas) return;
+    const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
+    const shouldHideNativeCanvas = state.active && state.isolate;
+    const shouldCssCompositeNativeCanvas = state.active && sceneContextActive && !state.isolate;
+    if (shouldHideNativeCanvas) {
+      canvas.style.opacity = '0';
+      canvas.style.pointerEvents = 'none';
+      canvas.style.mixBlendMode = '';
+    } else if (shouldCssCompositeNativeCanvas) {
+      canvas.style.opacity = '1';
+      canvas.style.pointerEvents = 'none';
+      canvas.style.mixBlendMode = 'screen';
+    } else {
+      canvas.style.opacity = '';
+      canvas.style.pointerEvents = '';
+      canvas.style.mixBlendMode = '';
+    }
+  };
+
+  const routeActive = () => isTier2ReceiverLightRoute();
+	  const updateStrength = () => {
+	    const volumeState = volumePrototype?.debugState?.() || {};
+	    const envelope = resolveReceiverEnvelope(volumeState, state.receiverRenderFrameCount + 1);
+	    const supportScalar = envelope.supportScalar;
+	    const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
+	    const sceneContextStrengthScale = sceneContextActive ? 0.18 : 1.0;
+	    drawReceiverEnvelope(volumeState, state.receiverRenderFrameCount + 1);
+	    receiverStrength.value = supportScalar * (state.isolate ? 1.35 : 1.8 * sceneContextStrengthScale);
+	    state.effectiveEnvelopeSource = effectiveReceiverEnvelopeSource;
+	    state.dynamicEnvelopeSource = effectiveReceiverEnvelopeSource;
+	    state.supportScalarSource = effectiveReceiverEnvelopeSource;
+	    state.splatMomentEnvelopeAccepted = effectiveReceiverEnvelopeSource === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE;
+	    state.splatMomentEnvelope = lastSplatMomentEnvelope ? { ...lastSplatMomentEnvelope } : null;
+	    state.envelopeFallbackReason = lastEnvelopeFallbackReason;
+	    state.lastSupportScalar = supportScalar;
+    state.lastFrameCount = Number(volumeState.frameCount || 0);
+    state.dynamicEnvelopeFrameCount = dynamicEnvelope.frameCount;
+    state.lastEnvelopeRevision = dynamicEnvelope.revision;
+    state.lastEnvelopeCenter = dynamicEnvelope.center;
+    state.lastEnvelopeMotionMagnitude = dynamicEnvelope.motionMagnitude;
+    state.lastEnvelopeEnergy = dynamicEnvelope.energy;
+    state.lastSceneContextEnvelopeScale = sceneContextStrengthScale;
+  };
+
+  return {
+    identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
+    outputNode,
+    receiverMaskRenderTarget,
+    update() {
+      state.active = routeActive();
+      state.isolate = isTier2ReceiverLightIsolateRoute();
+      isolateMix.value = state.active && state.isolate ? 1.0 : 0.0;
+      setNativeVolumeVisibility();
+      if (!state.active) {
+        receiverStrength.value = 0;
+        return false;
+      }
+      updateStrength();
+      const previousTarget = renderer.getRenderTarget();
+      const previousClearColor = renderer.getClearColor(new THREE.Color());
+      const previousClearAlpha = renderer.getClearAlpha();
+      renderer.setRenderTarget(receiverMaskRenderTarget);
+      renderer.setClearColor(0x000000, 1);
+      renderer.clear();
+      renderer.render(receiverScene, camera);
+      renderer.setRenderTarget(previousTarget);
+      renderer.setClearColor(previousClearColor, previousClearAlpha);
+      state.receiverRenderFrameCount += 1;
+      state.lastRenderTargetSize = {
+        width: receiverMaskRenderTarget.width,
+        height: receiverMaskRenderTarget.height,
+      };
+      return true;
+    },
+    resize(width, height) {
+      receiverMaskRenderTarget.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+      state.lastRenderTargetSize = {
+        width: receiverMaskRenderTarget.width,
+        height: receiverMaskRenderTarget.height,
+      };
+    },
+    debugState() {
+      return {
+        ...state,
+        strength: receiverStrength.value,
+        isolateMix: isolateMix.value,
+      };
+    },
+    dispose() {
+      setNativeVolumeVisibility();
+      receiverScene.remove(...receiverProxies);
+      for (const mesh of receiverProxies) mesh.geometry.dispose();
+      receiverLightMaskTexture.dispose();
+      receiverMaskMaterial.dispose();
+      receiverMaskRenderTarget.dispose();
+    },
+  };
+}
+
 async function initKaminosVolumeRoute() {
   const params = new URLSearchParams(window.location.search);
+  const routedVolumeSceneContext = normalizeVolumeSceneContext(params.get('volume_scene_context'));
   routedBonfireAblationControls = normalizeBonfireAblationControls({
     bonfireRecenter: routeBonfireAblationControl(params, 'volume_bonfire_recenter', 'bonfireRecenter'),
     bonfireLateralDamping: routeBonfireAblationControl(params, 'volume_bonfire_lateral_damping', 'bonfireLateralDamping'),
@@ -19969,7 +20658,8 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_mode')) {
     document.getElementById('volume-boundary-splat-mode').value = normalizeBoundarySplatMode(params.get('volume_boundary_splat_mode'));
   }
-  if (params.has('volume_boundary_splat_composition') && boundarySplatFieldLayoutRouteValue(params) === 'proof') {
+  const routeBoundarySplatComposition = String(params.get('volume_boundary_splat_composition') || '').toLowerCase().replace(/_/g, '-');
+  if (params.has('volume_boundary_splat_composition') && !isLegacyBoundarySplatFieldLayoutComposition(routeBoundarySplatComposition)) {
     document.getElementById('volume-boundary-splat-composition').value = normalizeBoundarySplatComposition(params.get('volume_boundary_splat_composition'));
   }
   if (params.has('volume_boundary_splat_phase_mode')) {
@@ -20008,6 +20698,10 @@ async function initKaminosVolumeRoute() {
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;
   window.__kaminosVolumeMainRendererBridge = volumeBridge;
+  volumeSceneContext?.dispose?.();
+  volumeSceneContext = createVolumeSceneContextRouter();
+  volumeSceneContext.setMode(routedVolumeSceneContext);
+  window.__kaminosVolumeSceneContext = volumeSceneContext;
   volumePrototype.setVolumePrimitives(volumePrimitives);
   if (params.has('volume_primitive_fixture')) {
     seedVolumePrimitiveFixture(params.get('volume_primitive_fixture'));
