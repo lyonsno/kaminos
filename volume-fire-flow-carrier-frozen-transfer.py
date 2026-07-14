@@ -45,6 +45,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-full-grid-manifest", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--test-samples", type=int, default=80_000)
+    parser.add_argument("--write-dense", action="store_true")
+    parser.add_argument("--dense-batch-cells", type=int, default=32_768)
     return parser.parse_args()
 
 
@@ -354,6 +356,88 @@ def main() -> int:
             "selected": SUPPORT.scalar_metrics(selected, truth),
             "constant": SUPPORT.scalar_metrics(constant, truth),
         }
+
+        phase = "dense-frozen-write"
+        dense_derived_targets: dict[str, Any] = {}
+        if args.write_dense:
+            channel = SUPPORT.FIRE_FLOW_CARRIER
+            role_paths = {
+                "lowDerived": out_dir / f"{channel}.low-derived.f32",
+                "truthHigh": out_dir / f"{channel}.truth-high.f32",
+                "frozenLinear": out_dir / f"{channel}.frozen-linear.f32",
+                "frozenUngated": out_dir / f"{channel}.frozen-ungated.f32",
+                "frozenSelected": out_dir / f"{channel}.frozen-selected.f32",
+                "frozenConstant": out_dir / f"{channel}.frozen-constant.f32",
+            }
+            dense = {
+                role: np.memmap(path, dtype="<f4", mode="w+", shape=(high_cells,))
+                for role, path in role_paths.items()
+            }
+            dense["truthHigh"][:] = high_carrier
+            batch_cells = max(1, int(args.dense_batch_cells))
+            for start in range(0, high_cells, batch_cells):
+                end = min(high_cells, start + batch_cells)
+                indexes = np.arange(start, end, dtype=np.int64)
+                low_batch, bx, by, bz = SUPPORT.low_values_for_high_cells(
+                    low_fluid, low_front, indexes, low_grid, high_grid,
+                )
+                low_batch_channel = SUPPORT.sample_low_scalar_for_high_cells(
+                    low_carrier, bx, by, bz, low_grid, high_grid,
+                )
+                batch_context = SUPPORT.sample_low_context_for_high_cells(
+                    low_context_fields, bx, by, bz, low_grid, high_grid,
+                )
+                batch_features = SUPPORT.build_features(
+                    low_batch, bx, by, bz, high_grid, batch_context,
+                )
+                batch_features = (
+                    (batch_features - frozen["featureMean"]) / frozen["featureStd"]
+                ).astype(np.float32)
+                batch_probability = SUPPORT.predict_mlp(
+                    batch_features, frozen["classifier"], binary=True,
+                )
+                batch_residual = SUPPORT.predict_mlp(
+                    batch_features, frozen["head"], binary=False,
+                )
+                batch_selected_gate = SUPPORT.apply_selected_residual_gate(
+                    batch_probability, frozen["calibration"],
+                )
+                dense["lowDerived"][start:end] = low_batch_channel
+                dense["frozenLinear"][start:end] = np.clip(
+                    low_batch_channel + SUPPORT.predict_ridge_residual(batch_features, frozen["linear"]),
+                    0.0,
+                    1.0,
+                )
+                dense["frozenUngated"][start:end] = np.clip(
+                    low_batch_channel + batch_residual,
+                    0.0,
+                    1.0,
+                )
+                dense["frozenSelected"][start:end] = np.clip(
+                    low_batch_channel + batch_residual * batch_selected_gate,
+                    0.0,
+                    1.0,
+                )
+                dense["frozenConstant"][start:end] = np.clip(
+                    low_batch_channel + batch_residual * np.float32(frozen["constantScale"]),
+                    0.0,
+                    1.0,
+                )
+            for values in dense.values():
+                values.flush()
+            del dense
+            authorities = {
+                "lowDerived": "native-low-derived-then-nearest-upsampled-control-v0",
+                "truthHigh": SUPPORT.FIRE_FLOW_CARRIER_AUTHORITY,
+                "frozenLinear": "frozen-earlier-replay-ridge-derived-carrier-v0",
+                "frozenUngated": "frozen-earlier-replay-ungated-derived-carrier-v0",
+                "frozenSelected": "frozen-earlier-replay-source-selected-gate-derived-carrier-v0",
+                "frozenConstant": "frozen-earlier-replay-constant-residual-scale-derived-carrier-v0",
+            }
+            dense_derived_targets[channel] = {
+                role: SUPPORT.dense_scalar_descriptor(path, high_grid, authorities[role])
+                for role, path in role_paths.items()
+            }
         source_replay = source.get("route", {}).get("deterministicReplay")
         target_replay = full.get("deterministicReplay")
         report = {
@@ -396,6 +480,7 @@ def main() -> int:
                 "lowDerived": low_receipt,
                 "truthHigh": high_receipt,
             },
+            "denseDerivedTargets": dense_derived_targets,
             "channel": {
                 "channel": SUPPORT.FIRE_FLOW_CARRIER,
                 "lowUpsampled": metrics["low"],

@@ -30,6 +30,7 @@ assert.match(source, /validation-selected-support-conditioned-residual-gate-v0/,
 assert.match(frozenTransferSource, /kaminos\.volume\.fire-flow-carrier-frozen-transfer\.v0/, 'frozen evaluator emits a stable transfer report schema');
 assert.match(frozenTransferSource, /targetDataUsedForTraining/, 'frozen evaluator reports whether target data entered fitting');
 assert.match(frozenTransferSource, /frozen-model-validation/, 'frozen evaluator fails checkpoints before target metrics');
+assert.match(frozenTransferSource, /--write-dense/, 'frozen evaluator exposes explicit dense artifact generation');
 assert.ok(existsSync(phaseAlignedPackerPath), 'phase-aligned corpus packer exists beside the carrier probe');
 const phaseAlignedPackerSource = existsSync(phaseAlignedPackerPath) ? readFileSync(phaseAlignedPackerPath, 'utf8') : '';
 assert.match(phaseAlignedPackerSource, /kaminos\.volume\.full-grid-field-pair\.v0/, 'phase-aligned packer emits the carrier probe pair schema directly');
@@ -353,6 +354,7 @@ execFileSync('python3', [
   '--target-full-grid-manifest', frozenTargetFullPath,
   '--out-dir', frozenTransferDir,
   '--test-samples', '350',
+  '--write-dense',
 ], { stdio: 'pipe' });
 const frozenTransfer = JSON.parse(readFileSync(join(frozenTransferDir, 'manifest.json'), 'utf8'));
 assert.equal(frozenTransfer.schema, 'kaminos.volume.fire-flow-carrier-frozen-transfer.v0');
@@ -377,6 +379,13 @@ assert.equal(typeof frozenTransfer.channel.constantResidual.improvementVsLow.rms
 assert.equal(frozenTransfer.channel.constantResidual.scale, carrierChannel.calibratedResidual.calibration.constantControl.scale);
 assert.equal(frozenTransfer.split.targetTest.samplingIdentity, 'reproduced-probe-rng-sequence-without-fit-v0');
 assert.equal(frozenTransfer.split.targetTest.sameSamplingContractAsSourceProbe, true);
+for (const role of ['lowDerived', 'truthHigh', 'frozenLinear', 'frozenUngated', 'frozenSelected', 'frozenConstant']) {
+  const artifact = frozenTransfer.denseDerivedTargets.fireFlowVisibilityCarrier[role];
+  assert.deepEqual(artifact.shape, [highGrid, highGrid, highGrid, 1], `${role} frozen transfer records dense carrier shape`);
+  assert.equal(artifact.byteLength, highCells * Float32Array.BYTES_PER_ELEMENT, `${role} frozen transfer records dense byte length`);
+  assert.ok(existsSync(artifact.path), `${role} frozen transfer artifact exists`);
+  assert.equal(artifact.sha256, sha256(readFileSync(artifact.path)), `${role} frozen transfer checksum binds bytes`);
+}
 
 const corruptFrozenHeadsPath = join(fixtureRoot, 'frozen-heads-corrupt.npz');
 const frozenHeadBytes = readFileSync(carrierReport.channelHeadArtifact.path);
