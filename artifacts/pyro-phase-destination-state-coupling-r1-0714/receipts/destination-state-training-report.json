@@ -1,0 +1,4642 @@
+{
+  "claimBoundary": "offline cross-episode destination-state residual prediction after exact heldout support and donor assignment; does not yet apply state residuals to predicted support or modify the deployed occupancy model",
+  "completedAt": 1784064752.2894568,
+  "evaluation": {
+    "aggregate": {
+      "beatsCarriedDonor": true,
+      "candidateCarriedDonorMse": 1.1158125712254916,
+      "candidatePredictionMse": 0.6688745434009405,
+      "carriedDonorMse": 1.098154223464156,
+      "predictionMse": 0.6365358976627279,
+      "predictionToDonorMseRatio": 0.5796416241561763,
+      "sampleCount": 3059367,
+      "splatCarriedDonorMse": 1.0667616052217812,
+      "splatPredictionMse": 0.5790449719059053
+    },
+    "aggregateMayCloseCohortClaim": false,
+    "allCohortsBeatCarriedDonor": true,
+    "authority": "full-cross-episode-state-mse-versus-carried-donor-v0",
+    "cohorts": {
+      "birth": {
+        "beatsCarriedDonor": true,
+        "candidateCarriedDonorMse": 0.6766030496323088,
+        "candidatePredictionMse": 0.5334261893645675,
+        "carriedDonorMse": 0.6822847842324166,
+        "predictionMse": 0.516476772573735,
+        "predictionToDonorMseRatio": 0.7569812261822331,
+        "sampleCount": 673451,
+        "splatCarriedDonorMse": 0.6923856457437193,
+        "splatPredictionMse": 0.48634447605669934
+      },
+      "stable-q3": {
+        "beatsCarriedDonor": true,
+        "candidateCarriedDonorMse": 0.7495250573321002,
+        "candidatePredictionMse": 0.5684794618583007,
+        "carriedDonorMse": 0.7829294602818292,
+        "predictionMse": 0.5676517184282851,
+        "predictionToDonorMseRatio": 0.7250355839515209,
+        "sampleCount": 478652,
+        "splatCarriedDonorMse": 0.8423150655257916,
+        "splatPredictionMse": 0.5661801745527018
+      },
+      "stable-q4": {
+        "beatsCarriedDonor": true,
+        "candidateCarriedDonorMse": 2.99525689250269,
+        "candidatePredictionMse": 1.1399419009066998,
+        "carriedDonorMse": 2.9721622493599718,
+        "predictionMse": 1.0587157613187734,
+        "predictionToDonorMseRatio": 0.3562106212562111,
+        "sampleCount": 478617,
+        "splatCarriedDonorMse": 2.9311051059951407,
+        "splatPredictionMse": 0.9143137353846826
+      },
+      "transported": {
+        "beatsCarriedDonor": true,
+        "candidateCarriedDonorMse": 0.8159318728513106,
+        "candidatePredictionMse": 0.608545638218179,
+        "carriedDonorMse": 0.7719844654599907,
+        "predictionMse": 0.5747732846489927,
+        "predictionToDonorMseRatio": 0.7445399620917388,
+        "sampleCount": 1428647,
+        "splatCarriedDonorMse": 0.6938557412087553,
+        "splatPredictionMse": 0.5147335449704392
+      }
+    },
+    "evaluatedPairCount": 63,
+    "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+  },
+  "evaluationManifest": {
+    "bytes": 421170,
+    "controlledStepDeltaMs": 160,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "frameCount": 64,
+    "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+    "sha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+  },
+  "evaluationPairs": [
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 0.9018648725588534,
+          "candidatePredictionMse": 0.5472009796724896,
+          "carriedDonorMse": 0.9100311687054335,
+          "predictionMse": 0.5389260539534907,
+          "predictionToDonorMseRatio": 0.592206149070851,
+          "sampleCount": 40140,
+          "splatCarriedDonorMse": 0.9245490285215777,
+          "splatPredictionMse": 0.524215074897493
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": false,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.437155510020676,
+            "candidatePredictionMse": 0.3445246329626718,
+            "carriedDonorMse": 0.4544253687476597,
+            "predictionMse": 0.3465629511730272,
+            "predictionToDonorMseRatio": 0.7626399734858816,
+            "sampleCount": 7156,
+            "splatCarriedDonorMse": 0.4851273398178526,
+            "splatPredictionMse": 0.350186627991437
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": false,
+            "candidateCarriedDonorMse": 0.4197197148489463,
+            "candidatePredictionMse": 0.544971664842303,
+            "carriedDonorMse": 0.43829651270109155,
+            "predictionMse": 0.5600586401772184,
+            "predictionToDonorMseRatio": 1.2778076574822441,
+            "sampleCount": 9112,
+            "splatCarriedDonorMse": 0.47132193110490517,
+            "splatPredictionMse": 0.5868799296615125
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 1.9359613192673013,
+            "candidatePredictionMse": 0.7859824769623073,
+            "carriedDonorMse": 1.9860516971930349,
+            "predictionMse": 0.7499140012181496,
+            "predictionToDonorMseRatio": 0.3775903730391473,
+            "sampleCount": 9111,
+            "splatCarriedDonorMse": 2.0751012579498957,
+            "splatPredictionMse": 0.6857922665618698
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7865010184443072,
+            "candidatePredictionMse": 0.499448607338677,
+            "carriedDonorMse": 0.7579505681335796,
+            "predictionMse": 0.4889076981712325,
+            "predictionToDonorMseRatio": 0.6450390285677158,
+            "sampleCount": 14761,
+            "splatCarriedDonorMse": 0.7071942120256197,
+            "splatPredictionMse": 0.470168304095776
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 40140,
+      "sourceFrameId": "frame-0",
+      "step": 1,
+      "targetFrameId": "frame-1"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 0.9156415473688665,
+          "candidatePredictionMse": 0.5251234349124188,
+          "carriedDonorMse": 0.9265616777080194,
+          "predictionMse": 0.5181753163999293,
+          "predictionToDonorMseRatio": 0.559245357180872,
+          "sampleCount": 41980,
+          "splatCarriedDonorMse": 0.9459752427554037,
+          "splatPredictionMse": 0.5058231057110595
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.4374148364538149,
+            "candidatePredictionMse": 0.3410543275296499,
+            "carriedDonorMse": 0.45881343068429237,
+            "predictionMse": 0.3485238790672489,
+            "predictionToDonorMseRatio": 0.7596200454451534,
+            "sampleCount": 7998,
+            "splatCarriedDonorMse": 0.49685537598291885,
+            "splatPredictionMse": 0.3618030818007581
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.5146040193739663,
+            "candidatePredictionMse": 0.520714312231949,
+            "carriedDonorMse": 0.5478534494139737,
+            "predictionMse": 0.5332294495191557,
+            "predictionToDonorMseRatio": 0.9733067302752936,
+            "sampleCount": 8301,
+            "splatCarriedDonorMse": 0.6069635472628759,
+            "splatPredictionMse": 0.5554785824741899
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.1155023310280954,
+            "candidatePredictionMse": 0.8050498656257961,
+            "carriedDonorMse": 2.1833336029717048,
+            "predictionMse": 0.7738637684248992,
+            "predictionToDonorMseRatio": 0.3544413768796505,
+            "sampleCount": 8300,
+            "splatCarriedDonorMse": 2.303922530871454,
+            "splatPredictionMse": 0.7184218178455275
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7542598805725174,
+            "candidatePredictionMse": 0.47825590561588427,
+            "carriedDonorMse": 0.7225170601990194,
+            "predictionMse": 0.4669523536795355,
+            "predictionToDonorMseRatio": 0.6462855749743988,
+            "sampleCount": 17381,
+            "splatCarriedDonorMse": 0.666085379535024,
+            "splatPredictionMse": 0.44685715023713757
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 41980,
+      "sourceFrameId": "frame-1",
+      "step": 2,
+      "targetFrameId": "frame-2"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 0.946874931487856,
+          "candidatePredictionMse": 0.5458919237641044,
+          "carriedDonorMse": 0.9526502887551546,
+          "predictionMse": 0.5358638965822693,
+          "predictionToDonorMseRatio": 0.562498015176684,
+          "sampleCount": 42409,
+          "splatCarriedDonorMse": 0.9629175905636843,
+          "splatPredictionMse": 0.5180362927034508
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.5039927841973609,
+            "candidatePredictionMse": 0.39005901615222077,
+            "carriedDonorMse": 0.5211716831067282,
+            "predictionMse": 0.3897999824429412,
+            "predictionToDonorMseRatio": 0.7479300872973866,
+            "sampleCount": 8541,
+            "splatCarriedDonorMse": 0.5517119478344927,
+            "splatPredictionMse": 0.3893394780708886
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.5098135178076968,
+            "candidatePredictionMse": 0.48191158853490007,
+            "carriedDonorMse": 0.54522435353023,
+            "predictionMse": 0.5043698152115291,
+            "predictionToDonorMseRatio": 0.9250683905548696,
+            "sampleCount": 8072,
+            "splatCarriedDonorMse": 0.6081769503702888,
+            "splatPredictionMse": 0.544295551525536
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.1823747273461147,
+            "candidatePredictionMse": 0.7962006383452809,
+            "carriedDonorMse": 2.257592933341587,
+            "predictionMse": 0.7793891891730503,
+            "predictionToDonorMseRatio": 0.3452301686732487,
+            "sampleCount": 8071,
+            "splatCarriedDonorMse": 2.3913141884446483,
+            "splatPredictionMse": 0.749502168422418
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7967421979963101,
+            "candidatePredictionMse": 0.5361416554706523,
+            "carriedDonorMse": 0.7519060763727388,
+            "predictionMse": 0.5097008206436751,
+            "predictionToDonorMseRatio": 0.6778783104167967,
+            "sampleCount": 17725,
+            "splatCarriedDonorMse": 0.6721974157086128,
+            "splatPredictionMse": 0.46269489206238185
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 42409,
+      "sourceFrameId": "frame-2",
+      "step": 3,
+      "targetFrameId": "frame-3"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 0.960313001925574,
+          "candidatePredictionMse": 0.5475039336606778,
+          "carriedDonorMse": 0.9642424623233452,
+          "predictionMse": 0.5358125997320272,
+          "predictionToDonorMseRatio": 0.5556824353503216,
+          "sampleCount": 43008,
+          "splatCarriedDonorMse": 0.9712281696971601,
+          "splatPredictionMse": 0.5150280060810921
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.5430218375008543,
+            "candidatePredictionMse": 0.4140551444016738,
+            "carriedDonorMse": 0.5492991799305788,
+            "predictionMse": 0.40710419826301925,
+            "predictionToDonorMseRatio": 0.7411338176664849,
+            "sampleCount": 8772,
+            "splatCarriedDonorMse": 0.5604588998056447,
+            "splatPredictionMse": 0.39474696068318904
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.5468285718304647,
+            "candidatePredictionMse": 0.48883876976942847,
+            "carriedDonorMse": 0.5863480745037019,
+            "predictionMse": 0.5035685608859608,
+            "predictionToDonorMseRatio": 0.8588218888792165,
+            "sampleCount": 7775,
+            "splatCarriedDonorMse": 0.656604968145012,
+            "splatPredictionMse": 0.5297548562042405
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.334687882433299,
+            "candidatePredictionMse": 0.8236120245095496,
+            "carriedDonorMse": 2.4103085543058307,
+            "predictionMse": 0.8043885958889399,
+            "predictionToDonorMseRatio": 0.3337284740793711,
+            "sampleCount": 7774,
+            "splatCarriedDonorMse": 2.5447453043014434,
+            "splatPredictionMse": 0.7702136116745227
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7564776734756391,
+            "candidatePredictionMse": 0.5196915576974583,
+            "carriedDonorMse": 0.7146728973517188,
+            "predictionMse": 0.497915543253751,
+            "predictionToDonorMseRatio": 0.696704107709722,
+            "sampleCount": 18687,
+            "splatCarriedDonorMse": 0.6403532953536384,
+            "splatPredictionMse": 0.45920262868716066
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 43008,
+      "sourceFrameId": "frame-3",
+      "step": 4,
+      "targetFrameId": "frame-4"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 0.9757696776329547,
+          "candidatePredictionMse": 0.5725955092925578,
+          "carriedDonorMse": 0.9811264361071999,
+          "predictionMse": 0.5567215115312385,
+          "predictionToDonorMseRatio": 0.5674309559327887,
+          "sampleCount": 44287,
+          "splatCarriedDonorMse": 0.9906495622836353,
+          "splatPredictionMse": 0.5285010710666702
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6031345948295268,
+            "candidatePredictionMse": 0.4646129331537972,
+            "carriedDonorMse": 0.6101033453008579,
+            "predictionMse": 0.4539969007353596,
+            "predictionToDonorMseRatio": 0.7441311447185753,
+            "sampleCount": 9642,
+            "splatCarriedDonorMse": 0.6224922350276689,
+            "splatPredictionMse": 0.43512395421369265
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.5860073737471626,
+            "candidatePredictionMse": 0.4754465481610201,
+            "carriedDonorMse": 0.6261581940585195,
+            "predictionMse": 0.4958536892435732,
+            "predictionToDonorMseRatio": 0.7918984275038198,
+            "sampleCount": 7632,
+            "splatCarriedDonorMse": 0.697537430167598,
+            "splatPredictionMse": 0.5321330511681123
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.3837682155334883,
+            "candidatePredictionMse": 0.8711675547353862,
+            "carriedDonorMse": 2.470284747853382,
+            "predictionMse": 0.8438412774037184,
+            "predictionToDonorMseRatio": 0.34159676455801147,
+            "sampleCount": 7631,
+            "splatCarriedDonorMse": 2.6240919164220795,
+            "splatPredictionMse": 0.795261228814087
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7602695501398182,
+            "candidatePredictionMse": 0.5470153623372181,
+            "carriedDonorMse": 0.719169733389996,
+            "predictionMse": 0.518748288108497,
+            "predictionToDonorMseRatio": 0.7213155170800089,
+            "sampleCount": 19382,
+            "splatCarriedDonorMse": 0.6461033925014223,
+            "splatPredictionMse": 0.4684957117018817
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 44287,
+      "sourceFrameId": "frame-4",
+      "step": 5,
+      "targetFrameId": "frame-5"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 0.995615971316699,
+          "candidatePredictionMse": 0.567546330109667,
+          "carriedDonorMse": 0.996866752230509,
+          "predictionMse": 0.5499575545136453,
+          "predictionToDonorMseRatio": 0.5516861238305966,
+          "sampleCount": 45520,
+          "splatCarriedDonorMse": 0.9990903627439495,
+          "splatPredictionMse": 0.5186886201207176
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6050965546259597,
+            "candidatePredictionMse": 0.46487357434337306,
+            "carriedDonorMse": 0.6077550820375845,
+            "predictionMse": 0.45282264730359895,
+            "predictionToDonorMseRatio": 0.7450742259290489,
+            "sampleCount": 9879,
+            "splatCarriedDonorMse": 0.6124813529915847,
+            "splatPredictionMse": 0.43139877701066737
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7287133442120143,
+            "candidatePredictionMse": 0.5059833878938439,
+            "carriedDonorMse": 0.7648294628869541,
+            "predictionMse": 0.5130187043674207,
+            "predictionToDonorMseRatio": 0.6707622146654248,
+            "sampleCount": 7158,
+            "splatCarriedDonorMse": 0.8290358960868469,
+            "splatPredictionMse": 0.5255259336537793
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.5867886354982113,
+            "candidatePredictionMse": 0.9129101732626322,
+            "carriedDonorMse": 2.6561735319367035,
+            "predictionMse": 0.8778232319387516,
+            "predictionToDonorMseRatio": 0.3304841424644051,
+            "sampleCount": 7157,
+            "splatCarriedDonorMse": 2.779524458938467,
+            "splatPredictionMse": 0.8154464473629637
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7321069947039286,
+            "candidatePredictionMse": 0.5198675656508048,
+            "carriedDonorMse": 0.6981374304917788,
+            "predictionMse": 0.49732083803344435,
+            "predictionToDonorMseRatio": 0.7123537806633915,
+            "sampleCount": 21326,
+            "splatCarriedDonorMse": 0.6377470941146238,
+            "splatPredictionMse": 0.45723776671369215
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 45520,
+      "sourceFrameId": "frame-5",
+      "step": 6,
+      "targetFrameId": "frame-6"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0255824039214918,
+          "candidatePredictionMse": 0.5987426626985589,
+          "carriedDonorMse": 1.023109214139644,
+          "predictionMse": 0.5795066884130732,
+          "predictionToDonorMseRatio": 0.5664172313220672,
+          "sampleCount": 45345,
+          "splatCarriedDonorMse": 1.0187124323052492,
+          "splatPredictionMse": 0.5453094007944316
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.5968766129736885,
+            "candidatePredictionMse": 0.459575040168956,
+            "carriedDonorMse": 0.6117671234546757,
+            "predictionMse": 0.4543123562702364,
+            "predictionToDonorMseRatio": 0.7426230322818178,
+            "sampleCount": 9758,
+            "splatCarriedDonorMse": 0.6382391420875414,
+            "splatPredictionMse": 0.444956473783624
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6540950762826436,
+            "candidatePredictionMse": 0.5215801761120907,
+            "carriedDonorMse": 0.685893569239594,
+            "predictionMse": 0.5367366952058052,
+            "predictionToDonorMseRatio": 0.7825364156728436,
+            "sampleCount": 7589,
+            "splatCarriedDonorMse": 0.7424242233852837,
+            "splatPredictionMse": 0.5636816180390757
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.691308406869759,
+            "candidatePredictionMse": 1.0096360926836958,
+            "carriedDonorMse": 2.7147208457355165,
+            "predictionMse": 0.9494071437137775,
+            "predictionToDonorMseRatio": 0.34972551421085385,
+            "sampleCount": 7589,
+            "splatCarriedDonorMse": 2.7563429592746425,
+            "splatPredictionMse": 0.842333456656145
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7492990877935818,
+            "candidatePredictionMse": 0.541185385575298,
+            "carriedDonorMse": 0.7161546831910106,
+            "predictionMse": 0.5177228291462158,
+            "predictionToDonorMseRatio": 0.7229203987599008,
+            "sampleCount": 20409,
+            "splatCarriedDonorMse": 0.6572312972308846,
+            "splatPredictionMse": 0.4760116177167365
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 45345,
+      "sourceFrameId": "frame-6",
+      "step": 7,
+      "targetFrameId": "frame-7"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0191432749837608,
+          "candidatePredictionMse": 0.6067027379214244,
+          "carriedDonorMse": 1.0203381788586598,
+          "predictionMse": 0.5859572237947265,
+          "predictionToDonorMseRatio": 0.5742774659771845,
+          "sampleCount": 46939,
+          "splatCarriedDonorMse": 1.0224624524140367,
+          "splatPredictionMse": 0.5490763097917071
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6023279490234774,
+            "candidatePredictionMse": 0.4730957190054512,
+            "carriedDonorMse": 0.6210984698654821,
+            "predictionMse": 0.46675671406972896,
+            "predictionToDonorMseRatio": 0.7515019545464657,
+            "sampleCount": 10692,
+            "splatCarriedDonorMse": 0.6544682846957127,
+            "splatPredictionMse": 0.4554873719617784
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6765510776787995,
+            "candidatePredictionMse": 0.5342459359658553,
+            "carriedDonorMse": 0.712538815902008,
+            "predictionMse": 0.5471453748283809,
+            "predictionToDonorMseRatio": 0.7678815000916767,
+            "sampleCount": 7687,
+            "splatCarriedDonorMse": 0.7765170171877125,
+            "splatPredictionMse": 0.5700777105839817
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.713782619496056,
+            "candidatePredictionMse": 1.0295636447238918,
+            "carriedDonorMse": 2.752299549846092,
+            "predictionMse": 0.9719487813802307,
+            "predictionToDonorMseRatio": 0.35314062433160004,
+            "sampleCount": 7687,
+            "splatCarriedDonorMse": 2.8207740926906,
+            "splatPredictionMse": 0.8695223576581649
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7347281475264988,
+            "candidatePredictionMse": 0.5460966866729923,
+            "carriedDonorMse": 0.7003620188827323,
+            "predictionMse": 0.5191590361755145,
+            "predictionToDonorMseRatio": 0.7412724022409356,
+            "sampleCount": 20873,
+            "splatCarriedDonorMse": 0.6392666790715907,
+            "splatPredictionMse": 0.47126987973555395
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 46939,
+      "sourceFrameId": "frame-7",
+      "step": 8,
+      "targetFrameId": "frame-8"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0572726394222831,
+          "candidatePredictionMse": 0.5951317519282401,
+          "carriedDonorMse": 1.0499503592082517,
+          "predictionMse": 0.5719793101827515,
+          "predictionToDonorMseRatio": 0.5447679551384416,
+          "sampleCount": 48842,
+          "splatCarriedDonorMse": 1.0369329721610838,
+          "splatPredictionMse": 0.5308194137463278
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6054810638754086,
+            "candidatePredictionMse": 0.4657360177042808,
+            "carriedDonorMse": 0.615679239763245,
+            "predictionMse": 0.45619058918141847,
+            "predictionToDonorMseRatio": 0.7409549644013387,
+            "sampleCount": 11037,
+            "splatCarriedDonorMse": 0.63380933023051,
+            "splatPredictionMse": 0.4392209384741075
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8342127774918704,
+            "candidatePredictionMse": 0.5429823634975692,
+            "carriedDonorMse": 0.8753367884141235,
+            "predictionMse": 0.5451377498684272,
+            "predictionToDonorMseRatio": 0.6227748645822041,
+            "sampleCount": 7330,
+            "splatCarriedDonorMse": 0.9484461411647954,
+            "splatPredictionMse": 0.5489695478610638
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.9682819882447284,
+            "candidatePredictionMse": 1.0745593639187987,
+            "carriedDonorMse": 2.967122531952265,
+            "predictionMse": 0.9960753231268427,
+            "predictionToDonorMseRatio": 0.33570414177383473,
+            "sampleCount": 7329,
+            "splatCarriedDonorMse": 2.9650612763212196,
+            "splatPredictionMse": 0.856548139496699
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7382397564075536,
+            "candidatePredictionMse": 0.5215410998737959,
+            "carriedDonorMse": 0.7052693329054178,
+            "predictionMse": 0.5014059528825037,
+            "predictionToDonorMseRatio": 0.7109425144248349,
+            "sampleCount": 23146,
+            "splatCarriedDonorMse": 0.646655246679399,
+            "splatPredictionMse": 0.46561013600909495
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48842,
+      "sourceFrameId": "frame-8",
+      "step": 9,
+      "targetFrameId": "frame-9"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0631841946070066,
+          "candidatePredictionMse": 0.6143270156008407,
+          "carriedDonorMse": 1.053387265891348,
+          "predictionMse": 0.5904687646881431,
+          "predictionToDonorMseRatio": 0.5605429112421483,
+          "sampleCount": 49052,
+          "splatCarriedDonorMse": 1.0359705037301756,
+          "splatPredictionMse": 0.5480540963989011
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6066581707456427,
+            "candidatePredictionMse": 0.4754904065058792,
+            "carriedDonorMse": 0.6149040450732194,
+            "predictionMse": 0.46537475303848447,
+            "predictionToDonorMseRatio": 0.7568249985785509,
+            "sampleCount": 11364,
+            "splatCarriedDonorMse": 0.6295633772111334,
+            "splatPredictionMse": 0.44739136909644905
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7200337542065519,
+            "candidatePredictionMse": 0.5146628178971352,
+            "carriedDonorMse": 0.7551867441942446,
+            "predictionMse": 0.5251529851069147,
+            "predictionToDonorMseRatio": 0.6953948664276846,
+            "sampleCount": 7867,
+            "splatCarriedDonorMse": 0.8176809486168093,
+            "splatPredictionMse": 0.5438021712576335
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.8832682339093143,
+            "candidatePredictionMse": 1.0423709019907619,
+            "carriedDonorMse": 2.880145343291913,
+            "predictionMse": 0.9789443857405932,
+            "predictionToDonorMseRatio": 0.3398940918105513,
+            "sampleCount": 7866,
+            "splatCarriedDonorMse": 2.874593537749867,
+            "splatPredictionMse": 0.8661861346291824
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.770346353415432,
+            "candidatePredictionMse": 0.5685426502511288,
+            "carriedDonorMse": 0.7327126035700301,
+            "predictionMse": 0.5394397667903358,
+            "predictionToDonorMseRatio": 0.7362228575869967,
+            "sampleCount": 21955,
+            "splatCarriedDonorMse": 0.6658081594004273,
+            "splatPredictionMse": 0.48770130730448186
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49052,
+      "sourceFrameId": "frame-9",
+      "step": 10,
+      "targetFrameId": "frame-10"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.083677571960097,
+          "candidatePredictionMse": 0.624779082265451,
+          "carriedDonorMse": 1.0690585186436636,
+          "predictionMse": 0.5976020929537946,
+          "predictionToDonorMseRatio": 0.5589984856132896,
+          "sampleCount": 49659,
+          "splatCarriedDonorMse": 1.0430690905255569,
+          "splatPredictionMse": 0.5492874452886267
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6261853938718532,
+            "candidatePredictionMse": 0.4983655363028531,
+            "carriedDonorMse": 0.6291807546772998,
+            "predictionMse": 0.4783143819064976,
+            "predictionToDonorMseRatio": 0.7602177567427663,
+            "sampleCount": 11102,
+            "splatCarriedDonorMse": 0.6345058405536498,
+            "splatPredictionMse": 0.4426678852018656
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7325422105422454,
+            "candidatePredictionMse": 0.5213110478718491,
+            "carriedDonorMse": 0.7643917617315964,
+            "predictionMse": 0.5302744964860308,
+            "predictionToDonorMseRatio": 0.693720841894981,
+            "sampleCount": 7970,
+            "splatCarriedDonorMse": 0.8210131860682199,
+            "splatPredictionMse": 0.5462095162445759
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.0085403113448166,
+            "candidatePredictionMse": 1.0937704658704055,
+            "carriedDonorMse": 2.9660948047979105,
+            "predictionMse": 1.0150470026482123,
+            "predictionToDonorMseRatio": 0.34221664156057574,
+            "sampleCount": 7970,
+            "splatCarriedDonorMse": 2.8906361264923026,
+            "splatPredictionMse": 0.8750941791420914
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.753681151512635,
+            "candidatePredictionMse": 0.5580249634195514,
+            "carriedDonorMse": 0.7238464121527205,
+            "predictionMse": 0.5327790475291427,
+            "predictionToDonorMseRatio": 0.7360388040670905,
+            "sampleCount": 22617,
+            "splatCarriedDonorMse": 0.6708068755128727,
+            "splatPredictionMse": 0.4878974192795273
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49659,
+      "sourceFrameId": "frame-10",
+      "step": 11,
+      "targetFrameId": "frame-11"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1123870271955596,
+          "candidatePredictionMse": 0.6536126022147322,
+          "carriedDonorMse": 1.0907066968932675,
+          "predictionMse": 0.618690742911047,
+          "predictionToDonorMseRatio": 0.5672384195249787,
+          "sampleCount": 50669,
+          "splatCarriedDonorMse": 1.052163887466968,
+          "splatPredictionMse": 0.5566074374822745
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6211285217163157,
+            "candidatePredictionMse": 0.4987935721418787,
+            "carriedDonorMse": 0.6235315740000543,
+            "predictionMse": 0.48118720321779684,
+            "predictionToDonorMseRatio": 0.7717126498196464,
+            "sampleCount": 11347,
+            "splatCarriedDonorMse": 0.6278036669489234,
+            "splatPredictionMse": 0.4498869917972075
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8233501609490094,
+            "candidatePredictionMse": 0.5587954156772965,
+            "carriedDonorMse": 0.8635817428915941,
+            "predictionMse": 0.5555286329134026,
+            "predictionToDonorMseRatio": 0.6432843647820591,
+            "sampleCount": 7692,
+            "splatCarriedDonorMse": 0.9351045552339667,
+            "splatPredictionMse": 0.5497210191109243
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.2081975212479397,
+            "candidatePredictionMse": 1.2342919078096168,
+            "carriedDonorMse": 3.139300327382217,
+            "predictionMse": 1.1282147783788004,
+            "predictionToDonorMseRatio": 0.3593841495629028,
+            "sampleCount": 7691,
+            "splatCarriedDonorMse": 3.016816427176488,
+            "splatPredictionMse": 0.9396332149462379
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.764782838511178,
+            "candidatePredictionMse": 0.5709049199286035,
+            "carriedDonorMse": 0.7269633347461275,
+            "predictionMse": 0.5404646790912847,
+            "predictionToDonorMseRatio": 0.7434552105437718,
+            "sampleCount": 23939,
+            "splatCarriedDonorMse": 0.6597286613860379,
+            "splatPredictionMse": 0.48634869538049647
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50669,
+      "sourceFrameId": "frame-11",
+      "step": 12,
+      "targetFrameId": "frame-12"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1566081607041117,
+          "candidatePredictionMse": 0.7022439822599186,
+          "carriedDonorMse": 1.129294266880348,
+          "predictionMse": 0.6633506678517374,
+          "predictionToDonorMseRatio": 0.5874028473413132,
+          "sampleCount": 49247,
+          "splatCarriedDonorMse": 1.0807362334158823,
+          "splatPredictionMse": 0.5942069977927489
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6735200841713431,
+            "candidatePredictionMse": 0.5478469077570826,
+            "carriedDonorMse": 0.6661380958125876,
+            "predictionMse": 0.5217963528020408,
+            "predictionToDonorMseRatio": 0.7833155858854286,
+            "sampleCount": 10955,
+            "splatCarriedDonorMse": 0.6530145609525781,
+            "splatPredictionMse": 0.47548425510418924
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7177407213609919,
+            "candidatePredictionMse": 0.5955702829465532,
+            "carriedDonorMse": 0.7352064637748521,
+            "predictionMse": 0.5922635740969897,
+            "predictionToDonorMseRatio": 0.8055744927160531,
+            "sampleCount": 8423,
+            "splatCarriedDonorMse": 0.7662566725106031,
+            "splatPredictionMse": 0.5863849805866543
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.0567628310868318,
+            "candidatePredictionMse": 1.2168606588486512,
+            "carriedDonorMse": 3.003835698957009,
+            "predictionMse": 1.119173892437683,
+            "predictionToDonorMseRatio": 0.3725815938688931,
+            "sampleCount": 8422,
+            "splatCarriedDonorMse": 2.909743019615102,
+            "splatPredictionMse": 0.9455085299292953
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8295557844295882,
+            "candidatePredictionMse": 0.6209193620456577,
+            "carriedDonorMse": 0.7845322712005475,
+            "predictionMse": 0.5845774554958292,
+            "predictionToDonorMseRatio": 0.7451286288086874,
+            "sampleCount": 21447,
+            "splatCarriedDonorMse": 0.7044904699044745,
+            "splatPredictionMse": 0.5199696216294677
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49247,
+      "sourceFrameId": "frame-12",
+      "step": 13,
+      "targetFrameId": "frame-13"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.2021841100096493,
+          "candidatePredictionMse": 0.7241829515208226,
+          "carriedDonorMse": 1.171222451495134,
+          "predictionMse": 0.6826813092267645,
+          "predictionToDonorMseRatio": 0.5828792885205384,
+          "sampleCount": 48859,
+          "splatCarriedDonorMse": 1.1161795030248853,
+          "splatPredictionMse": 0.6089006118151068
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6889490455209675,
+            "candidatePredictionMse": 0.5553677977691055,
+            "carriedDonorMse": 0.6832842764596688,
+            "predictionMse": 0.5289914999561516,
+            "predictionToDonorMseRatio": 0.7741894818611058,
+            "sampleCount": 10755,
+            "splatCarriedDonorMse": 0.6732135759062498,
+            "splatPredictionMse": 0.48210030384423347
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7287822170284738,
+            "candidatePredictionMse": 0.5952282831677942,
+            "carriedDonorMse": 0.7528172553504775,
+            "predictionMse": 0.5933883817709398,
+            "predictionToDonorMseRatio": 0.7882236725494358,
+            "sampleCount": 8352,
+            "splatCarriedDonorMse": 0.7955462123673729,
+            "splatPredictionMse": 0.5901174459543099
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.2164963105741187,
+            "candidatePredictionMse": 1.264054461786423,
+            "carriedDonorMse": 3.1447650006920878,
+            "predictionMse": 1.1623684619170078,
+            "predictionToDonorMseRatio": 0.36962013430612406,
+            "sampleCount": 8352,
+            "splatCarriedDonorMse": 3.017242672012922,
+            "splatPredictionMse": 0.9815933510380476
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.858733653450775,
+            "candidatePredictionMse": 0.6486516204435289,
+            "carriedDonorMse": 0.8095059982153976,
+            "predictionMse": 0.6075580068691759,
+            "predictionToDonorMseRatio": 0.7505293453150099,
+            "sampleCount": 21400,
+            "splatCarriedDonorMse": 0.7219901666858376,
+            "splatPredictionMse": 0.5345026938481032
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48859,
+      "sourceFrameId": "frame-13",
+      "step": 14,
+      "targetFrameId": "frame-14"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.2147097912081786,
+          "candidatePredictionMse": 0.7211986873236201,
+          "carriedDonorMse": 1.1816816601952687,
+          "predictionMse": 0.6779349475745057,
+          "predictionToDonorMseRatio": 0.5737035365874082,
+          "sampleCount": 49882,
+          "splatCarriedDonorMse": 1.1229649828389845,
+          "splatPredictionMse": 0.6010216324649685
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7214973049361743,
+            "candidatePredictionMse": 0.5687959892484795,
+            "carriedDonorMse": 0.7031731272778574,
+            "predictionMse": 0.536837617618022,
+            "predictionToDonorMseRatio": 0.7634501331076773,
+            "sampleCount": 10791,
+            "splatCarriedDonorMse": 0.6705968114408499,
+            "splatPredictionMse": 0.4800227347194309
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8954805475445736,
+            "candidatePredictionMse": 0.6336276159690521,
+            "carriedDonorMse": 0.9247593407125085,
+            "predictionMse": 0.6183212542796183,
+            "predictionToDonorMseRatio": 0.668629368807688,
+            "sampleCount": 7728,
+            "splatCarriedDonorMse": 0.9768105285666157,
+            "splatPredictionMse": 0.5911099446095137
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.354194958899727,
+            "candidatePredictionMse": 1.307130749591868,
+            "carriedDonorMse": 3.2846136643962116,
+            "predictionMse": 1.1987486881992697,
+            "predictionToDonorMseRatio": 0.36495880815244297,
+            "sampleCount": 7727,
+            "splatCarriedDonorMse": 3.160913585278854,
+            "splatPredictionMse": 1.0060694679457616
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8448273087086425,
+            "candidatePredictionMse": 0.6278592774915925,
+            "carriedDonorMse": 0.7966641304615522,
+            "predictionMse": 0.5915814247929753,
+            "predictionToDonorMseRatio": 0.7425731900973613,
+            "sampleCount": 23636,
+            "splatCarriedDonorMse": 0.7110407024667242,
+            "splatPredictionMse": 0.5270874644398783
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49882,
+      "sourceFrameId": "frame-14",
+      "step": 15,
+      "targetFrameId": "frame-15"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.2202492442435606,
+          "candidatePredictionMse": 0.7408110368338932,
+          "carriedDonorMse": 1.1867324034610534,
+          "predictionMse": 0.6967431002167456,
+          "predictionToDonorMseRatio": 0.587110538302253,
+          "sampleCount": 48258,
+          "splatCarriedDonorMse": 1.1271469087365946,
+          "splatPredictionMse": 0.6184001017862608
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6770664206438647,
+            "candidatePredictionMse": 0.5330010591055071,
+            "carriedDonorMse": 0.6822300026572431,
+            "predictionMse": 0.5153477590519963,
+            "predictionToDonorMseRatio": 0.7553871231765666,
+            "sampleCount": 10502,
+            "splatCarriedDonorMse": 0.6914097040143604,
+            "splatPredictionMse": 0.4839641145124218
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7850240619154066,
+            "candidatePredictionMse": 0.6167338626132844,
+            "carriedDonorMse": 0.8064111645145564,
+            "predictionMse": 0.6152256494028372,
+            "predictionToDonorMseRatio": 0.7629180701797338,
+            "sampleCount": 7905,
+            "splatCarriedDonorMse": 0.8444326802463772,
+            "splatPredictionMse": 0.612544381473153
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.2861942767295145,
+            "candidatePredictionMse": 1.3358659264311772,
+            "carriedDonorMse": 3.212167553593464,
+            "predictionMse": 1.2178588402143125,
+            "predictionToDonorMseRatio": 0.37913926340856324,
+            "sampleCount": 7904,
+            "splatCarriedDonorMse": 3.080564490240488,
+            "splatPredictionMse": 1.008068464717664
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8929029801974068,
+            "candidatePredictionMse": 0.6706391044941881,
+            "carriedDonorMse": 0.8356905380793185,
+            "predictionMse": 0.6252303883497652,
+            "predictionToDonorMseRatio": 0.7481601859304793,
+            "sampleCount": 21947,
+            "splatCarriedDonorMse": 0.7339795298693839,
+            "splatPredictionMse": 0.5445037818707903
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48258,
+      "sourceFrameId": "frame-15",
+      "step": 16,
+      "targetFrameId": "frame-16"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1991304234672941,
+          "candidatePredictionMse": 0.731916987691817,
+          "carriedDonorMse": 1.1676035750177312,
+          "predictionMse": 0.6892657732916312,
+          "predictionToDonorMseRatio": 0.5903251651838802,
+          "sampleCount": 48475,
+          "splatCarriedDonorMse": 1.1115558444407305,
+          "splatPredictionMse": 0.6134413921357448
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7095410237902197,
+            "candidatePredictionMse": 0.5676446715019366,
+            "carriedDonorMse": 0.7127809032986829,
+            "predictionMse": 0.5445597590633762,
+            "predictionToDonorMseRatio": 0.7639931941823986,
+            "sampleCount": 10577,
+            "splatCarriedDonorMse": 0.7185406890915067,
+            "splatPredictionMse": 0.5035199147281574
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7728320586497801,
+            "candidatePredictionMse": 0.63616102862027,
+            "carriedDonorMse": 0.7969736789085232,
+            "predictionMse": 0.6284435676657071,
+            "predictionToDonorMseRatio": 0.7885374188597764,
+            "sampleCount": 7686,
+            "splatCarriedDonorMse": 0.8398921149240667,
+            "splatPredictionMse": 0.6147236370798176
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.2633090928659407,
+            "candidatePredictionMse": 1.259003323726446,
+            "carriedDonorMse": 3.186994076526565,
+            "predictionMse": 1.1581901153040017,
+            "predictionToDonorMseRatio": 0.36341144272420106,
+            "sampleCount": 7685,
+            "splatCarriedDonorMse": 3.0513229363676753,
+            "splatPredictionMse": 0.978966633664101
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.870267425200469,
+            "candidatePredictionMse": 0.6619045624837624,
+            "carriedDonorMse": 0.8187024686197355,
+            "predictionMse": 0.6179891459807614,
+            "predictionToDonorMseRatio": 0.7548397246470258,
+            "sampleCount": 22527,
+            "splatCarriedDonorMse": 0.7270314346984321,
+            "splatPredictionMse": 0.5399172944198704
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48475,
+      "sourceFrameId": "frame-16",
+      "step": 17,
+      "targetFrameId": "frame-17"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1390947002497829,
+          "candidatePredictionMse": 0.6944259225824823,
+          "carriedDonorMse": 1.117428356837886,
+          "predictionMse": 0.6567025125674153,
+          "predictionToDonorMseRatio": 0.5876909320842376,
+          "sampleCount": 49331,
+          "splatCarriedDonorMse": 1.0789104129945142,
+          "splatPredictionMse": 0.5896386725406292
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6978605643769775,
+            "candidatePredictionMse": 0.5453178361109843,
+            "carriedDonorMse": 0.7058839577715817,
+            "predictionMse": 0.5287183921734809,
+            "predictionToDonorMseRatio": 0.7490160193505486,
+            "sampleCount": 10830,
+            "splatCarriedDonorMse": 0.720147768250878,
+            "splatPredictionMse": 0.4992082696179194
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8468009930253864,
+            "candidatePredictionMse": 0.6243378557735713,
+            "carriedDonorMse": 0.8894158213404588,
+            "predictionMse": 0.6093961421533537,
+            "predictionToDonorMseRatio": 0.6851644950895059,
+            "sampleCount": 7121,
+            "splatCarriedDonorMse": 0.9651755161228105,
+            "splatPredictionMse": 0.5828330957174116
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.1717637283173223,
+            "candidatePredictionMse": 1.2072029331884917,
+            "carriedDonorMse": 3.131289688669604,
+            "predictionMse": 1.1201999346302622,
+            "predictionToDonorMseRatio": 0.35774394770424556,
+            "sampleCount": 7120,
+            "splatCarriedDonorMse": 3.059335840406994,
+            "splatPredictionMse": 0.9655279371934108
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8253018602170763,
+            "candidatePredictionMse": 0.6310691783416655,
+            "carriedDonorMse": 0.7770330734299481,
+            "predictionMse": 0.591691590988576,
+            "predictionToDonorMseRatio": 0.7614754264921503,
+            "sampleCount": 24260,
+            "splatCarriedDonorMse": 0.691221896919498,
+            "splatPredictionMse": 0.52168699124975
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49331,
+      "sourceFrameId": "frame-17",
+      "step": 18,
+      "targetFrameId": "frame-18"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1587843813201126,
+          "candidatePredictionMse": 0.7014867701134857,
+          "carriedDonorMse": 1.1299302385445216,
+          "predictionMse": 0.6635421101225965,
+          "predictionToDonorMseRatio": 0.5872416610226433,
+          "sampleCount": 48121,
+          "splatCarriedDonorMse": 1.0786339847212485,
+          "splatPredictionMse": 0.5960849368054609
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7420748395854431,
+            "candidatePredictionMse": 0.5793015170509888,
+            "carriedDonorMse": 0.7413778809852485,
+            "predictionMse": 0.5575926903448202,
+            "predictionToDonorMseRatio": 0.7521032184070715,
+            "sampleCount": 10474,
+            "splatCarriedDonorMse": 0.7401388434737912,
+            "splatPredictionMse": 0.5189992206449652
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.73969974646059,
+            "candidatePredictionMse": 0.5696863302925229,
+            "carriedDonorMse": 0.7679053179775635,
+            "predictionMse": 0.5673893534740485,
+            "predictionToDonorMseRatio": 0.7388793125803387,
+            "sampleCount": 7438,
+            "splatCarriedDonorMse": 0.8180485562299609,
+            "splatPredictionMse": 0.5633058391300941
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.134990532028524,
+            "candidatePredictionMse": 1.180201813022269,
+            "carriedDonorMse": 3.065187114691427,
+            "predictionMse": 1.086398210277796,
+            "predictionToDonorMseRatio": 0.35443128580003963,
+            "sampleCount": 7438,
+            "splatCarriedDonorMse": 2.9410921505365866,
+            "splatPredictionMse": 0.919636249843178
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8418350117379639,
+            "candidatePredictionMse": 0.6443710317976181,
+            "carriedDonorMse": 0.7947670093263133,
+            "predictionMse": 0.6055602364126133,
+            "predictionToDonorMseRatio": 0.7619342893031232,
+            "sampleCount": 22771,
+            "splatCarriedDonorMse": 0.7110905605944899,
+            "splatPredictionMse": 0.5365632668392704
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48121,
+      "sourceFrameId": "frame-18",
+      "step": 19,
+      "targetFrameId": "frame-19"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1600015784336086,
+          "candidatePredictionMse": 0.7166155383378456,
+          "carriedDonorMse": 1.1312193357537996,
+          "predictionMse": 0.6761958869418518,
+          "predictionToDonorMseRatio": 0.5977584236493463,
+          "sampleCount": 48413,
+          "splatCarriedDonorMse": 1.080050904323027,
+          "splatPredictionMse": 0.6043387289045303
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7229391472221732,
+            "candidatePredictionMse": 0.5723194042715696,
+            "carriedDonorMse": 0.7303696287186493,
+            "predictionMse": 0.5521474584710169,
+            "predictionToDonorMseRatio": 0.7559835961959385,
+            "sampleCount": 10759,
+            "splatCarriedDonorMse": 0.7435793736012735,
+            "splatPredictionMse": 0.5162862214922563
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7436664056947854,
+            "candidatePredictionMse": 0.5892673277605297,
+            "carriedDonorMse": 0.766705683664345,
+            "predictionMse": 0.5817579482400708,
+            "predictionToDonorMseRatio": 0.7587760996627199,
+            "sampleCount": 7430,
+            "splatCarriedDonorMse": 0.8076644000546723,
+            "splatPredictionMse": 0.5684079402036998
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.1058284202507678,
+            "candidatePredictionMse": 1.1758920868247484,
+            "carriedDonorMse": 3.045297765609968,
+            "predictionMse": 1.08261118717358,
+            "predictionToDonorMseRatio": 0.3555025716694521,
+            "sampleCount": 7429,
+            "splatCarriedDonorMse": 2.9376877129152126,
+            "splatPredictionMse": 0.9167784766826146
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8678400264701797,
+            "candidatePredictionMse": 0.6765503412463482,
+            "carriedDonorMse": 0.815421563330652,
+            "predictionMse": 0.6330746612805422,
+            "predictionToDonorMseRatio": 0.7763771400583278,
+            "sampleCount": 22795,
+            "splatCarriedDonorMse": 0.7222331844159366,
+            "splatPredictionMse": 0.555784563563554
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48413,
+      "sourceFrameId": "frame-19",
+      "step": 20,
+      "targetFrameId": "frame-20"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1931401529358177,
+          "candidatePredictionMse": 0.7114180349045267,
+          "carriedDonorMse": 1.1527142269501665,
+          "predictionMse": 0.6651753369341351,
+          "predictionToDonorMseRatio": 0.5770513813246201,
+          "sampleCount": 50248,
+          "splatCarriedDonorMse": 1.0808459140867888,
+          "splatPredictionMse": 0.5829660960978843
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7765714999742777,
+            "candidatePredictionMse": 0.5965429530010821,
+            "carriedDonorMse": 0.769874693891515,
+            "predictionMse": 0.5696415991477192,
+            "predictionToDonorMseRatio": 0.7399146947775749,
+            "sampleCount": 11257,
+            "splatCarriedDonorMse": 0.7579692608554929,
+            "splatPredictionMse": 0.5218169700750738
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8293102793087792,
+            "candidatePredictionMse": 0.5730558745915965,
+            "carriedDonorMse": 0.871937357092835,
+            "predictionMse": 0.5663608409663339,
+            "predictionToDonorMseRatio": 0.649543039255323,
+            "sampleCount": 7028,
+            "splatCarriedDonorMse": 0.9477188287089343,
+            "splatPredictionMse": 0.5544585589658674
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.3831116414483366,
+            "candidatePredictionMse": 1.3102394357649303,
+            "carriedDonorMse": 3.2694116187060196,
+            "predictionMse": 1.1705912481306666,
+            "predictionToDonorMseRatio": 0.35804339882843134,
+            "sampleCount": 7027,
+            "splatCarriedDonorMse": 3.0672782449419005,
+            "splatPredictionMse": 0.922327803447531
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8665994097717734,
+            "candidatePredictionMse": 0.6335242297962606,
+            "carriedDonorMse": 0.808187915317596,
+            "predictionMse": 0.5937257843172508,
+            "predictionToDonorMseRatio": 0.7346382853100848,
+            "sampleCount": 24936,
+            "splatCarriedDonorMse": 0.7043452585101679,
+            "splatPredictionMse": 0.5229729923545664
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50248,
+      "sourceFrameId": "frame-20",
+      "step": 21,
+      "targetFrameId": "frame-21"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.2140368391486964,
+          "candidatePredictionMse": 0.7273856501088899,
+          "carriedDonorMse": 1.1703302531529154,
+          "predictionMse": 0.6800578011032238,
+          "predictionToDonorMseRatio": 0.5810819632074976,
+          "sampleCount": 49573,
+          "splatCarriedDonorMse": 1.0926296558270832,
+          "splatPredictionMse": 0.5959194028709298
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7630004557068591,
+            "candidatePredictionMse": 0.58506877506651,
+            "carriedDonorMse": 0.7574419192111677,
+            "predictionMse": 0.5604842648427586,
+            "predictionToDonorMseRatio": 0.7399699575994828,
+            "sampleCount": 11013,
+            "splatCarriedDonorMse": 0.747560076552161,
+            "splatPredictionMse": 0.5167784688894232
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7196082769550213,
+            "candidatePredictionMse": 0.5762276000282713,
+            "carriedDonorMse": 0.7473412575811074,
+            "predictionMse": 0.5731901760838584,
+            "predictionToDonorMseRatio": 0.7669724777929194,
+            "sampleCount": 7538,
+            "splatCarriedDonorMse": 0.7966443342497039,
+            "splatPredictionMse": 0.5677903112937907
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.3453872296091514,
+            "candidatePredictionMse": 1.2777906234274072,
+            "carriedDonorMse": 3.2278658590889906,
+            "predictionMse": 1.1454773663494857,
+            "predictionToDonorMseRatio": 0.3548714278581505,
+            "sampleCount": 7538,
+            "splatCarriedDonorMse": 3.0189389781642593,
+            "splatPredictionMse": 0.9102537982109585
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.9001272389685725,
+            "candidatePredictionMse": 0.6659741545150578,
+            "carriedDonorMse": 0.8392932438178207,
+            "predictionMse": 0.6210431029856193,
+            "predictionToDonorMseRatio": 0.7399596119237016,
+            "sampleCount": 23484,
+            "splatCarriedDonorMse": 0.7311439191053737,
+            "splatPredictionMse": 0.5411656780443956
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49573,
+      "sourceFrameId": "frame-21",
+      "step": 22,
+      "targetFrameId": "frame-22"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1728635555517901,
+          "candidatePredictionMse": 0.7191897478132505,
+          "carriedDonorMse": 1.1335709242789416,
+          "predictionMse": 0.6731091566675301,
+          "predictionToDonorMseRatio": 0.5937953614112776,
+          "sampleCount": 49368,
+          "splatCarriedDonorMse": 1.0637173575716539,
+          "splatPredictionMse": 0.5911881057418045
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7224999354666387,
+            "candidatePredictionMse": 0.5721295601910138,
+            "carriedDonorMse": 0.7197225860588157,
+            "predictionMse": 0.5458566581109806,
+            "predictionToDonorMseRatio": 0.7584264669253734,
+            "sampleCount": 11144,
+            "splatCarriedDonorMse": 0.714785076000464,
+            "splatPredictionMse": 0.4991492766353661
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7318997532698135,
+            "candidatePredictionMse": 0.6072045727366903,
+            "carriedDonorMse": 0.7509674236396335,
+            "predictionMse": 0.6041632874978248,
+            "predictionToDonorMseRatio": 0.8045133097381124,
+            "sampleCount": 7593,
+            "splatCarriedDonorMse": 0.784865504297091,
+            "splatPredictionMse": 0.598756558184286
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.1963293973291833,
+            "candidatePredictionMse": 1.2287030552185993,
+            "carriedDonorMse": 3.0970674798508124,
+            "predictionMse": 1.1096792070389687,
+            "predictionToDonorMseRatio": 0.35829997707780736,
+            "sampleCount": 7592,
+            "splatCarriedDonorMse": 2.9206018487781527,
+            "splatPredictionMse": 0.8980812547196256
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8692452414835585,
+            "candidatePredictionMse": 0.6593311226731462,
+            "carriedDonorMse": 0.8128177844541963,
+            "predictionMse": 0.6135218484553596,
+            "predictionToDonorMseRatio": 0.7548085932535752,
+            "sampleCount": 23039,
+            "splatCarriedDonorMse": 0.7125023052908845,
+            "splatPredictionMse": 0.5320831387348498
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49368,
+      "sourceFrameId": "frame-22",
+      "step": 23,
+      "targetFrameId": "frame-23"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1346061318196583,
+          "candidatePredictionMse": 0.6782207519890763,
+          "carriedDonorMse": 1.1070908778475153,
+          "predictionMse": 0.6366576644489719,
+          "predictionToDonorMseRatio": 0.5750726315140514,
+          "sampleCount": 49830,
+          "splatCarriedDonorMse": 1.0581748707859253,
+          "splatPredictionMse": 0.562767731044343
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6857938625139316,
+            "candidatePredictionMse": 0.5334657837682716,
+            "carriedDonorMse": 0.68310331439147,
+            "predictionMse": 0.5096986119996837,
+            "predictionToDonorMseRatio": 0.7461515721874945,
+            "sampleCount": 11133,
+            "splatCarriedDonorMse": 0.6783201177293162,
+            "splatPredictionMse": 0.46744586218886053
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8943883977357525,
+            "candidatePredictionMse": 0.6038018243779515,
+            "carriedDonorMse": 0.9168898674167371,
+            "predictionMse": 0.5888465629839341,
+            "predictionToDonorMseRatio": 0.6422216930403666,
+            "sampleCount": 7198,
+            "splatCarriedDonorMse": 0.9568924801829318,
+            "splatPredictionMse": 0.5622594316167924
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.1324087214957332,
+            "candidatePredictionMse": 1.1638262812153042,
+            "carriedDonorMse": 3.095769362888602,
+            "predictionMse": 1.0708109752108523,
+            "predictionToDonorMseRatio": 0.34589494554972255,
+            "sampleCount": 7198,
+            "splatCarriedDonorMse": 3.0306327253648138,
+            "splatPredictionMse": 0.9054504312029374
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8196203782962742,
+            "candidatePredictionMse": 0.6227430310219022,
+            "carriedDonorMse": 0.768619731874556,
+            "predictionMse": 0.5803860669179759,
+            "predictionToDonorMseRatio": 0.755101700944491,
+            "sampleCount": 24301,
+            "splatCarriedDonorMse": 0.6779519160137242,
+            "splatPredictionMse": 0.505084797399885
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49830,
+      "sourceFrameId": "frame-23",
+      "step": 24,
+      "targetFrameId": "frame-24"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.146419588317555,
+          "candidatePredictionMse": 0.6875367847374844,
+          "carriedDonorMse": 1.1169221469743693,
+          "predictionMse": 0.6482907257762497,
+          "predictionToDonorMseRatio": 0.5804260641911386,
+          "sampleCount": 49131,
+          "splatCarriedDonorMse": 1.0644822512531504,
+          "splatPredictionMse": 0.5785199542896111
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.67933128198421,
+            "candidatePredictionMse": 0.5389235465414662,
+            "carriedDonorMse": 0.6795254033633745,
+            "predictionMse": 0.5173044716549046,
+            "predictionToDonorMseRatio": 0.7612731902213776,
+            "sampleCount": 10860,
+            "splatCarriedDonorMse": 0.6798705080374449,
+            "splatPredictionMse": 0.4788705607454617
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7989696008674433,
+            "candidatePredictionMse": 0.560874893333599,
+            "carriedDonorMse": 0.8181023050471827,
+            "predictionMse": 0.5575615704566151,
+            "predictionToDonorMseRatio": 0.6815303746448419,
+            "sampleCount": 7510,
+            "splatCarriedDonorMse": 0.8521160013667191,
+            "splatPredictionMse": 0.551671218675311
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.1542379576615946,
+            "candidatePredictionMse": 1.2037233359585853,
+            "carriedDonorMse": 3.104889929353345,
+            "predictionMse": 1.1136067238065661,
+            "predictionToDonorMseRatio": 0.35866222286292027,
+            "sampleCount": 7510,
+            "splatCarriedDonorMse": 3.0171601012497904,
+            "splatPredictionMse": 0.9533994133140886
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.828291871606735,
+            "candidatePredictionMse": 0.6311353212125379,
+            "carriedDonorMse": 0.775630486522022,
+            "predictionMse": 0.5884809769912771,
+            "predictionToDonorMseRatio": 0.7587130563034782,
+            "sampleCount": 23251,
+            "splatCarriedDonorMse": 0.6820102463714215,
+            "splatPredictionMse": 0.5126510317090355
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49131,
+      "sourceFrameId": "frame-24",
+      "step": 25,
+      "targetFrameId": "frame-25"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.134248862988323,
+          "candidatePredictionMse": 0.6748244546047424,
+          "carriedDonorMse": 1.1063817408327952,
+          "predictionMse": 0.6383418096752426,
+          "predictionToDonorMseRatio": 0.5769634350570086,
+          "sampleCount": 49056,
+          "splatCarriedDonorMse": 1.0568401903340803,
+          "splatPredictionMse": 0.5734837742450201
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6583783205065573,
+            "candidatePredictionMse": 0.5132927385354844,
+            "carriedDonorMse": 0.6669683194461403,
+            "predictionMse": 0.5011460765690225,
+            "predictionToDonorMseRatio": 0.751379131448374,
+            "sampleCount": 10931,
+            "splatCarriedDonorMse": 0.6822394286720662,
+            "splatPredictionMse": 0.4795520108508683
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7556425713979187,
+            "candidatePredictionMse": 0.5469424080382068,
+            "carriedDonorMse": 0.7726566105688769,
+            "predictionMse": 0.54163826703095,
+            "predictionToDonorMseRatio": 0.7010077434426696,
+            "sampleCount": 7579,
+            "splatCarriedDonorMse": 0.8029037913172483,
+            "splatPredictionMse": 0.5322086830180496
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.019958353546405,
+            "candidatePredictionMse": 1.11703205419111,
+            "carriedDonorMse": 2.978601393668673,
+            "predictionMse": 1.0384485917404134,
+            "predictionToDonorMseRatio": 0.34863630761327913,
+            "sampleCount": 7579,
+            "splatCarriedDonorMse": 2.905077909441595,
+            "splatPredictionMse": 0.8987446584947298
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8633996338722935,
+            "candidatePredictionMse": 0.6479785375069831,
+            "carriedDonorMse": 0.8078219865159342,
+            "predictionMse": 0.6035176448741477,
+            "predictionToDonorMseRatio": 0.7470923730079033,
+            "sampleCount": 22967,
+            "splatCarriedDonorMse": 0.7090172801046288,
+            "splatPredictionMse": 0.5244760579713292
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49056,
+      "sourceFrameId": "frame-25",
+      "step": 26,
+      "targetFrameId": "frame-26"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1075922612488949,
+          "candidatePredictionMse": 0.6548823278753749,
+          "carriedDonorMse": 1.09120885180848,
+          "predictionMse": 0.6212171667297991,
+          "predictionToDonorMseRatio": 0.5692926388016784,
+          "sampleCount": 50674,
+          "splatCarriedDonorMse": 1.0620827905810775,
+          "splatPredictionMse": 0.5613679913598861
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6696932324730244,
+            "candidatePredictionMse": 0.5267589497832347,
+            "carriedDonorMse": 0.6815075508982695,
+            "predictionMse": 0.5118934270300798,
+            "predictionToDonorMseRatio": 0.7511192302350462,
+            "sampleCount": 11429,
+            "splatCarriedDonorMse": 0.7025107836542603,
+            "splatPredictionMse": 0.4854658310244717
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.9113017375611822,
+            "candidatePredictionMse": 0.5578978168868637,
+            "carriedDonorMse": 0.9380085226162275,
+            "predictionMse": 0.5459592588795882,
+            "predictionToDonorMseRatio": 0.5820408298176619,
+            "sampleCount": 7268,
+            "splatCarriedDonorMse": 0.985487251602974,
+            "splatPredictionMse": 0.5247351557555429
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.008451183809985,
+            "candidatePredictionMse": 1.0755625471407446,
+            "carriedDonorMse": 3.0006244707038845,
+            "predictionMse": 1.0071470619718461,
+            "predictionToDonorMseRatio": 0.33564582033005624,
+            "sampleCount": 7267,
+            "splatCarriedDonorMse": 2.9867103140708187,
+            "splatPredictionMse": 0.8855195327826937
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8088405710744825,
+            "candidatePredictionMse": 0.6189504120792652,
+            "carriedDonorMse": 0.7642243458659145,
+            "predictionMse": 0.5804192285088137,
+            "predictionToDonorMseRatio": 0.7594880111430656,
+            "sampleCount": 24710,
+            "splatCarriedDonorMse": 0.6849066121617939,
+            "splatPredictionMse": 0.5119193466057897
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50674,
+      "sourceFrameId": "frame-26",
+      "step": 27,
+      "targetFrameId": "frame-27"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.113827773087499,
+          "candidatePredictionMse": 0.6698909451643893,
+          "carriedDonorMse": 1.0962141574018127,
+          "predictionMse": 0.6376044559462613,
+          "predictionToDonorMseRatio": 0.5816422380983263,
+          "sampleCount": 50391,
+          "splatCarriedDonorMse": 1.064901062849484,
+          "splatPredictionMse": 0.5802062528918088
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6955547884001864,
+            "candidatePredictionMse": 0.5461155218687556,
+            "carriedDonorMse": 0.706053635312353,
+            "predictionMse": 0.5305152116132477,
+            "predictionToDonorMseRatio": 0.7513808938587953,
+            "sampleCount": 11393,
+            "splatCarriedDonorMse": 0.7247182520450931,
+            "splatPredictionMse": 0.502781326714567
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.804072169091188,
+            "candidatePredictionMse": 0.5352520247847692,
+            "carriedDonorMse": 0.8272590707012246,
+            "predictionMse": 0.5361402701648215,
+            "predictionToDonorMseRatio": 0.6480923439260244,
+            "sampleCount": 7566,
+            "splatCarriedDonorMse": 0.868480229119067,
+            "splatPredictionMse": 0.5377193730626921
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.9750929913980912,
+            "candidatePredictionMse": 1.111170169876403,
+            "carriedDonorMse": 2.959892263666336,
+            "predictionMse": 1.039620454999181,
+            "predictionToDonorMseRatio": 0.351235910766371,
+            "sampleCount": 7565,
+            "splatCarriedDonorMse": 2.9328687476987727,
+            "splatPredictionMse": 0.9124209618841201
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8217308877587611,
+            "candidatePredictionMse": 0.6317870416261568,
+            "carriedDonorMse": 0.7769988450563476,
+            "predictionMse": 0.5934637913245253,
+            "predictionToDonorMseRatio": 0.7637897985311517,
+            "sampleCount": 23867,
+            "splatCarriedDonorMse": 0.6974752135853904,
+            "splatPredictionMse": 0.5253335685660696
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50391,
+      "sourceFrameId": "frame-27",
+      "step": 28,
+      "targetFrameId": "frame-28"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1010290253203774,
+          "candidatePredictionMse": 0.6679526721505848,
+          "carriedDonorMse": 1.0923391656118697,
+          "predictionMse": 0.6392119386989584,
+          "predictionToDonorMseRatio": 0.5851771673323699,
+          "sampleCount": 50366,
+          "splatCarriedDonorMse": 1.0768905261300772,
+          "splatPredictionMse": 0.588117301451622
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6726708902982877,
+            "candidatePredictionMse": 0.5281779170315833,
+            "carriedDonorMse": 0.6926659205619009,
+            "predictionMse": 0.5189263033698361,
+            "predictionToDonorMseRatio": 0.7491725635193304,
+            "sampleCount": 11474,
+            "splatCarriedDonorMse": 0.7282126410305464,
+            "splatPredictionMse": 0.5024789901933967
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7757469636708076,
+            "candidatePredictionMse": 0.5481835176789008,
+            "carriedDonorMse": 0.8055514193209878,
+            "predictionMse": 0.5509037699690087,
+            "predictionToDonorMseRatio": 0.683884053526185,
+            "sampleCount": 7678,
+            "splatCarriedDonorMse": 0.858537118254642,
+            "splatPredictionMse": 0.5557397740403116
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.8772960081667347,
+            "candidatePredictionMse": 1.0952646212407813,
+            "carriedDonorMse": 2.8913110916047975,
+            "predictionMse": 1.027922589797841,
+            "predictionToDonorMseRatio": 0.3555212694969123,
+            "sampleCount": 7678,
+            "splatCarriedDonorMse": 2.9162267954946874,
+            "splatPredictionMse": 0.9082034227881688
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8365116483784383,
+            "candidatePredictionMse": 0.6357663177638788,
+            "carriedDonorMse": 0.7938730151169263,
+            "predictionMse": 0.5998538115804027,
+            "predictionToDonorMseRatio": 0.755604234125596,
+            "sampleCount": 23536,
+            "splatCarriedDonorMse": 0.7180710004297942,
+            "splatPredictionMse": 0.5360093561431123
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50366,
+      "sourceFrameId": "frame-28",
+      "step": 29,
+      "targetFrameId": "frame-29"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0802810175000075,
+          "candidatePredictionMse": 0.6576734136487669,
+          "carriedDonorMse": 1.0752515229093103,
+          "predictionMse": 0.6317397247220272,
+          "predictionToDonorMseRatio": 0.5875273936025013,
+          "sampleCount": 50520,
+          "splatCarriedDonorMse": 1.0663101991925161,
+          "splatPredictionMse": 0.5856353888522667
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6726219636385293,
+            "candidatePredictionMse": 0.5274701842497401,
+            "carriedDonorMse": 0.6870303855638576,
+            "predictionMse": 0.5157174188234208,
+            "predictionToDonorMseRatio": 0.7506471761073022,
+            "sampleCount": 11466,
+            "splatCarriedDonorMse": 0.7126453578755523,
+            "splatPredictionMse": 0.49482361362107535
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7393850675671295,
+            "candidatePredictionMse": 0.5589257329205954,
+            "carriedDonorMse": 0.7744544281992278,
+            "predictionMse": 0.5674406226173198,
+            "predictionToDonorMseRatio": 0.7326972407359599,
+            "sampleCount": 7737,
+            "splatCarriedDonorMse": 0.836799958211848,
+            "splatPredictionMse": 0.5825782043003853
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.865811263075092,
+            "candidatePredictionMse": 1.07270916917441,
+            "carriedDonorMse": 2.9016628431516622,
+            "predictionMse": 1.021908817479695,
+            "predictionToDonorMseRatio": 0.3521804126525401,
+            "sampleCount": 7736,
+            "splatCarriedDonorMse": 2.965398985510011,
+            "splatPredictionMse": 0.9315970811335355
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8045873953651337,
+            "candidatePredictionMse": 0.617225783325063,
+            "carriedDonorMse": 0.7635383940844108,
+            "predictionMse": 0.5812518663124693,
+            "predictionToDonorMseRatio": 0.7612608230519585,
+            "sampleCount": 23581,
+            "splatCarriedDonorMse": 0.6905623918075702,
+            "splatPredictionMse": 0.5172982360678577
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50520,
+      "sourceFrameId": "frame-29",
+      "step": 30,
+      "targetFrameId": "frame-30"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0257541321938735,
+          "candidatePredictionMse": 0.617933096030866,
+          "carriedDonorMse": 1.0269214550973391,
+          "predictionMse": 0.5953831066645537,
+          "predictionToDonorMseRatio": 0.5797747273749568,
+          "sampleCount": 52486,
+          "splatCarriedDonorMse": 1.0289966958146097,
+          "splatPredictionMse": 0.5552942366799996
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6548610307043492,
+            "candidatePredictionMse": 0.5131171723036051,
+            "carriedDonorMse": 0.6623214281316695,
+            "predictionMse": 0.49914777734202065,
+            "predictionToDonorMseRatio": 0.753633743588906,
+            "sampleCount": 12030,
+            "splatCarriedDonorMse": 0.6755843568913498,
+            "splatPredictionMse": 0.47431329741031486
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8248478318765883,
+            "candidatePredictionMse": 0.5469294118120307,
+            "carriedDonorMse": 0.8799572463796236,
+            "predictionMse": 0.5471830936980496,
+            "predictionToDonorMseRatio": 0.6218291808486212,
+            "sampleCount": 7387,
+            "splatCarriedDonorMse": 0.9779295388294643,
+            "splatPredictionMse": 0.5476340837176389
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.9068128397483637,
+            "candidatePredictionMse": 1.0948700502995037,
+            "carriedDonorMse": 2.95833415238842,
+            "predictionMse": 1.0461430098015556,
+            "predictionToDonorMseRatio": 0.3536257082239844,
+            "sampleCount": 7387,
+            "splatCarriedDonorMse": 3.049927597081855,
+            "splatPredictionMse": 0.9595171600274253
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7162205358484858,
+            "candidatePredictionMse": 0.5502711731502905,
+            "carriedDonorMse": 0.684441015073413,
+            "predictionMse": 0.5246721457993805,
+            "predictionToDonorMseRatio": 0.7665702876428354,
+            "sampleCount": 25682,
+            "splatCarriedDonorMse": 0.6279440892510614,
+            "splatPredictionMse": 0.4791627638422079
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 52486,
+      "sourceFrameId": "frame-30",
+      "step": 31,
+      "targetFrameId": "frame-31"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0723893182400461,
+          "candidatePredictionMse": 0.6335425694057658,
+          "carriedDonorMse": 1.0658789994002005,
+          "predictionMse": 0.6114012223129536,
+          "predictionToDonorMseRatio": 0.5736122230168771,
+          "sampleCount": 51518,
+          "splatCarriedDonorMse": 1.0543050992404757,
+          "splatPredictionMse": 0.5720388274812873
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6396868475341371,
+            "candidatePredictionMse": 0.49133090139861657,
+            "carriedDonorMse": 0.6536974430287847,
+            "predictionMse": 0.4871315406958484,
+            "predictionToDonorMseRatio": 0.7451941963224081,
+            "sampleCount": 11558,
+            "splatCarriedDonorMse": 0.6786051683526028,
+            "splatPredictionMse": 0.47966601055759356
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7659843802962643,
+            "candidatePredictionMse": 0.5463537766410534,
+            "carriedDonorMse": 0.7980794155057706,
+            "predictionMse": 0.5504285721018984,
+            "predictionToDonorMseRatio": 0.6896914785768191,
+            "sampleCount": 7861,
+            "splatCarriedDonorMse": 0.8551372558782258,
+            "splatPredictionMse": 0.5576726529211785
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.960472098459548,
+            "candidatePredictionMse": 1.084932512572321,
+            "carriedDonorMse": 2.970801975738225,
+            "predictionMse": 1.029425157486912,
+            "predictionToDonorMseRatio": 0.3465142294551984,
+            "sampleCount": 7860,
+            "splatCarriedDonorMse": 2.9891662020114267,
+            "splatPredictionMse": 0.9307454151128515
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7658376338087436,
+            "candidatePredictionMse": 0.5832578466639408,
+            "carriedDonorMse": 0.7315612620149151,
+            "predictionMse": 0.554878546170055,
+            "predictionToDonorMseRatio": 0.7584854132950826,
+            "sampleCount": 24239,
+            "splatCarriedDonorMse": 0.6706254899369982,
+            "splatPredictionMse": 0.5044264564031475
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 51518,
+      "sourceFrameId": "frame-31",
+      "step": 32,
+      "targetFrameId": "frame-32"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0578997457973573,
+          "candidatePredictionMse": 0.6196549354165048,
+          "carriedDonorMse": 1.0596302179623223,
+          "predictionMse": 0.6001201653803361,
+          "predictionToDonorMseRatio": 0.5663486707036084,
+          "sampleCount": 50934,
+          "splatCarriedDonorMse": 1.0627066129222564,
+          "splatPredictionMse": 0.565391685316037
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.631193747685257,
+            "candidatePredictionMse": 0.48983777985136595,
+            "carriedDonorMse": 0.6448593579397226,
+            "predictionMse": 0.482889148800057,
+            "predictionToDonorMseRatio": 0.7488286288390879,
+            "sampleCount": 11297,
+            "splatCarriedDonorMse": 0.6691537761698836,
+            "splatPredictionMse": 0.47053602693106317
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7669282508775324,
+            "candidatePredictionMse": 0.5434214688778914,
+            "carriedDonorMse": 0.8082832488950236,
+            "predictionMse": 0.5484119587249321,
+            "predictionToDonorMseRatio": 0.6784898233071728,
+            "sampleCount": 7819,
+            "splatCarriedDonorMse": 0.8818032453705629,
+            "splatPredictionMse": 0.5572839406752266
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.8923153774131416,
+            "candidatePredictionMse": 1.0321387279441037,
+            "carriedDonorMse": 2.9380714756561592,
+            "predictionMse": 0.9883305184402588,
+            "predictionToDonorMseRatio": 0.336387499973783,
+            "sampleCount": 7819,
+            "splatCarriedDonorMse": 3.019415650310414,
+            "splatPredictionMse": 0.9104492571000903
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7558999939679787,
+            "candidatePredictionMse": 0.5712113797479976,
+            "carriedDonorMse": 0.7247586050994688,
+            "predictionMse": 0.545669917935463,
+            "predictionToDonorMseRatio": 0.7528988467278331,
+            "sampleCount": 23999,
+            "splatCarriedDonorMse": 0.6693961359998956,
+            "splatPredictionMse": 0.5002628747131794
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50934,
+      "sourceFrameId": "frame-32",
+      "step": 33,
+      "targetFrameId": "frame-33"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0721259534118324,
+          "candidatePredictionMse": 0.6301246791936088,
+          "carriedDonorMse": 1.0746547053791742,
+          "predictionMse": 0.6064215593648408,
+          "predictionToDonorMseRatio": 0.5642943322440253,
+          "sampleCount": 51740,
+          "splatCarriedDonorMse": 1.0791502644322266,
+          "splatPredictionMse": 0.5642826796692527
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6723454281200413,
+            "candidatePredictionMse": 0.5279656410915284,
+            "carriedDonorMse": 0.6834312852801813,
+            "predictionMse": 0.5158152481201348,
+            "predictionToDonorMseRatio": 0.7547433944418711,
+            "sampleCount": 11571,
+            "splatCarriedDonorMse": 0.7031394757870968,
+            "splatPredictionMse": 0.49421454950432364
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8828996035737912,
+            "candidatePredictionMse": 0.5634986760130304,
+            "carriedDonorMse": 0.9463355033331212,
+            "predictionMse": 0.5578589906660425,
+            "predictionToDonorMseRatio": 0.5894938831959574,
+            "sampleCount": 7344,
+            "splatCarriedDonorMse": 1.0591104362385968,
+            "splatPredictionMse": 0.5478328833825086
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.074502627797529,
+            "candidatePredictionMse": 1.1476724920534298,
+            "carriedDonorMse": 3.1027685579221163,
+            "predictionMse": 1.0775782879767808,
+            "predictionToDonorMseRatio": 0.3472957353604295,
+            "sampleCount": 7344,
+            "splatCarriedDonorMse": 3.153019100365827,
+            "splatPredictionMse": 0.9529663696182944
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7310908478301574,
+            "candidatePredictionMse": 0.5465530948599808,
+            "carriedDonorMse": 0.7047616195786288,
+            "predictionMse": 0.5257682928921896,
+            "predictionToDonorMseRatio": 0.746022879632041,
+            "sampleCount": 25481,
+            "splatCarriedDonorMse": 0.6579541026870227,
+            "splatPredictionMse": 0.48881753383833865
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 51740,
+      "sourceFrameId": "frame-33",
+      "step": 34,
+      "targetFrameId": "frame-34"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.111821186234176,
+          "candidatePredictionMse": 0.66665498543573,
+          "carriedDonorMse": 1.1068284356105271,
+          "predictionMse": 0.6416716190604453,
+          "predictionToDonorMseRatio": 0.5797390077952768,
+          "sampleCount": 50099,
+          "splatCarriedDonorMse": 1.0979524345018163,
+          "splatPredictionMse": 0.5972567455043829
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6791445606274077,
+            "candidatePredictionMse": 0.520948293276938,
+            "carriedDonorMse": 0.6990430535376567,
+            "predictionMse": 0.5145890540729885,
+            "predictionToDonorMseRatio": 0.7361335635463376,
+            "sampleCount": 11160,
+            "splatCarriedDonorMse": 0.7344181520447665,
+            "splatPredictionMse": 0.5032837399326343
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7309221442672451,
+            "candidatePredictionMse": 0.5662855098586329,
+            "carriedDonorMse": 0.7748125535112361,
+            "predictionMse": 0.5718379612548785,
+            "predictionToDonorMseRatio": 0.7380339395166832,
+            "sampleCount": 7793,
+            "splatCarriedDonorMse": 0.852839947722776,
+            "splatPredictionMse": 0.5817089859593153
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.1460848068762926,
+            "candidatePredictionMse": 1.2575196880670252,
+            "carriedDonorMse": 3.1155215983354125,
+            "predictionMse": 1.1587912071428872,
+            "predictionToDonorMseRatio": 0.37194131722983914,
+            "sampleCount": 7793,
+            "splatCarriedDonorMse": 3.0611870053738484,
+            "splatPredictionMse": 0.9832739077221985
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7668548427303795,
+            "candidatePredictionMse": 0.5726052864702335,
+            "carriedDonorMse": 0.7421874394223693,
+            "predictionMse": 0.5531409022622742,
+            "predictionToDonorMseRatio": 0.7452846449311692,
+            "sampleCount": 23353,
+            "splatCarriedDonorMse": 0.6983342779859079,
+            "splatPredictionMse": 0.5185375525592358
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50099,
+      "sourceFrameId": "frame-34",
+      "step": 35,
+      "targetFrameId": "frame-35"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1657111459546954,
+          "candidatePredictionMse": 0.6958519174106512,
+          "carriedDonorMse": 1.1457945663848055,
+          "predictionMse": 0.6614288404504538,
+          "predictionToDonorMseRatio": 0.5772665186721775,
+          "sampleCount": 49948,
+          "splatCarriedDonorMse": 1.1103873138161127,
+          "splatPredictionMse": 0.6002322591878817
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6537208198926356,
+            "candidatePredictionMse": 0.5132527405743207,
+            "carriedDonorMse": 0.6618669019022629,
+            "predictionMse": 0.4996800731250642,
+            "predictionToDonorMseRatio": 0.7549555230650457,
+            "sampleCount": 11102,
+            "splatCarriedDonorMse": 0.676348825474934,
+            "splatPredictionMse": 0.47555088654860816
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7755315102074641,
+            "candidatePredictionMse": 0.6070194174612599,
+            "carriedDonorMse": 0.8100768832626634,
+            "predictionMse": 0.5979711956895689,
+            "predictionToDonorMseRatio": 0.7381659791119848,
+            "sampleCount": 7957,
+            "splatCarriedDonorMse": 0.87149087980524,
+            "splatPredictionMse": 0.5818854680954516
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.2515300939490523,
+            "candidatePredictionMse": 1.2756827633562213,
+            "carriedDonorMse": 3.1853604924738264,
+            "predictionMse": 1.1694308779539635,
+            "predictionToDonorMseRatio": 0.36712669750159294,
+            "sampleCount": 7956,
+            "splatCarriedDonorMse": 3.067725645406761,
+            "splatPredictionMse": 0.9805386372388379
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8253283094892773,
+            "candidatePredictionMse": 0.6139141880682754,
+            "carriedDonorMse": 0.7889761836055701,
+            "predictionMse": 0.585512173805485,
+            "predictionToDonorMseRatio": 0.7421164110806644,
+            "sampleCount": 22933,
+            "splatCarriedDonorMse": 0.7243501820345348,
+            "splatPredictionMse": 0.5350197040049695
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49948,
+      "sourceFrameId": "frame-35",
+      "step": 36,
+      "targetFrameId": "frame-36"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.180696999689427,
+          "candidatePredictionMse": 0.6904007773494241,
+          "carriedDonorMse": 1.1589017609587091,
+          "predictionMse": 0.6562643738343443,
+          "predictionToDonorMseRatio": 0.5662812810737687,
+          "sampleCount": 50575,
+          "splatCarriedDonorMse": 1.1201546698818774,
+          "splatPredictionMse": 0.5955774342519806
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6300789081945644,
+            "candidatePredictionMse": 0.4972125925218183,
+            "carriedDonorMse": 0.6470925544647973,
+            "predictionMse": 0.49050408162667625,
+            "predictionToDonorMseRatio": 0.7580122476179106,
+            "sampleCount": 11172,
+            "splatCarriedDonorMse": 0.6773390367229888,
+            "splatPredictionMse": 0.4785778400353127
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8795420596894528,
+            "candidatePredictionMse": 0.6007180438861885,
+            "carriedDonorMse": 0.933848606788197,
+            "predictionMse": 0.5892284397743004,
+            "predictionToDonorMseRatio": 0.6309678415657167,
+            "sampleCount": 7435,
+            "splatCarriedDonorMse": 1.030393579408187,
+            "splatPredictionMse": 0.5688024769087213
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.5084767905200205,
+            "candidatePredictionMse": 1.3581768687018123,
+            "carriedDonorMse": 3.4019478630625146,
+            "predictionMse": 1.2318200320407482,
+            "predictionToDonorMseRatio": 0.36209256626638436,
+            "sampleCount": 7434,
+            "splatCarriedDonorMse": 3.2125631031380597,
+            "splatPredictionMse": 1.0071856557544114
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8173594816347186,
+            "candidatePredictionMse": 0.6032092089577841,
+            "carriedDonorMse": 0.7805043505555158,
+            "predictionMse": 0.5776634686078868,
+            "predictionToDonorMseRatio": 0.740115629332163,
+            "sampleCount": 24534,
+            "splatCarriedDonorMse": 0.7149841175258214,
+            "splatPredictionMse": 0.5322488190969582
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 50575,
+      "sourceFrameId": "frame-36",
+      "step": 37,
+      "targetFrameId": "frame-37"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.250531186364314,
+          "candidatePredictionMse": 0.7596830818211793,
+          "carriedDonorMse": 1.2053549483485435,
+          "predictionMse": 0.7087537229570608,
+          "predictionToDonorMseRatio": 0.5880041592131215,
+          "sampleCount": 49140,
+          "splatCarriedDonorMse": 1.1250416363205051,
+          "splatPredictionMse": 0.618212640531961
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7146433246563093,
+            "candidatePredictionMse": 0.5616593307055909,
+            "carriedDonorMse": 0.7191209080128799,
+            "predictionMse": 0.5418127542384746,
+            "predictionToDonorMseRatio": 0.753437632255257,
+            "sampleCount": 11059,
+            "splatCarriedDonorMse": 0.7270810562023381,
+            "splatPredictionMse": 0.5065299516302676
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7892195447826723,
+            "candidatePredictionMse": 0.6202245739479008,
+            "carriedDonorMse": 0.8140324549334439,
+            "predictionMse": 0.6090180719826406,
+            "predictionToDonorMseRatio": 0.7481496201922742,
+            "sampleCount": 7692,
+            "splatCarriedDonorMse": 0.8581442952014829,
+            "splatPredictionMse": 0.5890954018221782
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.587291796961107,
+            "candidatePredictionMse": 1.4424554570653019,
+            "carriedDonorMse": 3.4378871344493507,
+            "predictionMse": 1.2956001387575113,
+            "predictionToDonorMseRatio": 0.3768594162894265,
+            "sampleCount": 7691,
+            "splatCarriedDonorMse": 3.172278845539563,
+            "splatPredictionMse": 1.034524017321439
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8761707648987614,
+            "candidatePredictionMse": 0.672074357182269,
+            "carriedDonorMse": 0.8184005835639684,
+            "predictionMse": 0.6250428680990477,
+            "predictionToDonorMseRatio": 0.7637370752805588,
+            "sampleCount": 22698,
+            "splatCarriedDonorMse": 0.7156980389687815,
+            "splatPredictionMse": 0.5414313319510992
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49140,
+      "sourceFrameId": "frame-37",
+      "step": 38,
+      "targetFrameId": "frame-38"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.239550511478244,
+          "candidatePredictionMse": 0.7560195598569952,
+          "carriedDonorMse": 1.1987045549121897,
+          "predictionMse": 0.7088742437350317,
+          "predictionToDonorMseRatio": 0.5913669392763422,
+          "sampleCount": 48799,
+          "splatCarriedDonorMse": 1.1260895210169835,
+          "splatPredictionMse": 0.6250603484070956
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7075763040430666,
+            "candidatePredictionMse": 0.5689878389393819,
+            "carriedDonorMse": 0.7086924563972484,
+            "predictionMse": 0.5451918663850203,
+            "predictionToDonorMseRatio": 0.7692926056481403,
+            "sampleCount": 10972,
+            "splatCarriedDonorMse": 0.7106767272491272,
+            "splatPredictionMse": 0.5028879151772664
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7769209352118798,
+            "candidatePredictionMse": 0.6243396128937149,
+            "carriedDonorMse": 0.8055732194401695,
+            "predictionMse": 0.6106529262896833,
+            "predictionToDonorMseRatio": 0.7580352866174654,
+            "sampleCount": 7666,
+            "splatCarriedDonorMse": 0.8565106136237958,
+            "splatPredictionMse": 0.5863210389936269
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.47256992784006,
+            "candidatePredictionMse": 1.378273405153044,
+            "carriedDonorMse": 3.345581130753827,
+            "predictionMse": 1.254454635353319,
+            "predictionToDonorMseRatio": 0.37495866527399535,
+            "sampleCount": 7665,
+            "splatCarriedDonorMse": 3.119823269267192,
+            "splatPredictionMse": 1.0343323779315858
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8958114249394551,
+            "candidatePredictionMse": 0.6800947194913454,
+            "carriedDonorMse": 0.8401674198129861,
+            "predictionMse": 0.6362841815935919,
+            "predictionToDonorMseRatio": 0.7573302256057765,
+            "sampleCount": 22496,
+            "splatCarriedDonorMse": 0.7412447440325971,
+            "splatPredictionMse": 0.5583987808864747
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48799,
+      "sourceFrameId": "frame-38",
+      "step": 39,
+      "targetFrameId": "frame-39"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.2767463564137544,
+          "candidatePredictionMse": 0.7707784286605486,
+          "carriedDonorMse": 1.240250924985578,
+          "predictionMse": 0.7219443102620077,
+          "predictionToDonorMseRatio": 0.5820953612837682,
+          "sampleCount": 49983,
+          "splatCarriedDonorMse": 1.1753701580021538,
+          "splatPredictionMse": 0.6351280997757133
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7949164552444077,
+            "candidatePredictionMse": 0.6311394126533304,
+            "carriedDonorMse": 0.791787550148906,
+            "predictionMse": 0.6007487878379757,
+            "predictionToDonorMseRatio": 0.7587247206968549,
+            "sampleCount": 11332,
+            "splatCarriedDonorMse": 0.7862250522013472,
+            "splatPredictionMse": 0.546721010388456
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.9420184398958515,
+            "candidatePredictionMse": 0.6571505601223119,
+            "carriedDonorMse": 0.9837593701938581,
+            "predictionMse": 0.636684290323308,
+            "predictionToDonorMseRatio": 0.6471951471200157,
+            "sampleCount": 7287,
+            "splatCarriedDonorMse": 1.0579654685014257,
+            "splatPredictionMse": 0.6002998106806348
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.595155276533112,
+            "candidatePredictionMse": 1.4004017745233002,
+            "carriedDonorMse": 3.4839287486186628,
+            "predictionMse": 1.273515350064453,
+            "predictionToDonorMseRatio": 0.36554001013062826,
+            "sampleCount": 7286,
+            "splatCarriedDonorMse": 3.286192698992973,
+            "splatPredictionMse": 1.0479394843598353
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.9032656427218919,
+            "candidatePredictionMse": 0.6803622773803725,
+            "carriedDonorMse": 0.8500027440912257,
+            "predictionMse": 0.6378812996050522,
+            "predictionToDonorMseRatio": 0.7504461650733122,
+            "sampleCount": 24078,
+            "splatCarriedDonorMse": 0.7553131465255966,
+            "splatPredictionMse": 0.5623595613378165
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49983,
+      "sourceFrameId": "frame-39",
+      "step": 40,
+      "targetFrameId": "frame-40"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.2711648575506804,
+          "candidatePredictionMse": 0.7854164647734104,
+          "carriedDonorMse": 1.2271763373763924,
+          "predictionMse": 0.7330543952898391,
+          "predictionToDonorMseRatio": 0.5973504972048698,
+          "sampleCount": 48915,
+          "splatCarriedDonorMse": 1.1489745237332165,
+          "splatPredictionMse": 0.6399662717634887
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.739268088976971,
+            "candidatePredictionMse": 0.5804931649392326,
+            "carriedDonorMse": 0.7509142947590857,
+            "predictionMse": 0.5644905137366203,
+            "predictionToDonorMseRatio": 0.7517376053118348,
+            "sampleCount": 10885,
+            "splatCarriedDonorMse": 0.7716186605939561,
+            "splatPredictionMse": 0.5360413560430871
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7705458225083759,
+            "candidatePredictionMse": 0.6201170236490949,
+            "carriedDonorMse": 0.7956805649252574,
+            "predictionMse": 0.6101318775121959,
+            "predictionToDonorMseRatio": 0.7668050526903455,
+            "sampleCount": 7607,
+            "splatCarriedDonorMse": 0.8403645514441579,
+            "splatPredictionMse": 0.5923805066021529
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.535468080668392,
+            "candidatePredictionMse": 1.465951918755235,
+            "carriedDonorMse": 3.393257540425744,
+            "predictionMse": 1.3129107193042113,
+            "predictionToDonorMseRatio": 0.3869174984989449,
+            "sampleCount": 7607,
+            "splatCarriedDonorMse": 3.1404388022165954,
+            "splatPredictionMse": 1.0408374758357246
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.9368972693334284,
+            "candidatePredictionMse": 0.7113977835360326,
+            "carriedDonorMse": 0.8760683852081231,
+            "predictionMse": 0.6611277818021104,
+            "predictionToDonorMseRatio": 0.7546531674522756,
+            "sampleCount": 22816,
+            "splatCarriedDonorMse": 0.7679281467631355,
+            "splatPredictionMse": 0.5717588898306939
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48915,
+      "sourceFrameId": "frame-40",
+      "step": 41,
+      "targetFrameId": "frame-41"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.2277453183972324,
+          "candidatePredictionMse": 0.7495382108657057,
+          "carriedDonorMse": 1.1970726201570137,
+          "predictionMse": 0.7079928896027179,
+          "predictionToDonorMseRatio": 0.591436874990804,
+          "sampleCount": 48829,
+          "splatCarriedDonorMse": 1.1425433788410702,
+          "splatPredictionMse": 0.6341345406907406
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7438925857380598,
+            "candidatePredictionMse": 0.5921168246089527,
+            "carriedDonorMse": 0.7472874034264577,
+            "predictionMse": 0.5690294036874134,
+            "predictionToDonorMseRatio": 0.7614599163297858,
+            "sampleCount": 10833,
+            "splatCarriedDonorMse": 0.7533226348724987,
+            "splatPredictionMse": 0.5279850998268987
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7868318464206442,
+            "candidatePredictionMse": 0.6155083224183362,
+            "carriedDonorMse": 0.810837100802217,
+            "predictionMse": 0.609755877797936,
+            "predictionToDonorMseRatio": 0.7520078659383772,
+            "sampleCount": 7634,
+            "splatCarriedDonorMse": 0.8535131085916802,
+            "splatPredictionMse": 0.5995293095838914
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.3377766681970784,
+            "candidatePredictionMse": 1.3194022475880112,
+            "carriedDonorMse": 3.2670959805278996,
+            "predictionMse": 1.2121104481933194,
+            "predictionToDonorMseRatio": 0.37100546032855325,
+            "sampleCount": 7634,
+            "splatCarriedDonorMse": 3.1414414246715836,
+            "splatPredictionMse": 1.0213694714916444
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8977352327581116,
+            "candidatePredictionMse": 0.6781807658370417,
+            "carriedDonorMse": 0.8458972802470036,
+            "predictionMse": 0.6378987039619909,
+            "predictionToDonorMseRatio": 0.7541089430807997,
+            "sampleCount": 22728,
+            "splatCarriedDonorMse": 0.7537409202272561,
+            "splatPredictionMse": 0.5662861495174555
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48829,
+      "sourceFrameId": "frame-41",
+      "step": 42,
+      "targetFrameId": "frame-42"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1997749217809484,
+          "candidatePredictionMse": 0.7242491025168352,
+          "carriedDonorMse": 1.1762547474932117,
+          "predictionMse": 0.6868849581562605,
+          "predictionToDonorMseRatio": 0.5839593503194125,
+          "sampleCount": 49341,
+          "splatCarriedDonorMse": 1.1344411043150129,
+          "splatPredictionMse": 0.62045981262635
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7131147973906684,
+            "candidatePredictionMse": 0.5628124022809856,
+            "carriedDonorMse": 0.7225242002446814,
+            "predictionMse": 0.5483555785162123,
+            "predictionToDonorMseRatio": 0.7589442378961324,
+            "sampleCount": 10527,
+            "splatCarriedDonorMse": 0.7392520275407044,
+            "splatPredictionMse": 0.522654558489948
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8784703320115775,
+            "candidatePredictionMse": 0.6099689840583538,
+            "carriedDonorMse": 0.918475593459999,
+            "predictionMse": 0.6014148217564488,
+            "predictionToDonorMseRatio": 0.6547967371575468,
+            "sampleCount": 7206,
+            "splatCarriedDonorMse": 0.9895960582571915,
+            "splatPredictionMse": 0.586207422108617
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.325689263610394,
+            "candidatePredictionMse": 1.3196137276338513,
+            "carriedDonorMse": 3.272538728701878,
+            "predictionMse": 1.2140050756276366,
+            "predictionToDonorMseRatio": 0.37096736701087035,
+            "sampleCount": 7206,
+            "splatCarriedDonorMse": 3.178048888864521,
+            "splatPredictionMse": 1.0262563609499213
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.876811773518986,
+            "candidatePredictionMse": 0.651826726826375,
+            "carriedDonorMse": 0.8290764705593112,
+            "predictionMse": 0.6162255456437248,
+            "predictionToDonorMseRatio": 0.7432674397670542,
+            "sampleCount": 24402,
+            "splatCarriedDonorMse": 0.7442137097421117,
+            "splatPredictionMse": 0.5529345568745684
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49341,
+      "sourceFrameId": "frame-42",
+      "step": 43,
+      "targetFrameId": "frame-43"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1944868658526449,
+          "candidatePredictionMse": 0.7273449354617976,
+          "carriedDonorMse": 1.1654308269841724,
+          "predictionMse": 0.6867516552859331,
+          "predictionToDonorMseRatio": 0.5892684828520155,
+          "sampleCount": 48503,
+          "splatCarriedDonorMse": 1.113775646773556,
+          "splatPredictionMse": 0.6145858238621741
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.736407774118563,
+            "candidatePredictionMse": 0.5705650474052892,
+            "carriedDonorMse": 0.7423999021701487,
+            "predictionMse": 0.5506740579393251,
+            "predictionToDonorMseRatio": 0.7417485594079692,
+            "sampleCount": 10701,
+            "splatCarriedDonorMse": 0.7530525742618566,
+            "splatPredictionMse": 0.515312298888722
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7735127092726085,
+            "candidatePredictionMse": 0.6072630313253025,
+            "carriedDonorMse": 0.7986884547881226,
+            "predictionMse": 0.6029055743450583,
+            "predictionToDonorMseRatio": 0.7548695248199101,
+            "sampleCount": 7497,
+            "splatCarriedDonorMse": 0.8434453357045919,
+            "splatPredictionMse": 0.5951589841579578
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.202262719620876,
+            "candidatePredictionMse": 1.2529276005582597,
+            "carriedDonorMse": 3.134937959576091,
+            "predictionMse": 1.1422256016122652,
+            "predictionToDonorMseRatio": 0.36435349481899093,
+            "sampleCount": 7497,
+            "splatCarriedDonorMse": 3.0152494972742496,
+            "splatPredictionMse": 0.9454220479304966
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.887824819063207,
+            "candidatePredictionMse": 0.6676142434754683,
+            "carriedDonorMse": 0.8370779033497924,
+            "predictionMse": 0.6284419509020006,
+            "predictionToDonorMseRatio": 0.7507568272763158,
+            "sampleCount": 22808,
+            "splatCarriedDonorMse": 0.7468611643037216,
+            "splatPredictionMse": 0.5588023196602806
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48503,
+      "sourceFrameId": "frame-43",
+      "step": 44,
+      "targetFrameId": "frame-44"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.151661151120013,
+          "candidatePredictionMse": 0.7148952461672474,
+          "carriedDonorMse": 1.126349210294186,
+          "predictionMse": 0.6742842134873979,
+          "predictionToDonorMseRatio": 0.5986457905992446,
+          "sampleCount": 48382,
+          "splatCarriedDonorMse": 1.081350204381603,
+          "splatPredictionMse": 0.6020868220565535
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7918167036590686,
+            "candidatePredictionMse": 0.6287126509898053,
+            "carriedDonorMse": 0.7855665476591455,
+            "predictionMse": 0.5971293504163893,
+            "predictionToDonorMseRatio": 0.7601257362545961,
+            "sampleCount": 10739,
+            "splatCarriedDonorMse": 0.7744551592148372,
+            "splatPredictionMse": 0.5409812605080939
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7134708141511533,
+            "candidatePredictionMse": 0.5605185255233154,
+            "carriedDonorMse": 0.7459540035227904,
+            "predictionMse": 0.5657863984683082,
+            "predictionToDonorMseRatio": 0.7584735731645179,
+            "sampleCount": 7299,
+            "splatCarriedDonorMse": 0.8037018957390344,
+            "splatPredictionMse": 0.5751515059260737
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.115415091190773,
+            "candidatePredictionMse": 1.2236343419095659,
+            "carriedDonorMse": 3.070993034265731,
+            "predictionMse": 1.1207076594083247,
+            "predictionToDonorMseRatio": 0.36493331209273944,
+            "sampleCount": 7298,
+            "splatCarriedDonorMse": 2.9920204886212107,
+            "splatPredictionMse": 0.9377268905172298
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8362591089514104,
+            "candidatePredictionMse": 0.6428451139474771,
+            "carriedDonorMse": 0.7898118068800477,
+            "predictionMse": 0.6032303784623593,
+            "predictionToDonorMseRatio": 0.7637647009168788,
+            "sampleCount": 23046,
+            "splatCarriedDonorMse": 0.7072388254198465,
+            "splatPredictionMse": 0.5328041820443723
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48382,
+      "sourceFrameId": "frame-44",
+      "step": 45,
+      "targetFrameId": "frame-45"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1269475109336307,
+          "candidatePredictionMse": 0.668611532108552,
+          "carriedDonorMse": 1.109608879822041,
+          "predictionMse": 0.6361368935530745,
+          "predictionToDonorMseRatio": 0.5732983081886458,
+          "sampleCount": 49151,
+          "splatCarriedDonorMse": 1.0787846467347715,
+          "splatPredictionMse": 0.5784042027877805
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7764847405957793,
+            "candidatePredictionMse": 0.6065925254084485,
+            "carriedDonorMse": 0.7660165027751323,
+            "predictionMse": 0.5725184683780836,
+            "predictionToDonorMseRatio": 0.747397042105435,
+            "sampleCount": 10777,
+            "splatCarriedDonorMse": 0.747406302205094,
+            "splatPredictionMse": 0.5119423669907689
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8255401042730713,
+            "candidatePredictionMse": 0.5504803301899952,
+            "carriedDonorMse": 0.8719476427630818,
+            "predictionMse": 0.551337085203593,
+            "predictionToDonorMseRatio": 0.6323052648625574,
+            "sampleCount": 7004,
+            "splatCarriedDonorMse": 0.9544499334119885,
+            "splatPredictionMse": 0.5528602052277669
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.0606147471263703,
+            "candidatePredictionMse": 1.1364618046459862,
+            "carriedDonorMse": 3.0567927338113234,
+            "predictionMse": 1.0595451489704824,
+            "predictionToDonorMseRatio": 0.34661988601674076,
+            "sampleCount": 7004,
+            "splatCarriedDonorMse": 3.0499980434734613,
+            "splatPredictionMse": 0.922804427769586
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.812763378531416,
+            "candidatePredictionMse": 0.5955156798797249,
+            "carriedDonorMse": 0.7701768285397037,
+            "predictionMse": 0.5669422044308186,
+            "predictionToDonorMseRatio": 0.7361195292070409,
+            "sampleCount": 24366,
+            "splatCarriedDonorMse": 0.6944674063322154,
+            "splatPredictionMse": 0.5161449147438737
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49151,
+      "sourceFrameId": "frame-45",
+      "step": 46,
+      "targetFrameId": "frame-46"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1169240402199838,
+          "candidatePredictionMse": 0.6626472301067557,
+          "carriedDonorMse": 1.1053441505067207,
+          "predictionMse": 0.6385698919047704,
+          "predictionToDonorMseRatio": 0.5777113775940571,
+          "sampleCount": 48131,
+          "splatCarriedDonorMse": 1.0847576799053649,
+          "splatPredictionMse": 0.5957657351012411
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7059087080776097,
+            "candidatePredictionMse": 0.5379790523971202,
+            "carriedDonorMse": 0.7219185006176186,
+            "predictionMse": 0.5268690599224886,
+            "predictionToDonorMseRatio": 0.7298179219284994,
+            "sampleCount": 10587,
+            "splatCarriedDonorMse": 0.7503803540220787,
+            "splatPredictionMse": 0.50711796218981
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7032972709383984,
+            "candidatePredictionMse": 0.5475525453782444,
+            "carriedDonorMse": 0.7361122427469753,
+            "predictionMse": 0.5524397015695264,
+            "predictionToDonorMseRatio": 0.750482969156943,
+            "sampleCount": 7441,
+            "splatCarriedDonorMse": 0.7944499704066679,
+            "splatPredictionMse": 0.5611279792429166
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.972886935571426,
+            "candidatePredictionMse": 1.0811864294396343,
+            "carriedDonorMse": 2.9464165796778596,
+            "predictionMse": 1.0162919317685029,
+            "predictionToDonorMseRatio": 0.34492472611582203,
+            "sampleCount": 7441,
+            "splatCarriedDonorMse": 2.89935816920041,
+            "splatPredictionMse": 0.9009239359087134
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.835351196133209,
+            "candidatePredictionMse": 0.621253326843179,
+            "carriedDonorMse": 0.8011945624541986,
+            "predictionMse": 0.5950098246492298,
+            "predictionToDonorMseRatio": 0.7426533485532041,
+            "sampleCount": 22662,
+            "splatCarriedDonorMse": 0.7404716581359583,
+            "splatPredictionMse": 0.5483547096377651
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48131,
+      "sourceFrameId": "frame-46",
+      "step": 47,
+      "targetFrameId": "frame-47"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0563573940703725,
+          "candidatePredictionMse": 0.6392055637647913,
+          "carriedDonorMse": 1.0519655207776832,
+          "predictionMse": 0.6171707694156833,
+          "predictionToDonorMseRatio": 0.5866834579896015,
+          "sampleCount": 47673,
+          "splatCarriedDonorMse": 1.0441577460351266,
+          "splatPredictionMse": 0.5779978016839363
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6800016047675722,
+            "candidatePredictionMse": 0.5257679440237852,
+            "carriedDonorMse": 0.6992612178028349,
+            "predictionMse": 0.5211040363609231,
+            "predictionToDonorMseRatio": 0.7452208460785174,
+            "sampleCount": 10495,
+            "splatCarriedDonorMse": 0.7335005298655235,
+            "splatPredictionMse": 0.5128126449602797
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6476657490537494,
+            "candidatePredictionMse": 0.5224706486993141,
+            "carriedDonorMse": 0.679436402828995,
+            "predictionMse": 0.5282736942692237,
+            "predictionToDonorMseRatio": 0.7775175013726532,
+            "sampleCount": 7345,
+            "splatCarriedDonorMse": 0.7359175650960981,
+            "splatPredictionMse": 0.5385902197268411
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.7447854457211243,
+            "candidatePredictionMse": 0.9893084205587062,
+            "carriedDonorMse": 2.77677531937036,
+            "predictionMse": 0.943685460614278,
+            "predictionToDonorMseRatio": 0.3398494123853927,
+            "sampleCount": 7345,
+            "splatCarriedDonorMse": 2.833646205857891,
+            "splatPredictionMse": 0.8625779762686288
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8140143712139688,
+            "candidatePredictionMse": 0.6159238262686372,
+            "carriedDonorMse": 0.7748901943987682,
+            "predictionMse": 0.5843941318092613,
+            "predictionToDonorMseRatio": 0.754163797701284,
+            "sampleCount": 22488,
+            "splatCarriedDonorMse": 0.705336102282856,
+            "splatPredictionMse": 0.5283413416592596
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 47673,
+      "sourceFrameId": "frame-47",
+      "step": 48,
+      "targetFrameId": "frame-48"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0236179683253077,
+          "candidatePredictionMse": 0.6191711800773368,
+          "carriedDonorMse": 1.0328896258982823,
+          "predictionMse": 0.5991831280919258,
+          "predictionToDonorMseRatio": 0.5801037333208074,
+          "sampleCount": 48355,
+          "splatCarriedDonorMse": 1.0493725726946834,
+          "splatPredictionMse": 0.5636488134511943
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6826410075429923,
+            "candidatePredictionMse": 0.5409860158587492,
+            "carriedDonorMse": 0.6999007062010637,
+            "predictionMse": 0.5311460201154056,
+            "predictionToDonorMseRatio": 0.7588876756509813,
+            "sampleCount": 10639,
+            "splatCarriedDonorMse": 0.730584614926524,
+            "splatPredictionMse": 0.5136526943494614
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7729053177379752,
+            "candidatePredictionMse": 0.5207487422465593,
+            "carriedDonorMse": 0.8264787059380925,
+            "predictionMse": 0.522730793707324,
+            "predictionToDonorMseRatio": 0.6324794455702277,
+            "sampleCount": 6934,
+            "splatCarriedDonorMse": 0.9217202849605236,
+            "splatPredictionMse": 0.5262544407486833
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.7226133640520516,
+            "candidatePredictionMse": 1.0082349409358822,
+            "carriedDonorMse": 2.8016521284754625,
+            "predictionMse": 0.9630479963761128,
+            "predictionToDonorMseRatio": 0.34374288891467825,
+            "sampleCount": 6934,
+            "splatCarriedDonorMse": 2.942165487450415,
+            "splatPredictionMse": 0.8827156504920779
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7546336229280566,
+            "candidatePredictionMse": 0.5695445878367728,
+            "carriedDonorMse": 0.7271752365487567,
+            "predictionMse": 0.5459681113904192,
+            "predictionToDonorMseRatio": 0.750806798622071,
+            "sampleCount": 23848,
+            "splatCarriedDonorMse": 0.6783603274300015,
+            "splatPredictionMse": 0.504054375485791
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48355,
+      "sourceFrameId": "frame-48",
+      "step": 49,
+      "targetFrameId": "frame-49"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0392953863699428,
+          "candidatePredictionMse": 0.6486700108070452,
+          "carriedDonorMse": 1.0378706009275744,
+          "predictionMse": 0.625185106498915,
+          "predictionToDonorMseRatio": 0.6023728834212756,
+          "sampleCount": 48295,
+          "splatCarriedDonorMse": 1.0353376490300292,
+          "splatPredictionMse": 0.5834341655066831
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7156843535799633,
+            "candidatePredictionMse": 0.5825223377107336,
+            "carriedDonorMse": 0.7221554685308991,
+            "predictionMse": 0.5626017802560367,
+            "predictionToDonorMseRatio": 0.7790590873742923,
+            "sampleCount": 11058,
+            "splatCarriedDonorMse": 0.7336596728881173,
+            "splatPredictionMse": 0.527187455892131
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6704426855161912,
+            "candidatePredictionMse": 0.5498207040590265,
+            "carriedDonorMse": 0.7107794583574759,
+            "predictionMse": 0.5534002655253737,
+            "predictionToDonorMseRatio": 0.7785822437865801,
+            "sampleCount": 7344,
+            "splatCarriedDonorMse": 0.7824892767419814,
+            "splatPredictionMse": 0.5597639303544351
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.655222601299918,
+            "candidatePredictionMse": 0.9896215614544052,
+            "carriedDonorMse": 2.7054126681710935,
+            "predictionMse": 0.9456893615275329,
+            "predictionToDonorMseRatio": 0.3495545698641367,
+            "sampleCount": 7343,
+            "splatCarriedDonorMse": 2.7946394537198485,
+            "splatPredictionMse": 0.8675876727686487
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7919158518435897,
+            "candidatePredictionMse": 0.6022754671907661,
+            "carriedDonorMse": 0.7562109062627436,
+            "predictionMse": 0.5748867272983958,
+            "predictionToDonorMseRatio": 0.7602200953957848,
+            "sampleCount": 22550,
+            "splatCarriedDonorMse": 0.6927354474523502,
+            "splatPredictionMse": 0.5261956341564042
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48295,
+      "sourceFrameId": "frame-49",
+      "step": 50,
+      "targetFrameId": "frame-50"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0420106184982705,
+          "candidatePredictionMse": 0.64488223804914,
+          "carriedDonorMse": 1.0409742296112205,
+          "predictionMse": 0.6230859129398021,
+          "predictionToDonorMseRatio": 0.5985603631825833,
+          "sampleCount": 47922,
+          "splatCarriedDonorMse": 1.0391317604786883,
+          "splatPredictionMse": 0.5843368905232008
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6686531993584501,
+            "candidatePredictionMse": 0.5557267958258041,
+            "carriedDonorMse": 0.6791729497727114,
+            "predictionMse": 0.5404951573420631,
+            "predictionToDonorMseRatio": 0.7958137283337661,
+            "sampleCount": 10627,
+            "splatCarriedDonorMse": 0.6978747282869533,
+            "splatPredictionMse": 0.5134166889265239
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6587441806417056,
+            "candidatePredictionMse": 0.5387635908766734,
+            "carriedDonorMse": 0.7002075609193539,
+            "predictionMse": 0.5491394606871067,
+            "predictionToDonorMseRatio": 0.7842524007682825,
+            "sampleCount": 7422,
+            "splatCarriedDonorMse": 0.773920236968506,
+            "splatPredictionMse": 0.5675854514612101
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.7378198453951628,
+            "candidatePredictionMse": 1.024064638889239,
+            "carriedDonorMse": 2.773189990148117,
+            "predictionMse": 0.9805899393737612,
+            "predictionToDonorMseRatio": 0.3535963792085473,
+            "sampleCount": 7422,
+            "splatCarriedDonorMse": 2.8360702474867003,
+            "splatPredictionMse": 0.9033015846795788
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7848272731212975,
+            "candidatePredictionMse": 0.5968120275812868,
+            "carriedDonorMse": 0.7522355115661471,
+            "predictionMse": 0.5684392443799974,
+            "predictionToDonorMseRatio": 0.7556665906353083,
+            "sampleCount": 22451,
+            "splatCarriedDonorMse": 0.6942946021347692,
+            "splatPredictionMse": 0.5179987409110386
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 47922,
+      "sourceFrameId": "frame-50",
+      "step": 51,
+      "targetFrameId": "frame-51"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0483945953274836,
+          "candidatePredictionMse": 0.6343071161126157,
+          "carriedDonorMse": 1.0481647889465608,
+          "predictionMse": 0.6088136460403389,
+          "predictionToDonorMseRatio": 0.5808377198514902,
+          "sampleCount": 48759,
+          "splatCarriedDonorMse": 1.0477562442693658,
+          "splatPredictionMse": 0.5634919214674037
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6671033095229056,
+            "candidatePredictionMse": 0.5304301358587385,
+            "carriedDonorMse": 0.6759684781908416,
+            "predictionMse": 0.5171095025238256,
+            "predictionToDonorMseRatio": 0.7649905568197717,
+            "sampleCount": 10579,
+            "splatCarriedDonorMse": 0.6917287780449501,
+            "splatPredictionMse": 0.49342837659509126
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7993685965225023,
+            "candidatePredictionMse": 0.5461083709925579,
+            "carriedDonorMse": 0.8608542039458263,
+            "predictionMse": 0.547476382223212,
+            "predictionToDonorMseRatio": 0.6359687618574548,
+            "sampleCount": 7049,
+            "splatCarriedDonorMse": 0.97016195047618,
+            "splatPredictionMse": 0.5499084021888193
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.8162159919682104,
+            "candidatePredictionMse": 1.0468997805405709,
+            "carriedDonorMse": 2.8766646265205984,
+            "predictionMse": 0.9982197428248463,
+            "predictionToDonorMseRatio": 0.34700595044067384,
+            "sampleCount": 7048,
+            "splatCarriedDonorMse": 2.984128865724843,
+            "splatPredictionMse": 0.9116774535524472
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7714133045654964,
+            "candidatePredictionMse": 0.5850057180130769,
+            "carriedDonorMse": 0.7313666421182216,
+            "predictionMse": 0.5530884596753066,
+            "predictionToDonorMseRatio": 0.7562396585020934,
+            "sampleCount": 24083,
+            "splatCarriedDonorMse": 0.6601725755452882,
+            "splatPredictionMse": 0.49634666707482583
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48759,
+      "sourceFrameId": "frame-51",
+      "step": 52,
+      "targetFrameId": "frame-52"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0216228993242422,
+          "candidatePredictionMse": 0.6248267196229579,
+          "carriedDonorMse": 1.0210996975458093,
+          "predictionMse": 0.6053756131690335,
+          "predictionToDonorMseRatio": 0.5928663132738562,
+          "sampleCount": 47862,
+          "splatCarriedDonorMse": 1.0201695610508177,
+          "splatPredictionMse": 0.570795868362057
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.648320797156473,
+            "candidatePredictionMse": 0.5178238608247858,
+            "carriedDonorMse": 0.6641637466158994,
+            "predictionMse": 0.5109651685601306,
+            "predictionToDonorMseRatio": 0.7693361330901325,
+            "sampleCount": 10596,
+            "splatCarriedDonorMse": 0.6923289900993248,
+            "splatPredictionMse": 0.4987719378674102
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.662858966628615,
+            "candidatePredictionMse": 0.5400956328490949,
+            "carriedDonorMse": 0.6990949157207397,
+            "predictionMse": 0.5470935938227696,
+            "predictionToDonorMseRatio": 0.7825741276615312,
+            "sampleCount": 7429,
+            "splatCarriedDonorMse": 0.7635143807734058,
+            "splatPredictionMse": 0.5595344133315243
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.643379926465632,
+            "candidatePredictionMse": 0.9680147863749177,
+            "carriedDonorMse": 2.6923078983229503,
+            "predictionMse": 0.9307801100434464,
+            "predictionToDonorMseRatio": 0.34571830013321775,
+            "sampleCount": 7429,
+            "splatCarriedDonorMse": 2.7792909594026294,
+            "splatPredictionMse": 0.8645851298986086
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7794207115311377,
+            "candidatePredictionMse": 0.5897377062156098,
+            "carriedDonorMse": 0.7425768992888647,
+            "predictionMse": 0.5614591630404774,
+            "predictionToDonorMseRatio": 0.7560956495928753,
+            "sampleCount": 22408,
+            "splatCarriedDonorMse": 0.6770767886359355,
+            "splatPredictionMse": 0.5111861973957975
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 47862,
+      "sourceFrameId": "frame-52",
+      "step": 53,
+      "targetFrameId": "frame-53"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0300673353615437,
+          "candidatePredictionMse": 0.6415274587060109,
+          "carriedDonorMse": 1.0258960316006844,
+          "predictionMse": 0.6165410982393479,
+          "predictionToDonorMseRatio": 0.6009781490989604,
+          "sampleCount": 47686,
+          "splatCarriedDonorMse": 1.0184803804702678,
+          "splatPredictionMse": 0.5721209018541695
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6809937734203239,
+            "candidatePredictionMse": 0.5429650500846268,
+            "carriedDonorMse": 0.6817710632507822,
+            "predictionMse": 0.522831651188159,
+            "predictionToDonorMseRatio": 0.7668727515292637,
+            "sampleCount": 10473,
+            "splatCarriedDonorMse": 0.6831529118382641,
+            "splatPredictionMse": 0.4870389420388823
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6657551271162797,
+            "candidatePredictionMse": 0.553536083593552,
+            "carriedDonorMse": 0.6987785738173662,
+            "predictionMse": 0.5593539040891231,
+            "predictionToDonorMseRatio": 0.8004737481194103,
+            "sampleCount": 7564,
+            "splatCarriedDonorMse": 0.7574869235081871,
+            "splatPredictionMse": 0.5696966960812498
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.5897990229797,
+            "candidatePredictionMse": 1.0076999686773038,
+            "carriedDonorMse": 2.6462153066807783,
+            "predictionMse": 0.9656428564963889,
+            "predictionToDonorMseRatio": 0.36491469687235,
+            "sampleCount": 7563,
+            "splatCarriedDonorMse": 2.746510922149362,
+            "splatPredictionMse": 0.8908746570636514
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7862592308573992,
+            "candidatePredictionMse": 0.593010215834033,
+            "carriedDonorMse": 0.7462556515758181,
+            "predictionMse": 0.5610184312929293,
+            "predictionToDonorMseRatio": 0.7517777990803343,
+            "sampleCount": 22086,
+            "splatCarriedDonorMse": 0.675138177297451,
+            "splatPredictionMse": 0.5041441476643006
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 47686,
+      "sourceFrameId": "frame-53",
+      "step": 54,
+      "targetFrameId": "frame-54"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.0615992341334783,
+          "candidatePredictionMse": 0.6672071417184791,
+          "carriedDonorMse": 1.0475301363383893,
+          "predictionMse": 0.6349624950570795,
+          "predictionToDonorMseRatio": 0.6061520074988698,
+          "sampleCount": 48159,
+          "splatCarriedDonorMse": 1.0225184069248967,
+          "splatPredictionMse": 0.577638678770146
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6995763473151801,
+            "candidatePredictionMse": 0.5572254083821216,
+            "carriedDonorMse": 0.7011842075549112,
+            "predictionMse": 0.5370578740605004,
+            "predictionToDonorMseRatio": 0.7659297917351373,
+            "sampleCount": 10613,
+            "splatCarriedDonorMse": 0.7040426257588775,
+            "splatPredictionMse": 0.5012044797109516
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6912071822313414,
+            "candidatePredictionMse": 0.5745622040126156,
+            "carriedDonorMse": 0.7214919137408016,
+            "predictionMse": 0.5772528695897836,
+            "predictionToDonorMseRatio": 0.8000822442996411,
+            "sampleCount": 7532,
+            "splatCarriedDonorMse": 0.7753314364242864,
+            "splatPredictionMse": 0.5820362750603045
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 2.682696716122187,
+            "candidatePredictionMse": 1.0789146752092682,
+            "carriedDonorMse": 2.7107305553526926,
+            "predictionMse": 1.0150197990847434,
+            "predictionToDonorMseRatio": 0.3744451093010531,
+            "sampleCount": 7532,
+            "splatCarriedDonorMse": 2.760568491762481,
+            "splatPredictionMse": 0.9014289081966992
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8134823227550678,
+            "candidatePredictionMse": 0.6122323469691995,
+            "carriedDonorMse": 0.7630476027011839,
+            "predictionMse": 0.5731859194730561,
+            "predictionToDonorMseRatio": 0.7511797657760556,
+            "sampleCount": 22482,
+            "splatCarriedDonorMse": 0.6733858781609462,
+            "splatPredictionMse": 0.503770048368801
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48159,
+      "sourceFrameId": "frame-54",
+      "step": 55,
+      "targetFrameId": "frame-55"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1033358031130638,
+          "candidatePredictionMse": 0.6579134205190639,
+          "carriedDonorMse": 1.0837362062879035,
+          "predictionMse": 0.619965903654234,
+          "predictionToDonorMseRatio": 0.5720634782312837,
+          "sampleCount": 49177,
+          "splatCarriedDonorMse": 1.0488924785987295,
+          "splatPredictionMse": 0.5525036514500907
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.666681682799052,
+            "candidatePredictionMse": 0.539124480947996,
+            "carriedDonorMse": 0.6581094020784994,
+            "predictionMse": 0.5102249672541604,
+            "predictionToDonorMseRatio": 0.7752889802861389,
+            "sampleCount": 10674,
+            "splatCarriedDonorMse": 0.6428697919086283,
+            "splatPredictionMse": 0.4588480540206752
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.831290554877172,
+            "candidatePredictionMse": 0.562763919787458,
+            "carriedDonorMse": 0.8774606874098316,
+            "predictionMse": 0.5564610261242953,
+            "predictionToDonorMseRatio": 0.6341720308483649,
+            "sampleCount": 7337,
+            "splatCarriedDonorMse": 0.9595409230234488,
+            "splatPredictionMse": 0.5452558818342278
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.031924467406579,
+            "candidatePredictionMse": 1.1437145209564628,
+            "carriedDonorMse": 3.01725723097159,
+            "predictionMse": 1.0537051883954047,
+            "predictionToDonorMseRatio": 0.3492261705695209,
+            "sampleCount": 7336,
+            "splatCarriedDonorMse": 2.9911821439760535,
+            "splatPredictionMse": 0.8936885971757462
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7889722120631794,
+            "candidatePredictionMse": 0.5908646649605498,
+            "carriedDonorMse": 0.7426650251322198,
+            "predictionMse": 0.555148389961842,
+            "predictionToDonorMseRatio": 0.7475084609821321,
+            "sampleCount": 23830,
+            "splatCarriedDonorMse": 0.6603411372549576,
+            "splatPredictionMse": 0.4916527899641389
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49177,
+      "sourceFrameId": "frame-55",
+      "step": 56,
+      "targetFrameId": "frame-56"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1357572939513239,
+          "candidatePredictionMse": 0.6696598574411871,
+          "carriedDonorMse": 1.1072915893346695,
+          "predictionMse": 0.6302424674050613,
+          "predictionToDonorMseRatio": 0.5691747986487918,
+          "sampleCount": 48843,
+          "splatCarriedDonorMse": 1.0566858922383973,
+          "splatPredictionMse": 0.5601671073408381
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6567766599019701,
+            "candidatePredictionMse": 0.5225945642564294,
+            "carriedDonorMse": 0.661048237391799,
+            "predictionMse": 0.5027224105236168,
+            "predictionToDonorMseRatio": 0.7604927781172744,
+            "sampleCount": 10816,
+            "splatCarriedDonorMse": 0.6686421529292719,
+            "splatPredictionMse": 0.46739413722083867
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.753769355912445,
+            "candidatePredictionMse": 0.5726629990642894,
+            "carriedDonorMse": 0.7816507221065649,
+            "predictionMse": 0.5664487223812067,
+            "predictionToDonorMseRatio": 0.7246826573058305,
+            "sampleCount": 7780,
+            "splatCarriedDonorMse": 0.8312175953405561,
+            "splatPredictionMse": 0.5554011193890598
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.060618010640077,
+            "candidatePredictionMse": 1.1274163783254783,
+            "carriedDonorMse": 3.0220767955085543,
+            "predictionMse": 1.0404876853590885,
+            "predictionToDonorMseRatio": 0.3442955807428433,
+            "sampleCount": 7780,
+            "splatCarriedDonorMse": 2.953559079719181,
+            "splatPredictionMse": 0.8859477867521732
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8320720809714772,
+            "candidatePredictionMse": 0.6155337185164897,
+            "carriedDonorMse": 0.771822908051719,
+            "predictionMse": 0.5716616366681125,
+            "predictionToDonorMseRatio": 0.740664251740253,
+            "sampleCount": 22467,
+            "splatCarriedDonorMse": 0.6647132673054823,
+            "splatPredictionMse": 0.4936668244932197
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48843,
+      "sourceFrameId": "frame-56",
+      "step": 57,
+      "targetFrameId": "frame-57"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1698066655470702,
+          "candidatePredictionMse": 0.6917915432370613,
+          "carriedDonorMse": 1.1361210743069987,
+          "predictionMse": 0.649247709993765,
+          "predictionToDonorMseRatio": 0.5714599655585013,
+          "sampleCount": 48746,
+          "splatCarriedDonorMse": 1.0762355787690931,
+          "splatPredictionMse": 0.5736142286723489
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6824685338124129,
+            "candidatePredictionMse": 0.5481446618360144,
+            "carriedDonorMse": 0.6861539280714416,
+            "predictionMse": 0.526742700416557,
+            "predictionToDonorMseRatio": 0.7676742475220708,
+            "sampleCount": 10536,
+            "splatCarriedDonorMse": 0.6927057400874921,
+            "splatPredictionMse": 0.48869476900418873
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7611029250783954,
+            "candidatePredictionMse": 0.5686908323696348,
+            "carriedDonorMse": 0.7906046332872406,
+            "predictionMse": 0.5659882245892396,
+            "predictionToDonorMseRatio": 0.7158928758562007,
+            "sampleCount": 7837,
+            "splatCarriedDonorMse": 0.8430521145474104,
+            "splatPredictionMse": 0.5611835885352034
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.168883188008085,
+            "candidatePredictionMse": 1.202310710986592,
+            "carriedDonorMse": 3.09832655508215,
+            "predictionMse": 1.0977663886315217,
+            "predictionToDonorMseRatio": 0.35430945354383897,
+            "sampleCount": 7837,
+            "splatCarriedDonorMse": 2.972892540991598,
+            "splatPredictionMse": 0.9119098155558415
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8445867091875726,
+            "candidatePredictionMse": 0.6242225467805635,
+            "carriedDonorMse": 0.7842778833314389,
+            "predictionMse": 0.579500482603661,
+            "predictionToDonorMseRatio": 0.7388968819853382,
+            "sampleCount": 22536,
+            "splatCarriedDonorMse": 0.6770621929205352,
+            "splatPredictionMse": 0.4999945907336116
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48746,
+      "sourceFrameId": "frame-57",
+      "step": 58,
+      "targetFrameId": "frame-58"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1294479192322084,
+          "candidatePredictionMse": 0.6654752789627658,
+          "carriedDonorMse": 1.1028470796007044,
+          "predictionMse": 0.6293469792257431,
+          "predictionToDonorMseRatio": 0.5706566131123127,
+          "sampleCount": 49180,
+          "splatCarriedDonorMse": 1.0555566980335838,
+          "splatPredictionMse": 0.5651188908043699
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6748949904187187,
+            "candidatePredictionMse": 0.5367718662909641,
+            "carriedDonorMse": 0.680933550029614,
+            "predictionMse": 0.5231971624097925,
+            "predictionToDonorMseRatio": 0.7683527451203404,
+            "sampleCount": 10308,
+            "splatCarriedDonorMse": 0.6916687671156493,
+            "splatPredictionMse": 0.499064355509932
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8291897033627192,
+            "candidatePredictionMse": 0.6083541759505765,
+            "carriedDonorMse": 0.8639519658958928,
+            "predictionMse": 0.5954209980295867,
+            "predictionToDonorMseRatio": 0.6891829887928463,
+            "sampleCount": 7427,
+            "splatCarriedDonorMse": 0.9257515437326465,
+            "splatPredictionMse": 0.5724286817256043
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.15728956821202,
+            "candidatePredictionMse": 1.1654072520802201,
+            "carriedDonorMse": 3.0895523274129393,
+            "predictionMse": 1.0639505148818273,
+            "predictionToDonorMseRatio": 0.34437044663125504,
+            "sampleCount": 7426,
+            "splatCarriedDonorMse": 2.9691305659923524,
+            "splatPredictionMse": 0.8835829820846852
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7904162057615426,
+            "candidatePredictionMse": 0.5838073651246476,
+            "carriedDonorMse": 0.7435517509879704,
+            "predictionMse": 0.5510254303811032,
+            "predictionToDonorMseRatio": 0.7410720634427206,
+            "sampleCount": 24019,
+            "splatCarriedDonorMse": 0.660237164723842,
+            "splatPredictionMse": 0.49274643528146855
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49180,
+      "sourceFrameId": "frame-58",
+      "step": 59,
+      "targetFrameId": "frame-59"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1279654226037212,
+          "candidatePredictionMse": 0.6770548626986891,
+          "carriedDonorMse": 1.1056283249796752,
+          "predictionMse": 0.6452218752636714,
+          "predictionToDonorMseRatio": 0.5835793644989445,
+          "sampleCount": 48983,
+          "splatCarriedDonorMse": 1.0659179292035936,
+          "splatPredictionMse": 0.5886298976014167
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.6654736759303176,
+            "candidatePredictionMse": 0.5419186129360924,
+            "carriedDonorMse": 0.668041649240023,
+            "predictionMse": 0.5237831296905255,
+            "predictionToDonorMseRatio": 0.7840575962387843,
+            "sampleCount": 10806,
+            "splatCarriedDonorMse": 0.6726069351239432,
+            "splatPredictionMse": 0.4915422705872953
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7359769488440695,
+            "candidatePredictionMse": 0.5865165088339085,
+            "carriedDonorMse": 0.7667449081146448,
+            "predictionMse": 0.5839539397880817,
+            "predictionToDonorMseRatio": 0.7616013273879715,
+            "sampleCount": 7724,
+            "splatCarriedDonorMse": 0.8214435023734447,
+            "splatPredictionMse": 0.5793982614843901
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.0731166997102046,
+            "candidatePredictionMse": 1.1936136771789707,
+            "carriedDonorMse": 3.0295128177058044,
+            "predictionMse": 1.104196149715244,
+            "predictionToDonorMseRatio": 0.3644797748541734,
+            "sampleCount": 7724,
+            "splatCarriedDonorMse": 2.9519948052535336,
+            "splatPredictionMse": 0.9452316564463968
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.820035303438859,
+            "candidatePredictionMse": 0.5965277949500195,
+            "carriedDonorMse": 0.7750380353977122,
+            "predictionMse": 0.567804625160847,
+            "predictionToDonorMseRatio": 0.732615174001721,
+            "sampleCount": 22729,
+            "splatCarriedDonorMse": 0.6950428922134507,
+            "splatPredictionMse": 0.516741212202318
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48983,
+      "sourceFrameId": "frame-59",
+      "step": 60,
+      "targetFrameId": "frame-60"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.161770761831524,
+          "candidatePredictionMse": 0.7069912504739568,
+          "carriedDonorMse": 1.1340455036982762,
+          "predictionMse": 0.6642278980314593,
+          "predictionToDonorMseRatio": 0.5857153843168744,
+          "sampleCount": 48200,
+          "splatCarriedDonorMse": 1.0847561559058352,
+          "splatPredictionMse": 0.5882041603559095
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7472649267397935,
+            "candidatePredictionMse": 0.5972273238994408,
+            "carriedDonorMse": 0.7350909620790259,
+            "predictionMse": 0.5626916000002676,
+            "predictionToDonorMseRatio": 0.765472069482165,
+            "sampleCount": 10380,
+            "splatCarriedDonorMse": 0.7134483582376607,
+            "splatPredictionMse": 0.5012947575128488
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7536620329573106,
+            "candidatePredictionMse": 0.6101106415206988,
+            "carriedDonorMse": 0.7773171688790068,
+            "predictionMse": 0.5957981443064118,
+            "predictionToDonorMseRatio": 0.7664801038238107,
+            "sampleCount": 7802,
+            "splatCarriedDonorMse": 0.8193707438509104,
+            "splatPredictionMse": 0.5703537048143462
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.0853835483031036,
+            "candidatePredictionMse": 1.2138773646582852,
+            "carriedDonorMse": 3.033234819446734,
+            "predictionMse": 1.1046571713161244,
+            "predictionToDonorMseRatio": 0.36418452149959674,
+            "sampleCount": 7801,
+            "splatCarriedDonorMse": 2.94052596814652,
+            "splatPredictionMse": 0.9104879387078381
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8233151433260546,
+            "candidatePredictionMse": 0.6143141785085628,
+            "carriedDonorMse": 0.7788565384065642,
+            "predictionMse": 0.5810504641399771,
+            "predictionToDonorMseRatio": 0.746030155089573,
+            "sampleCount": 22217,
+            "splatCarriedDonorMse": 0.6998190185496929,
+            "splatPredictionMse": 0.5219149719291576
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48200,
+      "sourceFrameId": "frame-60",
+      "step": 61,
+      "targetFrameId": "frame-61"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1617205163767288,
+          "candidatePredictionMse": 0.6970514490046923,
+          "carriedDonorMse": 1.1336594262577717,
+          "predictionMse": 0.6556370688466006,
+          "predictionToDonorMseRatio": 0.5783368917161208,
+          "sampleCount": 49119,
+          "splatCarriedDonorMse": 1.083773043824069,
+          "splatPredictionMse": 0.5820115041211046
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7536574560616746,
+            "candidatePredictionMse": 0.6039769350236357,
+            "carriedDonorMse": 0.7450058152711154,
+            "predictionMse": 0.5704213514113021,
+            "predictionToDonorMseRatio": 0.7656602669654596,
+            "sampleCount": 10781,
+            "splatCarriedDonorMse": 0.7296251205323437,
+            "splatPredictionMse": 0.5107669805449314
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8493200736842976,
+            "candidatePredictionMse": 0.6056820672408043,
+            "carriedDonorMse": 0.8876272711731388,
+            "predictionMse": 0.5921440522189906,
+            "predictionToDonorMseRatio": 0.6671088997033398,
+            "sampleCount": 7352,
+            "splatCarriedDonorMse": 0.9557289555977455,
+            "splatPredictionMse": 0.5680764699579884
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.206670149536853,
+            "candidatePredictionMse": 1.2391711769348035,
+            "carriedDonorMse": 3.134312541819274,
+            "predictionMse": 1.129114724748459,
+            "predictionToDonorMseRatio": 0.3602431824150753,
+            "sampleCount": 7351,
+            "splatCarriedDonorMse": 3.0056767947658027,
+            "splatPredictionMse": 0.9334588097505129
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8090093318864092,
+            "candidatePredictionMse": 0.5993176605529735,
+            "carriedDonorMse": 0.7652270984277202,
+            "predictionMse": 0.5669963690108312,
+            "predictionToDonorMseRatio": 0.7409517647451517,
+            "sampleCount": 23635,
+            "splatCarriedDonorMse": 0.6873920167233848,
+            "splatPredictionMse": 0.5095362951581336
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 49119,
+      "sourceFrameId": "frame-61",
+      "step": 62,
+      "targetFrameId": "frame-62"
+    },
+    {
+      "metrics": {
+        "aggregate": {
+          "beatsCarriedDonor": true,
+          "candidateCarriedDonorMse": 1.1929643931902627,
+          "candidatePredictionMse": 0.7065162494370133,
+          "carriedDonorMse": 1.164754549365991,
+          "predictionMse": 0.6686532808698679,
+          "predictionToDonorMseRatio": 0.5740722637519079,
+          "sampleCount": 48341,
+          "splatCarriedDonorMse": 1.1146037159006188,
+          "splatPredictionMse": 0.6013413367504992
+        },
+        "aggregateMayCloseCohortClaim": false,
+        "allCohortsBeatCarriedDonor": true,
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "cohorts": {
+          "birth": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7176201312435594,
+            "candidatePredictionMse": 0.5661343797260634,
+            "carriedDonorMse": 0.7239517680853905,
+            "predictionMse": 0.5439797893247924,
+            "predictionToDonorMseRatio": 0.7514033576621222,
+            "sampleCount": 10737,
+            "splatCarriedDonorMse": 0.7352080113597572,
+            "splatPredictionMse": 0.5045938508336442
+          },
+          "stable-q3": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.7791216441368952,
+            "candidatePredictionMse": 0.6301331020743468,
+            "carriedDonorMse": 0.801405599370499,
+            "predictionMse": 0.6157086063013161,
+            "predictionToDonorMseRatio": 0.7682858801896977,
+            "sampleCount": 7882,
+            "splatCarriedDonorMse": 0.8410215197857946,
+            "splatPredictionMse": 0.5900650582603727
+          },
+          "stable-q4": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 3.1320759985741926,
+            "candidatePredictionMse": 1.1532555946054688,
+            "carriedDonorMse": 3.0818212108233776,
+            "predictionMse": 1.0777025037592087,
+            "predictionToDonorMseRatio": 0.3496966339170845,
+            "sampleCount": 7881,
+            "splatCarriedDonorMse": 2.9924793659330384,
+            "splatPredictionMse": 0.9433858978103024
+          },
+          "transported": {
+            "beatsCarriedDonor": true,
+            "candidateCarriedDonorMse": 0.8762912246782741,
+            "candidatePredictionMse": 0.641893719485381,
+            "carriedDonorMse": 0.8208331871357183,
+            "predictionMse": 0.6014499604210746,
+            "predictionToDonorMseRatio": 0.73273104675485,
+            "sampleCount": 21841,
+            "splatCarriedDonorMse": 0.7222411203933976,
+            "splatPredictionMse": 0.5295499443067527
+          }
+        },
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0"
+      },
+      "sampleCount": 48341,
+      "sourceFrameId": "frame-62",
+      "step": 63,
+      "targetFrameId": "frame-63"
+    }
+  ],
+  "model": {
+    "bytes": 1117696,
+    "path": "/private/tmp/kaminos-phase-destination-state-residual-r1-0714/destination-state-model.json",
+    "schema": "kaminos-boundary-splat-phase-destination-state-model-v0",
+    "sha256": "46d7686dd59b192243e35f9e90c94082a1d100478d7e51b5460dc6c6a9eda5d4"
+  },
+  "route": {
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "effectiveRunner": "/private/tmp/kaminos-phase-audit-venv-0714/bin/python",
+    "fallbackReason": null
+  },
+  "schema": "kaminos-boundary-splat-phase-destination-state-training-v0",
+  "startedAt": 1784063986.081442,
+  "status": "completed",
+  "training": {
+    "batchSize": 4096,
+    "cohortCounts": {
+      "birth": 116159,
+      "stable-q3": 94118,
+      "stable-q4": 94112,
+      "transported": 239569
+    },
+    "epochs": 8,
+    "hiddenSize": 128,
+    "learningRate": 0.0015,
+    "losses": [
+      {
+        "mse": 1.1486161947250366,
+        "step": 1
+      },
+      {
+        "mse": 0.6687986850738525,
+        "step": 133
+      },
+      {
+        "mse": 0.6113800406455994,
+        "step": 266
+      },
+      {
+        "mse": 0.5801591277122498,
+        "step": 399
+      },
+      {
+        "mse": 0.5886873006820679,
+        "step": 532
+      },
+      {
+        "mse": 0.5839685201644897,
+        "step": 665
+      },
+      {
+        "mse": 0.571922242641449,
+        "step": 798
+      },
+      {
+        "mse": 0.5763636231422424,
+        "step": 931
+      },
+      {
+        "mse": 0.5635156631469727,
+        "step": 1064
+      }
+    ],
+    "pairCount": 12,
+    "pairReports": [
+      {
+        "cohortCounts": {
+          "birth": 7200,
+          "stable-q3": 9003,
+          "stable-q4": 9003,
+          "transported": 15019
+        },
+        "sampleCount": 40225,
+        "sourceFrameId": "frame-0",
+        "targetFrameId": "frame-1"
+      },
+      {
+        "cohortCounts": {
+          "birth": 7743,
+          "stable-q3": 8730,
+          "stable-q4": 8730,
+          "transported": 15878
+        },
+        "sampleCount": 41081,
+        "sourceFrameId": "frame-1",
+        "targetFrameId": "frame-2"
+      },
+      {
+        "cohortCounts": {
+          "birth": 8605,
+          "stable-q3": 7706,
+          "stable-q4": 7705,
+          "transported": 19022
+        },
+        "sampleCount": 43038,
+        "sourceFrameId": "frame-2",
+        "targetFrameId": "frame-3"
+      },
+      {
+        "cohortCounts": {
+          "birth": 8993,
+          "stable-q3": 7804,
+          "stable-q4": 7803,
+          "transported": 18343
+        },
+        "sampleCount": 42943,
+        "sourceFrameId": "frame-3",
+        "targetFrameId": "frame-4"
+      },
+      {
+        "cohortCounts": {
+          "birth": 9040,
+          "stable-q3": 7626,
+          "stable-q4": 7625,
+          "transported": 19036
+        },
+        "sampleCount": 43327,
+        "sourceFrameId": "frame-4",
+        "targetFrameId": "frame-5"
+      },
+      {
+        "cohortCounts": {
+          "birth": 9706,
+          "stable-q3": 7086,
+          "stable-q4": 7086,
+          "transported": 20973
+        },
+        "sampleCount": 44851,
+        "sourceFrameId": "frame-5",
+        "targetFrameId": "frame-6"
+      },
+      {
+        "cohortCounts": {
+          "birth": 9994,
+          "stable-q3": 7557,
+          "stable-q4": 7557,
+          "transported": 20028
+        },
+        "sampleCount": 45136,
+        "sourceFrameId": "frame-6",
+        "targetFrameId": "frame-7"
+      },
+      {
+        "cohortCounts": {
+          "birth": 10326,
+          "stable-q3": 7686,
+          "stable-q4": 7685,
+          "transported": 20463
+        },
+        "sampleCount": 46160,
+        "sourceFrameId": "frame-7",
+        "targetFrameId": "frame-8"
+      },
+      {
+        "cohortCounts": {
+          "birth": 10918,
+          "stable-q3": 7314,
+          "stable-q4": 7314,
+          "transported": 22762
+        },
+        "sampleCount": 48308,
+        "sourceFrameId": "frame-8",
+        "targetFrameId": "frame-9"
+      },
+      {
+        "cohortCounts": {
+          "birth": 11062,
+          "stable-q3": 7903,
+          "stable-q4": 7902,
+          "transported": 21932
+        },
+        "sampleCount": 48799,
+        "sourceFrameId": "frame-9",
+        "targetFrameId": "frame-10"
+      },
+      {
+        "cohortCounts": {
+          "birth": 11150,
+          "stable-q3": 8014,
+          "stable-q4": 8014,
+          "transported": 22206
+        },
+        "sampleCount": 49384,
+        "sourceFrameId": "frame-10",
+        "targetFrameId": "frame-11"
+      },
+      {
+        "cohortCounts": {
+          "birth": 11422,
+          "stable-q3": 7689,
+          "stable-q4": 7688,
+          "transported": 23907
+        },
+        "sampleCount": 50706,
+        "sourceFrameId": "frame-11",
+        "targetFrameId": "frame-12"
+      }
+    ],
+    "sampleCap": null,
+    "sampleCount": 543958,
+    "samplingAuthority": "uniform-with-replacement-across-q3-q4-transported-birth-v0",
+    "seed": 713,
+    "stepCount": 1064,
+    "stepsPerEpoch": 133,
+    "supportAssignmentAuthority": "exact-training-correspondence-and-local-birth-donor-v0",
+    "timeout": null,
+    "weightDecay": 0.0001
+  },
+  "trainingManifest": {
+    "bytes": 90735,
+    "controlledStepDeltaMs": 160,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "frameCount": 13,
+    "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+    "sha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+  }
+}

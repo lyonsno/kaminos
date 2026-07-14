@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Destination-State Signal And Coupled Collapse</title>
+  <style>
+    :root { color-scheme: dark; background: #08090b; color: #f2f3f5; font-family: ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #08090b; }
+    header, section { padding: 24px max(20px, calc((100vw - 1180px) / 2)); border-bottom: 1px solid #292d33; }
+    header { background: #111317; }
+    h1 { margin: 0 0 10px; font-size: 28px; letter-spacing: 0; }
+    h2 { margin: 0 0 10px; font-size: 20px; letter-spacing: 0; }
+    p { max-width: 960px; margin: 8px 0; color: #c8ccd2; line-height: 1.5; }
+    strong { color: #fff; }
+    video, img { display: block; width: 100%; max-width: 1180px; height: auto; margin-top: 16px; background: #000; }
+    table { border-collapse: collapse; width: 100%; max-width: 960px; margin-top: 16px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #30343a; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    code { color: #a8d8ff; }
+    .roles { color: #f4cf73; }
+    .failure { color: #f1a4b7; }
+    .signal { color: #9de5b0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Destination-State Signal And Coupled Collapse</h1>
+    <p><strong>Question:</strong> Can learned state evolution beat carried donor appearance, and does it survive direct recurrent coupling to the occupancy head?</p>
+    <p class="signal"><strong>One-step result:</strong> yes. All Q3/Q4/transport/birth cohorts beat carried-donor MSE on a distinct 63-transition episode; aggregate ratio is <code>0.5796x</code>.</p>
+    <p class="failure"><strong>Recurrent result:</strong> no. Updated candidate state poisons subsequent occupancy inputs; support advantage ends after step 17 and visible energy collapses.</p>
+    <p class="roles"><strong>Every video frame:</strong> left = exact held-out reference, middle = copied-current control, right = combined recurrent prediction.</p>
+  </header>
+
+  <section>
+    <h2>Combined Beauty, 10.08 Seconds</h2>
+    <p>Watch the first second for coherent but steadily dimming motion. Near 2.9 seconds, the prediction contracts into a repetitive red crown. During the final second, nearly all predicted flame energy disappears even though support count is inflated.</p>
+    <video controls muted playsinline preload="metadata" src="motion-cohort-comparison.mp4"></video>
+  </section>
+
+  <section>
+    <h2>Additive Cohort Debug, Gain 0.625</h2>
+    <p>The same states and cadence receive a display-only debug mix: green Q1/Q2, yellow Q3, red Q4, blue transported, magenta birth, orange unmatched/death. Existing colored support proves the late dark beauty frame is not a blank renderer or missing payload.</p>
+    <video controls muted playsinline preload="metadata" src="motion-cohort-debug-comparison.mp4"></video>
+  </section>
+
+  <section>
+    <h2>Role-Matched Time Samples</h2>
+    <p>Row-major times are <code>0.16, 0.48, 1.60, 2.72, 2.88, 3.20, 6.40, 10.08 seconds</code>. Each tile preserves the left/middle/right role labels. This is one continuous episode.</p>
+    <img src="inspection-selected-beauty.png" alt="Eight ordered role-matched beauty frames from one combined recurrent episode.">
+  </section>
+
+  <section>
+    <h2>Consecutive Predicted Frames</h2>
+    <p>The three rows are consecutive prediction-only sequences at <code>0.16-0.96</code>, <code>2.56-3.36</code>, and <code>9.28-10.08 seconds</code>. The first row shows real local motion plus monotonic dimming; the second shows red-crown convergence; the third shows near-extinction.</p>
+    <img src="inspection-consecutive-predicted.png" alt="Three rows of six consecutive predicted frames showing early dimming, red-rim collapse, and late extinction.">
+  </section>
+
+  <section>
+    <h2>Debug Time Samples</h2>
+    <p>These are the exact same selected times with the fixed additive cohort mix. Support remains present while state energy and registration fail.</p>
+    <img src="inspection-selected-debug.png" alt="Eight ordered role-matched debug frames with exact cohort colors.">
+  </section>
+
+  <section>
+    <h2>Measured Boundary</h2>
+    <table>
+      <thead><tr><th>Cohort</th><th>Oracle state / donor MSE</th><th>Coupled / control MSE</th><th>Coupled energy</th></tr></thead>
+      <tbody>
+        <tr><td>Q3</td><td>0.7250x</td><td>2.2321x</td><td>0.1196</td></tr>
+        <tr><td>Q4</td><td>0.3562x</td><td>1.3295x</td><td>0.0956</td></tr>
+        <tr><td>Transported</td><td>0.7445x</td><td>1.9579x</td><td>0.0600</td></tr>
+        <tr><td>Birth</td><td>0.7570x</td><td>2.0128x</td><td>0.0537</td></tr>
+      </tbody>
+    </table>
+    <p>The signal is real and the direct composition is wrong. The next falsifier is dual-track recurrence: occupancy advances on its protected canonical state while appearance residuals advance separately on the same selected support.</p>
+  </section>
+
+  <section>
+    <h2>Evidence Boundary</h2>
+    <p>Occupancy model <code>e51c23d2…</code>; state model <code>46d7686d…</code>; combined predictions <code>ac4edaec…</code>; MLX <code>Device(gpu, 0)</code>; independent 13-frame training and 64-frame evaluation episodes; no fallback. This isolated splat witness does not establish analytical-raymarch agreement, multi-basin generalization, deployable continuation, or runtime integration.</p>
+  </section>
+</body>
+</html>

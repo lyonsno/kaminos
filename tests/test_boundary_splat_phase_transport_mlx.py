@@ -68,6 +68,48 @@ def frozen_model_document(hidden_size=2):
     }
 
 
+def frozen_state_model_document(hidden_size=2):
+    def layer(role, activation, input_size, output_size, bias=None):
+        return {
+            "role": role,
+            "activation": activation,
+            "inputSize": input_size,
+            "outputSize": output_size,
+            "weights": [0.0] * (input_size * output_size),
+            "bias": list(bias if bias is not None else [0.0] * output_size),
+        }
+    residual_bias = [0.0] * MODULE.DESTINATION_STATE_ATTRIBUTE_COUNT
+    residual_bias[0] = 0.5
+    return {
+        "schema": MODULE.DESTINATION_STATE_MODEL_SCHEMA,
+        "status": "completed",
+        "route": {"backend": "mlx", "device": "Device(gpu, 0)", "fallbackReason": None},
+        "input": {
+            "authority": MODULE.DESTINATION_STATE_INPUT_AUTHORITY,
+            "featureCount": MODULE.DESTINATION_STATE_INPUT_COUNT,
+            "destinationLocalGridFeatureCount": 64,
+            "selectedDonorAttributeCount": MODULE.DESTINATION_STATE_ATTRIBUTE_COUNT,
+            "selectedDonorDisplacementCount": MODULE.DEATH_CLASS,
+            "mean": [0.0] * MODULE.DESTINATION_STATE_INPUT_COUNT,
+            "scale": [1.0] * MODULE.DESTINATION_STATE_INPUT_COUNT,
+        },
+        "output": {
+            "authority": MODULE.DESTINATION_STATE_OUTPUT_AUTHORITY,
+            "attributeCount": MODULE.DESTINATION_STATE_ATTRIBUTE_COUNT,
+            "residualMean": [0.0] * MODULE.DESTINATION_STATE_ATTRIBUTE_COUNT,
+            "residualScale": [1.0] * MODULE.DESTINATION_STATE_ATTRIBUTE_COUNT,
+        },
+        "architecture": {
+            "authority": MODULE.DESTINATION_STATE_ARCHITECTURE_AUTHORITY,
+            "layers": [
+                layer("destination-state-trunk-a", "relu", MODULE.DESTINATION_STATE_INPUT_COUNT, hidden_size),
+                layer("destination-state-trunk-b", "relu", hidden_size, hidden_size),
+                layer("destination-state-residual-head", "linear", hidden_size, MODULE.DESTINATION_STATE_ATTRIBUTE_COUNT, residual_bias),
+            ],
+        },
+    }
+
+
 class TransportDatasetContracts(unittest.TestCase):
     def test_directional_input_preserves_exact_candidate_contract(self):
         source = frame([
@@ -287,6 +329,125 @@ class TransportDatasetContracts(unittest.TestCase):
             {cohort: 2 for cohort in MODULE.EULERIAN_DESTINATION_COHORTS},
         )
 
+    def test_destination_state_dataset_targets_motion_residual_after_donor_assignment(self):
+        source = frame([
+            ((0.0, 0.0, 0.0), 0.0),
+            ((0.0, 3.0, 0.0), 0.0),
+            ((0.0, 6.0, 0.0), 0.0),
+            ((0.0, 9.0, 0.0), 0.0),
+            ((0.0, 12.0, 0.0), 0.5),
+            ((9.0, 9.0, 9.0), 0.5),
+        ])
+        target = frame([
+            ((0.0, 0.0, 0.0), 0.001),
+            ((0.0, 3.0, 0.0), 0.01),
+            ((0.0, 6.0, 0.0), 0.1),
+            ((0.0, 9.0, 0.0), 1.0),
+            ((1.0, 12.0, 0.0), 0.51),
+            ((1.0, 0.0, 0.0), 2.0),
+        ])
+
+        dataset = MODULE.build_destination_state_dataset(source, target, grid_step=1.0)
+        self.assertEqual(dataset["stateCohorts"].tolist(), [
+            "stable-q3", "stable-q4", "transported", "birth",
+        ])
+        self.assertEqual(dataset["stateInputs"].shape, (4, 64 + 25 + MODULE.DEATH_CLASS))
+        self.assertEqual(dataset["stateTargets"].shape, (4, 25))
+        self.assertEqual(dataset["stateBaselines"].shape, (4, 25))
+        np.testing.assert_allclose(
+            dataset["stateResidualTargets"],
+            dataset["stateTargets"] - dataset["stateBaselines"],
+        )
+
+        birth_row = dataset["stateDestinationKeys"].index((1.0, 0.0, 0.0))
+        donor_index = dataset["stateDonorIndices"][birth_row]
+        target_index = target["index"][(1.0, 0.0, 0.0)]
+        expected_baseline = np.concatenate((source["candidates"][donor_index], source["splats"][donor_index, 3:]))
+        expected_target = np.concatenate((target["candidates"][target_index], target["splats"][target_index, 3:]))
+        np.testing.assert_allclose(dataset["stateBaselines"][birth_row], expected_baseline)
+        np.testing.assert_allclose(dataset["stateTargets"][birth_row], expected_target)
+        donor_code = dataset["stateInputs"][birth_row, 64 + 25:]
+        self.assertEqual(int(np.sum(donor_code)), 1)
+
+    def test_destination_state_sampler_balances_only_motion_bearing_cohorts(self):
+        cohorts = np.asarray(
+            ["stable-q3"] * 100
+            + ["stable-q4"] * 30
+            + ["transported"] * 4
+            + ["birth"],
+        )
+        pools = MODULE.build_destination_state_sampling_pools(cohorts)
+        sampled = MODULE.sample_destination_state_balanced_indices(
+            np.random.default_rng(713), pools, batch_size=12,
+        )
+        self.assertEqual(
+            {cohort: int(np.sum(cohorts[sampled] == cohort)) for cohort in MODULE.DESTINATION_STATE_COHORTS},
+            {cohort: 3 for cohort in MODULE.DESTINATION_STATE_COHORTS},
+        )
+
+    def test_destination_state_residual_changes_attributes_without_moving_support(self):
+        carried = frame([
+            ((0.0, 0.0, 0.0), 1.0),
+            ((1.0, 0.0, 0.0), 2.0),
+        ])
+        residuals = np.zeros((2, 25), dtype=np.float32)
+        residuals[0, 0] = 0.5
+        residuals[0, 16] = 0.25
+        residuals[1, 15] = -0.5
+        residuals[1, 24] = -0.25
+
+        predicted = MODULE.apply_destination_state_residuals(carried, residuals)
+        self.assertEqual(predicted["keys"], carried["keys"])
+        np.testing.assert_array_equal(predicted["splats"][:, :3], carried["splats"][:, :3])
+        self.assertAlmostEqual(float(predicted["candidates"][0, 0]), float(carried["candidates"][0, 0] + 0.5))
+        self.assertAlmostEqual(float(predicted["splats"][0, 3]), float(carried["splats"][0, 3] + 0.25))
+        self.assertAlmostEqual(float(predicted["candidates"][1, 15]), float(carried["candidates"][1, 15] - 0.5))
+        self.assertAlmostEqual(float(predicted["splats"][1, 11]), float(carried["splats"][1, 11] - 0.25))
+
+    def test_count_drift_gate_retains_every_step_and_exposes_compounding_inflation(self):
+        gate = MODULE.summarize_count_drift_gate(
+            source_count=100,
+            exact_counts=[101, 102, 103],
+            predicted_counts=[102, 110, 130],
+        )
+        self.assertEqual(gate["authority"], "every-recurrent-step-count-drift-versus-identity-v0")
+        self.assertEqual(gate["evaluatedStepCount"], 3)
+        self.assertEqual([row["step"] for row in gate["steps"]], [1, 2, 3])
+        self.assertEqual(gate["firstWorseThanIdentityStep"], 2)
+        self.assertFalse(gate["allStepsNotWorseThanIdentity"])
+        self.assertEqual(gate["steps"][-1]["predictedCountError"], 27)
+        self.assertEqual(gate["steps"][-1]["identityCountError"], 3)
+        self.assertGreater(gate["steps"][-1]["predictedToExactRatio"], gate["steps"][0]["predictedToExactRatio"])
+
+    def test_destination_state_metrics_require_advantage_in_every_motion_cohort(self):
+        baselines = np.zeros((4, 25), dtype=np.float32)
+        targets = np.ones((4, 25), dtype=np.float32)
+        predictions = np.full((4, 25), 0.5, dtype=np.float32)
+        metrics = MODULE.summarize_destination_state_metrics(
+            baselines,
+            predictions,
+            targets,
+            np.asarray(MODULE.DESTINATION_STATE_COHORTS),
+            target_scale=np.ones(25, dtype=np.float32),
+        )
+        self.assertEqual(metrics["authority"], "cross-episode-state-mse-versus-carried-donor-v0")
+        self.assertEqual(metrics["aggregate"]["sampleCount"], 4)
+        self.assertEqual(metrics["aggregate"]["predictionToDonorMseRatio"], 0.25)
+        self.assertTrue(metrics["allCohortsBeatCarriedDonor"])
+        self.assertEqual(list(metrics["cohorts"]), list(MODULE.DESTINATION_STATE_COHORTS))
+
+        hostile = predictions.copy()
+        hostile[-1] = 2.0
+        hostile_metrics = MODULE.summarize_destination_state_metrics(
+            baselines,
+            hostile,
+            targets,
+            np.asarray(MODULE.DESTINATION_STATE_COHORTS),
+            target_scale=np.ones(25, dtype=np.float32),
+        )
+        self.assertFalse(hostile_metrics["cohorts"]["birth"]["beatsCarriedDonor"])
+        self.assertFalse(hostile_metrics["allCohortsBeatCarriedDonor"])
+
     def test_eulerian_composer_preserves_uncertain_scaffold_and_adds_confident_birth(self):
         source = frame([
             ((0.0, 0.0, 0.0), 1.0),
@@ -323,10 +484,71 @@ class TransportDatasetContracts(unittest.TestCase):
         self.assertEqual(accounting["activatedDeathCount"], 1)
         self.assertEqual(accounting["selectedBirthCount"], 1)
         self.assertEqual(accounting["transportedAttributeCount"], 1)
+        self.assertEqual(predicted["donorClasses"].shape, (2,))
+        self.assertEqual(predicted["donorClasses"][predicted["index"][(0.0, 0.0, 0.0)]], stable_class)
+        self.assertEqual(predicted["donorClasses"][birth_index], right_class)
         self.assertEqual(
             accounting["compositionAuthority"],
             "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
         )
+
+    def test_frozen_destination_state_model_is_separate_and_hydrates_exact_residual(self):
+        document = frozen_state_model_document()
+        model, normalization = MODULE.hydrate_frozen_destination_state_model_document(document)
+        self.assertNotEqual(document["schema"], MODULE.MODEL_SCHEMA)
+        inputs = np.zeros((1, MODULE.DESTINATION_STATE_INPUT_COUNT), dtype=np.float32)
+        residual = MODULE.predict_destination_state_model(
+            model,
+            inputs,
+            normalization["inputMean"],
+            normalization["inputScale"],
+            normalization["residualMean"],
+            normalization["residualScale"],
+            batch_size=1,
+        )
+        self.assertEqual(residual.shape, (1, 25))
+        self.assertAlmostEqual(float(residual[0, 0]), 0.5)
+
+        hostile = copy.deepcopy(document)
+        hostile["schema"] = MODULE.MODEL_SCHEMA
+        with self.assertRaisesRegex(ValueError, "destination-state model schema"):
+            MODULE.validate_frozen_destination_state_model_document(hostile)
+
+    def test_destination_state_inference_input_binds_carried_donor_and_class(self):
+        source = frame([((0.0, 0.0, 0.0), 1.0)])
+        carried = frame([((1.0, 0.0, 0.0), 1.0)])
+        donor_class = MODULE.displacement_class((1, 0, 0))
+        inputs = MODULE.build_destination_state_inference_inputs(
+            source,
+            carried,
+            np.asarray([donor_class], dtype=np.int32),
+            grid_step=1.0,
+        )
+        self.assertEqual(inputs.shape, (1, MODULE.DESTINATION_STATE_INPUT_COUNT))
+        np.testing.assert_allclose(inputs[0, 64:80], carried["candidates"][0])
+        np.testing.assert_allclose(inputs[0, 80:89], carried["splats"][0, 3:])
+        self.assertEqual(inputs[0, 64 + 25 + donor_class], 1.0)
+
+    def test_frozen_destination_state_application_preserves_predicted_support(self):
+        source = frame([((0.0, 0.0, 0.0), 1.0)])
+        carried = frame([((1.0, 0.0, 0.0), 1.0)])
+        carried["donorClasses"] = np.asarray([MODULE.displacement_class((1, 0, 0))], dtype=np.int32)
+        model, normalization = MODULE.hydrate_frozen_destination_state_model_document(
+            frozen_state_model_document(),
+        )
+        predicted, accounting = MODULE.apply_frozen_destination_state_model(
+            model,
+            normalization,
+            source,
+            carried,
+            grid_step=1.0,
+            batch_size=1,
+        )
+        self.assertEqual(predicted["keys"], carried["keys"])
+        np.testing.assert_array_equal(predicted["splats"][:, :3], carried["splats"][:, :3])
+        self.assertAlmostEqual(float(predicted["candidates"][0, 0]), 1.5)
+        self.assertEqual(accounting["authority"], "frozen-destination-state-residual-on-predicted-support-v0")
+        self.assertEqual(accounting["updatedCount"], 1)
 
     def test_action_margin_calibration_separates_static_and_motion(self):
         probabilities = np.zeros((4, MODULE.DEATH_CLASS + 1), dtype=np.float32)

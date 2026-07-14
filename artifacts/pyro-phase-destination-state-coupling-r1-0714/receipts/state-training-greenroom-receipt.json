@@ -1,0 +1,31 @@
+{
+  "job_id": "7591d846c81b",
+  "job_type": "kaminos_phase_destination_state_residual_mlx_train",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-destination-state-residual-r1-0714",
+  "effective_route": "/private/tmp/kaminos-phase-audit-venv-0714/bin/python -u boundary-splat-phase-state-residual-mlx.py --training-manifest /private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json --evaluation-manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --out-dir /private/tmp/kaminos-phase-destination-state-residual-r1-0714 --hidden-size 128 --epochs 8 --batch-size 4096 --learning-rate 0.0015 --weight-decay 0.0001 --seed 713",
+  "effective_cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "batch_size": "4096",
+    "epochs": "8",
+    "evaluation_manifest": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+    "hidden_size": "128",
+    "learning_rate": "0.0015",
+    "seed": "713",
+    "weight_decay": "0.0001"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784063985.9584472,
+  "finished_at": 1784064753.399539,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}

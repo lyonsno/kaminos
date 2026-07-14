@@ -1,0 +1,33 @@
+{
+  "schema": "kaminos-static-artifact-smoke-receipt-v0",
+  "status": "completed",
+  "requestedRoute": "http://127.0.0.1:18218/artifacts/pyro-phase-destination-state-coupling-r1-0714/inspection-guide.html",
+  "effectiveRoute": "http://127.0.0.1:18218/artifacts/pyro-phase-destination-state-coupling-r1-0714/inspection-guide.html",
+  "registration": {
+    "authority": "static-path-under-effective-worktree-server-root-v0",
+    "serverRoot": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+    "artifactPath": "artifacts/pyro-phase-destination-state-coupling-r1-0714/inspection-guide.html",
+    "httpStatus": 200,
+    "mounted": true
+  },
+  "browser": {
+    "name": "Google Chrome",
+    "mode": "headless-single-process-capture",
+    "viewport": "1280x2600",
+    "videoFramesLoaded": true
+  },
+  "screenshot": {
+    "path": "inspection-guide-smoke.png",
+    "width": 1280,
+    "height": 2600,
+    "sha256": "8755e6ae5a855553b65430711797adaf4b1227f253b614e39327ec71df611d8e"
+  },
+  "inspection": {
+    "nonblank": true,
+    "rolesVisible": true,
+    "contextAnchorsVisible": true,
+    "videoRolesLoaded": true,
+    "sampleOrderingVisible": true,
+    "overlapObserved": false
+  }
+}

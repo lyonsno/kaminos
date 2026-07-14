@@ -16,8 +16,12 @@ import numpy as np
 
 SCHEMA = "kaminos-boundary-splat-phase-transport-training-v0"
 MODEL_SCHEMA = "kaminos-boundary-splat-phase-transport-model-v0"
+DESTINATION_STATE_MODEL_SCHEMA = "kaminos-boundary-splat-phase-destination-state-model-v0"
 PREDICTION_SCHEMA = "kaminos-boundary-splat-phase-transport-predictions-v0"
 INPUT_AUTHORITY = "exact-16-feature-plus-directional-local-grid-occupancy-v0"
+DESTINATION_STATE_INPUT_AUTHORITY = "exact-destination-local-grid-plus-selected-donor-state-and-displacement-v0"
+DESTINATION_STATE_OUTPUT_AUTHORITY = "candidate-16-plus-nonposition-splat-9-donor-residual-v0"
+DESTINATION_STATE_ARCHITECTURE_AUTHORITY = "offline-two-layer-relu-destination-state-residual-head-v0"
 CORRESPONDENCE_AUTHORITY = "stable-site-first-bounded-local-grid-feature-correspondence-v0"
 ARCHITECTURE_AUTHORITY = "shared-two-layer-relu-carrier-displacement-and-residual-birth-heads-v0"
 LEGACY_OBJECTIVE_FAMILY = "population-weighted-carrier-and-residual-birth-v0"
@@ -41,6 +45,9 @@ EULERIAN_DESTINATION_COHORTS = (
     "stable-q1", "stable-q2", "stable-q3", "stable-q4",
     "transported", "birth", "death", "empty",
 )
+DESTINATION_STATE_COHORTS = ("stable-q3", "stable-q4", "transported", "birth")
+DESTINATION_STATE_ATTRIBUTE_COUNT = len(FEATURES) + 9
+DESTINATION_STATE_INPUT_COUNT = 64 + DESTINATION_STATE_ATTRIBUTE_COUNT + len(DISPLACEMENTS)
 POSITION_PRECISION = 6
 DENSE_GRID_MAX_CELLS_PER_SOURCE = 256
 DENSE_GRID_MIN_CELL_BUDGET = 4096
@@ -368,6 +375,8 @@ def build_eulerian_pair_dataset(source, target, grid_step, radius_cells=1):
     occupancy_labels = np.zeros(len(destination_keys), dtype=np.float32)
     destination_cohorts = np.full(len(destination_keys), "empty", dtype="<U12")
     source_destination_mask = np.zeros(len(destination_keys), dtype=bool)
+    destination_donor_indices = np.full(len(destination_keys), -1, dtype=np.int32)
+    destination_target_indices = np.full(len(destination_keys), -1, dtype=np.int32)
 
     for destination_index, key in enumerate(destination_keys):
         direct_source_index = source["index"].get(key)
@@ -378,9 +387,11 @@ def build_eulerian_pair_dataset(source, target, grid_step, radius_cells=1):
                 destination_cohorts[destination_index] = "death"
             continue
         occupancy_labels[destination_index] = 1.0
+        destination_target_indices[destination_index] = target_index
         matched = matched_targets.get(target_index)
         if matched is not None:
             source_index, delta, kind = matched
+            destination_donor_indices[destination_index] = source_index
             carrier_labels[destination_index] = displacement_class(delta)
             destination_cohorts[destination_index] = (
                 "transported" if kind == "transported" else source_cohorts[source_index]
@@ -389,13 +400,14 @@ def build_eulerian_pair_dataset(source, target, grid_step, radius_cells=1):
         donors = local_destination_donors(key, source, grid_step)
         if not donors:
             raise ValueError("supported Eulerian birth has no local attribute donor")
-        class_index, _ = min(
+        class_index, source_index = min(
             donors,
             key=lambda row: (
                 feature_distance(source["candidates"][row[1]], target["candidates"][target_index]),
                 source["keys"][row[1]],
             ),
         )
+        destination_donor_indices[destination_index] = source_index
         carrier_labels[destination_index] = class_index
         destination_cohorts[destination_index] = "birth"
 
@@ -417,6 +429,8 @@ def build_eulerian_pair_dataset(source, target, grid_step, radius_cells=1):
         "destinationKeys": destination_keys,
         "destinationInputs": destination_inputs,
         "destinationCohorts": destination_cohorts,
+        "destinationDonorIndices": destination_donor_indices,
+        "destinationTargetIndices": destination_target_indices,
         "occupancyLabels": occupancy_labels,
         "sourceDestinationMask": source_destination_mask,
         "unsupportedBirthCount": unsupported_birth_count,
@@ -428,6 +442,76 @@ def build_eulerian_pair_dataset(source, target, grid_step, radius_cells=1):
         "birthLabels": occupancy_labels[birth_mask],
         "birthKeys": [key for key, include in zip(destination_keys, birth_mask) if include],
     }
+
+
+def build_destination_state_dataset(source, target, grid_step, radius_cells=1):
+    eulerian = build_eulerian_pair_dataset(source, target, grid_step, radius_cells)
+    cohort_order = {cohort: index for index, cohort in enumerate(DESTINATION_STATE_COHORTS)}
+    selected = [
+        index
+        for index, cohort in enumerate(eulerian["destinationCohorts"])
+        if cohort in cohort_order
+    ]
+    selected.sort(key=lambda index: (
+        cohort_order[eulerian["destinationCohorts"][index]],
+        eulerian["destinationKeys"][index],
+    ))
+    if not selected:
+        raise ValueError("destination-state supervision requires motion-bearing supported destinations")
+
+    donor_indices = eulerian["destinationDonorIndices"][selected]
+    target_indices = eulerian["destinationTargetIndices"][selected]
+    carrier_classes = eulerian["carrierLabels"][selected]
+    if np.any(donor_indices < 0) or np.any(target_indices < 0):
+        raise ValueError("destination-state supervision contains an unresolved donor or target")
+    if np.any(carrier_classes >= DEATH_CLASS):
+        raise ValueError("destination-state supervision cannot use the death class as a donor")
+
+    baselines = np.concatenate((
+        source["candidates"][donor_indices],
+        source["splats"][donor_indices, 3:],
+    ), axis=1).astype(np.float32)
+    targets = np.concatenate((
+        target["candidates"][target_indices],
+        target["splats"][target_indices, 3:],
+    ), axis=1).astype(np.float32)
+    donor_codes = np.zeros((len(selected), DEATH_CLASS), dtype=np.float32)
+    donor_codes[np.arange(len(selected)), carrier_classes] = 1.0
+    state_inputs = np.concatenate((
+        eulerian["destinationInputs"][selected],
+        baselines,
+        donor_codes,
+    ), axis=1).astype(np.float32)
+    if state_inputs.shape[1] != DESTINATION_STATE_INPUT_COUNT:
+        raise ValueError("destination-state input width violates its explicit contract")
+    return {
+        "stateInputs": state_inputs,
+        "stateTargets": targets,
+        "stateBaselines": baselines,
+        "stateResidualTargets": (targets - baselines).astype(np.float32),
+        "stateCohorts": eulerian["destinationCohorts"][selected].copy(),
+        "stateDestinationKeys": [eulerian["destinationKeys"][index] for index in selected],
+        "stateDonorIndices": donor_indices.copy(),
+        "stateTargetIndices": target_indices.copy(),
+        "stateCarrierClasses": carrier_classes.copy(),
+        "correspondence": eulerian["correspondence"],
+    }
+
+
+def build_destination_state_inference_inputs(source, carried, donor_classes, grid_step):
+    donor_classes = np.asarray(donor_classes, dtype=np.int32)
+    if donor_classes.shape != (len(carried["keys"]),):
+        raise ValueError("destination-state donor classes must align with carried support")
+    if np.any(donor_classes < 0) or np.any(donor_classes >= DEATH_CLASS):
+        raise ValueError("destination-state donor classes must name a local displacement")
+    destination_inputs = make_directional_inputs(carried["keys"], source, grid_step)
+    baselines = np.concatenate((carried["candidates"], carried["splats"][:, 3:]), axis=1).astype(np.float32)
+    donor_codes = np.zeros((len(carried["keys"]), DEATH_CLASS), dtype=np.float32)
+    donor_codes[np.arange(len(carried["keys"])), donor_classes] = 1.0
+    inputs = np.concatenate((destination_inputs, baselines, donor_codes), axis=1).astype(np.float32)
+    if inputs.shape != (len(carried["keys"]), DESTINATION_STATE_INPUT_COUNT):
+        raise ValueError("destination-state inference input violates its explicit contract")
+    return inputs
 
 
 def build_motion_sampling_pools(cohorts):
@@ -486,6 +570,37 @@ def sample_eulerian_balanced_indices(rng, pools, batch_size):
     return result
 
 
+def build_destination_state_sampling_pools(cohorts):
+    cohorts = np.asarray(cohorts)
+    pools = {}
+    for cohort in DESTINATION_STATE_COHORTS:
+        indices = np.flatnonzero(cohorts == cohort)
+        if not len(indices):
+            raise ValueError(f"destination-state sampling requires populated cohort {cohort}")
+        pools[cohort] = indices
+    if np.any(~np.isin(cohorts, DESTINATION_STATE_COHORTS)):
+        raise ValueError("destination-state sampling received a non-motion cohort")
+    return pools
+
+
+def sample_destination_state_balanced_indices(rng, pools, batch_size):
+    if tuple(pools) != DESTINATION_STATE_COHORTS:
+        raise ValueError("destination-state sampling pools are incomplete or out of order")
+    if batch_size < len(pools):
+        raise ValueError("destination-state batch must contain at least one row per cohort")
+    base, remainder = divmod(int(batch_size), len(pools))
+    sampled = []
+    for cohort_index, cohort in enumerate(DESTINATION_STATE_COHORTS):
+        indices = pools[cohort]
+        if not len(indices):
+            raise ValueError(f"destination-state sampling requires populated cohort {cohort}")
+        count = base + (1 if cohort_index < remainder else 0)
+        sampled.append(rng.choice(indices, size=count, replace=True))
+    result = np.concatenate(sampled).astype(np.int64)
+    rng.shuffle(result)
+    return result
+
+
 def build_binary_sampling_pools(labels):
     labels = np.asarray(labels) > 0.5
     negative = np.flatnonzero(~labels)
@@ -522,6 +637,43 @@ class TransportModel(nn.Module):
         hidden = nn.relu(self.trunk_a(inputs))
         hidden = nn.relu(self.trunk_b(hidden))
         return self.carrier(hidden), self.birth(hidden).squeeze(-1)
+
+
+class DestinationStateModel(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.trunk_a = nn.Linear(DESTINATION_STATE_INPUT_COUNT, hidden_size)
+        self.trunk_b = nn.Linear(hidden_size, hidden_size)
+        self.residual = nn.Linear(hidden_size, DESTINATION_STATE_ATTRIBUTE_COUNT)
+
+    def __call__(self, inputs):
+        hidden = nn.relu(self.trunk_a(inputs))
+        hidden = nn.relu(self.trunk_b(hidden))
+        return self.residual(hidden)
+
+
+def destination_state_loss(model, inputs, residual_targets):
+    residuals = model(inputs)
+    return mx.mean((residuals - residual_targets) ** 2)
+
+
+def predict_destination_state_model(
+    model,
+    inputs,
+    input_mean,
+    input_scale,
+    residual_mean,
+    residual_scale,
+    batch_size,
+):
+    rows = []
+    for start in range(0, len(inputs), batch_size):
+        normalized = (inputs[start:start + batch_size] - input_mean) / input_scale
+        rows.append(np.asarray(model(mx.array(normalized)), dtype=np.float32))
+    if not rows:
+        return np.zeros((0, DESTINATION_STATE_ATTRIBUTE_COUNT), dtype=np.float32)
+    normalized_residuals = np.concatenate(rows)
+    return (normalized_residuals * residual_scale + residual_mean).astype(np.float32)
 
 
 def weighted_loss(model, carrier_inputs, carrier_labels, birth_inputs, birth_labels, class_weights, birth_positive_weight):
@@ -890,6 +1042,93 @@ def hydrate_frozen_model_document(document):
     return model, validated["mean"], validated["scale"]
 
 
+def validate_frozen_destination_state_model_document(document):
+    if document.get("schema") != DESTINATION_STATE_MODEL_SCHEMA or document.get("status") != "completed":
+        raise ValueError("frozen destination-state model schema/status mismatch")
+    route = document.get("route", {})
+    if route.get("backend") != "mlx" or route.get("fallbackReason") not in (None, ""):
+        raise ValueError("frozen destination-state model route must be non-fallback MLX")
+    input_document = document.get("input", {})
+    if input_document.get("authority") != DESTINATION_STATE_INPUT_AUTHORITY:
+        raise ValueError("frozen destination-state model input authority mismatch")
+    if (
+        input_document.get("featureCount") != DESTINATION_STATE_INPUT_COUNT
+        or input_document.get("destinationLocalGridFeatureCount") != 64
+        or input_document.get("selectedDonorAttributeCount") != DESTINATION_STATE_ATTRIBUTE_COUNT
+        or input_document.get("selectedDonorDisplacementCount") != DEATH_CLASS
+    ):
+        raise ValueError("frozen destination-state model input shape mismatch")
+    input_mean = np.asarray(input_document.get("mean", []), dtype=np.float32)
+    input_scale = np.asarray(input_document.get("scale", []), dtype=np.float32)
+    output_document = document.get("output", {})
+    if (
+        output_document.get("authority") != DESTINATION_STATE_OUTPUT_AUTHORITY
+        or output_document.get("attributeCount") != DESTINATION_STATE_ATTRIBUTE_COUNT
+    ):
+        raise ValueError("frozen destination-state model output contract mismatch")
+    residual_mean = np.asarray(output_document.get("residualMean", []), dtype=np.float32)
+    residual_scale = np.asarray(output_document.get("residualScale", []), dtype=np.float32)
+    for name, values, shape in (
+        ("input mean", input_mean, (DESTINATION_STATE_INPUT_COUNT,)),
+        ("input scale", input_scale, (DESTINATION_STATE_INPUT_COUNT,)),
+        ("residual mean", residual_mean, (DESTINATION_STATE_ATTRIBUTE_COUNT,)),
+        ("residual scale", residual_scale, (DESTINATION_STATE_ATTRIBUTE_COUNT,)),
+    ):
+        if values.shape != shape or not np.all(np.isfinite(values)):
+            raise ValueError(f"frozen destination-state model {name} mismatch")
+    if np.any(input_scale <= 0) or np.any(residual_scale <= 0):
+        raise ValueError("frozen destination-state model scales must be positive")
+
+    architecture = document.get("architecture", {})
+    if architecture.get("authority") != DESTINATION_STATE_ARCHITECTURE_AUTHORITY:
+        raise ValueError("frozen destination-state model architecture authority mismatch")
+    layers = architecture.get("layers", [])
+    if len(layers) != 3:
+        raise ValueError("frozen destination-state model must contain exactly three offline layers")
+    hidden_size = int(layers[0].get("outputSize", 0))
+    if hidden_size < 1:
+        raise ValueError("frozen destination-state model hidden size must be positive")
+    expected_layers = (
+        ("destination-state-trunk-a", "relu", DESTINATION_STATE_INPUT_COUNT, hidden_size),
+        ("destination-state-trunk-b", "relu", hidden_size, hidden_size),
+        ("destination-state-residual-head", "linear", hidden_size, DESTINATION_STATE_ATTRIBUTE_COUNT),
+    )
+    for layer, (role, activation, input_size, output_size) in zip(layers, expected_layers):
+        if (
+            layer.get("role") != role
+            or layer.get("activation") != activation
+            or layer.get("inputSize") != input_size
+            or layer.get("outputSize") != output_size
+        ):
+            raise ValueError(f"frozen destination-state model layer contract mismatch for {role}")
+        weights = np.asarray(layer.get("weights", []), dtype=np.float32)
+        bias = np.asarray(layer.get("bias", []), dtype=np.float32)
+        if weights.size != input_size * output_size or bias.size != output_size:
+            raise ValueError(f"frozen destination-state model parameter shape mismatch for {role}")
+        if not np.all(np.isfinite(weights)) or not np.all(np.isfinite(bias)):
+            raise ValueError(f"frozen destination-state model parameters must be finite for {role}")
+    return {
+        "hiddenSize": hidden_size,
+        "inputMean": input_mean,
+        "inputScale": input_scale,
+        "residualMean": residual_mean,
+        "residualScale": residual_scale,
+    }
+
+
+def hydrate_frozen_destination_state_model_document(document):
+    validated = validate_frozen_destination_state_model_document(document)
+    model = DestinationStateModel(validated["hiddenSize"])
+    targets = (model.trunk_a, model.trunk_b, model.residual)
+    for target, layer in zip(targets, document["architecture"]["layers"]):
+        output_size = int(layer["outputSize"])
+        input_size = int(layer["inputSize"])
+        target.weight = mx.array(np.asarray(layer["weights"], dtype=np.float32).reshape(output_size, input_size))
+        target.bias = mx.array(np.asarray(layer["bias"], dtype=np.float32))
+    mx.eval(model.parameters())
+    return model, validated
+
+
 def prediction_universe(source, grid_step, plan=None):
     plan = plan or local_grid_plan(source, grid_step)
     if plan["strategy"] == "sparse-key-lookup":
@@ -1046,6 +1285,7 @@ def compose_eulerian_destination_occupancy(
 
     rows = []
     features = []
+    donor_classes = []
     stable_attribute_count = 0
     transported_attribute_count = 0
     selected_birth_count = 0
@@ -1056,6 +1296,7 @@ def compose_eulerian_destination_occupancy(
         row[:3] = target_key
         rows.append(row)
         features.append(source["candidates"][source_index].copy())
+        donor_classes.append(class_index)
         if DISPLACEMENTS[class_index] == (0, 0, 0):
             stable_attribute_count += 1
         else:
@@ -1063,6 +1304,7 @@ def compose_eulerian_destination_occupancy(
         if kind == "birth":
             selected_birth_count += 1
     result = index_frame(np.asarray(features, dtype=np.float32), np.asarray(rows, dtype=np.float32))
+    result["donorClasses"] = np.asarray(donor_classes, dtype=np.int32)
     return result, {
         "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
         "sourceCount": len(source["keys"]),
@@ -1092,6 +1334,7 @@ def recurrent_predict(
     batch_size,
     action_calibration=None,
     destination_death_calibration=None,
+    destination_state_bundle=None,
 ):
     grid_plan = local_grid_plan(source, grid_step)
     if destination_death_calibration is not None:
@@ -1117,6 +1360,19 @@ def recurrent_predict(
             "boundingVolumeCells": grid_plan["boundingVolumeCells"],
             "denseCellBudget": grid_plan["denseCellBudget"],
         }
+        if destination_state_bundle is not None:
+            result, state_accounting = apply_frozen_destination_state_model(
+                destination_state_bundle["model"],
+                destination_state_bundle["normalization"],
+                source,
+                result,
+                grid_step,
+                batch_size,
+            )
+            accounting["destinationState"] = state_accounting
+            accounting["compositionAuthority"] = (
+                "eulerian-destination-occupancy-plus-frozen-destination-state-residual-v0"
+            )
         return result, accounting
     carrier_inputs = make_directional_inputs(source["keys"], source, grid_step, grid_plan)
     carrier_probabilities, _ = predict_model(model, carrier_inputs, input_mean, input_scale, batch_size)
@@ -1227,6 +1483,143 @@ def support_metrics(source, prediction, exact):
     }
 
 
+def apply_destination_state_residuals(carried, residuals):
+    residuals = np.asarray(residuals, dtype=np.float32)
+    if residuals.shape != (len(carried["keys"]), DESTINATION_STATE_ATTRIBUTE_COUNT):
+        raise ValueError("destination-state residuals must align with carried support and attributes")
+    if not np.all(np.isfinite(residuals)):
+        raise ValueError("destination-state residuals must be finite")
+    candidates = carried["candidates"].copy()
+    splats = carried["splats"].copy()
+    candidates += residuals[:, :len(FEATURES)]
+    splats[:, 3:] += residuals[:, len(FEATURES):]
+    return index_frame(candidates, splats)
+
+
+def apply_frozen_destination_state_model(
+    model,
+    normalization,
+    source,
+    carried,
+    grid_step,
+    batch_size,
+):
+    donor_classes = carried.get("donorClasses")
+    if donor_classes is None:
+        raise ValueError("predicted support lacks destination-state donor provenance")
+    inputs = build_destination_state_inference_inputs(source, carried, donor_classes, grid_step)
+    residuals = predict_destination_state_model(
+        model,
+        inputs,
+        normalization["inputMean"],
+        normalization["inputScale"],
+        normalization["residualMean"],
+        normalization["residualScale"],
+        batch_size,
+    )
+    predicted = apply_destination_state_residuals(carried, residuals)
+    return predicted, {
+        "authority": "frozen-destination-state-residual-on-predicted-support-v0",
+        "updatedCount": len(predicted["keys"]),
+        "supportChanged": predicted["keys"] != carried["keys"],
+        "meanAbsoluteResidual": float(np.mean(np.abs(residuals), dtype=np.float64)),
+        "maximumAbsoluteResidual": float(np.max(np.abs(residuals))),
+    }
+
+
+def summarize_count_drift_gate(source_count, exact_counts, predicted_counts):
+    source_count = int(source_count)
+    exact_counts = [int(value) for value in exact_counts]
+    predicted_counts = [int(value) for value in predicted_counts]
+    if source_count <= 0 or not exact_counts or len(exact_counts) != len(predicted_counts):
+        raise ValueError("count-drift gate requires positive source support and aligned nonempty episodes")
+    if any(value <= 0 for value in exact_counts) or any(value < 0 for value in predicted_counts):
+        raise ValueError("count-drift gate received invalid support counts")
+    steps = []
+    for step, (exact_count, predicted_count) in enumerate(zip(exact_counts, predicted_counts), start=1):
+        predicted_error = abs(predicted_count - exact_count)
+        identity_error = abs(source_count - exact_count)
+        steps.append({
+            "step": step,
+            "sourceCount": source_count,
+            "exactCount": exact_count,
+            "predictedCount": predicted_count,
+            "predictedCountError": predicted_error,
+            "identityCountError": identity_error,
+            "predictedToExactRatio": predicted_count / exact_count,
+            "notWorseThanIdentity": predicted_error <= identity_error,
+        })
+    worse_steps = [row["step"] for row in steps if not row["notWorseThanIdentity"]]
+    return {
+        "authority": "every-recurrent-step-count-drift-versus-identity-v0",
+        "evaluatedStepCount": len(steps),
+        "steps": steps,
+        "firstWorseThanIdentityStep": worse_steps[0] if worse_steps else None,
+        "allStepsNotWorseThanIdentity": not worse_steps,
+        "maximumAbsolutePredictedCountError": max(row["predictedCountError"] for row in steps),
+        "maximumPredictedToExactRatio": max(row["predictedToExactRatio"] for row in steps),
+        "stepsMayBeTruncated": False,
+        "manualToleranceApplied": False,
+    }
+
+
+def summarize_destination_state_metrics(baselines, predictions, targets, cohorts, target_scale):
+    baselines = np.asarray(baselines, dtype=np.float32)
+    predictions = np.asarray(predictions, dtype=np.float32)
+    targets = np.asarray(targets, dtype=np.float32)
+    cohorts = np.asarray(cohorts)
+    target_scale = np.asarray(target_scale, dtype=np.float32)
+    expected_shape = (len(cohorts), DESTINATION_STATE_ATTRIBUTE_COUNT)
+    if baselines.shape != expected_shape or predictions.shape != expected_shape or targets.shape != expected_shape:
+        raise ValueError("destination-state metrics require aligned 25-attribute rows")
+    if target_scale.shape != (DESTINATION_STATE_ATTRIBUTE_COUNT,) or np.any(target_scale <= 0):
+        raise ValueError("destination-state metrics require a positive training target scale")
+    if not all(np.all(np.isfinite(values)) for values in (baselines, predictions, targets, target_scale)):
+        raise ValueError("destination-state metrics require finite values")
+    if np.any(~np.isin(cohorts, DESTINATION_STATE_COHORTS)):
+        raise ValueError("destination-state metrics received a non-motion cohort")
+
+    def metric_rows(indices):
+        baseline_error = (baselines[indices] - targets[indices]) / target_scale
+        prediction_error = (predictions[indices] - targets[indices]) / target_scale
+        donor_mse = float(np.mean(baseline_error ** 2, dtype=np.float64))
+        prediction_mse = float(np.mean(prediction_error ** 2, dtype=np.float64))
+        candidate_donor_mse = float(np.mean(baseline_error[:, :len(FEATURES)] ** 2, dtype=np.float64))
+        candidate_prediction_mse = float(np.mean(prediction_error[:, :len(FEATURES)] ** 2, dtype=np.float64))
+        splat_donor_mse = float(np.mean(baseline_error[:, len(FEATURES):] ** 2, dtype=np.float64))
+        splat_prediction_mse = float(np.mean(prediction_error[:, len(FEATURES):] ** 2, dtype=np.float64))
+        return {
+            "sampleCount": int(len(indices)),
+            "carriedDonorMse": donor_mse,
+            "predictionMse": prediction_mse,
+            "predictionToDonorMseRatio": prediction_mse / max(donor_mse, 1e-12),
+            "beatsCarriedDonor": prediction_mse < donor_mse,
+            "candidateCarriedDonorMse": candidate_donor_mse,
+            "candidatePredictionMse": candidate_prediction_mse,
+            "splatCarriedDonorMse": splat_donor_mse,
+            "splatPredictionMse": splat_prediction_mse,
+        }
+
+    cohort_metrics = {}
+    for cohort in DESTINATION_STATE_COHORTS:
+        indices = np.flatnonzero(cohorts == cohort)
+        if not len(indices):
+            raise ValueError(f"destination-state metrics require populated cohort {cohort}")
+        cohort_metrics[cohort] = metric_rows(indices)
+    aggregate = metric_rows(np.arange(len(cohorts)))
+    return {
+        "authority": "cross-episode-state-mse-versus-carried-donor-v0",
+        "normalizationAuthority": "training-residual-channel-standard-deviation-v0",
+        "aggregate": aggregate,
+        "cohorts": cohort_metrics,
+        "allCohortsBeatCarriedDonor": all(
+            cohort_metrics[cohort]["beatsCarriedDonor"]
+            for cohort in DESTINATION_STATE_COHORTS
+        ),
+        "aggregateMayCloseCohortClaim": False,
+    }
+
+
 def summarize_rollout_gate(metrics):
     if not metrics:
         raise ValueError("rollout gate requires at least one recurrent step")
@@ -1265,6 +1658,7 @@ def write_frame_artifacts(out_dir, label, frame):
 
 def build_prediction_document(
     *, inference_manifest, training_manifest, model, route, temporal, frames, recurrent, support_metrics,
+    state_model=None, count_drift_gate=None,
 ):
     return {
         "schema": PREDICTION_SCHEMA,
@@ -1272,13 +1666,20 @@ def build_prediction_document(
         "manifest": inference_manifest,
         "modelTrainingManifest": training_manifest,
         "model": model,
+        **({"destinationStateModel": state_model} if state_model is not None else {}),
         "route": route,
         "temporal": temporal,
         "frames": frames,
         "recurrent": recurrent,
         "supportMetrics": support_metrics,
         "rolloutGate": summarize_rollout_gate(support_metrics) if support_metrics else None,
-        "claimBoundary": "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration",
+        "countDriftGate": count_drift_gate,
+        "claimBoundary": (
+            "isolated recurrent one-cell transport with frozen destination-state residuals on predicted support; "
+            "no live renderer or instancing integration"
+            if state_model is not None
+            else "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration"
+        ),
     }
 
 
@@ -1287,6 +1688,7 @@ def parse_args():
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--model", default="")
+    parser.add_argument("--state-model", default="")
     parser.add_argument("--inference-start", type=int, default=0)
     parser.add_argument("--inference-steps", type=int, default=0)
     parser.add_argument("--holdout-start", type=int, default=6)
@@ -1321,6 +1723,8 @@ def main():
     try:
         if args.holdout_steps < 1 or args.hidden_size < 1 or args.epochs < 1 or args.batch_size < 1:
             raise ValueError("holdout, model, epoch, and batch dimensions must be positive")
+        if args.state_model and not args.model:
+            raise ValueError("destination-state model is valid only during frozen transport inference")
         failure_phase = "manifest-validation"
         manifest_path = Path(args.manifest).resolve()
         manifest_bytes = manifest_path.read_bytes()
@@ -1386,6 +1790,31 @@ def main():
                 "modelSha256": model_receipt["sha256"],
                 "modelTrainingManifest": frozen_model_document["manifest"],
             })
+            objective_family = frozen_model_document.get("training", {}).get("objectiveFamily", LEGACY_OBJECTIVE_FAMILY)
+            destination_state_bundle = None
+            state_model_receipt = None
+            if args.state_model:
+                if objective_family != EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+                    raise ValueError("destination-state inference requires the Eulerian occupancy objective")
+                state_model_path = Path(args.state_model).resolve()
+                state_model_bytes = state_model_path.read_bytes()
+                state_model_document = json.loads(state_model_bytes)
+                state_model, state_normalization = hydrate_frozen_destination_state_model_document(state_model_document)
+                state_model_receipt = {
+                    "path": str(state_model_path),
+                    "sha256": sha256_bytes(state_model_bytes),
+                    "schema": DESTINATION_STATE_MODEL_SCHEMA,
+                    "trainingManifest": state_model_document.get("trainingManifest"),
+                    "evaluationManifest": state_model_document.get("evaluationManifest"),
+                }
+                destination_state_bundle = {
+                    "model": state_model,
+                    "normalization": state_normalization,
+                }
+                last_trustworthy.update({
+                    "destinationStateModelPath": str(state_model_path),
+                    "destinationStateModelSha256": state_model_receipt["sha256"],
+                })
             failure_phase = "route-validation"
             device = str(mx.default_device())
             if not device.lower().startswith("device(gpu"):
@@ -1399,7 +1828,6 @@ def main():
             inference_metrics = []
             birth_calibration = frozen_model_document["calibration"]["birth"]
             target_support_calibration = frozen_model_document["calibration"]["targetSupport"]
-            objective_family = frozen_model_document.get("training", {}).get("objectiveFamily", LEGACY_OBJECTIVE_FAMILY)
             action_calibration = (
                 frozen_model_document["calibration"]["carrierAction"]
                 if objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
@@ -1422,6 +1850,7 @@ def main():
                     args.batch_size,
                     action_calibration,
                     destination_death_calibration,
+                    destination_state_bundle,
                 )
                 exact = frames[inference_docs[step_index]["id"]]
                 recurrent_rows.append({"step": step_index, **recurrent})
@@ -1439,6 +1868,11 @@ def main():
                     **artifacts,
                 })
             training_manifest = frozen_model_document["manifest"]
+            count_drift_gate = summarize_count_drift_gate(
+                len(prediction_frames[0]["keys"]),
+                [row["exactCount"] for row in inference_metrics],
+                [row["predictionCount"] for row in inference_metrics],
+            )
             prediction_artifact = build_prediction_document(
                 inference_manifest=manifest_receipt,
                 training_manifest=training_manifest,
@@ -1455,6 +1889,8 @@ def main():
                 frames=prediction_docs,
                 recurrent=recurrent_rows,
                 support_metrics=inference_metrics,
+                state_model=state_model_receipt,
+                count_drift_gate=count_drift_gate,
             )
             prediction_path = out_dir / "transport-predictions.json"
             write_json(prediction_path, prediction_artifact)
@@ -1469,9 +1905,11 @@ def main():
                 "manifest": manifest_receipt,
                 "modelTrainingManifest": training_manifest,
                 "model": model_receipt,
+                **({"destinationStateModel": state_model_receipt} if state_model_receipt is not None else {}),
                 "predictions": {"path": str(prediction_path), "sha256": sha256_bytes(prediction_path.read_bytes())},
                 "holdoutMetrics": inference_metrics,
                 "rolloutGate": summarize_rollout_gate(inference_metrics),
+                "countDriftGate": count_drift_gate,
                 "recurrent": recurrent_rows,
             }
             write_json(report_path, report)
