@@ -31,12 +31,18 @@ async function fixture(dynamicOffset, sessionId) {
   }
   const reference = { model: { id: 'facebook/sam3.1', revision: 'fixture' }, source: { repository: 'facebookresearch/sam3' } };
   const sharedWeight = await add('ingress', 'shared-weight', 1);
+  const frame0 = await add('ingress', 'frame-0-rgba', 20 + dynamicOffset, 'uint8');
+  const frame1 = await add('ingress', 'frame-1-rgba', 30 + dynamicOffset, 'uint8');
   records[`decoder/${sharedWeight.file}`] = records[`ingress/${sharedWeight.file}`];
   const packets = {
     ingress: {
       schema: 'ingress', routeIds: ['image-route'], shape: { imageHeight: 1, imageWidth: 1, imageChannels: 4 }, reference,
-      sourceImages: [{ rgbaSha256: `frame-0-${dynamicOffset}` }, { rgbaSha256: `frame-1-${dynamicOffset}` }], weights: [sharedWeight],
-      tensors: [await add('ingress', 'frame-0-rgba', 20 + dynamicOffset, 'uint8'), await add('ingress', 'frame-1-rgba', 30 + dynamicOffset, 'uint8'), await add('ingress', 'expected-ingress', 4 + dynamicOffset)],
+      sourceImages: [
+        { frameIndex: 0, originalSha256: `sha256:${String(dynamicOffset + 1).padStart(64, '0')}`, rgbaSha256: frame0.sha256 },
+        { frameIndex: 1, originalSha256: `sha256:${String(dynamicOffset + 2).padStart(64, '0')}`, rgbaSha256: frame1.sha256 },
+      ],
+      weights: [sharedWeight],
+      tensors: [frame0, frame1, await add('ingress', 'expected-ingress', 4 + dynamicOffset)],
       tolerances: { maximum: 0.001 },
     },
     decoder: { schema: 'decoder', routeId: 'decoder-route', shape: { channels: 256 }, reference, weights: [sharedWeight], tensors: [await add('decoder', 'expected-decoder', 5 + dynamicOffset)], tolerances: { maximum: 0.001 } },
@@ -70,6 +76,14 @@ const first = await fixture(0, 'session-a');
 const second = await fixture(40, 'session-b');
 assert.equal(first.projection.modelPackage.packageId, second.projection.modelPackage.packageId, 'dynamic invocation bytes must not alter the reusable model package identity');
 assert.notEqual(first.projection.invocation.invocationId, second.projection.invocation.invocationId, 'different images, mask, and session must alter invocation identity');
+assert.deepEqual(
+  first.projection.invocation.sourceImages.map(image => ({ originalSha256: image.originalSha256, rgbaSha256: image.rgbaSha256 })),
+  [
+    { originalSha256: `sha256:${String(1).padStart(64, '0')}`, rgbaSha256: first.projection.invocation.sourceImages[0].sha256 },
+    { originalSha256: `sha256:${String(2).padStart(64, '0')}`, rgbaSha256: first.projection.invocation.sourceImages[1].sha256 },
+  ],
+  'the invocation must preserve encoded-image authority separately from its owned RGBA tensor bytes',
+);
 
 const stores = new Map([['one', first.files], ['two', second.files]]);
 let networkReads = 0;
@@ -87,6 +101,8 @@ const fetchImpl = async url => {
 const cache = createSam31BrowserTrackerPackageCache({ fetchImpl });
 const firstRuntime = await loadSam31BrowserTrackerPackageRuntime({ rootUrl: 'https://example.test/one/tracker-root.json', pageUrl: 'https://example.test/smoke.html', fetchImpl, cache });
 assert.equal(firstRuntime.verificationAttached, true);
+assert.deepEqual(firstRuntime.encodedSourceImageSha256, first.projection.invocation.sourceImages.map(image => image.originalSha256));
+assert.deepEqual(firstRuntime.rgbaSourceImageSha256, first.projection.invocation.sourceImages.map(image => image.rgbaSha256));
 assert.equal(firstRuntime.manifests.temporal.attentionWeights.length, 1);
 assert.equal(firstRuntime.manifests.temporal.weights, undefined);
 assert.equal(firstRuntime.manifests.episode.tensors.some(item => item.role === 'expected-episode'), true);
@@ -155,12 +171,17 @@ assert.equal(backingEvents.filter(([event]) => event === 'write').length, 1);
 assert.equal(backingEvents.filter(([event]) => event === 'read').length, 2);
 
 assert.equal(typeof trackerPackageRuntime.createSam31BrowserTrackerDualInvocationEvidence, 'function', 'the package runtime must own the cross-realm dual-invocation gate');
-function invocationSummary({ invocationId, executionRealmId, verificationAttached, verificationId, imageSha256, maskSha256, requestPrefix, outputPrefix, maskOutputSha256, cacheEvidence }) {
+function invocationSummary({ invocationId, executionRealmId, verificationAttached, verificationId, encodedImageSha256, rgbaImageSha256, maskSha256, requestPrefix, outputPrefix, maskOutputSha256, cacheEvidence }) {
   return {
     executionRealmId,
     packageRuntime: {
       packageId: 'sam31-tracker-model-package:fixture', invocationId, verificationId,
-      sourceImageSha256: imageSha256, initialMaskSha256: maskSha256, cacheEvidence,
+      sourceImageSha256: rgbaImageSha256,
+      encodedSourceImageSha256: encodedImageSha256,
+      rgbaSourceImageSha256: rgbaImageSha256,
+      initialMaskSha256: maskSha256,
+      session: { conditioningFrameIndex: 0, propagationFrameIndices: [1], conditioningObjects: [0] },
+      cacheEvidence,
     },
     verificationAttached,
     parity: verificationAttached ? { maximums: {} } : null,
@@ -170,18 +191,36 @@ function invocationSummary({ invocationId, executionRealmId, verificationAttache
       outputs: [{ role: index === 18 ? 'sam31-multiplex-selected-masks' : `output-${index}`, artifactId: `${outputPrefix}-${index}`, sha256: index === 18 ? maskOutputSha256 : `${outputPrefix}-sha-${index}` }],
     })),
     evidence: { routeChainPassed: true },
-    trackerState: { version: 1, frames: [{ tensorDigests: { maskLogits: `${outputPrefix}-state-mask` } }] },
+    trackerState: {
+      version: 1,
+      conditioningFrameIndices: [0],
+      nonConditioningFrameIndices: [],
+      frames: [{
+        frameIndex: 0,
+        kind: 'conditioning',
+        conditioningObjects: [0],
+        tensorDigests: {
+          memory: `${outputPrefix}-state-memory`,
+          memoryPosition: 'deterministic-memory-position',
+          image: `${outputPrefix}-state-image`,
+          imagePosition: 'deterministic-image-position',
+          pointers: `${outputPrefix}-state-pointers`,
+          maskLogits: `${outputPrefix}-state-mask`,
+          objectScores: 'deterministic-object-scores',
+        },
+      }],
+    },
     deviceLoss: null,
   };
 }
 const firstInvocationSummary = invocationSummary({
   invocationId: 'invocation-a', executionRealmId: 'realm-a', verificationAttached: true, verificationId: 'verification-a',
-  imageSha256: ['image-a0', 'image-a1'], maskSha256: 'mask-a', requestPrefix: 'request-a', outputPrefix: 'output-a', maskOutputSha256: 'result-a',
+  encodedImageSha256: ['encoded-a0', 'encoded-a1'], rgbaImageSha256: ['rgba-a0', 'rgba-a1'], maskSha256: 'mask-a', requestPrefix: 'request-a', outputPrefix: 'output-a', maskOutputSha256: 'result-a',
   cacheEvidence: { staticNetworkLoadCount: 1, staticCacheHitCount: 0, dynamicNetworkLoadCount: 2, backingStore: { staticOriginNetworkLoadCount: 1, staticBackingStoreHitCount: 0 } },
 });
 const secondInvocationSummary = invocationSummary({
   invocationId: 'invocation-b', executionRealmId: 'realm-b', verificationAttached: false, verificationId: null,
-  imageSha256: ['image-b0', 'image-b1'], maskSha256: 'mask-b', requestPrefix: 'request-b', outputPrefix: 'output-b', maskOutputSha256: 'result-b',
+  encodedImageSha256: ['encoded-b0', 'encoded-b1'], rgbaImageSha256: ['rgba-b0', 'rgba-b1'], maskSha256: 'mask-b', requestPrefix: 'request-b', outputPrefix: 'output-b', maskOutputSha256: 'result-b',
   cacheEvidence: { staticNetworkLoadCount: 1, staticCacheHitCount: 1, dynamicNetworkLoadCount: 4, backingStore: { staticOriginNetworkLoadCount: 1, staticBackingStoreHitCount: 1 } },
 });
 const dualEvidence = trackerPackageRuntime.createSam31BrowserTrackerDualInvocationEvidence({
@@ -192,6 +231,55 @@ assert.equal(dualEvidence.passed, true);
 assert.equal(dualEvidence.sameModelPackage, true);
 assert.equal(dualEvidence.secondVerificationFree, true);
 assert.equal(dualEvidence.noSecondStaticOriginNetworkLoads, true);
+assert.equal(dualEvidence.distinctEncodedSourceImages, true);
+assert.equal(dualEvidence.distinctRgbaSourceImages, true);
+assert.equal(dualEvidence.trackerStateShapePassed, true);
+assert.equal(dualEvidence.distinctCausalTrackerState, true);
+assert.equal(dualEvidence.deterministicTrackerStateShared, true);
+assert.deepEqual(dualEvidence.causalTrackerStateDigestNames, ['memory', 'image', 'pointers', 'maskLogits']);
+assert.deepEqual(dualEvidence.deterministicTrackerStateDigestNames, ['memoryPosition', 'imagePosition', 'objectScores']);
 assert.equal(dualEvidence.stateIsolationPassed, true);
+
+const encodedReuse = structuredClone(secondInvocationSummary);
+encodedReuse.packageRuntime.encodedSourceImageSha256 = firstInvocationSummary.packageRuntime.encodedSourceImageSha256.slice();
+const encodedReuseEvidence = trackerPackageRuntime.createSam31BrowserTrackerDualInvocationEvidence({
+  invocations: [firstInvocationSummary, encodedReuse],
+  betweenInvocationCheckpoints: [{ afterInvocationIndex: 0, realmRemoved: true, passed: true }],
+});
+assert.equal(encodedReuseEvidence.distinctEncodedSourceImages, false, 'encoded-image reuse must fail even when resized RGBA bytes differ');
+assert.equal(encodedReuseEvidence.passed, false);
+
+const rgbaReuse = structuredClone(secondInvocationSummary);
+rgbaReuse.packageRuntime.rgbaSourceImageSha256 = firstInvocationSummary.packageRuntime.rgbaSourceImageSha256.slice();
+rgbaReuse.packageRuntime.sourceImageSha256 = rgbaReuse.packageRuntime.rgbaSourceImageSha256;
+const rgbaReuseEvidence = trackerPackageRuntime.createSam31BrowserTrackerDualInvocationEvidence({
+  invocations: [firstInvocationSummary, rgbaReuse],
+  betweenInvocationCheckpoints: [{ afterInvocationIndex: 0, realmRemoved: true, passed: true }],
+});
+assert.equal(rgbaReuseEvidence.distinctRgbaSourceImages, false, 'resized RGBA reuse must fail independently of encoded-image identity');
+assert.equal(rgbaReuseEvidence.passed, false);
+
+for (const digestName of ['memory', 'image', 'pointers', 'maskLogits']) {
+  const reusedState = structuredClone(secondInvocationSummary);
+  reusedState.trackerState.frames[0].tensorDigests[digestName] = firstInvocationSummary.trackerState.frames[0].tensorDigests[digestName];
+  const reusedStateEvidence = trackerPackageRuntime.createSam31BrowserTrackerDualInvocationEvidence({
+    invocations: [firstInvocationSummary, reusedState],
+    betweenInvocationCheckpoints: [{ afterInvocationIndex: 0, realmRemoved: true, passed: true }],
+  });
+  assert.equal(reusedStateEvidence.distinctCausalTrackerState, false, `${digestName} reuse must fail the causal state gate`);
+  assert.equal(reusedStateEvidence.stateIsolationPassed, false);
+  assert.equal(reusedStateEvidence.passed, false);
+}
+
+const carriedFrame = structuredClone(secondInvocationSummary);
+carriedFrame.trackerState.nonConditioningFrameIndices = [1];
+carriedFrame.trackerState.frames.push({ frameIndex: 1, kind: 'non-conditioning', conditioningObjects: [], tensorDigests: {} });
+const carriedFrameEvidence = trackerPackageRuntime.createSam31BrowserTrackerDualInvocationEvidence({
+  invocations: [firstInvocationSummary, carriedFrame],
+  betweenInvocationCheckpoints: [{ afterInvocationIndex: 0, realmRemoved: true, passed: true }],
+});
+assert.equal(carriedFrameEvidence.trackerStateShapePassed, false, 'carried non-conditioning frames must fail fresh-session shape');
+assert.equal(carriedFrameEvidence.stateIsolationPassed, false);
+assert.equal(carriedFrameEvidence.passed, false);
 
 console.log('sam3.1 browser tracker package runtime contracts passed');

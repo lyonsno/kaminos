@@ -179,6 +179,8 @@ function verifyPackageAuthority() {
       invocationId: resolution.manifest.invocationId,
       verificationId: resolution.manifest.verificationId || null,
       verificationAttached: resolution.evidence.verification.attached,
+      encodedSourceImageSha256: resolution.manifest.sourceImages.map(image => image.originalSha256),
+      rgbaSourceImageSha256: resolution.manifest.sourceImages.map(image => image.rgbaSha256),
       sourceImageSha256: resolution.manifest.sourceImages.map(image => image.sha256),
       initialMaskSha256: resolution.manifest.initialMask.sha256,
       resolution: resolution.evidence,

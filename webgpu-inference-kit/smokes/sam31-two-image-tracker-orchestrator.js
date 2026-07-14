@@ -78,7 +78,7 @@ function createVisibleState(sourceState) {
     invocationReceipts,
     realmCheckpointPassed: (sourceState.betweenInvocationCheckpoints || []).every(checkpoint => checkpoint.passed && checkpoint.realmRemoved),
     dualInvocationPassed: sourceState.dualInvocationEvidence?.passed || false,
-    dualGate: dual ? `same-package=${dual.sameModelPackage}; distinct-invocations=${dual.distinctInvocationIds}; verification-free-second=${dual.secondVerificationFree}; real-route-chains=${dual.bothRouteChainsReal}; no-second-static-load=${dual.noSecondStaticNetworkLoads}; fresh-dynamic-reads=${dual.freshSecondDynamicReadsObserved}; state-isolated=${dual.stateIsolationPassed}; distinct-realms=${dual.distinctExecutionRealms}; no-device-loss=${dual.noDeviceLoss}` : null,
+    dualGate: dual ? `same-package=${dual.sameModelPackage}; distinct-encoded=${dual.distinctEncodedSourceImages}; distinct-rgba=${dual.distinctRgbaSourceImages}; distinct-invocations=${dual.distinctInvocationIds}; verification-free-second=${dual.secondVerificationFree}; real-route-chains=${dual.bothRouteChainsReal}; no-second-static-load=${dual.noSecondStaticNetworkLoads}; fresh-dynamic-reads=${dual.freshSecondDynamicReadsObserved}; state-shape=${dual.trackerStateShapePassed}; causal-state=${dual.distinctCausalTrackerState}; state-isolated=${dual.stateIsolationPassed}; distinct-realms=${dual.distinctExecutionRealms}; no-device-loss=${dual.noDeviceLoss}` : null,
     deviceLoss: sourceState.deviceLoss || null,
   };
 }

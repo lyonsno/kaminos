@@ -248,6 +248,10 @@ const sharedWeight = packageEntry('shared-weight', '1');
 const packagePackets = {
   ingress: {
     schema: 'ingress', routeIds: ['image-route'], shape: { imageHeight: 28 }, reference: twoImageReference,
+    sourceImages: [
+      { frameIndex: 0, originalSha256: `sha256:${'8'.repeat(64)}`, rgbaSha256: `sha256:${'2'.repeat(64)}` },
+      { frameIndex: 1, originalSha256: `sha256:${'9'.repeat(64)}`, rgbaSha256: `sha256:${'3'.repeat(64)}` },
+    ],
     weights: [sharedWeight],
     tensors: [packageEntry('frame-0-rgba', '2'), packageEntry('frame-1-rgba', '3'), packageEntry('expected-ingress', '4')],
     tolerances: { maximum: 0.001 },
@@ -269,8 +273,23 @@ const packagePackets = {
 };
 const packageProjection = await createSam31BrowserTrackerPackageProjection({ packets: packagePackets, sessionId: 'fixture-session', componentAuthorities: { ingress: { passed: true } } });
 const repeatedProjection = await createSam31BrowserTrackerPackageProjection({ packets: packagePackets, sessionId: 'fixture-session', componentAuthorities: { ingress: { passed: true } } });
+const substitutedEncodedSourcePackets = structuredClone(packagePackets);
+substitutedEncodedSourcePackets.ingress.sourceImages[0].originalSha256 = `sha256:${'7'.repeat(64)}`;
+const substitutedEncodedSourceProjection = await createSam31BrowserTrackerPackageProjection({ packets: substitutedEncodedSourcePackets, sessionId: 'fixture-session', componentAuthorities: { ingress: { passed: true } } });
+const mismatchedRgbaPackets = structuredClone(packagePackets);
+mismatchedRgbaPackets.ingress.sourceImages[0].rgbaSha256 = `sha256:${'6'.repeat(64)}`;
+await assert.rejects(
+  () => createSam31BrowserTrackerPackageProjection({ packets: mismatchedRgbaPackets, sessionId: 'fixture-session', componentAuthorities: { ingress: { passed: true } } }),
+  /RGBA identity does not match its invocation artifact/,
+);
 assert.equal(packageProjection.modelPackage.packageId, repeatedProjection.modelPackage.packageId, 'rerunning package projection must preserve content identity');
 assert.equal(packageProjection.invocation.invocationId, repeatedProjection.invocation.invocationId, 'rerunning invocation projection must preserve content identity');
+assert.notEqual(packageProjection.invocation.invocationId, substitutedEncodedSourceProjection.invocation.invocationId, 'encoded-image substitution must alter invocation identity even when RGBA tensor bytes are unchanged');
+assert.deepEqual(
+  packageProjection.invocation.sourceImages.map(image => [image.originalSha256, image.rgbaSha256]),
+  packagePackets.ingress.sourceImages.map(image => [image.originalSha256, image.rgbaSha256]),
+  'package projection must preserve both authenticated source-image identities',
+);
 assert.equal(packageProjection.verification.verificationId, repeatedProjection.verification.verificationId, 'rerunning verification projection must preserve content identity');
 assert.equal(packageProjection.modelPackage.staticArtifacts.filter(entry => entry.sha256 === sharedWeight.sha256).length, 1, 'identical checkpoint bytes must be stored once');
 assert.equal(packageProjection.modelPackage.staticArtifacts.find(entry => entry.sha256 === sharedWeight.sha256).aliases.length, 2, 'deduplicated bytes must preserve both component aliases');

@@ -71,6 +71,40 @@ function componentMetadata(manifest) {
   return Object.fromEntries(Object.entries(manifest).filter(([key]) => !excluded.has(key)));
 }
 
+function sourceImageAuthority(sourceImages, frameArtifacts) {
+  if (!Array.isArray(sourceImages) || sourceImages.length !== 2) {
+    throw new Error('tracker invocation requires two authenticated source-image records');
+  }
+  const result = frameArtifacts.map((artifact, frameIndex) => {
+    const source = sourceImages.find(entry => entry?.frameIndex === frameIndex);
+    if (!source) throw new Error(`tracker source-image authority is missing frame ${frameIndex}`);
+    for (const field of ['originalSha256', 'rgbaSha256']) {
+      if (typeof source[field] !== 'string' || !source[field].startsWith('sha256:')) {
+        throw new Error(`tracker source-image frame ${frameIndex} ${field} is required`);
+      }
+    }
+    if (source.rgbaSha256 !== artifact.sha256) {
+      throw new Error(`tracker source-image frame ${frameIndex} RGBA identity does not match its invocation artifact`);
+    }
+    return {
+      frameIndex,
+      role: artifact.role,
+      file: artifact.file,
+      sha256: artifact.sha256,
+      byteLength: artifact.byteLength,
+      originalSha256: source.originalSha256,
+      rgbaSha256: source.rgbaSha256,
+    };
+  });
+  if (new Set(result.map(source => source.originalSha256)).size !== result.length) {
+    throw new Error('tracker invocation requires distinct encoded source images');
+  }
+  if (new Set(result.map(source => source.rgbaSha256)).size !== result.length) {
+    throw new Error('tracker invocation requires distinct RGBA source images');
+  }
+  return result;
+}
+
 export async function createSam31BrowserTrackerPackageProjection({ packets, sessionId = 'sam31-session-0', componentAuthorities = {} }) {
   requireObject(packets, 'packets');
   for (const name of PACKET_NAMES) requireObject(packets[name], `${name} packet`);
@@ -138,6 +172,7 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
   const frameArtifacts = dynamicArtifacts.filter(entry => entry.invocationRole === 'source-image').sort((left, right) => left.role.localeCompare(right.role));
   const maskArtifact = dynamicArtifacts.find(entry => entry.invocationRole === 'initial-mask');
   if (frameArtifacts.length !== 2 || !maskArtifact) throw new Error('tracker invocation requires two source-image tensors and one initial mask');
+  const sourceImages = sourceImageAuthority(ingress.sourceImages, frameArtifacts);
   const routeIds = Array.from(new Set(PACKET_NAMES.flatMap(name => {
     const manifest = packets[name];
     return [...(manifest.routeIds || []), ...(manifest.routeId ? [manifest.routeId] : [])];
@@ -163,7 +198,7 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
   const invocation = {
     schema: SAM31_BROWSER_TRACKER_INVOCATION_SCHEMA,
     invocationId: 'pending',
-    sourceImages: frameArtifacts.map((entry, frameIndex) => ({ frameIndex, role: entry.role, file: entry.file, sha256: entry.sha256, byteLength: entry.byteLength })),
+    sourceImages,
     initialMask: { role: maskArtifact.role, file: maskArtifact.file, sha256: maskArtifact.sha256, byteLength: maskArtifact.byteLength },
     session: {
       sessionId,

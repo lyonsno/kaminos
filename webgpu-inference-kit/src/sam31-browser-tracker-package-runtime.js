@@ -59,7 +59,7 @@ function composePacketManifests(manifest) {
       packet.sourceImages = sourceImages.map((source, frameIndex) => ({
         ...(component.sourceImages?.[frameIndex] || {}),
         ...source,
-        rgbaSha256: source.sha256,
+        rgbaSha256: source.rgbaSha256,
       }));
     }
     if (packetName === 'episode') {
@@ -211,8 +211,11 @@ export async function loadSam31BrowserTrackerPackageRuntime({
     invocationId: manifest.invocationId,
     verificationId: manifest.verificationId || null,
     verificationAttached,
+    encodedSourceImageSha256: manifest.sourceImages.map(image => image.originalSha256),
+    rgbaSourceImageSha256: manifest.sourceImages.map(image => image.rgbaSha256),
     sourceImageSha256: manifest.sourceImages.map(image => image.sha256),
     initialMaskSha256: manifest.initialMask.sha256,
+    session: structuredClone(manifest.session),
     manifests: composePacketManifests(manifest),
     packageResolution: resolution.evidence,
     componentAuthorities: manifest.componentAuthorities || null,
@@ -220,6 +223,32 @@ export async function loadSam31BrowserTrackerPackageRuntime({
     loadUint8: entry => load(entry, Uint8Array),
     cacheEvidence: () => cache.evidence(),
   };
+}
+
+const CAUSAL_TRACKER_STATE_DIGESTS = Object.freeze(['memory', 'image', 'pointers', 'maskLogits']);
+const DETERMINISTIC_TRACKER_STATE_DIGESTS = Object.freeze(['memoryPosition', 'imagePosition', 'objectScores']);
+
+function sameArray(left, right) {
+  return Array.isArray(left) && Array.isArray(right)
+    && left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
+function trackerStateShapePassed(invocation) {
+  const state = invocation.trackerState;
+  const session = invocation.packageRuntime.session;
+  if (!state || state.version !== 1 || !session) return false;
+  const frameIndex = session.conditioningFrameIndex;
+  const frame = state.frames?.[0];
+  return Number.isInteger(frameIndex)
+    && sameArray(state.conditioningFrameIndices, [frameIndex])
+    && sameArray(state.nonConditioningFrameIndices, [])
+    && state.frames?.length === 1
+    && frame?.frameIndex === frameIndex
+    && frame?.kind === 'conditioning'
+    && sameArray(frame.conditioningObjects, session.conditioningObjects)
+    && [...CAUSAL_TRACKER_STATE_DIGESTS, ...DETERMINISTIC_TRACKER_STATE_DIGESTS]
+      .every(name => typeof frame.tensorDigests?.[name] === 'string' && frame.tensorDigests[name].length > 0);
 }
 
 export function createSam31BrowserTrackerDualInvocationEvidence({
@@ -232,15 +261,30 @@ export function createSam31BrowserTrackerDualInvocationEvidence({
   const [first, second] = invocations;
   const firstRequests = new Set(first.requestIds);
   const firstOutputs = new Set(first.receipts.flatMap(receipt => receipt.outputs.map(output => output.artifactId)));
-  const firstImages = new Set(first.packageRuntime.sourceImageSha256);
+  const firstEncodedImages = new Set(first.packageRuntime.encodedSourceImageSha256);
+  const firstRgbaImages = new Set(first.packageRuntime.rgbaSourceImageSha256);
   const firstFinalMask = first.receipts.at(-1).outputs.find(output => output.role === 'sam31-multiplex-selected-masks');
   const secondFinalMask = second.receipts.at(-1).outputs.find(output => output.role === 'sam31-multiplex-selected-masks');
+  const firstStateShapePassed = trackerStateShapePassed(first);
+  const secondStateShapePassed = trackerStateShapePassed(second);
+  const firstStateDigests = first.trackerState?.frames?.[0]?.tensorDigests || {};
+  const secondStateDigests = second.trackerState?.frames?.[0]?.tensorDigests || {};
+  const distinctCausalTrackerState = firstStateShapePassed && secondStateShapePassed
+    && CAUSAL_TRACKER_STATE_DIGESTS.every(name => firstStateDigests[name] !== secondStateDigests[name]);
+  const deterministicTrackerStateShared = firstStateShapePassed && secondStateShapePassed
+    && DETERMINISTIC_TRACKER_STATE_DIGESTS.every(name => firstStateDigests[name] === secondStateDigests[name]);
+  const trackerStateShapeValid = firstStateShapePassed && secondStateShapePassed;
   const evidence = {
     schema: 'kaminos.sam31-browser-tracker-dual-invocation-evidence.v0',
+    causalTrackerStateDigestNames: [...CAUSAL_TRACKER_STATE_DIGESTS],
+    deterministicTrackerStateDigestNames: [...DETERMINISTIC_TRACKER_STATE_DIGESTS],
     sameModelPackage: first.packageRuntime.packageId === second.packageRuntime.packageId,
     distinctInvocationIds: first.packageRuntime.invocationId !== second.packageRuntime.invocationId,
     distinctVerificationAttachments: first.packageRuntime.verificationId !== second.packageRuntime.verificationId,
-    distinctSourceImages: second.packageRuntime.sourceImageSha256.every(identity => !firstImages.has(identity)),
+    distinctEncodedSourceImages: second.packageRuntime.encodedSourceImageSha256.every(identity => !firstEncodedImages.has(identity)),
+    distinctRgbaSourceImages: second.packageRuntime.rgbaSourceImageSha256.every(identity => !firstRgbaImages.has(identity)),
+    distinctSourceImages: second.packageRuntime.encodedSourceImageSha256.every(identity => !firstEncodedImages.has(identity))
+      && second.packageRuntime.rgbaSourceImageSha256.every(identity => !firstRgbaImages.has(identity)),
     distinctInitialMasks: first.packageRuntime.initialMaskSha256 !== second.packageRuntime.initialMaskSha256,
     distinctRequestIds: second.requestIds.every(requestId => !firstRequests.has(requestId)),
     distinctOutputIds: second.receipts.flatMap(receipt => receipt.outputs.map(output => output.artifactId)).every(outputId => !firstOutputs.has(outputId)),
@@ -253,11 +297,16 @@ export function createSam31BrowserTrackerDualInvocationEvidence({
     noSecondStaticOriginNetworkLoads: second.packageRuntime.cacheEvidence.backingStore.staticOriginNetworkLoadCount === first.packageRuntime.cacheEvidence.backingStore.staticOriginNetworkLoadCount,
     secondBackingStoreHitsObserved: second.packageRuntime.cacheEvidence.backingStore.staticBackingStoreHitCount > first.packageRuntime.cacheEvidence.backingStore.staticBackingStoreHitCount,
     freshSecondDynamicReadsObserved: second.packageRuntime.cacheEvidence.dynamicNetworkLoadCount > first.packageRuntime.cacheEvidence.dynamicNetworkLoadCount,
-    stateIsolationPassed: first.trackerState.version === 1 && second.trackerState.version === 1 && first.trackerState.frames[0].tensorDigests.maskLogits !== second.trackerState.frames[0].tensorDigests.maskLogits,
+    trackerStateShapePassed: trackerStateShapeValid,
+    distinctCausalTrackerState,
+    deterministicTrackerStateShared,
+    stateIsolationPassed: trackerStateShapeValid && distinctCausalTrackerState && deterministicTrackerStateShared,
     distinctExecutionRealms: typeof first.executionRealmId === 'string' && first.executionRealmId.length > 0 && typeof second.executionRealmId === 'string' && first.executionRealmId !== second.executionRealmId,
     betweenInvocationCheckpointPassed: betweenInvocationCheckpoints.length === 1 && betweenInvocationCheckpoints[0].passed === true && betweenInvocationCheckpoints[0].realmRemoved === true,
     noDeviceLoss: invocations.every(invocation => invocation.deviceLoss == null),
   };
-  evidence.passed = Object.entries(evidence).filter(([key]) => key !== 'schema').every(([, value]) => value === true);
+  evidence.passed = Object.entries(evidence)
+    .filter(([key]) => !['schema', 'causalTrackerStateDigestNames', 'deterministicTrackerStateDigestNames'].includes(key))
+    .every(([, value]) => value === true);
   return evidence;
 }
