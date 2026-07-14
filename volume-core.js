@@ -12713,6 +12713,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const smokeDomain = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
     return createCoupledSmokePhaseStateDescriptor({
       active: state.active && smokeDomain.mode === COUPLED_SMOKE_STRATEGY,
+      device,
       generation: smokeDomainTransferGeneration,
       retainedHistoryEpoch: smokeDomainTransferGeneration,
       writeTick: state.smokeDomainTransferFrameCount,

@@ -32,8 +32,11 @@ assert.equal(COUPLED_PHASE_STATE_RENDERER_AUTHORITY, 'renderer-neutral-state-onl
 
 const nearBuffer = { label: 'near-live-fluid-buffer' };
 const farBuffer = { label: 'far-live-smoke-buffer' };
+const gpuQueue = { label: 'owning-gpu-queue' };
+const gpuDevice = { label: 'owning-gpu-device', queue: gpuQueue };
 const descriptor = createCoupledSmokePhaseStateDescriptor({
   active: true,
+  device: gpuDevice,
   generation: 7,
   retainedHistoryEpoch: 7,
   writeTick: 41,
@@ -50,6 +53,10 @@ const descriptor = createCoupledSmokePhaseStateDescriptor({
 assert.equal(descriptor.schema, COUPLED_PHASE_STATE_SCHEMA);
 assert.equal(descriptor.socketIdentity, COUPLED_PHASE_STATE_SOCKET_IDENTITY);
 assert.equal(descriptor.producerIdentity, COUPLED_PHASE_STATE_PRODUCER_IDENTITY);
+assert.ok(descriptor.gpu, 'socket must expose borrowed same-device access for external GPU consumers');
+assert.equal(descriptor.gpu.device, gpuDevice, 'socket must lend the exact device that owns the buffers');
+assert.equal(descriptor.gpu.queue, gpuQueue, 'socket must lend the owning device queue');
+assert.equal(descriptor.gpu.ownership, 'borrowed-producer-owned-do-not-destroy-v0');
 assert.deepEqual(descriptor.phase.token, {
   generation: 7,
   retainedHistoryEpoch: 7,
@@ -97,6 +104,7 @@ assert.equal(
 
 const baseArgs = {
   active: true,
+  device: gpuDevice,
   generation: 3,
   retainedHistoryEpoch: 3,
   writeTick: 8,
@@ -132,8 +140,13 @@ assert.throws(
   () => createCoupledSmokePhaseStateDescriptor({ ...baseArgs, farBuffer: null }),
   /farBuffer is unavailable/,
 );
+assert.throws(
+  () => createCoupledSmokePhaseStateDescriptor({ ...baseArgs, device: null }),
+  /owning GPUDevice is unavailable/,
+);
 
 assert.match(core, /getCoupledSmokePhaseState\(options = \{\}\)/, 'prototype exposes the renderer-neutral socket');
+assert.match(core, /device,\s*generation: smokeDomainTransferGeneration/, 'socket lends the GPUDevice that owns both buffers');
 assert.match(core, /fluidBuffers\[currentFluid\]/, 'socket resolves the live near-fluid ping-pong state');
 assert.match(core, /smokeDomainFarStateBuffers\[currentSmokeDomainFarState\]/, 'socket resolves the live far-smoke ping-pong state');
 assert.match(core, /coupledPhaseStateGeneration/, 'debug state exposes socket generation');

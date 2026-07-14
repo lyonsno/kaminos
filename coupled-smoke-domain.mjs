@@ -74,6 +74,7 @@ export function smokeDomainMetricVelocityScale(nearGrid, farGrid) {
 
 export function createCoupledSmokePhaseStateDescriptor({
   active,
+  device,
   generation,
   retainedHistoryEpoch,
   writeTick,
@@ -88,6 +89,7 @@ export function createCoupledSmokePhaseStateDescriptor({
   expectedWriteTick = null,
 } = {}) {
   if (!active) throw new Error('coupled phase state socket inactive');
+  if (!device?.queue) throw new Error('coupled phase state owning GPUDevice is unavailable');
   const effectiveGeneration = nonnegativeInteger(generation, 'generation');
   const effectiveRetainedHistoryEpoch = nonnegativeInteger(retainedHistoryEpoch, 'retainedHistoryEpoch');
   const effectiveWriteTick = nonnegativeInteger(writeTick, 'writeTick');
@@ -110,6 +112,11 @@ export function createCoupledSmokePhaseStateDescriptor({
     schema: COUPLED_PHASE_STATE_SCHEMA,
     socketIdentity: COUPLED_PHASE_STATE_SOCKET_IDENTITY,
     producerIdentity: COUPLED_PHASE_STATE_PRODUCER_IDENTITY,
+    gpu: {
+      device,
+      queue: device.queue,
+      ownership: 'borrowed-producer-owned-do-not-destroy-v0',
+    },
     phase: {
       token: {
         generation: effectiveGeneration,
