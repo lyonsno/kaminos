@@ -34,6 +34,8 @@ assert.match(exporter, /--export-scope/, 'exporter accepts an explicit output sc
 assert.match(exporter, /--viewport-size/, 'exporter accepts an explicit per-target viewport size');
 assert.match(exporter, /Emulation\.setDeviceMetricsOverride/, 'exporter enforces viewport metrics through CDP instead of trusting a mutable browser window');
 assert.match(exporter, /viewportContract/, 'export manifest records requested and effective viewport custody');
+assert.match(exporter, /--render-canvas-size/, 'exporter accepts an explicit renderer canvas CSS size instead of trusting pre-render intrinsic dimensions');
+assert.match(exporter, /renderCanvasContract/, 'export manifest records requested and effective renderer canvas geometry');
 assert.match(exporter, /fluid-front-only-v0/, 'exporter names the narrow fluid/front-only scope used by model pair production');
 assert.match(
   exporter,

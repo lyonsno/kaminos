@@ -357,6 +357,7 @@ function buildFramePlan(context, frameIndex) {
     '--initial-field-manifest', roleManifests[role],
     '--advance-imported-steps', '0',
     '--render-only',
+    '--render-canvas-size', '1240,633',
     '--render-warmup-count', String(context.renderWarmupCount),
     '--render-composition', RENDER_COMPOSITION,
     '--render-png', join(captureRoot, `${role}-beauty.png`),

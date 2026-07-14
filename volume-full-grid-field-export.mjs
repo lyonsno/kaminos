@@ -58,6 +58,9 @@ const viewportSize = args.has('--viewport-size')
   ? parseDimensions(String(args.get('--viewport-size')), '--viewport-size')
   : null;
 const viewportDeviceScaleFactor = Number(args.get('--viewport-device-scale-factor') || 2);
+const renderCanvasSize = args.has('--render-canvas-size')
+  ? parseDimensions(String(args.get('--render-canvas-size')), '--render-canvas-size')
+  : null;
 const chunkFloats = Math.max(1, Math.floor(Number(args.get('--chunk-floats') || 262144)));
 const exportScope = String(args.get('--export-scope') || FULL_EXPORT_SCOPE);
 const exportIdentity = exportScope === FLUID_FRONT_EXPORT_SCOPE ? FLUID_FRONT_EXPORT_IDENTITY : EXPORT_IDENTITY;
@@ -450,6 +453,11 @@ async function main() {
     requested: viewportSize ? { ...viewportSize, deviceScaleFactor: viewportDeviceScaleFactor } : null,
     effective: null,
   };
+  const renderCanvasContract = {
+    identity: renderCanvasSize ? 'explicit-pre-render-canvas-css-geometry-v0' : 'pre-render-intrinsic-aspect-derived-v0',
+    requested: renderCanvasSize,
+    effective: null,
+  };
   const runtimeEvents = [];
   try {
     phase = 'render-option-validation';
@@ -638,8 +646,12 @@ async function main() {
         const canvasMount = await evaluateByValue(ws, `(() => {
           const canvas = window.__kaminosVolumePrototype?.canvasElement?.();
           if (!canvas) return { ok: false, reason: 'renderer-canvas-missing' };
-          const height = Math.max(64, Math.min(700, window.innerHeight));
-          const width = Math.max(64, Math.min(window.innerWidth, height * canvas.width / Math.max(1, canvas.height)));
+          const requestedSize = ${JSON.stringify(renderCanvasSize)};
+          const height = requestedSize?.height ?? Math.max(64, Math.min(700, window.innerHeight));
+          const width = requestedSize?.width ?? Math.max(64, Math.min(window.innerWidth, height * canvas.width / Math.max(1, canvas.height)));
+          if (width > window.innerWidth || height > window.innerHeight) {
+            return { ok: false, reason: 'requested-canvas-exceeds-viewport', width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
+          }
           document.body.appendChild(canvas);
           canvas.style.setProperty('position', 'fixed', 'important');
           canvas.style.setProperty('left', '0px', 'important');
@@ -675,6 +687,18 @@ async function main() {
           || mountedRect.x + mountedRect.width > canvasMount.viewportWidth + 0.5
           || mountedRect.y + mountedRect.height > canvasMount.viewportHeight + 0.5) {
           throw new Error(`canvas-clip-offscreen: ${JSON.stringify(canvasMount)}`);
+        }
+        renderCanvasContract.effective = {
+          cssWidth: mountedRect.width,
+          cssHeight: mountedRect.height,
+          intrinsicWidthBeforeRender: canvasMount.intrinsicWidth,
+          intrinsicHeightBeforeRender: canvasMount.intrinsicHeight,
+        };
+        if (renderCanvasSize && (
+          mountedRect.width !== renderCanvasSize.width
+          || mountedRect.height !== renderCanvasSize.height
+        )) {
+          throw new Error(`effective renderer canvas does not match requested geometry: ${JSON.stringify(renderCanvasContract)}`);
         }
         for (let warmupIndex = 0; warmupIndex < renderWarmupCount; warmupIndex += 1) {
           phase = `render-imported-field-warmup-${warmupIndex + 1}`;
@@ -816,6 +840,7 @@ async function main() {
         lastDebugState,
         pageDiagnostics,
         viewportContract,
+        renderCanvasContract,
         runtimeEvents,
         initialFieldImport,
         importedAdvance,
@@ -911,6 +936,7 @@ async function main() {
       lastDebugState,
       pageDiagnostics,
       viewportContract,
+      renderCanvasContract,
       runtimeEvents,
       chunkFloats,
       sessionId: begin.sessionId,
@@ -969,6 +995,7 @@ async function main() {
       lastDebugState,
       pageDiagnostics,
       viewportContract,
+      renderCanvasContract,
       runtimeEvents,
       chunkFloats,
       exportScope,
