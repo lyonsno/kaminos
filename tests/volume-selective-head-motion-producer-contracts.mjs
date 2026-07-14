@@ -103,6 +103,7 @@ assert.deepEqual(manifest.frames[0].roles, [
 assert.equal(manifest.frames[0].commands.highExport.includes('--deterministic-replay-steps 97'), true);
 assert.match(manifest.frames[0].commands.highExport, /--chunk-floats 262144/, 'producer uses the previously witnessed CDP transfer chunk instead of the renderer-resetting oversized chunk');
 assert.match(manifest.frames[0].commands.highExport, /--export-scope fluid-front-only-v0/, 'producer does not drain unused boundary sidecars for model pair construction');
+assert.match(manifest.frames[0].commands.highExport, /--viewport-size 1240,633/, 'producer fixes the effective CSS viewport independently of browser-window chrome');
 assert.equal(manifest.frames[1].commands.highExport.includes('--deterministic-replay-steps 98'), true);
 assert.match(manifest.frames[0].commands.selectiveFullResidual, /--residual-scale 1/);
 assert.match(manifest.frames[0].commands.selectiveCalibratedResidual, /--residual-scale 0\.5/);
@@ -115,6 +116,20 @@ assert.equal(manifest.temporalAuthority, 'consecutive-phase-aligned-per-frame-fr
 assert.equal(manifest.recurrentPrediction, false);
 assert.equal(manifest.staticSidecarOverMovingMaterial, false);
 assert.match(readFileSync(producer, 'utf8'), /process\.on\('SIGINT'[\s\S]*interrupted/, 'operator interruption leaves a durable failed producer manifest');
+
+const targeted = run([
+  '--frame-count', '1',
+  '--target-frame-index', '6',
+  '--sequence-frame-count', '8',
+], 'targeted-frame');
+assert.equal(targeted.result.status, 0, targeted.result.stderr || targeted.result.stdout);
+const targetedManifest = JSON.parse(readFileSync(join(targeted.outDir, 'producer-manifest.json'), 'utf8'));
+assert.equal(targetedManifest.targetedRegeneration.frameIndex, 6);
+assert.equal(targetedManifest.sequenceFrameCount, 8);
+assert.deepEqual(targetedManifest.simulationSteps, [103]);
+assert.equal(targetedManifest.frames[0].frameIndex, 6);
+assert.match(targetedManifest.frames[0].commands.selectiveFullResidual, /--sequence-frame-index 6/);
+assert.match(targetedManifest.sequenceIdentity, /steps-97-104$/);
 
 const badStart = run(['--start-step', '98'], 'bad-start');
 assert.notEqual(badStart.result.status, 0, 'sequence cannot skip the first post-training step');

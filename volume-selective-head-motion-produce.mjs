@@ -44,7 +44,13 @@ try {
   const supportProbePath = requiredPath('--support-probe-manifest');
   const targetOrigin = required('--target-origin');
   const startStep = requiredInteger('--start-step', 0);
-  const frameCount = requiredInteger('--frame-count', 2);
+  const frameCount = requiredInteger('--frame-count', 1);
+  const sequenceFrameCount = args.has('--sequence-frame-count')
+    ? requiredInteger('--sequence-frame-count', 1)
+    : frameCount;
+  const targetFrameIndex = args.has('--target-frame-index')
+    ? requiredInteger('--target-frame-index', 0)
+    : null;
   const supportThreshold = requiredNumber('--support-threshold');
   const calibratedResidualScale = requiredNumber('--calibrated-residual-scale');
   const partialFlowDebugMix = Number(args.get('--partial-flow-debug-mix') || 0.625);
@@ -53,6 +59,7 @@ try {
   const userDataDir = resolve(String(args.get('--user-data-dir') || join(outDir, '.chrome-profile')));
   const renderWarmupCount = Number(args.get('--render-warmup-count') || 2);
   const windowSize = String(args.get('--window-size') || '1240,720');
+  const viewportSize = String(args.get('--viewport-size') || '1240,633');
 
   if (!Number.isFinite(partialFlowDebugMix) || partialFlowDebugMix < 0.5 || partialFlowDebugMix > 0.75) {
     failurePhase = 'render-contract-validation';
@@ -62,6 +69,13 @@ try {
   if (!(calibratedResidualScale > 0 && calibratedResidualScale < 1)) throw new Error('calibrated residual scale must be between zero and one');
   if (!Number.isInteger(debugPort) || debugPort < 1 || debugPort > 65535) throw new Error(`invalid debug port: ${debugPort}`);
   if (!Number.isInteger(renderWarmupCount) || renderWarmupCount < 0) throw new Error(`invalid render warmup count: ${renderWarmupCount}`);
+  if (!/^\d+,\d+$/.test(viewportSize)) throw new Error('--viewport-size must be WIDTH,HEIGHT');
+  if (targetFrameIndex !== null && frameCount !== 1) {
+    throw new Error('--target-frame-index requires --frame-count 1');
+  }
+  if (targetFrameIndex !== null && targetFrameIndex >= sequenceFrameCount) {
+    throw new Error('--target-frame-index must be less than --sequence-frame-count');
+  }
   const target = new URL(targetOrigin);
   if (target.pathname !== '/' || target.search || target.hash) throw new Error('--target-origin must contain only origin');
 
@@ -98,13 +112,16 @@ try {
   const controlsSignature = String(trainingPair.source?.deterministicReplay?.controlsSignature || '');
   if (!controlsSignature) throw new Error('training pair omitted replay controls signature');
   const modelIdentity = `sha256:${sha256(supportProbeRaw)}`;
-  const sequenceIdentity = `selective-head-${sourceCaptureSha.slice(0, 12)}-steps-${startStep}-${startStep + frameCount - 1}`;
+  const sequenceIdentity = `selective-head-${sourceCaptureSha.slice(0, 12)}-steps-${startStep}-${startStep + sequenceFrameCount - 1}`;
   const context = {
-    sourceCapturePath, supportProbePath, targetOrigin: target.origin, startStep, frameCount,
+    sourceCapturePath, supportProbePath, targetOrigin: target.origin, startStep, frameCount, sequenceFrameCount,
     supportThreshold, calibratedResidualScale, partialFlowDebugMix, debugPort, userDataDir,
-    renderWarmupCount, windowSize, lowGrid, highGrid,
+    renderWarmupCount, windowSize, viewportSize, lowGrid, highGrid,
   };
-  const frames = Array.from({ length: frameCount }, (_, frameIndex) => buildFramePlan(context, frameIndex));
+  const frameIndexes = targetFrameIndex === null
+    ? Array.from({ length: frameCount }, (_, frameIndex) => frameIndex)
+    : [targetFrameIndex];
+  const frames = frameIndexes.map(frameIndex => buildFramePlan(context, frameIndex));
   const baseManifest = {
     schema: SCHEMA,
     identity: 'streamed-phase-aligned-selective-head-motion-production-v0',
@@ -119,6 +136,12 @@ try {
     trainingPair: { path: trainingPairPath, sha256: trainingPairSha },
     trainingStep,
     sequenceIdentity,
+    sequenceFrameCount,
+    targetedRegeneration: targetFrameIndex === null ? null : {
+      identity: 'targeted-sequence-frame-regeneration-v0',
+      frameIndex: targetFrameIndex,
+      simulationStep: startStep + targetFrameIndex,
+    },
     simulationSteps: frames.map(frame => frame.simulationStep),
     cadenceMs,
     lowGrid,
@@ -157,31 +180,43 @@ try {
       if (!sharedBrowserPid && captured.browserPid) sharedBrowserPid = captured.browserPid;
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, capturedFrameCount: capturedFramePaths.length, lastCapturedFrameManifest: captured.frameManifestPath };
     }
-    failurePhase = 'witness-assembly';
-    const witnessDir = join(outDir, 'witness');
-    const assemble = [
-      join(dirname(new URL(import.meta.url).pathname), 'volume-selective-head-motion-witness.mjs'),
-      ...capturedFramePaths.flatMap(path => ['--frame-manifest', path]),
-      '--out-dir', witnessDir,
-      '--expected-frame-count', String(frameCount),
-      '--partial-debug-mix', String(partialFlowDebugMix),
-    ];
-    runCommand(process.execPath, assemble, failurePhase);
-    const witnessManifestPath = join(witnessDir, 'manifest.json');
-    const witness = readJson(witnessManifestPath);
-    if (witness.status !== 'captured' || witness.frameCount !== frameCount) throw new Error('assembled witness did not capture every requested frame');
-    const capturedManifest = {
-      ...baseManifest,
-      status: 'captured',
-      executionAuthority: 'browser-gpu-consecutive-frame-production-v0',
-      frameManifests: capturedFramePaths,
-      deletionReceipts,
-      witness: {
-        manifestPath: witnessManifestPath,
-        manifestSha256: sha256(readFileSync(witnessManifestPath)),
-        indexPath: join(witnessDir, 'index.html'),
-      },
-    };
+    let capturedManifest;
+    if (targetFrameIndex !== null) {
+      capturedManifest = {
+        ...baseManifest,
+        status: 'captured',
+        executionAuthority: 'browser-gpu-targeted-sequence-frame-regeneration-v0',
+        frameManifests: capturedFramePaths,
+        deletionReceipts,
+        witness: null,
+      };
+    } else {
+      failurePhase = 'witness-assembly';
+      const witnessDir = join(outDir, 'witness');
+      const assemble = [
+        join(dirname(new URL(import.meta.url).pathname), 'volume-selective-head-motion-witness.mjs'),
+        ...capturedFramePaths.flatMap(path => ['--frame-manifest', path]),
+        '--out-dir', witnessDir,
+        '--expected-frame-count', String(frameCount),
+        '--partial-debug-mix', String(partialFlowDebugMix),
+      ];
+      runCommand(process.execPath, assemble, failurePhase);
+      const witnessManifestPath = join(witnessDir, 'manifest.json');
+      const witness = readJson(witnessManifestPath);
+      if (witness.status !== 'captured' || witness.frameCount !== frameCount) throw new Error('assembled witness did not capture every requested frame');
+      capturedManifest = {
+        ...baseManifest,
+        status: 'captured',
+        executionAuthority: 'browser-gpu-consecutive-frame-production-v0',
+        frameManifests: capturedFramePaths,
+        deletionReceipts,
+        witness: {
+          manifestPath: witnessManifestPath,
+          manifestSha256: sha256(readFileSync(witnessManifestPath)),
+          indexPath: join(witnessDir, 'index.html'),
+        },
+      };
+    }
     writeJson(manifestPath, capturedManifest);
     console.log(JSON.stringify({ ok: true, status: 'captured', manifest: manifestPath, witness: capturedManifest.witness }, null, 2));
   }
@@ -281,6 +316,7 @@ function buildFramePlan(context, frameIndex) {
     '--reuse-browser',
     '--keep-browser-open',
     '--window-size', context.windowSize,
+    '--viewport-size', context.viewportSize,
     '--chunk-floats', '262144',
   ];
   const highArgs = [

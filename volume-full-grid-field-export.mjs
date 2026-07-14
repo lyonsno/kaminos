@@ -54,6 +54,10 @@ const keepBrowserOpen = args.has('--keep-browser-open');
 const userDataDir = String(args.get('--user-data-dir') || mkdtempSync('/tmp/kaminos-full-grid-field-export-profile-'));
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = String(args.get('--window-size') || '960,720');
+const viewportSize = args.has('--viewport-size')
+  ? parseDimensions(String(args.get('--viewport-size')), '--viewport-size')
+  : null;
+const viewportDeviceScaleFactor = Number(args.get('--viewport-device-scale-factor') || 2);
 const chunkFloats = Math.max(1, Math.floor(Number(args.get('--chunk-floats') || 262144)));
 const exportScope = String(args.get('--export-scope') || FULL_EXPORT_SCOPE);
 const exportIdentity = exportScope === FLUID_FRONT_EXPORT_SCOPE ? FLUID_FRONT_EXPORT_IDENTITY : EXPORT_IDENTITY;
@@ -65,6 +69,17 @@ const advanceImportedSteps = Math.max(0, Math.floor(Number(args.get('--advance-i
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
+}
+
+function parseDimensions(value, label) {
+  const match = /^(\d+),(\d+)$/.exec(value);
+  if (!match) throw new Error(`${label} must be WIDTH,HEIGHT`);
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 64 || height < 64) {
+    throw new Error(`${label} dimensions must be integers >= 64`);
+  }
+  return { width, height };
 }
 
 function writeManifest(payload) {
@@ -430,9 +445,17 @@ async function main() {
   let begin = null;
   let lastDebugState = null;
   let pageDiagnostics = null;
+  const viewportContract = {
+    identity: viewportSize ? 'cdp-emulation-fixed-device-metrics-v0' : 'browser-window-derived-v0',
+    requested: viewportSize ? { ...viewportSize, deviceScaleFactor: viewportDeviceScaleFactor } : null,
+    effective: null,
+  };
   const runtimeEvents = [];
   try {
     phase = 'render-option-validation';
+    if (!Number.isFinite(viewportDeviceScaleFactor) || viewportDeviceScaleFactor <= 0) {
+      throw new Error('--viewport-device-scale-factor must be finite and greater than zero');
+    }
     if (![FULL_EXPORT_SCOPE, FLUID_FRONT_EXPORT_SCOPE].includes(exportScope)) {
       throw new Error(`unsupported --export-scope: ${exportScope}`);
     }
@@ -501,6 +524,18 @@ async function main() {
     await wsRequest(ws, 'Log.enable');
     await wsRequest(ws, 'Page.enable');
 
+    if (viewportSize) {
+      phase = 'viewport-override';
+      await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
+        width: viewportSize.width,
+        height: viewportSize.height,
+        deviceScaleFactor: viewportDeviceScaleFactor,
+        mobile: false,
+        screenWidth: viewportSize.width,
+        screenHeight: viewportSize.height,
+      });
+    }
+
     phase = 'load';
     await wsRequest(ws, 'Page.navigate', { url });
     await delay(settleMs);
@@ -518,7 +553,23 @@ async function main() {
       moduleScripts: Array.from(document.querySelectorAll('script[type="module"]')).map(script => script.src || script.textContent?.slice(0, 120)),
       hasNavigatorGpu: Boolean(navigator.gpu),
       hasVolumePrototype: Boolean(window.__kaminosVolumePrototype),
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio,
     })`, 'page-diagnostics');
+    viewportContract.effective = {
+      width: Number(pageDiagnostics?.innerWidth),
+      height: Number(pageDiagnostics?.innerHeight),
+      deviceScaleFactor: Number(pageDiagnostics?.devicePixelRatio),
+    };
+    if (viewportSize && (
+      viewportContract.effective.width !== viewportSize.width
+      || viewportContract.effective.height !== viewportSize.height
+      || Math.abs(viewportContract.effective.deviceScaleFactor - viewportDeviceScaleFactor) > 1e-6
+    )) {
+      phase = 'viewport-validation';
+      throw new Error(`effective viewport does not match requested viewport: ${JSON.stringify(viewportContract)}`);
+    }
     if (lastDebugState?.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0') {
       throw new Error(`wrong effective route: ${lastDebugState?.effectiveRoute || '(missing)'}`);
     }
@@ -764,6 +815,7 @@ async function main() {
         browserSession: browserReceipt(browserSession),
         lastDebugState,
         pageDiagnostics,
+        viewportContract,
         runtimeEvents,
         initialFieldImport,
         importedAdvance,
@@ -858,6 +910,7 @@ async function main() {
       browserSession: browserReceipt(browserSession),
       lastDebugState,
       pageDiagnostics,
+      viewportContract,
       runtimeEvents,
       chunkFloats,
       sessionId: begin.sessionId,
@@ -915,6 +968,7 @@ async function main() {
       browserSession: browserReceipt(browserSession),
       lastDebugState,
       pageDiagnostics,
+      viewportContract,
       runtimeEvents,
       chunkFloats,
       exportScope,

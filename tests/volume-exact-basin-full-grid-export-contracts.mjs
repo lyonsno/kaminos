@@ -31,6 +31,9 @@ assert.match(exporter, /--target-origin/, 'exporter can rebind the captured rout
 assert.match(exporter, /--render-composition/, 'exporter accepts an invocation-scoped frozen render composition');
 assert.match(exporter, /--render-control-overrides-json/, 'exporter accepts structured invocation-scoped render controls');
 assert.match(exporter, /--export-scope/, 'exporter accepts an explicit output scope');
+assert.match(exporter, /--viewport-size/, 'exporter accepts an explicit per-target viewport size');
+assert.match(exporter, /Emulation\.setDeviceMetricsOverride/, 'exporter enforces viewport metrics through CDP instead of trusting a mutable browser window');
+assert.match(exporter, /viewportContract/, 'export manifest records requested and effective viewport custody');
 assert.match(exporter, /fluid-front-only-v0/, 'exporter names the narrow fluid/front-only scope used by model pair production');
 assert.match(
   exporter,
