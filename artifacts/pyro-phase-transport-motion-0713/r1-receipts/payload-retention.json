@@ -1,0 +1,40 @@
+{
+  "authority": "artifact-retention-disclosure-v0",
+  "predictionManifest": {
+    "path": "r1-receipts/transport-predictions.json",
+    "sha256": "332b3d0e11e01a258c5d4a4989070019a2f61463edaac81d9812c04f9ffadaac"
+  },
+  "prunedPayloads": {
+    "count": 8,
+    "reason": "volatile recurrent prediction tensors were removed after the rendered witness, per-frame hashes, model, training report, metrics, and Greenroom receipt were verified and committed",
+    "pathPrefix": "/private/tmp/kaminos-phase-transport-full-r1-0713/",
+    "patterns": [
+      "prediction-step-00.features.f32",
+      "prediction-step-00.splats.f32",
+      "prediction-step-01.features.f32",
+      "prediction-step-01.splats.f32",
+      "prediction-step-02.features.f32",
+      "prediction-step-02.splats.f32",
+      "prediction-step-03.features.f32",
+      "prediction-step-03.splats.f32"
+    ],
+    "availability": "absent-by-design",
+    "hashAuthority": "original hashes and byte counts remain in transport-predictions.json"
+  },
+  "retainedEvidence": [
+    "transport-model.json",
+    "training-report.json",
+    "transport-predictions.json",
+    "greenroom-receipt.json",
+    "../moving-phase-witness.json",
+    "../beauty-comparison.mp4",
+    "../partial-flow-debug-comparison.mp4",
+    "../beauty-filmstrip.png",
+    "../partial-debug-filmstrip.png"
+  ],
+  "regeneration": {
+    "required": true,
+    "commandSurface": "../inspection-guide.html",
+    "corpusSha256": "51548442ececac255b3f94167e46428c39236d97ad767729d79d5ae51b0be534"
+  }
+}

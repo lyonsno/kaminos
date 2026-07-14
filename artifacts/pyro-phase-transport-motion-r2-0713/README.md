@@ -39,6 +39,7 @@ The R1 thresholded-birth comparison is preserved in `../pyro-phase-transport-mot
 - R2 model SHA-256: `785ce32571aab2d5fe66b746f375bafcd57c85d5ab88442112fc3396b7af0747`
 - R2 training report SHA-256: `7f584aa214fa3ab0af83497773aa4a747f83e8d24b8e269ca43d54f1642aae6b`
 - R2 predictions manifest SHA-256: `fcab121ae28b934300d2b23d016ba6220f18622f6ed94b14e69bbf9f9f4622ba`
+- Prediction payload retention: the manifest records the original hashes and byte counts for eight generated `.f32` files, but those volatile `/private/tmp/kaminos-phase-transport-full-r2-0713/` payloads were pruned after the rendered witness and receipts were verified. They are not represented as presently available evidence. Regenerate them from the preserved corpus and model using the commands below; see `r2-receipts/payload-retention.json`.
 
 ## Model And Support Semantics
 
@@ -104,5 +105,5 @@ node video-filmstrip.mjs \
 - `beauty-filmstrip.png`: `1f1d9afa0fbabac2c71cb53fe4cd04c8d2bcacdd276110666a1aab5cf7ac377e`
 - `partial-debug-filmstrip.png`: `c7a99101c5f95249862d719d4ef36df231f14c0b7b316f386305d9c0c5f91d81`
 - `moving-phase-witness.json` records every rendered frame hash, requested/effective cadence, role authority, segment correspondence, route, and encoder probe.
-- `r2-receipts/` preserves the compact model/training/prediction/Greenroom records.
+- `r2-receipts/` preserves the compact model/training/prediction/Greenroom records. `payload-retention.json` distinguishes retained receipts from pruned, reproducible prediction tensors.
 - `r2-metrics/` preserves per-frame PSNR, SSIM, and motion-energy diagnostics.
