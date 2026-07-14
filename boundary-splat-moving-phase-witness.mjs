@@ -155,6 +155,43 @@ function makeControlSequence(source, frameCount, debugGain = null) {
   return { frames: Array.from({ length: frameCount }, () => ({ segment: 0, fraction: 0, rows })) };
 }
 
+async function* streamStateSequence(frameDocs, splatAuthority, framesPerStep, gridStep, debugGain, segmentReports, label) {
+  let source = await loadState(frameDocs[0], `${label} 0`, splatAuthority);
+  for (let segment = 0; segment < frameDocs.length - 1; segment += 1) {
+    const target = await loadState(frameDocs[segment + 1], `${label} ${segment + 1}`, splatAuthority);
+    const correspondence = buildBoundedTransportCorrespondence(source.sites, target.sites, {
+      gridStep,
+      radiusCells: 1,
+    });
+    segmentReports.push({
+      segment,
+      authority: correspondence.authority,
+      stableCount: correspondence.stableCount,
+      transportedCount: correspondence.transportedCount,
+      birthCount: correspondence.births.length,
+      deathCount: correspondence.deaths.length,
+      ambiguityCount: correspondence.ambiguityCount,
+    });
+    for (let sample = segment === 0 ? 0 : 1; sample <= framesPerStep; sample += 1) {
+      const fraction = sample / framesPerStep;
+      yield {
+        segment,
+        fraction,
+        rows: interpolateWithChurn(source, target, correspondence, fraction, debugGain),
+      };
+    }
+    source = target;
+  }
+}
+
+async function* streamControlSequence(sourceDoc, splatAuthority, frameCount, debugGain, label) {
+  const source = await loadState(sourceDoc, label, splatAuthority);
+  const rows = source.sites.map(site => (
+    debugGain === null ? Array.from(site.splat) : mixColor(site.splat, [0.15, 0.9, 0.25], debugGain)
+  ));
+  for (let index = 0; index < frameCount; index += 1) yield { segment: 0, fraction: 0, rows };
+}
+
 function addBitmapLabel(rendered, label) {
   const rgba = Buffer.from(rendered.rgba);
   const barHeight = Math.min(12, rendered.height);
@@ -314,15 +351,16 @@ function summarizeTemporalDiagnostics(frames, transitions) {
   };
 }
 
-async function renderSequence(sequence, camera, outDir, renderOptions, label) {
+async function renderFrameStream(frameStream, expectedFrameCount, camera, outDir, renderOptions, label) {
   await mkdir(outDir, { recursive: true });
   const frameHashes = [];
   const frameEvidence = [];
   const diagnosticFrames = [];
   const diagnosticTransitions = [];
   let previousLuminance = null;
-  for (let index = 0; index < sequence.frames.length; index += 1) {
-    const rendered = renderBoundarySplatRowsPng(sequence.frames[index].rows, camera, renderOptions);
+  let index = 0;
+  for await (const frame of frameStream) {
+    const rendered = renderBoundarySplatRowsPng(frame.rows, camera, renderOptions);
     if (rendered.projectedSplatCount <= 0 || rendered.nonBackgroundPixelCount <= 0 || rendered.maxLuminance <= rendered.backgroundLuminance) {
       throw new Error(`rendered frame ${index} is blank or partial`);
     }
@@ -340,14 +378,16 @@ async function renderSequence(sequence, camera, outDir, renderOptions, label) {
       index,
       path,
       sha256: frameHashes.at(-1),
-      segment: sequence.frames[index].segment,
-      fraction: sequence.frames[index].fraction,
+      segment: frame.segment,
+      fraction: frame.fraction,
       inputSplatCount: rendered.inputSplatCount,
       projectedSplatCount: rendered.projectedSplatCount,
       nonBackgroundPixelCount: rendered.nonBackgroundPixelCount,
       maxLuminance: rendered.maxLuminance,
     });
+    index += 1;
   }
+  if (index !== expectedFrameCount) throw new Error(`rendered frame count ${index} did not equal expected ${expectedFrameCount}`);
   return {
     frameHashes,
     frameEvidence,
@@ -357,6 +397,27 @@ async function renderSequence(sequence, camera, outDir, renderOptions, label) {
       summary: summarizeTemporalDiagnostics(diagnosticFrames, diagnosticTransitions),
     },
   };
+}
+
+async function renderDocumentSequence(frameDocs, splatAuthority, framesPerStep, gridStep, debugGain, camera, outDir, renderOptions, label) {
+  const segmentReports = [];
+  const frameCount = (frameDocs.length - 1) * framesPerStep + 1;
+  const frameStream = streamStateSequence(
+    frameDocs, splatAuthority, framesPerStep, gridStep, debugGain, segmentReports, label.toLowerCase(),
+  );
+  const evidence = await renderFrameStream(frameStream, frameCount, camera, outDir, renderOptions, label);
+  return { ...evidence, segmentReports };
+}
+
+async function renderControlDocument(sourceDoc, splatAuthority, frameCount, debugGain, camera, outDir, renderOptions, label) {
+  return renderFrameStream(
+    streamControlSequence(sourceDoc, splatAuthority, frameCount, debugGain, label.toLowerCase()),
+    frameCount,
+    camera,
+    outDir,
+    renderOptions,
+    label,
+  );
 }
 
 function run(command, commandArgs, label) {
@@ -477,27 +538,21 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
       referenceIds,
     };
     failurePhase = 'artifact-validation';
-    const referenceStates = await Promise.all(referenceDocs.map((frame, index) => loadState(frame, `reference ${index}`, CAPTURE_AUTHORITY)));
-    const predictedStates = await Promise.all(predictions.frames.map((frame, index) => loadState(frame, `prediction ${index}`, PREDICTION_AUTHORITY)));
-    const frameCount = (referenceStates.length - 1) * framesPerStep + 1;
-    failurePhase = 'sequence-construction';
-    const beautyReference = makeSequence(referenceStates, framesPerStep, gridStep);
-    const beautyPrediction = makeSequence(predictedStates, framesPerStep, gridStep);
-    const beautyControl = makeControlSequence(referenceStates[0], frameCount);
-    const debugReference = makeSequence(referenceStates, framesPerStep, gridStep, requestedGain);
-    const debugPrediction = makeSequence(predictedStates, framesPerStep, gridStep, requestedGain);
-    const debugControl = makeControlSequence(referenceStates[0], frameCount, requestedGain);
+    const frameCount = (referenceDocs.length - 1) * framesPerStep + 1;
     failurePhase = 'isolated-raster';
     const renderOptions = { width, height, radiusMultiplier: 1, kernelSharpness: 6.5 };
     const roleNames = ['reference', 'control', 'predicted'];
-    const beautySequences = [beautyReference, beautyControl, beautyPrediction];
-    const debugSequences = [debugReference, debugControl, debugPrediction];
-    const beautyEvidence = [];
-    const debugEvidence = [];
-    for (let index = 0; index < roleNames.length; index += 1) {
-      beautyEvidence.push(await renderSequence(beautySequences[index], referenceDocs[0].camera, resolve(outDir, 'beauty', roleNames[index]), renderOptions, roleNames[index].toUpperCase()));
-      debugEvidence.push(await renderSequence(debugSequences[index], referenceDocs[0].camera, resolve(outDir, 'partial-debug', roleNames[index]), renderOptions, roleNames[index].toUpperCase()));
-    }
+    const camera = referenceDocs[0].camera;
+    const beautyEvidence = [
+      await renderDocumentSequence(referenceDocs, CAPTURE_AUTHORITY, framesPerStep, gridStep, null, camera, resolve(outDir, 'beauty', 'reference'), renderOptions, 'REFERENCE'),
+      await renderControlDocument(referenceDocs[0], CAPTURE_AUTHORITY, frameCount, null, camera, resolve(outDir, 'beauty', 'control'), renderOptions, 'CONTROL'),
+      await renderDocumentSequence(predictions.frames, PREDICTION_AUTHORITY, framesPerStep, gridStep, null, camera, resolve(outDir, 'beauty', 'predicted'), renderOptions, 'PREDICTED'),
+    ];
+    const debugEvidence = [
+      await renderDocumentSequence(referenceDocs, CAPTURE_AUTHORITY, framesPerStep, gridStep, requestedGain, camera, resolve(outDir, 'partial-debug', 'reference'), renderOptions, 'REFERENCE'),
+      await renderControlDocument(referenceDocs[0], CAPTURE_AUTHORITY, frameCount, requestedGain, camera, resolve(outDir, 'partial-debug', 'control'), renderOptions, 'CONTROL'),
+      await renderDocumentSequence(predictions.frames, PREDICTION_AUTHORITY, framesPerStep, gridStep, requestedGain, camera, resolve(outDir, 'partial-debug', 'predicted'), renderOptions, 'PREDICTED'),
+    ];
     failurePhase = 'video-encode';
     const labels = ['REFERENCE exact', 'CONTROL copied current', 'PREDICTION learned transport'];
     const beautyComparison = await encodeComparison(
@@ -528,7 +583,7 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
         frameCount,
         framesPerControlledStep: framesPerStep,
         controlledStepDeltaMs,
-        simulatedDurationSeconds: (referenceStates.length - 1) * controlledStepDeltaMs / 1000,
+        simulatedDurationSeconds: (referenceDocs.length - 1) * controlledStepDeltaMs / 1000,
         encodedDurationSeconds: beautyComparison.probe.duration,
         loops: false,
         resetDisclosure: 'playback ends on the farthest held-out target and restarts only by explicit viewer action',
@@ -557,8 +612,8 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
       discreteOffsets: referenceIds.map((referenceFrameId, step) => ({ step, label: offsetLabel(step, controlledStepDeltaMs), referenceFrameId })),
       correspondence: {
         authority: 'stable-site-first-bounded-local-grid-feature-correspondence-v0',
-        referenceSegments: beautyReference.segmentReports,
-        predictedSegments: beautyPrediction.segmentReports,
+        referenceSegments: beautyEvidence[0].segmentReports,
+        predictedSegments: beautyEvidence[2].segmentReports,
       },
       render: { authority: 'isolated-cpu-projected-boundary-splat-raster-v0', width, height, gridStep },
       artifacts: { beautyComparison, partialDebugComparison },
