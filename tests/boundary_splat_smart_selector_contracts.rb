@@ -91,4 +91,18 @@ class BoundarySplatSmartSelectorContracts < Minitest::Test
     assert_match(/indirectDrawIdentity:\s*draw\?\.indirectDrawIdentity/, core,
       'PBR ladder rows must preserve the effective indirect draw identity from GPU draw-state readback')
   end
+
+  def test_adaptive_lod_vertex_shader_does_not_alias_out_of_range_global_instances
+    vertex_shader = core[/@vertex\s*\nfn boundarySplatVs[\s\S]*?\n}\n\n@fragment/, 0]
+    refute_nil(vertex_shader, 'boundary splat vertex shader must be present')
+
+    assert_match(/var groupFound = false;/, vertex_shader)
+    assert_match(/groupFound = true;/, vertex_shader)
+    assert_match(/if \(!groupFound\)/, vertex_shader,
+      'unexpected global instance indices must fail hidden instead of aliasing to tier group 0')
+    assert_match(/out\.position = vec4<f32>\(2\.0, 2\.0, 1\.0, 1\.0\);/, vertex_shader)
+    assert_match(/out\.colorOpacity = vec4<f32>\(0\.0\);/, vertex_shader)
+    assert_match(/min\(sourceCandidateIndexRaw, historyCapacity - 1u\)/, vertex_shader,
+      'source candidate lookup must be bounded before reading history')
+  end
 end

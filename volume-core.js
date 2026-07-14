@@ -5441,33 +5441,41 @@ fn boundarySplatQuadCorner(vertexIndex: u32) -> vec2<f32> {
 @vertex
 fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> BoundarySplatVertexOut {
   var groupIndex = 0u;
+  var groupFound = false;
   for (var candidateGroupIndex = 0u; candidateGroupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; candidateGroupIndex += 1u) {
     let candidateGroup = boundarySplatDrawGroups[candidateGroupIndex];
     if (instanceIndex >= candidateGroup.firstInstance && instanceIndex < candidateGroup.firstInstance + candidateGroup.instanceCount) {
       groupIndex = candidateGroupIndex;
+      groupFound = true;
       break;
     }
+  }
+  let corner = boundarySplatQuadCorner(vertexIndex);
+  var out: BoundarySplatVertexOut;
+  out.local = corner;
+  if (!groupFound) {
+    out.position = vec4<f32>(2.0, 2.0, 1.0, 1.0);
+    out.colorOpacity = vec4<f32>(0.0);
+    return out;
   }
   let drawGroup = boundarySplatDrawGroups[groupIndex];
   let localInstanceIndex = instanceIndex - drawGroup.firstInstance;
   let descriptorCount = max(1u, drawGroup.descriptorCount);
-  let sourceCandidateIndex = localInstanceIndex / descriptorCount;
+  let historyCapacity = max(1u, u32(boundarySplatCamera.instanceInfo.x));
+  let sourceCandidateIndexRaw = localInstanceIndex / descriptorCount;
+  let sourceCandidateIndex = min(sourceCandidateIndexRaw, historyCapacity - 1u);
   let descriptorIndex = min(drawGroup.descriptorStart + (localInstanceIndex % descriptorCount), u32(boundarySplatCamera.instanceInfo.y) - 1u);
   let descriptor = boundarySplatInstanceDescriptors[descriptorIndex];
   let historySlotCount = max(1u, u32(boundarySplatCamera.instanceInfo.z));
-  let historyCapacity = max(1u, u32(boundarySplatCamera.instanceInfo.x));
   let historySlot = min(u32(descriptor.phase.x), historySlotCount - 1u);
   let historyIndex = historySlot * historyCapacity + sourceCandidateIndex;
   let splat = boundarySplatHistoryForRender[historyIndex];
-  let corner = boundarySplatQuadCorner(vertexIndex);
   let instanceScale = descriptor.transform.w;
   let offset = boundarySplatCamera.cameraRight.xyz * corner.x * splat.shape.x * boundarySplatCamera.controls.x * instanceScale
     + boundarySplatCamera.cameraUp.xyz * corner.y * splat.shape.y * boundarySplatCamera.controls.x * instanceScale;
   let transformedPosition = splat.positionSupport.xyz * instanceScale + descriptor.transform.xyz;
-  var out: BoundarySplatVertexOut;
   out.position = boundarySplatCamera.viewProj * vec4<f32>(transformedPosition + offset, 1.0);
   out.colorOpacity = splat.colorOpacity;
-  out.local = corner;
   return out;
 }
 
