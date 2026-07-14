@@ -101,20 +101,25 @@ try {
   const sequenceStartedAt = Date.now();
   let sampleIndex = 0;
   while (Date.now() - sequenceStartedAt <= durationMs) {
-    const scheduledAt = sequenceStartedAt + sampleIndex * sampleMs;
     let pause = null;
     try {
       const visibilityState = await evaluate('document.visibilityState');
       if (visibilityState !== 'visible') throw new Error(`live-page-not-visible:${visibilityState}`);
       pause = await evaluate('window.__kaminosVolumePrototype.captureBoundarySplatWitnessFrame()', true);
       if (pause?.ok !== true) throw new Error(`exact-frame-witness-pause-failed:${JSON.stringify(pause)}`);
+      const exactDrawState = pause.exactDrawState;
+      if (!exactDrawState || exactDrawState.authority !== 'gpu-indirect-post-submit-witness-readback') {
+        throw new Error(`exact-frame-draw-state-unavailable:${JSON.stringify(exactDrawState)}`);
+      }
       const state = await debugState();
       const pageUrl = await evaluate('location.href');
       validateState(state, pageUrl);
       if (
         Number(state.frameCount) !== Number(pause.frameCount)
         || Number(state.simStepCount) !== Number(pause.simStepCount)
-        || Number(state.boundarySplatHistoryWriteSlot) !== Number(pause.historyWriteSlot)
+        || Number(state.boundarySplatHistoryWriteSlot) !== Number(exactDrawState.historyWriteSlot)
+        || Number(state.boundarySplatSourceCandidateCount) !== Number(exactDrawState.sourceCandidateCount)
+        || Number(state.boundarySplatInstanceCount) !== Number(exactDrawState.instanceCount)
       ) {
         throw new Error(`exact-frame-telemetry-disagreement:${JSON.stringify({ pause, state: compactState(state) })}`);
       }
@@ -147,8 +152,8 @@ try {
           throw new Error(`collapse-candidate-geometry-readback-failed:${JSON.stringify(candidateGeometry)}`);
         }
       }
-      const frameCount = Number(state.frameCount);
-      const historyWriteSlot = Number(state.boundarySplatHistoryWriteSlot);
+      const frameCount = Number(pause.frameCount);
+      const historyWriteSlot = Number(exactDrawState.historyWriteSlot);
       const imageName = `temporal-frame-${String(sampleIndex).padStart(4, '0')}-f${frameCount}-slot${historyWriteSlot}.png`;
       const imagePath = resolve(outDir, imageName);
       writeFileSync(imagePath, image);
@@ -164,13 +169,13 @@ try {
         historyFrameStride: Number(state.boundarySplatHistoryFrameStride),
         physicalHistoryWindowFrames: Number(state.boundarySplatPhysicalHistoryWindowFrames),
         phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
-        phaseSourceCount: Number(state.boundarySplatPhaseSourceCount),
+        phaseSourceCount: Number(exactDrawState.phaseSourceCount),
         boundarySplatPhaseSources: compactPhaseSources(state.boundarySplatPhaseSources),
-        sourceCandidateCount: Number(state.boundarySplatSourceCandidateCount),
-        renderedInstanceCount: Number(state.boundarySplatInstanceCount),
-        tierGroups: state.boundarySplatTierGroups,
+        sourceCandidateCount: Number(exactDrawState.sourceCandidateCount),
+        renderedInstanceCount: Number(exactDrawState.instanceCount),
+        tierGroups: exactDrawState.tierGroups,
         bufferIntegrity: state.boundarySplatBufferIntegrity,
-        overflowCount: Number(state.boundarySplatOverflowCount),
+        overflowCount: Number(exactDrawState.overflowCount),
         candidateCopyBytes: Number(state.boundarySplatCopyBytesThisFrame),
         fallbackReason: state.boundarySplatFallbackReason,
         capturePause: pause,
@@ -194,7 +199,8 @@ try {
       }
     }
     sampleIndex += 1;
-    const remaining = scheduledAt + sampleMs - Date.now();
+    const nextLiveSampleAt = Date.now() + sampleMs;
+    const remaining = nextLiveSampleAt - Date.now();
     if (remaining > 0) await delay(remaining);
   }
 

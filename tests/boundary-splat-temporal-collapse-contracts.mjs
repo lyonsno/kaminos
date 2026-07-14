@@ -114,6 +114,10 @@ assert.match(witness, /resumeBoundarySplatWitnessFrame/, 'witness must resume th
 assert.match(witness, /document\.visibilityState/, 'witness must fail when the supposedly live page is hidden');
 assert.match(witness, /validateBoundarySplatTemporalSequence/, 'completed report must prove temporal and image advancement');
 assert.match(witness, /sampleBoundarySplatCandidateGeometry/, 'operator-shaped candidates must preserve paused-frame source geometry before the simulator resumes');
+assert.match(witness, /const exactDrawState = pause\.exactDrawState/, 'sample accounting must bind to the pause-owned exact GPU draw state');
+assert.match(witness, /sourceCandidateCount: Number\(exactDrawState\.sourceCandidateCount\)/, 'sample source count must not fall back to ambient telemetry');
+assert.match(witness, /nextLiveSampleAt = Date\.now\(\) \+ sampleMs/, 'each exact-frame sample must be followed by a full caller-owned live interval');
+assert.doesNotMatch(witness, /sequenceStartedAt \+ sampleIndex \* sampleMs/, 'an overrun must not trigger catch-up pauses with no live dwell');
 assert.match(witness, /lastTrustworthyEvidence/, 'failure before completion must still leave a durable report');
 assert.match(witness, /requestedEffectiveRouteAgreement/, 'report must preserve requested/effective route agreement');
 assert.doesNotMatch(witness, /slice\(0,\s*\d+\)/, 'witness must not silently retain only a capped prefix of the sequence');

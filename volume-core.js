@@ -6299,6 +6299,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let format = null;
   let raf = 0;
   let boundarySplatWitnessPaused = false;
+  let boundarySplatWitnessExactDrawState = null;
   const timingSamples = {
     rafDelta: [],
     cpuFrame: [],
@@ -10412,27 +10413,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     try {
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+      const exactDrawState = await sampleBoundarySplatDrawState();
+      if (!exactDrawState) throw new Error('exact-frame-draw-state-unavailable');
+      boundarySplatWitnessExactDrawState = exactDrawState;
+      return {
+        identity: 'boundary-splat-exact-frame-witness-pause-v0',
+        ok: true,
+        authority: 'same-live-render-loop-paused-plus-direct-post-submit-gpu-draw-state-v0',
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        historyWriteSlot: exactDrawState.historyWriteSlot,
+        historyWriteTick: state.boundarySplatHistoryWriteTick,
+        selectorTelemetryFrameCount: state.boundarySplatSelectorTelemetryFrameCount,
+        exactDrawState,
+      };
     } catch (error) {
+      boundarySplatWitnessExactDrawState = null;
       boundarySplatWitnessPaused = false;
       if (state.active) raf = requestAnimationFrame(render);
       throw error;
     }
-    return {
-      identity: 'boundary-splat-exact-frame-witness-pause-v0',
-      ok: true,
-      authority: 'same-live-render-loop-paused-after-submitted-frame-v0',
-      frameCount: state.frameCount,
-      simStepCount: state.simStepCount,
-      historyWriteSlot: state.boundarySplatHistoryWriteSlot,
-      historyWriteTick: state.boundarySplatHistoryWriteTick,
-      selectorTelemetryFrameCount: state.boundarySplatSelectorTelemetryFrameCount,
-    };
   }
 
   function resumeBoundarySplatWitnessFrame() {
     if (!state.active || !device) return { ok: false, reason: 'inactive' };
     if (!boundarySplatWitnessPaused) return { ok: false, reason: 'witness-frame-not-paused' };
     cancelAnimationFrame(raf);
+    boundarySplatWitnessExactDrawState = null;
     boundarySplatWitnessPaused = false;
     raf = requestAnimationFrame(render);
     return {
@@ -10448,9 +10455,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!boundarySplatWitnessPaused) {
       return { ok: false, reason: 'exact-frame-witness-pause-required' };
     }
+    if (!boundarySplatWitnessExactDrawState) {
+      return { ok: false, reason: 'exact-frame-draw-state-unavailable' };
+    }
     const sourceCandidateCount = Math.max(0, Math.min(
       boundarySplatCapacity,
-      Math.floor(Number(state.boundarySplatSourceCandidateCount) || 0),
+      Math.floor(Number(boundarySplatWitnessExactDrawState.sourceCandidateCount) || 0),
     ));
     if (!sourceCandidateCount) return { ok: false, reason: 'source-candidate-count-unavailable' };
     const readbackBytes = sourceCandidateCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
@@ -10475,6 +10485,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         frameCount: state.frameCount,
         simStepCount: state.simStepCount,
         sourceCandidateCount,
+        exactDrawState: boundarySplatWitnessExactDrawState,
         readbackBytes,
         summary,
       };

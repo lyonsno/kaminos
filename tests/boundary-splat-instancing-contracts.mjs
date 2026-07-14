@@ -33,6 +33,9 @@ assert.match(core, /boundarySplatIncrementalInstanceCost/, 'runtime telemetry mu
 assert.match(core, /sampleBoundarySplatInstanceCostLadder/, 'runtime must expose a serial GPU instance-cost ladder from the existing live simulation');
 assert.match(core, /captureBoundarySplatWitnessFrame/, 'prototype must expose a bounded exact-frame witness pause');
 assert.match(core, /resumeBoundarySplatWitnessFrame/, 'prototype must resume the same live render loop after witness capture');
+assert.match(core, /const exactDrawState = await sampleBoundarySplatDrawState\(\)/, 'exact-frame pause must bind its screenshot to a direct post-submit GPU draw-state readback');
+assert.match(core, /boundarySplatWitnessExactDrawState = exactDrawState/, 'paused-frame draw state must retain explicit custody until resume');
+assert.match(core, /boundarySplatWitnessExactDrawState\.sourceCandidateCount/, 'candidate geometry must size from retained exact draw state rather than ambient throttled telemetry');
 assert.match(core, /\(index \* phaseStride\) % historyDepth/, 'large fields must cycle across the truthful history ring instead of saturating almost every flame onto the oldest slot');
 
 assert.match(witness, /duplicateMotionWitness/, 'witness must produce an explicit duplicate-motion diagnostic');
