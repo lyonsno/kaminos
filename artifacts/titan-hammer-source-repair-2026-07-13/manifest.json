@@ -1,0 +1,136 @@
+{
+  "schema": "kaminos.titan-hammer-source-repair-manifest.v0",
+  "created_at": "2026-07-14T00:00:55Z",
+  "agent": "handy-candyman",
+  "call_sign": "Handy Candyman",
+  "source_envelope": {
+    "family": "Crucible Bench splat decomposition",
+    "authoritative_source": "observed-bench-splat.png from the Crucible Bench workspace direction packet",
+    "immediate_source": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-white.png",
+    "source_mask": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-mask-square.png",
+    "prior_promoted_cast": "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-sf3d-white.glb"
+  },
+  "intent": "Test whether deterministic source cleanup or a neutral material rebuild can produce a better Titan Hammer GLB than the prior source-cleanup SF3D cast.",
+  "truth_boundary": "This artifact records source-repair and SF3D refire evidence only. The new GLBs loaded in the Kaminos viewer, but visual inspection did not justify promoting them as replacements. The prior promoted hammer cast remains the best current supported reusable GLB.",
+  "source_repair": {
+    "script": "artifacts/titan-hammer-source-repair-2026-07-13/tools/repair_hammer_source.py",
+    "receipt": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair-receipt.json",
+    "contact_sheet": {
+      "path": "artifacts/titan-hammer-source-repair-2026-07-13/titan-hammer-source-repair-contact-sheet.png",
+      "sha256": "69e93410b7ee8177f1e18f3e5cd3750b9a698ce2cf96219040db6f35ecf2ffde"
+    },
+    "variants": {
+      "soft": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-repaired-soft.png",
+      "strong": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-repaired-strong.png",
+      "max": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-repaired-max.png",
+      "neutral_rebuild": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png"
+    }
+  },
+  "mesh_firings": [
+    {
+      "id": "sf3d-repaired-max",
+      "status": "useful_miss",
+      "greenroom_job_id": "e0b09a77c5cf",
+      "requested_route": {
+        "job_type": "sf3d",
+        "input": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-repaired-max.png",
+        "output_dir": "artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-repaired-max",
+        "params": {
+          "texture_resolution": "1024",
+          "remesh": "none",
+          "dtype": "float16",
+          "foreground_ratio": "0.85"
+        }
+      },
+      "effective_route": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-repaired-max.png --output-dir /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-repaired-max --texture-resolution 1024 --remesh none --dtype float16",
+      "backend": {
+        "model": "stabilityai/stable-fast-3d",
+        "device": "mps",
+        "dtype": "float16",
+        "texture_resolution": 1024,
+        "remesh": "none"
+      },
+      "timing": {
+        "load_time_s": 6.36,
+        "inference_time_s": 7.66,
+        "total_time_s": 61.65
+      },
+      "outputs": {
+        "glb": {
+          "path": "artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-repaired-max/output.glb",
+          "sha256": "e14a20cf75779e493d4894820f944b9b4e0422a1e301924dad8113c7ea59357a",
+          "size": "280K"
+        },
+        "receipt": "artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-repaired-max/receipt.json",
+        "viewer_witness": "artifacts/titan-hammer-source-repair-2026-07-13/witnesses/hammer-sf3d-repaired-max-kaminos-witness.json",
+        "captures": [
+          "artifacts/titan-hammer-source-repair-2026-07-13/witnesses/hammer-sf3d-repaired-max-front.png",
+          "artifacts/titan-hammer-source-repair-2026-07-13/witnesses/hammer-sf3d-repaired-max-oblique.png"
+        ]
+      },
+      "visual_verdict": "Viewer witness loaded and registered the GLB, but visual inspection showed remaining severe black patches on the handle and weaker cross-head clarity than the prior promoted source-cleanup hammer. Preserve as useful miss, not a promoted cast.",
+      "failure_phase": null
+    },
+    {
+      "id": "sf3d-neutral-rebuild",
+      "status": "useful_miss",
+      "greenroom_job_id": "c0e30d3acaed",
+      "requested_route": {
+        "job_type": "sf3d",
+        "input": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png",
+        "output_dir": "artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-neutral-rebuild",
+        "params": {
+          "texture_resolution": "1024",
+          "remesh": "none",
+          "dtype": "float16",
+          "foreground_ratio": "0.85"
+        }
+      },
+      "effective_route": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png --output-dir /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-neutral-rebuild --texture-resolution 1024 --remesh none --dtype float16",
+      "backend": {
+        "model": "stabilityai/stable-fast-3d",
+        "device": "mps",
+        "dtype": "float16",
+        "texture_resolution": 1024,
+        "remesh": "none"
+      },
+      "timing": {
+        "load_time_s": 7.55,
+        "inference_time_s": 13.1,
+        "total_time_s": 33.33
+      },
+      "outputs": {
+        "glb": {
+          "path": "artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-neutral-rebuild/output.glb",
+          "sha256": "fe05f71bc1f6714f1bf31b269f7c9817a47863d3c9d2ec522e5734eac4985916",
+          "size": "216K"
+        },
+        "receipt": "artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-neutral-rebuild/receipt.json",
+        "viewer_witness": "artifacts/titan-hammer-source-repair-2026-07-13/witnesses/hammer-sf3d-neutral-rebuild-kaminos-witness.json",
+        "captures": [
+          "artifacts/titan-hammer-source-repair-2026-07-13/witnesses/hammer-sf3d-neutral-rebuild-front.png",
+          "artifacts/titan-hammer-source-repair-2026-07-13/witnesses/hammer-sf3d-neutral-rebuild-oblique.png"
+        ]
+      },
+      "visual_verdict": "Viewer witness loaded and registered the GLB. It improved silhouette discipline and reduced random head patching, but SF3D collapsed the tan handle into a near-black column. Preserve as a shape/material-prior miss, not a promoted cast.",
+      "failure_phase": null
+    }
+  ],
+  "evidence_bundle": {
+    "path": "artifacts/titan-hammer-source-repair-2026-07-13/evidence",
+    "contents": [
+      "titan-hammer-source-repair-contact-sheet.png",
+      "hammer-square-neutral-rebuild.png",
+      "hammer-sf3d-repaired-max-front.png",
+      "hammer-sf3d-repaired-max-oblique.png",
+      "hammer-sf3d-neutral-rebuild-front.png",
+      "hammer-sf3d-neutral-rebuild-oblique.png"
+    ]
+  },
+  "promotion": {
+    "promoted_new_cast": false,
+    "reason": "Neither repair firing beats the prior promoted hammer in material readability and handle quality.",
+    "current_best_supported_cast": "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-sf3d-white.glb"
+  },
+  "next_decision_boundary": "If Titan Hammer still needs improvement, do not keep attenuating the baked source. Next pass should produce a cleaner source image that preserves tan handle material and hammer-head geometry without dark patch collapse, then re-fire once and compare against the current promoted cast."
+}

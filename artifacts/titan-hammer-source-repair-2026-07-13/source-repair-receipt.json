@@ -1,0 +1,91 @@
+{
+  "schema": "kaminos.titan-hammer-source-repair.v0",
+  "created_at": "2026-07-13T23:56:08Z",
+  "source": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-square-white.png",
+  "mask": "artifacts/titan-hammer-source-cleanup-2026-07-13/source-cleanup/hammer-mask-square.png",
+  "method": "deterministic masked dark-artifact attenuation using head/handle material medians; no generative pixels",
+  "outputs": {
+    "soft": {
+      "path": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-repaired-soft.png",
+      "sha256": "81dc29dbfec8522a11659524a88669b381a03116ceddbc32b0d671c36d451b76",
+      "diagnostics": {
+        "head_median_rgb": [
+          135.0,
+          138.0,
+          139.0
+        ],
+        "handle_median_rgb": [
+          146.0,
+          132.0,
+          115.0
+        ],
+        "dark_pixels": 2363,
+        "interior_dark_pixels": 1547,
+        "boundary_dark_pixels": 816,
+        "strength": 0.48
+      }
+    },
+    "strong": {
+      "path": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-repaired-strong.png",
+      "sha256": "aeb2e4b3747ccf1733f5641d7c8d374f344356c59afeb05dab45e94713b6d073",
+      "diagnostics": {
+        "head_median_rgb": [
+          135.0,
+          138.0,
+          139.0
+        ],
+        "handle_median_rgb": [
+          146.0,
+          132.0,
+          115.0
+        ],
+        "dark_pixels": 2363,
+        "interior_dark_pixels": 1547,
+        "boundary_dark_pixels": 816,
+        "strength": 0.72
+      }
+    },
+    "max": {
+      "path": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-repaired-max.png",
+      "sha256": "505ecbc056adcd4bdc69dcf7cee6be4be93e5f3c11e7671403bd74e6a31e384d",
+      "diagnostics": {
+        "head_median_rgb": [
+          135.0,
+          138.0,
+          139.0
+        ],
+        "handle_median_rgb": [
+          146.0,
+          132.0,
+          115.0
+        ],
+        "dark_pixels": 2363,
+        "interior_dark_pixels": 1547,
+        "boundary_dark_pixels": 816,
+        "strength": 0.88
+      }
+    },
+    "neutral_rebuild": {
+      "path": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png",
+      "sha256": "9f0044f34574551ead1d770e8024021f3762638fb2b1e1faee38a5b9a43fffa4",
+      "diagnostics": {
+        "head_rgb": [
+          132,
+          140,
+          139
+        ],
+        "handle_rgb": [
+          156,
+          124,
+          84
+        ],
+        "method": "procedural neutral-material repaint from mask silhouette; no source texture retained"
+      }
+    }
+  },
+  "contact_sheet": {
+    "path": "artifacts/titan-hammer-source-repair-2026-07-13/titan-hammer-source-repair-contact-sheet.png",
+    "sha256": "69e93410b7ee8177f1e18f3e5cd3750b9a698ce2cf96219040db6f35ecf2ffde"
+  },
+  "truth_boundary": "Source repair only. It preserves the source mask silhouette and attenuates dark interior artifacts; it is not a new mesh, not image generation, and not proof of reconstruction improvement until a backend refire and viewer witness pass."
+}

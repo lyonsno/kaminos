@@ -1,0 +1,15 @@
+{
+  "model": "stabilityai/stable-fast-3d",
+  "device": "mps",
+  "dtype": "float16",
+  "input_image": "hammer-square-repaired-max.png",
+  "texture_resolution": 1024,
+  "remesh": "none",
+  "load_time_s": 6.36,
+  "inference_time_s": 7.66,
+  "total_time_s": 61.65,
+  "output_glb": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-repair-2026-07-13/mesh-firings/sf3d-repaired-max/output.glb",
+  "output_size_mb": 0.27,
+  "mps_memory_after_load_mb": 4160.0,
+  "mps_memory_after_inference_mb": 31367.0
+}
