@@ -323,4 +323,43 @@ const runtimeProjection = resolveProjection(packageProjection.runtimeRoot);
 assert.equal(runtimeProjection.evidence.verification.attached, false);
 assert.equal(runtimeProjection.manifest.tensors, undefined, 'runtime root must execute without verification-owned expected tensors');
 
+const substitutedModelPackage = structuredClone(packageProjection.modelPackage);
+substitutedModelPackage.claims = { ...substitutedModelPackage.claims, packageSubstitutionProbe: 'different-package' };
+substitutedModelPackage.packageId = `${SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.modelPackagePrefix}sha256:${sha256TextSync(canonicalSam3IdentityJson(
+  Object.fromEntries(SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.modelPackageFields
+    .filter(field => field !== 'packageId' && Object.hasOwn(substitutedModelPackage, field))
+    .map(field => [field, substitutedModelPackage[field]])),
+))}`;
+const omittedBindingInvocation = structuredClone(packageProjection.invocation);
+delete omittedBindingInvocation.modelPackageId;
+omittedBindingInvocation.invocationId = `${SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationPrefix}sha256:${sha256TextSync(canonicalSam3IdentityJson(
+  Object.fromEntries(SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationFields
+    .filter(field => field !== 'invocationId' && Object.hasOwn(omittedBindingInvocation, field))
+    .map(field => [field, omittedBindingInvocation[field]])),
+))}`;
+const omittedBindingArtifacts = new Map([
+  ['sam31-model-package.json', encodeArtifact(substitutedModelPackage)],
+  ['sam31-invocation.json', encodeArtifact(omittedBindingInvocation)],
+]);
+const omittedBindingRoot = {
+  ...packageProjection.runtimeRoot,
+  modelPackage: {
+    ...packageProjection.runtimeRoot.modelPackage,
+    sha256: `sha256:${sha256TextSync(omittedBindingArtifacts.get('sam31-model-package.json'))}`,
+  },
+  invocation: {
+    ...packageProjection.runtimeRoot.invocation,
+    sha256: `sha256:${sha256TextSync(omittedBindingArtifacts.get('sam31-invocation.json'))}`,
+  },
+};
+assert.throws(
+  () => resolveSam3BrowserPackageManifestSync(omittedBindingRoot, {
+    contract: SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
+    readArtifactText: file => omittedBindingArtifacts.get(file),
+    sha256Text: text => `sha256:${sha256TextSync(text)}`,
+  }),
+  /invocation missing required identity field modelPackageId/,
+  'a same-schema invocation must not omit package binding and authenticate against a substituted package',
+);
+
 console.log('sam3.1 packet byte and temporal authority contracts passed');

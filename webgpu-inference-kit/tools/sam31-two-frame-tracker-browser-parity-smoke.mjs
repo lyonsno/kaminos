@@ -113,8 +113,12 @@ function deriveMetaCallerImageAuthority(index, framePaths, resolution, sourceRoo
   if (effective.sourceRoot !== sourceRoot || effective.sourceCommit !== '5dd401d1c5c1d5c3eedff06d41b77af824517619') {
     throw new Error(`caller ${index} Meta preprocessing source identity mismatch`);
   }
-  if (effective.algorithm !== 'Meta Image.open(path).convert(RGB).resize((size,size)) default Pillow bicubic'
+  if (effective.algorithm !== 'Meta sam3.model.io_utils.load_resource_as_video_frames list-of-PIL-images branch default Pillow bicubic'
       || effective.defaultResizeFilter !== 'Resampling.BICUBIC'
+      || effective.loaderEntryPoint !== 'sam3.model.io_utils.load_resource_as_video_frames'
+      || effective.loaderBranch !== 'list-of-PIL-images'
+      || effective.loaderExecutionObserved !== true
+      || effective.resizeCallCount !== framePaths.length
       || effective.resolution !== resolution) {
     throw new Error(`caller ${index} Meta preprocessing algorithm identity mismatch`);
   }

@@ -341,7 +341,10 @@ assert.match(terminalSmokeSource, /deriveMetaCallerImageAuthority/, 'the caller 
 assert.doesNotMatch(terminalSmokeSource, /rgbaSourceImageSha256:\s*invocation\.sourceImages\.map/, 'pregenerated invocation RGBA hashes must not certify browser caller preprocessing');
 assert.match(terminalSmokeSource, /metaPreprocessEvidence/, 'the caller witness must preserve effective source and Pillow preprocessing identity');
 assert.match(metaPreprocessSource, /5dd401d1c5c1d5c3eedff06d41b77af824517619/, 'the preprocessing witness must pin the reviewed Meta source commit');
-assert.match(metaPreprocessSource, /Image\.open\(path\)\.convert\("RGB"\)\.resize/, 'the preprocessing witness must execute the pinned Meta image-loader operation');
+assert.match(metaPreprocessSource, /load_resource_as_video_frames/, 'the preprocessing witness must execute the named pinned Meta loader entry point');
+assert.match(metaPreprocessSource, /loaderExecutionObserved/, 'the preprocessing witness must record that the named Meta loader actually executed');
+assert.match(metaPreprocessSource, /list-of-PIL-images/, 'the preprocessing witness must name the exact Meta loader branch whose resize semantics it certifies');
+assert.doesNotMatch(metaPreprocessSource, /image\s*=\s*Image\.open\(path\)\.convert\("RGB"\)\.resize/, 'a locally retyped PIL operation must not impersonate execution through the pinned Meta loader');
 assert.match(metaPreprocessSource, /failurePhase/, 'the preprocessing witness must preserve its failure phase');
 assert.match(metaPreprocessSource, /lastTrustworthyEvidence/, 'the preprocessing witness must preserve its last trustworthy evidence before failure');
 assert.match(terminalSmokeSource, /browserParams\.set\('commit', requestedCommit\)/, 'the terminal witness must propagate requested commit identity into browser receipts');

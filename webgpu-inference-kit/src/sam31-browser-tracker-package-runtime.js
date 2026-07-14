@@ -245,6 +245,8 @@ export async function loadSam31BrowserTrackerPackageRuntime({
   const effectiveRootUrl = new URL(rootUrl, pageUrl).toString();
   const rootText = await responseText(fetcher, effectiveRootUrl);
   const root = JSON.parse(rootText);
+  if (!root || typeof root !== 'object' || Array.isArray(root)) throw new Error('tracker package root must be an object');
+  if (root.schema !== SAM31_BROWSER_TRACKER_ROOT_SCHEMA) throw new Error(`unsupported tracker package root ${root.schema || 'missing'}`);
   const artifactUrl = file => resolveSam3BrowserArtifactUrl(file, effectiveRootUrl, pageUrl);
   const resolution = await resolveSam3BrowserPackageManifest(root, {
     contract: SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,

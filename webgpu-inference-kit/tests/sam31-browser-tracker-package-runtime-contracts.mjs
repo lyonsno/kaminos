@@ -121,6 +121,11 @@ assert.deepEqual(
 );
 
 const stores = new Map([['one', first.files], ['two', second.files]]);
+const wrongRootFiles = new Map(first.files);
+const wrongRuntimeRoot = JSON.parse(new TextDecoder().decode(wrongRootFiles.get('tracker-runtime-root.json')));
+wrongRuntimeRoot.schema = 'not.kaminos.sam31-root';
+wrongRootFiles.set('tracker-runtime-root.json', new TextEncoder().encode(JSON.stringify(wrongRuntimeRoot, null, 2)));
+stores.set('wrong-root', wrongRootFiles);
 let networkReads = 0;
 const fetchImpl = async url => {
   networkReads += 1;
@@ -134,6 +139,16 @@ const fetchImpl = async url => {
   };
 };
 const cache = createSam31BrowserTrackerPackageCache({ fetchImpl });
+await assert.rejects(
+  () => loadSam31BrowserTrackerPackageRuntime({
+    rootUrl: 'https://example.test/wrong-root/tracker-runtime-root.json',
+    pageUrl: 'https://example.test/smoke.html',
+    fetchImpl,
+    cache: createSam31BrowserTrackerPackageCache({ fetchImpl }),
+  }),
+  /unsupported tracker package root not\.kaminos\.sam31-root/,
+  'the full runtime must reject a hash-valid package root carrying the wrong schema',
+);
 const modelOnlyReads = [];
 const modelOnlyFetch = async url => {
   modelOnlyReads.push(new URL(url).pathname);

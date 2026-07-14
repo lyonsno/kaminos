@@ -360,8 +360,12 @@ function assertVerificationBinding(verification, modelPackage, invocation) {
   }
 }
 
-function assertInvocationBinding(invocation, modelPackage) {
-  if (!Object.hasOwn(invocation, 'modelPackageId')) return;
+function assertInvocationBinding(invocation, modelPackage, contract) {
+  const packageBindingRequired = contract.invocationFields.includes('modelPackageId');
+  if (!Object.hasOwn(invocation, 'modelPackageId')) {
+    if (packageBindingRequired) throw new Error('invocation missing required identity field modelPackageId');
+    return;
+  }
   requireNonEmptyString(invocation.modelPackageId, 'invocation.modelPackageId');
   if (invocation.modelPackageId !== modelPackage.packageId) {
     throw new Error(`invocation model package binding mismatch: ${invocation.modelPackageId} !== ${modelPackage.packageId}`);
@@ -445,7 +449,7 @@ export async function resolveSam3BrowserPackageManifest(rootManifest, { readArti
     contract.invocationPrefix,
     await sha256Text(canonicalSam3IdentityJson(identityContract(invocation, contract.invocationFields, 'invocationId'))),
   );
-  assertInvocationBinding(invocation, modelPackage);
+  assertInvocationBinding(invocation, modelPackage, contract);
   if (verification) {
     assertVerificationBinding(verification, modelPackage, invocation);
     assertIdentity(
@@ -488,7 +492,7 @@ export function resolveSam3BrowserPackageManifestSync(rootManifest, { readArtifa
     contract.invocationPrefix,
     sha256Text(canonicalSam3IdentityJson(identityContract(invocation, contract.invocationFields, 'invocationId'))),
   );
-  assertInvocationBinding(invocation, modelPackage);
+  assertInvocationBinding(invocation, modelPackage, contract);
   if (verification) {
     assertVerificationBinding(verification, modelPackage, invocation);
     assertIdentity(
