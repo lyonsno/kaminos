@@ -716,7 +716,7 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     } : null,
     foregroundKilnHeartbeat: browserFiringEvidence.foregroundKilnHeartbeat || null,
     sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation || null,
-    hostEventCorrelation: browserFiringEvidence.foregroundKilnHeartbeat?.hostEventCorrelation || null,
+    hostEventCorrelation: browserFiringEvidence.hostEventCorrelation || null,
     requestedFirePresentation: browserFiringEvidence.requestedFirePresentation || null,
     selectedFirePresentation: browserFiringEvidence.selectedFirePresentation || null,
     firePresentationFailures: browserFiringEvidence.firePresentationFailures || [],
@@ -1101,6 +1101,7 @@ try {
       const routeState = window.__kaminosKilnRouteBenchState || {};
       const foregroundKilnHeartbeat = routeState.result?.foregroundKilnHeartbeat || null;
       const sharpDutyCorrelation = foregroundKilnHeartbeat?.sharpDutyCorrelation || null;
+      const hostEventCorrelation = foregroundKilnHeartbeat?.hostEventCorrelation || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
       const reportPath = routeState.result?.report?.path || null;
       const snapshotIdentity = {
@@ -1113,12 +1114,17 @@ try {
         identity: Object.freeze({ ...snapshotIdentity }),
         foregroundSamples: Object.freeze([...(foregroundKilnHeartbeat?.samples || [])]),
         foregroundGaps: Object.freeze([...(sharpDutyCorrelation?.foregroundGaps || [])]),
+        hostEvents: Object.freeze([...(foregroundKilnHeartbeat?.hostEvents || [])]),
+        hostCorrelatedGaps: Object.freeze([...(hostEventCorrelation?.correlatedGaps || [])]),
       };
       const foregroundKilnHeartbeatWitness = foregroundKilnHeartbeat
-        ? { ...foregroundKilnHeartbeat, samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined }
+        ? { ...foregroundKilnHeartbeat, samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined, hostEvents: undefined, hostEventCorrelation: undefined }
         : null;
       const sharpDutyCorrelationWitness = sharpDutyCorrelation
         ? { ...sharpDutyCorrelation, foregroundGaps: undefined }
+        : null;
+      const hostEventCorrelationWitness = hostEventCorrelation
+        ? { ...hostEventCorrelation, correlatedGaps: undefined }
         : null;
       return {
         status: routeState.status || null,
@@ -1129,6 +1135,7 @@ try {
         snapshotIdentity,
         foregroundKilnHeartbeat: foregroundKilnHeartbeatWitness,
         sharpDutyCorrelation: sharpDutyCorrelationWitness,
+        hostEventCorrelation: hostEventCorrelationWitness,
         volumeReleased: Boolean(fire?.volumeReleased),
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
@@ -1163,6 +1170,17 @@ try {
               foregroundGapCount: browserFiringEvidence.sharpDutyCorrelation.foregroundGapCount,
             }
           : null,
+        hostEventCorrelation: browserFiringEvidence.hostEventCorrelation
+          ? {
+              schema: browserFiringEvidence.hostEventCorrelation.schema,
+              status: browserFiringEvidence.hostEventCorrelation.status,
+              cadenceStatus: browserFiringEvidence.hostEventCorrelation.cadenceStatus,
+              firingId: browserFiringEvidence.hostEventCorrelation.firingId,
+              hostEventCount: browserFiringEvidence.hostEventCorrelation.hostEventCount,
+              foregroundGapCount: browserFiringEvidence.hostEventCorrelation.foregroundGapCount,
+              unexplainedGapCount: browserFiringEvidence.hostEventCorrelation.unexplainedGapsAtOrAboveThreshold?.length,
+            }
+          : null,
       },
     };
     if (captureInFlight && inFlightCapture.status !== 'captured') {
@@ -1171,6 +1189,7 @@ try {
     if (!browserFiringEvidence.reportPath) throw new Error('Friendly firing did not expose its durable pipeline report path');
     if (!browserFiringEvidence.foregroundKilnHeartbeat) throw new Error('Friendly firing did not expose its foreground heartbeat summary');
     if (!browserFiringEvidence.sharpDutyCorrelation) throw new Error('Friendly firing did not expose its SHARP duty correlation summary');
+    if (!browserFiringEvidence.hostEventCorrelation) throw new Error('Friendly firing did not expose its host-event correlation summary');
     if (browserFiringEvidence.selectedFirePresentation !== requestedFirePresentation) {
       throw new Error(`Friendly firing did not retain the requested fire presentation: ${JSON.stringify(browserFiringEvidence)}`);
     }
@@ -1207,6 +1226,24 @@ try {
       expectedIdentity: browserFiringEvidence.snapshotIdentity,
       timeoutMs: fireTimeoutMs,
       label: 'foreground SHARP duty correlation gaps',
+    });
+    browserFiringEvidence.foregroundKilnHeartbeat.hostEvents = await readBrowserArrayInChunks({
+      evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+      snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+      arrayKey: 'hostEvents',
+      expectedCount: browserFiringEvidence.foregroundKilnHeartbeat.hostEventCount,
+      expectedIdentity: browserFiringEvidence.snapshotIdentity,
+      timeoutMs: fireTimeoutMs,
+      label: 'foreground host events',
+    });
+    browserFiringEvidence.hostEventCorrelation.correlatedGaps = await readBrowserArrayInChunks({
+      evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+      snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+      arrayKey: 'hostCorrelatedGaps',
+      expectedCount: browserFiringEvidence.hostEventCorrelation.foregroundGapCount,
+      expectedIdentity: browserFiringEvidence.snapshotIdentity,
+      timeoutMs: fireTimeoutMs,
+      label: 'foreground host-event correlated gaps',
     });
     const pipelineReport = JSON.parse(readFileSync(browserFiringEvidence.reportPath, 'utf8'));
     state.fullRoute = projectFriendlyFiringEvidence({
@@ -1275,6 +1312,17 @@ try {
         - correlationTotals.unattributedDurationMs) > 1) {
       throw new Error('Friendly firing correlation does not preserve its unattributed foreground remainder');
     }
+    const hostEventCorrelation = state.fullRoute.hostEventCorrelation;
+    if (hostEventCorrelation?.schema !== 'kaminos.foreground-host-event-correlation.v0'
+      || hostEventCorrelation.status !== 'verified'
+      || hostEventCorrelation.firingId !== foregroundKilnHeartbeat.firingId
+      || hostEventCorrelation.foregroundGapCount !== hostEventCorrelation.correlatedGaps?.length
+      || hostEventCorrelation.hostEventCount !== foregroundKilnHeartbeat.hostEvents?.length
+      || !Array.isArray(hostEventCorrelation.phaseRankings)
+      || !Array.isArray(hostEventCorrelation.sourceRankings)
+      || !Array.isArray(hostEventCorrelation.unexplainedGapsAtOrAboveThreshold)) {
+      throw new Error('Friendly firing is missing verified foreground host-event attribution');
+    }
     const expectedLateTailSteps = ['ply-blob-assembly', 'object-url-create', 'output-bind'];
     for (const step of expectedLateTailSteps) {
       const interval = state.fullRoute.lateTailBlockingIntervals?.find(candidate => candidate.step === step);
@@ -1318,6 +1366,9 @@ try {
     }
     for (const gap of state.fullRoute.uninstrumentedGapsAtOrAbove50Ms || []) {
       cadenceFailures.push({ kind: 'uninstrumented-frame-gap', ...gap });
+    }
+    for (const gap of hostEventCorrelation.unexplainedGapsAtOrAboveThreshold) {
+      cadenceFailures.push({ kind: 'host-unattributed-frame-gap', ...gap });
     }
     state.fullRoute.cadenceAcceptance = classifyCadenceAcceptance({
       captureInFlight,

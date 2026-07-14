@@ -22,6 +22,7 @@ const budget = {
   let nowMs = 100;
   const events = [];
   const episode = createForegroundKilnHeartbeatEpisode({
+    firingId: 'firing-host-event-a',
     routeId: 'sharp-image-to-splat-live-v0',
     profileId: 'cooperative-spn-gaussian',
     pipelineId: 'sharp-image-to-splat-live-v0',
@@ -48,7 +49,10 @@ const budget = {
   const report = episode.finish();
   assert.equal(typeof episode.recordEvent, 'function');
   assert.deepEqual(report.hostEvents, [{
+    eventId: 'firing-host-event-a:host:0',
+    firingId: 'firing-host-event-a',
     kind: 'browser-host',
+    source: 'runtime-explicit',
     phase: 'present',
     startMs: 110,
     endMs: 118,
@@ -646,19 +650,25 @@ assert.equal(correlatedReport.sharpDutyCorrelation.totals.foregroundGapDurationM
 assert.equal(correlatedReport.sharpDutyCorrelation.totals.attributedDurationMs, 30);
 assert.equal(correlatedReport.sharpDutyCorrelation.totals.unattributedDurationMs, 46);
 correlatedReport.hostEvents = [{
+  eventId: 'firing-correlation-a:host:manual',
+  firingId: 'firing-correlation-a',
   kind: 'browser-performance',
+  source: 'performance-observer-longtask',
   phase: 'longtask',
+  startMs: 120,
+  endMs: 140,
   startEpochMs: 1_700_000_000_120,
   endEpochMs: 1_700_000_000_140,
   durationMs: 20,
 }];
+correlatedReport.hostEventCount = 1;
 const hostCorrelation = createForegroundHostEventCorrelation({
   foregroundHeartbeat: correlatedReport,
   foregroundGaps: correlatedReport.sharpDutyCorrelation.foregroundGaps,
 });
 assert.equal(hostCorrelation.schema, 'kaminos.foreground-host-event-correlation.v0');
 assert.equal(hostCorrelation.hostEventCount, 1);
-assert.equal(hostCorrelation.coveredDurationMs, 20);
+assert.equal(hostCorrelation.totals.hostCoveredDurationMs, 20);
 assert.deepEqual(
   correlatedReport.sharpDutyCorrelation.phaseRankings.map(row => [row.phase, row.overlapDurationMs]),
   [['spn-fusion', 20], ['monodepth', 10]],

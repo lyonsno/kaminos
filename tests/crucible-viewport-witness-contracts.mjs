@@ -616,6 +616,11 @@ for (const [pattern, message] of [
   [/snapshotIdentity/, 'Witness must carry snapshot identity through every chunk read'],
   [/foregroundKilnHeartbeat\.samples = await readBrowserArrayInChunks/, 'Witness must reconstruct every uncapped foreground sample outside the browser payload'],
   [/sharpDutyCorrelation\.foregroundGaps = await readBrowserArrayInChunks/, 'Witness must reconstruct every correlated foreground gap outside the browser payload'],
+  [/foregroundKilnHeartbeat\.hostEvents = await readBrowserArrayInChunks/, 'Witness must reconstruct every uncapped host event outside the browser payload'],
+  [/hostEventCorrelation\.correlatedGaps = await readBrowserArrayInChunks/, 'Witness must reconstruct every host-correlated gap outside the browser payload'],
+  [/hostEvents: undefined[\s\S]*hostEventCorrelation: undefined/, 'Initial CDP summary must omit duplicated large host attribution arrays'],
+  [/kaminos\.foreground-host-event-correlation\.v0/, 'Full-route witness must require the host attribution schema'],
+  [/unexplainedGapsAtOrAboveThreshold/, 'Full-route witness must preserve and reject thresholded unexplained residuals'],
   [/samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined/, 'Initial CDP summary must omit duplicated large heartbeat evidence'],
   [/lastTrustworthyEvidence = \{[\s\S]*postFiringSummary:[\s\S]*reportPath: browserFiringEvidence\.reportPath[\s\S]*readBrowserArrayInChunks/, 'Chunk failures must preserve the compact post-firing identity and declared-count evidence'],
 ]) {
