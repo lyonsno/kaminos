@@ -10,7 +10,8 @@
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
 
 /* Sidebar */
-#sidebar { width: 380px; background: #1a1a1a; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 16px; flex-shrink: 0; }
+#sidebar { width: 380px; background: #1a1a1a; border-right: 1px solid #2a2a2a; overflow-y: auto; padding: 16px; flex-shrink: 0; transition: width 180ms ease, padding 180ms ease, border-color 180ms ease; }
+#sidebar.crucible-sidebar-released { width: 0; padding-left: 0; padding-right: 0; border-right-color: transparent; overflow: hidden; visibility: hidden; pointer-events: none; }
 #sidebar::-webkit-scrollbar { width: 6px; }
 #sidebar::-webkit-scrollbar-track { background: transparent; }
 #sidebar::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
@@ -100,7 +101,7 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-bench-list .btn { width: 100%; text-align: left; margin: 0; }
     .crucible-bench-list .btn.active { background: #57421f; border-color: #8b6a2f; }
     .crucible-bench-note { color: #777; font-size: 10px; line-height: 1.35; margin-top: 7px; }
-    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: auto; perspective: 1200px; transition: background 180ms ease, padding 180ms ease; }
+    #crucible-viewport-workspace { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: auto; perspective: 1200px; transition: background 180ms ease; }
     #crucible-viewport-workspace[hidden] { display: none; }
     .crucible-workroom-shell { width: min(1080px, 82vw); min-height: min(650px, 76vh); position: relative; transform: rotateX(5deg); transform-origin: center bottom; filter: drop-shadow(0 32px 70px rgba(0,0,0,0.56)); }
     .crucible-room-backwall { position: absolute; left: 5%; right: 5%; top: 0; height: 40%; border: 1px solid rgba(103,115,112,0.28); border-bottom: 0; background: linear-gradient(180deg, rgba(42,47,47,0.76), rgba(20,22,22,0.42)); box-shadow: inset 0 -24px 60px rgba(7,8,8,0.48); }
@@ -112,12 +113,16 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-worktable-stage { position: absolute; left: 0; right: 0; bottom: 0; min-height: 68%; border: 1px solid rgba(150,124,80,0.54); border-radius: 8px; background: linear-gradient(135deg, rgba(104,83,55,0.96), rgba(58,46,35,0.96) 38%, rgba(116,99,65,0.94) 66%, rgba(50,43,36,0.97)), repeating-linear-gradient(92deg, rgba(255,246,202,0.08) 0 2px, transparent 2px 18px); box-shadow: inset 0 0 0 1px rgba(240,213,148,0.08), inset 0 34px 70px rgba(255,236,170,0.06), 0 22px 58px rgba(0,0,0,0.55); padding: clamp(18px, 2.8vw, 32px); display: grid; grid-template-columns: 1fr minmax(240px, 0.42fr); grid-template-rows: auto minmax(240px, 1fr) auto; gap: 16px; }
     .crucible-worktable-stage::after { content: ""; position: absolute; inset: 14px; border: 1px solid rgba(26,23,19,0.44); border-radius: 6px; pointer-events: none; box-shadow: inset 0 0 26px rgba(0,0,0,0.24); }
     .crucible-viewport-heading { position: relative; z-index: 1; grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+    .crucible-viewport-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-shrink: 0; }
     .crucible-viewport-title { color: #ffe6a9; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; margin-bottom: 5px; text-shadow: 0 2px 12px rgba(0,0,0,0.52); }
     .crucible-viewport-subtitle { color: #d8d1ba; font-size: 12px; line-height: 1.42; max-width: 560px; }
     .crucible-heat-badge { border: 1px solid rgba(104,128,128,0.44); border-radius: 999px; background: rgba(20,27,28,0.72); color: #bfe6e2; font-size: 10px; font-weight: 800; letter-spacing: 0.6px; padding: 6px 10px; text-transform: uppercase; white-space: nowrap; }
     #crucible-viewport-workspace[data-crucible-heat-state="firing"] .crucible-heat-badge { border-color: rgba(255,172,88,0.66); color: #ffd59a; background: rgba(82,42,18,0.74); }
     #crucible-viewport-workspace[data-crucible-heat-state="failed"] .crucible-heat-badge { border-color: rgba(218,97,83,0.68); color: #ffc2b7; background: rgba(74,26,24,0.72); }
     #crucible-viewport-workspace[data-crucible-heat-state="cast"] .crucible-heat-badge { border-color: rgba(130,190,148,0.62); color: #ccf2d2; background: rgba(24,58,36,0.68); }
+    .crucible-console-toggle { min-height: 30px; border: 1px solid rgba(177,181,156,0.42); border-radius: 6px; background: rgba(15,18,18,0.76); color: #e8dfc5; padding: 5px 9px; font-size: 10px; font-weight: 750; cursor: pointer; }
+    .crucible-console-toggle:hover { border-color: rgba(234,197,117,0.72); color: #fff0c7; }
+    .crucible-console-toggle[hidden] { display: none; }
     .crucible-viewport-zone { position: relative; z-index: 1; border: 1px solid rgba(31,34,34,0.72); border-radius: 8px; background: rgba(18,20,20,0.74); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045), 0 12px 28px rgba(0,0,0,0.24); overflow: hidden; }
     .crucible-viewport-zone-label { color: #d7c382; font-size: 10px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
     .crucible-viewport-plate { display: grid; grid-template-columns: minmax(170px, 0.44fr) 1fr; min-height: 264px; padding: 13px; gap: 13px; border-color: rgba(108,132,126,0.58); background: linear-gradient(135deg, rgba(19,28,29,0.84), rgba(12,14,15,0.72)); }
@@ -141,53 +146,64 @@ h2 { font-size: 11px; font-weight: 600; margin: 18px 0 8px; color: #666; text-tr
     .crucible-viewport-firing-mouth { min-height: 264px; display: flex; flex-direction: column; justify-content: space-between; padding: 15px; background: radial-gradient(circle at 50% 68%, rgba(110,46,24,0.48), transparent 38%), linear-gradient(180deg, rgba(21,19,18,0.96), rgba(9,8,8,0.9)); }
     .crucible-viewport-firing-mouth::before { content: ""; position: absolute; left: 50%; bottom: 28px; width: 118px; height: 118px; transform: translateX(-50%); border-radius: 50%; border: 1px solid rgba(227,160,74,0.28); background: radial-gradient(circle, rgba(255,204,108,0.46), rgba(139,55,23,0.34) 42%, rgba(7,7,7,0.92) 72%); box-shadow: 0 0 44px rgba(235,109,39,0.14), inset 0 0 34px rgba(0,0,0,0.72); opacity: 0.38; }
     #crucible-viewport-workspace[data-crucible-heat-state="firing"] .crucible-viewport-firing-mouth::before { opacity: 0.9; box-shadow: 0 0 54px rgba(255,133,45,0.42), inset 0 0 28px rgba(0,0,0,0.58); }
+    .crucible-kiln-progress { position: relative; z-index: 2; display: grid; gap: 5px; margin-top: 9px; }
+    .crucible-kiln-progress[hidden] { display: none; }
+    .crucible-kiln-progress-track { height: 6px; overflow: hidden; border: 1px solid rgba(231,180,96,0.3); border-radius: 4px; background: rgba(3,4,4,0.72); }
+    .crucible-kiln-progress-fill { width: var(--crucible-route-progress, 8%); height: 100%; background: linear-gradient(90deg, #bd572d, #ffc565); transition: width 180ms ease; }
+    .crucible-kiln-progress.indeterminate .crucible-kiln-progress-fill { width: 28%; animation: crucible-kiln-search 1.4s ease-in-out infinite alternate; }
+    .crucible-kiln-progress-label { color: #e8cca1; font-size: 10px; }
+    @keyframes crucible-kiln-search { from { transform: translateX(-35%); } to { transform: translateX(280%); } }
     .crucible-viewport-slot-body { color: #b9b3a2; font-size: 12px; line-height: 1.35; margin-top: 8px; overflow-wrap: anywhere; position: relative; z-index: 1; }
     .crucible-viewport-slot-body.present { color: #f0e7c9; }
     .crucible-viewport-trays { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .crucible-viewport-tray { min-height: 132px; padding: 13px; }
     .crucible-viewport-cast-tray { background: linear-gradient(135deg, rgba(37,45,45,0.88), rgba(17,18,18,0.76)); }
     .crucible-viewport-shard-rack { background: linear-gradient(135deg, rgba(39,34,49,0.78), rgba(19,18,24,0.78)); }
-    .crucible-viewport-receipt-tag { position: relative; z-index: 1; grid-column: 1 / -1; min-height: 78px; padding: 13px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(100deg, rgba(202,187,137,0.92), rgba(126,142,136,0.86)); color: #1d201f; border-color: rgba(242,229,183,0.48); }
+    .crucible-viewport-receipt-tag { position: relative; z-index: 1; grid-column: 1 / -1; min-height: 46px; padding: 0; background: linear-gradient(100deg, rgba(202,187,137,0.92), rgba(126,142,136,0.86)); color: #1d201f; border-color: rgba(242,229,183,0.48); }
+    .crucible-viewport-receipt-tag summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; padding: 10px 14px; color: #2d352e; font-size: 11px; font-weight: 800; list-style: none; }
+    .crucible-viewport-receipt-tag summary::-webkit-details-marker { display: none; }
+    .crucible-viewport-receipt-tag summary::after { content: "+"; margin-left: auto; font-size: 16px; font-weight: 500; }
+    .crucible-viewport-receipt-tag[open] summary::after { content: "-"; }
+    .crucible-viewport-receipt-body { padding: 0 14px 12px; }
     .crucible-viewport-receipt-tag .crucible-viewport-zone-label { color: #30382f; }
     .crucible-viewport-receipt-tag .crucible-viewport-slot-body { color: #262925; margin-top: 3px; }
     .crucible-viewport-proxy-sockets { position: relative; z-index: 1; grid-column: 2; min-height: 92px; padding: 12px; display: grid; gap: 8px; background: rgba(16,22,24,0.66); }
     .crucible-viewport-socket-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .crucible-viewport-socket { min-height: 38px; border: 1px solid rgba(117,148,149,0.32); border-radius: 6px; background: linear-gradient(135deg, rgba(35,49,51,0.72), rgba(13,15,16,0.88)); box-shadow: inset 0 0 18px rgba(0,0,0,0.42); }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] { align-items: flex-start; justify-content: flex-start; padding: 18px; background: linear-gradient(90deg, rgba(4,5,5,0.74) 0, rgba(4,5,5,0.58) 34%, rgba(4,5,5,0.1) 58%, transparent 76%); pointer-events: none; perspective: none; }
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] { align-items: flex-start; justify-content: flex-start; padding: 58px 18px 18px; background: linear-gradient(90deg, rgba(4,5,5,0.7) 0, rgba(4,5,5,0.52) 34%, rgba(4,5,5,0.08) 58%, transparent 76%); pointer-events: none; perspective: none; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-workroom-shell { width: min(520px, calc(100% - 36px)); min-height: 0; transform: none; filter: drop-shadow(0 22px 48px rgba(0,0,0,0.52)); pointer-events: auto; }
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-workroom-shell { width: min(520px, calc(100% - 36px)); min-height: 0; transform: none; filter: drop-shadow(0 22px 48px rgba(0,0,0,0.52)); pointer-events: auto; }
+    #crucible-viewport-workspace[data-crucible-room-posture="firing"] { pointer-events: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] { pointer-events: none; }
+    #crucible-viewport-workspace[data-crucible-console-state="expanded"] { align-items: center; justify-content: center; padding: clamp(18px, 4vw, 54px); background: radial-gradient(circle at 52% 36%, rgba(58,65,68,0.36), transparent 38%), linear-gradient(180deg, rgba(8,9,10,0.72), rgba(4,4,5,0.86)); pointer-events: auto; perspective: 1200px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] { align-items: flex-start; justify-content: flex-start; padding: 14px; background: linear-gradient(90deg, rgba(4,5,5,0.7) 0, rgba(4,5,5,0.46) 29%, rgba(4,5,5,0.06) 46%, transparent 64%); pointer-events: none; perspective: none; }
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"][data-crucible-console-state="tucked"] { padding: 58px 14px 14px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-workroom-shell { width: min(340px, calc(100% - 28px)); min-height: 0; transform: none; filter: drop-shadow(0 18px 38px rgba(0,0,0,0.5)); pointer-events: auto; }
     #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-proxy-sockets { display: none; }
     #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-shard-rack { display: none; }
     #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-shard-rack { display: none; }
     #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-proxy-sockets { display: none; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-room-backwall,
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-room-shelf,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-room-backwall,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-room-shelf { display: none; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-worktable-stage,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-worktable-stage { position: relative; left: auto; right: auto; bottom: auto; width: 100%; min-height: 0; max-height: calc(100vh - 36px); overflow-y: auto; padding: 14px; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 10px; background: linear-gradient(145deg, rgba(87,69,48,0.96), rgba(38,34,30,0.94)); backdrop-filter: blur(9px); }
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-worktable-stage { max-height: calc(100vh - 76px); }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-room-backwall,
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-room-shelf { display: none; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-worktable-stage { position: relative; left: auto; right: auto; bottom: auto; width: 100%; min-height: 0; max-height: calc(100vh - 28px); overflow-y: auto; padding: 11px; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; gap: 8px; background: linear-gradient(145deg, rgba(79,63,44,0.97), rgba(31,30,28,0.95)); backdrop-filter: blur(9px); }
+    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"][data-crucible-console-state="tucked"] .crucible-worktable-stage { max-height: calc(100vh - 72px); }
     #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-heading,
     #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-heading,
     #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-receipt-tag,
     #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-receipt-tag { grid-column: 1; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-title,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-title { font-size: 18px; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-subtitle,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-subtitle { font-size: 10px; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-plate,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-plate { grid-template-columns: 112px minmax(0, 1fr); min-height: 0; padding: 10px; gap: 10px; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-source-thumb-wrap,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-source-thumb-wrap { min-height: 112px; max-height: 156px; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-firing-mouth,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-firing-mouth { min-height: 224px; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-trays,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-trays { grid-template-columns: minmax(0, 1fr); gap: 0; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-tray,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-tray { min-height: 92px; }
-    #crucible-viewport-workspace[data-crucible-room-posture="firing"] .crucible-viewport-receipt-tag,
-    #crucible-viewport-workspace[data-crucible-room-posture="cast-held"] .crucible-viewport-receipt-tag { min-height: 58px; padding: 10px 12px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-title { font-size: 17px; margin: 0; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-heat-badge { display: none; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-subtitle { display: none; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-plate { grid-template-columns: 68px minmax(0, 1fr); min-height: 0; padding: 8px; gap: 9px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-source-thumb-wrap { min-height: 68px; max-height: 76px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-plate-body,
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] #crucible-viewport-armature,
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-plate .crucible-viewport-help { display: none; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-controls { margin-top: 7px; gap: 6px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-firing-mouth { min-height: 176px; padding: 10px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-firing-mouth::before { width: 84px; height: 84px; bottom: 18px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-presentation-control { display: none; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-trays { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-tray { min-height: 76px; padding: 9px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-receipt-tag { min-height: 38px; }
+    #crucible-viewport-workspace[data-crucible-console-state="tucked"] .crucible-viewport-receipt-tag summary { min-height: 36px; padding: 7px 10px; }
 
 /* Viewport */
 #viewport { flex: 1; position: relative; background: #111; }
@@ -2581,7 +2597,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <div id="viewport">
   <div id="env-loading">Loading environment...</div>
-  <div id="crucible-viewport-workspace" data-crucible-viewport-workspace="generate" data-crucible-workroom="active" data-crucible-heat-state="idle" data-crucible-room-posture="bench" hidden>
+  <div id="crucible-viewport-workspace" data-crucible-viewport-workspace="generate" data-crucible-workroom="active" data-crucible-heat-state="idle" data-crucible-room-posture="bench" data-crucible-console-state="expanded" hidden>
     <div class="crucible-workroom-shell">
       <div class="crucible-room-backwall"></div>
       <div class="crucible-room-shelf"></div>
@@ -2591,7 +2607,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             <div class="crucible-viewport-title" id="crucible-viewport-title">Unnamed crucible</div>
             <div class="crucible-viewport-subtitle" id="crucible-viewport-summary">This crucible is on the bench.</div>
           </div>
-          <div class="crucible-heat-badge" id="crucible-viewport-heat-label">Idle</div>
+          <div class="crucible-viewport-heading-actions">
+            <div class="crucible-heat-badge" id="crucible-viewport-heat-label">Idle</div>
+            <button type="button" class="crucible-console-toggle" id="crucible-viewport-console-toggle" hidden>Open bench</button>
+          </div>
         </div>
         <div class="crucible-viewport-zone crucible-viewport-plate" id="crucible-viewport-source-plate">
           <div class="crucible-viewport-source-thumb-wrap empty" id="crucible-viewport-source-thumb-wrap">
@@ -2614,6 +2633,12 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <div>
             <div class="crucible-viewport-zone-label">Firing Mouth</div>
             <div class="crucible-viewport-slot-body" id="crucible-viewport-firing">No firing started.</div>
+            <div class="crucible-kiln-progress" id="crucible-viewport-progress" hidden>
+              <div class="crucible-kiln-progress-track" aria-hidden="true">
+                <div class="crucible-kiln-progress-fill" id="crucible-viewport-progress-fill"></div>
+              </div>
+              <div class="crucible-kiln-progress-label" id="crucible-viewport-progress-label">The model is starting.</div>
+            </div>
           </div>
           <div class="crucible-viewport-controls crucible-viewport-firing-controls">
             <div class="crucible-viewport-route-grid">
@@ -2624,7 +2649,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
                 <select class="crucible-viewport-select" id="crucible-viewport-profile-select"></select>
               </label>
             </div>
-            <label class="crucible-viewport-control-label">Show the flame as
+            <label class="crucible-viewport-control-label crucible-viewport-presentation-control">Show the flame as
               <select class="crucible-viewport-select" id="crucible-viewport-presentation-select">
                 <option value="full-volume">Full volume</option>
                 <option value="hybrid-smoke-preview">Live splats with smoke (preview)</option>
@@ -2655,12 +2680,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
             <div class="crucible-viewport-socket"></div>
           </div>
         </div>
-        <div class="crucible-viewport-zone crucible-viewport-receipt-tag" id="crucible-viewport-receipt-tag">
-          <div>
+        <details class="crucible-viewport-zone crucible-viewport-receipt-tag" id="crucible-viewport-receipt-tag">
+          <summary>Last firing</summary>
+          <div class="crucible-viewport-receipt-body">
             <div class="crucible-viewport-zone-label">Receipt Tag</div>
             <div class="crucible-viewport-slot-body" id="crucible-viewport-receipt">No firing receipt yet.</div>
           </div>
-        </div>
+        </details>
       </div>
     </div>
   </div>
@@ -8994,16 +9020,20 @@ async function initScene() {
     falloff: aoPass?.distanceFallOff?.value ?? null,
   });
 
-  window.addEventListener('resize', () => {
+  const resizeSceneViewport = () => {
     const w = vp.clientWidth;
     const h = vp.clientHeight;
+    if (!w || !h) return;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
     depthRT.setSize(Math.round(size.x * aoResScale), Math.round(size.y * aoResScale));
     needsRender = true;
-  });
+  };
+  window.addEventListener('resize', resizeSceneViewport);
+  const sceneViewportResizeObserver = new ResizeObserver(resizeSceneViewport);
+  sceneViewportResizeObserver.observe(vp);
 
   // --- Render loop with idle detection ---
   let needsRender = true;
@@ -9624,6 +9654,7 @@ function setActiveTab(tabName) {
   if (crucibleViewportWorkspace) {
     crucibleViewportWorkspace.hidden = tabName !== 'generate';
     if (tabName === 'generate') renderCrucibleViewportWorkspace();
+    syncCrucibleViewportChrome(crucibleViewportWorkspace);
   }
   if (tabName === 'pipeline') loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err)));
 }
@@ -13083,6 +13114,8 @@ let kilnRouteBenchState = {
 let sharpBreathingRoomRunningProfileId = null;
 let crucibleViewportProfileId = 'cooperative-spn-gaussian';
 let crucibleViewportPresentationMode = 'full-volume';
+let crucibleViewportConsolePreference = 'auto';
+let crucibleViewportLastRoomPosture = 'bench';
 
 const CRUCIBLE_BENCH_STORAGE_KEY = 'kaminosCrucibleBenchState';
 const CRUCIBLE_BENCH_PROXY_ZONES = [
@@ -13305,6 +13338,59 @@ function crucibleViewportRoomPosture({ heatState, routeStatus }) {
   return 'bench';
 }
 
+function crucibleViewportFiringCopy({ heatState, lastFiring, lastCast }) {
+  if (heatState === 'firing') return 'The kiln is shaping your cast.';
+  if (lastCast) return 'Your cast is in the scene.';
+  if (heatState === 'failed') return 'This firing needs attention.';
+  if (lastFiring) return 'The last firing has finished.';
+  return 'No firing started.';
+}
+
+function crucibleViewportCastCopy(lastCast) {
+  return lastCast ? 'Your splat is in the scene.' : 'No cast on the tray.';
+}
+
+function crucibleViewportConsoleState(roomPosture) {
+  if (roomPosture === 'bench') return 'expanded';
+  return crucibleViewportConsolePreference === 'expanded' ? 'expanded' : 'tucked';
+}
+
+function crucibleViewportNextConsolePreference({ roomPosture, previousRoomPosture, preference }) {
+  if (roomPosture === 'cast-held' && previousRoomPosture === 'firing') return 'auto';
+  return preference;
+}
+
+function toggleCrucibleViewportConsole() {
+  const workspace = document.getElementById('crucible-viewport-workspace');
+  const currentState = workspace?.dataset.crucibleConsoleState || 'expanded';
+  crucibleViewportConsolePreference = currentState === 'tucked' ? 'expanded' : 'tucked';
+  renderCrucibleViewportWorkspace();
+  return crucibleViewportConsolePreference;
+}
+
+function syncCrucibleViewportChrome(workspace = document.getElementById('crucible-viewport-workspace')) {
+  const consoleState = workspace && !workspace.hidden
+    ? (workspace.dataset.crucibleConsoleState || 'expanded')
+    : 'inactive';
+  document.body.dataset.crucibleConsoleState = consoleState;
+  document.getElementById('sidebar')?.classList.toggle('crucible-sidebar-released', consoleState === 'tucked');
+}
+
+function crucibleViewportCastScreenPoint(castRecord) {
+  if (!castRecord?.object || !camera) return null;
+  const viewport = document.getElementById('viewport');
+  const viewportRect = viewport?.getBoundingClientRect();
+  if (!viewportRect?.width || !viewportRect?.height) return null;
+  const projected = new THREE.Vector3();
+  castRecord.object.getWorldPosition(projected);
+  projected.project(camera);
+  return {
+    screenX: viewportRect.left + ((projected.x + 1) * 0.5 * viewportRect.width),
+    screenY: viewportRect.top + ((1 - projected.y) * 0.5 * viewportRect.height),
+    insideDepth: projected.z >= -1 && projected.z <= 1,
+  };
+}
+
 function crucibleViewportSourcePlateLabel(currentSource) {
   if (!currentSource?.source) return 'No source on the plate yet.';
   return `${crucibleBenchSourceLabel(currentSource)} - ${compactCrucibleBenchPath(currentSource.source)}`;
@@ -13415,6 +13501,7 @@ function runCrucibleViewportFiring() {
   const profileId = document.getElementById('crucible-viewport-profile-select')?.value || crucibleViewportProfileId;
   const firePresentationMode = document.getElementById('crucible-viewport-presentation-select')?.value
     || crucibleViewportPresentationMode;
+  crucibleViewportConsolePreference = 'auto';
   return runKilnRouteBenchRoute(route.id, profileId, { firePresentationMode });
 }
 
@@ -13519,6 +13606,7 @@ function crucibleViewportDebugState() {
   const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
   const heatState = crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt });
   const routeStatus = kilnRouteBenchState.status || 'idle';
+  const roomPosture = crucibleViewportRoomPosture({ heatState, routeStatus });
   return {
     schema: 'kaminos.crucible-viewport-debug.v0',
     source: source ? { ...source } : null,
@@ -13529,7 +13617,9 @@ function crucibleViewportDebugState() {
     runningProfileId: sharpBreathingRoomRunningProfileId,
     routeStatus,
     heatState,
-    roomPosture: crucibleViewportRoomPosture({ heatState, routeStatus }),
+    roomPosture,
+    consoleState: crucibleViewportConsoleState(roomPosture),
+    castScreenPoint: crucibleViewportCastScreenPoint(castRecord),
     lastCast: lastCast ? { ...lastCast } : null,
     castTargetSceneObjectId: castRecord?.id || null,
   };
@@ -13547,9 +13637,18 @@ function renderCrucibleViewportWorkspace() {
   const heatState = crucibleViewportHeatState({ lastFiring, lastCast, lastReceipt });
   const routeStatus = kilnRouteBenchState.status || 'idle';
   const roomPosture = crucibleViewportRoomPosture({ heatState, routeStatus });
+  crucibleViewportConsolePreference = crucibleViewportNextConsolePreference({
+    roomPosture,
+    previousRoomPosture: crucibleViewportLastRoomPosture,
+    preference: crucibleViewportConsolePreference,
+  });
+  const consoleState = crucibleViewportConsoleState(roomPosture);
+  crucibleViewportLastRoomPosture = roomPosture;
   workspace.dataset.crucibleHeatState = heatState;
   workspace.dataset.crucibleRouteStatus = kilnRouteBenchState.status || 'idle';
   workspace.dataset.crucibleRoomPosture = roomPosture;
+  workspace.dataset.crucibleConsoleState = consoleState;
+  syncCrucibleViewportChrome(workspace);
   const title = document.getElementById('crucible-viewport-title');
   const summary = document.getElementById('crucible-viewport-summary');
   const source = document.getElementById('crucible-viewport-source');
@@ -13568,6 +13667,10 @@ function renderCrucibleViewportWorkspace() {
   const fireButton = document.getElementById('crucible-viewport-fire-button');
   const fireHelp = document.getElementById('crucible-viewport-fire-help');
   const castButton = document.getElementById('crucible-viewport-cast-button');
+  const consoleToggle = document.getElementById('crucible-viewport-console-toggle');
+  const progress = document.getElementById('crucible-viewport-progress');
+  const progressFill = document.getElementById('crucible-viewport-progress-fill');
+  const progressLabel = document.getElementById('crucible-viewport-progress-label');
   const route = selectedKilnRouteBenchRoute();
   const running = Boolean(sharpBreathingRoomRunningProfileId);
   const castRecord = lastCast?.assetId ? sceneObjects.find(entry => entry.id === lastCast.assetId) : null;
@@ -13576,6 +13679,14 @@ function renderCrucibleViewportWorkspace() {
     summary.textContent = `This crucible is holding ${currentSource ? 'one source' : 'no source yet'}, ${crucible.firings.length} firing${crucible.firings.length === 1 ? '' : 's'}, and ${crucible.casts.length} cast${crucible.casts.length === 1 ? '' : 's'}.`;
   }
   if (heatLabel) heatLabel.textContent = crucibleViewportHeatLabel(heatState);
+  if (consoleToggle) {
+    consoleToggle.hidden = roomPosture === 'bench';
+    consoleToggle.textContent = consoleState === 'tucked'
+      ? 'Open bench'
+      : roomPosture === 'cast-held'
+        ? 'See cast'
+        : 'See furnace';
+  }
   renderCrucibleViewportSourceOptions(sourceSelect, currentSource);
   renderCrucibleViewportRouteOptions(routeSelect, profileSelect, route);
   if (presentationSelect) {
@@ -13585,6 +13696,21 @@ function renderCrucibleViewportWorkspace() {
   if (fireButton) {
     fireButton.disabled = running || !currentSource?.source;
     fireButton.textContent = running ? 'Firing...' : 'Fire image';
+  }
+  const routeProgress = kilnRouteBenchState.progressEvent?.progress;
+  if (progress) {
+    progress.hidden = routeStatus !== 'running';
+    progress.classList.toggle('indeterminate', !Number.isFinite(routeProgress));
+  }
+  if (progressFill) {
+    progressFill.style.setProperty('--crucible-route-progress', Number.isFinite(routeProgress)
+      ? `${Math.max(0, Math.min(100, routeProgress * 100))}%`
+      : '8%');
+  }
+  if (progressLabel) {
+    progressLabel.textContent = Number.isFinite(routeProgress)
+      ? `${Math.round(routeProgress * 100)}% complete`
+      : 'The model is working.';
   }
   if (fireHelp) {
     fireHelp.textContent = running
@@ -13614,15 +13740,11 @@ function renderCrucibleViewportWorkspace() {
   }
   if (firing) {
     firing.classList.toggle('present', Boolean(lastFiring));
-    firing.textContent = lastFiring
-      ? `${lastFiring.profileLabel || lastFiring.profileId || 'Route'} - ${lastFiring.status || 'running'}`
-      : 'No firing started.';
+    firing.textContent = crucibleViewportFiringCopy({ heatState, lastFiring, lastCast });
   }
   if (cast) {
     cast.classList.toggle('present', Boolean(lastCast));
-    cast.textContent = lastCast
-      ? `${lastCast.label || 'Generated cast'} - ${compactCrucibleBenchPath(lastCast.path || lastCast.assetId || '')}`
-      : 'No cast on the tray.';
+    cast.textContent = crucibleViewportCastCopy(lastCast);
   }
   if (receipt) {
     receipt.classList.toggle('present', Boolean(lastReceipt));
@@ -18236,15 +18358,14 @@ async function runKilnRouteBenchRoute(routeId, profileId, options = {}) {
       generator: pipelineGeneratorForPipelineId(pipelineId),
       schedulerProfileId: profileId,
       onProgress: event => {
-        if (event?.message) {
-          const progress = Number.isFinite(event.progress) ? ` ${Math.round(event.progress * 100)}%` : '';
-          setKilnRouteBenchStatus(`${profileLabel}: ${event.message}${progress}`, 'running', {
-            routeId: route.id,
-            source,
-            runningProfileId: profileId,
-            progressEvent: event,
-          });
-        }
+        const progress = Number.isFinite(event?.progress) ? ` ${Math.round(event.progress * 100)}%` : '';
+        const progressMessage = event?.message || 'The model is working on your cast.';
+        setKilnRouteBenchStatus(`${profileLabel}: ${progressMessage}${progress}`, 'running', {
+          routeId: route.id,
+          source,
+          runningProfileId: profileId,
+          progressEvent: event,
+        });
       },
     });
     await endSharpBreathingRoomKilnFire(run?.ok ? 'complete' : 'failed', {
@@ -18550,6 +18671,7 @@ function initPipelineDock() {
     runCrucibleViewportFiring().catch(err => setInfo(err.message || String(err)));
   });
   document.getElementById('crucible-viewport-cast-button')?.addEventListener('click', openCrucibleViewportCast);
+  document.getElementById('crucible-viewport-console-toggle')?.addEventListener('click', toggleCrucibleViewportConsole);
   document.getElementById('pipeline-refresh-button')?.addEventListener('click', () => loadPipelineManifest().catch(err => setInfo(err.message || String(err))));
   document.getElementById('pipeline-browser-refresh')?.addEventListener('click', () => loadPipelineAssetBrowser().catch(err => setInfo(err.message || String(err))));
   document.querySelectorAll('[data-pipeline-asset-palette]').forEach(button => {

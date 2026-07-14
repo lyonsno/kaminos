@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -31,6 +31,8 @@ const out = args.get('out') || '/tmp/kaminos-crucible-viewport-witness.png';
 const reportPath = args.get('report') || '/tmp/kaminos-crucible-viewport-witness.json';
 const chrome = args.get('chrome') || process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const port = Number(args.get('cdp-port') || 9341);
+const viewportWidth = Number(args.get('viewport-width') || 1600);
+const viewportHeight = Number(args.get('viewport-height') || 1100);
 const fireFriendly = args.has('fire-friendly');
 const replayCastReportPath = args.get('replay-cast-report') || null;
 const schedulerProfileId = args.get('scheduler-profile') || 'cooperative-spn-gaussian';
@@ -268,6 +270,34 @@ async function evaluate(ws, expression, timeoutMs = 20000) {
     throw new Error(`evaluation failed during ${phase}: ${result.exceptionDetails.text || 'exception'}`);
   }
   return result.result?.value;
+}
+
+async function clickVisibleElementCenter(ws, elementId) {
+  const target = await evaluate(ws, `(() => {
+    const element = document.getElementById(${JSON.stringify(elementId)});
+    if (!element) return { ok: false, reason: 'missing-element' };
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const x = rect.left + rect.width / 2;
+    const y = rect.top + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      ok: rect.width > 0
+        && rect.height > 0
+        && style.visibility !== 'hidden'
+        && style.display !== 'none'
+        && style.pointerEvents !== 'none'
+        && Boolean(hit && (hit === element || element.contains(hit))),
+      x,
+      y,
+      reason: hit?.id || hit?.tagName || 'no-hit-target',
+    };
+  })()`);
+  if (!target?.ok) throw new Error(`Element ${elementId} is not a visible hit target: ${JSON.stringify(target)}`);
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: target.x, y: target.y });
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: target.x, y: target.y, button: 'left', clickCount: 1 });
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: target.x, y: target.y, button: 'left', clickCount: 1 });
+  return target;
 }
 
 async function captureViewportPng(ws, outputPath) {
@@ -761,7 +791,7 @@ try {
     `--user-data-dir=${userDataDir}`,
     '--disable-gpu-sandbox',
     '--no-first-run',
-    '--window-size=1600,1100',
+    `--window-size=${viewportWidth},${viewportHeight}`,
     'about:blank',
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
   browser.stderr.on('data', chunk => { stderr += chunk.toString(); });
@@ -783,8 +813,8 @@ try {
   });
   await wsRequest(ws, 'Page.enable');
   await wsRequest(ws, 'Emulation.setDeviceMetricsOverride', {
-    width: 1600,
-    height: 1100,
+    width: viewportWidth,
+    height: viewportHeight,
     deviceScaleFactor: 1,
     mobile: false,
   });
@@ -821,6 +851,7 @@ try {
       heatState: workspace?.dataset.crucibleHeatState || null,
       routeStatus: workspace?.dataset.crucibleRouteStatus || null,
       roomPosture: workspace?.dataset.crucibleRoomPosture || null,
+      consoleState: workspace?.dataset.crucibleConsoleState || null,
       pointerEvents: workspace ? getComputedStyle(workspace).pointerEvents : null,
       stageRect: stageRect ? { width: stageRect.width, height: stageRect.height } : null,
       sourceThumbHidden: Boolean(sourceThumb?.hidden),
@@ -904,9 +935,12 @@ try {
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const workspace = document.getElementById('crucible-viewport-workspace');
       const stage = document.getElementById('crucible-worktable-stage');
+      const sidebar = document.getElementById('sidebar');
       const transformBar = document.getElementById('transform-bar');
       const stageRect = stage?.getBoundingClientRect();
+      const workspaceRect = workspace?.getBoundingClientRect();
       const transformBarRect = transformBar?.getBoundingClientRect();
+      const debug = window.kaminosCrucibleViewportDebugState?.() || null;
       return {
         status: replay.authority,
         reportPath: replay.reportPath,
@@ -919,9 +953,18 @@ try {
           heatState: workspace?.dataset.crucibleHeatState || null,
           routeStatus: workspace?.dataset.crucibleRouteStatus || null,
           roomPosture: workspace?.dataset.crucibleRoomPosture || null,
+          consoleState: workspace?.dataset.crucibleConsoleState || null,
           stageTop: stageRect?.top ?? null,
+          stageRight: stageRect?.right ?? null,
+          viewportWidth: window.innerWidth,
+          caddyOccupancy: stageRect && workspaceRect?.width ? stageRect.width / workspaceRect.width : null,
           transformBarBottom: transformBar?.classList.contains('visible') ? (transformBarRect?.bottom ?? null) : 0,
           castButtonDisabled: Boolean(document.getElementById('crucible-viewport-cast-button')?.disabled),
+          consoleToggleLabel: document.getElementById('crucible-viewport-console-toggle')?.textContent || null,
+          tuckedSidebarWidth: sidebar?.getBoundingClientRect().width ?? null,
+          sceneViewportWidth: document.getElementById('viewport')?.getBoundingClientRect().width ?? null,
+          sceneCanvasWidth: document.querySelector('#viewport > canvas')?.getBoundingClientRect().width ?? null,
+          castScreenX: debug?.castScreenPoint?.screenX ?? null,
         },
       };
     })()`, fireTimeoutMs);
@@ -930,7 +973,60 @@ try {
     if (state.replayedCast.receiptReportPath !== state.replayedCast.reportPath) throw new Error(`Replayed Crucible receipt lost source report identity: ${JSON.stringify(state.replayedCast)}`);
     if (!state.replayedCast.castTargetSceneObjectId || state.replayedCast.completedWorkroom.castButtonDisabled) throw new Error(`Replayed real cast is not actuatable: ${JSON.stringify(state.replayedCast)}`);
     if (state.replayedCast.completedWorkroom.roomPosture !== 'cast-held') throw new Error(`Replayed real cast did not open the room around the asset: ${JSON.stringify(state.replayedCast)}`);
+    if (state.replayedCast.completedWorkroom.consoleState !== 'tucked') throw new Error(`Replayed real cast did not tuck the kiln caddy: ${JSON.stringify(state.replayedCast.completedWorkroom)}`);
+    if (state.replayedCast.completedWorkroom.tuckedSidebarWidth > 1) throw new Error(`Replayed Crucible left the legacy sidebar in the cast workspace: ${JSON.stringify(state.replayedCast.completedWorkroom)}`);
+    if (Math.abs(state.replayedCast.completedWorkroom.sceneCanvasWidth - state.replayedCast.completedWorkroom.sceneViewportWidth) > 2) throw new Error(`Replayed Crucible renderer retained stale viewport width: ${JSON.stringify(state.replayedCast.completedWorkroom)}`);
+    if (!Number.isFinite(state.replayedCast.completedWorkroom.caddyOccupancy)
+      || state.replayedCast.completedWorkroom.caddyOccupancy > 0.4) throw new Error(`Replayed Crucible caddy obscures the primary scene field: ${JSON.stringify(state.replayedCast.completedWorkroom)}`);
+    if (!Number.isFinite(state.replayedCast.completedWorkroom.castScreenX)
+      || state.replayedCast.completedWorkroom.castScreenX < state.replayedCast.completedWorkroom.stageRight + 24) throw new Error(`Replayed Crucible cast remains behind the caddy: ${JSON.stringify(state.replayedCast.completedWorkroom)}`);
     if (state.replayedCast.completedWorkroom.stageTop < state.replayedCast.completedWorkroom.transformBarBottom + 8) throw new Error(`Replayed Crucible console overlaps the scene toolbar: ${JSON.stringify(state.replayedCast.completedWorkroom)}`);
+    phase = 'exercising-crucible-console-toggle';
+    const toggleBefore = await evaluate(ws, `(() => {
+      const sidebar = document.getElementById('sidebar');
+      const before = window.kaminosCrucibleViewportDebugState?.() || null;
+      return { before, tuckedSidebarWidth: sidebar?.getBoundingClientRect().width ?? null };
+    })()`);
+    const openHitTarget = await clickVisibleElementCenter(ws, 'crucible-viewport-console-toggle');
+    await sleep(360);
+    const toggleExpanded = await evaluate(ws, `(() => {
+      const sidebar = document.getElementById('sidebar');
+      const expandedState = document.getElementById('crucible-viewport-workspace')?.dataset.crucibleConsoleState || null;
+      const expandedSidebarWidth = sidebar?.getBoundingClientRect().width ?? null;
+      const expandedDebug = window.kaminosCrucibleViewportDebugState?.() || null;
+      return { expandedState, expandedSidebarWidth, expandedDebug };
+    })()`);
+    const tuckHitTarget = await clickVisibleElementCenter(ws, 'crucible-viewport-console-toggle');
+    await sleep(360);
+    const toggleRetucked = await evaluate(ws, `(() => {
+      const sidebar = document.getElementById('sidebar');
+      const retuckedState = document.getElementById('crucible-viewport-workspace')?.dataset.crucibleConsoleState || null;
+      const retuckedSidebarWidth = sidebar?.getBoundingClientRect().width ?? null;
+      const retuckedDebug = window.kaminosCrucibleViewportDebugState?.() || null;
+      return { retuckedState, retuckedSidebarWidth, retuckedDebug };
+    })()`);
+    state.replayedCast.consoleToggleExercise = {
+      expandedState: toggleExpanded.expandedState,
+      retuckedState: toggleRetucked.retuckedState,
+      tuckedSidebarWidth: toggleBefore.tuckedSidebarWidth,
+      expandedSidebarWidth: toggleExpanded.expandedSidebarWidth,
+      retuckedSidebarWidth: toggleRetucked.retuckedSidebarWidth,
+      openHitTarget,
+      tuckHitTarget,
+      castTargetPreserved: Boolean(
+        toggleBefore.before?.castTargetSceneObjectId
+        && toggleExpanded.expandedDebug?.castTargetSceneObjectId === toggleBefore.before.castTargetSceneObjectId
+        && toggleRetucked.retuckedDebug?.castTargetSceneObjectId === toggleBefore.before.castTargetSceneObjectId
+      ),
+    };
+    if (state.replayedCast.consoleToggleExercise.expandedState !== 'expanded'
+      || state.replayedCast.consoleToggleExercise.retuckedState !== 'tucked'
+      || state.replayedCast.consoleToggleExercise.tuckedSidebarWidth > 1
+      || state.replayedCast.consoleToggleExercise.expandedSidebarWidth < 300
+      || state.replayedCast.consoleToggleExercise.retuckedSidebarWidth > 1
+      || !state.replayedCast.consoleToggleExercise.castTargetPreserved) {
+      throw new Error(`Crucible console toggle lost presentation or cast custody: ${JSON.stringify(state.replayedCast.consoleToggleExercise)}`);
+    }
   }
 
   if (fireFriendly) {
@@ -1337,23 +1433,41 @@ try {
     state.fullRoute.completedWorkroom = await evaluate(ws, `(() => {
       const workspace = document.getElementById('crucible-viewport-workspace');
       const stage = document.getElementById('crucible-worktable-stage');
+      const sidebar = document.getElementById('sidebar');
       const transformBar = document.getElementById('transform-bar');
       const stageRect = stage?.getBoundingClientRect();
+      const workspaceRect = workspace?.getBoundingClientRect();
       const transformBarRect = transformBar?.getBoundingClientRect();
+      const debug = window.kaminosCrucibleViewportDebugState?.() || null;
       return {
         heatState: workspace?.dataset.crucibleHeatState || null,
         routeStatus: workspace?.dataset.crucibleRouteStatus || null,
         roomPosture: workspace?.dataset.crucibleRoomPosture || null,
+        consoleState: workspace?.dataset.crucibleConsoleState || null,
         stageTop: stageRect?.top ?? null,
+        stageRight: stageRect?.right ?? null,
+        viewportWidth: window.innerWidth,
+        caddyOccupancy: stageRect && workspaceRect?.width ? stageRect.width / workspaceRect.width : null,
         transformBarBottom: transformBar?.classList.contains('visible') ? (transformBarRect?.bottom ?? null) : 0,
         castButtonDisabled: Boolean(document.getElementById('crucible-viewport-cast-button')?.disabled),
         cast: document.getElementById('crucible-viewport-cast')?.textContent || null,
         receipt: document.getElementById('crucible-viewport-receipt')?.textContent || null,
+        tuckedSidebarWidth: sidebar?.getBoundingClientRect().width ?? null,
+        sceneViewportWidth: document.getElementById('viewport')?.getBoundingClientRect().width ?? null,
+        sceneCanvasWidth: document.querySelector('#viewport > canvas')?.getBoundingClientRect().width ?? null,
+        castScreenX: debug?.castScreenPoint?.screenX ?? null,
       };
     })()`);
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, completedWorkroom: state.fullRoute.completedWorkroom };
     if (state.fullRoute.completedWorkroom.castButtonDisabled) throw new Error('Completed real cast is not actuatable from the Crucible tray');
     if (state.fullRoute.completedWorkroom.roomPosture !== 'cast-held') throw new Error(`Completed real cast did not open the room around the asset: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
+    if (state.fullRoute.completedWorkroom.consoleState !== 'tucked') throw new Error(`Completed real cast did not tuck the kiln caddy: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
+    if (state.fullRoute.completedWorkroom.tuckedSidebarWidth > 1) throw new Error(`Completed Crucible left the legacy sidebar in the cast workspace: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
+    if (Math.abs(state.fullRoute.completedWorkroom.sceneCanvasWidth - state.fullRoute.completedWorkroom.sceneViewportWidth) > 2) throw new Error(`Completed Crucible renderer retained stale viewport width: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
+    if (!Number.isFinite(state.fullRoute.completedWorkroom.caddyOccupancy)
+      || state.fullRoute.completedWorkroom.caddyOccupancy > 0.4) throw new Error(`Completed Crucible caddy obscures the primary scene field: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
+    if (!Number.isFinite(state.fullRoute.completedWorkroom.castScreenX)
+      || state.fullRoute.completedWorkroom.castScreenX < state.fullRoute.completedWorkroom.stageRight + 24) throw new Error(`Completed Crucible cast remains behind the caddy: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
     if (state.fullRoute.completedWorkroom.stageTop < state.fullRoute.completedWorkroom.transformBarBottom + 8) throw new Error(`Completed Crucible console overlaps the scene toolbar: ${JSON.stringify(state.fullRoute.completedWorkroom)}`);
   }
 

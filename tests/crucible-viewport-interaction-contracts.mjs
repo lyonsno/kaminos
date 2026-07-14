@@ -3,6 +3,27 @@ import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
+const consolePreferenceSource = html.match(
+  /function crucibleViewportNextConsolePreference\([\s\S]*?\n}/,
+);
+assert.ok(consolePreferenceSource, 'Console retuck policy must be a testable state transition');
+const crucibleViewportNextConsolePreference = Function(`return (${consolePreferenceSource[0]})`)();
+assert.equal(
+  crucibleViewportNextConsolePreference({ roomPosture: 'cast-held', previousRoomPosture: 'firing', preference: 'expanded' }),
+  'auto',
+  'a cast arriving after an operator opened the firing bench must reveal itself automatically',
+);
+assert.equal(
+  crucibleViewportNextConsolePreference({ roomPosture: 'cast-held', previousRoomPosture: 'cast-held', preference: 'expanded' }),
+  'expanded',
+  'opening an already completed cast must remain an operator-owned presentation choice',
+);
+assert.equal(
+  crucibleViewportNextConsolePreference({ roomPosture: 'firing', previousRoomPosture: 'firing', preference: 'expanded' }),
+  'expanded',
+  'opening the bench during a firing must remain stable until the result arrives',
+);
+
 const replayRunSource = html.match(
   /function replayRunWithSourceReport\([\s\S]*?\n}/,
 );
@@ -40,6 +61,7 @@ const requiredControls = [
   ['crucible-viewport-presentation-select', 'The firing mouth must expose the visible fire presentation'],
   ['crucible-viewport-fire-button', 'The firing mouth must expose one obvious primary command'],
   ['crucible-viewport-cast-button', 'The cast tray must expose the finished cast action'],
+  ['crucible-viewport-console-toggle', 'The active caddy must expose one plain-language control for reopening the full bench'],
 ];
 
 for (const [id, message] of requiredControls) {
@@ -76,6 +98,56 @@ assert.match(
   html,
   /workspace\.dataset\.crucibleRouteStatus\s*=\s*kilnRouteBenchState\.status/,
   'The workroom must expose the real route status used by its controls',
+);
+assert.match(
+  html,
+  /function toggleCrucibleViewportConsole\(\)[\s\S]*crucibleViewportConsolePreference\s*=\s*currentState\s*===\s*'tucked'\s*\?\s*'expanded'\s*:\s*'tucked'[\s\S]*renderCrucibleViewportWorkspace\(\)/,
+  'The operator must be able to open or tuck the bench without mutating route or cast state',
+);
+assert.match(
+  html,
+  /consoleToggle\.textContent\s*=\s*consoleState\s*===\s*'tucked'[\s\S]*'Open bench'[\s\S]*roomPosture\s*===\s*'cast-held'[\s\S]*'See cast'[\s\S]*'See furnace'/,
+  'The console toggle must describe the visible result in ordinary language',
+);
+assert.match(
+  html,
+  /progressLabel\.textContent\s*=\s*Number\.isFinite\(routeProgress\)[\s\S]*Math\.round\(routeProgress\s*\*\s*100\)/,
+  'The firing mouth must turn real route progress into a legible percentage when one exists',
+);
+assert.match(
+  html,
+  /onProgress:\s*event\s*=>\s*\{[\s\S]*event\?\.message\s*\|\|\s*'The model is working on your cast\.'[\s\S]*setKilnRouteBenchStatus/,
+  'Progress-only route events must update the caddy instead of being dropped when message is absent',
+);
+assert.doesNotMatch(
+  html,
+  /onProgress:\s*event\s*=>\s*\{\s*if\s*\(event\?\.message\)/,
+  'A missing optional progress message must not gate truthful progress ingestion',
+);
+assert.match(
+  html,
+  /crucibleViewportConsolePreference\s*=\s*crucibleViewportNextConsolePreference\(\{[\s\S]*previousRoomPosture:\s*crucibleViewportLastRoomPosture/,
+  'A newly completed cast must retuck even when the operator opened the full bench during firing',
+);
+assert.match(
+  html,
+  /function crucibleViewportCastScreenPoint\(castRecord\)[\s\S]*\.project\(camera\)[\s\S]*screenX/,
+  'The witness debug surface must expose where the selected cast lands in the visible scene',
+);
+assert.match(
+  html,
+  /const sceneViewportResizeObserver\s*=\s*new ResizeObserver\([\s\S]*sceneViewportResizeObserver\.observe\(vp\)/,
+  'The renderer must follow flex-driven viewport changes when the Crucible releases or restores sidebar width',
+);
+assert.match(
+  html,
+  /function crucibleViewportFiringCopy\([\s\S]*'The kiln is shaping your cast\.'[\s\S]*'Your cast is in the scene\.'/,
+  'Primary firing copy must explain the human-visible state instead of leading with route identity',
+);
+assert.match(
+  html,
+  /function crucibleViewportCastCopy\([\s\S]*'Your splat is in the scene\.'/,
+  'Primary cast copy must explain the result while path and route identity remain in the receipt',
 );
 
 assert.match(

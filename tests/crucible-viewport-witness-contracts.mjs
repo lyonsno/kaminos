@@ -9,6 +9,56 @@ import { createSchedulerVerificationReceipt } from '../lib/scheduler-verificatio
 
 const witness = readFileSync(new URL('../crucible-viewport-witness.mjs', import.meta.url), 'utf8');
 const witnessPath = new URL('../crucible-viewport-witness.mjs', import.meta.url);
+assert.match(
+  witness,
+  /consoleState:\s*workspace\?\.dataset\.crucibleConsoleState/,
+  'Visual witness must record whether the Crucible is expanded or tucked',
+);
+assert.match(
+  witness,
+  /const viewportWidth\s*=\s*Number\(args\.get\('viewport-width'\)[\s\S]*const viewportHeight\s*=\s*Number\(args\.get\('viewport-height'\)/,
+  'Visual witness must exercise workstation layouts narrower than its default capture',
+);
+assert.match(
+  witness,
+  /completedWorkroom\.consoleState\s*!==\s*'tucked'/,
+  'A completed cast must fail visual acceptance if the caddy did not tuck',
+);
+assert.match(
+  witness,
+  /completedWorkroom\.caddyOccupancy\s*>\s*0\.4/,
+  'A completed cast must fail visual acceptance when the caddy consumes more than forty percent of its actual scene workspace',
+);
+assert.match(
+  witness,
+  /consoleToggleExercise[\s\S]*expandedState[\s\S]*retuckedState[\s\S]*castTargetPreserved/,
+  'Visual witness must actuate open and tuck and reject any presentation toggle that loses cast custody',
+);
+assert.match(
+  witness,
+  /tuckedSidebarWidth[\s\S]*expandedSidebarWidth[\s\S]*retuckedSidebarWidth/,
+  'Visual witness must prove the caddy releases sidebar width and restores navigation with the full bench',
+);
+assert.match(
+  witness,
+  /Math\.abs\(state\.(?:replayedCast|fullRoute)\.completedWorkroom\.sceneCanvasWidth\s*-\s*state\.(?:replayedCast|fullRoute)\.completedWorkroom\.sceneViewportWidth\)\s*>\s*2/,
+  'Visual witness must reject a renderer canvas that retains the old sidebar-constrained width',
+);
+assert.match(
+  witness,
+  /castScreenX\s*<\s*state\.(?:replayedCast|fullRoute)\.completedWorkroom\.stageRight\s*\+\s*24/,
+  'Visual witness must reject a selected cast whose projected center remains behind the caddy',
+);
+assert.match(
+  witness,
+  /function clickVisibleElementCenter\([\s\S]*document\.elementFromPoint[\s\S]*Input\.dispatchMouseEvent/,
+  'Visual witness must actuate the console toggle through a real visible hit target rather than DOM click',
+);
+assert.doesNotMatch(
+  witness,
+  /button\?\.click\(\)/,
+  'Visual witness must not bypass hit testing for the console toggle',
+);
 const argumentFailureRoot = mkdtempSync(join(tmpdir(), 'kaminos-crucible-replay-args-'));
 try {
   const argumentFailureReport = join(argumentFailureRoot, 'witness.json');

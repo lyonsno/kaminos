@@ -52,20 +52,48 @@ assert.match(
   /data-crucible-room-posture="bench"/,
   'The workroom must declare its initial full-bench posture without waiting for route activity',
 );
+assert.match(
+  index,
+  /data-crucible-console-state="expanded"/,
+  'The workroom must declare presentation state separately from route posture',
+);
+assert.match(
+  index,
+  /function crucibleViewportConsoleState\(roomPosture\)/,
+  'Console presentation must be derived through a named helper instead of rewriting route truth',
+);
+assert.match(
+  index,
+  /workspace\.dataset\.crucibleConsoleState\s*=\s*consoleState/,
+  'The workroom must expose whether the operator is seeing the full bench or tucked caddy',
+);
 
 for (const [pattern, message] of [
   [/#crucible-viewport-workspace\[data-crucible-room-posture="firing"\][\s\S]*?pointer-events:\s*none;/, 'The firing posture must open the unused viewport to the live furnace instead of retaining a full-screen input shield'],
   [/#crucible-viewport-workspace\[data-crucible-room-posture="cast-held"\][\s\S]*?pointer-events:\s*none;/, 'The completed posture must open the unused viewport to the loaded cast'],
-  [/#crucible-viewport-workspace\[data-crucible-room-posture="cast-held"\][^}]*padding:\s*58px 18px 18px;/, 'The completed console must clear the scene transform toolbar instead of hiding its own title'],
-  [/data-crucible-room-posture="firing"\][\s\S]*?\.crucible-workroom-shell[\s\S]*?width:\s*min\(520px,\s*calc\(100% - 36px\)\)/, 'A firing must fold the worktable into a compact side console'],
-  [/data-crucible-room-posture="cast-held"\][\s\S]*?\.crucible-workroom-shell[\s\S]*?width:\s*min\(520px,\s*calc\(100% - 36px\)\)/, 'A completed cast must keep the worktable compact so the asset remains visible'],
-  [/data-crucible-room-posture="firing"\][\s\S]*?\.crucible-workroom-shell[\s\S]*?pointer-events:\s*auto;/, 'The compact firing console must remain directly operable'],
-  [/data-crucible-room-posture="cast-held"\][\s\S]*?\.crucible-workroom-shell[\s\S]*?pointer-events:\s*auto;/, 'The compact completed console must keep View cast and route controls operable'],
+  [/#crucible-viewport-workspace\[data-crucible-room-posture="cast-held"\]\[data-crucible-console-state="tucked"\][^}]*padding:\s*58px 14px 14px;/, 'The completed caddy must clear the scene transform toolbar instead of hiding its own title'],
+  [/data-crucible-console-state="tucked"\][\s\S]*?\.crucible-workroom-shell[\s\S]*?width:\s*min\(340px,\s*calc\(100% - 28px\)\)/, 'An active firing or completed cast must become a genuinely narrow kiln caddy'],
+  [/data-crucible-console-state="tucked"\][\s\S]*?\.crucible-workroom-shell[\s\S]*?pointer-events:\s*auto;/, 'The tucked kiln caddy must remain directly operable'],
   [/data-crucible-room-posture="firing"\][\s\S]*?\.crucible-viewport-proxy-sockets[\s\S]*?display:\s*none;/, 'Ancillary proxy sockets must leave the live furnace visual field during firing'],
   [/data-crucible-room-posture="cast-held"\][\s\S]*?\.crucible-viewport-shard-rack[\s\S]*?display:\s*none;/, 'The empty shard rack must not crowd the completed cast posture'],
 ]) {
   assert.match(index, pattern, message);
 }
+assert.match(
+  index,
+  /<details[^>]+id="crucible-viewport-receipt-tag"[^>]*>[\s\S]*?<summary[^>]*>Last firing<\/summary>/,
+  'Technical firing receipts must be expandable subtext instead of permanent primary UI',
+);
+assert.match(
+  index,
+  /#sidebar\.crucible-sidebar-released\s*\{[^}]*width:\s*0;/,
+  'The tucked caddy must release the legacy sidebar width back to the cast workspace',
+);
+assert.match(
+  index,
+  /function syncCrucibleViewportChrome\(workspace[\s\S]*workspace && !workspace\.hidden[\s\S]*document\.body\.dataset\.crucibleConsoleState[\s\S]*classList\.toggle\('crucible-sidebar-released', consoleState === 'tucked'\)/,
+  'Sidebar release must follow the visible Crucible rather than leaking into other app tabs',
+);
 
 for (const id of [
   'crucible-viewport-source-plate',
