@@ -52,6 +52,7 @@ function sharpCorrelation({
 
 function observation({
   episodeId,
+  episodeEpochId = 'governor-epoch-a',
   observationFiringId = firingId,
   maxFrameGapMs = 120,
   host = hostCorrelation({ correlationFiringId: observationFiringId }),
@@ -59,6 +60,7 @@ function observation({
 } = {}) {
   return {
     episodeId,
+    episodeEpochId,
     firingId: observationFiringId,
     frameTail: {
       sampleWindowMs: 30_000,
@@ -72,6 +74,7 @@ function observation({
 
 function governor() {
   return createForegroundBudgetGovernor({
+    episodeEpochId: 'governor-epoch-a',
     targetFrameGapMs: 50,
     failureWindowsBeforeAdjust: 2,
     successWindowsBeforeRelax: 2,
@@ -245,14 +248,72 @@ assert.equal(changedEvidenceDecision.schedulerChanged, false);
 assert.equal(identityGovernor.snapshot().retainedDecisionCount, 1);
 assert.equal(identityGovernor.forgetEpisode('same-episode'), true);
 assert.equal(identityGovernor.snapshot().retainedDecisionCount, 0);
-const afterForgetDecision = identityGovernor.observe(observation({
+assert.equal(identityGovernor.snapshot().retainedEpisodeIdentityCount, 1);
+const afterForgetReplay = identityGovernor.observe(observation({ episodeId: 'same-episode' }));
+assert.equal(afterForgetReplay.status, 'duplicate-observation-held');
+assert.equal(afterForgetReplay.action, 'hold');
+assert.equal(afterForgetReplay.schedulerChanged, false);
+assert.equal(afterForgetReplay.revision, firstIdentityDecision.revision);
+assert.deepEqual(afterForgetReplay.effectiveScheduler, firstIdentityDecision.effectiveScheduler);
+const afterForgetChangedEvidence = identityGovernor.observe(observation({
   episodeId: 'same-episode',
   maxFrameGapMs: 121,
 }));
-assert.notEqual(afterForgetDecision.status, 'held-invalid-evidence');
+assert.equal(afterForgetChangedEvidence.status, 'held-invalid-evidence');
+assert.ok(afterForgetChangedEvidence.failures.includes('episode-evidence-mismatch'));
+const afterForgetChangedFiring = identityGovernor.observe(observation({
+  episodeId: 'same-episode',
+  observationFiringId: 'other-firing',
+}));
+assert.equal(afterForgetChangedFiring.status, 'held-invalid-evidence');
+assert.ok(afterForgetChangedFiring.failures.includes('episode-firing-mismatch'));
+
+const clearHistoryGovernor = governor();
+const clearHistoryObservation = observation({ episodeId: 'clear-history-episode' });
+const beforeClearHistory = clearHistoryGovernor.observe(clearHistoryObservation);
+clearHistoryGovernor.clearDecisionHistory();
+assert.equal(clearHistoryGovernor.snapshot().retainedDecisionCount, 0);
+assert.equal(clearHistoryGovernor.snapshot().retainedEpisodeIdentityCount, 1);
+const afterClearHistoryReplay = clearHistoryGovernor.observe(clearHistoryObservation);
+assert.equal(afterClearHistoryReplay.status, 'duplicate-observation-held');
+assert.equal(afterClearHistoryReplay.schedulerChanged, false);
+assert.equal(afterClearHistoryReplay.revision, beforeClearHistory.revision);
+assert.deepEqual(afterClearHistoryReplay.effectiveScheduler, beforeClearHistory.effectiveScheduler);
+const afterClearHistoryChangedEvidence = clearHistoryGovernor.observe(observation({
+  episodeId: 'clear-history-episode',
+  maxFrameGapMs: 121,
+}));
+assert.equal(afterClearHistoryChangedEvidence.status, 'held-invalid-evidence');
+assert.ok(afterClearHistoryChangedEvidence.failures.includes('episode-evidence-mismatch'));
+const afterClearHistoryChangedFiring = clearHistoryGovernor.observe(observation({
+  episodeId: 'clear-history-episode',
+  observationFiringId: 'other-firing',
+}));
+assert.equal(afterClearHistoryChangedFiring.status, 'held-invalid-evidence');
+assert.ok(afterClearHistoryChangedFiring.failures.includes('episode-firing-mismatch'));
+
+assert.throws(
+  () => clearHistoryGovernor.beginEpisodeEpoch('governor-epoch-a'),
+  /must differ from the current episode epoch/,
+);
+const epochAdvance = clearHistoryGovernor.beginEpisodeEpoch('governor-epoch-b');
+assert.equal(epochAdvance.previousEpisodeEpochId, 'governor-epoch-a');
+assert.equal(epochAdvance.episodeEpochId, 'governor-epoch-b');
+assert.equal(clearHistoryGovernor.snapshot().retainedEpisodeIdentityCount, 0);
+const oldEpochReplay = clearHistoryGovernor.observe(clearHistoryObservation);
+assert.equal(oldEpochReplay.status, 'held-invalid-evidence');
+assert.ok(oldEpochReplay.failures.includes('episode-epoch-mismatch'));
+const newEpochObservation = observation({
+  episodeId: 'clear-history-episode',
+  episodeEpochId: 'governor-epoch-b',
+});
+const firstNewEpochDecision = clearHistoryGovernor.observe(newEpochObservation);
+assert.equal(firstNewEpochDecision.status, 'accumulating-pressure');
+assert.equal(firstNewEpochDecision.consecutivePressureWindows, 1);
 
 assert.throws(
   () => createForegroundBudgetGovernor({
+    episodeEpochId: 'invalid-config-epoch',
     targetFrameGapMs: 50,
     scheduler: { mode: 'cooperative', yieldMs: 4, waitForSubmittedWorkDone: true, phaseChunkSize: {} },
   }),

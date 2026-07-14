@@ -92,7 +92,7 @@ function expectedSchedulerForProfile(profileId) {
   throw new Error(`Unsupported --scheduler-profile ${profileId}`);
 }
 
-function createSharpForegroundBudgetGovernor(expectedScheduler) {
+function createSharpForegroundBudgetGovernor(expectedScheduler, episodeEpochId) {
   const phaseChunkSize = {
     spnPatch: expectedScheduler.spnPatchChunkSize,
     gaussianCpuItems: expectedScheduler.cpuChunkItems,
@@ -112,6 +112,7 @@ function createSharpForegroundBudgetGovernor(expectedScheduler) {
     { min: 1, max: value, stepFactor: 2 },
   ]));
   return createForegroundBudgetGovernor({
+    episodeEpochId,
     targetFrameGapMs: 50,
     failureWindowsBeforeAdjust: 1,
     successWindowsBeforeRelax: 2,
@@ -1407,9 +1408,11 @@ try {
       || !Array.isArray(hostEventCorrelation.unexplainedGapsAtOrAboveThreshold)) {
       throw new Error('Friendly firing is missing verified foreground host-event attribution');
     }
-    const governor = createSharpForegroundBudgetGovernor(expectedScheduler);
+    const governorEpisodeEpochId = `sharp-witness:${foregroundKilnHeartbeat.firingId}`;
+    const governor = createSharpForegroundBudgetGovernor(expectedScheduler, governorEpisodeEpochId);
     state.fullRoute.foregroundBudgetGovernorDecision = governor.observe({
       episodeId: `${foregroundKilnHeartbeat.firingId}:${schedulerProfileId}`,
+      episodeEpochId: governorEpisodeEpochId,
       firingId: foregroundKilnHeartbeat.firingId,
       frameTail: {
         sampleWindowMs: foregroundKilnHeartbeat.durationMs,

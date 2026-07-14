@@ -3,7 +3,7 @@
   "version": "0.1.12",
   "private": false,
   "type": "module",
-  "description": "Runtime helpers for browser WebGPU inference ports, with route receipts and scheduler profiles.",
+  "description": "A composable browser-native WebGPU inference runtime with cooperative scheduling, tensors, kernels, programs, and route adapters.",
   "license": "UNLICENSED",
   "repository": {
     "type": "git",

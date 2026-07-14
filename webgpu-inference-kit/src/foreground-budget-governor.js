@@ -65,6 +65,9 @@ function normalizeScheduler(input) {
 }
 
 function validateConfig(input) {
+  if (!isNonEmptyString(input.episodeEpochId)) {
+    throw new Error('episodeEpochId must be a non-empty caller-owned lifecycle identity');
+  }
   if (!isFiniteNonNegative(input.targetFrameGapMs) || input.targetFrameGapMs === 0) {
     throw new Error('targetFrameGapMs must be greater than 0');
   }
@@ -120,6 +123,7 @@ function validateObservation(observation) {
   const sharp = observation?.sharpDutyCorrelation;
   const firingId = observation?.firingId;
   if (!isNonEmptyString(observation?.episodeId)) failures.push('episode-id-missing');
+  if (!isNonEmptyString(observation?.episodeEpochId)) failures.push('episode-epoch-id-missing');
   if (!isNonEmptyString(firingId)) failures.push('firing-id-missing');
   if (!isPlainObject(observation?.frameTail) || !isFiniteNonNegative(observation.frameTail.maxFrameGapMs)) {
     failures.push('frame-tail-invalid');
@@ -195,6 +199,7 @@ function makeDecision({
     revision: state.revision,
     observation: {
       episodeId: observation?.episodeId || null,
+      episodeEpochId: observation?.episodeEpochId || null,
       firingId: observation?.firingId || null,
       maxFrameGapMs: observation?.frameTail?.maxFrameGapMs ?? null,
       targetFrameGapMs: state.targetFrameGapMs,
@@ -233,6 +238,7 @@ function relaxScheduler(state) {
 export function createForegroundBudgetGovernor(input = {}) {
   const baseline = validateConfig(input);
   const state = {
+    episodeEpochId: input.episodeEpochId,
     targetFrameGapMs: input.targetFrameGapMs,
     failureWindowsBeforeAdjust: input.failureWindowsBeforeAdjust ?? 2,
     successWindowsBeforeRelax: input.successWindowsBeforeRelax ?? 3,
@@ -248,20 +254,25 @@ export function createForegroundBudgetGovernor(input = {}) {
     consecutiveHealthyWindows: 0,
     pressureKey: null,
     decisionsByEpisode: new Map(),
+    episodeIdentities: new Map(),
   };
 
   function remember(observation, decision, evidenceFingerprint) {
-    state.decisionsByEpisode.set(observation.episodeId, {
+    state.episodeIdentities.set(observation.episodeId, {
       firingId: observation.firingId,
       evidenceFingerprint,
-      decision: clone(decision),
     });
+    state.decisionsByEpisode.set(observation.episodeId, clone(decision));
     return decision;
   }
 
   function observe(observation = {}) {
     state.previousScheduler = clone(state.scheduler);
     const failures = validateObservation(observation);
+    if (isNonEmptyString(observation?.episodeEpochId)
+      && observation.episodeEpochId !== state.episodeEpochId) {
+      failures.push('episode-epoch-mismatch');
+    }
     if (failures.length) {
       state.consecutivePressureWindows = 0;
       state.consecutiveHealthyWindows = 0;
@@ -275,9 +286,9 @@ export function createForegroundBudgetGovernor(input = {}) {
       });
     }
     const evidenceFingerprint = stableSerialize(observation);
-    const priorEpisode = state.decisionsByEpisode.get(observation.episodeId);
-    if (priorEpisode) {
-      if (priorEpisode.firingId !== observation.firingId) {
+    const priorIdentity = state.episodeIdentities.get(observation.episodeId);
+    if (priorIdentity) {
+      if (priorIdentity.firingId !== observation.firingId) {
         return makeDecision({
           state,
           observation,
@@ -286,7 +297,7 @@ export function createForegroundBudgetGovernor(input = {}) {
           failures: ['episode-firing-mismatch'],
         });
       }
-      if (priorEpisode.evidenceFingerprint !== evidenceFingerprint) {
+      if (priorIdentity.evidenceFingerprint !== evidenceFingerprint) {
         return makeDecision({
           state,
           observation,
@@ -295,7 +306,14 @@ export function createForegroundBudgetGovernor(input = {}) {
           failures: ['episode-evidence-mismatch'],
         });
       }
-      return clone(priorEpisode.decision);
+      const retainedDecision = state.decisionsByEpisode.get(observation.episodeId);
+      if (retainedDecision) return clone(retainedDecision);
+      return makeDecision({
+        state,
+        observation,
+        status: 'duplicate-observation-held',
+        action: 'hold',
+      });
     }
 
     const host = observation.hostEventCorrelation;
@@ -461,6 +479,28 @@ export function createForegroundBudgetGovernor(input = {}) {
     clearDecisionHistory() {
       state.decisionsByEpisode.clear();
     },
+    beginEpisodeEpoch(nextEpisodeEpochId) {
+      if (!isNonEmptyString(nextEpisodeEpochId)) {
+        throw new Error('nextEpisodeEpochId must be a non-empty caller-owned lifecycle identity');
+      }
+      if (nextEpisodeEpochId === state.episodeEpochId) {
+        throw new Error('nextEpisodeEpochId must differ from the current episode epoch');
+      }
+      const previousEpisodeEpochId = state.episodeEpochId;
+      state.episodeEpochId = nextEpisodeEpochId;
+      state.decisionsByEpisode.clear();
+      state.episodeIdentities.clear();
+      state.consecutivePressureWindows = 0;
+      state.consecutiveHealthyWindows = 0;
+      state.pressureKey = null;
+      state.previousScheduler = clone(state.scheduler);
+      return {
+        previousEpisodeEpochId,
+        episodeEpochId: state.episodeEpochId,
+        revision: state.revision,
+        scheduler: clone(state.scheduler),
+      };
+    },
     snapshot() {
       return {
         schema: FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
@@ -470,7 +510,9 @@ export function createForegroundBudgetGovernor(input = {}) {
         bounds: clone(state.bounds),
         targetFrameGapMs: state.targetFrameGapMs,
         attributionPolicy: clone(state.attributionPolicy),
+        episodeEpochId: state.episodeEpochId,
         retainedDecisionCount: state.decisionsByEpisode.size,
+        retainedEpisodeIdentityCount: state.episodeIdentities.size,
       };
     },
   };
