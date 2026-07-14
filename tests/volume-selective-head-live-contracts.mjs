@@ -1,0 +1,117 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+const root = resolve(import.meta.dirname, '..');
+const corePath = join(root, 'volume-core.js');
+const runtimePath = join(root, 'selective-head-live-runtime.mjs');
+const pagePath = join(root, 'volume-selective-head-live.html');
+const witnessPath = join(root, 'volume-selective-head-live-witness.mjs');
+const sequenceWitnessPath = join(root, 'volume-selective-head-live-sequence-witness.mjs');
+const exporterPath = join(root, 'volume-selective-head-live-model-export.py');
+const modelRoot = join(root, 'models', 'selective-head-live', 'exact-basin-160-to-128-v0');
+const modelManifestPath = join(modelRoot, 'manifest.json');
+const modelDataPath = join(modelRoot, 'model.f32');
+
+assert.ok(existsSync(exporterPath), 'frozen selective-head model exporter exists');
+assert.ok(existsSync(modelManifestPath), 'checksum-bound browser model manifest exists');
+assert.ok(existsSync(modelDataPath), 'packed frozen browser model exists');
+assert.ok(existsSync(pagePath), 'operator-clickable selective-head live page exists');
+assert.ok(existsSync(witnessPath), 'continuous live route witness exists');
+assert.ok(existsSync(sequenceWitnessPath), 'frame-locked continuous sequence witness exists');
+assert.ok(existsSync(runtimePath), 'WebGPU selective-head live runtime exists');
+
+const model = JSON.parse(readFileSync(modelManifestPath, 'utf8'));
+assert.equal(model.schema, 'kaminos.volume.selective-head-live-model.v0');
+assert.equal(model.identity, 'exact-basin-selective-carrier-heads-160-to-128-v0');
+assert.equal(model.source.lowGrid, 128);
+assert.equal(model.source.highGrid, 160);
+assert.equal(model.features.identity, 'full-low-field-plus-spatial-rbf-features-v0');
+assert.equal(model.features.featureCount, 185);
+assert.equal(model.features.lowFieldCount, 17);
+assert.equal(model.features.squaredLowFieldCount, 17);
+assert.equal(model.features.positionCount, 5);
+assert.equal(model.features.fourierCount, 18);
+assert.equal(model.features.rbfCount, 128);
+assert.equal(model.architecture.activation, 'tanh');
+assert.equal(model.architecture.hiddenWidth, 48);
+assert.deepEqual(model.outputs.map(output => output.channel), [
+  'supportProbability',
+  'fuel',
+  'fireLick',
+  'visibleFireCarrier',
+  'frontTopology',
+]);
+assert.equal(model.composition.supportThreshold, 0.98);
+assert.equal(model.composition.frontTopology, 'dense-ungated-residual-v0');
+assert.equal(model.composition.fuel, 'sparse-hard-support-gated-residual-v0');
+assert.equal(model.packed.dtype, 'float32-le');
+assert.equal(model.packed.byteLength, readFileSync(modelDataPath).byteLength);
+assert.match(model.packed.sha256, /^[a-f0-9]{64}$/);
+
+const core = `${readFileSync(corePath, 'utf8')}\n${readFileSync(runtimePath, 'utf8')}`;
+assert.match(core, /exact-basin-selective-head-live-v0/, 'core names the exact live route');
+assert.match(core, /box-average-linear-field-v0/, 'live route preserves the phase-aligned fluid downsample operator');
+assert.match(core, /max-pool-support-field-v0/, 'live route preserves the phase-aligned front downsample operator');
+assert.match(core, /full-low-field-plus-spatial-rbf-features-v0/, 'live route reports exact feature authority');
+assert.match(core, /downsampled-same-high-history-input-to-exact-high-target/, 'live route reports same-high-history input authority');
+assert.match(core, /selectiveHeadLiveRole/, 'live route exposes explicit truth, low-control, and learned roles');
+assert.match(core, /selectiveHeadLiveModelIdentity/, 'live debug state exposes frozen model identity');
+assert.match(core, /selectiveHeadLiveEffectiveRole/, 'live debug state distinguishes requested from effective role');
+assert.match(core, /selectiveHeadLiveFallbackReason/, 'live route fails loud when exact inference cannot apply');
+assert.match(core, /encodeSelectiveHeadLiveFields/, 'live frame derives low and learned fields before rendering');
+assert.match(core, /sampleSelectiveHeadLiveFields/, 'frame-locked samples derive the learned fields on each controlled simulation step');
+assert.match(core, /selective-head controlled readback raymarch-under-splats/, 'frame-locked samples preserve the hybrid learned render route');
+assert.match(core, /selective-head-live-lean-frame-readback-v0/, 'movie capture avoids unrelated full-grid telemetry readbacks');
+assert.match(core, /loadSelectiveHeadLiveReplayAnchor/, 'live route can load the checksum-bound exact training-horizon fields');
+assert.match(core, /setSelectiveHeadLiveCapturePaused/, 'live route exposes witness-owned pause and single-step release control');
+assert.match(core, /stepSelectiveHeadLiveCaptureFrame/, 'live route admits exactly one paused render and waits for GPU completion');
+assert.match(core, /checksum-bound-exact-basin-step96-field-anchor-v0/, 'live route reports exact field-anchor authority');
+assert.match(core, /SELECTIVE_HEAD_LIVE_MODEL_URL/, 'live route loads the checksum-bound packed model');
+
+const page = readFileSync(pagePath, 'utf8');
+assert.match(page, /Truth high/);
+assert.match(page, /Low phase-aligned control/);
+assert.match(page, /Selective full residual/);
+assert.match(page, /Continuous same-history live assay/);
+assert.match(page, /window\.__kaminosSelectiveHeadLive/);
+assert.match(page, /setCapturePaused/, 'operator page relays the frame-lock pause handshake');
+assert.match(page, /stepCaptureFrame/, 'operator page relays renderer-internal single-step capture');
+assert.match(page, /model identity/i);
+assert.match(page, /effective role/i);
+assert.match(page, /fallback/i);
+assert.match(page, /checksum-bound-exact-basin-step96-field-anchor-v0/, 'page names the exact replay-anchor authority');
+assert.match(page, /d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1/, 'page pins the exact high fluid checksum');
+assert.match(page, /1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8/, 'page pins the exact high front checksum');
+assert.match(page, /warmupTarget/, 'page exposes the requested replay horizon');
+assert.match(page, /warmupComplete/, 'page distinguishes warmup from learned execution');
+
+const witness = readFileSync(witnessPath, 'utf8');
+assert.match(witness, /kaminos\.volume\.selective-head-live-witness\.v0/);
+assert.match(witness, /exact-basin-selective-head-live-v0/);
+assert.match(witness, /minimumContinuousSeconds/);
+assert.match(witness, /continuousFrameDelta/);
+assert.match(witness, /requestedRole/);
+assert.match(witness, /effectiveRole/);
+assert.match(witness, /fallbackReason/);
+assert.match(witness, /failurePhase/);
+
+const sequenceWitness = readFileSync(sequenceWitnessPath, 'utf8');
+assert.match(sequenceWitness, /kaminos\.volume\.selective-head-live-sequence-witness\.v0/);
+assert.match(sequenceWitness, /frame-locked-consecutive-simulation-steps-v0/);
+assert.match(sequenceWitness, /cdp-presented-frame-after-consecutive-sim-step-v0/);
+assert.match(sequenceWitness, /setCapturePaused\(true\)/);
+assert.match(sequenceWitness, /stepCaptureFrame\(\)/);
+assert.match(sequenceWitness, /canvasElement\(\)\.getBoundingClientRect/);
+assert.match(sequenceWitness, /captureBeyondViewport: false, clip/);
+assert.match(sequenceWitness, /Emulation\.setDeviceMetricsOverride/);
+assert.match(sequenceWitness, /width: 1620, height: 633, deviceScaleFactor: 2/);
+assert.match(sequenceWitness, /requestedFrameCount/);
+assert.match(sequenceWitness, /capturedSimSteps/);
+assert.match(sequenceWitness, /assertConsecutiveSteps/);
+assert.match(sequenceWitness, /effectiveRole/);
+assert.match(sequenceWitness, /failurePhase/);
+assert.match(sequenceWitness, /ffmpeg/);
+
+console.log('selective-head live contracts passed');

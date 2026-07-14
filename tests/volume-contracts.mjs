@@ -197,7 +197,7 @@ assert.match(core, /boundarySidecarProximity/, 'Boundary sidecar raymarch derive
 assert.match(core, /boundarySidecarFootprintWidth/, 'Boundary sidecar raymarch derives a ray-footprint reconstruction width');
 assert.match(core, /boundarySidecarBuildPipeline/, 'Renderer owns a boundary sidecar compute pipeline');
 assert.match(core, /encodeBoundarySidecar/, 'Render loop encodes the boundary sidecar bake before drawing');
-assert.match(core, /async function sampleFrame\([^)]*\)[\s\S]*encodeBoundarySidecar\(encoder\)[\s\S]*encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos volume one-off readback pass'/, 'sampleFrame readback bakes the boundary sidecar before drawing evidence frames');
+assert.match(core, /async function sampleFrame\([^)]*\)[\s\S]*encodeBoundarySidecar\(encoder(?:,[^)]*)?\)[\s\S]*encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos volume one-off readback pass'/, 'sampleFrame readback bakes the boundary sidecar before drawing evidence frames');
 assert.match(core, /sampleWorldBoundarySidecar/, 'Raymarch samples the baked boundary sidecar');
 assert.match(core, /boundarySidecarStepFootprintWidth/, 'Boundary-fire path compensates sheet width for ray step footprint');
 const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5\) \{[\s\S]*?let boundaryGradientGate/);
@@ -543,7 +543,7 @@ assert.match(core, /uniforms\[19\]\s*=\s*renderPhaseTimeMs\s*\*\s*0\.001/, 'look
 assert.match(core, /uniforms\[44\]\s*=\s*lookFreeze\s*\?\s*0\s*:\s*\(historyValid \? requestedTemporalAccum : 0\)/, 'look freeze disables temporal history blending instead of accumulating crawl');
 assert.match(core, /uniforms\[45\]\s*=\s*lookFreeze\s*\?\s*0\s*:\s*\(controlsSnapshot\.temporalJitter \?\? 0\.85\)/, 'look freeze disables temporal ray jitter');
 assert.match(core, /uniforms\[47\]\s*=\s*renderPhaseFrame\s*%\s*4096/, 'look freeze pins shader frame index through the freeze-aware render phase');
-assert.match(core, /const sampleLookFreeze = normalizeLookFreeze\(controlsSnapshot\.lookFreeze\)[\s\S]*if \(advanceSim && !sampleLookFreeze\) \{[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder, \{ force: true \}\)[\s\S]*\} else if \(!sampleLookFreeze\)/, 'sampleFrame must not advance sim/majorant while look freeze is active but may rebuild majorants for frozen render-scale reads');
+assert.match(core, /const sampleLookFreeze = normalizeLookFreeze\(controlsSnapshot\.lookFreeze\)[\s\S]*if \(advanceSim && !sampleLookFreeze\) \{[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder, \{[^}]*force: true[^}]*\}\)[\s\S]*\} else if \(!sampleLookFreeze\)/, 'sampleFrame must not advance sim/majorant while look freeze is active but may rebuild majorants for frozen render-scale reads');
 assert.match(index, /id="volume-history-clamp"/, 'Volume tab exposes temporal history clamp control');
 assert.match(index, /volume_history_clamp/, 'URL route can override temporal history clamp strength');
 assert.match(index, /historyClamp/, 'Volume controls carry temporal history clamp strength into the renderer');
@@ -1163,7 +1163,7 @@ assert.match(core, /normalizePyroCompareMode\(controlsSnapshot\.pyroCompareMode\
 assert.match(core, /pyroCompareMuted\s*=\s*pyroCompareMode\s*===\s*'base'/, 'Base compare mode mutes Pyro material carriers');
 assert.match(core, /lookFreezeCanPin\(state\)/, 'Look-lab freeze waits for an initialized sim frame before pinning');
 assert.match(core, /pumpLookLabFrozenFrame\(\)/, 'Frozen look-lab controls force a redraw even when the browser parks RAF');
-assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder\)/, 'Look-lab freeze skips sim and majorant passes while live mode keeps stepping');
+assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder(?:,[^)]*)?\)/, 'Look-lab freeze skips sim and majorant passes while live mode keeps stepping');
 assert.match(core, /lookFreezeRenderTimeMs/, 'Look-lab freeze pins renderer time as well as sim stepping so radiance probes do not crawl');
 assert.match(core, /lookFreezeRenderFrame/, 'Look-lab freeze pins temporal-frame shader input as well as sim stepping');
 assert.match(core, /typeof state\.lookFreezeRenderTimeMs !== 'number'/, 'Look-lab freeze render-time pin treats null as unpinned rather than finite zero');

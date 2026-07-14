@@ -7,6 +7,14 @@ import {
   BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS,
   packBoundarySplatFeatureCapture,
 } from './boundary-splat-feature-capture.mjs';
+import {
+  SELECTIVE_HEAD_LIVE_FEATURE_AUTHORITY,
+  SELECTIVE_HEAD_LIVE_MODEL,
+  SELECTIVE_HEAD_LIVE_MODEL_URL,
+  SELECTIVE_HEAD_LIVE_PAIR_AUTHORITY,
+  SELECTIVE_HEAD_LIVE_ROUTE,
+  createSelectiveHeadLiveRuntime,
+} from './selective-head-live-runtime.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -40,6 +48,8 @@ const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
+const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
+const SELECTIVE_HEAD_LIVE_REPLAY_ANCHOR_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
 const FULL_FIELD_CHANNELS = [
@@ -104,6 +114,11 @@ function normalizeGridSize(value) {
   const requested = Number(value);
   if (SUPPORTED_GRID_SIZES.includes(requested)) return requested;
   return DEFAULT_GRID_SIZE;
+}
+
+function normalizeSelectiveHeadLiveRole(value) {
+  const role = String(value || 'off');
+  return SELECTIVE_HEAD_LIVE_ROLES.has(role) ? role : 'off';
 }
 
 function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE) {
@@ -5091,6 +5106,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     routeIdentity: ROUTE_IDENTITY,
     requestedRoute: 'kaminos_volume_smoke=1',
     effectiveRoute: ROUTE_IDENTITY,
+    selectiveHeadLiveRole: normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole),
+    selectiveHeadLiveEffectiveRole: 'off',
+    selectiveHeadLiveRouteIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+    selectiveHeadLiveModelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
+    selectiveHeadLiveModelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
+    selectiveHeadLiveFeatureAuthority: SELECTIVE_HEAD_LIVE_FEATURE_AUTHORITY,
+    selectiveHeadLivePairAuthority: SELECTIVE_HEAD_LIVE_PAIR_AUTHORITY,
+    selectiveHeadLiveFallbackReason: null,
+    selectiveHeadLiveReplayAnchor: null,
+    selectiveHeadLiveCapturePaused: false,
+    selectiveHeadLive: null,
     backend: 'inactive',
     active: false,
     width: 0,
@@ -5579,6 +5605,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySidecarWriteBindGroup = null;
   let boundarySplatComputeBindGroups = [];
   let boundarySplatRenderBindGroup = null;
+  let selectiveHeadLiveRuntime = null;
+  let selectiveHeadLiveBindGroups = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
@@ -5637,6 +5665,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let lastTemporalControlSignature = '';
   let format = null;
   let raf = 0;
+  let selectiveHeadLiveCapturePaused = false;
   const timingSamples = {
     rafDelta: [],
     cpuFrame: [],
@@ -6076,6 +6105,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function destroyFluidState() {
+    selectiveHeadLiveRuntime?.destroy();
+    selectiveHeadLiveRuntime = null;
+    selectiveHeadLiveBindGroups = null;
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
@@ -6159,6 +6191,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     historyTextureSize = key;
     resetTemporalHistory('history-resized');
     rebuildFluidBindGroups();
+    rebuildSelectiveHeadLiveBindGroups();
   }
 
   function temporalCameraSignature() {
@@ -6296,6 +6329,194 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ];
   }
 
+  function rebuildSelectiveHeadLiveBindGroups() {
+    if (
+      !selectiveHeadLiveRuntime
+      || !bindGroupLayout
+      || !majorantFluidBindGroupLayout
+      || !boundarySidecarReadBindGroupLayout
+      || !boundarySplatComputeBindGroupLayout
+      || !uniformBuffer
+      || !majorantBuffer
+      || !historyTexture
+      || !historySampler
+      || !externalEmitterBuffer
+      || !oracleActivityCueBuffer
+      || !boundarySidecarBuffer
+      || !boundarySplatBuffer
+      || !boundarySplatDrawBuffer
+      || !boundarySplatCameraBuffer
+      || !boundarySplatFeatureBuffer
+    ) {
+      selectiveHeadLiveBindGroups = null;
+      return;
+    }
+    const makeRole = (role, fluid, front) => ({
+      render: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} render`,
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluid } },
+          { binding: 2, resource: { buffer: fluidBuffers[0] } },
+          { binding: 3, resource: { buffer: majorantBuffer } },
+          { binding: 4, resource: historyTexture.createView() },
+          { binding: 5, resource: historySampler },
+          { binding: 6, resource: { buffer: externalEmitterBuffer } },
+          { binding: 7, resource: { buffer: front } },
+          { binding: 8, resource: { buffer: frontBuffers[0] } },
+          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
+          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+        ],
+      }),
+      majorant: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} majorant`,
+        layout: majorantFluidBindGroupLayout,
+        entries: [
+          { binding: 1, resource: { buffer: fluid } },
+          { binding: 7, resource: { buffer: front } },
+        ],
+      }),
+      sidecar: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} sidecar`,
+        layout: boundarySidecarReadBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluid } },
+          { binding: 7, resource: { buffer: front } },
+        ],
+      }),
+      splat: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} splat`,
+        layout: boundarySplatComputeBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 1, resource: { buffer: fluid } },
+          { binding: 2, resource: { buffer: boundarySplatBuffer } },
+          { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
+          { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
+          { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
+        ],
+      }),
+    });
+    selectiveHeadLiveBindGroups = {
+      lowPhaseAligned: makeRole(
+        'lowPhaseAligned',
+        selectiveHeadLiveRuntime.buffers.lowUpsampledFluid,
+        selectiveHeadLiveRuntime.buffers.lowUpsampledFront,
+      ),
+      selectiveFullResidual: makeRole(
+        'selectiveFullResidual',
+        selectiveHeadLiveRuntime.buffers.predictedFluid,
+        selectiveHeadLiveRuntime.buffers.predictedFront,
+      ),
+    };
+  }
+
+  function selectiveHeadLiveRequestedRole() {
+    return normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole);
+  }
+
+  function selectiveHeadLiveRoleGroups(kind) {
+    const role = state.selectiveHeadLiveEffectiveRole;
+    return selectiveHeadLiveBindGroups?.[role]?.[kind] || null;
+  }
+
+  function encodeSelectiveHeadLiveFields(encoder) {
+    const requestedRole = selectiveHeadLiveRequestedRole();
+    state.selectiveHeadLiveRole = requestedRole;
+    state.selectiveHeadLiveFallbackReason = null;
+    if (requestedRole === 'off') {
+      state.selectiveHeadLiveEffectiveRole = 'off';
+      state.selectiveHeadLive = null;
+      return false;
+    }
+    if (gridSize !== 160) {
+      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
+      state.selectiveHeadLiveFallbackReason = `unsupported-grid-${gridSize}-requires-160`;
+      return false;
+    }
+    if (!selectiveHeadLiveRuntime || !selectiveHeadLiveBindGroups) {
+      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
+      state.selectiveHeadLiveFallbackReason = 'frozen-model-runtime-unavailable';
+      return false;
+    }
+    selectiveHeadLiveRuntime.encode(encoder, currentFluid);
+    state.selectiveHeadLiveEffectiveRole = requestedRole;
+    state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
+    return true;
+  }
+
+  async function loadSelectiveHeadLiveReplayAnchor(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const fluidUrl = String(options.fluidUrl || '');
+    const frontUrl = String(options.frontUrl || '');
+    const fluidSha256 = String(options.fluidSha256 || '').toLowerCase();
+    const frontSha256 = String(options.frontSha256 || '').toLowerCase();
+    const completedSteps = Math.max(0, Math.floor(Number(options.completedSteps) || 0));
+    if (!fluidUrl || !frontUrl || !/^[a-f0-9]{64}$/.test(fluidSha256) || !/^[a-f0-9]{64}$/.test(frontSha256)) {
+      throw new Error('selective-head replay anchor requires URLs and SHA-256 identities for both fields');
+    }
+    if (gridSize !== 160 || completedSteps !== 96) {
+      throw new Error(`selective-head replay anchor requires grid 160 at step 96, got grid ${gridSize} step ${completedSteps}`);
+    }
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const [fluidResponse, frontResponse] = await Promise.all([
+      fetch(fluidUrl, { cache: 'no-store' }),
+      fetch(frontUrl, { cache: 'no-store' }),
+    ]);
+    if (!fluidResponse.ok || !frontResponse.ok) {
+      throw new Error(`selective-head replay anchor fetch failed: fluid=${fluidResponse.status} front=${frontResponse.status}`);
+    }
+    const [fluidBytes, frontBytes] = await Promise.all([fluidResponse.arrayBuffer(), frontResponse.arrayBuffer()]);
+    const expectedFluidBytes = 160 ** 3 * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+    const expectedFrontBytes = 160 ** 3 * Float32Array.BYTES_PER_ELEMENT;
+    if (fluidBytes.byteLength !== expectedFluidBytes || frontBytes.byteLength !== expectedFrontBytes) {
+      throw new Error(`selective-head replay anchor shape mismatch: fluid=${fluidBytes.byteLength}/${expectedFluidBytes} front=${frontBytes.byteLength}/${expectedFrontBytes}`);
+    }
+    const digestHex = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), value => value.toString(16).padStart(2, '0')).join('');
+    const [effectiveFluidSha256, effectiveFrontSha256] = await Promise.all([digestHex(fluidBytes), digestHex(frontBytes)]);
+    if (effectiveFluidSha256 !== fluidSha256 || effectiveFrontSha256 !== frontSha256) {
+      throw new Error(`selective-head replay anchor checksum mismatch: fluid=${effectiveFluidSha256} front=${effectiveFrontSha256}`);
+    }
+    rebuildFluidState(gridSize, majorantGridSize, 'selective-head-live-replay-anchor');
+    const uploadInChunks = (buffer, bytes) => {
+      const source = new Uint8Array(bytes);
+      const chunkBytes = 8 * 1024 * 1024;
+      for (let offset = 0; offset < source.byteLength; offset += chunkBytes) {
+        const length = Math.min(chunkBytes, source.byteLength - offset);
+        device.queue.writeBuffer(buffer, offset, source, offset, length);
+      }
+    };
+    for (const buffer of fluidBuffers) uploadInChunks(buffer, fluidBytes);
+    for (const buffer of frontBuffers) uploadInChunks(buffer, frontBytes);
+    state.frameCount = completedSteps;
+    state.simStepCount = completedSteps;
+    selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
+      device,
+      sourceFluidBuffers: fluidBuffers,
+      sourceFrontBuffers: frontBuffers,
+    });
+    rebuildSelectiveHeadLiveBindGroups();
+    state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    state.selectiveHeadLiveReplayAnchor = {
+      ok: true,
+      authority: SELECTIVE_HEAD_LIVE_REPLAY_ANCHOR_AUTHORITY,
+      completedSteps,
+      grid: gridSize,
+      fluidUrl,
+      frontUrl,
+      fluidSha256: effectiveFluidSha256,
+      frontSha256: effectiveFrontSha256,
+      fluidByteLength: fluidBytes.byteLength,
+      frontByteLength: frontBytes.byteLength,
+      modelIdentity: selectiveHeadLiveRuntime.modelIdentity,
+    };
+    return { ...state.selectiveHeadLiveReplayAnchor };
+  }
+
   function ensureMajorantBuffer() {
     if (majorantBuffer) return;
     majorantBuffer = device.createBuffer({
@@ -6400,6 +6621,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 5, resource: { buffer: boundarySplatBuffer } },
       ],
     });
+    rebuildSelectiveHeadLiveBindGroups();
   }
 
   function growBoundarySplatCapacity(candidateCount) {
@@ -6734,6 +6956,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
       requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
     }
+    if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
+      requiredLimits.maxStorageBuffersPerShaderStage = 9;
+    }
     const requiredFeatures = [];
     if (adapter.features?.has?.('timestamp-query')) {
       requiredFeatures.push('timestamp-query');
@@ -7051,6 +7276,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
+    if (gridSize === 160) {
+      selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
+        device,
+        sourceFluidBuffers: fluidBuffers,
+        sourceFrontBuffers: frontBuffers,
+      });
+      rebuildSelectiveHeadLiveBindGroups();
+      state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
+    }
     const pipelineError = await device.popErrorScope();
     if (pipelineError) {
       throw new Error(`fluid pipeline validation: ${pipelineError.message || String(pipelineError)}`);
@@ -8225,7 +8459,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
     pass.setPipeline(majorantComputePipeline);
-    pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
+    pass.setBindGroup(0, options.readBindGroup || majorantFrontBindGroups[currentFluid]);
     pass.setBindGroup(1, majorantWriteBindGroup);
     const workgroups = Math.ceil(majorantGridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
@@ -8272,7 +8506,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
     });
     pass.setPipeline(boundarySidecarBuildPipeline);
-    pass.setBindGroup(0, boundarySidecarReadBindGroups[currentFluid]);
+    pass.setBindGroup(0, options.readBindGroup || boundarySidecarReadBindGroups[currentFluid]);
     pass.setBindGroup(3, boundarySidecarWriteBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
@@ -8390,7 +8624,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([6, 0, 0, 0, 0, 0, boundarySplatCapacity, 0]));
     const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
     compactPass.setPipeline(boundarySplatCompactPipeline);
-    compactPass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
+    const computeBindGroup = hooks.computeBindGroup || boundarySplatComputeBindGroups[currentFluid];
+    compactPass.setBindGroup(0, computeBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
     compactPass.dispatchWorkgroups(workgroups, workgroups, workgroups);
     compactPass.end();
@@ -8399,7 +8634,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ...(hooks.finalizeTimestampWrites ? { timestampWrites: hooks.finalizeTimestampWrites } : {}),
     });
     finalizePass.setPipeline(boundarySplatFinalizePipeline);
-    finalizePass.setBindGroup(0, boundarySplatComputeBindGroups[currentFluid]);
+    finalizePass.setBindGroup(0, computeBindGroup);
     finalizePass.dispatchWorkgroups(1);
     finalizePass.end();
     hooks.afterCompaction?.();
@@ -8704,7 +8939,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }],
     });
     pass.setPipeline(targetPipeline);
-    pass.setBindGroup(0, bindGroups[currentFluid]);
+    pass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
   }
@@ -8767,6 +9002,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function render(now) {
     if (!state.active) return;
+    if (selectiveHeadLiveCapturePaused) {
+      raf = 0;
+      return;
+    }
     raf = requestAnimationFrame(render);
     try {
       const cpuStart = performance.now();
@@ -8783,15 +9022,44 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
         encodeSim(encoder);
-        encodeMajorant(encoder);
+        encodeSelectiveHeadLiveFields(encoder);
+        const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
+        encodeMajorant(encoder, {
+          readBindGroup: selectiveMajorant,
+          force: state.selectiveHeadLiveEffectiveRole !== 'off',
+        });
       }
-      encodeBoundarySidecar(encoder);
-      encodeBoundarySplats(encoder);
+      const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
+      const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
+      const selectiveRender = selectiveHeadLiveRoleGroups('render');
+      encodeBoundarySidecar(encoder, { readBindGroup: selectiveSidecar });
+      encodeBoundarySplats(encoder, { computeBindGroup: selectiveSplat });
       const currentTexture = context.getCurrentTexture();
       if (boundarySplatRequested()) {
-        const splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView());
+        const selectiveHybrid = state.selectiveHeadLiveEffectiveRole !== 'off';
+        if (selectiveHybrid) {
+          encodeDraw(
+            encoder,
+            currentTexture.createView(),
+            'kaminos selective-head live raymarch-under-splats pass',
+            pipeline,
+            { bindGroup: selectiveRender },
+          );
+        }
+        const splatApplied = encodeBoundarySplatDraw(
+          encoder,
+          currentTexture.createView(),
+          boundarySplatRenderPipeline,
+          { loadOp: selectiveHybrid ? 'load' : 'clear' },
+        );
         if (!splatApplied) {
-          encodeDraw(encoder, currentTexture.createView(), 'kaminos boundary splat explicit fallback raymarch');
+          encodeDraw(
+            encoder,
+            currentTexture.createView(),
+            'kaminos boundary splat explicit fallback raymarch',
+            pipeline,
+            { bindGroup: selectiveRender },
+          );
           state.volumeReconstructionStyle = 'boundary-splat-fallback-raymarch';
           emitStatus({ phase: 'boundary-splat-fallback', reason: state.boundarySplatFallbackReason });
         }
@@ -10760,34 +11028,66 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
     const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    let sampleSelectiveHeadLiveFields = null;
     if (advanceSim && !sampleLookFreeze) {
       encodeSim(encoder);
-      encodeMajorant(encoder, { force: true });
+      encodeSelectiveHeadLiveFields(encoder);
+      sampleSelectiveHeadLiveFields = {
+        majorant: selectiveHeadLiveRoleGroups('majorant'),
+        sidecar: selectiveHeadLiveRoleGroups('sidecar'),
+        splat: selectiveHeadLiveRoleGroups('splat'),
+        render: selectiveHeadLiveRoleGroups('render'),
+      };
+      encodeMajorant(encoder, { readBindGroup: sampleSelectiveHeadLiveFields.majorant, force: true });
     } else if (!sampleLookFreeze) {
-      encodeMajorant(encoder, { force: true });
+      encodeSelectiveHeadLiveFields(encoder);
+      sampleSelectiveHeadLiveFields = {
+        majorant: selectiveHeadLiveRoleGroups('majorant'),
+        sidecar: selectiveHeadLiveRoleGroups('sidecar'),
+        splat: selectiveHeadLiveRoleGroups('splat'),
+        render: selectiveHeadLiveRoleGroups('render'),
+      };
+      encodeMajorant(encoder, { readBindGroup: sampleSelectiveHeadLiveFields.majorant, force: true });
     } else {
       state.majorantBuiltThisFrame = false;
     }
-    encodeBoundarySidecar(encoder);
-    encodeBoundarySplats(encoder);
+    encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
+    encodeBoundarySplats(encoder, { computeBindGroup: sampleSelectiveHeadLiveFields?.splat || null });
     if (boundarySplatRequested()) {
-      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline);
+      const selectiveHybrid = state.selectiveHeadLiveEffectiveRole !== 'off';
+      if (selectiveHybrid) {
+        encodeDraw(
+          encoder,
+          frameTexture.createView(),
+          'kaminos selective-head controlled readback raymarch-under-splats',
+          readbackPipeline,
+          { bindGroup: sampleSelectiveHeadLiveFields?.render || null },
+        );
+      }
+      const splatApplied = encodeBoundarySplatDraw(
+        encoder,
+        frameTexture.createView(),
+        boundarySplatReadbackPipeline,
+        { loadOp: selectiveHybrid ? 'load' : 'clear' },
+      );
       if (!splatApplied) {
-        buffer.destroy();
-        const validationError = await device.popErrorScope();
-        return {
-          ok: false,
-          reason: 'boundary-splat-readback-route-unavailable',
-          validationError: validationError?.message || null,
-          boundarySplatFallbackReason: state.boundarySplatFallbackReason,
-          boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
-          boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
-          boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
-          boundarySplatTimestampStatus: state.boundarySplatTimestampStatus,
-          boundarySplatGpuProfile: state.boundarySplatGpuProfile,
-          boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
-          boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
-        };
+        if (!selectiveHybrid) {
+          buffer.destroy();
+          const validationError = await device.popErrorScope();
+          return {
+            ok: false,
+            reason: 'boundary-splat-readback-route-unavailable',
+            validationError: validationError?.message || null,
+            boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+            boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+            boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+            boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+            boundarySplatTimestampStatus: state.boundarySplatTimestampStatus,
+            boundarySplatGpuProfile: state.boundarySplatGpuProfile,
+            boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
+            boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
+          };
+        }
       }
       encodeBoundarySplatTelemetry(encoder, true);
     } else {
@@ -11512,6 +11812,96 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function captureSelectiveHeadLiveFrame(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    cancelAnimationFrame(raf);
+    const frameIndex = Math.max(0, Math.floor(Number(options.frameIndex) || 0));
+    const startNow = Number.isFinite(Number(options.startNow)) ? Number(options.startNow) : performance.now();
+    const stepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 1000 / 30);
+    const sampleNow = startNow + frameIndex * stepDeltaMs;
+    updateUniforms(sampleNow);
+    ensureFrameTexture();
+    const bytesPerPixel = 4;
+    const unpaddedBytesPerRow = state.width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const readback = device.createBuffer({
+      label: 'kaminos selective-head-live-lean-frame-readback-v0',
+      size: bytesPerRow * state.height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    device.pushErrorScope('validation');
+    const encoder = device.createCommandEncoder({ label: `kaminos selective-head live frame ${frameIndex}` });
+    encodeSim(encoder);
+    encodeSelectiveHeadLiveFields(encoder);
+    const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
+    const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
+    const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
+    const selectiveRender = selectiveHeadLiveRoleGroups('render');
+    encodeMajorant(encoder, { readBindGroup: selectiveMajorant, force: true });
+    encodeBoundarySidecar(encoder, { readBindGroup: selectiveSidecar });
+    encodeBoundarySplats(encoder, { computeBindGroup: selectiveSplat });
+    const selectiveHybrid = state.selectiveHeadLiveEffectiveRole !== 'off';
+    if (selectiveHybrid) {
+      encodeDraw(
+        encoder,
+        frameTexture.createView(),
+        'kaminos selective-head controlled readback raymarch-under-splats',
+        readbackPipeline,
+        { bindGroup: selectiveRender },
+      );
+    }
+    const splatApplied = encodeBoundarySplatDraw(
+      encoder,
+      frameTexture.createView(),
+      boundarySplatReadbackPipeline,
+      { loadOp: selectiveHybrid ? 'load' : 'clear' },
+    );
+    if (!splatApplied && !selectiveHybrid) {
+      readback.destroy();
+      await device.popErrorScope();
+      return { ok: false, reason: 'boundary-splat-readback-route-unavailable' };
+    }
+    encoder.copyTextureToBuffer(
+      { texture: frameTexture },
+      { buffer: readback, bytesPerRow, rowsPerImage: state.height },
+      { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+    );
+    device.queue.submit([encoder.finish()]);
+    const validationError = await device.popErrorScope();
+    if (validationError) {
+      readback.destroy();
+      return { ok: false, reason: `lean-frame-readback-validation:${validationError.message || String(validationError)}` };
+    }
+    await readback.mapAsync(GPUMapMode.READ);
+    const padded = new Uint8Array(readback.getMappedRange());
+    const rgba = new Uint8Array(unpaddedBytesPerRow * state.height);
+    for (let row = 0; row < state.height; row += 1) {
+      rgba.set(padded.subarray(row * bytesPerRow, row * bytesPerRow + unpaddedBytesPerRow), row * unpaddedBytesPerRow);
+    }
+    readback.unmap();
+    readback.destroy();
+    state.frameCount += 1;
+    return {
+      ok: true,
+      sequenceAuthority: 'frame-locked-consecutive-simulation-steps-v0',
+      imageAuthority: 'selective-head-live-lean-frame-readback-v0',
+      frameIndex,
+      width: state.width,
+      height: state.height,
+      rgba: Array.from(rgba),
+      simStepCount: state.simStepCount,
+      frameCount: state.frameCount,
+      effectiveRole: state.selectiveHeadLiveEffectiveRole,
+      requestedRole: state.selectiveHeadLiveRole,
+      modelIdentity: state.selectiveHeadLiveModelIdentity,
+      routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+      fallbackReason: state.selectiveHeadLiveFallbackReason,
+      boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+      backend: state.backend,
+      reason: null,
+    };
+  }
+
   async function controlledStepSequence(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const requestedFrameCount = Math.max(1, Math.floor(Number(options.frameCount) || 1));
@@ -11782,6 +12172,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     cancelAnimationFrame(raf);
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
 
+    const controlsBefore = { ...controlsSnapshot };
     controlsSnapshot = applyRuntimeQualityControls({
       ...controlsSnapshot,
       boundarySidecarSource: 'live',
@@ -11806,6 +12197,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.frameCount += 1;
     }
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    if (gridSize === 160) {
+      selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
+        device,
+        sourceFluidBuffers: fluidBuffers,
+        sourceFrontBuffers: frontBuffers,
+      });
+      rebuildSelectiveHeadLiveBindGroups();
+      state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
+    }
+    if (options.restoreControls === true) {
+      controlsSnapshot = applyRuntimeQualityControls(controlsBefore);
+      updateUniforms(startTimeMs + steps * timeStepMs);
+    }
     return {
       ok: true,
       identity: 'deterministic-replay-same-route-controls-fixed-step-v0',
@@ -11824,6 +12228,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
+      selectiveHeadLiveModelIdentity: selectiveHeadLiveRuntime?.modelIdentity || null,
+      controlsRestored: options.restoreControls === true,
     };
   }
 
@@ -12057,6 +12463,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.volumeResidualStrength = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
       state.volumeResidualFeatureDebug = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
       state.volumeResidualFeatureDebugMode = state.volumeResidualFeatureDebug ? 'residual-feature-debug-false-color-v0' : 'off';
+      state.selectiveHeadLiveRole = normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole);
       state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       state.boundarySplatRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       state.boundarySplatSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
@@ -12091,6 +12498,61 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         frameId: state.externalEmitterFrameId,
       };
     },
+    setSelectiveHeadLiveRole(role) {
+      const requestedRole = normalizeSelectiveHeadLiveRole(role);
+      controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRole: requestedRole };
+      state.selectiveHeadLiveRole = requestedRole;
+      resetTemporalHistory('selective-head-live-role-change');
+      return {
+        requestedRole,
+        effectiveRole: state.selectiveHeadLiveEffectiveRole,
+        routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+        modelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
+        fallbackReason: state.selectiveHeadLiveFallbackReason,
+      };
+    },
+    setSelectiveHeadLiveCapturePaused(paused) {
+      selectiveHeadLiveCapturePaused = Boolean(paused);
+      state.selectiveHeadLiveCapturePaused = selectiveHeadLiveCapturePaused;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      return {
+        paused: selectiveHeadLiveCapturePaused,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        authority: 'witness-owned-presented-frame-pause-release-v0',
+      };
+    },
+    async stepSelectiveHeadLiveCaptureFrame() {
+      if (!state.active || !device) return { ok: false, reason: 'inactive' };
+      if (!selectiveHeadLiveCapturePaused) return { ok: false, reason: 'capture-not-paused' };
+      const beforeFrameCount = state.frameCount;
+      const beforeSimStepCount = state.simStepCount;
+      selectiveHeadLiveCapturePaused = false;
+      render(performance.now());
+      selectiveHeadLiveCapturePaused = true;
+      state.selectiveHeadLiveCapturePaused = true;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      const simStepDelta = state.simStepCount - beforeSimStepCount;
+      const frameDelta = state.frameCount - beforeFrameCount;
+      return {
+        ok: state.active && simStepDelta === 1 && frameDelta === 1,
+        reason: state.error || (simStepDelta !== 1 || frameDelta !== 1 ? `single-step-delta-mismatch:${frameDelta}/${simStepDelta}` : null),
+        authority: 'renderer-internal-paused-single-step-gpu-complete-v0',
+        beforeFrameCount,
+        beforeSimStepCount,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        effectiveRole: state.selectiveHeadLiveEffectiveRole,
+        requestedRole: state.selectiveHeadLiveRole,
+        fallbackReason: state.selectiveHeadLiveFallbackReason,
+        boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+      };
+    },
+    loadSelectiveHeadLiveReplayAnchor,
     setTruthOracleActivityCue(payload = {}) {
       const source = payload && typeof payload === 'object' ? payload : {};
       const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
@@ -12188,6 +12650,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,
+    captureSelectiveHeadLiveFrame,
     renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
