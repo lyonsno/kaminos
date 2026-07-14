@@ -36,6 +36,8 @@ assert.match(exporter, /Emulation\.setDeviceMetricsOverride/, 'exporter enforces
 assert.match(exporter, /viewportContract/, 'export manifest records requested and effective viewport custody');
 assert.match(exporter, /--render-canvas-size/, 'exporter accepts an explicit renderer canvas CSS size instead of trusting pre-render intrinsic dimensions');
 assert.match(exporter, /renderCanvasContract/, 'export manifest records requested and effective renderer canvas geometry');
+assert.match(exporter, /remount-imported-render-canvas/, 'exporter reacquires and restyles a renderer canvas replaced during warmup initialization');
+assert.match(exporter, /post-render-canvas-geometry-drift/, 'exporter rejects a final render that replaced or resized the fixed witness canvas');
 assert.match(exporter, /fluid-front-only-v0/, 'exporter names the narrow fluid/front-only scope used by model pair production');
 assert.match(
   exporter,

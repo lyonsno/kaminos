@@ -430,6 +430,58 @@ async function uploadInitialArtifact(ws, sessionId, kind, artifact) {
   return { kind, byteLength: bytes.byteLength, sha256: artifact.sha256, chunkCount, chunkFloats };
 }
 
+async function mountImportedRenderCanvas(ws, phase) {
+  const canvasMount = await evaluateByValue(ws, `(() => {
+    const canvas = window.__kaminosVolumePrototype?.canvasElement?.();
+    if (!canvas) return { ok: false, reason: 'renderer-canvas-missing' };
+    const requestedSize = ${JSON.stringify(renderCanvasSize)};
+    const height = requestedSize?.height ?? Math.max(64, Math.min(700, window.innerHeight));
+    const width = requestedSize?.width ?? Math.max(64, Math.min(window.innerWidth, height * canvas.width / Math.max(1, canvas.height)));
+    if (width > window.innerWidth || height > window.innerHeight) {
+      return { ok: false, reason: 'requested-canvas-exceeds-viewport', width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
+    }
+    document.body.appendChild(canvas);
+    canvas.style.setProperty('position', 'fixed', 'important');
+    canvas.style.setProperty('left', '0px', 'important');
+    canvas.style.setProperty('top', '0px', 'important');
+    canvas.style.setProperty('width', width + 'px', 'important');
+    canvas.style.setProperty('height', height + 'px', 'important');
+    canvas.style.setProperty('display', 'block', 'important');
+    canvas.style.setProperty('visibility', 'visible', 'important');
+    canvas.style.setProperty('opacity', '1', 'important');
+    canvas.style.setProperty('transform', 'none', 'important');
+    canvas.style.setProperty('z-index', '2147483647', 'important');
+    canvas.style.setProperty('pointer-events', 'none', 'important');
+    const rect = canvas.getBoundingClientRect();
+    return {
+      ok: true,
+      identity: 'witness-mounted-imported-canvas-v0',
+      connected: canvas.isConnected,
+      intrinsicWidth: canvas.width,
+      intrinsicHeight: canvas.height,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+    };
+  })()`, phase);
+  const rect = canvasMount?.rect;
+  if (canvasMount?.ok !== true
+    || !canvasMount.connected
+    || !rect
+    || rect.x < 0
+    || rect.y < 0
+    || rect.width < 64
+    || rect.height < 64
+    || rect.x + rect.width > canvasMount.viewportWidth + 0.5
+    || rect.y + rect.height > canvasMount.viewportHeight + 0.5) {
+    throw new Error(`canvas-clip-offscreen: ${JSON.stringify(canvasMount)}`);
+  }
+  if (renderCanvasSize && (rect.width !== renderCanvasSize.width || rect.height !== renderCanvasSize.height)) {
+    throw new Error(`effective renderer canvas does not match requested geometry: ${JSON.stringify(canvasMount)}`);
+  }
+  return canvasMount;
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
   let phase = 'source-capture-validation';
@@ -643,63 +695,7 @@ async function main() {
       }
       if (renderPngPath) {
         phase = 'mount-imported-render-canvas';
-        const canvasMount = await evaluateByValue(ws, `(() => {
-          const canvas = window.__kaminosVolumePrototype?.canvasElement?.();
-          if (!canvas) return { ok: false, reason: 'renderer-canvas-missing' };
-          const requestedSize = ${JSON.stringify(renderCanvasSize)};
-          const height = requestedSize?.height ?? Math.max(64, Math.min(700, window.innerHeight));
-          const width = requestedSize?.width ?? Math.max(64, Math.min(window.innerWidth, height * canvas.width / Math.max(1, canvas.height)));
-          if (width > window.innerWidth || height > window.innerHeight) {
-            return { ok: false, reason: 'requested-canvas-exceeds-viewport', width, height, viewportWidth: window.innerWidth, viewportHeight: window.innerHeight };
-          }
-          document.body.appendChild(canvas);
-          canvas.style.setProperty('position', 'fixed', 'important');
-          canvas.style.setProperty('left', '0px', 'important');
-          canvas.style.setProperty('top', '0px', 'important');
-          canvas.style.setProperty('width', width + 'px', 'important');
-          canvas.style.setProperty('height', height + 'px', 'important');
-          canvas.style.setProperty('display', 'block', 'important');
-          canvas.style.setProperty('visibility', 'visible', 'important');
-          canvas.style.setProperty('opacity', '1', 'important');
-          canvas.style.setProperty('transform', 'none', 'important');
-          canvas.style.setProperty('z-index', '2147483647', 'important');
-          canvas.style.setProperty('pointer-events', 'none', 'important');
-          const rect = canvas.getBoundingClientRect();
-          return {
-            ok: true,
-            identity: 'witness-mounted-imported-canvas-v0',
-            connected: canvas.isConnected,
-            intrinsicWidth: canvas.width,
-            intrinsicHeight: canvas.height,
-            viewportWidth: window.innerWidth,
-            viewportHeight: window.innerHeight,
-            rect: { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
-          };
-        })()`, phase);
-        const mountedRect = canvasMount?.rect;
-        if (canvasMount?.ok !== true
-          || !canvasMount.connected
-          || !mountedRect
-          || mountedRect.x < 0
-          || mountedRect.y < 0
-          || mountedRect.width < 64
-          || mountedRect.height < 64
-          || mountedRect.x + mountedRect.width > canvasMount.viewportWidth + 0.5
-          || mountedRect.y + mountedRect.height > canvasMount.viewportHeight + 0.5) {
-          throw new Error(`canvas-clip-offscreen: ${JSON.stringify(canvasMount)}`);
-        }
-        renderCanvasContract.effective = {
-          cssWidth: mountedRect.width,
-          cssHeight: mountedRect.height,
-          intrinsicWidthBeforeRender: canvasMount.intrinsicWidth,
-          intrinsicHeightBeforeRender: canvasMount.intrinsicHeight,
-        };
-        if (renderCanvasSize && (
-          mountedRect.width !== renderCanvasSize.width
-          || mountedRect.height !== renderCanvasSize.height
-        )) {
-          throw new Error(`effective renderer canvas does not match requested geometry: ${JSON.stringify(renderCanvasContract)}`);
-        }
+        let canvasMount = await mountImportedRenderCanvas(ws, phase);
         for (let warmupIndex = 0; warmupIndex < renderWarmupCount; warmupIndex += 1) {
           phase = `render-imported-field-warmup-${warmupIndex + 1}`;
           const warmupReceipt = await evaluateByValue(
@@ -729,6 +725,14 @@ async function main() {
           });
           await delay(100);
         }
+        phase = 'remount-imported-render-canvas';
+        canvasMount = await mountImportedRenderCanvas(ws, phase);
+        renderCanvasContract.effective = {
+          cssWidth: canvasMount.rect.width,
+          cssHeight: canvasMount.rect.height,
+          intrinsicWidthBeforeRender: canvasMount.intrinsicWidth,
+          intrinsicHeightBeforeRender: canvasMount.intrinsicHeight,
+        };
         phase = 'render-imported-field';
         const renderReceipt = await evaluateByValue(
           ws,
@@ -751,6 +755,9 @@ async function main() {
         const rect = renderReceipt.canvasCssRect;
         if (rect.x < 0 || rect.y < 0 || rect.width < 64 || rect.height < 64) {
           throw new Error(`canvas-clip-offscreen: ${JSON.stringify(rect)}`);
+        }
+        if (renderCanvasSize && (rect.width !== renderCanvasSize.width || rect.height !== renderCanvasSize.height)) {
+          throw new Error(`post-render-canvas-geometry-drift: ${JSON.stringify({ requested: renderCanvasSize, effective: rect })}`);
         }
         await delay(100);
         phase = 'capture-imported-render';
@@ -796,6 +803,9 @@ async function main() {
           const secondaryRect = secondaryReceipt.canvasCssRect;
           if (secondaryRect.x < 0 || secondaryRect.y < 0 || secondaryRect.width < 64 || secondaryRect.height < 64) {
             throw new Error(`canvas-clip-offscreen: ${JSON.stringify(secondaryRect)}`);
+          }
+          if (renderCanvasSize && (secondaryRect.width !== renderCanvasSize.width || secondaryRect.height !== renderCanvasSize.height)) {
+            throw new Error(`post-render-canvas-geometry-drift: ${JSON.stringify({ requested: renderCanvasSize, effective: secondaryRect })}`);
           }
           await delay(100);
           phase = 'capture-imported-render-secondary';
