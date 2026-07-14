@@ -24,6 +24,7 @@ const BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY = 'boundary-splat-pbr-fire-field-v0
 const BOUNDARY_SPLAT_PBR_FIXED_SUBSTRATE_IDENTITY = 'operator-pretty-four-flame-substrate-v0';
 const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-nested-permutation-prefix-v0';
 const BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY = 'boundary-splat-projected-area-nested-tiers-v0';
+const BOUNDARY_SPLAT_POPULATION_ALLOCATOR_IDENTITY = 'boundary-splat-global-marginal-utility-population-v0';
 const BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY = 'boundary-splat-single-global-indirect-no-first-instance-v0';
 const BOUNDARY_SPLAT_SELECTOR_POLICY_CODE = 2;
 const BOUNDARY_SPLAT_SELECTOR_BUDGETS = [0, 12800, 6400, 3200, 1600, 800];
@@ -244,6 +245,133 @@ export function boundarySplatApplyBudgetCeiling(requestedTier, candidateCeiling)
   if (ceiling === 0) return tier;
   if (tier === 0) return ceiling;
   return Math.min(tier, ceiling);
+}
+
+function boundarySplatPositiveLimit(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : Number.POSITIVE_INFINITY;
+}
+
+function boundarySplatProjectedAreaPx(projectedDiameterPx) {
+  const diameter = Number(projectedDiameterPx);
+  if (!Number.isFinite(diameter) || diameter <= 0) return 0;
+  return Math.PI * Math.pow(diameter * 0.5, 2);
+}
+
+export function boundarySplatPopulationAllocationPlan(descriptors, options = {}) {
+  const sourceCandidateCount = Math.max(0, Math.floor(Number(options.sourceCandidateCount) || 0));
+  const candidateDrawLimit = boundarySplatPositiveLimit(options.candidateDrawLimit);
+  const projectedWorkLimit = boundarySplatPositiveLimit(options.projectedWorkLimit);
+  const historyMemoryLimitBytes = boundarySplatPositiveLimit(options.historyMemoryLimitBytes);
+  const historyCandidateCapacity = Math.max(0, Math.floor(Number(options.historyCandidateCapacity) || sourceCandidateCount));
+  const candidateStrideBytes = Math.max(1, Math.floor(Number(options.candidateStrideBytes) || BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES));
+  const requestedHistoryDepth = Math.max(1, Math.floor(Number(options.requestedHistoryDepth) || BOUNDARY_SPLAT_DEFAULT_HISTORY_DEPTH));
+  const historyDepthTiers = [...new Set((options.historyDepthTiers || [requestedHistoryDepth])
+    .map(value => Math.max(1, Math.floor(Number(value) || 0)))
+    .filter(value => value <= requestedHistoryDepth))]
+    .sort((a, b) => a - b);
+  if (!historyDepthTiers.length) historyDepthTiers.push(requestedHistoryDepth);
+  const effectiveHistoryDepth = [...historyDepthTiers]
+    .reverse()
+    .find(depth => depth * historyCandidateCapacity * candidateStrideBytes <= historyMemoryLimitBytes) || 0;
+  const reasons = [];
+  if (sourceCandidateCount <= 0) reasons.push('source-candidate-count-unavailable');
+  if (historyCandidateCapacity <= 0) reasons.push('history-candidate-capacity-unavailable');
+  if (effectiveHistoryDepth <= 0) reasons.push('history-memory-limit-below-minimum-depth');
+
+  const normalizedDescriptors = (descriptors || [])
+    .map((descriptor, arrivalIndex) => ({
+      ...descriptor,
+      index: Number.isFinite(Number(descriptor?.index)) ? Math.floor(Number(descriptor.index)) : arrivalIndex,
+      projectedAreaPx: boundarySplatProjectedAreaPx(descriptor?.projectedDiameterPx),
+      salience: Math.max(0, Number.isFinite(Number(descriptor?.salience)) ? Number(descriptor.salience) : 1),
+    }))
+    .sort((a, b) => a.index - b.index);
+  const candidateTiers = [...new Set([
+    ...BOUNDARY_SPLAT_ADAPTIVE_TIER_BUDGETS.filter(value => value > 0),
+    sourceCandidateCount,
+  ].filter(value => value > 0 && value <= sourceCandidateCount))].sort((a, b) => a - b);
+  const minimumCandidateBudget = candidateTiers[0] || 0;
+  const allocations = normalizedDescriptors.map(descriptor => ({
+    index: descriptor.index,
+    projectedDiameterPx: Number(descriptor.projectedDiameterPx) || 0,
+    projectedAreaPx: descriptor.projectedAreaPx,
+    salience: descriptor.salience,
+    requestedCandidateBudget: minimumCandidateBudget,
+    projectedWork: minimumCandidateBudget * descriptor.projectedAreaPx,
+  }));
+  let totalCandidateDraws = allocations.reduce((total, allocation) => total + allocation.requestedCandidateBudget, 0);
+  let totalProjectedWork = allocations.reduce((total, allocation) => total + allocation.projectedWork, 0);
+  if (totalCandidateDraws > candidateDrawLimit) reasons.push('candidate-draw-limit-below-population-minimum');
+  if (totalProjectedWork > projectedWorkLimit) reasons.push('projected-work-limit-below-population-minimum');
+  if (reasons.length) {
+    return {
+      identity: BOUNDARY_SPLAT_POPULATION_ALLOCATOR_IDENTITY,
+      authority: 'deterministic-cpu-request-gpu-count-readback-required-v0',
+      ok: false,
+      reasons,
+      constraints: { candidateDrawLimit, projectedWorkLimit, historyMemoryLimitBytes },
+      allocations: [],
+      totalCandidateDraws: 0,
+      totalProjectedWork: 0,
+      history: {
+        authority: 'truthful-shared-source-history-residency-plan-v0',
+        requestedDepth: requestedHistoryDepth,
+        effectiveDepth: effectiveHistoryDepth,
+        residentSourceCandidateCount: effectiveHistoryDepth * historyCandidateCapacity,
+        memoryBytes: effectiveHistoryDepth * historyCandidateCapacity * candidateStrideBytes,
+      },
+    };
+  }
+
+  while (true) {
+    const upgrades = allocations.map(allocation => {
+      const currentTierIndex = candidateTiers.indexOf(allocation.requestedCandidateBudget);
+      const nextCandidateBudget = candidateTiers[currentTierIndex + 1];
+      if (!nextCandidateBudget) return null;
+      const deltaCandidates = nextCandidateBudget - allocation.requestedCandidateBudget;
+      const deltaProjectedWork = deltaCandidates * allocation.projectedAreaPx;
+      if (totalCandidateDraws + deltaCandidates > candidateDrawLimit) return null;
+      if (totalProjectedWork + deltaProjectedWork > projectedWorkLimit) return null;
+      const qualityGain = allocation.projectedAreaPx
+        * allocation.salience
+        * Math.log2(nextCandidateBudget / Math.max(1, allocation.requestedCandidateBudget));
+      return {
+        allocation,
+        nextCandidateBudget,
+        deltaCandidates,
+        deltaProjectedWork,
+        marginalUtilityPerCandidate: qualityGain / Math.max(1, deltaCandidates),
+      };
+    }).filter(Boolean).sort((a, b) =>
+      b.marginalUtilityPerCandidate - a.marginalUtilityPerCandidate
+      || b.allocation.projectedAreaPx - a.allocation.projectedAreaPx
+      || a.allocation.index - b.allocation.index);
+    const upgrade = upgrades[0];
+    if (!upgrade) break;
+    upgrade.allocation.requestedCandidateBudget = upgrade.nextCandidateBudget;
+    upgrade.allocation.projectedWork += upgrade.deltaProjectedWork;
+    totalCandidateDraws += upgrade.deltaCandidates;
+    totalProjectedWork += upgrade.deltaProjectedWork;
+  }
+
+  return {
+    identity: BOUNDARY_SPLAT_POPULATION_ALLOCATOR_IDENTITY,
+    authority: 'deterministic-cpu-request-gpu-count-readback-required-v0',
+    ok: true,
+    reasons: [],
+    constraints: { candidateDrawLimit, projectedWorkLimit, historyMemoryLimitBytes },
+    allocations,
+    totalCandidateDraws,
+    totalProjectedWork,
+    history: {
+      authority: 'truthful-shared-source-history-residency-plan-v0',
+      requestedDepth: requestedHistoryDepth,
+      effectiveDepth: effectiveHistoryDepth,
+      residentSourceCandidateCount: effectiveHistoryDepth * historyCandidateCapacity,
+      memoryBytes: effectiveHistoryDepth * historyCandidateCapacity * candidateStrideBytes,
+    },
+  };
 }
 
 export function boundarySplatGroupDescriptorsByTier(descriptors, options = {}) {
