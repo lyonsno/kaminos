@@ -48,6 +48,11 @@ assert.match(exporter, /kaminos\.volume\.fire-flow-carrier-frozen-transfer\.v0/,
 assert.match(exporter, /frozen-earlier-replay-constant-residual-scale-derived-carrier-v0/, 'exporter admits the frozen fixed-gain carrier authority');
 assert.match(exporter, /targetDataUsedForTraining/, 'exporter validates target-blind transfer authority before import');
 assert.match(exporter, /JSON\.parse\(String\(args\.get\('--render-control-overrides-json'\)/, 'render control overrides use structured JSON parsing instead of ad hoc text splitting');
+assert.match(
+  exporter,
+  /Object\.hasOwn\(renderControlOverrides,\s*'oracleActivityDisplay'\)[\s\S]*?renderControlOverrides\.oracleActivityDisplay[\s\S]*?:\s*1/,
+  'an explicit scalar cue display override, including zero for beauty and flow-debug witnesses, wins over the isolated-cue default',
+);
 assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
 assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
 assert.match(exporter, /deterministicReplay/, 'exporter preserves deterministic replay identity');

@@ -583,10 +583,13 @@ async function main() {
           throw new Error(`scalar activity cue display forbids force/material injection: ${key}`);
         }
       }
+      const oracleActivityDisplay = Object.hasOwn(renderControlOverrides, 'oracleActivityDisplay')
+        ? renderControlOverrides.oracleActivityDisplay
+        : 1;
       renderControlOverrides = {
         ...renderControlOverrides,
         oracleActivityCue: 0,
-        oracleActivityDisplay: 1,
+        oracleActivityDisplay,
         oracleActivityCurlNoise: 0,
         oracleActivityVorticity: 0,
         oracleActivityMaterial: 0,
