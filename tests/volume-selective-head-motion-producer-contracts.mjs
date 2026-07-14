@@ -122,6 +122,16 @@ assert.match(producerSource, /viewportContract:\s*renderManifest\.viewportContra
 assert.match(producerSource, /renderWidth:\s*beauty\.renderWidth[\s\S]*renderHeight:\s*beauty\.renderHeight/, 'crop identity uses post-render dimensions rather than placeholder pre-render canvas intrinsics');
 assert.match(producerSource, /partialFlowDebug:[\s\S]*renderReceipt:\s*renderReceiptDescriptor\(partial, renderManifest\)/, 'partial-flow image retains its own secondary-render route, geometry, fallback, and capacity receipt');
 assert.match(producerSource, /--expected-viewport-size[\s\S]*context\.viewportSize[\s\S]*--expected-canvas-size[\s\S]*RENDER_CANVAS_SIZE/, 'producer gives the final assembler explicit viewport and canvas admission dimensions');
+assert.match(
+  producerSource,
+  /manifestEvidence\(fullManifestPath, \['channelMetrics', 'checkpointTransfer', 'support', 'residualBlend'\]\)/,
+  'frame receipt retains the composer channel metrics and predicted-support evidence under their actual schema keys',
+);
+assert.match(
+  producerSource,
+  /manifestEvidence\(calibratedManifestPath, \['channelMetrics', 'checkpointTransfer', 'support', 'residualBlend'\]\)/,
+  'calibrated frame receipt retains the same metrics and predicted-support evidence before deleting field binaries',
+);
 
 const targeted = run([
   '--frame-count', '1',

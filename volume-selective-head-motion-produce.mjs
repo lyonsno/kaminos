@@ -489,8 +489,8 @@ function executeFrame(frame, context, identity) {
   const fieldEvidence = {
     highExport: manifestEvidence(highManifestPath),
     pair: manifestEvidence(pairManifestPath),
-    selectiveFullResidual: manifestEvidence(fullManifestPath, ['metrics', 'checkpointTransfer', 'supportGate', 'residualBlend']),
-    selectiveCalibratedResidual: manifestEvidence(calibratedManifestPath, ['metrics', 'checkpointTransfer', 'supportGate', 'residualBlend']),
+    selectiveFullResidual: manifestEvidence(fullManifestPath, ['channelMetrics', 'checkpointTransfer', 'support', 'residualBlend']),
+    selectiveCalibratedResidual: manifestEvidence(calibratedManifestPath, ['channelMetrics', 'checkpointTransfer', 'support', 'residualBlend']),
   };
   const frameManifestPath = join(outDir, 'frame-manifests', `frame-${String(frame.frameIndex).padStart(4, '0')}.json`);
   const frameManifest = {
