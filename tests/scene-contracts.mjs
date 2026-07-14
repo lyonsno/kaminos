@@ -300,7 +300,8 @@ assert.match(index, /schema:\s*'kaminos\.asset-smoke-link\.v0'/, 'single-asset s
 assert.match(index, /function kaminosMeshAssetRouteFromSearch\(/, 'direct GLB smoke links resolve mesh_root/mesh_path from the URL');
 assert.match(index, /async function loadKaminosMeshAssetRoute\(/, 'direct GLB smoke links load and register a mesh scene object automatically');
 assert.match(index, /window\.kaminosAssetSmokeLinkDebugState/, 'direct asset smoke links expose requested/effective route and registration state to witnesses');
-assert.match(index, /await loadKaminosMeshAssetRoute\(meshRoute\)/, 'Kaminos initializes direct GLB smoke routes after the scene is ready');
+assert.match(index, /async function loadKaminosAssetRoutesFromSearch\(/, 'direct asset smoke links initialize through a route-owned function instead of being stranded behind environment loading');
+assert.match(index, /loadKaminosAssetRoutesFromSearch\(new URLSearchParams\(window\.location\.search\)\)/, 'Kaminos starts direct asset smoke routes independently of HDR environment loading');
 assert.match(index, /const RENDER_HANDOFF_SCHEMA\s*=\s*'kaminos\.render-handoff\.v0'/, 'splat route handoff declares a compact schema identity for downstream renderers');
 assert.match(index, /class HybridMeshSplatRoute/, 'Kaminos exposes a named hybrid mesh/splat route stub before real renderer integration');
 assert.match(index, /meshDepthOcclusion:\s*false/, 'hybrid splat route stub must explicitly say mesh depth occlusion is not implemented yet');

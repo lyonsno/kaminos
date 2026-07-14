@@ -1,0 +1,116 @@
+{
+  "requestedUrl": "http://127.0.0.1:8096/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Ftitan-hammer-realistic-sourcegen-2026-07-13%2Fpromoted%2Ftitan-hammer-trellis2mlx-fast-61014.glb",
+  "effectiveUrl": "http://127.0.0.1:8096/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Ftitan-hammer-realistic-sourcegen-2026-07-13%2Fpromoted%2Ftitan-hammer-trellis2mlx-fast-61014.glb",
+  "effectiveServerRoots": {
+    "scratch": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/scratch",
+      "exists": true
+    },
+    "scenes": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/scenes",
+      "exists": true
+    },
+    "splat-inbox": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/view-firings/surface-board-sharp",
+      "exists": true
+    },
+    "splat-production": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/kaminos-assets/splats/production",
+      "exists": true
+    },
+    "image-inbox": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/kaminos-assets/images/inbox",
+      "exists": false
+    },
+    "pipeline-runs": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/crucible-bench-shards-2026-07-13/kaminos-assets/pipeline-runs",
+      "exists": false
+    },
+    "greenroom": {
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom",
+      "exists": true
+    },
+    "lerms-preview": {
+      "path": "/private/tmp",
+      "exists": true
+    },
+    "pixal3d": {
+      "path": "/Users/noahlyons/dev/pixal3d-mlx/outputs",
+      "exists": true
+    },
+    "trellis2mlx": {
+      "path": "/Users/noahlyons/dev/trellis2mlx/assets/outputs",
+      "exists": true
+    }
+  },
+  "expectedServerRoot": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713",
+  "scenario": "mesh-asset-link",
+  "debugPort": 9439,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "userDataDir": "/tmp/kaminos-scene-object-witness-profile-9439-70685",
+  "settleMs": 3500,
+  "phase": "writing-report",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.115",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.245.15",
+    "WebKit-Version": "537.36 (@25f5b661e5b08141ec24b17d1ce96c5ceb5828da)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9439/devtools/browser/152d4e4d-4fc7-4dba-ac29-8c7494566844"
+  },
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9439/devtools/browser/152d4e4d-4fc7-4dba-ac29-8c7494566844\nTrying to load the allocator multiple times. This is *not* supported.\n[70696:57531446:0713/235110.886165:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[70696:57531446:0713/235110.888443:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[70696:57531446:0713/235110.892907:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "ok": true,
+  "screenshot": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/witnesses/hammer-trellis2mlx-fast-61014-direct-glb-link.png",
+  "screenshotBytes": 427705,
+  "evidence": {
+    "meshAssetLink": {
+      "state": {
+        "schema": "kaminos.asset-smoke-link.v0",
+        "assetType": "mesh",
+        "status": "loaded",
+        "requestedRoot": "lerms-preview",
+        "requestedPath": "kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-trellis2mlx-fast-61014.glb",
+        "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Ftitan-hammer-realistic-sourcegen-2026-07-13%2Fpromoted%2Ftitan-hammer-trellis2mlx-fast-61014.glb",
+        "fileName": "titan-hammer-trellis2mlx-fast-61014.glb",
+        "label": "Titan Hammer Trellis2mlx Fast 61014",
+        "registeredObjectId": "glb-6119d6ba-d74d-4257-82f5-7f664cd14d76",
+        "registeredAt": "2026-07-14T03:51:09.088Z",
+        "error": null
+      },
+      "object": {
+        "id": "glb-6119d6ba-d74d-4257-82f5-7f664cd14d76",
+        "label": "Titan Hammer Trellis2mlx Fast 61014",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Ftitan-hammer-realistic-sourcegen-2026-07-13%2Fpromoted%2Ftitan-hammer-trellis2mlx-fast-61014.glb",
+        "type": "glb",
+        "groupId": "group-056989ff-9469-45ca-8727-4c914ec99e0b",
+        "active": true,
+        "transform": {
+          "position": [
+            0.0001933574676513672,
+            0.000014066696166992188,
+            -0.0012691468000411987
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.8999697511904516,
+            1.8999697511904516,
+            1.8999697511904516
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      },
+      "requestedResource": "http://127.0.0.1:8096/api/read?root=lerms-preview&path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Ftitan-hammer-realistic-sourcegen-2026-07-13%2Fpromoted%2Ftitan-hammer-trellis2mlx-fast-61014.glb",
+      "rowText": "glb / /api/read?root=lerms-preview&path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Ftitan-hammer-realistic-sourcegen-2026-07-13%2Fpromoted%2Ftitan-hammer-trellis2mlx-fast-61014.glb\n      \n      \n        reloadable\n        ×",
+      "info": "Mesh asset loaded: Titan Hammer Trellis2mlx Fast 61014"
+    }
+  }
+}
