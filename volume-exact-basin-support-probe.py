@@ -21,18 +21,42 @@ PROBE_IDENTITY = "exact-basin-accepted-splat-support-head-v0"
 LABEL_AUTHORITY = "effective-splat-position-and-shader-formula-agreement-v0"
 SPLIT_IDENTITY = "spatial-block-hash-holdout-v0"
 THRESHOLD_IDENTITY = "validation-selected-f1-threshold-v0"
+RESIDUAL_GATE_CALIBRATION_IDENTITY = "validation-selected-support-conditioned-residual-gate-v0"
 CLASSIFIER_IDENTITY = "full-low-state-spatial-mlp-support-classifier-v0"
 CHANNEL_HEAD_IDENTITY = "support-gated-single-channel-residual-mlp-v0"
 FEATURE_IDENTITY = "full-low-field-plus-spatial-rbf-features-v0"
 PREVIEW_IDENTITY = "labeled-support-gate-channel-preview-v0"
+FIRE_FLOW_CARRIER = "fireFlowVisibilityCarrier"
+FIRE_FLOW_CARRIER_IDENTITY = "fire-flow-visibility-carrier-v0"
+FIRE_FLOW_CARRIER_AUTHORITY = "exact-high-field-renderer-coupled-derived-target-v0"
+VELOCITY_STENCIL_IDENTITY = "clamped-central-difference-matching-volume-core-wgsl-v0"
+LINEAR_CONTEXT_IDENTITY = "full-low-context-ridge-residual-control-v0"
+DERIVED_LOW_CONTEXT_IDENTITY = "native-low-derived-neighborhood-flow-context-v0"
+DERIVED_LOW_CONTEXT_CHANNELS = [
+    "curlMagnitude", "absoluteDivergence", "flowTerm", "materialTerm", FIRE_FLOW_CARRIER,
+]
 FLUID_CHANNELS = [
     "velocityX", "velocityY", "velocityZ", "densityCarrier",
     "smokeDensity", "heat", "fuel", "detail",
     "flame", "ember", "visibleFireCarrier", "combustionFront",
     "microdetail", "interfaceShred", "fireLick", "emberFleck",
 ]
-ALL_CHANNELS = [*FLUID_CHANNELS, "frontTopology"]
+NATIVE_CHANNELS = [*FLUID_CHANNELS, "frontTopology"]
+DERIVED_CHANNELS = [FIRE_FLOW_CARRIER]
+ALL_CHANNELS = [*NATIVE_CHANNELS, *DERIVED_CHANNELS]
 DEFAULT_CHANNELS = ["fuel", "fireLick", "visibleFireCarrier", "flame", "frontTopology"]
+DERIVED_TARGETS = {
+    FIRE_FLOW_CARRIER: {
+        "identity": FIRE_FLOW_CARRIER_IDENTITY,
+        "authority": FIRE_FLOW_CARRIER_AUTHORITY,
+        "velocityStencil": VELOCITY_STENCIL_IDENTITY,
+        "flowTerm": "smoothstep(0.015,0.12,curlMagnitude+absDivergence)",
+        "materialTerm": "smoothstep(0.025,0.74,max(flame,visibleFireCarrier,interfaceShred,frontTopology))",
+        "composition": "flowTerm*materialTerm",
+        "targetFamily": "fire-only-diagnostic-carrier",
+        "physicalTruth": False,
+    },
+}
 
 
 class ProbeFailure(RuntimeError):
@@ -55,6 +79,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-width", type=int, default=48)
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=1024)
+    parser.add_argument("--dense-batch-cells", type=int, default=32_768)
     parser.add_argument("--learning-rate", type=float, default=0.002)
     parser.add_argument("--weight-decay", type=float, default=1.0e-5)
     parser.add_argument("--spatial-block-size", type=int, default=8)
@@ -129,6 +154,59 @@ def parse_channels(raw: str) -> list[str]:
 def smoothstep(edge0: float, edge1: float, values: np.ndarray) -> np.ndarray:
     t = np.clip((values - np.float32(edge0)) / np.float32(edge1 - edge0), 0.0, 1.0)
     return (t * t * (3.0 - 2.0 * t)).astype(np.float32, copy=False)
+
+
+def derive_fire_flow_visibility_carrier(
+    fluid: np.ndarray,
+    front: np.ndarray,
+    grid: int,
+) -> tuple[np.ndarray, dict[str, np.ndarray], dict[str, Any]]:
+    velocity = np.asarray(fluid[:, :3], dtype=np.float32).reshape((grid, grid, grid, 3))
+    padded = np.pad(velocity, ((1, 1), (1, 1), (1, 1), (0, 0)), mode="edge")
+    vx0 = padded[1:-1, 1:-1, 0:-2]
+    vx1 = padded[1:-1, 1:-1, 2:]
+    vy0 = padded[1:-1, 0:-2, 1:-1]
+    vy1 = padded[1:-1, 2:, 1:-1]
+    vz0 = padded[0:-2, 1:-1, 1:-1]
+    vz1 = padded[2:, 1:-1, 1:-1]
+    curl = np.stack([
+        (vy1[..., 2] - vy0[..., 2]) - (vz1[..., 1] - vz0[..., 1]),
+        (vz1[..., 0] - vz0[..., 0]) - (vx1[..., 2] - vx0[..., 2]),
+        (vx1[..., 1] - vx0[..., 1]) - (vy1[..., 0] - vy0[..., 0]),
+    ], axis=-1).astype(np.float32, copy=False) * np.float32(0.5)
+    divergence = (
+        (vx1[..., 0] - vx0[..., 0])
+        + (vy1[..., 1] - vy0[..., 1])
+        + (vz1[..., 2] - vz0[..., 2])
+    ).astype(np.float32, copy=False) * np.float32(0.5)
+    curl_magnitude = np.linalg.norm(curl, axis=-1).astype(np.float32, copy=False).reshape(-1)
+    absolute_divergence = np.abs(divergence).astype(np.float32, copy=False).reshape(-1)
+    flow_term = smoothstep(0.015, 0.12, curl_magnitude + absolute_divergence)
+    material_energy = np.maximum.reduce([
+        np.asarray(fluid[:, 8], dtype=np.float32),
+        np.asarray(fluid[:, 10], dtype=np.float32),
+        np.asarray(fluid[:, 13], dtype=np.float32),
+        np.asarray(front, dtype=np.float32),
+    ])
+    material_term = smoothstep(0.025, 0.74, material_energy)
+    carrier = np.clip(flow_term * material_term, 0.0, 1.0).astype(np.float32, copy=False)
+    components = {
+        "curlMagnitude": curl_magnitude,
+        "absoluteDivergence": absolute_divergence,
+        "flowTerm": flow_term,
+        "materialTerm": material_term,
+        FIRE_FLOW_CARRIER: carrier,
+    }
+    return carrier, components, {
+        **DERIVED_TARGETS[FIRE_FLOW_CARRIER],
+        "grid": int(grid),
+        "cellCount": int(carrier.size),
+        "flowNonzeroCount": int(np.count_nonzero(flow_term)),
+        "materialNonzeroCount": int(np.count_nonzero(material_term)),
+        "carrierNonzeroCount": int(np.count_nonzero(carrier)),
+        "carrierMean": float(np.mean(carrier, dtype=np.float64)),
+        "carrierMax": float(np.max(carrier)),
+    }
 
 
 def derive_and_validate_labels(
@@ -291,14 +369,51 @@ def low_values_for_high_cells(
     return low_values.astype(np.float32, copy=False), x, y, z
 
 
-def build_features(low_values: np.ndarray, x: np.ndarray, y: np.ndarray, z: np.ndarray, grid: int) -> np.ndarray:
-    low = low_values.astype(np.float32, copy=False)
-    return np.concatenate([
-        low,
-        low * low,
-        normalized_position_features(x, y, z, grid),
-        spatial_basis_features(x, y, z, grid),
+def sample_low_scalar_for_high_cells(
+    low_scalar: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    low_grid: int,
+    high_grid: int,
+) -> np.ndarray:
+    ratio = high_grid / low_grid
+    lx = np.minimum(low_grid - 1, np.floor(x / ratio).astype(np.int64))
+    ly = np.minimum(low_grid - 1, np.floor(y / ratio).astype(np.int64))
+    lz = np.minimum(low_grid - 1, np.floor(z / ratio).astype(np.int64))
+    low_indexes = lx + ly * low_grid + lz * low_grid * low_grid
+    return np.asarray(low_scalar[low_indexes], dtype=np.float32)
+
+
+def sample_low_context_for_high_cells(
+    low_context: dict[str, np.ndarray],
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    low_grid: int,
+    high_grid: int,
+) -> np.ndarray:
+    return np.stack([
+        sample_low_scalar_for_high_cells(low_context[channel], x, y, z, low_grid, high_grid)
+        for channel in DERIVED_LOW_CONTEXT_CHANNELS
     ], axis=1).astype(np.float32, copy=False)
+
+
+def build_features(
+    low_values: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    grid: int,
+    derived_low_context: np.ndarray | None = None,
+) -> np.ndarray:
+    low = low_values.astype(np.float32, copy=False)
+    groups = [low, low * low]
+    if derived_low_context is not None:
+        context = derived_low_context.astype(np.float32, copy=False)
+        groups.extend([context, context * context])
+    groups.extend([normalized_position_features(x, y, z, grid), spatial_basis_features(x, y, z, grid)])
+    return np.concatenate(groups, axis=1).astype(np.float32, copy=False)
 
 
 def standardize(train: np.ndarray, *others: np.ndarray) -> tuple[np.ndarray, list[np.ndarray], dict[str, np.ndarray]]:
@@ -308,6 +423,29 @@ def standardize(train: np.ndarray, *others: np.ndarray) -> tuple[np.ndarray, lis
     normalized_train = ((train - mean) / std).astype(np.float32)
     normalized_others = [((value - mean) / std).astype(np.float32) for value in others]
     return normalized_train, normalized_others, {"mean": mean, "std": std}
+
+
+def fit_ridge_residual(features: np.ndarray, residual: np.ndarray, alpha: float = 1.0e-3) -> dict[str, Any]:
+    target = np.asarray(residual, dtype=np.float32)
+    target_mean = np.float32(np.mean(target, dtype=np.float64))
+    centered = target - target_mean
+    gram = np.asarray(features.T @ features, dtype=np.float64)
+    regularization = max(1.0, float(features.shape[0])) * float(alpha)
+    gram.flat[::gram.shape[0] + 1] += regularization
+    rhs = np.asarray(features.T @ centered, dtype=np.float64)
+    weights = np.linalg.solve(gram, rhs).astype(np.float32)
+    return {
+        "identity": LINEAR_CONTEXT_IDENTITY,
+        "weights": weights,
+        "bias": float(target_mean),
+        "ridgeAlpha": float(alpha),
+        "featureCount": int(features.shape[1]),
+        "trainingRows": int(features.shape[0]),
+    }
+
+
+def predict_ridge_residual(features: np.ndarray, state: dict[str, Any]) -> np.ndarray:
+    return (features @ state["weights"] + np.float32(state["bias"])).astype(np.float32, copy=False)
 
 
 def train_mlp(
@@ -456,6 +594,120 @@ def select_threshold(probability: np.ndarray, labels: np.ndarray) -> tuple[float
     }
 
 
+def apply_residual_gate_calibration(
+    probability: np.ndarray,
+    temperature: float,
+    bias: float,
+) -> np.ndarray:
+    clipped = np.clip(probability.astype(np.float64), 1.0e-6, 1.0 - 1.0e-6)
+    logit = np.log(clipped) - np.log1p(-clipped)
+    calibrated_logit = (logit + float(bias)) / max(1.0e-6, float(temperature))
+    return (1.0 / (1.0 + np.exp(-np.clip(calibrated_logit, -30.0, 30.0)))).astype(np.float32)
+
+
+def apply_selected_residual_gate(probability: np.ndarray, calibration: dict[str, Any]) -> np.ndarray:
+    if calibration["selectedFamily"] == "constant-residual-scale":
+        return np.full(probability.shape, np.float32(calibration["constantScale"]), dtype=np.float32)
+    return apply_residual_gate_calibration(
+        probability,
+        calibration["temperature"],
+        calibration["bias"],
+    )
+
+
+def select_residual_gate_calibration(
+    probability: np.ndarray,
+    residual: np.ndarray,
+    low: np.ndarray,
+    truth: np.ndarray,
+    clip_output: bool,
+) -> dict[str, Any]:
+    temperatures = np.asarray([0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0], dtype=np.float64)
+    biases = np.linspace(-12.0, 12.0, 97, dtype=np.float64)
+    constant_scales = np.linspace(0.0, 1.5, 61, dtype=np.float64)
+    raw_prediction = low + residual * probability
+    if clip_output:
+        raw_prediction = np.clip(raw_prediction, 0.0, 1.0)
+    raw_metrics = scalar_metrics(raw_prediction, truth)
+    best: dict[str, Any] | None = None
+    for temperature in temperatures:
+        for bias in biases:
+            gate = apply_residual_gate_calibration(probability, float(temperature), float(bias))
+            prediction = low + residual * gate
+            if clip_output:
+                prediction = np.clip(prediction, 0.0, 1.0)
+            metrics = scalar_metrics(prediction, truth)
+            score = (
+                metrics["rmse"],
+                metrics["mae"],
+                abs(float(bias)),
+                abs(math.log(float(temperature))),
+            )
+            if best is None or score < best["score"]:
+                best = {
+                    "family": "logit-temperature-bias",
+                    "temperature": float(temperature),
+                    "bias": float(bias),
+                    "constantScale": None,
+                    "metrics": metrics,
+                    "score": score,
+                }
+    best_constant: dict[str, Any] | None = None
+    for scale in constant_scales:
+        prediction = low + residual * np.float32(scale)
+        if clip_output:
+            prediction = np.clip(prediction, 0.0, 1.0)
+        metrics = scalar_metrics(prediction, truth)
+        score = (metrics["rmse"], metrics["mae"], abs(float(scale) - 1.0), 0.0)
+        candidate = {
+            "family": "constant-residual-scale",
+            "temperature": None,
+            "bias": None,
+            "constantScale": float(scale),
+            "metrics": metrics,
+            "score": score,
+        }
+        if best_constant is None or score < best_constant["score"]:
+            best_constant = candidate
+    assert best is not None
+    assert best_constant is not None
+    if best_constant["score"] < best["score"]:
+        best = best_constant
+    selected_at_boundary = (
+        best["constantScale"] in (float(constant_scales[0]), float(constant_scales[-1]))
+        if best["family"] == "constant-residual-scale"
+        else best["temperature"] in (float(temperatures[0]), float(temperatures[-1]))
+            or best["bias"] in (float(biases[0]), float(biases[-1]))
+    )
+    return {
+        "identity": RESIDUAL_GATE_CALIBRATION_IDENTITY,
+        "selectedOn": "validation",
+        "selectionMetric": "carrier-rmse-then-mae-v0",
+        "candidateCount": int(temperatures.size * biases.size + constant_scales.size),
+        "selectedFamily": best["family"],
+        "temperature": best["temperature"],
+        "bias": best["bias"],
+        "constantScale": best["constantScale"],
+        "selectedAtSearchBoundary": bool(selected_at_boundary),
+        "validationMetrics": best["metrics"],
+        "rawSoftGateValidationMetrics": raw_metrics,
+        "constantControl": {
+            "scale": best_constant["constantScale"],
+            "validationMetrics": best_constant["metrics"],
+        },
+        "search": {
+            "temperatureValues": temperatures.tolist(),
+            "biasMin": float(biases[0]),
+            "biasMax": float(biases[-1]),
+            "biasCount": int(biases.size),
+            "constantScaleMin": float(constant_scales[0]),
+            "constantScaleMax": float(constant_scales[-1]),
+            "constantScaleCount": int(constant_scales.size),
+        },
+        "testDataUsedForSelection": False,
+    }
+
+
 def scalar_metrics(prediction: np.ndarray, truth: np.ndarray) -> dict[str, float]:
     error = prediction.astype(np.float64) - truth.astype(np.float64)
     return {
@@ -486,10 +738,32 @@ def improvement(base: dict[str, float], candidate: dict[str, float]) -> dict[str
     }
 
 
-def channel_values(fluid: np.ndarray, front: np.ndarray, indexes: np.ndarray, channel: str) -> np.ndarray:
+def channel_values(
+    fluid: np.ndarray,
+    front: np.ndarray,
+    indexes: np.ndarray,
+    channel: str,
+    derived: dict[str, np.ndarray] | None = None,
+) -> np.ndarray:
+    if channel in DERIVED_CHANNELS:
+        if derived is None or channel not in derived:
+            raise ProbeFailure("derived-target", f"missing derived target values for {channel}")
+        return np.asarray(derived[channel][indexes], dtype=np.float32)
     if channel == "frontTopology":
         return np.asarray(front[indexes], dtype=np.float32)
     return np.asarray(fluid[indexes, FLUID_CHANNELS.index(channel)], dtype=np.float32)
+
+
+def dense_scalar_descriptor(path: Path, grid: int, authority: str) -> dict[str, Any]:
+    return {
+        "path": str(path),
+        "sha256": sha256_file(path),
+        "byteLength": path.stat().st_size,
+        "dtype": "float32-le",
+        "shape": [grid, grid, grid, 1],
+        "channelOrder": [FIRE_FLOW_CARRIER],
+        "authority": authority,
+    }
 
 
 def write_png_rgb(path: Path, rgb: np.ndarray) -> None:
@@ -567,23 +841,26 @@ def write_preview(
     slice_y: int,
     truth: np.ndarray,
     low: np.ndarray,
+    linear: np.ndarray,
     ungated: np.ndarray,
-    gated: np.ndarray,
+    soft_gated: np.ndarray,
+    hard_gated: np.ndarray,
     truth_support: np.ndarray,
     predicted_support: np.ndarray,
 ) -> dict[str, Any]:
     shape = (grid, grid)
-    fields = [value.reshape(shape) for value in [truth, low, ungated, gated]]
+    fields = [value.reshape(shape) for value in [truth, low, linear, ungated, soft_gated, hard_gated]]
     shared_scale = max(1.0e-8, float(max(np.max(np.abs(value)) for value in fields)))
-    error = (gated - truth).reshape(shape)
+    error = (soft_gated - truth).reshape(shape)
     error_scale = max(1.0e-8, float(np.max(np.abs(error))))
     panels = [
         heat_rgb(fields[0], shared_scale), heat_rgb(fields[1], shared_scale),
         heat_rgb(fields[2], shared_scale), heat_rgb(fields[3], shared_scale),
+        heat_rgb(fields[4], shared_scale), heat_rgb(fields[5], shared_scale),
         mask_rgb(truth_support.reshape(shape), False), mask_rgb(predicted_support.reshape(shape), True),
         signed_rgb(error, error_scale),
     ]
-    labels = ["TRUTH", "LOW", "UNGATED", "GATED", "TRUE MASK", "PRED MASK", "ERROR"]
+    labels = ["TRUTH", "LOW", "LINEAR", "UNGATED", "SOFT", "HARD", "TRUE MASK", "PRED MASK", "ERROR"]
     gap = 4
     label_height = 16
     canvas = np.zeros((grid + label_height, grid * len(panels) + gap * (len(panels) - 1), 3), dtype=np.uint8)
@@ -601,10 +878,10 @@ def write_preview(
         "status": "written",
         "channel": channel,
         "slice": {"axis": "y", "index": slice_y},
-        "rowOrder": ["truthHigh", "lowUpsampled", "ungatedPrediction", "gatedPrediction", "truthSupport", "predictedSupport", "gatedSignedError"],
+        "rowOrder": ["truthHigh", "lowUpsampled", "linearContext", "ungatedPrediction", "softSupportPrediction", "hardSupportPrediction", "truthSupport", "predictedSupport", "softSupportSignedError"],
         "labelPlacement": "under-each-panel",
         "sharedAbsFieldMax": shared_scale,
-        "gatedSignedErrorAbsMax": error_scale,
+        "softSupportSignedErrorAbsMax": error_scale,
         "authority": "offline-labeled-channel-slice-not-renderer-state",
         "png": {"path": str(png_path), "sha256": sha256_file(png_path)},
     }
@@ -675,6 +952,23 @@ def main() -> int:
         splat_shape = tuple(int(value) for value in splat_descriptor["shape"])
         splats = np.memmap(splat_path, dtype="<f4", mode="r", shape=splat_shape)
 
+        phase = "derived-target"
+        derived_low: dict[str, np.ndarray] = {}
+        derived_high: dict[str, np.ndarray] = {}
+        derived_low_context_fields: dict[str, np.ndarray] = {}
+        derived_target_receipts: dict[str, Any] = {}
+        if FIRE_FLOW_CARRIER in channels:
+            low_carrier, low_components, low_carrier_receipt = derive_fire_flow_visibility_carrier(low_fluid, low_front, low_grid)
+            high_carrier, _high_components, high_carrier_receipt = derive_fire_flow_visibility_carrier(high_fluid, high_front, high_grid)
+            derived_low[FIRE_FLOW_CARRIER] = low_carrier
+            derived_high[FIRE_FLOW_CARRIER] = high_carrier
+            derived_low_context_fields = low_components
+            derived_target_receipts[FIRE_FLOW_CARRIER] = {
+                "contract": DERIVED_TARGETS[FIRE_FLOW_CARRIER],
+                "lowDerived": low_carrier_receipt,
+                "truthHigh": high_carrier_receipt,
+            }
+
         phase = "label-validation"
         labels, structural_signal, label_authority = derive_and_validate_labels(high_fluid, high_boundary, splats, high_grid)
         if int(full["boundarySplats"]["draw"]["candidateCount"]) != label_authority["formulaPositiveCount"]:
@@ -709,9 +1003,12 @@ def main() -> int:
         low_train, x_train, y_train, z_train = low_values_for_high_cells(low_fluid, low_front, train_indexes, low_grid, high_grid)
         low_validation, x_validation, y_validation, z_validation = low_values_for_high_cells(low_fluid, low_front, validation_indexes, low_grid, high_grid)
         low_test, x_test, y_test, z_test = low_values_for_high_cells(low_fluid, low_front, test_indexes, low_grid, high_grid)
-        train_features = build_features(low_train, x_train, y_train, z_train, high_grid)
-        validation_features = build_features(low_validation, x_validation, y_validation, z_validation, high_grid)
-        test_features = build_features(low_test, x_test, y_test, z_test, high_grid)
+        train_context = sample_low_context_for_high_cells(derived_low_context_fields, x_train, y_train, z_train, low_grid, high_grid) if derived_low_context_fields else None
+        validation_context = sample_low_context_for_high_cells(derived_low_context_fields, x_validation, y_validation, z_validation, low_grid, high_grid) if derived_low_context_fields else None
+        test_context = sample_low_context_for_high_cells(derived_low_context_fields, x_test, y_test, z_test, low_grid, high_grid) if derived_low_context_fields else None
+        train_features = build_features(low_train, x_train, y_train, z_train, high_grid, train_context)
+        validation_features = build_features(low_validation, x_validation, y_validation, z_validation, high_grid, validation_context)
+        test_features = build_features(low_test, x_test, y_test, z_test, high_grid, test_context)
         train_features, [validation_features, test_features], standardization = standardize(train_features, validation_features, test_features)
 
         phase = "classifier-train"
@@ -726,28 +1023,90 @@ def main() -> int:
         phase = "channel-assay"
         gated_channels = []
         channel_states: dict[str, dict[str, np.ndarray | float]] = {}
+        linear_states: dict[str, dict[str, Any]] = {}
+        residual_gate_calibrations: dict[str, dict[str, Any]] = {}
         predicted_support_test = test_probability >= np.float32(threshold)
         for channel in channels:
-            low_train_channel = low_train[:, ALL_CHANNELS.index(channel)]
-            low_test_channel = low_test[:, ALL_CHANNELS.index(channel)]
-            high_train_channel = channel_values(high_fluid, high_front, train_indexes, channel)
-            high_test_channel = channel_values(high_fluid, high_front, test_indexes, channel)
+            if channel in DERIVED_CHANNELS:
+                low_train_channel = sample_low_scalar_for_high_cells(
+                    derived_low[channel], x_train, y_train, z_train, low_grid, high_grid,
+                )
+                low_validation_channel = sample_low_scalar_for_high_cells(
+                    derived_low[channel], x_validation, y_validation, z_validation, low_grid, high_grid,
+                )
+                low_test_channel = sample_low_scalar_for_high_cells(
+                    derived_low[channel], x_test, y_test, z_test, low_grid, high_grid,
+                )
+            else:
+                low_train_channel = low_train[:, NATIVE_CHANNELS.index(channel)]
+                low_validation_channel = low_validation[:, NATIVE_CHANNELS.index(channel)]
+                low_test_channel = low_test[:, NATIVE_CHANNELS.index(channel)]
+            high_train_channel = channel_values(high_fluid, high_front, train_indexes, channel, derived_high)
+            high_validation_channel = channel_values(high_fluid, high_front, validation_indexes, channel, derived_high)
+            high_test_channel = channel_values(high_fluid, high_front, test_indexes, channel, derived_high)
             residual_train = high_train_channel - low_train_channel
+            linear_state = fit_ridge_residual(train_features, residual_train)
+            linear = low_test_channel + predict_ridge_residual(test_features, linear_state)
             state, training = train_mlp(train_features, residual_train, args, rng, binary=False)
+            residual_validation = predict_mlp(validation_features, state, binary=False)
             residual_test = predict_mlp(test_features, state, binary=False)
-            ungated = low_test_channel + residual_test
-            gated = low_test_channel + residual_test * predicted_support_test.astype(np.float32)
+            gate_calibration = select_residual_gate_calibration(
+                validation_probability,
+                residual_validation,
+                low_validation_channel,
+                high_validation_channel,
+                channel in DERIVED_CHANNELS,
+            )
+            calibrated_test_probability = apply_selected_residual_gate(test_probability, gate_calibration)
+            ungated = np.clip(low_test_channel + residual_test, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test
+            soft_gated = np.clip(low_test_channel + residual_test * test_probability, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test * test_probability
+            calibrated_soft_gated = np.clip(low_test_channel + residual_test * calibrated_test_probability, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test * calibrated_test_probability
+            gated = np.clip(low_test_channel + residual_test * predicted_support_test.astype(np.float32), 0.0, 1.0) if channel in DERIVED_CHANNELS else low_test_channel + residual_test * predicted_support_test.astype(np.float32)
             truth_support = labels[test_indexes]
             low_metrics = scalar_metrics(low_test_channel, high_test_channel)
+            linear_metrics = scalar_metrics(linear, high_test_channel)
             ungated_metrics = scalar_metrics(ungated, high_test_channel)
+            soft_gated_metrics = scalar_metrics(soft_gated, high_test_channel)
+            calibrated_soft_gated_metrics = scalar_metrics(calibrated_soft_gated, high_test_channel)
             gated_metrics = scalar_metrics(gated, high_test_channel)
             gated_channels.append({
                 "channel": channel,
-                "channelIndex": ALL_CHANNELS.index(channel),
+                "channelIndex": None if channel in DERIVED_CHANNELS else NATIVE_CHANNELS.index(channel),
+                "targetAuthority": DERIVED_TARGETS.get(channel),
                 "model": {"identity": CHANNEL_HEAD_IDENTITY, **training},
                 "lowUpsampled": low_metrics,
-                "ungated": {"metrics": ungated_metrics, "improvementVsLow": improvement(low_metrics, ungated_metrics)},
-                "gated": {"metrics": gated_metrics, "improvementVsLow": improvement(low_metrics, gated_metrics)},
+                "linearContext": {
+                    "identity": LINEAR_CONTEXT_IDENTITY,
+                    "ridgeAlpha": linear_state["ridgeAlpha"],
+                    "featureCount": linear_state["featureCount"],
+                    "trainingRows": linear_state["trainingRows"],
+                    "metrics": linear_metrics,
+                    "improvementVsLow": improvement(low_metrics, linear_metrics),
+                },
+                "ungated": {
+                    "metrics": ungated_metrics,
+                    "improvementVsLow": improvement(low_metrics, ungated_metrics),
+                    "improvementVsLinearContext": improvement(linear_metrics, ungated_metrics),
+                },
+                "softGated": {
+                    "identity": "support-probability-weighted-residual-v0",
+                    "metrics": soft_gated_metrics,
+                    "improvementVsLow": improvement(low_metrics, soft_gated_metrics),
+                    "improvementVsLinearContext": improvement(linear_metrics, soft_gated_metrics),
+                },
+                "calibratedResidual": {
+                    "identity": "validation-selected-residual-gate-v0",
+                    "calibration": gate_calibration,
+                    "metrics": calibrated_soft_gated_metrics,
+                    "improvementVsLow": improvement(low_metrics, calibrated_soft_gated_metrics),
+                    "improvementVsLinearContext": improvement(linear_metrics, calibrated_soft_gated_metrics),
+                    "improvementVsRawSoftGate": improvement(soft_gated_metrics, calibrated_soft_gated_metrics),
+                },
+                "gated": {
+                    "metrics": gated_metrics,
+                    "improvementVsLow": improvement(low_metrics, gated_metrics),
+                    "improvementVsLinearContext": improvement(linear_metrics, gated_metrics),
+                },
                 "onSupport": {
                     "low": region_metrics(low_test_channel, high_test_channel, low_test_channel, truth_support),
                     "ungated": region_metrics(ungated, high_test_channel, low_test_channel, truth_support),
@@ -760,6 +1119,8 @@ def main() -> int:
                 },
             })
             channel_states[channel] = state
+            linear_states[channel] = linear_state
+            residual_gate_calibrations[channel] = gate_calibration
 
         phase = "preview-write"
         slice_y = int(args.preview_slice_y if args.preview_slice_y is not None else high_grid // 2)
@@ -771,22 +1132,101 @@ def main() -> int:
             for x in range(high_grid)
         ], dtype=np.int64)
         low_slice, sx, sy, sz = low_values_for_high_cells(low_fluid, low_front, slice_indexes, low_grid, high_grid)
-        slice_features = build_features(low_slice, sx, sy, sz, high_grid)
+        slice_context = sample_low_context_for_high_cells(derived_low_context_fields, sx, sy, sz, low_grid, high_grid) if derived_low_context_fields else None
+        slice_features = build_features(low_slice, sx, sy, sz, high_grid, slice_context)
         slice_features = ((slice_features - standardization["mean"]) / standardization["std"]).astype(np.float32)
         slice_probability = predict_mlp(slice_features, classifier_state, binary=True)
         predicted_support_slice = slice_probability >= np.float32(threshold)
         preview_receipts = []
         for channel in channels:
-            low_channel = low_slice[:, ALL_CHANNELS.index(channel)]
-            truth_channel = channel_values(high_fluid, high_front, slice_indexes, channel)
+            if channel in DERIVED_CHANNELS:
+                low_channel = sample_low_scalar_for_high_cells(
+                    derived_low[channel], sx, sy, sz, low_grid, high_grid,
+                )
+            else:
+                low_channel = low_slice[:, NATIVE_CHANNELS.index(channel)]
+            truth_channel = channel_values(high_fluid, high_front, slice_indexes, channel, derived_high)
+            linear = low_channel + predict_ridge_residual(slice_features, linear_states[channel])
             residual = predict_mlp(slice_features, channel_states[channel], binary=False)
-            ungated = low_channel + residual
-            gated = low_channel + residual * predicted_support_slice.astype(np.float32)
+            ungated = np.clip(low_channel + residual, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_channel + residual
+            soft_gated = np.clip(low_channel + residual * slice_probability, 0.0, 1.0) if channel in DERIVED_CHANNELS else low_channel + residual * slice_probability
+            gated = np.clip(low_channel + residual * predicted_support_slice.astype(np.float32), 0.0, 1.0) if channel in DERIVED_CHANNELS else low_channel + residual * predicted_support_slice.astype(np.float32)
             preview_receipts.append(write_preview(
                 out_dir, channel, high_grid, slice_y,
-                truth_channel, low_channel, ungated, gated,
+                truth_channel, low_channel, linear, ungated, soft_gated, gated,
                 labels[slice_indexes], predicted_support_slice,
             ))
+
+        phase = "dense-derived-target-write"
+        dense_derived_targets: dict[str, Any] = {}
+        dense_batch_cells = max(1, int(args.dense_batch_cells))
+        for channel in channels:
+            if channel not in DERIVED_CHANNELS:
+                continue
+            role_paths = {
+                "lowDerived": out_dir / f"{channel}.low-derived.f32",
+                "truthHigh": out_dir / f"{channel}.truth-high.f32",
+                "ungatedPrediction": out_dir / f"{channel}.ungated-prediction.f32",
+                "softSupportGatedPrediction": out_dir / f"{channel}.soft-support-gated-prediction.f32",
+                "calibratedResidualPrediction": out_dir / f"{channel}.calibrated-residual-prediction.f32",
+                "supportGatedPrediction": out_dir / f"{channel}.support-gated-prediction.f32",
+            }
+            dense = {
+                role: np.memmap(path, dtype="<f4", mode="w+", shape=(high_cells,))
+                for role, path in role_paths.items()
+            }
+            dense["truthHigh"][:] = derived_high[channel]
+            for start in range(0, high_cells, dense_batch_cells):
+                end = min(high_cells, start + dense_batch_cells)
+                indexes = np.arange(start, end, dtype=np.int64)
+                low_batch, bx, by, bz = low_values_for_high_cells(
+                    low_fluid, low_front, indexes, low_grid, high_grid,
+                )
+                low_channel = sample_low_scalar_for_high_cells(
+                    derived_low[channel], bx, by, bz, low_grid, high_grid,
+                )
+                batch_context = sample_low_context_for_high_cells(
+                    derived_low_context_fields, bx, by, bz, low_grid, high_grid,
+                )
+                features = build_features(low_batch, bx, by, bz, high_grid, batch_context)
+                features = ((features - standardization["mean"]) / standardization["std"]).astype(np.float32)
+                support_probability = predict_mlp(features, classifier_state, binary=True)
+                calibrated_support_probability = apply_selected_residual_gate(
+                    support_probability,
+                    residual_gate_calibrations[channel],
+                )
+                residual = predict_mlp(features, channel_states[channel], binary=False)
+                dense["lowDerived"][start:end] = low_channel
+                dense["ungatedPrediction"][start:end] = np.clip(low_channel + residual, 0.0, 1.0)
+                dense["softSupportGatedPrediction"][start:end] = np.clip(
+                    low_channel + residual * support_probability,
+                    0.0,
+                    1.0,
+                )
+                dense["calibratedResidualPrediction"][start:end] = np.clip(
+                    low_channel + residual * calibrated_support_probability,
+                    0.0,
+                    1.0,
+                )
+                dense["supportGatedPrediction"][start:end] = np.clip(
+                    low_channel + residual * (support_probability >= np.float32(threshold)).astype(np.float32),
+                    0.0,
+                    1.0,
+                )
+            for values in dense.values():
+                values.flush()
+            del dense
+            dense_derived_targets[channel] = {
+                role: dense_scalar_descriptor(path, high_grid, {
+                    "lowDerived": "native-low-derived-then-nearest-upsampled-control-v0",
+                    "truthHigh": FIRE_FLOW_CARRIER_AUTHORITY,
+                    "ungatedPrediction": "full-low-state-spatial-mlp-derived-carrier-v0",
+                    "softSupportGatedPrediction": "support-probability-weighted-derived-carrier-v0",
+                    "calibratedResidualPrediction": "validation-selected-residual-gate-derived-carrier-v0",
+                    "supportGatedPrediction": "accepted-splat-support-gated-derived-carrier-v0",
+                }[role])
+                for role, path in role_paths.items()
+            }
 
         phase = "report-write"
         model_path = out_dir / "gated-channel-heads.npz"
@@ -819,7 +1259,18 @@ def main() -> int:
             },
             "labelAuthority": label_authority,
             "split": split_receipt,
-            "features": {"identity": FEATURE_IDENTITY, "featureCount": int(train_features.shape[1]), "source": "current phase-aligned low field only"},
+            "features": {
+                "identity": FEATURE_IDENTITY,
+                "featureCount": int(train_features.shape[1]),
+                "source": "current phase-aligned low field only",
+                "derivedLowContext": {
+                    "identity": DERIVED_LOW_CONTEXT_IDENTITY,
+                    "channelOrder": DERIVED_LOW_CONTEXT_CHANNELS,
+                    "source": "native low field only; exact clamped central-difference stencil before high-grid sampling",
+                } if derived_low_context_fields else None,
+            },
+            "derivedTargets": {channel: DERIVED_TARGETS[channel] for channel in channels if channel in DERIVED_CHANNELS},
+            "derivedTargetReceipts": derived_target_receipts,
             "classifier": {
                 "identity": CLASSIFIER_IDENTITY,
                 "training": classifier_training,
@@ -828,6 +1279,7 @@ def main() -> int:
                 "artifact": classifier_artifact,
             },
             "gatedChannels": gated_channels,
+            "denseDerivedTargets": dense_derived_targets,
             "channelHeadArtifact": {"path": str(model_path), "sha256": sha256_file(model_path), "byteLength": model_path.stat().st_size},
             "visualPreviews": preview_receipts,
             "limitations": [

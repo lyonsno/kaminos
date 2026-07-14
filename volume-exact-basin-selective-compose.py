@@ -17,6 +17,7 @@ import numpy as np
 SCHEMA = "kaminos.volume.exact-basin-selective-composition.v0"
 IDENTITY = "dense-topology-plus-support-aware-sparse-carriers-v0"
 AUTHORITY = "learned-selective-head-composition-not-filtered-high-truth-v0"
+VELOCITY_ORACLE_AUTHORITY = "offline-high-truth-diagnostic-velocity-oracle-v0"
 DENSE_POLICY = "dense-ungated-residual-v0"
 SPARSE_POLICY = "sparse-hard-support-gated-residual-v0"
 FLUID_CHANNELS = [
@@ -49,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-cells", type=int, default=32768)
     parser.add_argument("--support-threshold", type=float)
     parser.add_argument("--residual-scale", type=float, default=1.0)
+    parser.add_argument("--diagnostic-velocity-source", default="low-upsampled")
     return parser.parse_args()
 
 
@@ -224,6 +226,14 @@ def main() -> int:
             raise CompositionFailure(phase, "invalid low/high grid relationship", {"lowGrid": low_grid, "highGrid": high_grid})
         if int(probe_report.get("inputs", {}).get("lowGrid") or 0) != low_grid or int(probe_report.get("inputs", {}).get("highGrid") or 0) != high_grid:
             raise CompositionFailure(phase, "support probe grid relationship disagrees with pair")
+        diagnostic_velocity_source = str(args.diagnostic_velocity_source).strip()
+        if diagnostic_velocity_source not in {"low-upsampled", "high-truth-oracle"}:
+            raise CompositionFailure(
+                phase,
+                "diagnostic velocity source must be low-upsampled or high-truth-oracle",
+                {"diagnosticVelocitySource": diagnostic_velocity_source},
+            )
+        velocity_oracle = diagnostic_velocity_source == "high-truth-oracle"
 
         low_cells = low_grid ** 3
         high_cells = high_grid ** 3
@@ -304,6 +314,8 @@ def main() -> int:
             probability = probe_module.predict_mlp(features, classifier, binary=True)
             hard_mask = probability >= np.float32(threshold)
             fluid_out[start:end] = low_values[:, :16]
+            if velocity_oracle:
+                fluid_out[start:end, :3] = high_fluid[indexes, :3]
             front_out[start:end] = low_values[:, 16]
             probability_out[start:end] = probability
             mask_out[start:end] = hard_mask.astype(np.uint8)
@@ -328,12 +340,28 @@ def main() -> int:
 
         phase = "report-write"
         channel_policies = {channel: SUPPORTED_POLICIES[channel] for channel in requested_channels}
+        diagnostic_velocity = {
+            "identity": (
+                "exact-high-velocity-transplant-oracle-v0"
+                if velocity_oracle
+                else "phase-aligned-low-upsampled-velocity-control-v0"
+            ),
+            "source": diagnostic_velocity_source,
+            "authority": (
+                "offline-high-truth-oracle-not-deployable-v0"
+                if velocity_oracle
+                else "phase-aligned-low-input-control-v0"
+            ),
+            "targetChannels": FLUID_CHANNELS[:3],
+            "highTruthReadAtApplication": velocity_oracle,
+            "deployable": not velocity_oracle,
+        }
         report = {
             "schema": SCHEMA,
             "identity": IDENTITY,
             "status": "captured",
             "failurePhase": None,
-            "compositionAuthority": AUTHORITY,
+            "compositionAuthority": VELOCITY_ORACLE_AUTHORITY if velocity_oracle else AUTHORITY,
             "runtimeTruthAvailable": False,
             "source": {
                 "pairManifestPath": str(pair_path),
@@ -350,10 +378,19 @@ def main() -> int:
                 "authority": pair.get("authority"),
                 "lowGrid": low_grid,
                 "highGrid": high_grid,
-                "applicationInput": "phase-aligned low field only",
-                "highTruthUse": "offline metrics only; not read by checkpoint application features",
+                "applicationInput": (
+                    "phase-aligned low field plus offline high velocity oracle"
+                    if velocity_oracle
+                    else "phase-aligned low field only"
+                ),
+                "highTruthUse": (
+                    "exact velocityX/Y/Z transplant for offline oracle assay; all learned features remain low-field only"
+                    if velocity_oracle
+                    else "offline metrics only; not read by checkpoint application features"
+                ),
             },
             "features": probe_report.get("features"),
+            "diagnosticVelocity": diagnostic_velocity,
             "support": {
                 "identity": probe_report.get("classifier", {}).get("identity"),
                 "threshold": threshold,
@@ -383,12 +420,22 @@ def main() -> int:
             "consumptionContract": {
                 "requiresExplicitSchemaAdmission": True,
                 "mustNotBeAcceptedAs": "kaminos.volume.coarse-receiver-initial.v0",
+                "mustNotBePromotedAs": (
+                    "a learned prediction or runtime-deployable velocity route"
+                    if velocity_oracle
+                    else "filtered-high initialization truth"
+                ),
                 "receiverAdvance": "held render first; any simulation advance is a separate experiment",
             },
             "limitations": [
                 "One exact basin and a same-high-history phase-aligned teacher pair.",
                 "No native-low transfer, replay generalization, temporal stability, or renderer improvement is claimed.",
                 "This manifest is learned composition authority and must not impersonate filtered-high initialization truth.",
+                *(
+                    ["VelocityX/Y/Z are copied from exact high truth solely to measure the diagnostic route ceiling; this artifact is not a prediction."]
+                    if velocity_oracle
+                    else []
+                ),
             ],
         }
         write_json(manifest_path, report)

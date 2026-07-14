@@ -18,6 +18,11 @@ assert.match(source, /spatial-block-hash-holdout-v0/, 'probe uses spatial blocks
 assert.match(source, /validation-selected-f1-threshold-v0/, 'probe selects its gate threshold on validation data');
 assert.match(source, /offSupport/, 'probe reports off-support pollution explicitly');
 assert.match(source, /failurePhase/, 'probe writes durable failure-phase reports');
+assert.match(source, /fire-flow-visibility-carrier-v0/, 'probe names the renderer-coupled fire flow carrier derivation');
+assert.match(source, /clamped-central-difference-matching-volume-core-wgsl-v0/, 'carrier derivation preserves the renderer velocity stencil identity');
+assert.match(source, /full-low-context-ridge-residual-control-v0/, 'carrier probe preserves a calibrated linear-context control');
+assert.match(source, /native-low-derived-neighborhood-flow-context-v0/, 'carrier probe gives both controls free low-grid derivative context');
+assert.match(source, /validation-selected-support-conditioned-residual-gate-v0/, 'carrier probe calibrates residual weighting on validation data');
 assert.ok(existsSync(composerPath), 'exact-basin selective-head composer exists');
 const composerSource = readFileSync(composerPath, 'utf8');
 assert.match(composerSource, /kaminos\.volume\.exact-basin-selective-composition\.v0/, 'composer emits a stable manifest schema');
@@ -65,6 +70,9 @@ for (let z = 0; z < highGrid; z += 1) {
     for (let x = 0; x < highGrid; x += 1) {
       const cell = highIndex(x, y, z);
       const positive = x >= 4 && x <= 7 && y >= 3 && y <= 8 && z >= 4 && z <= 6;
+      highFluid[cell * 16 + 0] = 0.08 * Math.sin(y * 0.8) + 0.02 * z;
+      highFluid[cell * 16 + 1] = 0.06 * Math.cos(z * 0.6) + 0.015 * x;
+      highFluid[cell * 16 + 2] = 0.07 * Math.sin(x * 0.7) + 0.02 * y;
       highFluid[cell * 16 + 3] = 0.1 + y / highGrid;
       highFluid[cell * 16 + 4] = 0.05 + z / (highGrid * 2);
       highFluid[cell * 16 + 5] = positive ? 0.5 : 0.02;
@@ -221,7 +229,64 @@ for (const channel of report.gatedChannels) {
 }
 assert.ok(existsSync(join(outDir, 'previews', 'fuel.support-gate-preview.png')), 'probe writes labeled fuel gate preview');
 const preview = JSON.parse(readFileSync(join(outDir, 'previews', 'fuel.support-gate-preview.json'), 'utf8'));
-assert.deepEqual(preview.rowOrder, ['truthHigh', 'lowUpsampled', 'ungatedPrediction', 'gatedPrediction', 'truthSupport', 'predictedSupport', 'gatedSignedError']);
+assert.deepEqual(preview.rowOrder, ['truthHigh', 'lowUpsampled', 'linearContext', 'ungatedPrediction', 'softSupportPrediction', 'hardSupportPrediction', 'truthSupport', 'predictedSupport', 'softSupportSignedError']);
+
+const carrierOutDir = join(fixtureRoot, 'carrier-out');
+execFileSync('python3', [
+  probePath,
+  '--pair-manifest', pairPath,
+  '--full-grid-manifest', fullGridPath,
+  '--out-dir', carrierOutDir,
+  '--channels', 'fireFlowVisibilityCarrier',
+  '--train-samples', '700',
+  '--validation-samples', '350',
+  '--test-samples', '350',
+  '--hidden-width', '16',
+  '--epochs', '8',
+  '--batch-size', '128',
+  '--dense-batch-cells', '256',
+  '--spatial-block-size', '3',
+  '--preview-slice-y', '5',
+], { stdio: 'pipe' });
+const carrierReport = JSON.parse(readFileSync(join(carrierOutDir, 'manifest.json'), 'utf8'));
+assert.equal(carrierReport.status, 'captured');
+assert.deepEqual(carrierReport.features.derivedLowContext, {
+  identity: 'native-low-derived-neighborhood-flow-context-v0',
+  channelOrder: ['curlMagnitude', 'absoluteDivergence', 'flowTerm', 'materialTerm', 'fireFlowVisibilityCarrier'],
+  source: 'native low field only; exact clamped central-difference stencil before high-grid sampling',
+});
+assert.deepEqual(carrierReport.derivedTargets.fireFlowVisibilityCarrier, {
+  identity: 'fire-flow-visibility-carrier-v0',
+  authority: 'exact-high-field-renderer-coupled-derived-target-v0',
+  velocityStencil: 'clamped-central-difference-matching-volume-core-wgsl-v0',
+  flowTerm: 'smoothstep(0.015,0.12,curlMagnitude+absDivergence)',
+  materialTerm: 'smoothstep(0.025,0.74,max(flame,visibleFireCarrier,interfaceShred,frontTopology))',
+  composition: 'flowTerm*materialTerm',
+  targetFamily: 'fire-only-diagnostic-carrier',
+  physicalTruth: false,
+});
+const carrierChannel = carrierReport.gatedChannels.find(({ channel }) => channel === 'fireFlowVisibilityCarrier');
+assert.ok(carrierChannel, 'probe reports the derived fire flow carrier');
+assert.equal(carrierChannel.channelIndex, null, 'derived carrier does not impersonate a native fluid channel');
+assert.equal(carrierChannel.linearContext.identity, 'full-low-context-ridge-residual-control-v0');
+assert.equal(typeof carrierChannel.linearContext.metrics.rmse, 'number');
+assert.equal(typeof carrierChannel.ungated.improvementVsLinearContext.rmseReductionFraction, 'number');
+assert.equal(typeof carrierChannel.softGated.improvementVsLinearContext.rmseReductionFraction, 'number');
+assert.equal(carrierChannel.calibratedResidual.calibration.identity, 'validation-selected-support-conditioned-residual-gate-v0');
+assert.equal(carrierChannel.calibratedResidual.calibration.selectedOn, 'validation');
+assert.equal(carrierChannel.calibratedResidual.calibration.testDataUsedForSelection, false);
+assert.ok(['logit-temperature-bias', 'constant-residual-scale'].includes(carrierChannel.calibratedResidual.calibration.selectedFamily));
+assert.equal(typeof carrierChannel.calibratedResidual.calibration.selectedAtSearchBoundary, 'boolean');
+assert.equal(typeof carrierChannel.calibratedResidual.calibration.constantControl.validationMetrics.rmse, 'number');
+assert.equal(typeof carrierChannel.calibratedResidual.metrics.rmse, 'number');
+assert.equal(typeof carrierChannel.gated.improvementVsLinearContext.rmseReductionFraction, 'number');
+for (const role of ['lowDerived', 'truthHigh', 'ungatedPrediction', 'softSupportGatedPrediction', 'calibratedResidualPrediction', 'supportGatedPrediction']) {
+  const artifact = carrierReport.denseDerivedTargets.fireFlowVisibilityCarrier[role];
+  assert.deepEqual(artifact.shape, [highGrid, highGrid, highGrid, 1], `${role} records dense carrier shape`);
+  assert.equal(artifact.byteLength, highCells * Float32Array.BYTES_PER_ELEMENT, `${role} records full dense byte length`);
+  assert.ok(existsSync(artifact.path), `${role} dense carrier exists`);
+  assert.equal(artifact.sha256, sha256(readFileSync(artifact.path)), `${role} dense carrier checksum binds bytes`);
+}
 
 const compositionDir = join(fixtureRoot, 'composition-out');
 execFileSync('python3', [
@@ -272,6 +337,36 @@ const blendComposition = JSON.parse(readFileSync(join(blendCompositionDir, 'mani
 assert.equal(blendComposition.residualBlend.scale, 0.5);
 assert.equal(blendComposition.residualBlend.authority, 'caller-specified-residual-blend-assay-v0');
 
+const velocityOracleCompositionDir = join(fixtureRoot, 'composition-velocity-oracle');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', pairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', velocityOracleCompositionDir,
+  '--batch-cells', '256',
+  '--diagnostic-velocity-source', 'high-truth-oracle',
+], { stdio: 'pipe' });
+const velocityOracleComposition = JSON.parse(readFileSync(join(velocityOracleCompositionDir, 'manifest.json'), 'utf8'));
+assert.equal(velocityOracleComposition.compositionAuthority, 'offline-high-truth-diagnostic-velocity-oracle-v0');
+assert.equal(velocityOracleComposition.runtimeTruthAvailable, false);
+assert.deepEqual(velocityOracleComposition.diagnosticVelocity, {
+  identity: 'exact-high-velocity-transplant-oracle-v0',
+  source: 'high-truth-oracle',
+  authority: 'offline-high-truth-oracle-not-deployable-v0',
+  targetChannels: ['velocityX', 'velocityY', 'velocityZ'],
+  highTruthReadAtApplication: true,
+  deployable: false,
+});
+assert.equal(
+  velocityOracleComposition.relationship.applicationInput,
+  'phase-aligned low field plus offline high velocity oracle',
+);
+assert.match(
+  velocityOracleComposition.consumptionContract.mustNotBePromotedAs,
+  /prediction|runtime/i,
+  'oracle transplant fails loud as non-predictive evidence',
+);
+
 function readF32(path) {
   const bytes = readFileSync(path);
   return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
@@ -281,6 +376,7 @@ const composedFluid = readF32(composition.receiver.fluid.path);
 const composedFront = readF32(composition.receiver.front.path);
 const blendFluid = readF32(blendComposition.receiver.fluid.path);
 const blendFront = readF32(blendComposition.receiver.front.path);
+const velocityOracleFluid = readF32(velocityOracleComposition.receiver.fluid.path);
 let selectedFuelChanged = false;
 let denseFrontChanged = false;
 for (let z = 0; z < highGrid; z += 1) {
@@ -292,6 +388,23 @@ for (let z = 0; z < highGrid; z += 1) {
         composedFluid[highCell * 16 + 3],
         lowFluid[lowCell * 16 + 3],
         'unselected densityCarrier remains byte-value identical to the low baseline',
+      );
+      for (let component = 0; component < 3; component += 1) {
+        assert.equal(
+          composedFluid[highCell * 16 + component],
+          lowFluid[lowCell * 16 + component],
+          'default composition retains low-upsampled diagnostic velocity',
+        );
+        assert.equal(
+          velocityOracleFluid[highCell * 16 + component],
+          highFluid[highCell * 16 + component],
+          'diagnostic oracle composition transplants exact high velocity',
+        );
+      }
+      assert.equal(
+        velocityOracleFluid[highCell * 16 + 3],
+        composedFluid[highCell * 16 + 3],
+        'diagnostic oracle does not alter non-velocity composition',
       );
       assert.ok(
         Math.abs(blendFluid[highCell * 16 + 6] - (
