@@ -32,6 +32,24 @@ assert.equal(healthy.historyBufferBytes, 100_663_296);
 assert.equal(healthy.maxHistoryIndex, 1_969_296);
 assert.deepEqual(healthy.failureReasons, []);
 
+const shallowActiveHistory = core.boundarySplatBufferIntegrity({
+  candidateCapacity: 131072,
+  candidateCount: 3217,
+  sourceCandidateCount: 3217,
+  historySlotCount: 4,
+  allocatedHistorySlotCount: 16,
+  historyWriteSlot: 3,
+  requestedInstanceCount: 100,
+  renderedInstanceCount: 320255,
+  descriptorCapacity: 128,
+  maxBufferSize: 268_435_456,
+  maxStorageBufferBindingSize: 262_144_000,
+});
+assert.equal(shallowActiveHistory.historySlotCount, 4, 'active history depth must remain the addressing authority');
+assert.equal(shallowActiveHistory.allocatedHistorySlotCount, 16, 'diagnostics must expose the physically allocated ring depth');
+assert.equal(shallowActiveHistory.historyBufferBytes, 100_663_296, 'allocation accounting must not shrink when controls expose fewer active history slots');
+assert.equal(shallowActiveHistory.maxHistoryIndex, 396_432, 'active address ceiling must remain bounded by the configured history depth');
+
 const unavailable = core.boundarySplatBufferIntegrity({
   candidateCapacity: 131072,
   candidateCount: null,

@@ -322,6 +322,7 @@ export function boundarySplatBufferIntegrity(options = {}) {
   const candidateCount = integer(options.candidateCount);
   const sourceCandidateCount = integer(options.sourceCandidateCount);
   const historySlotCount = integer(options.historySlotCount);
+  const allocatedHistorySlotCount = integer(options.allocatedHistorySlotCount, historySlotCount);
   const historyWriteSlot = integer(options.historyWriteSlot);
   const requestedInstanceCount = integer(options.requestedInstanceCount);
   const renderedInstanceCount = integer(options.renderedInstanceCount);
@@ -333,7 +334,7 @@ export function boundarySplatBufferIntegrity(options = {}) {
     ? Number(options.maxStorageBufferBindingSize)
     : Number.POSITIVE_INFINITY;
   const candidateBufferBytes = candidateCapacity * candidateStrideBytes;
-  const historyBufferBytes = historySlotCount * candidateBufferBytes;
+  const historyBufferBytes = allocatedHistorySlotCount * candidateBufferBytes;
   const descriptorBufferBytes = descriptorCapacity * descriptorStrideBytes;
   const maxHistoryIndex = historySlotCount > 0 && sourceCandidateCount > 0
     ? (historySlotCount - 1) * candidateCapacity + Math.min(sourceCandidateCount, candidateCapacity) - 1
@@ -344,6 +345,7 @@ export function boundarySplatBufferIntegrity(options = {}) {
   if (!availableInteger(options.renderedInstanceCount)) failureReasons.push('rendered-instance-count-unavailable');
   if (candidateCount > candidateCapacity) failureReasons.push('candidate-count-exceeds-capacity');
   if (sourceCandidateCount > candidateCapacity) failureReasons.push('source-candidate-count-exceeds-capacity');
+  if (allocatedHistorySlotCount < historySlotCount) failureReasons.push('active-history-exceeds-allocated-history');
   if (historySlotCount === 0 || historyWriteSlot >= historySlotCount) failureReasons.push('history-write-slot-out-of-range');
   if (requestedInstanceCount > descriptorCapacity) failureReasons.push('requested-instance-count-exceeds-descriptor-capacity');
   if (renderedInstanceCount > 0xffffffff) failureReasons.push('rendered-instance-count-exceeds-u32');
@@ -357,6 +359,7 @@ export function boundarySplatBufferIntegrity(options = {}) {
     candidateCount,
     sourceCandidateCount,
     historySlotCount,
+    allocatedHistorySlotCount,
     historyWriteSlot,
     requestedInstanceCount,
     renderedInstanceCount,
@@ -8977,6 +8980,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       candidateCount: overrides.candidateCount ?? state.boundarySplatCandidateCount,
       sourceCandidateCount: overrides.sourceCandidateCount ?? state.boundarySplatSourceCandidateCount,
       historySlotCount: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
+      allocatedHistorySlotCount: BOUNDARY_SPLAT_HISTORY_SLOTS,
       historyWriteSlot: overrides.historyWriteSlot ?? state.boundarySplatHistoryWriteSlot ?? 0,
       requestedInstanceCount: overrides.requestedInstanceCount ?? state.boundarySplatRequestedInstanceCount ?? 0,
       renderedInstanceCount: overrides.renderedInstanceCount ?? state.boundarySplatInstanceCount,
