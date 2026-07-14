@@ -5,6 +5,16 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
 const sourceModule = await import(new URL('../smoke-splat-motion-source.mjs', import.meta.url));
+const spatialStrataRendererSource = await readFile(
+  new URL('../spatial-strata-hybrid-smoke-renderer.mjs', import.meta.url),
+  'utf8',
+);
+
+assert.match(
+  spatialStrataRendererSource,
+  /let liveCoverage = mix\(\s*u\.params\.z,\s*\$\{SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE\}/,
+  'the live coarse footprint must consume the requested/effective coarse coverage instead of a hidden constant',
+);
 
 assert.equal(
   typeof sourceModule.buildPhaseMatchedHybridSmokePlan,

@@ -4,7 +4,7 @@ export const SPATIAL_STRATA_HYBRID_SMOKE_ROUTE_IDENTITY = 'spatial-strata-hybrid
 export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_ROUTE_IDENTITY = 'spatial-strata-hybrid-smoke-live-coupled-v0';
 export const SPATIAL_STRATA_HYBRID_SMOKE_RENDERER_IDENTITY = 'phase-matched-spatial-strata-front-back-raster-v0';
 export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_APPEARANCE_IDENTITY = 'temperature-lit-sparse-live-smoke-v0';
-export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_COARSE_COVERAGE = 2.4;
+export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_COARSE_COVERAGE = 1.8;
 export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE = 1.7;
 export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_OPTICAL_GAIN = 12;
 
@@ -107,7 +107,7 @@ fn vs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) drawInst
   let liveProduct = 1.0 - clamp(u.counts.w, 0.0, 1.0);
   let offlineFootprint = mix(u.params.z, 1.22, splat.d.w);
   let liveCoverage = mix(
-    ${SPATIAL_STRATA_HYBRID_SMOKE_LIVE_COARSE_COVERAGE},
+    u.params.z,
     ${SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE},
     splat.d.w,
   );
@@ -199,7 +199,7 @@ export function createSpatialStrataHybridSmokeRenderer({
   fineLodFraction = 1,
   requestedRoute = SPATIAL_STRATA_HYBRID_SMOKE_ROUTE_IDENTITY,
   effectiveRoute = SPATIAL_STRATA_HYBRID_SMOKE_ROUTE_IDENTITY,
-  coarseCoverageScale = 1.8,
+  coarseCoverageScale = SPATIAL_STRATA_HYBRID_SMOKE_LIVE_COARSE_COVERAGE,
   motionRate = 0.16,
 } = {}) {
   if (!device?.createRenderPipeline) throw new TypeError('a WebGPU device is required');
@@ -420,6 +420,13 @@ export function createSpatialStrataHybridSmokeRenderer({
         appearanceIdentity: productSource
           ? SPATIAL_STRATA_HYBRID_SMOKE_LIVE_APPEARANCE_IDENTITY
           : 'offline-spatial-strata-smoke-appearance-v0',
+        coverage: {
+          authority: productSource
+            ? 'live-coarse-uniform-fine-fixed-v0'
+            : 'offline-coarse-uniform-fine-fixed-v0',
+          coarse: coarseCoverageScale,
+          fine: SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE,
+        },
         productWriteTicks: [...productWriteTicks],
         lastUpdateMs,
         lastElapsedSeconds,

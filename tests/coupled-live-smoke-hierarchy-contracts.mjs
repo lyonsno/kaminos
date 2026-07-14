@@ -297,7 +297,11 @@ assert.equal(
   SPATIAL_STRATA_HYBRID_SMOKE_LIVE_APPEARANCE_IDENTITY,
   'temperature-lit-sparse-live-smoke-v0',
 );
-assert.equal(SPATIAL_STRATA_HYBRID_SMOKE_LIVE_COARSE_COVERAGE, 2.4);
+assert.equal(
+  SPATIAL_STRATA_HYBRID_SMOKE_LIVE_COARSE_COVERAGE,
+  1.8,
+  'the published live default matches the coverage consumed by the validated route',
+);
 assert.equal(SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE, 1.7);
 assert.equal(SPATIAL_STRATA_HYBRID_SMOKE_LIVE_OPTICAL_GAIN, 12);
 
@@ -406,6 +410,11 @@ renderer.update({
 });
 assert.equal(renderer.debugState().productSourceMode, 'live-owned-product-source');
 assert.equal(renderer.debugState().appearanceIdentity, SPATIAL_STRATA_HYBRID_SMOKE_LIVE_APPEARANCE_IDENTITY);
+assert.deepEqual(renderer.debugState().coverage, {
+  authority: 'live-coarse-uniform-fine-fixed-v0',
+  coarse: 1.8,
+  fine: SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE,
+});
 assert.deepEqual(renderer.debugState().productWriteTicks, [20, 21]);
 
 const replacedBuffers = activeLiveProducts.map(product => product.packedBuffer);
