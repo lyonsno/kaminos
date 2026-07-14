@@ -32,6 +32,9 @@ const outDir = resolve(String(args.values.get('--out-dir') || '/tmp/kaminos-sele
 const manifestPath = resolve(String(args.values.get('--manifest') || join(outDir, 'manifest.json')));
 const expectedFrameCount = Number(args.values.get('--expected-frame-count') || args.frames.length);
 const requestedPartialDebugMix = Number(args.values.get('--partial-debug-mix') || 0.625);
+const requestedViewportSize = String(args.values.get('--expected-viewport-size') || '');
+const requestedCanvasSize = String(args.values.get('--expected-canvas-size') || '');
+const requestedDeviceScaleFactor = Number(args.values.get('--expected-device-scale-factor'));
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
 
@@ -43,6 +46,14 @@ try {
   }
   if (args.frames.length !== expectedFrameCount) {
     throw new Error(`frame count mismatch: received ${args.frames.length}, expected ${expectedFrameCount}`);
+  }
+  const expectedGeometry = {
+    viewport: parseDimensions(requestedViewportSize, '--expected-viewport-size'),
+    canvas: parseDimensions(requestedCanvasSize, '--expected-canvas-size'),
+    deviceScaleFactor: requestedDeviceScaleFactor,
+  };
+  if (!Number.isFinite(expectedGeometry.deviceScaleFactor) || expectedGeometry.deviceScaleFactor <= 0) {
+    throw new Error(`invalid --expected-device-scale-factor: ${requestedDeviceScaleFactor}`);
   }
   if (!Number.isFinite(requestedPartialDebugMix)
     || requestedPartialDebugMix < 0.5
@@ -62,7 +73,7 @@ try {
   failurePhase = 'role-validation';
   validateRoles(frames);
   failurePhase = 'render-identity-validation';
-  const renderIdentity = validateRenderIdentity(frames, requestedPartialDebugMix);
+  const { renderIdentity, geometryIdentity } = validateRenderIdentity(frames, requestedPartialDebugMix, expectedGeometry);
   failurePhase = 'artifact-validation';
   const copiedFrames = copyArtifacts(frames);
   failurePhase = 'output';
@@ -95,6 +106,7 @@ try {
       applicationAuthority: PARTIAL_DEBUG_AUTHORITY,
     },
     renderIdentity,
+    geometryIdentity,
     frames: copiedFrames,
     falseClosureChecks: {
       consecutiveSimulationSteps: true,
@@ -103,6 +115,8 @@ try {
       fixedSourceAndModelIdentity: true,
       requestedEffectivePartialDebugMatch: true,
       noFallbackOrHiddenComposition: true,
+      matchedViewportAndCanvasGeometry: true,
+      independentPartialDebugRenderReceipts: true,
       checksumBoundCopiedArtifacts: true,
       durableFailureReport: true,
     },
@@ -141,6 +155,15 @@ function parseArgs(argv) {
     else values.set(key, value);
   }
   return { values, frames };
+}
+
+function parseDimensions(value, label) {
+  const match = /^(\d+),(\d+)$/.exec(value);
+  if (!match) throw new Error(`${label} must be WIDTH,HEIGHT`);
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (width < 64 || height < 64) throw new Error(`${label} dimensions must be at least 64`);
+  return { width, height };
 }
 
 function loadFrame(path, ordinal) {
@@ -199,7 +222,7 @@ function validateRoles(frames) {
   }
 }
 
-function validateRenderIdentity(frames, partialDebugMix) {
+function validateRenderIdentity(frames, partialDebugMix, expectedGeometry) {
   const firstReceipt = frames[0].captures[ROLES[0]].renderReceipt;
   const keys = ['effectiveRoute', 'backend', 'composition', 'learnedDecoder', 'learnedDecoderModel'];
   if (firstReceipt?.composition !== EXPECTED_COMPOSITION) {
@@ -209,21 +232,7 @@ function validateRenderIdentity(frames, partialDebugMix) {
     for (const role of ROLES) {
       const capture = frame.captures[role];
       const receipt = capture.renderReceipt || {};
-      for (const key of keys) {
-        if (receipt[key] !== firstReceipt[key]) {
-          throw new Error(`frame ${frame.frameIndex}/${role} render ${key} drift: ${receipt[key]} != ${firstReceipt[key]}`);
-        }
-      }
-      if (receipt.fallback !== null) throw new Error(`frame ${frame.frameIndex}/${role} used fallback: ${receipt.fallback}`);
-      for (const countKey of ['boundarySplatCandidateCount', 'boundarySplatInstanceCount', 'boundarySplatOverflowCount']) {
-        if (!Number.isFinite(receipt[countKey])) throw new Error(`frame ${frame.frameIndex}/${role} missing ${countKey}`);
-      }
-      if (receipt.boundarySplatOverflowCount !== 0
-        || receipt.boundarySplatCandidateCount !== receipt.boundarySplatInstanceCount) {
-        throw new Error(
-          `frame ${frame.frameIndex}/${role} capacity clipping: candidates=${receipt.boundarySplatCandidateCount}, instances=${receipt.boundarySplatInstanceCount}, overflow=${receipt.boundarySplatOverflowCount}`,
-        );
-      }
+      validateReceipt(receipt, firstReceipt, keys, expectedGeometry, `frame ${frame.frameIndex}/${role} beauty`);
       const debug = capture.partialFlowDebug || {};
       if (debug.requestedMix !== partialDebugMix || debug.effectiveMix !== partialDebugMix) {
         throw new Error(`frame ${frame.frameIndex}/${role} partial debug mismatch: ${debug.requestedMix}/${debug.effectiveMix}`);
@@ -231,9 +240,55 @@ function validateRenderIdentity(frames, partialDebugMix) {
       if (debug.applicationAuthority !== PARTIAL_DEBUG_AUTHORITY) {
         throw new Error(`frame ${frame.frameIndex}/${role} partial debug is not render-only`);
       }
+      validateReceipt(debug.renderReceipt || {}, firstReceipt, keys, expectedGeometry, `frame ${frame.frameIndex}/${role} partial debug`);
     }
   }
-  return Object.fromEntries(keys.map(key => [key, firstReceipt[key]]));
+  return {
+    renderIdentity: Object.fromEntries(keys.map(key => [key, firstReceipt[key]])),
+    geometryIdentity: {
+      viewport: { ...expectedGeometry.viewport, deviceScaleFactor: expectedGeometry.deviceScaleFactor },
+      canvas: {
+        ...expectedGeometry.canvas,
+        renderWidth: expectedGeometry.canvas.width * expectedGeometry.deviceScaleFactor,
+        renderHeight: expectedGeometry.canvas.height * expectedGeometry.deviceScaleFactor,
+      },
+    },
+  };
+}
+
+function validateReceipt(receipt, firstReceipt, keys, expectedGeometry, label) {
+  for (const key of keys) {
+    if (receipt[key] !== firstReceipt[key]) throw new Error(`${label} ${key} drift: ${receipt[key]} != ${firstReceipt[key]}`);
+  }
+  if (receipt.fallback !== null) throw new Error(`${label} used fallback: ${receipt.fallback}`);
+  const viewport = receipt.viewportContract;
+  if (viewport?.identity !== 'cdp-emulation-fixed-device-metrics-v0') throw new Error(`${label} missing fixed viewport authority`);
+  for (const state of ['requested', 'effective']) {
+    if (viewport?.[state]?.width !== expectedGeometry.viewport.width
+      || viewport?.[state]?.height !== expectedGeometry.viewport.height
+      || viewport?.[state]?.deviceScaleFactor !== expectedGeometry.deviceScaleFactor) {
+      throw new Error(`${label} ${state} viewport geometry mismatch`);
+    }
+  }
+  const canvas = receipt.canvas;
+  if (canvas?.cssRect?.x !== 0
+    || canvas?.cssRect?.y !== 0
+    || canvas?.cssRect?.width !== expectedGeometry.canvas.width
+    || canvas?.cssRect?.height !== expectedGeometry.canvas.height
+    || canvas?.renderWidth !== expectedGeometry.canvas.width * expectedGeometry.deviceScaleFactor
+    || canvas?.renderHeight !== expectedGeometry.canvas.height * expectedGeometry.deviceScaleFactor
+    || canvas?.devicePixelRatio !== expectedGeometry.deviceScaleFactor) {
+    throw new Error(`${label} canvas geometry mismatch`);
+  }
+  for (const countKey of ['boundarySplatCandidateCount', 'boundarySplatInstanceCount', 'boundarySplatOverflowCount']) {
+    if (!Number.isFinite(receipt[countKey])) throw new Error(`${label} missing ${countKey}`);
+  }
+  if (receipt.boundarySplatOverflowCount !== 0
+    || receipt.boundarySplatCandidateCount !== receipt.boundarySplatInstanceCount) {
+    throw new Error(
+      `${label} capacity clipping: candidates=${receipt.boundarySplatCandidateCount}, instances=${receipt.boundarySplatInstanceCount}, overflow=${receipt.boundarySplatOverflowCount}`,
+    );
+  }
 }
 
 function copyArtifacts(frames) {
@@ -251,6 +306,7 @@ function copyArtifacts(frames) {
           requestedMix: capture.partialFlowDebug.requestedMix,
           effectiveMix: capture.partialFlowDebug.effectiveMix,
           applicationAuthority: capture.partialFlowDebug.applicationAuthority,
+          renderReceipt: capture.partialFlowDebug.renderReceipt,
         },
         renderReceipt: capture.renderReceipt,
       };

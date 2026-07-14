@@ -120,6 +120,8 @@ const producerSource = readFileSync(producer, 'utf8');
 assert.match(producerSource, /process\.on\('SIGINT'[\s\S]*interrupted/, 'operator interruption leaves a durable failed producer manifest');
 assert.match(producerSource, /viewportContract:\s*renderManifest\.viewportContract/, 'per-frame receipt retains effective viewport custody after ephemeral render manifests are deleted');
 assert.match(producerSource, /renderWidth:\s*beauty\.renderWidth[\s\S]*renderHeight:\s*beauty\.renderHeight/, 'crop identity uses post-render dimensions rather than placeholder pre-render canvas intrinsics');
+assert.match(producerSource, /partialFlowDebug:[\s\S]*renderReceipt:\s*renderReceiptDescriptor\(partial, renderManifest\)/, 'partial-flow image retains its own secondary-render route, geometry, fallback, and capacity receipt');
+assert.match(producerSource, /--expected-viewport-size[\s\S]*context\.viewportSize[\s\S]*--expected-canvas-size[\s\S]*RENDER_CANVAS_SIZE/, 'producer gives the final assembler explicit viewport and canvas admission dimensions');
 
 const targeted = run([
   '--frame-count', '1',
@@ -145,5 +147,8 @@ const badMix = run(['--partial-flow-debug-mix', '0.9'], 'bad-mix');
 assert.notEqual(badMix.result.status, 0, 'partial debug mix must remain inside the witness contract');
 const badMixManifest = JSON.parse(readFileSync(join(badMix.outDir, 'producer-manifest.json'), 'utf8'));
 assert.equal(badMixManifest.failurePhase, 'render-contract-validation');
+assert.equal(badMixManifest.runtimeConfig.viewportSize, '1620,633', 'failure manifest preserves requested viewport custody');
+assert.equal(badMixManifest.runtimeConfig.renderCanvasSize, '1240,633', 'failure manifest preserves requested canvas custody');
+assert.equal(badMixManifest.runtimeConfig.targetOrigin, 'http://127.0.0.1:18100', 'failure manifest preserves requested route custody');
 
 console.log('selective-head motion producer contracts passed');

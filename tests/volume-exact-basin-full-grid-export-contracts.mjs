@@ -38,6 +38,8 @@ assert.match(exporter, /--render-canvas-size/, 'exporter accepts an explicit ren
 assert.match(exporter, /renderCanvasContract/, 'export manifest records requested and effective renderer canvas geometry');
 assert.match(exporter, /remount-imported-render-canvas/, 'exporter reacquires and restyles a renderer canvas replaced during warmup initialization');
 assert.match(exporter, /post-render-canvas-geometry-drift/, 'exporter rejects a final render that replaced or resized the fixed witness canvas');
+assert.match(exporter, /rect\.x \+ rect\.width > viewportContract\.effective\.width/, 'primary post-render clip must remain fully inside the effective viewport');
+assert.match(exporter, /secondaryRect\.x \+ secondaryRect\.width > viewportContract\.effective\.width/, 'secondary post-render clip must remain fully inside the effective viewport');
 assert.match(exporter, /fluid-front-only-v0/, 'exporter names the narrow fluid/front-only scope used by model pair production');
 assert.match(
   exporter,

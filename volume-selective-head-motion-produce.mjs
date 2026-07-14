@@ -10,6 +10,8 @@ const TRANSFER_MODE = 'consecutive-phase-aligned-sequence-v0';
 const PAIR_AUTHORITY = 'downsampled-same-high-history-input-to-exact-high-target';
 const RENDER_COMPOSITION = 'raymarch-under-splats-v0';
 const PARTIAL_DEBUG_AUTHORITY = 'render-only-control-override-v0';
+const RENDER_CANVAS_SIZE = '1240,633';
+const VIEWPORT_DEVICE_SCALE_FACTOR = 2;
 const ROLES = ['truthHigh', 'lowPhaseAligned', 'selectiveFullResidual', 'selectiveCalibratedResidual'];
 const BEAUTY_OVERRIDES = {
   fireRenderMode: 'off', fire: 0, radiance: 0, glow: 0, shellAmount: 0,
@@ -22,14 +24,31 @@ const manifestPath = resolve(String(args.get('--manifest') || join(outDir, 'prod
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
 let sharedBrowserPid = null;
+let activeManifest = null;
+let capturedFramePaths = [];
+let deletionReceipts = [];
+let runtimeConfig = {
+  targetOrigin: args.has('--target-origin') ? String(args.get('--target-origin')) : null,
+  debugPort: args.has('--debug-port') ? Number(args.get('--debug-port')) : null,
+  userDataDir: args.has('--user-data-dir') ? resolve(String(args.get('--user-data-dir'))) : null,
+  windowSize: String(args.get('--window-size') || '1240,720'),
+  viewportSize: String(args.get('--viewport-size') || '1620,633'),
+  viewportDeviceScaleFactor: VIEWPORT_DEVICE_SCALE_FACTOR,
+  renderCanvasSize: RENDER_CANVAS_SIZE,
+  renderWarmupCount: Number(args.get('--render-warmup-count') || 2),
+};
 
 process.on('SIGINT', () => {
   writeJson(manifestPath, {
+    ...(activeManifest || {}),
     schema: SCHEMA,
     identity: 'streamed-phase-aligned-selective-head-motion-production-v0',
     status: 'failed',
     failurePhase: 'interrupted',
     error: 'operator interrupted producer execution',
+    runtimeConfig,
+    frameManifests: capturedFramePaths,
+    deletionReceipts,
     lastTrustworthyEvidence,
   });
   if (sharedBrowserPid) {
@@ -60,6 +79,16 @@ try {
   const renderWarmupCount = Number(args.get('--render-warmup-count') || 2);
   const windowSize = String(args.get('--window-size') || '1240,720');
   const viewportSize = String(args.get('--viewport-size') || '1620,633');
+  runtimeConfig = {
+    targetOrigin,
+    debugPort,
+    userDataDir,
+    windowSize,
+    viewportSize,
+    viewportDeviceScaleFactor: VIEWPORT_DEVICE_SCALE_FACTOR,
+    renderCanvasSize: RENDER_CANVAS_SIZE,
+    renderWarmupCount,
+  };
 
   if (!Number.isFinite(partialFlowDebugMix) || partialFlowDebugMix < 0.5 || partialFlowDebugMix > 0.75) {
     failurePhase = 'render-contract-validation';
@@ -149,6 +178,7 @@ try {
     supportThreshold,
     calibratedResidualScale,
     partialFlowDebugMix,
+    runtimeConfig,
     renderComposition: RENDER_COMPOSITION,
     roles: ROLES,
     retention: {
@@ -158,6 +188,7 @@ try {
     },
     frames,
   };
+  activeManifest = baseManifest;
   writeJson(manifestPath, baseManifest);
   lastTrustworthyEvidence = {
     planManifest: manifestPath,
@@ -168,8 +199,8 @@ try {
   if (planOnly) {
     console.log(JSON.stringify({ ok: true, status: 'planned', manifest: manifestPath }, null, 2));
   } else {
-    const capturedFramePaths = [];
-    const deletionReceipts = [];
+    capturedFramePaths = [];
+    deletionReceipts = [];
     for (const frame of frames) {
       failurePhase = `frame-${frame.frameIndex}-execution`;
       const captured = executeFrame(frame, context, {
@@ -199,6 +230,9 @@ try {
         '--out-dir', witnessDir,
         '--expected-frame-count', String(frameCount),
         '--partial-debug-mix', String(partialFlowDebugMix),
+        '--expected-viewport-size', context.viewportSize,
+        '--expected-canvas-size', RENDER_CANVAS_SIZE,
+        '--expected-device-scale-factor', String(VIEWPORT_DEVICE_SCALE_FACTOR),
       ];
       runCommand(process.execPath, assemble, failurePhase);
       const witnessManifestPath = join(witnessDir, 'manifest.json');
@@ -217,17 +251,22 @@ try {
         },
       };
     }
+    activeManifest = capturedManifest;
     writeJson(manifestPath, capturedManifest);
     console.log(JSON.stringify({ ok: true, status: 'captured', manifest: manifestPath, witness: capturedManifest.witness }, null, 2));
   }
 } catch (error) {
   mkdirSync(dirname(manifestPath), { recursive: true });
   writeJson(manifestPath, {
+    ...(activeManifest || {}),
     schema: SCHEMA,
     identity: 'streamed-phase-aligned-selective-head-motion-production-v0',
     status: 'failed',
     failurePhase,
     error: error?.stack || error?.message || String(error),
+    runtimeConfig,
+    frameManifests: capturedFramePaths,
+    deletionReceipts,
     lastTrustworthyEvidence,
   });
   console.error(JSON.stringify({ ok: false, manifest: manifestPath, failurePhase, error: error?.message || String(error) }, null, 2));
@@ -357,7 +396,7 @@ function buildFramePlan(context, frameIndex) {
     '--initial-field-manifest', roleManifests[role],
     '--advance-imported-steps', '0',
     '--render-only',
-    '--render-canvas-size', '1240,633',
+    '--render-canvas-size', RENDER_CANVAS_SIZE,
     '--render-warmup-count', String(context.renderWarmupCount),
     '--render-composition', RENDER_COMPOSITION,
     '--render-png', join(captureRoot, `${role}-beauty.png`),
@@ -438,27 +477,9 @@ function executeFrame(frame, context, identity) {
         requestedMix: context.partialFlowDebugMix,
         effectiveMix: partial.controlOverrides.flowDebug,
         applicationAuthority: PARTIAL_DEBUG_AUTHORITY,
+        renderReceipt: renderReceiptDescriptor(partial, renderManifest),
       },
-      renderReceipt: {
-        effectiveRoute: beauty.effectiveRoute,
-        backend: beauty.backend,
-        composition: beauty.boundarySplatCompositionEffective,
-        learnedDecoder: beauty.boundarySplatRendererIdentity,
-        learnedDecoderModel: beauty.boundarySplatAttributeModelIdentity,
-        fallback: beauty.boundarySplatFallbackReason ?? null,
-        viewportContract: renderManifest.viewportContract,
-        canvas: {
-          cssRect: beauty.canvasCssRect,
-          intrinsicWidthBeforeRender: beauty.canvasMount?.intrinsicWidth,
-          intrinsicHeightBeforeRender: beauty.canvasMount?.intrinsicHeight,
-          renderWidth: beauty.renderWidth,
-          renderHeight: beauty.renderHeight,
-          devicePixelRatio: beauty.devicePixelRatio,
-        },
-        boundarySplatCandidateCount: beauty.boundarySplatCandidateCount,
-        boundarySplatInstanceCount: beauty.boundarySplatInstanceCount,
-        boundarySplatOverflowCount: beauty.boundarySplatOverflowCount,
-      },
+      renderReceipt: renderReceiptDescriptor(beauty, renderManifest),
     };
   }
 
@@ -508,6 +529,29 @@ function executeFrame(frame, context, identity) {
   };
   rmSync(frame.paths.frameRoot, { recursive: true, force: true });
   return { frameManifestPath, deletionReceipt, browserPid };
+}
+
+function renderReceiptDescriptor(render, renderManifest) {
+  return {
+    effectiveRoute: render.effectiveRoute,
+    backend: render.backend,
+    composition: render.boundarySplatCompositionEffective,
+    learnedDecoder: render.boundarySplatRendererIdentity,
+    learnedDecoderModel: render.boundarySplatAttributeModelIdentity,
+    fallback: render.boundarySplatFallbackReason ?? null,
+    viewportContract: renderManifest.viewportContract,
+    canvas: {
+      cssRect: render.canvasCssRect,
+      intrinsicWidthBeforeRender: render.canvasMount?.intrinsicWidth,
+      intrinsicHeightBeforeRender: render.canvasMount?.intrinsicHeight,
+      renderWidth: render.renderWidth,
+      renderHeight: render.renderHeight,
+      devicePixelRatio: render.devicePixelRatio,
+    },
+    boundarySplatCandidateCount: render.boundarySplatCandidateCount,
+    boundarySplatInstanceCount: render.boundarySplatInstanceCount,
+    boundarySplatOverflowCount: render.boundarySplatOverflowCount,
+  };
 }
 
 function imageDescriptor(receipt) {

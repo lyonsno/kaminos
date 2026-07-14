@@ -28,6 +28,28 @@ function writeFrame(frameIndex, simStep, overrides = {}, variant = 'base') {
     writeFileSync(partial, `partial:${frameIndex}:${role}`);
     const beautySha256 = createHash('sha256').update(readFileSync(beauty)).digest('hex');
     const partialSha256 = createHash('sha256').update(readFileSync(partial)).digest('hex');
+    const renderReceipt = {
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+      backend: 'WebGPU:apple',
+      composition: 'raymarch-under-splats-v0',
+      learnedDecoder: 'live-boundary-sidecar-learned-attribute-splats-v0',
+      learnedDecoderModel: 'sha256:decoder-model',
+      fallback: null,
+      viewportContract: {
+        identity: 'cdp-emulation-fixed-device-metrics-v0',
+        requested: { width: 1620, height: 633, deviceScaleFactor: 2 },
+        effective: { width: 1620, height: 633, deviceScaleFactor: 2 },
+      },
+      canvas: {
+        cssRect: { x: 0, y: 0, width: 1240, height: 633 },
+        renderWidth: 2480,
+        renderHeight: 1266,
+        devicePixelRatio: 2,
+      },
+      boundarySplatCandidateCount: role === 'truthHigh' ? 120000 : 100000,
+      boundarySplatInstanceCount: role === 'truthHigh' ? 120000 : 100000,
+      boundarySplatOverflowCount: 0,
+    };
     return [role, {
       role,
       beauty: { path: beauty, sha256: beautySha256 },
@@ -37,18 +59,9 @@ function writeFrame(frameIndex, simStep, overrides = {}, variant = 'base') {
         requestedMix: 0.625,
         effectiveMix: 0.625,
         applicationAuthority: 'render-only-control-override-v0',
+        renderReceipt: { ...renderReceipt },
       },
-      renderReceipt: {
-        effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
-        backend: 'WebGPU:apple',
-        composition: 'raymarch-under-splats-v0',
-        learnedDecoder: 'live-boundary-sidecar-learned-attribute-splats-v0',
-        learnedDecoderModel: 'sha256:decoder-model',
-        fallback: null,
-        boundarySplatCandidateCount: role === 'truthHigh' ? 120000 : 100000,
-        boundarySplatInstanceCount: role === 'truthHigh' ? 120000 : 100000,
-        boundarySplatOverflowCount: 0,
-      },
+      renderReceipt,
     }];
   }));
   const frame = {
@@ -82,6 +95,9 @@ function run(framePaths, name) {
     ...framePaths.flatMap(path => ['--frame-manifest', path]),
     '--out-dir', outDir,
     '--expected-frame-count', String(framePaths.length),
+    '--expected-viewport-size', '1620,633',
+    '--expected-canvas-size', '1240,633',
+    '--expected-device-scale-factor', '2',
   ], { encoding: 'utf8' });
   return { result, outDir };
 }
@@ -107,6 +123,8 @@ assert.equal(manifest.staticSidecarOverMovingMaterial, false);
 assert.equal(manifest.sourceCaptureSha256, 'source-capture-sha');
 assert.equal(manifest.selectiveModelIdentity, 'sha256:selective-model');
 assert.equal(manifest.renderIdentity.composition, 'raymarch-under-splats-v0');
+assert.deepEqual(manifest.geometryIdentity.viewport, { width: 1620, height: 633, deviceScaleFactor: 2 });
+assert.deepEqual(manifest.geometryIdentity.canvas, { width: 1240, height: 633, renderWidth: 2480, renderHeight: 1266 });
 assert.equal(manifest.frames[0].captures.truthHigh.partialFlowDebug.path.endsWith('truthHigh-partial-flow.png'), true);
 
 const html = readFileSync(join(valid.outDir, 'index.html'), 'utf8');
@@ -157,5 +175,21 @@ const overflow = run([frame0, overflowFrame], 'capacity-overflow');
 assert.notEqual(overflow.result.status, 0, 'capacity overflow must fail instead of silently clipping the learned field');
 const overflowReport = JSON.parse(readFileSync(join(overflow.outDir, 'manifest.json'), 'utf8'));
 assert.equal(overflowReport.failurePhase, 'render-identity-validation');
+
+const missingGeometryPayload = JSON.parse(readFileSync(frame1, 'utf8'));
+delete missingGeometryPayload.captures.truthHigh.renderReceipt.viewportContract;
+const missingGeometryFrame = join(fixtureRoot, 'missing-geometry.json');
+writeFileSync(missingGeometryFrame, JSON.stringify(missingGeometryPayload, null, 2));
+const missingGeometry = run([frame0, missingGeometryFrame], 'missing-geometry');
+assert.notEqual(missingGeometry.result.status, 0, 'legacy or stale frame without viewport custody must fail');
+assert.equal(JSON.parse(readFileSync(join(missingGeometry.outDir, 'manifest.json'), 'utf8')).failurePhase, 'render-identity-validation');
+
+const partialFallbackPayload = JSON.parse(readFileSync(frame1, 'utf8'));
+partialFallbackPayload.captures.selectiveFullResidual.partialFlowDebug.renderReceipt.fallback = 'secondary-render-fallback';
+const partialFallbackFrame = join(fixtureRoot, 'partial-fallback.json');
+writeFileSync(partialFallbackFrame, JSON.stringify(partialFallbackPayload, null, 2));
+const partialFallback = run([frame0, partialFallbackFrame], 'partial-fallback');
+assert.notEqual(partialFallback.result.status, 0, 'partial-debug fallback must fail independently of clean beauty evidence');
+assert.equal(JSON.parse(readFileSync(join(partialFallback.outDir, 'manifest.json'), 'utf8')).failurePhase, 'render-identity-validation');
 
 rmSync(fixtureRoot, { recursive: true, force: true });

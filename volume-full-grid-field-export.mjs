@@ -753,7 +753,12 @@ async function main() {
           throw new Error(`requested render composition was not effective: ${renderComposition} != ${renderReceipt.boundarySplatCompositionEffective || '(missing)'}`);
         }
         const rect = renderReceipt.canvasCssRect;
-        if (rect.x < 0 || rect.y < 0 || rect.width < 64 || rect.height < 64) {
+        if (rect.x < 0
+          || rect.y < 0
+          || rect.width < 64
+          || rect.height < 64
+          || rect.x + rect.width > viewportContract.effective.width + 0.5
+          || rect.y + rect.height > viewportContract.effective.height + 0.5) {
           throw new Error(`canvas-clip-offscreen: ${JSON.stringify(rect)}`);
         }
         if (renderCanvasSize && (rect.width !== renderCanvasSize.width || rect.height !== renderCanvasSize.height)) {
@@ -801,7 +806,12 @@ async function main() {
             throw new Error(`requested secondary render composition was not effective: ${renderComposition} != ${secondaryReceipt.boundarySplatCompositionEffective || '(missing)'}`);
           }
           const secondaryRect = secondaryReceipt.canvasCssRect;
-          if (secondaryRect.x < 0 || secondaryRect.y < 0 || secondaryRect.width < 64 || secondaryRect.height < 64) {
+          if (secondaryRect.x < 0
+            || secondaryRect.y < 0
+            || secondaryRect.width < 64
+            || secondaryRect.height < 64
+            || secondaryRect.x + secondaryRect.width > viewportContract.effective.width + 0.5
+            || secondaryRect.y + secondaryRect.height > viewportContract.effective.height + 0.5) {
             throw new Error(`canvas-clip-offscreen: ${JSON.stringify(secondaryRect)}`);
           }
           if (renderCanvasSize && (secondaryRect.width !== renderCanvasSize.width || secondaryRect.height !== renderCanvasSize.height)) {
