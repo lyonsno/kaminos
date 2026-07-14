@@ -78,15 +78,45 @@ const predictionFrames = predictedPositions.map((positions, index) => ({
 }));
 const predictionsPath = join(fixture, 'transport-predictions.json');
 const modelPath = join(fixture, 'transport-model.json');
-const modelBytes = Buffer.from(JSON.stringify({
+const displacements = [-1, 0, 1].flatMap(dx => [-1, 0, 1].flatMap(dy => [-1, 0, 1].map(dz => [dx, dy, dz])));
+function layer(role, activation, inputSize, outputSize) {
+  return { role, activation, inputSize, outputSize, weights: Array(inputSize * outputSize).fill(0), bias: Array(outputSize).fill(0) };
+}
+const modelDocument = {
   schema: 'kaminos-boundary-splat-phase-transport-model-v0',
-  fixture: true,
-}));
+  status: 'completed',
+  route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+  manifest: { path: '/fixture/training-corpus.json', bytes: 1, sha256: 'a'.repeat(64) },
+  input: {
+    authority: 'exact-16-feature-plus-directional-local-grid-occupancy-v0',
+    featureCount: 64,
+    candidateFeatureCount: 16,
+    directionalOccupancyCount: 27,
+    mean: Array(64).fill(0),
+    scale: Array(64).fill(1),
+  },
+  architecture: {
+    authority: 'shared-two-layer-relu-carrier-displacement-and-residual-birth-heads-v0',
+    carrierOutputOrder: [...displacements, 'death'],
+    layers: [
+      layer('shared-trunk-a', 'relu', 64, 2),
+      layer('shared-trunk-b', 'relu', 2, 2),
+      layer('carrier-displacement-death-head', 'softmax', 2, 28),
+      layer('residual-birth-head', 'sigmoid', 2, 1),
+    ],
+  },
+  calibration: {
+    birth: { threshold: 0.5, precision: 0.5 },
+    targetSupport: { medianRatio: 1 },
+  },
+};
+const modelBytes = Buffer.from(JSON.stringify(modelDocument));
 writeFileSync(modelPath, modelBytes);
 const predictionDocument = {
   schema: 'kaminos-boundary-splat-phase-transport-predictions-v0',
   status: 'completed',
   manifest: { path: corpusPath, bytes: corpusBytes.length, sha256: hash(corpusBytes) },
+  modelTrainingManifest: modelDocument.manifest,
   model: { path: modelPath, schema: 'kaminos-boundary-splat-phase-transport-model-v0', sha256: hash(modelBytes) },
   route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
   temporal: {
@@ -140,6 +170,18 @@ expectIdentityFailure(missingModel, 'missing-model', /prediction model identity 
 const staleModel = structuredClone(predictionDocument);
 staleModel.model.sha256 = 'f'.repeat(64);
 expectIdentityFailure(staleModel, 'stale-model', /prediction model hash mismatch/);
+
+const schemaOnlyModelPath = join(fixture, 'schema-only-model.json');
+const schemaOnlyModelBytes = Buffer.from(JSON.stringify({ schema: 'kaminos-boundary-splat-phase-transport-model-v0' }));
+writeFileSync(schemaOnlyModelPath, schemaOnlyModelBytes);
+const schemaOnlyModel = structuredClone(predictionDocument);
+schemaOnlyModel.model.path = schemaOnlyModelPath;
+schemaOnlyModel.model.sha256 = hash(schemaOnlyModelBytes);
+expectIdentityFailure(schemaOnlyModel, 'schema-only-model', /model status\/route contract mismatch/);
+
+const falseDuration = structuredClone(predictionDocument);
+falseDuration.temporal.controlledStepDeltaMs = 10_000;
+expectIdentityFailure(falseDuration, 'false-duration', /prediction temporal cadence does not match corpus/);
 
 writeFileSync(predictionsPath, JSON.stringify(predictionDocument));
 

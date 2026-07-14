@@ -14,6 +14,10 @@ import {
 const SCHEMA = 'kaminos-boundary-splat-moving-phase-witness-v0';
 const CAPTURE_AUTHORITY = 'intercepted-live-boundary-splat-buffer-post-compaction-v0';
 const PREDICTION_AUTHORITY = 'learned-local-grid-transport-plus-residual-churn-v0';
+const MODEL_SCHEMA = 'kaminos-boundary-splat-phase-transport-model-v0';
+const MODEL_INPUT_AUTHORITY = 'exact-16-feature-plus-directional-local-grid-occupancy-v0';
+const MODEL_ARCHITECTURE_AUTHORITY = 'shared-two-layer-relu-carrier-displacement-and-residual-birth-heads-v0';
+const MODEL_DISPLACEMENTS = [-1, 0, 1].flatMap(dx => [-1, 0, 1].flatMap(dy => [-1, 0, 1].map(dz => [dx, dy, dz])));
 const GLYPHS = {
   A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
   C: ['01111', '10000', '10000', '10000', '10000', '10000', '01111'],
@@ -50,6 +54,78 @@ function sha256(bytes) {
 
 function isSha256(value) {
   return /^[0-9a-f]{64}$/i.test(String(value));
+}
+
+function validateModelManifestIdentity(identity, label) {
+  if (!identity || typeof identity.path !== 'string' || !identity.path || !Number.isInteger(identity.bytes) || identity.bytes <= 0 || !isSha256(identity.sha256)) {
+    throw new Error(`${label} identity is missing or malformed`);
+  }
+}
+
+function validateFrozenModelArtifact(model, declaredTrainingManifest) {
+  if (model?.schema !== MODEL_SCHEMA || model?.status !== 'completed') throw new Error('model status/route contract mismatch');
+  if (model.route?.backend !== 'mlx' || !/^Device\(gpu,\s*\d+\)$/i.test(String(model.route?.device)) || model.route?.fallbackReason !== null) {
+    throw new Error('model status/route contract mismatch');
+  }
+  validateModelManifestIdentity(model.manifest, 'model training corpus');
+  validateModelManifestIdentity(declaredTrainingManifest, 'prediction model training corpus');
+  if (
+    model.manifest.path !== declaredTrainingManifest.path
+    || model.manifest.bytes !== declaredTrainingManifest.bytes
+    || model.manifest.sha256 !== declaredTrainingManifest.sha256
+  ) throw new Error('prediction model training corpus identity mismatch');
+  const input = model.input;
+  if (
+    input?.authority !== MODEL_INPUT_AUTHORITY
+    || input.featureCount !== 64
+    || input.candidateFeatureCount !== 16
+    || input.directionalOccupancyCount !== 27
+    || !Array.isArray(input.mean)
+    || input.mean.length !== 64
+    || !input.mean.every(Number.isFinite)
+    || !Array.isArray(input.scale)
+    || input.scale.length !== 64
+    || !input.scale.every(value => Number.isFinite(value) && value > 0)
+  ) throw new Error('model input/normalization contract mismatch');
+  const architecture = model.architecture;
+  const expectedOrder = [...MODEL_DISPLACEMENTS, 'death'];
+  if (
+    architecture?.authority !== MODEL_ARCHITECTURE_AUTHORITY
+    || JSON.stringify(architecture.carrierOutputOrder) !== JSON.stringify(expectedOrder)
+    || !Array.isArray(architecture.layers)
+    || architecture.layers.length !== 4
+  ) throw new Error('model architecture contract mismatch');
+  const hiddenSize = Number(architecture.layers[0]?.outputSize);
+  const expectedLayers = [
+    ['shared-trunk-a', 'relu', 64, hiddenSize],
+    ['shared-trunk-b', 'relu', hiddenSize, hiddenSize],
+    ['carrier-displacement-death-head', 'softmax', hiddenSize, 28],
+    ['residual-birth-head', 'sigmoid', hiddenSize, 1],
+  ];
+  if (!Number.isInteger(hiddenSize) || hiddenSize <= 0) throw new Error('model architecture contract mismatch');
+  for (let index = 0; index < expectedLayers.length; index += 1) {
+    const layer = architecture.layers[index];
+    const [role, activation, inputSize, outputSize] = expectedLayers[index];
+    if (
+      layer?.role !== role
+      || layer.activation !== activation
+      || layer.inputSize !== inputSize
+      || layer.outputSize !== outputSize
+      || !Array.isArray(layer.weights)
+      || layer.weights.length !== inputSize * outputSize
+      || !layer.weights.every(Number.isFinite)
+      || !Array.isArray(layer.bias)
+      || layer.bias.length !== outputSize
+      || !layer.bias.every(Number.isFinite)
+    ) throw new Error(`model layer contract mismatch for ${role}`);
+  }
+  const birth = model.calibration?.birth;
+  const targetSupport = model.calibration?.targetSupport;
+  if (
+    !Number.isFinite(birth?.threshold) || birth.threshold < 0 || birth.threshold > 1
+    || !Number.isFinite(birth?.precision) || birth.precision < 0 || birth.precision > 1
+    || !Number.isFinite(targetSupport?.medianRatio) || targetSupport.medianRatio <= 0
+  ) throw new Error('model calibration contract mismatch');
 }
 
 function offsetLabel(index, controlledStepDeltaMs) {
@@ -512,13 +588,14 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
     if (manifestIdentity.bytes !== manifestBytes.byteLength) throw new Error('prediction corpus byte count mismatch');
     if (manifestIdentity.sha256 !== sha256(manifestBytes)) throw new Error('prediction corpus hash mismatch');
     const modelIdentity = predictions.model;
-    if (!modelIdentity || typeof modelIdentity.path !== 'string' || !modelIdentity.path || modelIdentity.schema !== 'kaminos-boundary-splat-phase-transport-model-v0' || !isSha256(modelIdentity.sha256)) {
+    if (!modelIdentity || typeof modelIdentity.path !== 'string' || !modelIdentity.path || modelIdentity.schema !== MODEL_SCHEMA || !isSha256(modelIdentity.sha256)) {
       throw new Error('prediction model identity is missing or malformed');
     }
     const modelBytes = await readFile(resolve(modelIdentity.path));
     if (sha256(modelBytes) !== modelIdentity.sha256) throw new Error('prediction model hash mismatch');
     const model = JSON.parse(modelBytes.toString('utf8'));
     if (model.schema !== modelIdentity.schema) throw new Error('prediction model artifact schema mismatch');
+    validateFrozenModelArtifact(model, predictions.modelTrainingManifest);
     if (predictions.route?.backend !== 'mlx' || !/^Device\(gpu,\s*\d+\)$/i.test(String(predictions.route?.device)) || predictions.route?.fallbackReason !== null) {
       throw new Error('transport predictions require effective MLX GPU identity and null fallback');
     }
@@ -528,6 +605,14 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
     const referenceDocs = referenceIds.map(id => corpusFrames.get(id));
     if (referenceDocs.some(frame => !frame)) throw new Error('heldout reference frame is absent from corpus');
     if (predictions.frames.some((frame, index) => frame.referenceFrameId !== referenceIds[index])) throw new Error('prediction/reference order mismatch');
+    const corpusStepDeltas = [...new Set(referenceDocs.map(frame => Number(frame.controlledStepDeltaMs)))];
+    const predictionStepDelta = Number(predictions.temporal?.controlledStepDeltaMs);
+    if (
+      corpusStepDeltas.length !== 1
+      || !Number.isFinite(corpusStepDeltas[0])
+      || corpusStepDeltas[0] <= 0
+      || predictionStepDelta !== corpusStepDeltas[0]
+    ) throw new Error('prediction temporal cadence does not match corpus');
     lastTrustworthyEvidence = {
       ...lastTrustworthyEvidence,
       manifestSha256: sha256(manifestBytes),
@@ -563,8 +648,10 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
       roleNames.map(role => resolve(outDir, 'partial-debug', role)), resolve(outDir, 'partial-flow-debug-comparison.mp4'),
       requestedFps, frameCount, labels, ffmpeg, ffprobe,
     );
+    if (!Number.isFinite(beautyComparison.probe.duration) || beautyComparison.probe.duration <= 0) throw new Error('encoded beauty duration is missing or invalid');
+    if (!Number.isFinite(partialDebugComparison.probe.duration) || partialDebugComparison.probe.duration <= 0) throw new Error('encoded debug duration is missing or invalid');
     failurePhase = 'report-write';
-    const controlledStepDeltaMs = Number(predictions.temporal.controlledStepDeltaMs);
+    const controlledStepDeltaMs = corpusStepDeltas[0];
     const report = {
       schema: SCHEMA,
       status: 'completed',
@@ -572,6 +659,7 @@ export async function writeMovingPhaseWitness(manifestPathValue, predictionsPath
         manifest: { path: manifestPath, sha256: sha256(manifestBytes) },
         predictions: { path: predictionsPath, sha256: sha256(predictionsBytes) },
         model: { path: resolve(modelIdentity.path), schema: modelIdentity.schema, sha256: modelIdentity.sha256 },
+        modelTrainingManifest: predictions.modelTrainingManifest,
         requestedRoute: manifest.requestedRoute,
         effectiveRoute: manifest.effectiveRoute,
         backend: predictions.route,

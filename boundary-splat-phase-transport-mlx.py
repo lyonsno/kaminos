@@ -34,6 +34,8 @@ DISPLACEMENTS = tuple(
 )
 DEATH_CLASS = len(DISPLACEMENTS)
 POSITION_PRECISION = 6
+DENSE_GRID_MAX_CELLS_PER_SOURCE = 256
+DENSE_GRID_MIN_CELL_BUDGET = 4096
 
 
 def write_json(path, payload):
@@ -137,15 +139,40 @@ def grid_coordinates(keys, grid_step, origin=None):
     return coordinates, origin
 
 
-def make_directional_inputs(keys, source, grid_step):
+def local_grid_plan(source, grid_step):
+    source_coordinates, origin = grid_coordinates(source["keys"], grid_step)
+    minimum = np.min(source_coordinates, axis=0)
+    maximum = np.max(source_coordinates, axis=0)
+    shape = tuple(int(value) for value in (maximum - minimum + 1).tolist())
+    bounding_volume_cells = math.prod(shape)
+    dense_cell_budget = max(DENSE_GRID_MIN_CELL_BUDGET, len(source_coordinates) * DENSE_GRID_MAX_CELLS_PER_SOURCE)
+    strategy = "dense-bounded-grid" if bounding_volume_cells <= dense_cell_budget else "sparse-key-lookup"
+    return {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "strategy": strategy,
+        "sourceCount": len(source_coordinates),
+        "shape": shape,
+        "boundingVolumeCells": bounding_volume_cells,
+        "denseCellBudget": dense_cell_budget,
+        "minimum": minimum,
+        "maximum": maximum,
+        "origin": origin,
+        "sourceCoordinates": source_coordinates,
+    }
+
+
+def make_directional_inputs(keys, source, grid_step, plan=None):
     keys = [stable_key(key) for key in keys]
     if not keys:
         return np.zeros((0, 64), dtype=np.float32)
-    source_coordinates, origin = grid_coordinates(source["keys"], grid_step)
+    plan = plan or local_grid_plan(source, grid_step)
+    if plan["strategy"] == "sparse-key-lookup":
+        return np.stack([make_directional_input(key, source, grid_step) for key in keys]).astype(np.float32)
+    source_coordinates = plan["sourceCoordinates"]
+    origin = plan["origin"]
     query_coordinates, _ = grid_coordinates(keys, grid_step, origin)
-    minimum = np.min(source_coordinates, axis=0)
-    maximum = np.max(source_coordinates, axis=0)
-    shape = tuple((maximum - minimum + 1).tolist())
+    minimum = plan["minimum"]
+    shape = plan["shape"]
     lookup = np.full(shape, -1, dtype=np.int32)
     source_local = source_coordinates - minimum
     lookup[tuple(source_local.T)] = np.arange(len(source_coordinates), dtype=np.int32)
@@ -472,8 +499,16 @@ def hydrate_frozen_model_document(document):
     return model, validated["mean"], validated["scale"]
 
 
-def prediction_universe(source, grid_step):
-    source_coordinates, origin = grid_coordinates(source["keys"], grid_step)
+def prediction_universe(source, grid_step, plan=None):
+    plan = plan or local_grid_plan(source, grid_step)
+    if plan["strategy"] == "sparse-key-lookup":
+        keys = set()
+        source_keys = set(source["keys"])
+        for key in source["keys"]:
+            keys.update(offset_key(key, delta, grid_step) for delta in DISPLACEMENTS)
+        return sorted(key for key in keys if key not in source_keys)
+    source_coordinates = plan["sourceCoordinates"]
+    origin = plan["origin"]
     minimum = np.min(source_coordinates, axis=0) - 1
     maximum = np.max(source_coordinates, axis=0) + 1
     shape = tuple((maximum - minimum + 1).tolist())
@@ -491,7 +526,8 @@ def prediction_universe(source, grid_step):
 
 
 def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_calibration, target_support_calibration, batch_size):
-    carrier_inputs = make_directional_inputs(source["keys"], source, grid_step)
+    grid_plan = local_grid_plan(source, grid_step)
+    carrier_inputs = make_directional_inputs(source["keys"], source, grid_step, grid_plan)
     carrier_probabilities, _ = predict_model(model, carrier_inputs, input_mean, input_scale, batch_size)
     claims = {}
     death_count = 0
@@ -507,8 +543,8 @@ def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_c
         if incumbent is None or score > incumbent[0] or (score == incumbent[0] and source_index < incumbent[1]):
             claims[target_key] = (score, source_index, class_index)
     collision_count = sum(1 for probabilities in carrier_probabilities if int(np.argmax(probabilities)) != DEATH_CLASS) - len(claims)
-    birth_keys = prediction_universe(source, grid_step)
-    birth_inputs = make_directional_inputs(birth_keys, source, grid_step)
+    birth_keys = prediction_universe(source, grid_step, grid_plan)
+    birth_inputs = make_directional_inputs(birth_keys, source, grid_step, grid_plan)
     _, birth_probabilities = predict_model(model, birth_inputs, input_mean, input_scale, batch_size)
     target_support_budget = max(1, round(len(source["keys"]) * target_support_calibration["medianRatio"]))
     selected_births = select_ranked_births(
@@ -555,6 +591,12 @@ def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_c
         "deathCount": death_count,
         "collisionCount": collision_count,
         "birthCandidateCount": len(birth_keys),
+        "gridLookup": {
+            "authority": grid_plan["authority"],
+            "strategy": grid_plan["strategy"],
+            "boundingVolumeCells": grid_plan["boundingVolumeCells"],
+            "denseCellBudget": grid_plan["denseCellBudget"],
+        },
         "birthSelectionAuthority": "training-target-count-calibrated-ranked-residual-birth-v0",
         "targetSupportBudget": target_support_budget,
         "thresholdQualifiedBirthCount": threshold_qualified_birth_count,

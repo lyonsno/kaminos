@@ -125,6 +125,20 @@ class TransportDatasetContracts(unittest.TestCase):
         expected = sorted(expected - set(source["keys"]))
         self.assertEqual(MODULE.prediction_universe(source, 1.0), expected)
 
+    def test_sparse_outlier_grid_uses_exact_nonallocating_fallback(self):
+        source = frame([
+            ((0.0, 0.0, 0.0), 1.0),
+            ((1_000_000.0, 1_000_000.0, 1_000_000.0), 2.0),
+        ])
+        keys = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (1_000_000.0, 1_000_000.0, 1_000_000.0)]
+        plan = MODULE.local_grid_plan(source, 1.0)
+        self.assertEqual(plan["strategy"], "sparse-key-lookup")
+        self.assertGreater(plan["boundingVolumeCells"], 10 ** 12)
+        expected = np.stack([MODULE.make_directional_input(key, source, 1.0) for key in keys])
+        actual = MODULE.make_directional_inputs(keys, source, 1.0)
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-7)
+        self.assertEqual(len(MODULE.prediction_universe(source, 1.0)), 52)
+
     def test_carrier_and_residual_birth_labels_are_distinct(self):
         source = frame([
             ((0.0, 0.0, 0.0), 1.0),
