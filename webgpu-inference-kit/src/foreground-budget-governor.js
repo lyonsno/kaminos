@@ -7,6 +7,14 @@ function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+function stableSerialize(value) {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function isPlainObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -92,6 +100,16 @@ function validateConfig(input) {
     if (!Object.hasOwn(scheduler.phaseChunkSize, schedulerControl)) {
       throw new Error(`phaseControlMap.${measuredPhase} names unknown scheduler control ${schedulerControl}`);
     }
+  }
+  if (!isPlainObject(input.attributionPolicy)) {
+    throw new Error('foreground governor requires a caller-declared attributionPolicy');
+  }
+  const { minimumCoveredFraction, maximumSharedFraction } = input.attributionPolicy;
+  if (!Number.isFinite(minimumCoveredFraction) || minimumCoveredFraction <= 0 || minimumCoveredFraction > 1) {
+    throw new Error('attributionPolicy.minimumCoveredFraction must be in (0, 1]');
+  }
+  if (!Number.isFinite(maximumSharedFraction) || maximumSharedFraction < 0 || maximumSharedFraction > 1) {
+    throw new Error('attributionPolicy.maximumSharedFraction must be in [0, 1]');
   }
   return scheduler;
 }
@@ -220,6 +238,7 @@ export function createForegroundBudgetGovernor(input = {}) {
     successWindowsBeforeRelax: input.successWindowsBeforeRelax ?? 3,
     dominantPhaseFraction: input.dominantPhaseFraction ?? 0.6,
     phaseControlMap: clone(input.phaseControlMap || {}),
+    attributionPolicy: clone(input.attributionPolicy),
     bounds: clone(input.bounds),
     baseline: clone(baseline),
     scheduler: clone(baseline),
@@ -231,28 +250,52 @@ export function createForegroundBudgetGovernor(input = {}) {
     decisionsByEpisode: new Map(),
   };
 
-  function remember(observation, decision) {
-    state.decisionsByEpisode.set(observation.episodeId, clone(decision));
+  function remember(observation, decision, evidenceFingerprint) {
+    state.decisionsByEpisode.set(observation.episodeId, {
+      firingId: observation.firingId,
+      evidenceFingerprint,
+      decision: clone(decision),
+    });
     return decision;
   }
 
   function observe(observation = {}) {
-    if (isNonEmptyString(observation.episodeId) && state.decisionsByEpisode.has(observation.episodeId)) {
-      return clone(state.decisionsByEpisode.get(observation.episodeId));
-    }
     state.previousScheduler = clone(state.scheduler);
     const failures = validateObservation(observation);
     if (failures.length) {
       state.consecutivePressureWindows = 0;
       state.consecutiveHealthyWindows = 0;
       state.pressureKey = null;
-      return remember(observation, makeDecision({
+      return makeDecision({
         state,
         observation,
         status: 'held-invalid-evidence',
         action: 'hold',
         failures,
-      }));
+      });
+    }
+    const evidenceFingerprint = stableSerialize(observation);
+    const priorEpisode = state.decisionsByEpisode.get(observation.episodeId);
+    if (priorEpisode) {
+      if (priorEpisode.firingId !== observation.firingId) {
+        return makeDecision({
+          state,
+          observation,
+          status: 'held-invalid-evidence',
+          action: 'hold',
+          failures: ['episode-firing-mismatch'],
+        });
+      }
+      if (priorEpisode.evidenceFingerprint !== evidenceFingerprint) {
+        return makeDecision({
+          state,
+          observation,
+          status: 'held-invalid-evidence',
+          action: 'hold',
+          failures: ['episode-evidence-mismatch'],
+        });
+      }
+      return clone(priorEpisode.decision);
     }
 
     const host = observation.hostEventCorrelation;
@@ -263,6 +306,12 @@ export function createForegroundBudgetGovernor(input = {}) {
       hostOnlyDurationMs: totals.hostOnlyDurationMs,
       sharedSharpHostDurationMs: totals.sharedSharpHostDurationMs,
       uncoveredDurationMs: totals.uncoveredDurationMs,
+      coveredFraction: totals.foregroundGapDurationMs > 0
+        ? totals.combinedCoveredDurationMs / totals.foregroundGapDurationMs
+        : 0,
+      sharedFraction: totals.foregroundGapDurationMs > 0
+        ? totals.sharedSharpHostDurationMs / totals.foregroundGapDurationMs
+        : 0,
     };
     if (host.unexplainedGapsAtOrAboveThreshold.length > 0) {
       state.consecutivePressureWindows = 0;
@@ -274,7 +323,31 @@ export function createForegroundBudgetGovernor(input = {}) {
         status: 'instrumentation-required',
         action: 'instrument-unattributed-gap',
         attribution,
-      }));
+      }), evidenceFingerprint);
+    }
+    if (attribution.coveredFraction < state.attributionPolicy.minimumCoveredFraction) {
+      state.consecutivePressureWindows = 0;
+      state.consecutiveHealthyWindows = 0;
+      state.pressureKey = null;
+      return remember(observation, makeDecision({
+        state,
+        observation,
+        status: 'instrumentation-required',
+        action: 'increase-attribution-coverage',
+        attribution,
+      }), evidenceFingerprint);
+    }
+    if (attribution.sharedFraction > state.attributionPolicy.maximumSharedFraction) {
+      state.consecutivePressureWindows = 0;
+      state.consecutiveHealthyWindows = 0;
+      state.pressureKey = null;
+      return remember(observation, makeDecision({
+        state,
+        observation,
+        status: 'instrumentation-required',
+        action: 'disambiguate-shared-pressure',
+        attribution,
+      }), evidenceFingerprint);
     }
 
     if (observation.frameTail.maxFrameGapMs <= state.targetFrameGapMs) {
@@ -294,7 +367,7 @@ export function createForegroundBudgetGovernor(input = {}) {
             target: relaxation.target,
             schedulerChanged: true,
             attribution,
-          }));
+          }), evidenceFingerprint);
         }
       }
       return remember(observation, makeDecision({
@@ -303,7 +376,7 @@ export function createForegroundBudgetGovernor(input = {}) {
         status: 'maintaining',
         action: 'hold',
         attribution,
-      }));
+      }), evidenceFingerprint);
     }
 
     state.consecutiveHealthyWindows = 0;
@@ -318,7 +391,7 @@ export function createForegroundBudgetGovernor(input = {}) {
         action: 'split-host-phase',
         target: hostLeader.phase,
         attribution,
-      }));
+      }), evidenceFingerprint);
     }
 
     const sharpLeader = rankedLeader(observation.sharpDutyCorrelation.phaseRankings, 'phase');
@@ -350,7 +423,7 @@ export function createForegroundBudgetGovernor(input = {}) {
         target,
         measuredPhase,
         attribution,
-      }));
+      }), evidenceFingerprint);
     }
 
     if (canReducePhase) {
@@ -377,11 +450,17 @@ export function createForegroundBudgetGovernor(input = {}) {
       measuredPhase,
       schedulerChanged,
       attribution,
-    }));
+    }), evidenceFingerprint);
   }
 
   return {
     observe,
+    forgetEpisode(episodeId) {
+      return state.decisionsByEpisode.delete(episodeId);
+    },
+    clearDecisionHistory() {
+      state.decisionsByEpisode.clear();
+    },
     snapshot() {
       return {
         schema: FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
@@ -390,6 +469,8 @@ export function createForegroundBudgetGovernor(input = {}) {
         baseline: clone(state.baseline),
         bounds: clone(state.bounds),
         targetFrameGapMs: state.targetFrameGapMs,
+        attributionPolicy: clone(state.attributionPolicy),
+        retainedDecisionCount: state.decisionsByEpisode.size,
       };
     },
   };

@@ -625,6 +625,7 @@ for (const [pattern, message] of [
   [/phaseControlMap\['spn-fusion'\] = 'spnFusionOutputItems'/, 'Witness must map measured SPN fusion pressure to its available scheduler control explicitly'],
   [/gaussian:\s*'gaussianCpuItems'/, 'Witness must map measured Gaussian pressure to its scheduler control explicitly'],
   [/failureWindowsBeforeAdjust:\s*1/, 'A completed one-shot witness must emit the next bounded scheduler recommendation without pretending to retain cross-run state'],
+  [/attributionPolicy:[\s\S]*minimumCoveredFraction:[\s\S]*maximumSharedFraction:/, 'Witness recommendations must declare aggregate coverage and shared-ambiguity authority bounds'],
   [/foregroundBudgetGovernorDecision\s*=\s*governor\.observe/, 'Witness must derive a governor decision from the exact completed firing'],
   [/hostEventCorrelation[\s\S]*sharpDutyCorrelation[\s\S]*frameTail:/, 'Governor input must join host attribution, SHARP attribution, and observed frame-tail pressure'],
   [/fullRoute\.foregroundBudgetGovernorDecision/, 'Witness report must preserve the governor decision before cadence acceptance'],

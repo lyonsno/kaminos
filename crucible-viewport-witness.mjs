@@ -130,6 +130,10 @@ function createSharpForegroundBudgetGovernor(expectedScheduler) {
       phaseChunkSize: phaseChunkBounds,
     },
     phaseControlMap,
+    attributionPolicy: {
+      minimumCoveredFraction: 0.8,
+      maximumSharedFraction: 0.25,
+    },
   });
 }
 

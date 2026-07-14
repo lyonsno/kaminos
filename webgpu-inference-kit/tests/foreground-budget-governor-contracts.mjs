@@ -52,13 +52,14 @@ function sharpCorrelation({
 
 function observation({
   episodeId,
+  observationFiringId = firingId,
   maxFrameGapMs = 120,
-  host = hostCorrelation(),
-  sharp = sharpCorrelation(),
+  host = hostCorrelation({ correlationFiringId: observationFiringId }),
+  sharp = sharpCorrelation({ correlationFiringId: observationFiringId }),
 } = {}) {
   return {
     episodeId,
-    firingId,
+    firingId: observationFiringId,
     frameTail: {
       sampleWindowMs: 30_000,
       maxFrameGapMs,
@@ -94,6 +95,10 @@ function governor() {
       'spn-fusion': 'spnFusionOutputItems',
       gaussian: 'gaussianCpuItems',
     },
+    attributionPolicy: {
+      minimumCoveredFraction: 0.8,
+      maximumSharedFraction: 0.25,
+    },
   });
 }
 
@@ -128,6 +133,39 @@ assert.equal(unexplained.status, 'instrumentation-required');
 assert.equal(unexplained.action, 'instrument-unattributed-gap');
 assert.equal(unexplained.schedulerChanged, false);
 assert.equal(unexplained.revision, 0);
+
+const fragmentedResidual = governor().observe(observation({
+  episodeId: 'fragmented-residual-a',
+  host: hostCorrelation({
+    foregroundGapDurationMs: 5_000,
+    sharpCoveredDurationMs: 100,
+    hostCoveredDurationMs: 0,
+    uncoveredDurationMs: 4_900,
+    phaseRankings: [],
+    unexplained: [],
+  }),
+  sharp: sharpCorrelation({ phaseRankings: [{ phase: 'spn-fusion', overlapDurationMs: 100 }] }),
+}));
+assert.equal(fragmentedResidual.status, 'instrumentation-required');
+assert.equal(fragmentedResidual.action, 'increase-attribution-coverage');
+assert.equal(fragmentedResidual.schedulerChanged, false);
+assert.equal(fragmentedResidual.attribution.coveredFraction, 0.02);
+
+const sharedAmbiguity = governor().observe(observation({
+  episodeId: 'shared-ambiguity-a',
+  host: hostCorrelation({
+    sharpCoveredDurationMs: 90,
+    hostCoveredDurationMs: 80,
+    sharedSharpHostDurationMs: 75,
+    uncoveredDurationMs: 5,
+    phaseRankings: [{ phase: 'browser-longtask', overlapDurationMs: 80 }],
+  }),
+  sharp: sharpCorrelation({ phaseRankings: [{ phase: 'spn-fusion', overlapDurationMs: 90 }] }),
+}));
+assert.equal(sharedAmbiguity.status, 'instrumentation-required');
+assert.equal(sharedAmbiguity.action, 'disambiguate-shared-pressure');
+assert.equal(sharedAmbiguity.schedulerChanged, false);
+assert.equal(sharedAmbiguity.attribution.sharedFraction, 0.75);
 
 const hostBound = governor().observe(observation({
   episodeId: 'host-bound-a',
@@ -185,6 +223,33 @@ assert.equal(donated.action, 'increase-yield-budget');
 assert.equal(donated.previousScheduler.yieldMs, 4);
 assert.equal(donated.effectiveScheduler.yieldMs, 8);
 assert.equal(donated.revision, 1);
+
+const identityGovernor = governor();
+const firstIdentityDecision = identityGovernor.observe(observation({ episodeId: 'same-episode' }));
+const duplicateIdentityDecision = identityGovernor.observe(observation({ episodeId: 'same-episode' }));
+assert.deepEqual(duplicateIdentityDecision, firstIdentityDecision, 'an exact duplicate must be idempotent');
+const crossFiringDecision = identityGovernor.observe(observation({
+  episodeId: 'same-episode',
+  observationFiringId: 'other-firing',
+}));
+assert.equal(crossFiringDecision.status, 'held-invalid-evidence');
+assert.ok(crossFiringDecision.failures.includes('episode-firing-mismatch'));
+assert.equal(crossFiringDecision.schedulerChanged, false);
+const changedEvidenceDecision = identityGovernor.observe(observation({
+  episodeId: 'same-episode',
+  maxFrameGapMs: 121,
+}));
+assert.equal(changedEvidenceDecision.status, 'held-invalid-evidence');
+assert.ok(changedEvidenceDecision.failures.includes('episode-evidence-mismatch'));
+assert.equal(changedEvidenceDecision.schedulerChanged, false);
+assert.equal(identityGovernor.snapshot().retainedDecisionCount, 1);
+assert.equal(identityGovernor.forgetEpisode('same-episode'), true);
+assert.equal(identityGovernor.snapshot().retainedDecisionCount, 0);
+const afterForgetDecision = identityGovernor.observe(observation({
+  episodeId: 'same-episode',
+  maxFrameGapMs: 121,
+}));
+assert.notEqual(afterForgetDecision.status, 'held-invalid-evidence');
 
 assert.throws(
   () => createForegroundBudgetGovernor({
