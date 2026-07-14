@@ -62,6 +62,16 @@ function siblingPngPath(suffix) {
   return out.replace(/\.png$/i, `${suffix}.png`);
 }
 
+function sameSourceIdentity(left, right) {
+  if (!left || !right) return left === right;
+  try {
+    const base = effectiveUrl || url;
+    return new URL(left, base).href === new URL(right, base).href;
+  } catch {
+    return left === right;
+  }
+}
+
 async function capturePngScreenshot(ws, screenshotPath) {
   const shot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
   const png = Buffer.from(shot.data, 'base64');
@@ -5003,8 +5013,8 @@ async function runRealHybridCroppedSupportedOverlayScenario(ws) {
       && correctionApplication.keptCount >= correctionApplication.sourceCount) {
     throw new Error(`cropped hybrid overlay reported no dropped splats for an enabled crop: ${JSON.stringify(evidence)}`);
   }
-  if (evidence.overlayDebug?.sourceIdentity?.source !== evidence.splatObject.source
-      || evidence.handoffDebug?.activeHandoff?.hybridOverlay?.sourceIdentity?.source !== evidence.splatObject.source) {
+  if (!sameSourceIdentity(evidence.overlayDebug?.sourceIdentity?.source, evidence.splatObject.source)
+      || !sameSourceIdentity(evidence.handoffDebug?.activeHandoff?.hybridOverlay?.sourceIdentity?.source, evidence.splatObject.source)) {
     throw new Error(`cropped hybrid overlay did not preserve renderer source identity: ${JSON.stringify(evidence)}`);
   }
   if (evidence.overlayDebug?.sceneContextAccepted !== true

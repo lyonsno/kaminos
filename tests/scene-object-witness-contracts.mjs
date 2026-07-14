@@ -264,6 +264,7 @@ assert.match(witness, /default package route did not use packaged module identit
 assert.match(witness, /default package route did not start the scene renderer from the packaged route/, 'Hybrid Renderer default package witness requires the packaged module to start the scene renderer');
 assert.match(witness, /crop-capable renderer did not render the corrected cropped splat/, 'Real Hybrid Renderer witness requires corrected cropped splats to reach the overlay');
 assert.match(witness, /cropped hybrid overlay did not report renderer-side crop application/, 'Real Hybrid Renderer witness requires renderer-side crop telemetry before trusting cropped overlays');
+assert.match(witness, /sameSourceIdentity/, 'Real Hybrid Renderer witness canonicalizes same-origin absolute and relative source routes before comparing identity');
 assert.match(witness, /cropped hybrid overlay lost scene-context acceptance/, 'Real Hybrid Renderer witness keeps cropped overlay acceptance tied to scene-context telemetry');
 assert.match(witness, /real hybrid splat overlay did not start as a renderer-owned scene/, 'Real Hybrid Renderer witness fails unless the live renderer owns the scene splat set');
 assert.match(witness, /startResult = await window\.startHybridSplatSceneRenderer\?\.\(\)/, 'Real Hybrid Renderer witness starts the scene renderer, not the selected-splat fallback path');
