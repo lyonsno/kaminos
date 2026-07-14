@@ -1294,6 +1294,34 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
         <span class="slider-val" id="volume-boundary-splat-instances-val">1</span>
       </div>
       <div class="slider-row">
+        <span class="slider-label">World</span>
+        <select id="volume-boundary-splat-pbr-scene" class="select-input">
+          <option value="off">black field</option>
+          <option value="fire-field">fire court</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-splat-pbr-scene-val">black field</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Splat budget</span>
+        <select id="volume-boundary-splat-candidate-budget" class="select-input">
+          <option value="0" selected>Full source</option>
+          <option value="12800">12800</option>
+          <option value="6400">6400</option>
+          <option value="3200">3200</option>
+          <option value="1600">1600</option>
+          <option value="800">800</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-splat-candidate-budget-val">full source</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Splat allocation</span>
+        <select id="volume-boundary-splat-lod-mode" class="select-input">
+          <option value="fixed" selected>fixed budget</option>
+          <option value="projected-area">projected area</option>
+        </select>
+        <span class="slider-val" id="volume-boundary-splat-lod-mode-val">fixed budget</span>
+      </div>
+      <div class="slider-row">
         <span class="slider-label">Splat phase</span>
         <select id="volume-boundary-splat-phase-mode" class="select-input">
           <option value="shared-current">shared current</option>
@@ -5330,6 +5358,18 @@ function boundarySplatFieldLayoutRouteValue(params = new URLSearchParams(window.
 }
 
 function boundarySplatFieldLayoutCameraPose(params = new URLSearchParams(window.location.search)) {
+  const requestedPbrScene = normalizeBoundarySplatPbrScene(params.get('volume_boundary_splat_pbr_scene'));
+  if (requestedPbrScene === 'fire-field') {
+    const count = Math.max(1, Math.min(128, Number(params.get('volume_boundary_splat_instances')) || 16));
+    return {
+      identity: 'boundary-splat-pbr-fire-field-camera-v0',
+      requestedLayout: boundarySplatFieldLayoutRouteValue(params),
+      effectiveLayout: 'field',
+      requestedPbrScene,
+      position: count > 36 ? [5.55, 2.35, 8.45] : [4.2, 1.55, 6.25],
+      target: [0.18, -0.46, 0.05],
+    };
+  }
   const requested = boundarySplatFieldLayoutRouteValue(params);
   if (requested !== 'field') return null;
   return {
@@ -12162,6 +12202,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
   { key: 'reactionBoundaryFireWarmth', id: 'volume-reaction-boundary-fire-warmth', param: 'volume_reaction_boundary_fire_warmth', min: 0, max: 2, decimals: 2 },
   { key: 'reactionBoundaryFireLuma', id: 'volume-reaction-boundary-fire-luma', param: 'volume_reaction_boundary_fire_luma', min: 0, max: 5, decimals: 2 },
   { key: 'boundarySplatInstances', id: 'volume-boundary-splat-instances', param: 'volume_boundary_splat_instances', min: 1, max: 128, decimals: 0 },
+  { key: 'boundarySplatCandidateBudget', id: 'volume-boundary-splat-candidate-budget', param: 'volume_boundary_splat_candidate_budget', min: 0, max: 12800, decimals: 0 },
   { key: 'boundarySplatPhaseStride', id: 'volume-boundary-splat-phase-stride', param: 'volume_boundary_splat_phase_stride', min: 1, max: 15, decimals: 0 },
   { key: 'boundarySplatHistoryDepth', id: 'volume-boundary-splat-history-depth', param: 'volume_boundary_splat_history_depth', min: 4, max: 16, decimals: 0 },
   { key: 'boundarySplatHistoryFrameStride', id: 'volume-boundary-splat-history-frame-stride', param: 'volume_boundary_splat_history_frame_stride', min: 1, max: 16, decimals: 0 },
@@ -12200,6 +12241,7 @@ const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 const BOUNDARY_SPLAT_COMPOSITION_VALUES = new Set(['splat-only', 'hybrid-smoke']);
 const BOUNDARY_SPLAT_PHASE_MODE_VALUES = new Set(['shared-current', 'same-history-slot', 'offset-history', 'age-sweep']);
 const BOUNDARY_SPLAT_FIELD_LAYOUT_VALUES = new Set(['proof', 'field']);
+const BOUNDARY_SPLAT_SELECTOR_BUDGETS = [0, 12800, 6400, 3200, 1600, 800];
 
 function normalizeReactionFrontLiveView(value) {
   const mode = String(value || 'off').toLowerCase().replace(/-/g, '_');
@@ -12234,6 +12276,21 @@ function normalizeBoundarySplatPhaseMode(value) {
 function normalizeBoundarySplatFieldLayout(value) {
   const mode = String(value || 'proof').toLowerCase().replace(/_/g, '-');
   return ['field', 'composed-field', 'field-100'].includes(mode) ? 'field' : 'proof';
+}
+
+function normalizeBoundarySplatPbrScene(value) {
+  const normalized = String(value || 'off').toLowerCase().replace(/_/g, '-');
+  return ['fire-field', 'pbr-fire-field', 'court'].includes(normalized) ? 'fire-field' : 'off';
+}
+
+function normalizeBoundarySplatCandidateBudget(value) {
+  const requested = Math.round(Number(value));
+  return BOUNDARY_SPLAT_SELECTOR_BUDGETS.includes(requested) ? requested : 0;
+}
+
+function normalizeBoundarySplatLodMode(value) {
+  const normalized = String(value || 'fixed').toLowerCase().replace(/_/g, '-');
+  return normalized === 'projected-area' ? normalized : 'fixed';
 }
 
 function clampVolumeControlValue(value, field) {
@@ -12558,11 +12615,21 @@ function syncReactionFrontExtractorLabels(controlsSnapshot) {
   const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
   const boundarySplatPhaseModeLabel = document.getElementById('volume-boundary-splat-phase-mode-val');
   if (boundarySplatPhaseModeLabel) boundarySplatPhaseModeLabel.textContent = boundarySplatPhaseMode.replace(/-/g, ' ');
+  const boundarySplatLodMode = normalizeBoundarySplatLodMode(controlsSnapshot.boundarySplatLodMode);
+  const boundarySplatLodModeLabel = document.getElementById('volume-boundary-splat-lod-mode-val');
+  if (boundarySplatLodModeLabel) boundarySplatLodModeLabel.textContent = boundarySplatLodMode === 'projected-area'
+    ? 'projected area'
+    : 'fixed budget';
+  const boundarySplatPbrScene = normalizeBoundarySplatPbrScene(controlsSnapshot.boundarySplatPbrScene);
+  const boundarySplatPbrSceneLabel = document.getElementById('volume-boundary-splat-pbr-scene-val');
+  if (boundarySplatPbrSceneLabel) boundarySplatPbrSceneLabel.textContent = boundarySplatPbrScene === 'fire-field' ? 'fire court' : 'black field';
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const label = document.getElementById(`${field.id}-val`);
     const value = controlsSnapshot[field.key];
     if (!label || !Number.isFinite(value)) continue;
-    label.textContent = value.toFixed(field.decimals);
+    label.textContent = field.key === 'boundarySplatCandidateBudget' && value === 0
+      ? 'full source'
+      : value.toFixed(field.decimals);
   }
 }
 
@@ -18671,6 +18738,8 @@ function readVolumeControls() {
   const boundarySplatComposition = normalizeBoundarySplatComposition(document.getElementById('volume-boundary-splat-composition')?.value);
   const boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(document.getElementById('volume-boundary-splat-phase-mode')?.value);
   const boundarySplatFieldLayout = normalizeBoundarySplatFieldLayout(boundarySplatFieldLayoutRouteValue(params));
+  const boundarySplatLodMode = normalizeBoundarySplatLodMode(document.getElementById('volume-boundary-splat-lod-mode')?.value);
+  const boundarySplatPbrScene = normalizeBoundarySplatPbrScene(document.getElementById('volume-boundary-splat-pbr-scene')?.value);
   const boundarySplatFeatureCapture = ['1', 'true', 'on'].includes(String(params.get('volume_boundary_splat_feature_capture') || '').toLowerCase());
   const reactionBoundaryControls = {
     identity: 'reaction-boundary-live-controls-v0',
@@ -18739,10 +18808,13 @@ function readVolumeControls() {
     boundarySidecarView,
     boundarySplatMode,
     boundarySplatPhaseMode,
+    boundarySplatLodMode,
     boundarySplatComposition,
     boundarySplatFieldLayout,
+    boundarySplatPbrScene,
     boundarySplatFeatureCapture,
     boundarySplatInstances: parseFloat(document.getElementById('volume-boundary-splat-instances').value),
+    boundarySplatCandidateBudget: normalizeBoundarySplatCandidateBudget(document.getElementById('volume-boundary-splat-candidate-budget').value),
     boundarySplatPhaseStride: parseFloat(document.getElementById('volume-boundary-splat-phase-stride').value),
     boundarySplatHistoryDepth: parseFloat(document.getElementById('volume-boundary-splat-history-depth').value),
     boundarySplatHistoryFrameStride: parseFloat(document.getElementById('volume-boundary-splat-history-frame-stride').value),
@@ -19903,6 +19975,12 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_boundary_splat_phase_mode')) {
     document.getElementById('volume-boundary-splat-phase-mode').value = normalizeBoundarySplatPhaseMode(params.get('volume_boundary_splat_phase_mode'));
   }
+  if (params.has('volume_boundary_splat_lod_mode')) {
+    document.getElementById('volume-boundary-splat-lod-mode').value = normalizeBoundarySplatLodMode(params.get('volume_boundary_splat_lod_mode'));
+  }
+  if (params.has('volume_boundary_splat_pbr_scene')) {
+    document.getElementById('volume-boundary-splat-pbr-scene').value = normalizeBoundarySplatPbrScene(params.get('volume_boundary_splat_pbr_scene'));
+  }
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     const routeValue = Number(params.get(field.param));
     if (!params.has(field.param) || !Number.isFinite(routeValue)) continue;
@@ -19980,6 +20058,10 @@ async function initKaminosVolumeRoute() {
   document.getElementById('volume-boundary-splat-composition')?.addEventListener('change', syncControls);
   document.getElementById('volume-boundary-splat-phase-mode')?.addEventListener('input', syncControls);
   document.getElementById('volume-boundary-splat-phase-mode')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-splat-lod-mode')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-splat-lod-mode')?.addEventListener('change', syncControls);
+  document.getElementById('volume-boundary-splat-pbr-scene')?.addEventListener('input', syncControls);
+  document.getElementById('volume-boundary-splat-pbr-scene')?.addEventListener('change', syncControls);
   for (const field of REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS) {
     document.getElementById(field.id)?.addEventListener('input', syncControls);
     document.getElementById(field.id)?.addEventListener('change', syncControls);

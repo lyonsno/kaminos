@@ -44,8 +44,9 @@ assert.match(core, /phaseModeIdentity/, 'runtime phase-source telemetry must inc
 assert.match(core, /same-history-slot-control/, 'runtime must distinguish same-history-slot from offset-history');
 assert.match(core, /age-sweep-history/, 'runtime must distinguish age-sweep from offset-history');
 assert.match(core, /phaseMode === 'age-sweep'[\s\S]*index \* phaseStride/, 'age-sweep must mine stride-spaced history offsets instead of duplicating offset-history');
-assert.match(core, /const effectiveHistoryOffsetFrames = historyOffsetSlots \* historyFrameStride/, 'age-sweep telemetry must distinguish slot offsets from macro frame offsets');
-assert.match(core, /Math\.floor\(state\.frameCount \/ historyFrameStride\)/, 'history write slot must advance by live-history frame stride rather than requiring a giant 60-slot buffer');
+assert.match(core, /const nominalHistoryOffsetFrames = historyOffsetSlots \* historyFrameStride/, 'age-sweep telemetry must preserve its nominal slot-stride label');
+assert.match(core, /boundarySplatPhysicalHistoryAgeFrames = boundarySplatHistoryAgeFrames/, 'age-sweep telemetry must report physical slot age instead of laundering the nominal stride label into exact age');
+assert.match(core, /Math\.floor\(\(sourceCandidateGeneration - 1\) \/ historyFrameStride\)/, 'history write slot must advance by source-candidate generation stride rather than render cadence or a giant 60-slot buffer');
 assert.match(core, /phaseMode === 'offset-history'[\s\S]*historyOffsetFrames = requestedInstanceCount > 1 \? index : 0/, 'offset-history must remain the adjacent-offset baseline');
 
 assert.match(witness, /phaseLabWitness/, 'witness report must include phase-lab A\\/B summary');

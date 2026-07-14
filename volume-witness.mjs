@@ -2403,6 +2403,11 @@ async function main() {
             boundarySplatAttributeModelIdentity: sample.boundarySplatAttributeModelIdentity,
             boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority,
             boundarySplatCapacity: sample.boundarySplatCapacity,
+            boundarySplatSelectorPolicyIdentity: sample.boundarySplatSelectorPolicyIdentity,
+            boundarySplatRequestedCandidateBudget: sample.boundarySplatRequestedCandidateBudget,
+            boundarySplatEffectiveCandidateBudget: sample.boundarySplatEffectiveCandidateBudget,
+            boundarySplatSelectedCandidateCount: sample.boundarySplatSelectedCandidateCount,
+            boundarySplatSelectorCostProfile: sample.boundarySplatSelectorCostProfile,
             boundarySplatInstanceCount: sample.boundarySplatInstanceCount,
             boundarySplatCandidateCount: sample.boundarySplatCandidateCount,
             boundarySplatOverflowCount: sample.boundarySplatOverflowCount,
@@ -3475,6 +3480,20 @@ async function main() {
       boundaryFireReadbackEvidence.acceptsZeroRadiance &&
       mainRendererMetrics.litPixels >= 1500 &&
       mainRendererMetrics.meanLuma >= 8;
+    const boundarySplatBudgetVisualEvidence =
+      state.boundarySplatRendererIdentity === 'live-boundary-sidecar-learned-attribute-splats-v0' &&
+      state.boundarySplatSelectorPolicyIdentity === 'boundary-splat-nested-permutation-prefix-v0' &&
+      Number.isFinite(Number(state.boundarySplatRequestedCandidateBudget));
+    const boundarySplatBudgetSignalPixels = Number(metrics.litPixels || 0) +
+      Number(metrics.smokeLikePixels || 0) +
+      Number(metrics.fireLikePixels || 0) +
+      Number(metrics.emissiveLikePixels || 0) +
+      Number(metrics.volumeBounds?.pixelCount || 0);
+    const boundarySplatBudgetMainRendererSignalPixels = Number(mainRendererMetrics.litPixels || 0) +
+      Number(mainRendererMetrics.smokeLikePixels || 0) +
+      Number(mainRendererMetrics.fireLikePixels || 0) +
+      Number(mainRendererMetrics.emissiveLikePixels || 0) +
+      Number(mainRendererMetrics.volumeBounds?.pixelCount || 0);
     const expectsNoFireMainRendererVolume = expectsNoFireVolumeEvidence ||
       expectsFuelStarvedTallPlume ||
       (expectsCanonicalPlumeProof && !expectsCanonicalFireEvidence);
@@ -3489,6 +3508,13 @@ async function main() {
     } else if (expectsPyroMaterialEvidence) {
       if (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.meanLuma < 8) {
         throw new Error(`main renderer screenshot missing bridged Pyro material volume: ${JSON.stringify(mainRendererMetrics)}`);
+      }
+    } else if (boundarySplatBudgetVisualEvidence) {
+      if (mainRendererMetrics.litPixels < 220 || boundarySplatBudgetMainRendererSignalPixels < 350 || mainRendererMetrics.meanLuma < 1.0) {
+        throw new Error(`main renderer screenshot missing budgeted learned-splat volume signal: ${JSON.stringify({
+          ...mainRendererMetrics,
+          boundarySplatBudgetMainRendererSignalPixels,
+        })}`);
       }
     } else if (!boundaryFireMainRendererEvidence && (mainRendererMetrics.litPixels < 1500 || mainRendererMetrics.fireLikePixels < 80 || mainRendererMetrics.meanLuma < 8)) {
       throw new Error(`main renderer screenshot missing bridged fire volume: ${JSON.stringify(mainRendererMetrics)}`);
@@ -3591,6 +3617,13 @@ async function main() {
           smokeLikePixels: metrics.smokeLikePixels,
           meanLuma: metrics.meanLuma,
         });
+      }
+    } else if (boundarySplatBudgetVisualEvidence) {
+      if (metrics.litPixels < 220 || boundarySplatBudgetSignalPixels < 350 || metrics.meanLuma < 1.0) {
+        throw new Error(`blank frame or missing budgeted learned-splat volume signal: ${JSON.stringify({
+          ...metrics,
+          boundarySplatBudgetSignalPixels,
+        })}`);
       }
     } else if (!boundaryFireVisualEvidence && (metrics.litPixels < 1500 || visibleFirePixels < 450 || metrics.emissiveLikePixels < 80 || metrics.meanLuma < 8)) {
       throw new Error(`blank frame or missing fire volume: ${JSON.stringify(metrics)}`);
@@ -4318,6 +4351,11 @@ async function main() {
       boundarySplatFeatureCapture,
       boundarySplatSourceAuthority: sample.boundarySplatSourceAuthority ?? state.boundarySplatSourceAuthority,
       boundarySplatCapacity: sample.boundarySplatCapacity ?? state.boundarySplatCapacity,
+      boundarySplatSelectorPolicyIdentity: sample.boundarySplatSelectorPolicyIdentity ?? state.boundarySplatSelectorPolicyIdentity,
+      boundarySplatRequestedCandidateBudget: sample.boundarySplatRequestedCandidateBudget ?? state.boundarySplatRequestedCandidateBudget,
+      boundarySplatEffectiveCandidateBudget: sample.boundarySplatEffectiveCandidateBudget ?? state.boundarySplatEffectiveCandidateBudget,
+      boundarySplatSelectedCandidateCount: sample.boundarySplatSelectedCandidateCount ?? state.boundarySplatSelectedCandidateCount,
+      boundarySplatSelectorCostProfile: sample.boundarySplatSelectorCostProfile ?? state.boundarySplatSelectorCostProfile,
       boundarySplatInstanceCount: sample.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount,
       boundarySplatCandidateCount: sample.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount,
       boundarySplatOverflowCount: sample.boundarySplatOverflowCount ?? state.boundarySplatOverflowCount,
