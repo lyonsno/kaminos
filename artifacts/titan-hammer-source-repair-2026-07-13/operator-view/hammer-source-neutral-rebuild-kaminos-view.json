@@ -1,0 +1,157 @@
+{
+  "schema": "kaminos.hammer-source-image-plane-operator-view.v0",
+  "requestedRoute": {
+    "appUrl": "http://127.0.0.1:8096/",
+    "sourceUrl": "/artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png",
+    "viewerFunction": "window.showImagePlane",
+    "debugFunction": "window.kaminosSceneObjectDebugState"
+  },
+  "debugPort": 9464,
+  "visibleBrowserLeftOpen": true,
+  "phase": "recording-report",
+  "status": "passed",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.115",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.245.15",
+    "WebKit-Version": "537.36 (@25f5b661e5b08141ec24b17d1ce96c5ceb5828da)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9464/devtools/browser/958ad1e0-9ba4-4444-9b24-bea66cfb5be1"
+  },
+  "effectiveUrl": "http://127.0.0.1:8096/",
+  "sourceDirectUrl": "http://127.0.0.1:8096/artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png",
+  "registration": {
+    "initial": {
+      "id": "image-7c221b21-f2f6-474f-84df-954473f48ac8",
+      "label": "Titan Hammer SF3D source - neutral rebuild",
+      "source": "/artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png",
+      "type": "image",
+      "groupId": null,
+      "active": true,
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "sceneTransform": null,
+      "splat": null,
+      "image": {
+        "schema": "kaminos.sf3d-source-image.v0",
+        "assetSource": "/artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png",
+        "fileName": "hammer-square-neutral-rebuild.png",
+        "width": 919,
+        "height": 919,
+        "routeUse": "Greenroom SF3D job c0e30d3acaed input",
+        "sourceRepairReceipt": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair-receipt.json"
+      },
+      "renderRoute": null,
+      "renderCapabilities": null,
+      "renderHandoffSchema": null
+    },
+    "final": {
+      "id": "image-7c221b21-f2f6-474f-84df-954473f48ac8",
+      "label": "Titan Hammer SF3D source - neutral rebuild",
+      "source": "/artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png",
+      "type": "image",
+      "groupId": null,
+      "active": true,
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "sceneTransform": null,
+      "splat": null,
+      "image": {
+        "schema": "kaminos.sf3d-source-image.v0",
+        "assetSource": "/artifacts/titan-hammer-source-repair-2026-07-13/source-repair/hammer-square-neutral-rebuild.png",
+        "fileName": "hammer-square-neutral-rebuild.png",
+        "width": 919,
+        "height": 919,
+        "routeUse": "Greenroom SF3D job c0e30d3acaed input",
+        "sourceRepairReceipt": "artifacts/titan-hammer-source-repair-2026-07-13/source-repair-receipt.json"
+      },
+      "renderRoute": null,
+      "renderCapabilities": null,
+      "renderHandoffSchema": null
+    },
+    "rowCount": 1
+  },
+  "screenshot": {
+    "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-source-repair-2026-07-13/operator-view/hammer-source-neutral-rebuild-kaminos-view.png",
+    "bytes": 1250730
+  },
+  "finalInfoText": null,
+  "camera": {
+    "position": [
+      0,
+      1.7145055188062944e-16,
+      2.8
+    ],
+    "target": [
+      0,
+      0,
+      0
+    ],
+    "projectionMatrix": [
+      2.204547598514601,
+      0,
+      0,
+      0,
+      0,
+      2.7474774194546225,
+      0,
+      0,
+      0,
+      0,
+      -1.0001000100010002,
+      -1,
+      0,
+      0,
+      -0.010001000100010001,
+      0
+    ],
+    "matrixWorldInverse": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      6.123233995736766e-17,
+      0,
+      0,
+      -6.123233995736766e-17,
+      1,
+      0,
+      0,
+      0,
+      -2.8,
+      1
+    ]
+  }
+}
