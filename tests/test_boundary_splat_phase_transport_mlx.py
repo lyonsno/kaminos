@@ -1,4 +1,5 @@
 import importlib.util
+import copy
 import unittest
 from pathlib import Path
 
@@ -25,6 +26,48 @@ def frame(rows):
     return MODULE.index_frame(candidates, splats)
 
 
+def frozen_model_document(hidden_size=2):
+    def layer(role, activation, input_size, output_size, bias=None):
+        return {
+            "role": role,
+            "activation": activation,
+            "inputSize": input_size,
+            "outputSize": output_size,
+            "weights": [0.0] * (input_size * output_size),
+            "bias": list(bias if bias is not None else [0.0] * output_size),
+        }
+    carrier_bias = [0.0] * (MODULE.DEATH_CLASS + 1)
+    carrier_bias[MODULE.DEATH_CLASS] = 3.0
+    return {
+        "schema": MODULE.MODEL_SCHEMA,
+        "status": "completed",
+        "route": {"backend": "mlx", "device": "Device(gpu, 0)", "fallbackReason": None},
+        "manifest": {"path": "/training/corpus.json", "bytes": 1, "sha256": "0" * 64},
+        "input": {
+            "authority": MODULE.INPUT_AUTHORITY,
+            "featureCount": 64,
+            "candidateFeatureCount": 16,
+            "directionalOccupancyCount": 27,
+            "mean": [0.0] * 64,
+            "scale": [1.0] * 64,
+        },
+        "architecture": {
+            "authority": MODULE.ARCHITECTURE_AUTHORITY,
+            "carrierOutputOrder": [list(delta) for delta in MODULE.DISPLACEMENTS] + ["death"],
+            "layers": [
+                layer("shared-trunk-a", "relu", 64, hidden_size),
+                layer("shared-trunk-b", "relu", hidden_size, hidden_size),
+                layer("carrier-displacement-death-head", "softmax", hidden_size, MODULE.DEATH_CLASS + 1, carrier_bias),
+                layer("residual-birth-head", "sigmoid", hidden_size, 1, [1.0]),
+            ],
+        },
+        "calibration": {
+            "birth": {"threshold": 0.5, "precision": 0.5},
+            "targetSupport": {"medianRatio": 1.0},
+        },
+    }
+
+
 class TransportDatasetContracts(unittest.TestCase):
     def test_directional_input_preserves_exact_candidate_contract(self):
         source = frame([
@@ -36,6 +79,51 @@ class TransportDatasetContracts(unittest.TestCase):
         self.assertEqual(MODULE.INPUT_AUTHORITY, "exact-16-feature-plus-directional-local-grid-occupancy-v0")
         np.testing.assert_allclose(vector[5:21], source["candidates"][source["index"][(0.0, 0.0, 0.0)]])
         self.assertEqual(int(np.sum(vector[21:48])), 2)
+
+    def test_vectorized_directional_inputs_match_scalar_contract(self):
+        source = frame([
+            ((-1.0, 0.0, 0.0), 1.0),
+            ((0.0, 0.0, 0.0), 2.0),
+            ((0.0, 1.0, 0.0), 3.0),
+            ((1.0, 1.0, 1.0), 4.0),
+        ])
+        keys = [
+            (-1.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0),
+            (1.0, 0.0, 0.0),
+            (2.0, 1.0, 1.0),
+            (-2.0, 0.0, 0.0),
+        ]
+        expected = np.stack([
+            MODULE.make_directional_input(key, source, 1.0)
+            for key in keys
+        ])
+        actual = MODULE.make_directional_inputs(keys, source, 1.0)
+        self.assertEqual(actual.shape, (len(keys), 64))
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-7)
+
+    def test_vectorized_directional_inputs_preserve_half_cell_lattice_origin(self):
+        source = frame([
+            ((-0.5, 0.5, 0.5), 1.0),
+            ((0.5, 0.5, 0.5), 2.0),
+            ((1.5, 1.5, 0.5), 3.0),
+        ])
+        keys = [(-1.5, 0.5, 0.5), (-0.5, 0.5, 0.5), (0.5, 1.5, 0.5)]
+        expected = np.stack([MODULE.make_directional_input(key, source, 1.0) for key in keys])
+        actual = MODULE.make_directional_inputs(keys, source, 1.0)
+        np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-7)
+
+    def test_vectorized_prediction_universe_matches_scalar_sorted_keys(self):
+        source = frame([
+            ((-1.0, 0.0, 0.0), 1.0),
+            ((0.0, 0.0, 0.0), 2.0),
+            ((1.0, 1.0, 1.0), 3.0),
+        ])
+        expected = set()
+        for key in source["keys"]:
+            expected.update(MODULE.offset_key(key, delta, 1.0) for delta in MODULE.DISPLACEMENTS)
+        expected = sorted(expected - set(source["keys"]))
+        self.assertEqual(MODULE.prediction_universe(source, 1.0), expected)
 
     def test_carrier_and_residual_birth_labels_are_distinct(self):
         source = frame([
@@ -80,6 +168,39 @@ class TransportDatasetContracts(unittest.TestCase):
             claimed_count=2,
         )
         self.assertEqual(selected, [((1.0, 0.0, 0.0), float(np.float32(0.9))), ((2.0, 0.0, 0.0), float(np.float32(0.2)))])
+
+    def test_frozen_model_loader_rejects_wrong_input_authority(self):
+        model_document = frozen_model_document()
+        hostile = copy.deepcopy(model_document)
+        hostile["input"]["authority"] = "fallback-current-frame-copy"
+        with self.assertRaisesRegex(ValueError, "input authority"):
+            MODULE.validate_frozen_model_document(hostile)
+
+    def test_frozen_model_hydration_preserves_serialized_head_logits(self):
+        model, input_mean, input_scale = MODULE.hydrate_frozen_model_document(frozen_model_document())
+        carrier, birth = MODULE.predict_model(
+            model,
+            np.zeros((1, 64), dtype=np.float32),
+            input_mean,
+            input_scale,
+            batch_size=1,
+        )
+        self.assertEqual(int(np.argmax(carrier[0])), MODULE.DEATH_CLASS)
+        self.assertAlmostEqual(float(birth[0]), 1.0 / (1.0 + np.exp(-1.0)), places=6)
+
+    def test_prediction_provenance_separates_inference_and_training_corpora(self):
+        prediction = MODULE.build_prediction_document(
+            inference_manifest={"path": "/new/corpus.json", "bytes": 2, "sha256": "1" * 64},
+            training_manifest={"path": "/training/corpus.json", "bytes": 1, "sha256": "0" * 64},
+            model={"path": "/model.json", "sha256": "2" * 64, "schema": MODULE.MODEL_SCHEMA},
+            route={"backend": "mlx", "device": "Device(gpu, 0)", "fallbackReason": None},
+            temporal={},
+            frames=[],
+            recurrent=[],
+            support_metrics=[],
+        )
+        self.assertEqual(prediction["manifest"]["sha256"], "1" * 64)
+        self.assertEqual(prediction["modelTrainingManifest"]["sha256"], "0" * 64)
 
 
 if __name__ == "__main__":

@@ -119,6 +119,62 @@ def make_directional_input(key, source, grid_step):
     return result
 
 
+def grid_coordinates(keys, grid_step, origin=None):
+    if not math.isfinite(grid_step) or grid_step <= 0:
+        raise ValueError("grid step must be finite and positive")
+    positions = np.asarray(keys, dtype=np.float64).reshape(-1, 3)
+    if origin is None:
+        if not len(positions):
+            origin = np.zeros(3, dtype=np.float64)
+        else:
+            origin = np.mod(positions[0], grid_step)
+    origin = np.asarray(origin, dtype=np.float64).reshape(3)
+    coordinates = np.rint((positions - origin) / grid_step).astype(np.int64)
+    reconstructed = origin + coordinates.astype(np.float64) * grid_step
+    tolerance = max(10 ** (-POSITION_PRECISION), grid_step * 1e-5)
+    if positions.size and float(np.max(np.abs(positions - reconstructed))) > tolerance:
+        raise ValueError("world-position keys are not aligned to the declared local grid")
+    return coordinates, origin
+
+
+def make_directional_inputs(keys, source, grid_step):
+    keys = [stable_key(key) for key in keys]
+    if not keys:
+        return np.zeros((0, 64), dtype=np.float32)
+    source_coordinates, origin = grid_coordinates(source["keys"], grid_step)
+    query_coordinates, _ = grid_coordinates(keys, grid_step, origin)
+    minimum = np.min(source_coordinates, axis=0)
+    maximum = np.max(source_coordinates, axis=0)
+    shape = tuple((maximum - minimum + 1).tolist())
+    lookup = np.full(shape, -1, dtype=np.int32)
+    source_local = source_coordinates - minimum
+    lookup[tuple(source_local.T)] = np.arange(len(source_coordinates), dtype=np.int32)
+
+    result = np.zeros((len(keys), 64), dtype=np.float32)
+    result[:, 0] = 1.0
+    result[:, 1:4] = np.asarray(keys, dtype=np.float32)
+    feature_sum = np.zeros((len(keys), 16), dtype=np.float32)
+    neighbor_count = np.zeros(len(keys), dtype=np.int32)
+    for class_index, delta in enumerate(DISPLACEMENTS):
+        neighbor_local = query_coordinates + np.asarray(delta, dtype=np.int64) - minimum
+        in_bounds = np.all((neighbor_local >= 0) & (neighbor_local < np.asarray(shape)), axis=1)
+        source_indices = np.full(len(keys), -1, dtype=np.int32)
+        if np.any(in_bounds):
+            bounded = neighbor_local[in_bounds]
+            source_indices[in_bounds] = lookup[tuple(bounded.T)]
+        occupied = source_indices >= 0
+        result[occupied, 21 + class_index] = 1.0
+        if np.any(occupied):
+            feature_sum[occupied] += source["candidates"][source_indices[occupied]]
+            neighbor_count[occupied] += 1
+        if delta == (0, 0, 0):
+            result[occupied, 4] = 1.0
+            result[occupied, 5:21] = source["candidates"][source_indices[occupied]]
+    has_neighbors = neighbor_count > 0
+    result[has_neighbors, 48:64] = feature_sum[has_neighbors] / neighbor_count[has_neighbors, None]
+    return result
+
+
 def feature_distance(left, right):
     return float(np.mean((left - right) ** 2))
 
@@ -335,16 +391,107 @@ def model_layer(layer, role, activation):
     }
 
 
+def validate_frozen_model_document(document):
+    if document.get("schema") != MODEL_SCHEMA or document.get("status") != "completed":
+        raise ValueError("frozen model schema/status mismatch")
+    route = document.get("route", {})
+    if route.get("backend") != "mlx" or route.get("fallbackReason") not in (None, ""):
+        raise ValueError("frozen model route must be non-fallback MLX")
+    input_document = document.get("input", {})
+    if input_document.get("authority") != INPUT_AUTHORITY:
+        raise ValueError("frozen model input authority mismatch")
+    if (
+        input_document.get("featureCount") != 64
+        or input_document.get("candidateFeatureCount") != 16
+        or input_document.get("directionalOccupancyCount") != len(DISPLACEMENTS)
+    ):
+        raise ValueError("frozen model input shape contract mismatch")
+    mean = np.asarray(input_document.get("mean", []), dtype=np.float32)
+    scale = np.asarray(input_document.get("scale", []), dtype=np.float32)
+    if mean.shape != (64,) or scale.shape != (64,) or not np.all(np.isfinite(mean)) or not np.all(np.isfinite(scale)):
+        raise ValueError("frozen model normalization contract mismatch")
+    if np.any(scale <= 0):
+        raise ValueError("frozen model normalization scale must be positive")
+    architecture = document.get("architecture", {})
+    if architecture.get("authority") != ARCHITECTURE_AUTHORITY:
+        raise ValueError("frozen model architecture authority mismatch")
+    expected_order = [list(delta) for delta in DISPLACEMENTS] + ["death"]
+    if architecture.get("carrierOutputOrder") != expected_order:
+        raise ValueError("frozen model carrier output order mismatch")
+    expected_layers = (
+        ("shared-trunk-a", "relu", 64, None),
+        ("shared-trunk-b", "relu", None, None),
+        ("carrier-displacement-death-head", "softmax", None, DEATH_CLASS + 1),
+        ("residual-birth-head", "sigmoid", None, 1),
+    )
+    layers = architecture.get("layers", [])
+    if len(layers) != len(expected_layers):
+        raise ValueError("frozen model must contain exactly four deployed layers")
+    hidden_size = int(layers[0].get("outputSize", 0))
+    if hidden_size < 1:
+        raise ValueError("frozen model hidden size must be positive")
+    expected_layers = (
+        ("shared-trunk-a", "relu", 64, hidden_size),
+        ("shared-trunk-b", "relu", hidden_size, hidden_size),
+        ("carrier-displacement-death-head", "softmax", hidden_size, DEATH_CLASS + 1),
+        ("residual-birth-head", "sigmoid", hidden_size, 1),
+    )
+    for layer, (role, activation, input_size, output_size) in zip(layers, expected_layers):
+        if (
+            layer.get("role") != role
+            or layer.get("activation") != activation
+            or layer.get("inputSize") != input_size
+            or layer.get("outputSize") != output_size
+        ):
+            raise ValueError(f"frozen model layer contract mismatch for {role}")
+        weights = np.asarray(layer.get("weights", []), dtype=np.float32)
+        bias = np.asarray(layer.get("bias", []), dtype=np.float32)
+        if weights.size != input_size * output_size or bias.size != output_size:
+            raise ValueError(f"frozen model parameter shape mismatch for {role}")
+        if not np.all(np.isfinite(weights)) or not np.all(np.isfinite(bias)):
+            raise ValueError(f"frozen model parameters must be finite for {role}")
+    birth = document.get("calibration", {}).get("birth", {})
+    target_support = document.get("calibration", {}).get("targetSupport", {})
+    if not math.isfinite(float(birth.get("threshold", math.nan))) or not math.isfinite(float(birth.get("precision", math.nan))):
+        raise ValueError("frozen model birth calibration mismatch")
+    if not math.isfinite(float(target_support.get("medianRatio", math.nan))) or float(target_support["medianRatio"]) <= 0:
+        raise ValueError("frozen model target support calibration mismatch")
+    return {"hiddenSize": hidden_size, "mean": mean, "scale": scale}
+
+
+def hydrate_frozen_model_document(document):
+    validated = validate_frozen_model_document(document)
+    model = TransportModel(validated["hiddenSize"])
+    targets = (model.trunk_a, model.trunk_b, model.carrier, model.birth)
+    for target, layer in zip(targets, document["architecture"]["layers"]):
+        output_size = int(layer["outputSize"])
+        input_size = int(layer["inputSize"])
+        target.weight = mx.array(np.asarray(layer["weights"], dtype=np.float32).reshape(output_size, input_size))
+        target.bias = mx.array(np.asarray(layer["bias"], dtype=np.float32))
+    mx.eval(model.parameters())
+    return model, validated["mean"], validated["scale"]
+
+
 def prediction_universe(source, grid_step):
-    keys = set()
-    source_keys = set(source["keys"])
-    for key in source["keys"]:
-        keys.update(offset_key(key, delta, grid_step) for delta in DISPLACEMENTS)
-    return sorted(key for key in keys if key not in source_keys)
+    source_coordinates, origin = grid_coordinates(source["keys"], grid_step)
+    minimum = np.min(source_coordinates, axis=0) - 1
+    maximum = np.max(source_coordinates, axis=0) + 1
+    shape = tuple((maximum - minimum + 1).tolist())
+    occupied = np.zeros(shape, dtype=bool)
+    local = source_coordinates - minimum
+    occupied[tuple(local.T)] = True
+    expanded = np.zeros(shape, dtype=bool)
+    for delta in DISPLACEMENTS:
+        shifted = local + np.asarray(delta, dtype=np.int64)
+        expanded[tuple(shifted.T)] = True
+    expanded[tuple(local.T)] = False
+    universe_coordinates = np.argwhere(expanded) + minimum
+    positions = np.round(origin + universe_coordinates.astype(np.float64) * grid_step, POSITION_PRECISION)
+    return [tuple(row) for row in positions.tolist()]
 
 
 def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_calibration, target_support_calibration, batch_size):
-    carrier_inputs = np.stack([make_directional_input(key, source, grid_step) for key in source["keys"]])
+    carrier_inputs = make_directional_inputs(source["keys"], source, grid_step)
     carrier_probabilities, _ = predict_model(model, carrier_inputs, input_mean, input_scale, batch_size)
     claims = {}
     death_count = 0
@@ -361,7 +508,7 @@ def recurrent_predict(model, source, grid_step, input_mean, input_scale, birth_c
             claims[target_key] = (score, source_index, class_index)
     collision_count = sum(1 for probabilities in carrier_probabilities if int(np.argmax(probabilities)) != DEATH_CLASS) - len(claims)
     birth_keys = prediction_universe(source, grid_step)
-    birth_inputs = np.stack([make_directional_input(key, source, grid_step) for key in birth_keys])
+    birth_inputs = make_directional_inputs(birth_keys, source, grid_step)
     _, birth_probabilities = predict_model(model, birth_inputs, input_mean, input_scale, batch_size)
     target_support_budget = max(1, round(len(source["keys"]) * target_support_calibration["medianRatio"]))
     selected_births = select_ranked_births(
@@ -451,10 +598,31 @@ def write_frame_artifacts(out_dir, label, frame):
     }
 
 
+def build_prediction_document(
+    *, inference_manifest, training_manifest, model, route, temporal, frames, recurrent, support_metrics,
+):
+    return {
+        "schema": PREDICTION_SCHEMA,
+        "status": "completed",
+        "manifest": inference_manifest,
+        "modelTrainingManifest": training_manifest,
+        "model": model,
+        "route": route,
+        "temporal": temporal,
+        "frames": frames,
+        "recurrent": recurrent,
+        "supportMetrics": support_metrics,
+        "claimBoundary": "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration",
+    }
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--out-dir", required=True)
+    parser.add_argument("--model", default="")
+    parser.add_argument("--inference-start", type=int, default=0)
+    parser.add_argument("--inference-steps", type=int, default=0)
     parser.add_argument("--holdout-start", type=int, default=6)
     parser.add_argument("--holdout-steps", type=int, default=3)
     parser.add_argument("--grid-size", type=int, default=0)
@@ -492,17 +660,27 @@ def main():
         indices = [int(frame.get("controlledStepFrameIndex", -1)) for frame in frames_docs]
         if indices != list(range(len(frames_docs))):
             raise ValueError("transport trainer requires a contiguous controlled-step frame sequence")
-        holdout_indices = set(range(args.holdout_start, args.holdout_start + args.holdout_steps + 1))
-        if not holdout_indices.issubset(indices):
-            raise ValueError("requested holdout episode exceeds the corpus")
-        training_pairs = [
-            (left, right)
-            for left, right in zip(frames_docs, frames_docs[1:])
-            if int(left["controlledStepFrameIndex"]) not in holdout_indices
-            and int(right["controlledStepFrameIndex"]) not in holdout_indices
-        ]
-        if len(training_pairs) < 2:
-            raise ValueError("transport trainer requires at least two non-holdout adjacent pairs")
+        if args.model:
+            inference_steps = args.inference_steps or (len(frames_docs) - args.inference_start - 1)
+            if args.inference_start < 0 or inference_steps < 1:
+                raise ValueError("frozen inference start and step count must select a nonempty forward episode")
+            inference_indices = list(range(args.inference_start, args.inference_start + inference_steps + 1))
+            if not set(inference_indices).issubset(indices):
+                raise ValueError("requested frozen inference episode exceeds the corpus")
+            holdout_indices = set(inference_indices)
+            training_pairs = []
+        else:
+            holdout_indices = set(range(args.holdout_start, args.holdout_start + args.holdout_steps + 1))
+            if not holdout_indices.issubset(indices):
+                raise ValueError("requested holdout episode exceeds the corpus")
+            training_pairs = [
+                (left, right)
+                for left, right in zip(frames_docs, frames_docs[1:])
+                if int(left["controlledStepFrameIndex"]) not in holdout_indices
+                and int(right["controlledStepFrameIndex"]) not in holdout_indices
+            ]
+            if len(training_pairs) < 2:
+                raise ValueError("transport trainer requires at least two non-holdout adjacent pairs")
         query = parse_qs(urlparse(manifest.get("requestedRoute", "")).query)
         grid_size = args.grid_size or int(query.get("volume_resolution", [160])[0])
         grid_step = 2.0 / grid_size
@@ -512,9 +690,104 @@ def main():
             "manifestSha256": sha256_bytes(manifest_bytes),
             "effectiveRoute": manifest.get("effectiveRoute"),
             "validatedFrameCount": len(frames),
+            "mode": "frozen-model-inference" if args.model else "train-and-heldout-inference",
             "trainingPairIds": [f"{left['id']}->{right['id']}" for left, right in training_pairs],
             "holdoutFrameIds": [frames_docs[index]["id"] for index in sorted(holdout_indices)],
         })
+        manifest_receipt = {
+            "path": str(manifest_path),
+            "bytes": len(manifest_bytes),
+            "sha256": sha256_bytes(manifest_bytes),
+        }
+        if args.model:
+            failure_phase = "frozen-model-validation"
+            model_path = Path(args.model).resolve()
+            model_bytes = model_path.read_bytes()
+            frozen_model_document = json.loads(model_bytes)
+            frozen_model, input_mean, input_scale = hydrate_frozen_model_document(frozen_model_document)
+            model_receipt = {"path": str(model_path), "sha256": sha256_bytes(model_bytes), "schema": MODEL_SCHEMA}
+            last_trustworthy.update({
+                "modelPath": str(model_path),
+                "modelSha256": model_receipt["sha256"],
+                "modelTrainingManifest": frozen_model_document["manifest"],
+            })
+            failure_phase = "route-validation"
+            device = str(mx.default_device())
+            if not device.lower().startswith("device(gpu"):
+                raise RuntimeError(f"frozen transport inference requires MLX GPU, effective device was {device}")
+            route = {"backend": "mlx", "device": device, "effectiveRunner": sys.executable, "fallbackReason": None}
+            failure_phase = "frozen-recurrent-inference"
+            inference_docs = [frames_docs[index] for index in sorted(holdout_indices)]
+            current = frames[inference_docs[0]["id"]]
+            prediction_frames = [current]
+            recurrent_rows = []
+            inference_metrics = []
+            birth_calibration = frozen_model_document["calibration"]["birth"]
+            target_support_calibration = frozen_model_document["calibration"]["targetSupport"]
+            for step_index in range(1, len(inference_docs)):
+                predicted, recurrent = recurrent_predict(
+                    frozen_model,
+                    current,
+                    grid_step,
+                    input_mean,
+                    input_scale,
+                    birth_calibration,
+                    target_support_calibration,
+                    args.batch_size,
+                )
+                exact = frames[inference_docs[step_index]["id"]]
+                recurrent_rows.append({"step": step_index, **recurrent})
+                inference_metrics.append({"step": step_index, **support_metrics(prediction_frames[0], predicted, exact)})
+                prediction_frames.append(predicted)
+                current = predicted
+            failure_phase = "prediction-write"
+            prediction_docs = []
+            for step_index, (frame_doc, predicted) in enumerate(zip(inference_docs, prediction_frames)):
+                artifacts = write_frame_artifacts(out_dir, f"prediction-step-{step_index:02d}", predicted)
+                prediction_docs.append({
+                    "step": step_index,
+                    "referenceFrameId": frame_doc["id"],
+                    "controlFrameId": inference_docs[0]["id"],
+                    **artifacts,
+                })
+            training_manifest = frozen_model_document["manifest"]
+            prediction_artifact = build_prediction_document(
+                inference_manifest=manifest_receipt,
+                training_manifest=training_manifest,
+                model=model_receipt,
+                route=route,
+                temporal={
+                    "authority": "frozen-model-recurrent-one-controlled-step-local-grid-continuation-v0",
+                    "controlledStepDeltaMs": int(inference_docs[0].get("controlledStepDeltaMs", 160)),
+                    "sourceFrameId": inference_docs[0]["id"],
+                    "heldoutReferenceFrameIds": [frame["id"] for frame in inference_docs],
+                    "trainingFrameIdsExcluded": [frame["id"] for frame in inference_docs],
+                    "inferenceCorpusSeenDuringTraining": training_manifest.get("sha256") == manifest_receipt["sha256"],
+                },
+                frames=prediction_docs,
+                recurrent=recurrent_rows,
+                support_metrics=inference_metrics,
+            )
+            prediction_path = out_dir / "transport-predictions.json"
+            write_json(prediction_path, prediction_artifact)
+            failure_phase = "report-write"
+            report = {
+                "schema": SCHEMA,
+                "status": "completed",
+                "mode": "frozen-model-inference",
+                "startedAt": started_at,
+                "completedAt": time.time(),
+                "route": route,
+                "manifest": manifest_receipt,
+                "modelTrainingManifest": training_manifest,
+                "model": model_receipt,
+                "predictions": {"path": str(prediction_path), "sha256": sha256_bytes(prediction_path.read_bytes())},
+                "holdoutMetrics": inference_metrics,
+                "recurrent": recurrent_rows,
+            }
+            write_json(report_path, report)
+            print(json.dumps(report, indent=2))
+            return
         failure_phase = "dataset-construction"
         datasets = []
         pair_reports = []
@@ -590,7 +863,7 @@ def main():
             "schema": MODEL_SCHEMA,
             "status": "completed",
             "route": {"backend": "mlx", "device": device, "effectiveRunner": sys.executable, "fallbackReason": None},
-            "manifest": {"path": str(manifest_path), "bytes": len(manifest_bytes), "sha256": sha256_bytes(manifest_bytes)},
+            "manifest": manifest_receipt,
             "input": {
                 "authority": INPUT_AUTHORITY, "featureCount": 64, "candidateFeatureCount": 16,
                 "directionalOccupancyCount": 27, "mean": input_mean.tolist(), "scale": input_scale.tolist(),
@@ -660,24 +933,22 @@ def main():
                 "controlFrameId": holdout_docs[0]["id"],
                 **artifacts,
             })
-        prediction_artifact = {
-            "schema": PREDICTION_SCHEMA,
-            "status": "completed",
-            "manifest": model_artifact["manifest"],
-            "model": {"path": str(model_path), "sha256": sha256_bytes(model_path.read_bytes()), "schema": MODEL_SCHEMA},
-            "route": model_artifact["route"],
-            "temporal": {
+        prediction_artifact = build_prediction_document(
+            inference_manifest=model_artifact["manifest"],
+            training_manifest=model_artifact["manifest"],
+            model={"path": str(model_path), "sha256": sha256_bytes(model_path.read_bytes()), "schema": MODEL_SCHEMA},
+            route=model_artifact["route"],
+            temporal={
                 "authority": "recurrent-one-controlled-step-local-grid-continuation-v0",
                 "controlledStepDeltaMs": int(holdout_docs[0].get("controlledStepDeltaMs", 160)),
                 "sourceFrameId": holdout_docs[0]["id"],
                 "heldoutReferenceFrameIds": [frame["id"] for frame in holdout_docs],
                 "trainingFrameIdsExcluded": [frame["id"] for frame in holdout_docs],
             },
-            "frames": prediction_docs,
-            "recurrent": recurrent_rows,
-            "supportMetrics": holdout_metrics,
-            "claimBoundary": "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration",
-        }
+            frames=prediction_docs,
+            recurrent=recurrent_rows,
+            support_metrics=holdout_metrics,
+        )
         prediction_path = out_dir / "transport-predictions.json"
         write_json(prediction_path, prediction_artifact)
         failure_phase = "report-write"
