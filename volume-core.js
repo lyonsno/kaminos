@@ -4288,11 +4288,10 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       vec3<f32>(0.28, 0.38, 0.42) * 0.62,
       canonicalSmokeOnlyRender
     );
-    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper * oracleFireDetailColorGain;
+    let flameCol = fireColor(renderTemp) * (0.22 + renderTemp * 0.82 + fireFilament * 0.82 * flameBodyAuthority + quenchedFireLick * 0.32 + shredFilament * 0.10) * bonfireTransportedFireLumaShaper;
     let baseRadianceEmission = fireRadianceEmission(renderTemp, quenchedFlameDetail, quenchedFireLick, quenchedEmberFleck, radianceGain, glowGain)
       * mix(1.0, bonfireFireRenderBreakup * bonfireTransportedFireLumaShaper, bonfireRenderScene)
-      * flameBodyAuthority
-      * oracleFireDetailColorGain;
+      * flameBodyAuthority;
     let shellTemperature = clamp((rawTemp + thermalSupport * 0.42 + reactionSupport * 0.28 + frontSupport * 0.18 + shellBiteGain * edgeSupport * 0.10) * shellHeatGain, 0.0, 2.4);
     let shellWarmth = smoothstep(0.10, 1.85, shellTemperature);
     let shellHotCore = mix(vec3<f32>(1.75, 0.16, 0.018), vec3<f32>(2.80, 0.68, 0.055), shellWarmth);
@@ -4648,6 +4647,8 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(local, flameCol * 0.30 + radianceEmission * 0.70, stockRenderMode * fireMix * pyroStockFireVisibility);
     local = local + shellColor * shellRenderMode * smoothstep(0.002, 0.060, shellAlpha) * 0.92;
     local = mix(local, inspectColor, inspectRenderMode * smoothstep(0.002, 0.060, inspectAlpha));
+    let oracleFireDetailVisibility = smoothstep(0.002, 0.060, fireAlpha);
+    local = local * mix(1.0, oracleFireDetailColorGain, oracleFireDetailVisibility);
     let pyroFlamePaintSignal = clamp(
       pyroBaseCarrier
         * pyroLiveAuthority

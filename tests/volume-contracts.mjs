@@ -696,10 +696,11 @@ assert.match(
 assert.match(core, /uniforms\[322\]\s*=\s*scalarActivityReceiver\.fireDetailGain/, 'render-only fire detail gain reaches a dedicated shader uniform slot');
 assert.match(
   core,
-  /oracleFireDetailColorGain[\s\S]*?let flameCol =[\s\S]*?oracleFireDetailColorGain[\s\S]*?let baseRadianceEmission =[\s\S]*?oracleFireDetailColorGain/,
-  'render-only cue contrast modulates fire color and radiance emission',
+  /local = mix\(local, inspectColor,[^;]+;[\s\S]*?oracleFireDetailVisibility[\s\S]*?local = local \* mix\(1\.0, oracleFireDetailColorGain, oracleFireDetailVisibility\)/,
+  'render-only cue contrast modulates the active final fire material after stock, shell, and inspect mode composition',
 );
 assert.doesNotMatch(core, /stockFireAlpha[\s\S]{0,800}?oracleFireDetail/, 'render-only cue contrast does not enter fire alpha or broaden support');
+assert.equal((core.match(/oracleFireDetailColorGain/g) || []).length, 2, 'fire-detail color gain has one definition and one final-material application');
 assert.match(core, /oracleActivityFireDetailRequested/, 'frozen render receipt records requested fire-detail gain');
 assert.match(core, /oracleActivityFireDetailEffective/, 'frozen render receipt records effective bounded fire-detail gain');
 assert.match(core, /oracleActivityCurlNoiseForce/, 'fluid shader exposes scalar activity gated curl-noise force hook');
