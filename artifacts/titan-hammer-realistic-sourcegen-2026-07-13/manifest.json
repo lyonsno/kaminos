@@ -3,7 +3,7 @@
   "created_at": "2026-07-14T01:02:22Z",
   "agent": "handy-candyman",
   "intent": "Use local image-generation conditioning to produce a more realistic Titan Hammer source image before reconstruction, after operator inspection found the prior neutral source too symbolic.",
-  "truth_boundary": "This manifest promotes a current visual/source-to-SF3D hammer candidate. It does not claim collision suitability, topology approval, final production readiness, or authoritative replacement of all future hammer routes.",
+  "truth_boundary": "This manifest promotes a current visual/orbitability hammer candidate. It does not claim collision suitability, topology approval, final production readiness, or authoritative replacement of all future hammer routes.",
   "inputs": {
     "conditioning_image": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/inputs/hammer-square-neutral-rebuild-conditioning.png",
     "mask": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/inputs/hammer-mask-square.png",
@@ -48,7 +48,7 @@
         "status": "done",
         "output": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61013/output.png",
         "sha256": "f88d27b9ea3ae7e8b55ab41e7072cd4e10b2f06e8828eb9638b8cc6b6ebaa8dd",
-        "visual_verdict": "Best realistic source; selected for SF3D probe and promoted after the tan handle survived reconstruction."
+        "visual_verdict": "Best SF3D source; selected for SF3D probe and promoted before the Trellis pass after the tan handle survived reconstruction."
       },
       {
         "seed": "61014",
@@ -56,7 +56,7 @@
         "status": "done",
         "output": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61014/output.png",
         "sha256": "8d0c054a4eb890b7bbd9a210d78dd7770b71e2eb3aa0689a0798ec5f72160b09",
-        "visual_verdict": "Realistic angled source, but weaker as a reconstruction source than 61013."
+        "visual_verdict": "Best Trellis source; operator preferred this fourth image and direct inspection agreed its angled prop-photo pose and head/handle material separation were stronger for a geometry-first route."
       }
     ]
   },
@@ -97,7 +97,7 @@
       "id": "sf3d-flux2-61013",
       "source_seed": "61013",
       "greenroom_job_id": "cfd53ae12b32",
-      "status": "promoted_current_candidate",
+      "status": "previous_promoted_sf3d_candidate",
       "requested_route": {
         "job_type": "sf3d",
         "params": {
@@ -123,27 +123,97 @@
         "sha256": "479f585792f89bcf386a2667d2411dba577ea0c37009f67dcaedc4e93f406dc5"
       },
       "viewer_witness": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/witnesses/hammer-sf3d-flux2-61013-kaminos-witness.json",
-      "visual_verdict": "Promoted current candidate. The tan handle survives, the head reads as metal, and the object is coherent in front and oblique viewer captures."
+      "visual_verdict": "Previous promoted SF3D candidate. The tan handle survives, the head reads as metal, and the object is coherent in front and oblique viewer captures, but Trellis 61014 now has stronger spatial volume and less shredded texture."
+    },
+    {
+      "id": "trellis2mlx-fast-61014",
+      "source_seed": "61014",
+      "greenroom_job_id": "8b3fd2608978",
+      "status": "promoted_current_visual_orbitability_candidate",
+      "requested_route": {
+        "job_type": "trellis2mlx_fast",
+        "params": {
+          "seed": "61014",
+          "steps": "8",
+          "target_faces": "100000",
+          "texture_size": "512"
+        }
+      },
+      "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61014/output.png --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/trellis2mlx-fast-61014/output.glb --seed 61014 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first",
+      "backend": {
+        "runner": "trellis2mlx MLX",
+        "cwd": "/Users/noahlyons/dev/trellis2mlx",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "route_identity_evidence": [
+          "stdout: DINOv3 loaded 412 weight arrays",
+          "stdout: Features: (1, 1029, 1024) (MLX)",
+          "stdout: Rasterizing UV space (100,855 tris, 512x512, MLX)"
+        ]
+      },
+      "timing": {
+        "total_time_s": 121.4,
+        "greenroom_duration_s": 125.4
+      },
+      "mesh_summary": {
+        "sparse_voxels": 419,
+        "decoded_voxels": 110162,
+        "vertices_after_cleanup": 50232,
+        "faces_after_cleanup": 100855,
+        "glb_size_mb": 4.3
+      },
+      "output_glb": {
+        "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/trellis2mlx-fast-61014/output.glb",
+        "sha256": "cecd98b21c49672972c841b12e28dbd15760cdd1357303bfd2c7477ac0355caf"
+      },
+      "receipt": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/trellis2mlx-fast-61014/greenroom-receipt.json",
+      "stdout": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/trellis2mlx-fast-61014/stdout.log",
+      "viewer_witness": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/witnesses/hammer-trellis2mlx-fast-61014-kaminos-witness.json",
+      "visual_verdict": "Promoted current visual/orbitability candidate. The angled handle survives, the head has better spatial volume than SF3D 61013, and the object reads as a hammer in front and oblique viewer captures. It is not collision-approved or topology-approved."
     }
   ],
   "promoted": {
     "source_image": {
-      "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-flux2-61013-source.png",
-      "sha256": "f88d27b9ea3ae7e8b55ab41e7072cd4e10b2f06e8828eb9638b8cc6b6ebaa8dd"
+      "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-flux2-61014-source.png",
+      "sha256": "8d0c054a4eb890b7bbd9a210d78dd7770b71e2eb3aa0689a0798ec5f72160b09"
     },
     "glb": {
-      "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-sf3d-flux2-61013.glb",
-      "sha256": "479f585792f89bcf386a2667d2411dba577ea0c37009f67dcaedc4e93f406dc5"
+      "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-trellis2mlx-fast-61014.glb",
+      "sha256": "cecd98b21c49672972c841b12e28dbd15760cdd1357303bfd2c7477ac0355caf"
     },
     "witness_captures": [
-      "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/hammer-sf3d-flux2-61013-front.png",
-      "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/hammer-sf3d-flux2-61013-oblique.png"
-    ]
+      "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/hammer-trellis2mlx-fast-61014-front.png",
+      "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/hammer-trellis2mlx-fast-61014-oblique.png"
+    ],
+    "previous_sf3d_baseline": {
+      "source_image": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-flux2-61013-source.png",
+      "glb": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-sf3d-flux2-61013.glb",
+      "witness_captures": [
+        "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/hammer-sf3d-flux2-61013-front.png",
+        "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/hammer-sf3d-flux2-61013-oblique.png"
+      ]
+    },
+    "comparison_sheet": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/trellis-comparison.html",
+    "viewer_url": "http://127.0.0.1:8096/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-trellis2mlx-fast-61014.glb"
   },
-  "comparison": {
-    "previous_best": "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-sf3d-white.glb",
-    "improvement": "Better source realism and tan-handle survival than the neutral-source SF3D attempt; fewer severe random black patches than prior repaired/white-source candidates.",
-    "remaining_risk": "Simple handle geometry, imperfect head proportions, no collision/topology approval."
+  "witness_hashes": {
+    "hammer_trellis2mlx_fast_61014_front_sha256": "931f8a85b8a979516c10f79ea66af210bba37317d4a5417e4c8f8f675eba66db",
+    "hammer_trellis2mlx_fast_61014_oblique_sha256": "f1a99260ee6c8bfbb5cb04b10913d15beb1adb566ac8ddf3ca6d798761c50b6c"
   },
-  "next_decision_boundary": "If the operator accepts 61013 as visually better, next run should be Trellis or another geometry-first route only when interaction/collision/orbit completeness matters; otherwise use 61013 as the current source-realistic GLB candidate."
+  "operator_source_preference": {
+    "preferred_seed": "61014",
+    "reason": "The operator slightly preferred the fourth image; direct inspection agreed it was the better Trellis source because the angled prop-photo pose is more spatially informative than the clean symmetrical 61013 source."
+  },
+  "scoreboard_candidate": {
+    "idea": "Napkin/sketch-to-physical-source hallucination route: use a rough source sketch or silhouette as pressure, turn the hallucination knob up through a strong physical-object imagegen basin, then gate promotion through reconstruction witnesses.",
+    "status": "inferred_next_point_candidate; not yet run"
+  },
+  "comparison_update": {
+    "previous_promoted_sf3d": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-sf3d-flux2-61013.glb",
+    "current_promoted_trellis": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-trellis2mlx-fast-61014.glb",
+    "improvement": "Trellis 61014 has stronger spatial volume, better angled handle preservation, and less shredded surface texture than SF3D 61013 in inspected front/oblique captures.",
+    "remaining_risk": "No collision approval, no topology approval, and no final production interaction contract."
+  },
+  "next_decision_boundary": "Use Trellis 61014 as the current visual/orbitability candidate for operator smoke. Next work is either a higher-quality Trellis cascade/QEM route if topology matters, or a sketch/napkin-to-source hallucination matrix if the goal is to test source-prior generation breadth."
 }

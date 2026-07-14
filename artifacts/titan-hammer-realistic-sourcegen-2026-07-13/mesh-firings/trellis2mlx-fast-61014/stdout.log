@@ -1,0 +1,53 @@
+  Preprocessing /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61014/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 25.3s
+  419 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 3.4s (419 tokens)
+  No-cascade: using LR SLat directly (419 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 1666 voxels
+  Level 1 → 2: 6788 voxels
+  Level 2 → 3: 27489 voxels
+  Level 3 → 4: 110162 voxels
+  Decoded: 1.2s (110,162 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  110,162 voxels, coord range [0, 511], grid_size=512
+  Extracted: 0.1s
+  110,162 vertices, 220,240 faces
+  Pre-simplify: 49,843V 100,000F (0.0s)
+  Removed 129 duplicate faces
+  Removed 997 non-manifold faces
+  Filled 427 holes (9 too large, max_perimeter=0.03)
+  Cleanup: 49,843V 100,000F → 50,232V 100,855F
+  Cleanup: 6.1s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 1.9s (419 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 1666 voxels
+  Level 1 → 2: 6788 voxels
+  Level 2 → 3: 27489 voxels
+  Level 3 → 4: 110162 voxels
+  Decoded: 0.7s (110,162 voxels, 6 channels)
+  PBR attrs: RGB [0.01, 0.65] metallic [-0.01, 0.73] roughness [0.16, 0.53]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 74,975V 100,855F (8.9s)
+    Rasterizing UV space (100,855 tris, 512x512, MLX)...
+    145,078 pixels covered (0.3s)
+    Interpolated 145,078 positions (0.0s)
+    Sampled voxel attrs (0.2s)
+    Inpainted seams (1.1s)
+
+  Saved: /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/trellis2mlx-fast-61014/output.glb (4.3MB)
+
+Total: 121.4s

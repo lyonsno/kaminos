@@ -1,0 +1,28 @@
+{
+  "job_id": "8b3fd2608978",
+  "job_type": "trellis2mlx_fast",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61014/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/trellis2mlx-fast-61014",
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61014/output.png --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/trellis2mlx-fast-61014/output.glb --seed 61014 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first",
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1783992911.258231,
+  "finished_at": 1783993036.661226,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}
