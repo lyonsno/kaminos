@@ -7,6 +7,16 @@ const core = await import('../volume-core.js');
 
 assert.equal(typeof core.boundarySplatBufferIntegrity, 'function', 'runtime must expose a deterministic buffer-integrity audit instead of equating zero compaction overflow with all buffers being safe');
 assert.equal(typeof core.boundarySplatHistoryAgeFrames, 'function', 'runtime must expose exact physical history age under a stride-compressed ring');
+assert.equal(typeof core.boundarySplatDeviceCandidateCapacity, 'function', 'capacity growth must preflight the physical history allocation against WebGPU device limits');
+
+assert.equal(core.boundarySplatDeviceCandidateCapacity({
+  maxBufferSize: 268_435_456,
+  maxStorageBufferBindingSize: 262_144_000,
+}), 341_333, 'device candidate ceiling must account for all 16 physically allocated history slots');
+assert.equal(core.boundarySplatDeviceCandidateCapacity({
+  maxBufferSize: 64 * 1024 * 1024,
+  maxStorageBufferBindingSize: 64 * 1024 * 1024,
+}), 87_381, 'smaller devices must be bounded by the whole history allocation, not one candidate buffer');
 
 assert.equal(core.boundarySplatHistoryAgeFrames(0, 8, 3575), 0, 'current-control history must remain current');
 assert.equal(core.boundarySplatHistoryAgeFrames(5, 8, 3575), 40, 'end-of-stride history age must match the nominal five-slot offset');

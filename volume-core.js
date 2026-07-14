@@ -655,9 +655,24 @@ function nextPowerOfTwo(value) {
   return 2 ** Math.ceil(Math.log2(finiteValue));
 }
 
-function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize) {
+export function boundarySplatDeviceCandidateCapacity(options = {}) {
+  const strideBytes = Math.max(1, Math.floor(Number(options.candidateStrideBytes) || BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES));
+  const historySlots = Math.max(1, Math.floor(Number(options.allocatedHistorySlotCount) || BOUNDARY_SPLAT_HISTORY_SLOTS));
+  const maxBufferSize = Number.isFinite(Number(options.maxBufferSize))
+    ? Math.max(0, Number(options.maxBufferSize))
+    : Number.MAX_SAFE_INTEGER;
+  const maxStorageBufferBindingSize = Number.isFinite(Number(options.maxStorageBufferBindingSize))
+    ? Math.max(0, Number(options.maxStorageBufferBindingSize))
+    : Number.MAX_SAFE_INTEGER;
+  return Math.floor(Math.min(maxBufferSize, maxStorageBufferBindingSize) / (historySlots * strideBytes));
+}
+
+function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize, deviceCandidateCapacity = Number.MAX_SAFE_INTEGER) {
   if (candidateCount <= currentCapacity) return currentCapacity;
-  return Math.min(gridCellCount(gridSize), Math.max(currentCapacity, nextPowerOfTwo(candidateCount)));
+  return Math.min(gridCellCount(gridSize),
+    Math.max(0, Math.floor(Number(deviceCandidateCapacity) || 0)),
+    Math.max(currentCapacity, nextPowerOfTwo(candidateCount)),
+  );
 }
 
 function fluidBufferBytes(gridSize) {
@@ -7009,8 +7024,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function growBoundarySplatCapacity(candidateCount) {
-    const nextCapacity = nextBoundarySplatCapacity(boundarySplatCapacity, candidateCount, gridSize);
-    if (nextCapacity <= boundarySplatCapacity) return false;
+    const deviceCandidateCapacity = boundarySplatDeviceCandidateCapacity({
+      maxBufferSize: device?.limits?.maxBufferSize,
+      maxStorageBufferBindingSize: device?.limits?.maxStorageBufferBindingSize,
+    });
+    const nextCapacity = nextBoundarySplatCapacity(
+      boundarySplatCapacity,
+      candidateCount,
+      gridSize,
+      deviceCandidateCapacity,
+    );
+    if (nextCapacity <= boundarySplatCapacity) {
+      state.boundarySplatCapacityGrowth = {
+        identity: 'boundary-splat-capacity-growth-v0',
+        from: boundarySplatCapacity,
+        to: boundarySplatCapacity,
+        observedCandidateCount: candidateCount,
+        physicalGridCellLimit: gridCellCount(gridSize),
+        deviceCandidateCapacity,
+        reason: 'device-capacity-limit-reached',
+      };
+      return false;
+    }
     const previousCapacity = boundarySplatCapacity;
     const previousSplatBuffer = boundarySplatBuffer;
     const previousHistoryBuffer = boundarySplatHistoryBuffer;
@@ -7045,7 +7080,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       to: nextCapacity,
       observedCandidateCount: candidateCount,
       physicalGridCellLimit: gridCellCount(gridSize),
-      reason: 'gpu-overflow-readback',
+      deviceCandidateCapacity,
+      reason: candidateCount > nextCapacity ? 'gpu-overflow-device-capacity-limit' : 'gpu-overflow-readback',
     };
     state.boundarySplatFeatureCaptureEffective = featureCaptureRequested
       && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
