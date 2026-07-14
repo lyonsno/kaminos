@@ -2,11 +2,12 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 import {
   measureBoundarySplatTemporalFrame,
   summarizeBoundarySplatTemporalCollapse,
+  validateBoundarySplatTemporalSequence,
 } from './boundary-splat-temporal-collapse.mjs';
 
 const args = parseArgs(process.argv.slice(2));
@@ -68,6 +69,10 @@ try {
   await waitForPrototype();
   await delay(settleMs);
   await hideHud();
+  const initialVisibilityState = await evaluate('document.visibilityState');
+  if (initialVisibilityState !== 'visible') {
+    throw new Error(`live-page-not-visible:${initialVisibilityState}`);
+  }
 
   failurePhase = 'route-authority';
   const initialState = await waitForTelemetry();
@@ -97,66 +102,86 @@ try {
   let sampleIndex = 0;
   while (Date.now() - sequenceStartedAt <= durationMs) {
     const scheduledAt = sequenceStartedAt + sampleIndex * sampleMs;
-    const state = await debugState();
-    const pageUrl = await evaluate('location.href');
-    validateState(state, pageUrl);
-    const canvasRect = await evaluate(`(() => {
-      const canvas = document.getElementById('kaminos-volume-canvas');
-      if (!canvas?.classList.contains('active')) return null;
-      const rect = canvas.getBoundingClientRect();
-      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-    })()`);
-    if (!canvasRect || canvasRect.width < 100 || canvasRect.height < 100) {
-      throw new Error(`blank-or-partial-live-canvas:${JSON.stringify(canvasRect)}`);
-    }
-    const shot = await wsRequest('Page.captureScreenshot', {
-      format: 'png',
-      fromSurface: true,
-      clip: clipFromCanvas(canvasRect),
-    });
-    const image = Buffer.from(shot.data, 'base64');
-    const metrics = measureBoundarySplatTemporalFrame(image);
-    if (metrics.litPixels <= 200 || metrics.litHeightRatio <= 0 || metrics.litWidthRatio <= 0) {
-      throw new Error(`blank-or-partial-live-canvas:${JSON.stringify(metrics)}`);
-    }
-    const frameCount = Number(state.frameCount);
-    const historyWriteSlot = Number(state.boundarySplatHistoryWriteSlot);
-    const imageName = `temporal-frame-${String(sampleIndex).padStart(4, '0')}-f${frameCount}-slot${historyWriteSlot}.png`;
-    const imagePath = resolve(outDir, imageName);
-    writeFileSync(imagePath, image);
-    const sample = {
-      index: sampleIndex,
-      capturedAt: new Date().toISOString(),
-      elapsedMs: Date.now() - sequenceStartedAt,
-      frameCount,
-      simStepCount: Number(state.simStepCount),
-      historyWriteSlot,
-      historyWriteTick: Number(state.boundarySplatHistoryWriteTick),
-      historyDepth: Number(state.boundarySplatHistoryDepth),
-      historyFrameStride: Number(state.boundarySplatHistoryFrameStride),
-      physicalHistoryWindowFrames: Number(state.boundarySplatPhysicalHistoryWindowFrames),
-      phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
-      phaseSourceCount: Number(state.boundarySplatPhaseSourceCount),
-      boundarySplatPhaseSources: compactPhaseSources(state.boundarySplatPhaseSources),
-      sourceCandidateCount: Number(state.boundarySplatSourceCandidateCount),
-      renderedInstanceCount: Number(state.boundarySplatInstanceCount),
-      tierGroups: state.boundarySplatTierGroups,
-      bufferIntegrity: state.boundarySplatBufferIntegrity,
-      overflowCount: Number(state.boundarySplatOverflowCount),
-      candidateCopyBytes: Number(state.boundarySplatCopyBytesThisFrame),
-      fallbackReason: state.boundarySplatFallbackReason,
-      metrics,
-      image: {
-        path: imagePath,
-        sha256: sha256(image),
-        bytes: image.length,
+    let pause = null;
+    try {
+      const visibilityState = await evaluate('document.visibilityState');
+      if (visibilityState !== 'visible') throw new Error(`live-page-not-visible:${visibilityState}`);
+      pause = await evaluate('window.__kaminosVolumePrototype.captureBoundarySplatWitnessFrame()', true);
+      if (pause?.ok !== true) throw new Error(`exact-frame-witness-pause-failed:${JSON.stringify(pause)}`);
+      const state = await debugState();
+      const pageUrl = await evaluate('location.href');
+      validateState(state, pageUrl);
+      if (
+        Number(state.frameCount) !== Number(pause.frameCount)
+        || Number(state.simStepCount) !== Number(pause.simStepCount)
+        || Number(state.boundarySplatHistoryWriteSlot) !== Number(pause.historyWriteSlot)
+      ) {
+        throw new Error(`exact-frame-telemetry-disagreement:${JSON.stringify({ pause, state: compactState(state) })}`);
+      }
+      const canvasRect = await evaluate(`(() => {
+        const canvas = document.getElementById('kaminos-volume-canvas');
+        if (!canvas?.classList.contains('active')) return null;
+        const rect = canvas.getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      })()`);
+      if (!canvasRect || canvasRect.width < 100 || canvasRect.height < 100) {
+        throw new Error(`blank-or-partial-live-canvas:${JSON.stringify(canvasRect)}`);
+      }
+      const shot = await wsRequest('Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
         clip: clipFromCanvas(canvasRect),
-        authority: 'cdp-live-composed-canvas-sample-v0',
-      },
-    };
-    temporalSequence.push(sample);
-    lastTrustworthyEvidence.sampleCount = temporalSequence.length;
-    lastTrustworthyEvidence.lastSample = sample;
+      });
+      const image = Buffer.from(shot.data, 'base64');
+      const metrics = measureBoundarySplatTemporalFrame(image);
+      if (metrics.litPixels <= 200 || metrics.litHeightRatio <= 0 || metrics.litWidthRatio <= 0) {
+        throw new Error(`blank-or-partial-live-canvas:${JSON.stringify(metrics)}`);
+      }
+      const frameCount = Number(state.frameCount);
+      const historyWriteSlot = Number(state.boundarySplatHistoryWriteSlot);
+      const imageName = `temporal-frame-${String(sampleIndex).padStart(4, '0')}-f${frameCount}-slot${historyWriteSlot}.png`;
+      const imagePath = resolve(outDir, imageName);
+      writeFileSync(imagePath, image);
+      const sample = {
+        index: sampleIndex,
+        capturedAt: new Date().toISOString(),
+        elapsedMs: Date.now() - sequenceStartedAt,
+        frameCount,
+        simStepCount: Number(state.simStepCount),
+        historyWriteSlot,
+        historyWriteTick: Number(state.boundarySplatHistoryWriteTick),
+        historyDepth: Number(state.boundarySplatHistoryDepth),
+        historyFrameStride: Number(state.boundarySplatHistoryFrameStride),
+        physicalHistoryWindowFrames: Number(state.boundarySplatPhysicalHistoryWindowFrames),
+        phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
+        phaseSourceCount: Number(state.boundarySplatPhaseSourceCount),
+        boundarySplatPhaseSources: compactPhaseSources(state.boundarySplatPhaseSources),
+        sourceCandidateCount: Number(state.boundarySplatSourceCandidateCount),
+        renderedInstanceCount: Number(state.boundarySplatInstanceCount),
+        tierGroups: state.boundarySplatTierGroups,
+        bufferIntegrity: state.boundarySplatBufferIntegrity,
+        overflowCount: Number(state.boundarySplatOverflowCount),
+        candidateCopyBytes: Number(state.boundarySplatCopyBytesThisFrame),
+        fallbackReason: state.boundarySplatFallbackReason,
+        capturePause: pause,
+        metrics,
+        image: {
+          path: imagePath,
+          sha256: sha256(image),
+          bytes: image.length,
+          clip: clipFromCanvas(canvasRect),
+          authority: 'cdp-exact-frozen-live-composed-canvas-sample-v0',
+        },
+      };
+      temporalSequence.push(sample);
+      lastTrustworthyEvidence.sampleCount = temporalSequence.length;
+      lastTrustworthyEvidence.lastSample = sample;
+    } finally {
+      if (pause?.ok === true) {
+        const resume = await evaluate('window.__kaminosVolumePrototype.resumeBoundarySplatWitnessFrame()');
+        if (resume?.ok !== true) throw new Error(`exact-frame-witness-resume-failed:${JSON.stringify(resume)}`);
+      }
+    }
     sampleIndex += 1;
     const remaining = scheduledAt + sampleMs - Date.now();
     if (remaining > 0) await delay(remaining);
@@ -164,6 +189,10 @@ try {
 
   failurePhase = 'temporal-summary';
   const temporalSummary = summarizeBoundarySplatTemporalCollapse(temporalSequence);
+  const temporalAdvancement = validateBoundarySplatTemporalSequence(temporalSequence, {
+    requestedDurationMs: durationMs,
+    sampleMs,
+  });
   const finalState = await debugState();
   const finalPageUrl = await evaluate('location.href');
   validateState(finalState, finalPageUrl);
@@ -196,12 +225,13 @@ try {
       source: SOURCE,
       composition: COMPOSITION,
       phaseSource: PHASE_SOURCE,
-      capture: 'cdp-live-composed-canvas-sample-v0',
+      capture: 'cdp-exact-frozen-live-composed-canvas-sample-v0',
       sequenceRetention: 'all-samples-retained-v0',
     },
     initialState: compactState(initialState),
     historyPrime,
     temporalSummary,
+    temporalAdvancement,
     temporalSequence,
     finalState: compactState(finalState),
     claimBoundary: 'diagnostic candidate ranking only; operator or explicit sequence inspection owns visual disposition',
@@ -472,6 +502,7 @@ function clipFromCanvas(rect) {
 }
 
 function writeReport(report) {
+  mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
 }
 

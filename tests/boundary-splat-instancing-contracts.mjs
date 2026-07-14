@@ -31,6 +31,8 @@ assert.match(core, /phaseSourceIdentity:\s*'shared-current-control'/, 'runtime t
 assert.match(core, /phaseSourceIdentity:\s*'live-history-offset'/, 'runtime telemetry must reserve truthful live-history phase source identity');
 assert.match(core, /boundarySplatIncrementalInstanceCost/, 'runtime telemetry must report incremental per-instance cost proxy');
 assert.match(core, /sampleBoundarySplatInstanceCostLadder/, 'runtime must expose a serial GPU instance-cost ladder from the existing live simulation');
+assert.match(core, /captureBoundarySplatWitnessFrame/, 'prototype must expose a bounded exact-frame witness pause');
+assert.match(core, /resumeBoundarySplatWitnessFrame/, 'prototype must resume the same live render loop after witness capture');
 assert.match(core, /\(index \* phaseStride\) % historyDepth/, 'large fields must cycle across the truthful history ring instead of saturating almost every flame onto the oldest slot');
 
 assert.match(witness, /duplicateMotionWitness/, 'witness must produce an explicit duplicate-motion diagnostic');

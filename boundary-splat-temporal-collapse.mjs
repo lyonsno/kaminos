@@ -7,6 +7,9 @@ export function measureBoundarySplatTemporalFrame(buffer) {
   const xEnd = Math.floor(png.width * 0.98);
   const yStart = Math.floor(png.height * 0.02);
   const yEnd = Math.floor(png.height * 0.98);
+  const sampleWidth = Math.ceil((xEnd - xStart) / 2);
+  const sampleHeight = Math.ceil((yEnd - yStart) / 2);
+  const litMask = new Uint8Array(sampleWidth * sampleHeight);
   let litPixels = 0;
   let totalPixels = 0;
   let minX = png.width;
@@ -15,9 +18,9 @@ export function measureBoundarySplatTemporalFrame(buffer) {
   let maxY = -1;
   let weightedY = 0;
 
-  for (let y = yStart; y < yEnd; y += 2) {
+  for (let y = yStart, sampleY = 0; y < yEnd; y += 2, sampleY += 1) {
     const row = png.rows[y];
-    for (let x = xStart; x < xEnd; x += 2) {
+    for (let x = xStart, sampleX = 0; x < xEnd; x += 2, sampleX += 1) {
       const offset = x * png.channels;
       const red = row[offset];
       const green = row[offset + 1];
@@ -27,6 +30,7 @@ export function measureBoundarySplatTemporalFrame(buffer) {
       totalPixels += 1;
       if (luma < 42 || (chroma < 12 && luma < 105)) continue;
       litPixels += 1;
+      litMask[sampleY * sampleWidth + sampleX] = 1;
       weightedY += y;
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
@@ -41,6 +45,7 @@ export function measureBoundarySplatTemporalFrame(buffer) {
   const litHeightRatio = png.height ? litHeight / png.height : 0;
   const litDensity = totalPixels ? litPixels / totalPixels : 0;
   const litBoundsAreaRatio = litWidthRatio * litHeightRatio;
+  const components = measureLitComponents(litMask, sampleWidth, sampleHeight, litPixels);
   return {
     width: png.width,
     height: png.height,
@@ -53,6 +58,49 @@ export function measureBoundarySplatTemporalFrame(buffer) {
     litAspectRatio: litHeight ? litWidth / litHeight : 0,
     litFillRatio: litBoundsAreaRatio ? litDensity / litBoundsAreaRatio : 0,
     litCentroidYRatio: litPixels && png.height ? (weightedY / litPixels) / png.height : null,
+    ...components,
+  };
+}
+
+function measureLitComponents(mask, width, height, litPixels) {
+  const visited = new Uint8Array(mask.length);
+  const componentAreas = [];
+  const stack = [];
+  for (let index = 0; index < mask.length; index += 1) {
+    if (!mask[index] || visited[index]) continue;
+    visited[index] = 1;
+    stack.push(index);
+    let area = 0;
+    while (stack.length) {
+      const current = stack.pop();
+      area += 1;
+      const x = current % width;
+      const y = Math.floor(current / width);
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const neighborY = y + dy;
+        if (neighborY < 0 || neighborY >= height) continue;
+        for (let dx = -1; dx <= 1; dx += 1) {
+          if (dx === 0 && dy === 0) continue;
+          const neighborX = x + dx;
+          if (neighborX < 0 || neighborX >= width) continue;
+          const neighbor = neighborY * width + neighborX;
+          if (!mask[neighbor] || visited[neighbor]) continue;
+          visited[neighbor] = 1;
+          stack.push(neighbor);
+        }
+      }
+    }
+    if (area >= 2) componentAreas.push(area);
+  }
+  componentAreas.sort((a, b) => b - a);
+  const largestLitComponentPixels = componentAreas[0] || 0;
+  const retainedComponentPixels = componentAreas.reduce((sum, area) => sum + area, 0);
+  return {
+    litComponentCount: componentAreas.length,
+    largestLitComponentPixels,
+    largestLitComponentFraction: litPixels ? largestLitComponentPixels / litPixels : 0,
+    retainedLitComponentFraction: litPixels ? retainedComponentPixels / litPixels : 0,
+    litComponentAreas: componentAreas,
   };
 }
 
@@ -68,7 +116,8 @@ export function summarizeBoundarySplatTemporalCollapse(samples) {
     const fill = Number.isFinite(Number(metrics.litFillRatio))
       ? finiteNonnegative(metrics.litFillRatio)
       : density / Math.max(0.001, width * height);
-    const collapseScore = fill * Math.sqrt(density);
+    const largestLitComponentFraction = finiteOrNull(metrics.largestLitComponentFraction);
+    const collapseScore = largestLitComponentFraction ?? fill * Math.sqrt(density);
     return {
       position,
       sampleIndex: Number.isInteger(sample?.index) ? sample.index : position,
@@ -79,8 +128,11 @@ export function summarizeBoundarySplatTemporalCollapse(samples) {
       litHeightRatio: height,
       litDensity: density,
       litFillRatio: fill,
+      largestLitComponentFraction,
     };
   });
+  const hasConnectedFootprintTelemetry = scored.every(sample => sample.largestLitComponentFraction != null);
+  const operatorBroadFootprintThreshold = 0.5;
   const scores = scored.map(sample => sample.collapseScore);
   const medianCollapseScore = median(scores);
   const medianHeightRatio = median(scored.map(sample => sample.litHeightRatio));
@@ -89,9 +141,11 @@ export function summarizeBoundarySplatTemporalCollapse(samples) {
   const worst = scored.reduce((current, sample) => (
     sample.collapseScore > current.collapseScore ? sample : current
   ));
-  const candidateThreshold = medianCollapseScore * 1.35;
+  const candidateThreshold = hasConnectedFootprintTelemetry
+    ? operatorBroadFootprintThreshold
+    : medianCollapseScore * 1.35;
   const candidatePositions = scored
-    .filter(sample => sample.collapseScore >= candidateThreshold)
+    .filter(sample => sample.collapseScore > 0 && sample.collapseScore >= candidateThreshold)
     .map(sample => sample.position);
   const intervalPositions = [worst.position - 1, worst.position, worst.position + 1]
     .filter(position => position >= 0 && position < samples.length);
@@ -118,6 +172,10 @@ export function summarizeBoundarySplatTemporalCollapse(samples) {
     identity: 'boundary-splat-temporal-collapse-summary-v0',
     authority: 'full-sequence-relative-image-geometry-plus-live-phase-telemetry-v0',
     sampleCount: samples.length,
+    candidateBasis: hasConnectedFootprintTelemetry
+      ? 'operator-calibrated-connected-footprint-v0'
+      : 'legacy-relative-fill-density-v0',
+    operatorBroadFootprintThreshold: hasConnectedFootprintTelemetry ? operatorBroadFootprintThreshold : null,
     classification,
     phaseCorrelation,
     medianCollapseScore,
@@ -135,6 +193,71 @@ export function summarizeBoundarySplatTemporalCollapse(samples) {
     dominantCandidateHistoryWriteSlotFraction: dominantSlotFraction,
     scoredSamples: scored,
     claimBoundary: 'candidate ranking for operator and frame-sequence inspection; not autonomous visual closure',
+  };
+}
+
+export function validateBoundarySplatTemporalSequence(samples, options = {}) {
+  if (!Array.isArray(samples) || samples.length < 3) {
+    throw new Error('temporal-sequence-did-not-advance:at-least-three-samples-required');
+  }
+  const requestedDurationMs = finiteNonnegative(options.requestedDurationMs);
+  const sampleMs = finiteNonnegative(options.sampleMs);
+  const first = samples[0];
+  const last = samples.at(-1);
+  const frameCounts = samples.map(sample => Number(sample?.frameCount));
+  const simStepCounts = samples.map(sample => Number(sample?.simStepCount));
+  const imageHashes = samples.map(sample => String(sample?.image?.sha256 || ''));
+  const monotonicFrames = frameCounts.every((value, index) => (
+    Number.isFinite(value) && (index === 0 || value >= frameCounts[index - 1])
+  ));
+  const monotonicSimSteps = simStepCounts.every((value, index) => (
+    Number.isFinite(value) && (index === 0 || value >= simStepCounts[index - 1])
+  ));
+  const frameAdvance = frameCounts.at(-1) - frameCounts[0];
+  const simStepAdvance = simStepCounts.at(-1) - simStepCounts[0];
+  const distinctImageCount = new Set(imageHashes.filter(Boolean)).size;
+  const actualDurationMs = Number(last?.elapsedMs) - Number(first?.elapsedMs);
+  const durationComplete = Number.isFinite(actualDurationMs)
+    && actualDurationMs >= Math.max(0, requestedDurationMs - sampleMs);
+  if (
+    !monotonicFrames
+    || !monotonicSimSteps
+    || frameAdvance <= 0
+    || simStepAdvance <= 0
+    || distinctImageCount < 2
+    || !durationComplete
+  ) {
+    throw new Error(`temporal-sequence-did-not-advance:${JSON.stringify({
+      sampleCount: samples.length,
+      frameAdvance,
+      simStepAdvance,
+      monotonicFrames,
+      monotonicSimSteps,
+      distinctImageCount,
+      actualDurationMs,
+      requestedDurationMs,
+      sampleMs,
+      durationComplete,
+    })}`);
+  }
+  return {
+    identity: 'boundary-splat-temporal-sequence-advancement-v0',
+    ok: true,
+    sampleCount: samples.length,
+    firstFrameCount: frameCounts[0],
+    lastFrameCount: frameCounts.at(-1),
+    frameAdvance,
+    firstSimStepCount: simStepCounts[0],
+    lastSimStepCount: simStepCounts.at(-1),
+    simStepAdvance,
+    monotonicFrames,
+    monotonicSimSteps,
+    distinctImageCount,
+    actualDurationMs,
+    requestedDurationMs,
+    sampleMs,
+    durationComplete,
+    authority: 'retained-frame-and-simulation-counters-plus-distinct-image-hashes-v0',
   };
 }
 

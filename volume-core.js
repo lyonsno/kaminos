@@ -10323,6 +10323,39 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
+  async function captureBoundarySplatWitnessFrame() {
+    if (!state.active || !device || !boundarySplatRequested()) {
+      return { ok: false, reason: 'inactive-or-boundary-splat-route-unavailable' };
+    }
+    cancelAnimationFrame(raf);
+    raf = 0;
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    return {
+      identity: 'boundary-splat-exact-frame-witness-pause-v0',
+      ok: true,
+      authority: 'same-live-render-loop-paused-after-submitted-frame-v0',
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      historyWriteSlot: state.boundarySplatHistoryWriteSlot,
+      historyWriteTick: state.boundarySplatHistoryWriteTick,
+      selectorTelemetryFrameCount: state.boundarySplatSelectorTelemetryFrameCount,
+    };
+  }
+
+  function resumeBoundarySplatWitnessFrame() {
+    if (!state.active || !device) return { ok: false, reason: 'inactive' };
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(render);
+    return {
+      identity: 'boundary-splat-exact-frame-witness-resume-v0',
+      ok: true,
+      authority: 'same-live-render-loop-resumed-v0',
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+    };
+  }
+
   async function sampleBoundarySplatFeatureCapture(instanceCount) {
     if (!state.boundarySplatFeatureCaptureRequested) return null;
     if (!state.boundarySplatFeatureCaptureEffective || !boundarySplatFeatureBuffer) {
@@ -12995,6 +13028,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     sampleFrame,
     primeBoundarySplatLiveHistory,
+    captureBoundarySplatWitnessFrame,
+    resumeBoundarySplatWitnessFrame,
     sampleBoundarySplatInstanceCostLadder,
     sampleBoundarySplatPbrCostLadder,
     sampleBoundarySplatLiveCadence,
