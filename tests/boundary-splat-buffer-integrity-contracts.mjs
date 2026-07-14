@@ -103,6 +103,7 @@ assert.deepEqual(unsafe.failureReasons, [
 ]);
 
 assert.match(coreSource, /boundarySplatBufferIntegrity:\s*bufferIntegrity/, 'debug state must publish the full integrity record');
+assert.match(coreSource, /function ensureBoundarySplatBuffers\(\)[\s\S]*boundarySplatCapacity\s*=\s*Math\.min\([\s\S]*boundarySplatDeviceCandidateCapacity/, 'initial and rebuilt history allocation must apply the device candidate ceiling before createBuffer');
 assert.match(coreSource, /boundarySplatPhysicalHistoryAgeFrames/, 'runtime telemetry must distinguish physical frame age from nominal slot-stride labels');
 assert.match(coreSource, /boundarySplatBufferIntegrityFailureReason/, 'runtime must fail loud when a non-compaction buffer invariant is violated');
 assert.match(witnessSource, /boundary-splat-buffer-integrity-v0/, 'PBR witness must require the exact buffer-integrity identity');

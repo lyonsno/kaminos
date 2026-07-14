@@ -6922,6 +6922,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function ensureBoundarySplatBuffers() {
     if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatDrawGroupBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatInstanceDescriptorBuffer && boundarySplatHistoryBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer) return;
+    const requestedCapacity = boundarySplatCapacity;
+    boundarySplatCapacity = Math.min(
+      boundarySplatCapacity,
+      boundarySplatDeviceCandidateCapacity({
+        maxBufferSize: device?.limits?.maxBufferSize,
+        maxStorageBufferBindingSize: device?.limits?.maxStorageBufferBindingSize,
+      }),
+    );
+    if (boundarySplatCapacity < 1) {
+      throw new Error('boundary-splat-device-candidate-capacity-unavailable');
+    }
+    if (boundarySplatCapacity < requestedCapacity) {
+      state.boundarySplatCapacityGrowth = {
+        identity: 'boundary-splat-capacity-growth-v0',
+        from: requestedCapacity,
+        to: boundarySplatCapacity,
+        observedCandidateCount: null,
+        physicalGridCellLimit: gridCellCount(gridSize),
+        deviceCandidateCapacity: boundarySplatCapacity,
+        reason: 'initial-device-capacity-limit',
+      };
+    }
     boundarySplatBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates`,
       size: boundarySplatCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
