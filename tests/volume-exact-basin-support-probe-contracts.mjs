@@ -27,6 +27,8 @@ assert.match(composerSource, /--support-threshold/, 'composer accepts an explici
 assert.match(composerSource, /caller-specified-calibration-assay-v0/, 'threshold overrides carry explicit non-checkpoint authority');
 assert.match(composerSource, /--residual-scale/, 'composer accepts an explicit calibration-assay residual scale');
 assert.match(composerSource, /caller-specified-residual-blend-assay-v0/, 'residual-scale overrides carry explicit assay authority');
+assert.match(composerSource, /--checkpoint-transfer-mode/, 'composer requires an explicit mode before applying checkpoints to another frame');
+assert.match(composerSource, /consecutive-phase-aligned-sequence-v0/, 'composer names the narrow lawful temporal transfer mode');
 assert.match(composerSource, /failurePhase/, 'composer writes durable failure-phase reports');
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-exact-basin-support-probe-'));
@@ -149,7 +151,13 @@ writeFileSync(pairPath, `${JSON.stringify({
   },
   source: {
     exactBasinSourceCaptureSha256: 'a'.repeat(64),
-    deterministicReplay: { identity: 'fixture-replay', completedSteps: 12, simStepCount: 12 },
+    deterministicReplay: {
+      identity: 'fixture-replay',
+      completedSteps: 12,
+      simStepCount: 12,
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+      controlsSignature: 'fixture-controls-signature',
+    },
   },
 }, null, 2)}\n`);
 
@@ -272,6 +280,62 @@ const blendComposition = JSON.parse(readFileSync(join(blendCompositionDir, 'mani
 assert.equal(blendComposition.residualBlend.scale, 0.5);
 assert.equal(blendComposition.residualBlend.authority, 'caller-specified-residual-blend-assay-v0');
 
+const applicationLowFluid = new Float32Array(lowFluid);
+for (let cell = 0; cell < lowCells; cell += 1) applicationLowFluid[cell * 16 + 3] += 0.125;
+const applicationLowFluidDesc = writeF32('application-low-fluid.f32', applicationLowFluid);
+const applicationPair = JSON.parse(readFileSync(pairPath, 'utf8'));
+applicationPair.identity = 'support-probe-contract-application-pair';
+applicationPair.low.fluid = {
+  ...applicationLowFluidDesc,
+  shape: [lowGrid, lowGrid, lowGrid, 16],
+  channelOrder: fluidChannels,
+};
+applicationPair.source.deterministicReplay = {
+  ...applicationPair.source.deterministicReplay,
+  completedSteps: 13,
+  simStepCount: 13,
+};
+const applicationPairPath = join(fixtureRoot, 'application-pair.json');
+writeFileSync(applicationPairPath, `${JSON.stringify(applicationPair, null, 2)}\n`);
+const transferCompositionDir = join(fixtureRoot, 'composition-checkpoint-transfer');
+execFileSync('python3', [
+  composerPath,
+  '--pair-manifest', applicationPairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', transferCompositionDir,
+  '--batch-cells', '256',
+  '--checkpoint-transfer-mode', 'consecutive-phase-aligned-sequence-v0',
+  '--sequence-start-step', '13',
+  '--sequence-frame-index', '0',
+], { stdio: 'pipe' });
+const transferComposition = JSON.parse(readFileSync(join(transferCompositionDir, 'manifest.json'), 'utf8'));
+assert.equal(transferComposition.checkpointTransfer.identity, 'consecutive-phase-aligned-sequence-v0');
+assert.equal(transferComposition.checkpointTransfer.sequenceStartStep, 13);
+assert.equal(transferComposition.checkpointTransfer.frameIndex, 0);
+assert.equal(transferComposition.checkpointTransfer.trainingPair.sha256, sha256(readFileSync(pairPath)));
+assert.equal(transferComposition.checkpointTransfer.applicationPair.sha256, sha256(readFileSync(applicationPairPath)));
+assert.equal(transferComposition.checkpointTransfer.sourceCaptureSha256, 'a'.repeat(64));
+assert.equal(transferComposition.checkpointTransfer.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
+assert.equal(transferComposition.checkpointTransfer.controlsSignature, 'fixture-controls-signature');
+
+const badTransferPair = structuredClone(applicationPair);
+badTransferPair.source.exactBasinSourceCaptureSha256 = 'b'.repeat(64);
+const badTransferPairPath = join(fixtureRoot, 'application-pair-wrong-source.json');
+writeFileSync(badTransferPairPath, `${JSON.stringify(badTransferPair, null, 2)}\n`);
+const badTransferDir = join(fixtureRoot, 'composition-checkpoint-transfer-wrong-source');
+const badTransfer = spawnSync('python3', [
+  composerPath,
+  '--pair-manifest', badTransferPairPath,
+  '--support-probe-manifest', join(outDir, 'manifest.json'),
+  '--out-dir', badTransferDir,
+  '--checkpoint-transfer-mode', 'consecutive-phase-aligned-sequence-v0',
+  '--sequence-start-step', '13',
+  '--sequence-frame-index', '0',
+], { encoding: 'utf8' });
+assert.notEqual(badTransfer.status, 0, 'checkpoint transfer rejects a different exact source basin');
+const badTransferReport = JSON.parse(readFileSync(join(badTransferDir, 'manifest.json'), 'utf8'));
+assert.equal(badTransferReport.failurePhase, 'checkpoint-transfer-validation');
+
 function readF32(path) {
   const bytes = readFileSync(path);
   return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
@@ -281,6 +345,7 @@ const composedFluid = readF32(composition.receiver.fluid.path);
 const composedFront = readF32(composition.receiver.front.path);
 const blendFluid = readF32(blendComposition.receiver.fluid.path);
 const blendFront = readF32(blendComposition.receiver.front.path);
+const transferFluid = readF32(transferComposition.receiver.fluid.path);
 let selectedFuelChanged = false;
 let denseFrontChanged = false;
 for (let z = 0; z < highGrid; z += 1) {
@@ -292,6 +357,11 @@ for (let z = 0; z < highGrid; z += 1) {
         composedFluid[highCell * 16 + 3],
         lowFluid[lowCell * 16 + 3],
         'unselected densityCarrier remains byte-value identical to the low baseline',
+      );
+      assert.equal(
+        transferFluid[highCell * 16 + 3],
+        applicationLowFluid[lowCell * 16 + 3],
+        'checkpoint transfer inherits untouched channels from the application frame rather than the training frame',
       );
       assert.ok(
         Math.abs(blendFluid[highCell * 16 + 6] - (

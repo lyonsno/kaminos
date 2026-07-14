@@ -17,6 +17,7 @@ import numpy as np
 SCHEMA = "kaminos.volume.exact-basin-selective-composition.v0"
 IDENTITY = "dense-topology-plus-support-aware-sparse-carriers-v0"
 AUTHORITY = "learned-selective-head-composition-not-filtered-high-truth-v0"
+CHECKPOINT_TRANSFER_MODE = "consecutive-phase-aligned-sequence-v0"
 DENSE_POLICY = "dense-ungated-residual-v0"
 SPARSE_POLICY = "sparse-hard-support-gated-residual-v0"
 FLUID_CHANNELS = [
@@ -49,6 +50,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-cells", type=int, default=32768)
     parser.add_argument("--support-threshold", type=float)
     parser.add_argument("--residual-scale", type=float, default=1.0)
+    parser.add_argument("--checkpoint-transfer-mode")
+    parser.add_argument("--sequence-start-step", type=int)
+    parser.add_argument("--sequence-frame-index", type=int)
     return parser.parse_args()
 
 
@@ -213,11 +217,87 @@ def main() -> int:
         if probe_report.get("failurePhase") is not None:
             raise CompositionFailure(phase, "support probe manifest carries a failure phase")
         pair_sha = sha256_file(pair_path)
-        expected_pair_sha = str(probe_report.get("inputs", {}).get("pairManifest", {}).get("sha256") or "")
+        training_pair_descriptor = probe_report.get("inputs", {}).get("pairManifest", {})
+        expected_pair_sha = str(training_pair_descriptor.get("sha256") or "")
+        training_pair_path = resolve_artifact_path(
+            str(training_pair_descriptor.get("path") or ""), probe_manifest_path,
+        )
+        checkpoint_transfer = None
         if pair_sha != expected_pair_sha:
-            raise CompositionFailure(phase, "support probe was trained against a different pair manifest", {
-                "expectedSha256": expected_pair_sha, "actualSha256": pair_sha,
-            })
+            phase = "checkpoint-transfer-validation"
+            if args.checkpoint_transfer_mode != CHECKPOINT_TRANSFER_MODE:
+                raise CompositionFailure(phase, "support probe was trained against a different pair manifest", {
+                    "expectedSha256": expected_pair_sha,
+                    "actualSha256": pair_sha,
+                    "requiredTransferMode": CHECKPOINT_TRANSFER_MODE,
+                })
+            if not training_pair_path.exists() or sha256_file(training_pair_path) != expected_pair_sha:
+                raise CompositionFailure(phase, "training pair manifest is missing or disagrees with checkpoint authority", {
+                    "path": str(training_pair_path),
+                    "expectedSha256": expected_pair_sha,
+                })
+            training_pair = json.loads(training_pair_path.read_text())
+            if training_pair.get("schema") != "kaminos.volume.full-grid-field-pair.v0" or training_pair.get("status") != "captured":
+                raise CompositionFailure(phase, "checkpoint training pair is not a captured full-grid pair")
+            frame_index = args.sequence_frame_index
+            sequence_start_step = args.sequence_start_step
+            if frame_index is None or frame_index < 0 or sequence_start_step is None or sequence_start_step < 0:
+                raise CompositionFailure(phase, "checkpoint transfer requires nonnegative sequence start step and frame index")
+            training_source = training_pair.get("source", {})
+            application_source = pair.get("source", {})
+            training_replay = training_source.get("deterministicReplay", {})
+            application_replay = application_source.get("deterministicReplay", {})
+            training_step = int(training_replay.get("completedSteps", -1))
+            application_step = int(application_replay.get("completedSteps", -1))
+            required_equal = {
+                "authority": (training_pair.get("authority"), pair.get("authority")),
+                "lowGrid": (training_pair.get("lowGrid"), pair.get("lowGrid")),
+                "highGrid": (training_pair.get("highGrid"), pair.get("highGrid")),
+                "sourceCaptureSha256": (
+                    training_source.get("exactBasinSourceCaptureSha256"),
+                    application_source.get("exactBasinSourceCaptureSha256"),
+                ),
+                "replayIdentity": (training_replay.get("identity"), application_replay.get("identity")),
+                "effectiveRoute": (training_replay.get("effectiveRoute"), application_replay.get("effectiveRoute")),
+                "controlsSignature": (training_replay.get("controlsSignature"), application_replay.get("controlsSignature")),
+            }
+            mismatches = {
+                key: {"training": values[0], "application": values[1]}
+                for key, values in required_equal.items()
+                if not values[0] or values[0] != values[1]
+            }
+            if mismatches:
+                raise CompositionFailure(phase, "checkpoint transfer source identity mismatch", {"mismatches": mismatches})
+            if sequence_start_step != training_step + 1:
+                raise CompositionFailure(phase, "sequence must begin on the step immediately after the checkpoint training frame", {
+                    "trainingStep": training_step,
+                    "sequenceStartStep": sequence_start_step,
+                })
+            if application_step != sequence_start_step + frame_index:
+                raise CompositionFailure(phase, "application pair does not match its claimed consecutive sequence frame", {
+                    "applicationStep": application_step,
+                    "sequenceStartStep": sequence_start_step,
+                    "frameIndex": frame_index,
+                })
+            if int(training_replay.get("simStepCount", -1)) != training_step or int(application_replay.get("simStepCount", -1)) != application_step:
+                raise CompositionFailure(phase, "replay completedSteps and simStepCount disagree")
+            checkpoint_transfer = {
+                "identity": CHECKPOINT_TRANSFER_MODE,
+                "authority": "frozen-checkpoint-cross-frame-application-not-retraining-v0",
+                "sequenceStartStep": sequence_start_step,
+                "frameIndex": frame_index,
+                "trainingStep": training_step,
+                "applicationStep": application_step,
+                "sourceCaptureSha256": application_source.get("exactBasinSourceCaptureSha256"),
+                "effectiveRoute": application_replay.get("effectiveRoute"),
+                "controlsSignature": application_replay.get("controlsSignature"),
+                "trainingPair": {"path": str(training_pair_path), "sha256": expected_pair_sha},
+                "applicationPair": {"path": str(pair_path), "sha256": pair_sha},
+            }
+        elif args.checkpoint_transfer_mode is not None:
+            phase = "checkpoint-transfer-validation"
+            raise CompositionFailure(phase, "checkpoint transfer mode is invalid when application and training pair are identical")
+        phase = "manifest-validation"
         low_grid = int(pair.get("lowGrid") or 0)
         high_grid = int(pair.get("highGrid") or 0)
         if low_grid < 1 or high_grid <= low_grid:
@@ -335,6 +415,7 @@ def main() -> int:
             "failurePhase": None,
             "compositionAuthority": AUTHORITY,
             "runtimeTruthAvailable": False,
+            "checkpointTransfer": checkpoint_transfer,
             "source": {
                 "pairManifestPath": str(pair_path),
                 "pairManifestSha256": pair_sha,
