@@ -56,6 +56,7 @@ const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = String(args.get('--window-size') || '960,720');
 const chunkFloats = Math.max(1, Math.floor(Number(args.get('--chunk-floats') || 262144)));
 const exportScope = String(args.get('--export-scope') || FULL_EXPORT_SCOPE);
+const exportIdentity = exportScope === FLUID_FRONT_EXPORT_SCOPE ? FLUID_FRONT_EXPORT_IDENTITY : EXPORT_IDENTITY;
 const deterministicReplaySteps = Number(args.get('--deterministic-replay-steps') || 0);
 const deterministicReplayRequested = Number.isFinite(deterministicReplaySteps) && deterministicReplaySteps > 0;
 const deterministicReplayTimeStepMs = Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60));
@@ -846,7 +847,7 @@ async function main() {
 
     const manifest = {
       schema: MANIFEST_SCHEMA,
-      identity: exportScope === FULL_EXPORT_SCOPE ? EXPORT_IDENTITY : FLUID_FRONT_EXPORT_IDENTITY,
+      identity: exportIdentity,
       status: 'captured',
       failurePhase: null,
       completeFieldCoverage: true,
@@ -897,7 +898,7 @@ async function main() {
   } catch (error) {
     writeManifest({
       schema: MANIFEST_SCHEMA,
-      identity: EXPORT_IDENTITY,
+      identity: exportIdentity,
       status: 'failed',
       failurePhase: phase,
       completeFieldCoverage: false,

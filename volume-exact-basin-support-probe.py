@@ -641,6 +641,16 @@ def main() -> int:
             raise ProbeFailure(phase, "full-grid manifest is not a captured export", {"path": str(full_path)})
         if full.get("failurePhase") is not None or full.get("completeFieldCoverage") is not True:
             raise ProbeFailure(phase, "full-grid export is incomplete", {"failurePhase": full.get("failurePhase")})
+        if (
+            full.get("identity") == "full-grid-fluid-front-only-v0"
+            or full.get("exportScope") == "fluid-front-only-v0"
+            or full.get("derivedBoundaryCoverage") == "omitted-by-caller-v0"
+        ):
+            raise ProbeFailure(phase, "support probe requires included derived boundary coverage", {
+                "identity": full.get("identity"),
+                "exportScope": full.get("exportScope"),
+                "derivedBoundaryCoverage": full.get("derivedBoundaryCoverage"),
+            })
         low_grid = int(pair["lowGrid"])
         high_grid = int(pair["highGrid"])
         if int(full.get("grid") or 0) != high_grid:

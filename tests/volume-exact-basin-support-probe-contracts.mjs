@@ -194,6 +194,26 @@ function fullGridManifest(path, splats) {
 
 const fullGridPath = join(fixtureRoot, 'full-grid.json');
 fullGridManifest(fullGridPath, splatDesc);
+const narrowFullGridPath = join(fixtureRoot, 'full-grid-fluid-front-only.json');
+const narrowFullGrid = JSON.parse(readFileSync(fullGridPath, 'utf8'));
+narrowFullGrid.identity = 'full-grid-fluid-front-only-v0';
+narrowFullGrid.exportScope = 'fluid-front-only-v0';
+narrowFullGrid.derivedBoundaryCoverage = 'omitted-by-caller-v0';
+delete narrowFullGrid.boundarySidecar;
+delete narrowFullGrid.boundarySplats;
+writeFileSync(narrowFullGridPath, `${JSON.stringify(narrowFullGrid, null, 2)}\n`);
+const narrowProbeDir = join(fixtureRoot, 'narrow-probe-out');
+const narrowProbe = spawnSync('python3', [
+  probePath,
+  '--pair-manifest', pairPath,
+  '--full-grid-manifest', narrowFullGridPath,
+  '--out-dir', narrowProbeDir,
+  '--channels', 'fuel',
+], { encoding: 'utf8' });
+assert.notEqual(narrowProbe.status, 0, 'boundary-dependent support probe rejects fluid/front-only exports before artifact access');
+const narrowProbeReport = JSON.parse(readFileSync(join(narrowProbeDir, 'manifest.json'), 'utf8'));
+assert.equal(narrowProbeReport.failurePhase, 'manifest-validation');
+assert.match(narrowProbeReport.error, /requires included derived boundary coverage/, 'scope rejection names the missing authority');
 const outDir = join(fixtureRoot, 'valid-out');
 execFileSync('python3', [
   probePath,

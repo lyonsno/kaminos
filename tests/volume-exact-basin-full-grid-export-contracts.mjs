@@ -75,4 +75,17 @@ assert.equal(failed.status, 'failed', 'corrupt source capture writes a failed ma
 assert.equal(failed.failurePhase, 'source-capture-validation', 'corrupt source capture fails during source-capture validation');
 assert.match(failed.error, /payload SHA-256 mismatch/, 'failure report names the source payload hash mismatch');
 
+const narrowOutDir = join(fixtureRoot, 'narrow-failure-out');
+assert.throws(() => execFileSync(process.execPath, [
+  exporterPath,
+  '--source-capture', capturePath,
+  '--target-origin', 'http://127.0.0.1:9',
+  '--export-scope', 'fluid-front-only-v0',
+  '--out-dir', narrowOutDir,
+], { stdio: 'pipe' }), /Command failed/, 'narrow export also refuses a corrupt capture before browser launch');
+const narrowFailed = JSON.parse(readFileSync(join(narrowOutDir, 'manifest.json'), 'utf8'));
+assert.equal(narrowFailed.identity, 'full-grid-fluid-front-only-v0', 'narrow failure manifest keeps the requested scope identity');
+assert.equal(narrowFailed.exportScope, 'fluid-front-only-v0', 'narrow failure manifest records the requested scope');
+assert.equal(narrowFailed.failurePhase, 'source-capture-validation');
+
 console.log('exact-basin full-grid export contracts passed');
