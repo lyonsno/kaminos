@@ -59,7 +59,7 @@ try {
   const userDataDir = resolve(String(args.get('--user-data-dir') || join(outDir, '.chrome-profile')));
   const renderWarmupCount = Number(args.get('--render-warmup-count') || 2);
   const windowSize = String(args.get('--window-size') || '1240,720');
-  const viewportSize = String(args.get('--viewport-size') || '1240,633');
+  const viewportSize = String(args.get('--viewport-size') || '1620,633');
 
   if (!Number.isFinite(partialFlowDebugMix) || partialFlowDebugMix < 0.5 || partialFlowDebugMix > 0.75) {
     failurePhase = 'render-contract-validation';
@@ -444,6 +444,12 @@ function executeFrame(frame, context, identity) {
         learnedDecoder: beauty.boundarySplatRendererIdentity,
         learnedDecoderModel: beauty.boundarySplatAttributeModelIdentity,
         fallback: beauty.boundarySplatFallbackReason ?? null,
+        viewportContract: renderManifest.viewportContract,
+        canvas: {
+          cssRect: beauty.canvasCssRect,
+          intrinsicWidth: beauty.canvasMount?.intrinsicWidth,
+          intrinsicHeight: beauty.canvasMount?.intrinsicHeight,
+        },
         boundarySplatCandidateCount: beauty.boundarySplatCandidateCount,
         boundarySplatInstanceCount: beauty.boundarySplatInstanceCount,
         boundarySplatOverflowCount: beauty.boundarySplatOverflowCount,

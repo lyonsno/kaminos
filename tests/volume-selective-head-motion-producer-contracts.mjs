@@ -103,7 +103,7 @@ assert.deepEqual(manifest.frames[0].roles, [
 assert.equal(manifest.frames[0].commands.highExport.includes('--deterministic-replay-steps 97'), true);
 assert.match(manifest.frames[0].commands.highExport, /--chunk-floats 262144/, 'producer uses the previously witnessed CDP transfer chunk instead of the renderer-resetting oversized chunk');
 assert.match(manifest.frames[0].commands.highExport, /--export-scope fluid-front-only-v0/, 'producer does not drain unused boundary sidecars for model pair construction');
-assert.match(manifest.frames[0].commands.highExport, /--viewport-size 1240,633/, 'producer fixes the effective CSS viewport independently of browser-window chrome');
+assert.match(manifest.frames[0].commands.highExport, /--viewport-size 1620,633/, 'producer reserves the app side panel while fixing a 1240x633 renderer canvas');
 assert.equal(manifest.frames[1].commands.highExport.includes('--deterministic-replay-steps 98'), true);
 assert.match(manifest.frames[0].commands.selectiveFullResidual, /--residual-scale 1/);
 assert.match(manifest.frames[0].commands.selectiveCalibratedResidual, /--residual-scale 0\.5/);
@@ -115,7 +115,9 @@ assert.equal(manifest.retention.ephemeralFieldArtifactsDeletedAfterFrameReceipt,
 assert.equal(manifest.temporalAuthority, 'consecutive-phase-aligned-per-frame-frozen-model-application-v0');
 assert.equal(manifest.recurrentPrediction, false);
 assert.equal(manifest.staticSidecarOverMovingMaterial, false);
-assert.match(readFileSync(producer, 'utf8'), /process\.on\('SIGINT'[\s\S]*interrupted/, 'operator interruption leaves a durable failed producer manifest');
+const producerSource = readFileSync(producer, 'utf8');
+assert.match(producerSource, /process\.on\('SIGINT'[\s\S]*interrupted/, 'operator interruption leaves a durable failed producer manifest');
+assert.match(producerSource, /viewportContract:\s*renderManifest\.viewportContract/, 'per-frame receipt retains effective viewport custody after ephemeral render manifests are deleted');
 
 const targeted = run([
   '--frame-count', '1',
