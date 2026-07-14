@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eulerian Destination Occupancy Phase Witness</title>
+  <style>
+    :root { color-scheme: dark; background: #08090b; color: #f2f3f5; font-family: ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #08090b; }
+    header, section { padding: 24px max(20px, calc((100vw - 1180px) / 2)); }
+    header { border-bottom: 1px solid #30343a; background: #111317; }
+    section { border-bottom: 1px solid #25292f; }
+    h1 { margin: 0 0 10px; font-size: 28px; letter-spacing: 0; }
+    h2 { margin: 0 0 10px; font-size: 20px; letter-spacing: 0; }
+    p { max-width: 920px; margin: 8px 0; color: #c8ccd2; line-height: 1.5; }
+    strong { color: #ffffff; }
+    video, img { display: block; width: 100%; max-width: 1180px; height: auto; margin-top: 16px; background: #000; }
+    table { border-collapse: collapse; width: 100%; max-width: 920px; margin-top: 16px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #30343a; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    .roles { color: #f5c96a; }
+    .finding { color: #f1a4b7; }
+    code { color: #a8d8ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Eulerian Destination Occupancy Phase Witness</h1>
+    <p><strong>Question:</strong> Can a motion-balanced local-grid occupancy model preserve the support that carries visible fire phase, rather than learning only slow cells?</p>
+    <p><strong>Verdict:</strong> Support selection materially improves and the upper flame sheet survives. Large-scale state evolution still drifts: the prediction misses the rising reference plume and accumulates lower-left support over recurrence.</p>
+    <p class="roles"><strong>Every panel:</strong> left = exact held-out reference, middle = copied-current control, right = frozen recurrent prediction.</p>
+  </header>
+
+  <section>
+    <h2>Beauty Motion, 10.08 Seconds</h2>
+    <p>Static Q1/Q2 cells are attenuated to 0.1 and unmatched support to 0.05, exposing phase-bearing Q3/Q4, transported, and birth support. Watch the reference's tall plume and changing envelope, then compare the prediction's persistent but lower, slower orange rim and late blue lower-left accumulation.</p>
+    <video controls muted playsinline preload="metadata" src="motion-cohort-comparison.mp4"></video>
+  </section>
+
+  <section>
+    <h2>Additive Cohort Debug, Gain 0.625</h2>
+    <p>This is the same state sequence and cadence with a display-only mix. Green is Q1/Q2, yellow Q3, red Q4, blue transported, magenta birth, and orange unmatched/death. The prediction carries more motion-bearing color than control after the first step, but it does not send support into the reference's tall plume.</p>
+    <video controls muted playsinline preload="metadata" src="motion-cohort-debug-comparison.mp4"></video>
+  </section>
+
+  <section>
+    <h2>Beauty Time Samples</h2>
+    <p>The sheet is row-major at simulator times <code>0.16, 0.48, 1.12, 2.08, 4.16, 6.24, 8.16, 10.08 seconds</code>. Each tile retains the same left/middle/right role labels. This is one continuous episode, not a set of unrelated frames.</p>
+    <img src="motion-cohort-contact-sheet.png" alt="Eight ordered beauty samples, each showing reference, copied-current control, and recurrent prediction.">
+  </section>
+
+  <section>
+    <h2>Debug Time Samples</h2>
+    <p>Use the same row-major times. The decisive late failure is not blankness: predicted support remains active, but blue and magenta support thickens in the lower-left region while the exact reference develops a tall, changing plume.</p>
+    <img src="motion-cohort-debug-contact-sheet.png" alt="Eight ordered debug samples with exact cohort colors for reference, control, and prediction.">
+  </section>
+
+  <section>
+    <h2>Measured Change From Prior Model</h2>
+    <table>
+      <thead><tr><th>Cohort</th><th>Prior support</th><th>New support</th><th>Prior energy</th><th>New energy</th></tr></thead>
+      <tbody>
+        <tr><td>stable-q3</td><td>0.2115</td><td>0.3101</td><td>0.1619</td><td>0.2846</td></tr>
+        <tr><td>stable-q4</td><td>0.1635</td><td>0.2891</td><td>0.1001</td><td>0.2394</td></tr>
+        <tr><td>transported</td><td>0.1234</td><td>0.1975</td><td>0.0894</td><td>0.1911</td></tr>
+        <tr><td>birth</td><td>0.1021</td><td>0.1519</td><td>0.0940</td><td>0.1892</td></tr>
+      </tbody>
+    </table>
+    <p class="finding"><strong>Failure boundary:</strong> prediction count grows from 60,259 to 93,365 while the exact final count is 70,612. The support redirect worked, but recurrent count and state evolution are not yet trustworthy.</p>
+  </section>
+
+  <section>
+    <h2>Evidence Boundary</h2>
+    <p>Model <code>e51c23d25eb38ec778c65774aae46c78bbcb02808d582539843417b10043c073</code>, MLX <code>Device(gpu, 0)</code>, separate 13-frame training and 64-frame evaluation episodes, native 3D compute-fluid route, no fallback. This isolated splat witness does not establish analytical-raymarch image agreement, multi-basin generalization, or live runtime integration.</p>
+  </section>
+</body>
+</html>

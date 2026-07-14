@@ -1,0 +1,29 @@
+{
+  "job_id": "326c70924a38",
+  "job_type": "kaminos_phase_transport_motion_balanced_mlx_infer",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714",
+  "effective_route": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-transport-mlx.py --manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --model /private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json --out-dir /private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714 --inference-start 0 --inference-steps 63 --grid-size 160 --batch-size 4096",
+  "effective_cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "batch_size": "4096",
+    "grid_size": "160",
+    "inference_start": "0",
+    "inference_steps": "1",
+    "model": "/private/tmp/kaminos-phase-transport-motion-balanced-r1-0714/transport-model.json"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784061403.308686,
+  "finished_at": 1784061513.339336,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}

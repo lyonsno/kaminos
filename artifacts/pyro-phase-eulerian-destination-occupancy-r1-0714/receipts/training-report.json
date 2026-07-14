@@ -1,0 +1,370 @@
+{
+  "calibration": {
+    "birth": {
+      "authority": "training-residual-birth-f1-threshold-v0",
+      "fScore": 0.4807288863711466,
+      "falseNegative": 70273,
+      "falsePositive": 204720,
+      "precision": 0.38339392369529923,
+      "recall": 0.6443026057378874,
+      "sampleCount": 1355690,
+      "threshold": 0.6000000000000001,
+      "truePositive": 127291
+    },
+    "carrier": {
+      "accuracy": 0.6741926083455312,
+      "movingClassAccuracy": 0.16517685408272761,
+      "movingFalseNegative": 164931,
+      "movingFalsePositive": 331149,
+      "movingPrecision": 0.08970482321830107,
+      "movingRecall": 0.16517685408272761,
+      "movingTruePositive": 32633,
+      "sampleCount": 1798136
+    },
+    "destinationDeath": {
+      "algorithmAuthority": "descending-margin-cumulative-confusion-v0",
+      "authority": "training-eulerian-source-death-margin-f1-v0",
+      "fScore": 0.35624723410532527,
+      "falseNegative": 167864,
+      "falsePositive": 6696,
+      "precision": 0.8782456905956797,
+      "recall": 0.22344146111285876,
+      "sampleCount": 442446,
+      "threshold": 2.09808349609375e-05,
+      "thresholdCandidateCount": 54141,
+      "truePositive": 48300
+    },
+    "targetSupport": {
+      "authority": "training-adjacent-target-source-count-ratio-median-v0",
+      "maximumRatio": 1.0093580908836735,
+      "medianRatio": 1.0069738643029396,
+      "minimumRatio": 1.0050768225457836,
+      "pairCount": 7,
+      "ratios": [
+        1.0050768225457836,
+        1.005918047544427,
+        1.0076564856399464,
+        1.0093580908836735,
+        1.0069738643029396,
+        1.0059637882211607,
+        1.008032528184933
+      ]
+    }
+  },
+  "completedAt": 1784061374.0622258,
+  "holdoutMetrics": [
+    {
+      "beatsIdentity": true,
+      "exactCount": 64607,
+      "identityIoU": 0.3100791892335467,
+      "predictionCount": 63550,
+      "predictionIoU": 0.36154728767821853,
+      "predictionToIdentityRatio": 1.1659837236155401,
+      "step": 1
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 66347,
+      "identityIoU": 0.21401978712430253,
+      "predictionCount": 63993,
+      "predictionIoU": 0.26106601391294254,
+      "predictionToIdentityRatio": 1.2198218558236187,
+      "step": 2
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68232,
+      "identityIoU": 0.16775432544410263,
+      "predictionCount": 64439,
+      "predictionIoU": 0.2069009433533163,
+      "predictionToIdentityRatio": 1.2333568318168804,
+      "step": 3
+    }
+  ],
+  "manifest": {
+    "bytes": 90735,
+    "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+    "sha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+  },
+  "model": {
+    "path": "/private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json",
+    "sha256": "e51c23d25eb38ec778c65774aae46c78bbcb02808d582539843417b10043c073"
+  },
+  "predictions": {
+    "path": "/private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-predictions.json",
+    "sha256": "985e6505a440d7492872393a41b697c6cf488b21c75be9c127c5a31599acc760"
+  },
+  "recurrent": [
+    {
+      "activatedDeathCount": 7957,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 55153,
+      "destinationCandidateCount": 255844,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2818800,
+        "denseCellBudget": 16156160,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 63550,
+      "selectedBirthCount": 8397,
+      "sourceCount": 63110,
+      "stableAttributeCount": 55153,
+      "step": 1,
+      "targetSupportBudget": 63550,
+      "thresholdQualifiedBirthCount": 48698,
+      "transportedAttributeCount": 8397
+    },
+    {
+      "activatedDeathCount": 3764,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 59786,
+      "destinationCandidateCount": 225160,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2779650,
+        "denseCellBudget": 16268800,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 63993,
+      "selectedBirthCount": 4207,
+      "sourceCount": 63550,
+      "stableAttributeCount": 59786,
+      "step": 2,
+      "targetSupportBudget": 63993,
+      "thresholdQualifiedBirthCount": 43078,
+      "transportedAttributeCount": 4207
+    },
+    {
+      "activatedDeathCount": 2027,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 61966,
+      "destinationCandidateCount": 209839,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2798820,
+        "denseCellBudget": 16382208,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 64439,
+      "selectedBirthCount": 2473,
+      "sourceCount": 63993,
+      "stableAttributeCount": 61966,
+      "step": 3,
+      "targetSupportBudget": 64439,
+      "thresholdQualifiedBirthCount": 40326,
+      "transportedAttributeCount": 2473
+    }
+  ],
+  "rolloutGate": {
+    "aggregateOrEarlyStepCanCloseClaim": false,
+    "allStepsBeatIdentity": true,
+    "authority": "every-recurrent-step-support-advantage-gate-v0",
+    "beatStepCount": 3,
+    "evaluatedStepCount": 3,
+    "firstIdentityLossStep": null,
+    "minimumPredictionToIdentityRatio": 1.1659837236155401
+  },
+  "route": {
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+    "fallbackReason": null
+  },
+  "schema": "kaminos-boundary-splat-phase-transport-training-v0",
+  "startedAt": 1784061338.950798,
+  "status": "completed",
+  "trainingPairs": [
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 8955,
+      "birthPositiveCount": 22219,
+      "birthSampleCount": 181604,
+      "carrierCohorts": {
+        "birth": 7200,
+        "death": 23671,
+        "empty": 159385,
+        "stable-q1": 9003,
+        "stable-q2": 9003,
+        "stable-q3": 9003,
+        "stable-q4": 9003,
+        "transported": 15019
+      },
+      "carrierSampleCount": 241287,
+      "deathCount": 8652,
+      "sourceCount": 59683,
+      "sourceFrameId": "frame-0",
+      "stableCount": 36012,
+      "targetCount": 59986,
+      "targetFrameId": "frame-1",
+      "transportedCount": 15019,
+      "unsupportedBirthCount": 1755
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 9543,
+      "birthPositiveCount": 23621,
+      "birthSampleCount": 184719,
+      "carrierCohorts": {
+        "birth": 7743,
+        "death": 25066,
+        "empty": 161098,
+        "stable-q1": 8730,
+        "stable-q2": 8730,
+        "stable-q3": 8730,
+        "stable-q4": 8730,
+        "transported": 15878
+      },
+      "carrierSampleCount": 244705,
+      "deathCount": 9188,
+      "sourceCount": 59986,
+      "sourceFrameId": "frame-1",
+      "stableCount": 34920,
+      "targetCount": 60341,
+      "targetFrameId": "frame-2",
+      "transportedCount": 15878,
+      "unsupportedBirthCount": 1800
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 10958,
+      "birthPositiveCount": 27627,
+      "birthSampleCount": 185600,
+      "carrierCohorts": {
+        "birth": 8605,
+        "death": 29518,
+        "empty": 157973,
+        "stable-q1": 7706,
+        "stable-q2": 7706,
+        "stable-q3": 7706,
+        "stable-q4": 7705,
+        "transported": 19022
+      },
+      "carrierSampleCount": 245941,
+      "deathCount": 10496,
+      "sourceCount": 60341,
+      "sourceFrameId": "frame-2",
+      "stableCount": 30823,
+      "targetCount": 60803,
+      "targetFrameId": "frame-3",
+      "transportedCount": 19022,
+      "unsupportedBirthCount": 2353
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 11814,
+      "birthPositiveCount": 27336,
+      "birthSampleCount": 186114,
+      "carrierCohorts": {
+        "birth": 8993,
+        "death": 29588,
+        "empty": 158778,
+        "stable-q1": 7804,
+        "stable-q2": 7804,
+        "stable-q3": 7804,
+        "stable-q4": 7803,
+        "transported": 18343
+      },
+      "carrierSampleCount": 246917,
+      "deathCount": 11245,
+      "sourceCount": 60803,
+      "sourceFrameId": "frame-3",
+      "stableCount": 31215,
+      "targetCount": 61372,
+      "targetFrameId": "frame-4",
+      "transportedCount": 18343,
+      "unsupportedBirthCount": 2821
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 12262,
+      "birthPositiveCount": 28076,
+      "birthSampleCount": 185996,
+      "carrierCohorts": {
+        "birth": 9040,
+        "death": 30870,
+        "empty": 157920,
+        "stable-q1": 7626,
+        "stable-q2": 7625,
+        "stable-q3": 7626,
+        "stable-q4": 7625,
+        "transported": 19036
+      },
+      "carrierSampleCount": 247368,
+      "deathCount": 11834,
+      "sourceCount": 61372,
+      "sourceFrameId": "frame-4",
+      "stableCount": 30502,
+      "targetCount": 61800,
+      "targetFrameId": "frame-5",
+      "transportedCount": 19036,
+      "unsupportedBirthCount": 3222
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 16077,
+      "birthPositiveCount": 33356,
+      "birthSampleCount": 215279,
+      "carrierCohorts": {
+        "birth": 11150,
+        "death": 37866,
+        "empty": 181923,
+        "stable-q1": 8014,
+        "stable-q2": 8014,
+        "stable-q3": 8014,
+        "stable-q4": 8014,
+        "transported": 22206
+      },
+      "carrierSampleCount": 285201,
+      "deathCount": 15660,
+      "sourceCount": 69922,
+      "sourceFrameId": "frame-10",
+      "stableCount": 32056,
+      "targetCount": 70339,
+      "targetFrameId": "frame-11",
+      "transportedCount": 22206,
+      "unsupportedBirthCount": 4927
+    },
+    {
+      "ambiguityCount": 0,
+      "authority": "stable-site-first-bounded-local-grid-feature-correspondence-v0",
+      "birthCount": 16243,
+      "birthPositiveCount": 35329,
+      "birthSampleCount": 216378,
+      "carrierCohorts": {
+        "birth": 11422,
+        "death": 39585,
+        "empty": 181049,
+        "stable-q1": 7689,
+        "stable-q2": 7688,
+        "stable-q3": 7689,
+        "stable-q4": 7688,
+        "transported": 23907
+      },
+      "carrierSampleCount": 286717,
+      "deathCount": 15678,
+      "sourceCount": 70339,
+      "sourceFrameId": "frame-11",
+      "stableCount": 30754,
+      "targetCount": 70904,
+      "targetFrameId": "frame-12",
+      "transportedCount": 23907,
+      "unsupportedBirthCount": 4821
+    }
+  ]
+}

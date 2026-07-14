@@ -1,0 +1,1205 @@
+{
+  "schema": "kaminos-boundary-splat-phase-candidate-corpus-v0",
+  "authority": "live-simulator-controlled-step-selected-candidate-features-v0",
+  "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+  "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+  "captureReplay": null,
+  "featureOrder": [
+    "sidecar.support",
+    "sidecar.coverage",
+    "sidecar.ridge",
+    "sidecar.footprint",
+    "material.density",
+    "material.heat",
+    "material.fuel",
+    "material.detail",
+    "fire.energy",
+    "fire.temperature",
+    "fire.emission",
+    "fire.detail",
+    "micro.x",
+    "micro.y",
+    "micro.z",
+    "micro.w"
+  ],
+  "frames": [
+    {
+      "id": "frame-0",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-001-s346",
+      "controlledStepFrameIndex": 0,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 7131.300000000745,
+      "simStepCount": 347,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 59683,
+      "boundarySplatInstanceCount": 59683,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-000.features.f32",
+        "bytes": 3819712,
+        "sha256": "7688a5f967e729c288aa4504cf8c5384253dd9ce22cb9b24c57cc4a0bba6de41",
+        "count": 59683,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 20,
+          "base64Chars": 5092952
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-000.splats.f32",
+        "bytes": 2864784,
+        "sha256": "04ae72008bd4dc86f7b5dc8c158696e4a622ebae13894fa46874b6f5f24a1bab",
+        "count": 59683,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 15,
+          "base64Chars": 3819712
+        }
+      }
+    },
+    {
+      "id": "frame-1",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-002-s349",
+      "controlledStepFrameIndex": 1,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 7291.300000000745,
+      "simStepCount": 350,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 59986,
+      "boundarySplatInstanceCount": 59986,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-001.features.f32",
+        "bytes": 3839104,
+        "sha256": "90d5dc1c5354b872bad5c38242e2ceb7a2466d496a1f52c9bca914287e520825",
+        "count": 59986,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 20,
+          "base64Chars": 5118808
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-001.splats.f32",
+        "bytes": 2879328,
+        "sha256": "30dfe78a823f3e503412ed78107919b4e2e951fdf557ad15484957ee0f982cae",
+        "count": 59986,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 15,
+          "base64Chars": 3839104
+        }
+      }
+    },
+    {
+      "id": "frame-2",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-003-s352",
+      "controlledStepFrameIndex": 2,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 7451.300000000745,
+      "simStepCount": 353,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 60341,
+      "boundarySplatInstanceCount": 60341,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-002.features.f32",
+        "bytes": 3861824,
+        "sha256": "18afaaed056b3d184a78fa1bfb32adbdfd356648ea456ef9ef878d68a005482d",
+        "count": 60341,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 20,
+          "base64Chars": 5149100
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-002.splats.f32",
+        "bytes": 2896368,
+        "sha256": "d786c04b2f0055f1544d9d9e8ada0341d8be541ad71dbcadf8767b75eb7e35f4",
+        "count": 60341,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 15,
+          "base64Chars": 3861824
+        }
+      }
+    },
+    {
+      "id": "frame-3",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-004-s355",
+      "controlledStepFrameIndex": 3,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 7611.300000000745,
+      "simStepCount": 356,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 60803,
+      "boundarySplatInstanceCount": 60803,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-003.features.f32",
+        "bytes": 3891392,
+        "sha256": "72174cbe94982ff99c21029ced15d57d7857a297e6935a6277ac84a923f80525",
+        "count": 60803,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 20,
+          "base64Chars": 5188524
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-003.splats.f32",
+        "bytes": 2918544,
+        "sha256": "553ccd826f5a391b2cab805098a5c364e2ea4d45441ec21f47f2897d2ef48939",
+        "count": 60803,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 15,
+          "base64Chars": 3891392
+        }
+      }
+    },
+    {
+      "id": "frame-4",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-005-s358",
+      "controlledStepFrameIndex": 4,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 7771.300000000745,
+      "simStepCount": 359,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 61372,
+      "boundarySplatInstanceCount": 61372,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-004.features.f32",
+        "bytes": 3927808,
+        "sha256": "5a307552bc01ce238a9d68e2540226775a60615fd4cff0818a0930ed13e4a2a9",
+        "count": 61372,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 20,
+          "base64Chars": 5237080
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-004.splats.f32",
+        "bytes": 2945856,
+        "sha256": "caa5a25288ae20472d2aac113e7767a6e6f62e6d1c70a628c7a21225b1e4998d",
+        "count": 61372,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 15,
+          "base64Chars": 3927808
+        }
+      }
+    },
+    {
+      "id": "frame-5",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-006-s361",
+      "controlledStepFrameIndex": 5,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 7931.300000000745,
+      "simStepCount": 362,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 61800,
+      "boundarySplatInstanceCount": 61800,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-005.features.f32",
+        "bytes": 3955200,
+        "sha256": "25b8a66741ac4d9bfa86132b0adcaaff4d86e3a8c9c5613e48c1ee902793969d",
+        "count": 61800,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 21,
+          "base64Chars": 5273600
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-005.splats.f32",
+        "bytes": 2966400,
+        "sha256": "e55332079cdcfe2a795550866827e7784265d2f7f1306de446cd1fc847248899",
+        "count": 61800,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 16,
+          "base64Chars": 3955200
+        }
+      }
+    },
+    {
+      "id": "frame-6",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-007-s364",
+      "controlledStepFrameIndex": 6,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 8091.300000000745,
+      "simStepCount": 365,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 63110,
+      "boundarySplatInstanceCount": 63110,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-006.features.f32",
+        "bytes": 4039040,
+        "sha256": "17e1e713321117b61bf51353170a11bfb3ac598dfc3b80c447c5a9779bc44dab",
+        "count": 63110,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 21,
+          "base64Chars": 5385388
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-006.splats.f32",
+        "bytes": 3029280,
+        "sha256": "7dd33887b66a05acf8f5772e71252f5d9cf043e8e94e8b28361db5317ac9bbdb",
+        "count": 63110,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 16,
+          "base64Chars": 4039040
+        }
+      }
+    },
+    {
+      "id": "frame-7",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-008-s367",
+      "controlledStepFrameIndex": 7,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 8251.300000000745,
+      "simStepCount": 368,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 64607,
+      "boundarySplatInstanceCount": 64607,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-007.features.f32",
+        "bytes": 4134848,
+        "sha256": "23bcda0e8ccc9d3318a651f67b5164165067bd8731e962dd861d580093488909",
+        "count": 64607,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 22,
+          "base64Chars": 5513132
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-007.splats.f32",
+        "bytes": 3101136,
+        "sha256": "42655d1d1484cee988b7875b1e34dcdc99da3e45ea9ea6cff7eee3c4c8a59b3a",
+        "count": 64607,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 16,
+          "base64Chars": 4134848
+        }
+      }
+    },
+    {
+      "id": "frame-8",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-009-s370",
+      "controlledStepFrameIndex": 8,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 8411.300000000745,
+      "simStepCount": 371,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 66347,
+      "boundarySplatInstanceCount": 66347,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-008.features.f32",
+        "bytes": 4246208,
+        "sha256": "d0ffb79095e39d6894df62d7113887b7a74b449fa7f6c89820c3dde6c52d8026",
+        "count": 66347,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 22,
+          "base64Chars": 5661612
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-008.splats.f32",
+        "bytes": 3184656,
+        "sha256": "4a8e403728a14c09f00d6be7e5fa00ddb162362e6fb9c08cf36a9dce74364979",
+        "count": 66347,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 17,
+          "base64Chars": 4246208
+        }
+      }
+    },
+    {
+      "id": "frame-9",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-010-s373",
+      "controlledStepFrameIndex": 9,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 8571.300000000745,
+      "simStepCount": 374,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 68232,
+      "boundarySplatInstanceCount": 68232,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-009.features.f32",
+        "bytes": 4366848,
+        "sha256": "cecd56ffefe3f459fc7607af1744cdbb6662a6a6f35a1befd93eaf6dbad52e41",
+        "count": 68232,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 23,
+          "base64Chars": 5822464
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-009.splats.f32",
+        "bytes": 3275136,
+        "sha256": "41df73dbd2d45d870c861c236f4fe8d6f3907d53846e05c9bc84f10ad22fd6c8",
+        "count": 68232,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 17,
+          "base64Chars": 4366848
+        }
+      }
+    },
+    {
+      "id": "frame-10",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-011-s376",
+      "controlledStepFrameIndex": 10,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 8731.300000000745,
+      "simStepCount": 377,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 69922,
+      "boundarySplatInstanceCount": 69922,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-010.features.f32",
+        "bytes": 4475008,
+        "sha256": "47db1a90d47fa41f61420be2ac81ec224ca0b6b00d6adad4a234cc36a4402b9e",
+        "count": 69922,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 23,
+          "base64Chars": 5966680
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-010.splats.f32",
+        "bytes": 3356256,
+        "sha256": "5eb410e082d94c1fc28c6f7f8f17fbc811c60daec31b90bbdf80594a7a0f1759",
+        "count": 69922,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 18,
+          "base64Chars": 4475008
+        }
+      }
+    },
+    {
+      "id": "frame-11",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-012-s379",
+      "controlledStepFrameIndex": 11,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 8891.300000000745,
+      "simStepCount": 380,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 70339,
+      "boundarySplatInstanceCount": 70339,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-011.features.f32",
+        "bytes": 4501696,
+        "sha256": "1a3832b9016cf8a265aafaa1387f646d17556fc3b3a717660ace192bbb0d5ef0",
+        "count": 70339,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 23,
+          "base64Chars": 6002264
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-011.splats.f32",
+        "bytes": 3376272,
+        "sha256": "fbd54181f698011bdd1fe2b2a8d95ab084019f89db83e3f41fb1901bcb8e67fe",
+        "count": 70339,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 18,
+          "base64Chars": 4501696
+        }
+      }
+    },
+    {
+      "id": "frame-12",
+      "sameBrowserSessionId": "same-browser-f346-s346-7131",
+      "sameStateCaptureId": "same-browser-f346-s346-7131-frame-013-s382",
+      "controlledStepFrameIndex": 12,
+      "controlledStepDeltaMs": 160,
+      "controlledStepNowMs": 9051.300000000745,
+      "simStepCount": 383,
+      "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "fallbackReason": null,
+      "boundarySplatCandidateCount": 70904,
+      "boundarySplatInstanceCount": 70904,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCountAuthority": "gpu-indirect-post-submit-witness-readback",
+      "candidates": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-012.features.f32",
+        "bytes": 4537856,
+        "sha256": "7d5d7db68ed32a66f6b7bbdbc444f725c23d36f1ab697d818dff0e89ed227fe0",
+        "count": 70904,
+        "strideFloats": 16,
+        "dtype": "float32-le",
+        "transport": {
+          "identity": "browser-side-feature-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 24,
+          "base64Chars": 6050476
+        }
+      },
+      "camera": {
+        "viewProjection": [
+          2.3097424507141113,
+          -0.14975771307945251,
+          -0.4959806799888611,
+          -0.49588149785995483,
+          1.8492520911768166e-17,
+          2.7310283184051514,
+          -0.10928387939929962,
+          -0.10926202684640884,
+          -1.3295103311538696,
+          -0.2601723074913025,
+          -0.8616613745689392,
+          -0.8614890575408936,
+          -5.926275015189777e-16,
+          -0.054620563983917236,
+          2.362260341644287,
+          2.3817861080169678
+        ],
+        "right": [
+          0.8666778206825256,
+          0,
+          -0.4988682270050049
+        ],
+        "up": [
+          -0.05450735241174698,
+          0.9940130114555359,
+          -0.09469497203826904
+        ],
+        "controls": [
+          1,
+          1,
+          1,
+          3.4000000953674316
+        ]
+      },
+      "splats": {
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/frame-012.splats.f32",
+        "bytes": 3403392,
+        "sha256": "2b34d55a1dfea4d8acfa65ae6e610de6a9ccd7b5315efcda0e54cb5d548ff732",
+        "count": 70904,
+        "strideFloats": 12,
+        "dtype": "float32-le",
+        "authority": "intercepted-live-boundary-splat-buffer-post-compaction-v0",
+        "transport": {
+          "identity": "browser-side-splat-capture-chunked-cdp-v0",
+          "chunkChars": 262144,
+          "chunkCount": 18,
+          "base64Chars": 4537856
+        }
+      }
+    }
+  ],
+  "temporalAlignment": {
+    "schema": "kaminos-boundary-splat-temporal-alignment-v0",
+    "identityKey": "world-position-stable-key",
+    "alignmentMethod": "world-position-stable-key",
+    "offsetSteps": [
+      -6,
+      -3,
+      -1,
+      1,
+      3,
+      6
+    ],
+    "supportSemantics": {
+      "matched": "same quantized live splat world position is present in source and target",
+      "birth": "target live splat world position is absent from source support",
+      "death": "source live splat world position is absent from target support"
+    },
+    "pairs": [
+      {
+        "sourceFrameId": "frame-6",
+        "targetFrameId": "frame-0",
+        "offsetSteps": -6,
+        "sourceCount": 63110,
+        "targetCount": 59683,
+        "matchedSlots": 15871,
+        "births": 43812,
+        "deaths": 47239,
+        "stableSupportCount": 15871
+      },
+      {
+        "sourceFrameId": "frame-6",
+        "targetFrameId": "frame-3",
+        "offsetSteps": -3,
+        "sourceCount": 63110,
+        "targetCount": 60803,
+        "matchedSlots": 19130,
+        "births": 41673,
+        "deaths": 43980,
+        "stableSupportCount": 19130
+      },
+      {
+        "sourceFrameId": "frame-6",
+        "targetFrameId": "frame-5",
+        "offsetSteps": -1,
+        "sourceCount": 63110,
+        "targetCount": 61800,
+        "matchedSlots": 28344,
+        "births": 33456,
+        "deaths": 34766,
+        "stableSupportCount": 28344
+      },
+      {
+        "sourceFrameId": "frame-6",
+        "targetFrameId": "frame-7",
+        "offsetSteps": 1,
+        "sourceCount": 63110,
+        "targetCount": 64607,
+        "matchedSlots": 30229,
+        "births": 34378,
+        "deaths": 32881,
+        "stableSupportCount": 30229
+      },
+      {
+        "sourceFrameId": "frame-6",
+        "targetFrameId": "frame-9",
+        "offsetSteps": 3,
+        "sourceCount": 63110,
+        "targetCount": 68232,
+        "matchedSlots": 18868,
+        "births": 49364,
+        "deaths": 44242,
+        "stableSupportCount": 18868
+      },
+      {
+        "sourceFrameId": "frame-6",
+        "targetFrameId": "frame-12",
+        "offsetSteps": 6,
+        "sourceCount": 63110,
+        "targetCount": 70904,
+        "matchedSlots": 15190,
+        "births": 55714,
+        "deaths": 47920,
+        "stableSupportCount": 15190
+      }
+    ]
+  }
+}

@@ -1,0 +1,3603 @@
+{
+  "claimBoundary": "isolated recurrent one-cell transport with carried candidate attributes and locally synthesized residual births; no live renderer or instancing integration",
+  "frames": [
+    {
+      "candidates": {
+        "bytes": 3856576,
+        "count": 60259,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-00.features.f32",
+        "sha256": "a360a1493335e84ef29cf464e4fabd9c95bc9b17245fdb22af6dc040ec1d8e38",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-0",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 2892432,
+        "count": 60259,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-00.splats.f32",
+        "sha256": "6f0008704d1c3789ed4f1c042264e3602136a307029c78381bc70682e214da2b",
+        "strideFloats": 12
+      },
+      "step": 0
+    },
+    {
+      "candidates": {
+        "bytes": 3883456,
+        "count": 60679,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-01.features.f32",
+        "sha256": "a1f464334128255e4ead4f41ef19f409ad003fe2432c6373c92776fd495f7447",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-1",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 2912592,
+        "count": 60679,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-01.splats.f32",
+        "sha256": "b63f79894e3d5df7ee823bc7716c8239692f23b266158b4f2c55219a2f4734aa",
+        "strideFloats": 12
+      },
+      "step": 1
+    },
+    {
+      "candidates": {
+        "bytes": 3910528,
+        "count": 61102,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-02.features.f32",
+        "sha256": "0be1d493f038ccecdc2b41f84b32cf76077ca146206912f264e5d68cf8098155",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-2",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 2932896,
+        "count": 61102,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-02.splats.f32",
+        "sha256": "db5180970be5b43e60d1f8764740baaf0840bf6d5a4b0667af842e712b137969",
+        "strideFloats": 12
+      },
+      "step": 2
+    },
+    {
+      "candidates": {
+        "bytes": 3937792,
+        "count": 61528,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-03.features.f32",
+        "sha256": "7287bb8878b9cd09b720308871194f780d85bd497aad6cfb8b4b6a45f1a8ad81",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-3",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 2953344,
+        "count": 61528,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-03.splats.f32",
+        "sha256": "64b153f415d6fadbb9ff7ffb4c641e98c95b8f788120ae1746163a23d41f8fc2",
+        "strideFloats": 12
+      },
+      "step": 3
+    },
+    {
+      "candidates": {
+        "bytes": 3965248,
+        "count": 61957,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-04.features.f32",
+        "sha256": "a71d3c512983e16554a02d694ed18f5a9f5d418c10b3667a545d61f80a0f0c50",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-4",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 2973936,
+        "count": 61957,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-04.splats.f32",
+        "sha256": "86524fdd30b1237d952e771898d694dfbe3ab68b756b00e6d66f375535ad0081",
+        "strideFloats": 12
+      },
+      "step": 4
+    },
+    {
+      "candidates": {
+        "bytes": 3992896,
+        "count": 62389,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-05.features.f32",
+        "sha256": "7639d80cb1e0ad8f1c919a51370b617d8bf9cbeddae3f055a22884e1c55a0022",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-5",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 2994672,
+        "count": 62389,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-05.splats.f32",
+        "sha256": "309e066f623c46f2cec7156368db1946f9f295e7b4f3b08778e1fd0d7d721fa2",
+        "strideFloats": 12
+      },
+      "step": 5
+    },
+    {
+      "candidates": {
+        "bytes": 4020736,
+        "count": 62824,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-06.features.f32",
+        "sha256": "7ace6dd6da88ebf37a84f5b1fe6bb6c6dd1407a89e89097e727e5d27170a7213",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-6",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3015552,
+        "count": 62824,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-06.splats.f32",
+        "sha256": "c63adbd227526b31658f5fcaac990f4f19461827055d569bd25f696b65370491",
+        "strideFloats": 12
+      },
+      "step": 6
+    },
+    {
+      "candidates": {
+        "bytes": 4048768,
+        "count": 63262,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-07.features.f32",
+        "sha256": "71f9f33dac20f3a344af5c8077a682b8c0a9736bad3a3792a9d30e58c950f318",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-7",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3036576,
+        "count": 63262,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-07.splats.f32",
+        "sha256": "6f38f410dd214564448a15e804bd4dafb3190603b7f6fdb868f877856279711a",
+        "strideFloats": 12
+      },
+      "step": 7
+    },
+    {
+      "candidates": {
+        "bytes": 4076992,
+        "count": 63703,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-08.features.f32",
+        "sha256": "670039591c70b8699d7063103585a4b8d92e55500a39aa17acdcf817ca95c27c",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-8",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3057744,
+        "count": 63703,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-08.splats.f32",
+        "sha256": "9b4d056f533318cb93aa3e8f09961cde3e8dad4b6da85cf036422d5d850ed781",
+        "strideFloats": 12
+      },
+      "step": 8
+    },
+    {
+      "candidates": {
+        "bytes": 4105408,
+        "count": 64147,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-09.features.f32",
+        "sha256": "aa20b233d69e58bb2e3462aec7f966c3e91e3d48783dd95d9eb49605f0b43daf",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-9",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3079056,
+        "count": 64147,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-09.splats.f32",
+        "sha256": "c446c90e1764ce478231b807a9b87ef162fa046510c66287e0f55c7c822bbaa7",
+        "strideFloats": 12
+      },
+      "step": 9
+    },
+    {
+      "candidates": {
+        "bytes": 4134016,
+        "count": 64594,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-10.features.f32",
+        "sha256": "056e4f8549cb92ed0a29e7251cb989db338d8386e5a110d00dd90669a896182a",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-10",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3100512,
+        "count": 64594,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-10.splats.f32",
+        "sha256": "af3e8a9f2389fb68fbc09108b69b8e9bf827aacab0a1d891177a262ccbef93a7",
+        "strideFloats": 12
+      },
+      "step": 10
+    },
+    {
+      "candidates": {
+        "bytes": 4162816,
+        "count": 65044,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-11.features.f32",
+        "sha256": "89b7d55b014e68a1d5fa6f2144b533b2bcbea518aa02ed71f1d57427ee61834d",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-11",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3122112,
+        "count": 65044,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-11.splats.f32",
+        "sha256": "0c4de5d0b7a19dc68f3f823d46679413a963bd00d7943536bec7bfd9d489e85f",
+        "strideFloats": 12
+      },
+      "step": 11
+    },
+    {
+      "candidates": {
+        "bytes": 4191872,
+        "count": 65498,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-12.features.f32",
+        "sha256": "d74c6d61a5ba9644ec89ed205db30a729af3ca983addd66e142c63f138c26006",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-12",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3143904,
+        "count": 65498,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-12.splats.f32",
+        "sha256": "43f6f1c2a9dc5ce8ec393df3cb15656791b367b5524e2c1b788141f7fe07cc31",
+        "strideFloats": 12
+      },
+      "step": 12
+    },
+    {
+      "candidates": {
+        "bytes": 4221120,
+        "count": 65955,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-13.features.f32",
+        "sha256": "9d658437c3bb2800d7aa987d82e22780a482989659b65549bd9f743711b13e7b",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-13",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3165840,
+        "count": 65955,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-13.splats.f32",
+        "sha256": "ba0e76cc5bbef5188e40d7c86460a6049bd7a07db6dab815fff233ee1c8ad2b8",
+        "strideFloats": 12
+      },
+      "step": 13
+    },
+    {
+      "candidates": {
+        "bytes": 4250560,
+        "count": 66415,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-14.features.f32",
+        "sha256": "0042a1b0cefc4647c93fe849188accf29799270dc5f8a318438b1b380baa2e05",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-14",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3187920,
+        "count": 66415,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-14.splats.f32",
+        "sha256": "981475f4120a0229a89e8fd22ab112872592252497a27483ebf8050aa241cef6",
+        "strideFloats": 12
+      },
+      "step": 14
+    },
+    {
+      "candidates": {
+        "bytes": 4280192,
+        "count": 66878,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-15.features.f32",
+        "sha256": "40e2cc12a8dd365541dc6dddd77b00c6d600293c1ba94465fdae9515f69b7485",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-15",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3210144,
+        "count": 66878,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-15.splats.f32",
+        "sha256": "3cea8324c233db6cf8b9186ddccd4bd1f69d662c90c8b8e3327c6eec8978688c",
+        "strideFloats": 12
+      },
+      "step": 15
+    },
+    {
+      "candidates": {
+        "bytes": 4310016,
+        "count": 67344,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-16.features.f32",
+        "sha256": "155588acaad08d8020b5f2e1dfac258f8bd0c88d78ac3018c413301386ff8d96",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-16",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3232512,
+        "count": 67344,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-16.splats.f32",
+        "sha256": "fa66dd065a23ba3c55220b593d672a07fc05e1858d339c765ca11cbc5cddd455",
+        "strideFloats": 12
+      },
+      "step": 16
+    },
+    {
+      "candidates": {
+        "bytes": 4340096,
+        "count": 67814,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-17.features.f32",
+        "sha256": "1b63238e10c1980632bb347eefb28b049b1e19d32985d1dcaa6a41feb59a80c0",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-17",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3255072,
+        "count": 67814,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-17.splats.f32",
+        "sha256": "f0db67fb7a1acb9b37f15208646d25d5e6842346e3d235201530cd6e0f3d77f7",
+        "strideFloats": 12
+      },
+      "step": 17
+    },
+    {
+      "candidates": {
+        "bytes": 4370368,
+        "count": 68287,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-18.features.f32",
+        "sha256": "5945608f1467f344d15bc49d41011c2f7bcdc29e1ea5714311b14db116ebbf1e",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-18",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3277776,
+        "count": 68287,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-18.splats.f32",
+        "sha256": "f84dc1041b316298c1fb0d6891312902d6a8ffd20420d4e0b3ed4d29701aa587",
+        "strideFloats": 12
+      },
+      "step": 18
+    },
+    {
+      "candidates": {
+        "bytes": 4400832,
+        "count": 68763,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-19.features.f32",
+        "sha256": "4b91886299356a67a136c0b31d563707be6bd69b6b09f67885e773114208b0e5",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-19",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3300624,
+        "count": 68763,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-19.splats.f32",
+        "sha256": "4ea64a2561851cce6b341ff1a7186e78d996c02bb164a766b2c46e59dd543e5f",
+        "strideFloats": 12
+      },
+      "step": 19
+    },
+    {
+      "candidates": {
+        "bytes": 4431552,
+        "count": 69243,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-20.features.f32",
+        "sha256": "483742ed6288bf488a848bdd72174fc4f835d795542f06f2f7e8ed948a0330de",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-20",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3323664,
+        "count": 69243,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-20.splats.f32",
+        "sha256": "97b49ccbceb2d3e5acc6e75e7f65fca541eec035ef5e64b2efff1b3740d472d7",
+        "strideFloats": 12
+      },
+      "step": 20
+    },
+    {
+      "candidates": {
+        "bytes": 4462464,
+        "count": 69726,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-21.features.f32",
+        "sha256": "bbff08e4fb57ada35f0b3320107cfc4b6fa19636dc0fb6da8639414ac0c29251",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-21",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3346848,
+        "count": 69726,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-21.splats.f32",
+        "sha256": "f564063ad4a78cea969bcf1e4e7283acf6e609f98cc033f7790c2148a8f3684c",
+        "strideFloats": 12
+      },
+      "step": 21
+    },
+    {
+      "candidates": {
+        "bytes": 4493568,
+        "count": 70212,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-22.features.f32",
+        "sha256": "5715eb848f7ffcae8b45ca9887340da14392e411370140b262b205bddf131e0f",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-22",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3370176,
+        "count": 70212,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-22.splats.f32",
+        "sha256": "4ff2986fe38ce326d5df08c3aac7e518840672c74a5d89e3a53740c3e021aa8e",
+        "strideFloats": 12
+      },
+      "step": 22
+    },
+    {
+      "candidates": {
+        "bytes": 4524928,
+        "count": 70702,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-23.features.f32",
+        "sha256": "ba9cc0bea302a05718af006fcd15ac363e43820cb7a1a05ceab081daf5647549",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-23",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3393696,
+        "count": 70702,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-23.splats.f32",
+        "sha256": "fe0159c9518aacc1e0406a9cb5d6db7c11fc82e335557ed6dc3cb5d44a00090d",
+        "strideFloats": 12
+      },
+      "step": 23
+    },
+    {
+      "candidates": {
+        "bytes": 4556480,
+        "count": 71195,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-24.features.f32",
+        "sha256": "0e8852a9e1b8baf07cf03c1ea6f45fe72314f11bbdbe32831198fae38079af23",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-24",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3417360,
+        "count": 71195,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-24.splats.f32",
+        "sha256": "767b6e99c6e767df0cd1fa36ac121c1ff5e5c007c3d57fbc91b52f53f34d0626",
+        "strideFloats": 12
+      },
+      "step": 24
+    },
+    {
+      "candidates": {
+        "bytes": 4588288,
+        "count": 71692,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-25.features.f32",
+        "sha256": "7001de1750a7778c212c2ab45906babcd08cf50c1b2441cc08436eb4546e2af9",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-25",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3441216,
+        "count": 71692,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-25.splats.f32",
+        "sha256": "c83840e73de4e59715287b00ce37f5ca45241f25526bd10fa0c4969a081af33a",
+        "strideFloats": 12
+      },
+      "step": 25
+    },
+    {
+      "candidates": {
+        "bytes": 4620288,
+        "count": 72192,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-26.features.f32",
+        "sha256": "48a87048fac350fa7f75bd48a030bc50a16bc7cd816036ba7428e61b6632585d",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-26",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3465216,
+        "count": 72192,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-26.splats.f32",
+        "sha256": "289a106fd1a8788c4be822650271871c08babcfa049442ab5b4163b37e1d11d2",
+        "strideFloats": 12
+      },
+      "step": 26
+    },
+    {
+      "candidates": {
+        "bytes": 4652480,
+        "count": 72695,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-27.features.f32",
+        "sha256": "0eb835b29043e8cb8707cefc3952ff004804c6e15ad0825d6cf76975a1f8a683",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-27",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3489360,
+        "count": 72695,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-27.splats.f32",
+        "sha256": "974cd7528199ed93dd5558a6c6dcbb08e22f1f53f2e668cfdef0f323d0256a64",
+        "strideFloats": 12
+      },
+      "step": 27
+    },
+    {
+      "candidates": {
+        "bytes": 4684928,
+        "count": 73202,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-28.features.f32",
+        "sha256": "882950faed5a14f9b93503a60165923e3171f40355c79b6613520a5493a5c340",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-28",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3513696,
+        "count": 73202,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-28.splats.f32",
+        "sha256": "7bb6f049977469379ec6cc62db65dc591069c4e9d0c8363f8bae836471c680e4",
+        "strideFloats": 12
+      },
+      "step": 28
+    },
+    {
+      "candidates": {
+        "bytes": 4717632,
+        "count": 73713,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-29.features.f32",
+        "sha256": "ec7eeb68c5bf14caa2816d52cb720dc6578e4967a8afc02238a10a1bd5b02048",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-29",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3538224,
+        "count": 73713,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-29.splats.f32",
+        "sha256": "bdf8672327307a7d29d221003539d61ffa6f6ec76c2f33d69f8069a6b0982a86",
+        "strideFloats": 12
+      },
+      "step": 29
+    },
+    {
+      "candidates": {
+        "bytes": 4750528,
+        "count": 74227,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-30.features.f32",
+        "sha256": "26a614540bfbbe4ba2132afbc4741ad666bbb76e1cbdc2bae5b8e0487f78db2a",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-30",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3562896,
+        "count": 74227,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-30.splats.f32",
+        "sha256": "3f6858ebf026e51dc33403a8b217d85c2b7ea835239406d4e0af4f9b71822f7d",
+        "strideFloats": 12
+      },
+      "step": 30
+    },
+    {
+      "candidates": {
+        "bytes": 4783680,
+        "count": 74745,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-31.features.f32",
+        "sha256": "3c590110d584640d06d48d4abe92300c312f631151f7fc02d7f56748cce84b41",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-31",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3587760,
+        "count": 74745,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-31.splats.f32",
+        "sha256": "730c869598375a93f0cceb412e7a2c90133743a909c9403b5e07d7deb463f720",
+        "strideFloats": 12
+      },
+      "step": 31
+    },
+    {
+      "candidates": {
+        "bytes": 4817024,
+        "count": 75266,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-32.features.f32",
+        "sha256": "6a1baf25e50bed730cc2c74b228fd6c34b3c993f8974af72e5f32b50251e0c70",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-32",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3612768,
+        "count": 75266,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-32.splats.f32",
+        "sha256": "4239d7954475b5092f10323bb2f54cafdb4f2ccc0b34cd50db5d73ff79c46493",
+        "strideFloats": 12
+      },
+      "step": 32
+    },
+    {
+      "candidates": {
+        "bytes": 4850624,
+        "count": 75791,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-33.features.f32",
+        "sha256": "b3c6c73efbe6d7ce152a004a6788401ffe14320f8587bd6437ff13e63f84d9dd",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-33",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3637968,
+        "count": 75791,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-33.splats.f32",
+        "sha256": "9eb0356add8786671135cd42028b86911339b10ddad975d0a2beef9d87c89502",
+        "strideFloats": 12
+      },
+      "step": 33
+    },
+    {
+      "candidates": {
+        "bytes": 4884480,
+        "count": 76320,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-34.features.f32",
+        "sha256": "afa110a88be917ceb896858a06a2c2cc4735e3a769c0c50efa8b6f764f9d5eb6",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-34",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3663360,
+        "count": 76320,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-34.splats.f32",
+        "sha256": "5f4eaf0ca9a65813fd82fb8d8d8bb8bd09c1013e8bdd6e9178c6366aa096f6fb",
+        "strideFloats": 12
+      },
+      "step": 34
+    },
+    {
+      "candidates": {
+        "bytes": 4918528,
+        "count": 76852,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-35.features.f32",
+        "sha256": "cd50ff2d0d421ff032d24d12718f41b69580aeed369063ac26e7c6923fd37296",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-35",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3688896,
+        "count": 76852,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-35.splats.f32",
+        "sha256": "6cf960464eecd15a1e1d31c01fb13905b4f3cf4a1a8df6506389a763e89e19fb",
+        "strideFloats": 12
+      },
+      "step": 35
+    },
+    {
+      "candidates": {
+        "bytes": 4952832,
+        "count": 77388,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-36.features.f32",
+        "sha256": "f8f3ab087729ba859d8a637dd796605e0771e9789b8a45da3c3c5f63f805e94d",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-36",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3714624,
+        "count": 77388,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-36.splats.f32",
+        "sha256": "f1f69059a2a81197703779b60730bcb24c3bc1c8b5cd2763e3e861bbf8107f71",
+        "strideFloats": 12
+      },
+      "step": 36
+    },
+    {
+      "candidates": {
+        "bytes": 4987392,
+        "count": 77928,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-37.features.f32",
+        "sha256": "e61871f826df56a6861c5c7a330d57e6a5df4b0aebb3273774d9f6b4c3e2e2dc",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-37",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3740544,
+        "count": 77928,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-37.splats.f32",
+        "sha256": "e2e7ac153ce740bc8d284b147e4e4644571358f4500f6e98709d909c70db13c9",
+        "strideFloats": 12
+      },
+      "step": 37
+    },
+    {
+      "candidates": {
+        "bytes": 5022144,
+        "count": 78471,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-38.features.f32",
+        "sha256": "0e8ddbbd020a1e7031899eedf58b1727ead5012d65a9a47707626a7a4f0b832f",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-38",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3766608,
+        "count": 78471,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-38.splats.f32",
+        "sha256": "043d4aee662dd9bfa05d922fdaf7589b2be0c39112618a08dad3ba87936204bc",
+        "strideFloats": 12
+      },
+      "step": 38
+    },
+    {
+      "candidates": {
+        "bytes": 5057152,
+        "count": 79018,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-39.features.f32",
+        "sha256": "95d89d60ea39d61d61f2a8d721bcf69da103a0ad899eddccb0052bb7e034df92",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-39",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3792864,
+        "count": 79018,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-39.splats.f32",
+        "sha256": "7a367a4c0b63ca1e0b5181ae4caa906e1e7449d7cd754df707ed17c02db26c42",
+        "strideFloats": 12
+      },
+      "step": 39
+    },
+    {
+      "candidates": {
+        "bytes": 5092416,
+        "count": 79569,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-40.features.f32",
+        "sha256": "4a6210eac23dc12cc1987bf0da1dd33f28c1738b2ace9de106622370a40fda62",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-40",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3819312,
+        "count": 79569,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-40.splats.f32",
+        "sha256": "c72a32ea78414db52bb30930af875b87d0ba148c8ce7d297fe3e96556aa96583",
+        "strideFloats": 12
+      },
+      "step": 40
+    },
+    {
+      "candidates": {
+        "bytes": 5127936,
+        "count": 80124,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-41.features.f32",
+        "sha256": "ef8f266812588d85f4a37a5dd555708fdec88c0edd4dd2c772643f88dc5378aa",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-41",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3845952,
+        "count": 80124,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-41.splats.f32",
+        "sha256": "9a71ce39152de0ebb74d81324f71dd4dc545cecab7ee83e018554df8bec3824c",
+        "strideFloats": 12
+      },
+      "step": 41
+    },
+    {
+      "candidates": {
+        "bytes": 5163712,
+        "count": 80683,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-42.features.f32",
+        "sha256": "7b90e44330f0925adbff7bbc49d6077beb5e13fe03a480f9530cac57d3028770",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-42",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3872784,
+        "count": 80683,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-42.splats.f32",
+        "sha256": "4425374c9f85f98c101ec4c2739f37bd729ce86cc8029d145aee7de6d3dc64f8",
+        "strideFloats": 12
+      },
+      "step": 42
+    },
+    {
+      "candidates": {
+        "bytes": 5199744,
+        "count": 81246,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-43.features.f32",
+        "sha256": "206f6bb28bc8e71358dbe606ee5db67ce4324dc0aa8848471f6bdb47a9465df3",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-43",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3899808,
+        "count": 81246,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-43.splats.f32",
+        "sha256": "9295422fca46b7ff7df1f99959d647d516aa627a5a63c40cc11bc17ff5febf1b",
+        "strideFloats": 12
+      },
+      "step": 43
+    },
+    {
+      "candidates": {
+        "bytes": 5236032,
+        "count": 81813,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-44.features.f32",
+        "sha256": "59aae53d9ab49c8537bc469ea6d423f5aa0bbc23e072c833c9a2331c543e82ec",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-44",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3927024,
+        "count": 81813,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-44.splats.f32",
+        "sha256": "29e5762532cea13654889a6b51ed404c17692be11965a1bde57c27010f590948",
+        "strideFloats": 12
+      },
+      "step": 44
+    },
+    {
+      "candidates": {
+        "bytes": 5272576,
+        "count": 82384,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-45.features.f32",
+        "sha256": "3bcd06705254c48a430bf2296c0d7130139acf834ef321ae0ab19e8afb559165",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-45",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3954432,
+        "count": 82384,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-45.splats.f32",
+        "sha256": "788cec6fbe449a2a9b7582b274cd22e5a62a911615c63cea684f2797695e1317",
+        "strideFloats": 12
+      },
+      "step": 45
+    },
+    {
+      "candidates": {
+        "bytes": 5309376,
+        "count": 82959,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-46.features.f32",
+        "sha256": "83a79714112d174b98c30d7921d75f8832147d7cf68e7ae869d5ecb7a0962f54",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-46",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 3982032,
+        "count": 82959,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-46.splats.f32",
+        "sha256": "76d1f76dec9b46947da94043d6f7a7d645dde3d352471b854a45cda9bb7f8658",
+        "strideFloats": 12
+      },
+      "step": 46
+    },
+    {
+      "candidates": {
+        "bytes": 5346432,
+        "count": 83538,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-47.features.f32",
+        "sha256": "58179116be474c0c2882cc83e6b940a630e57d744f0aab2ad9c46e8c5736ec53",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-47",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4009824,
+        "count": 83538,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-47.splats.f32",
+        "sha256": "4204eb7e43254cb87f4be1f09a3f89b900528312b6607276fcf83f8fd417fa70",
+        "strideFloats": 12
+      },
+      "step": 47
+    },
+    {
+      "candidates": {
+        "bytes": 5383744,
+        "count": 84121,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-48.features.f32",
+        "sha256": "fb08ca567d1891e3fcd0aa74995922c191928a735ac605fccaf652fcbfa11a9c",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-48",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4037808,
+        "count": 84121,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-48.splats.f32",
+        "sha256": "1c1d19fbb9f2c04afb671b9217c3a222756da68863a5b6759c694c15b6786b2b",
+        "strideFloats": 12
+      },
+      "step": 48
+    },
+    {
+      "candidates": {
+        "bytes": 5421312,
+        "count": 84708,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-49.features.f32",
+        "sha256": "7d3bebc2aba0da68bd065e6b95f4f9e7ece48f60b2ea2f357e1d5511cc9d7d87",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-49",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4065984,
+        "count": 84708,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-49.splats.f32",
+        "sha256": "087c8664ed25db95e7e17d00817472873c65dbe176e8a4d2eab537b6a54a4932",
+        "strideFloats": 12
+      },
+      "step": 49
+    },
+    {
+      "candidates": {
+        "bytes": 5459136,
+        "count": 85299,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-50.features.f32",
+        "sha256": "21f72ca68a38cc18502c549aa9f98f37b46ce60c2db82c417cf42ecd2a8234e4",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-50",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4094352,
+        "count": 85299,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-50.splats.f32",
+        "sha256": "ef9d1f8c47f830db4e1a2f1f38df9cf3669fb88d05d9ef2ba7859f0fc931667b",
+        "strideFloats": 12
+      },
+      "step": 50
+    },
+    {
+      "candidates": {
+        "bytes": 5497216,
+        "count": 85894,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-51.features.f32",
+        "sha256": "173f5af3d6a3eefca8645593c71b9fae9ca3a64d9cdd5a4bcbdf9fc1d771e86a",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-51",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4122912,
+        "count": 85894,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-51.splats.f32",
+        "sha256": "def0d0c72effa51d83fcb53a378223be6448d605bae7cc921f80e2bc8117640c",
+        "strideFloats": 12
+      },
+      "step": 51
+    },
+    {
+      "candidates": {
+        "bytes": 5535552,
+        "count": 86493,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-52.features.f32",
+        "sha256": "41b54d939360bb5cb055e0afc7a3fa544a03066c6cb5aca2792d4db7a858def7",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-52",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4151664,
+        "count": 86493,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-52.splats.f32",
+        "sha256": "1443a06a3a12f7d9fc2ac0b67c47241dfaa47bbadaa5d9394b90b82f8c88ac13",
+        "strideFloats": 12
+      },
+      "step": 52
+    },
+    {
+      "candidates": {
+        "bytes": 5574144,
+        "count": 87096,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-53.features.f32",
+        "sha256": "8e4df526bd53d0560922adeed7672abef3f960e0ac277609071a3d804b36b99b",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-53",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4180608,
+        "count": 87096,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-53.splats.f32",
+        "sha256": "227f2c669673093fb54d42342f2f3363ff47124acab3eb1573b357d06a46b3f2",
+        "strideFloats": 12
+      },
+      "step": 53
+    },
+    {
+      "candidates": {
+        "bytes": 5612992,
+        "count": 87703,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-54.features.f32",
+        "sha256": "14679048eebad36a8821a62862c707926096c21a2e69712d441dd99efbb7ce2f",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-54",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4209744,
+        "count": 87703,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-54.splats.f32",
+        "sha256": "945004f05311885d1d974c538b9f5c56c4dde15383c05a9cc1120ecd5380c395",
+        "strideFloats": 12
+      },
+      "step": 54
+    },
+    {
+      "candidates": {
+        "bytes": 5652160,
+        "count": 88315,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-55.features.f32",
+        "sha256": "9050b05d4acc5e73bcc27693f70a3bc21faaab8b88497a238ab47c6438e31578",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-55",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4239120,
+        "count": 88315,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-55.splats.f32",
+        "sha256": "c3cf5ea6d82fb8df8214fb75c3586a9585dd6e5313aebfbc1d99b7c79584a8ea",
+        "strideFloats": 12
+      },
+      "step": 55
+    },
+    {
+      "candidates": {
+        "bytes": 5691584,
+        "count": 88931,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-56.features.f32",
+        "sha256": "a4a59187dc0941c53df8ac44db9caba0a59c8d3444edc6328ddcc9ddb18ff04f",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-56",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4268688,
+        "count": 88931,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-56.splats.f32",
+        "sha256": "e83a1f4415f128322f5a433eb01389837b5654ed0cf32f74451274102a71bbea",
+        "strideFloats": 12
+      },
+      "step": 56
+    },
+    {
+      "candidates": {
+        "bytes": 5731264,
+        "count": 89551,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-57.features.f32",
+        "sha256": "a586df4c81b8b39d6e1a7812895a65caa220557218f389682ef2a22d474dbc31",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-57",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4298448,
+        "count": 89551,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-57.splats.f32",
+        "sha256": "4a4ac039c0910f98ed3b4f5273f21d8ea1bba25fa5f508b682ac4f3189e76e8a",
+        "strideFloats": 12
+      },
+      "step": 57
+    },
+    {
+      "candidates": {
+        "bytes": 5771264,
+        "count": 90176,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-58.features.f32",
+        "sha256": "d5e3a67aa92c0509af12365eb8e4dcb9812e6c01acf3b195fd85cee76b57c81a",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-58",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4328448,
+        "count": 90176,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-58.splats.f32",
+        "sha256": "618016a2335b06b0900384888d1e201f3db357e577aaa62b058254924f265c43",
+        "strideFloats": 12
+      },
+      "step": 58
+    },
+    {
+      "candidates": {
+        "bytes": 5811520,
+        "count": 90805,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-59.features.f32",
+        "sha256": "c292ee50db2377ac018b4ecb840dca48d34a1a3e1e9f01ecdce0c2c77c73fea9",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-59",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4358640,
+        "count": 90805,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-59.splats.f32",
+        "sha256": "d69f63b54cc2f7481e1cbacb9b8d9a189b82b5af3c580f745d5d976731052d54",
+        "strideFloats": 12
+      },
+      "step": 59
+    },
+    {
+      "candidates": {
+        "bytes": 5852032,
+        "count": 91438,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-60.features.f32",
+        "sha256": "ff9e486ade777aee0ecb60406cfe8c0efb3d3d8bc923e2a98ff47c07bebbb9c0",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-60",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4389024,
+        "count": 91438,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-60.splats.f32",
+        "sha256": "8691dd38d98d712e7809c31a106a3d7849d77b34113b84223cc77bf6e719e29d",
+        "strideFloats": 12
+      },
+      "step": 60
+    },
+    {
+      "candidates": {
+        "bytes": 5892864,
+        "count": 92076,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-61.features.f32",
+        "sha256": "3a53232d9325d5e6e66dd035b229e86d70f619ee3b53d79184ad726629c45e86",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-61",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4419648,
+        "count": 92076,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-61.splats.f32",
+        "sha256": "425de45b51f26bf1834bb9f26973699ea2e1a7ddb93b5efbf6eaf8ce9606c5de",
+        "strideFloats": 12
+      },
+      "step": 61
+    },
+    {
+      "candidates": {
+        "bytes": 5933952,
+        "count": 92718,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-62.features.f32",
+        "sha256": "b9bc54b07c9309ef0a6bcabb63c1a46d570ed27589eb0d4df77df7a034bebac8",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-62",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4450464,
+        "count": 92718,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-62.splats.f32",
+        "sha256": "4aa4355858593a01990e23c61bae529e6f6e1f2be0a6f21a5999e9a8aef3ea32",
+        "strideFloats": 12
+      },
+      "step": 62
+    },
+    {
+      "candidates": {
+        "bytes": 5975360,
+        "count": 93365,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-63.features.f32",
+        "sha256": "cbc355480ad5211c693e233d1128c6f195da5d42314005c538c5d44bb00aac5b",
+        "strideFloats": 16
+      },
+      "controlFrameId": "frame-0",
+      "referenceFrameId": "frame-63",
+      "splats": {
+        "authority": "learned-local-grid-transport-plus-residual-churn-v0",
+        "bytes": 4481520,
+        "count": 93365,
+        "dtype": "float32-le",
+        "path": "/private/tmp/kaminos-phase-transport-eulerian-crosswind-eval-r1-0714/prediction-step-63.splats.f32",
+        "sha256": "be5d12cf0d07df2c9dbd99ef95d988211500f6bf94249716ffce3fdf6e1651cd",
+        "strideFloats": 12
+      },
+      "step": 63
+    }
+  ],
+  "manifest": {
+    "bytes": 421170,
+    "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+    "sha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+  },
+  "model": {
+    "path": "/private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json",
+    "schema": "kaminos-boundary-splat-phase-transport-model-v0",
+    "sha256": "e51c23d25eb38ec778c65774aae46c78bbcb02808d582539843417b10043c073"
+  },
+  "modelTrainingManifest": {
+    "bytes": 90735,
+    "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+    "sha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+  },
+  "recurrent": [
+    {
+      "activatedDeathCount": 6429,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 53830,
+      "destinationCandidateCount": 242045,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2797652,
+        "denseCellBudget": 15426304,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 60679,
+      "selectedBirthCount": 6849,
+      "sourceCount": 60259,
+      "stableAttributeCount": 53830,
+      "step": 1,
+      "targetSupportBudget": 60679,
+      "thresholdQualifiedBirthCount": 43916,
+      "transportedAttributeCount": 6849
+    },
+    {
+      "activatedDeathCount": 2839,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 57840,
+      "destinationCandidateCount": 213842,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2738736,
+        "denseCellBudget": 15533824,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 61102,
+      "selectedBirthCount": 3262,
+      "sourceCount": 60679,
+      "stableAttributeCount": 57840,
+      "step": 2,
+      "targetSupportBudget": 61102,
+      "thresholdQualifiedBirthCount": 38841,
+      "transportedAttributeCount": 3262
+    },
+    {
+      "activatedDeathCount": 1482,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 59620,
+      "destinationCandidateCount": 201584,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2680128,
+        "denseCellBudget": 15642112,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 61528,
+      "selectedBirthCount": 1908,
+      "sourceCount": 61102,
+      "stableAttributeCount": 59620,
+      "step": 3,
+      "targetSupportBudget": 61528,
+      "thresholdQualifiedBirthCount": 36820,
+      "transportedAttributeCount": 1908
+    },
+    {
+      "activatedDeathCount": 858,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 60670,
+      "destinationCandidateCount": 194700,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2583320,
+        "denseCellBudget": 15751168,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 61957,
+      "selectedBirthCount": 1287,
+      "sourceCount": 61528,
+      "stableAttributeCount": 60670,
+      "step": 4,
+      "targetSupportBudget": 61957,
+      "thresholdQualifiedBirthCount": 35865,
+      "transportedAttributeCount": 1287
+    },
+    {
+      "activatedDeathCount": 533,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 61424,
+      "destinationCandidateCount": 191155,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2583320,
+        "denseCellBudget": 15860992,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 62389,
+      "selectedBirthCount": 965,
+      "sourceCount": 61957,
+      "stableAttributeCount": 61424,
+      "step": 5,
+      "targetSupportBudget": 62389,
+      "thresholdQualifiedBirthCount": 35354,
+      "transportedAttributeCount": 965
+    },
+    {
+      "activatedDeathCount": 355,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 62034,
+      "destinationCandidateCount": 189265,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2583320,
+        "denseCellBudget": 15971584,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 62824,
+      "selectedBirthCount": 790,
+      "sourceCount": 62389,
+      "stableAttributeCount": 62034,
+      "step": 6,
+      "targetSupportBudget": 62824,
+      "thresholdQualifiedBirthCount": 35049,
+      "transportedAttributeCount": 790
+    },
+    {
+      "activatedDeathCount": 254,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 62570,
+      "destinationCandidateCount": 188046,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2429586,
+        "denseCellBudget": 16082944,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 63262,
+      "selectedBirthCount": 692,
+      "sourceCount": 62824,
+      "stableAttributeCount": 62570,
+      "step": 7,
+      "targetSupportBudget": 63262,
+      "thresholdQualifiedBirthCount": 34880,
+      "transportedAttributeCount": 692
+    },
+    {
+      "activatedDeathCount": 195,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 63067,
+      "destinationCandidateCount": 187490,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2410752,
+        "denseCellBudget": 16195072,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 63703,
+      "selectedBirthCount": 636,
+      "sourceCount": 63262,
+      "stableAttributeCount": 63067,
+      "step": 8,
+      "targetSupportBudget": 63703,
+      "thresholdQualifiedBirthCount": 34838,
+      "transportedAttributeCount": 636
+    },
+    {
+      "activatedDeathCount": 137,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 63566,
+      "destinationCandidateCount": 187252,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2389632,
+        "denseCellBudget": 16307968,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 64147,
+      "selectedBirthCount": 581,
+      "sourceCount": 63703,
+      "stableAttributeCount": 63566,
+      "step": 9,
+      "targetSupportBudget": 64147,
+      "thresholdQualifiedBirthCount": 34811,
+      "transportedAttributeCount": 581
+    },
+    {
+      "activatedDeathCount": 102,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 64045,
+      "destinationCandidateCount": 187311,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2389632,
+        "denseCellBudget": 16421632,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 64594,
+      "selectedBirthCount": 549,
+      "sourceCount": 64147,
+      "stableAttributeCount": 64045,
+      "step": 10,
+      "targetSupportBudget": 64594,
+      "thresholdQualifiedBirthCount": 34844,
+      "transportedAttributeCount": 549
+    },
+    {
+      "activatedDeathCount": 70,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 64524,
+      "destinationCandidateCount": 187657,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2405888,
+        "denseCellBudget": 16536064,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 65044,
+      "selectedBirthCount": 520,
+      "sourceCount": 64594,
+      "stableAttributeCount": 64524,
+      "step": 11,
+      "targetSupportBudget": 65044,
+      "thresholdQualifiedBirthCount": 34959,
+      "transportedAttributeCount": 520
+    },
+    {
+      "activatedDeathCount": 53,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 64991,
+      "destinationCandidateCount": 188060,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2405888,
+        "denseCellBudget": 16651264,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 65498,
+      "selectedBirthCount": 507,
+      "sourceCount": 65044,
+      "stableAttributeCount": 64991,
+      "step": 12,
+      "targetSupportBudget": 65498,
+      "thresholdQualifiedBirthCount": 35049,
+      "transportedAttributeCount": 507
+    },
+    {
+      "activatedDeathCount": 47,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 65451,
+      "destinationCandidateCount": 188538,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2422144,
+        "denseCellBudget": 16767488,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 65955,
+      "selectedBirthCount": 504,
+      "sourceCount": 65498,
+      "stableAttributeCount": 65451,
+      "step": 13,
+      "targetSupportBudget": 65955,
+      "thresholdQualifiedBirthCount": 35153,
+      "transportedAttributeCount": 504
+    },
+    {
+      "activatedDeathCount": 35,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 65920,
+      "destinationCandidateCount": 189058,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2422144,
+        "denseCellBudget": 16884480,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 66415,
+      "selectedBirthCount": 495,
+      "sourceCount": 65955,
+      "stableAttributeCount": 65920,
+      "step": 14,
+      "targetSupportBudget": 66415,
+      "thresholdQualifiedBirthCount": 35322,
+      "transportedAttributeCount": 495
+    },
+    {
+      "activatedDeathCount": 27,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 66388,
+      "destinationCandidateCount": 189537,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17002240,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 66878,
+      "selectedBirthCount": 490,
+      "sourceCount": 66415,
+      "stableAttributeCount": 66388,
+      "step": 15,
+      "targetSupportBudget": 66878,
+      "thresholdQualifiedBirthCount": 35462,
+      "transportedAttributeCount": 490
+    },
+    {
+      "activatedDeathCount": 17,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 66861,
+      "destinationCandidateCount": 190136,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17120768,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 67344,
+      "selectedBirthCount": 483,
+      "sourceCount": 66878,
+      "stableAttributeCount": 66861,
+      "step": 16,
+      "targetSupportBudget": 67344,
+      "thresholdQualifiedBirthCount": 35654,
+      "transportedAttributeCount": 483
+    },
+    {
+      "activatedDeathCount": 12,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 67332,
+      "destinationCandidateCount": 190705,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17240064,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 67814,
+      "selectedBirthCount": 482,
+      "sourceCount": 67344,
+      "stableAttributeCount": 67332,
+      "step": 17,
+      "targetSupportBudget": 67814,
+      "thresholdQualifiedBirthCount": 35848,
+      "transportedAttributeCount": 482
+    },
+    {
+      "activatedDeathCount": 8,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 67806,
+      "destinationCandidateCount": 191331,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17360384,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 68287,
+      "selectedBirthCount": 481,
+      "sourceCount": 67814,
+      "stableAttributeCount": 67806,
+      "step": 18,
+      "targetSupportBudget": 68287,
+      "thresholdQualifiedBirthCount": 36081,
+      "transportedAttributeCount": 481
+    },
+    {
+      "activatedDeathCount": 8,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 68279,
+      "destinationCandidateCount": 191957,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17481472,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 68763,
+      "selectedBirthCount": 484,
+      "sourceCount": 68287,
+      "stableAttributeCount": 68279,
+      "step": 19,
+      "targetSupportBudget": 68763,
+      "thresholdQualifiedBirthCount": 36266,
+      "transportedAttributeCount": 484
+    },
+    {
+      "activatedDeathCount": 5,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 68758,
+      "destinationCandidateCount": 192581,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17603328,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 69243,
+      "selectedBirthCount": 485,
+      "sourceCount": 68763,
+      "stableAttributeCount": 68758,
+      "step": 20,
+      "targetSupportBudget": 69243,
+      "thresholdQualifiedBirthCount": 36400,
+      "transportedAttributeCount": 485
+    },
+    {
+      "activatedDeathCount": 6,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 69237,
+      "destinationCandidateCount": 193219,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17726208,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 69726,
+      "selectedBirthCount": 489,
+      "sourceCount": 69243,
+      "stableAttributeCount": 69237,
+      "step": 21,
+      "targetSupportBudget": 69726,
+      "thresholdQualifiedBirthCount": 36562,
+      "transportedAttributeCount": 489
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 69724,
+      "destinationCandidateCount": 193879,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17849856,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 70212,
+      "selectedBirthCount": 488,
+      "sourceCount": 69726,
+      "stableAttributeCount": 69724,
+      "step": 22,
+      "targetSupportBudget": 70212,
+      "thresholdQualifiedBirthCount": 36720,
+      "transportedAttributeCount": 488
+    },
+    {
+      "activatedDeathCount": 4,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 70208,
+      "destinationCandidateCount": 194550,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 17974272,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 70702,
+      "selectedBirthCount": 494,
+      "sourceCount": 70212,
+      "stableAttributeCount": 70208,
+      "step": 23,
+      "targetSupportBudget": 70702,
+      "thresholdQualifiedBirthCount": 36899,
+      "transportedAttributeCount": 494
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 70700,
+      "destinationCandidateCount": 195254,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18099712,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71195,
+      "selectedBirthCount": 495,
+      "sourceCount": 70702,
+      "stableAttributeCount": 70700,
+      "step": 24,
+      "targetSupportBudget": 71195,
+      "thresholdQualifiedBirthCount": 37087,
+      "transportedAttributeCount": 495
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71194,
+      "destinationCandidateCount": 195891,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18225920,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 71692,
+      "selectedBirthCount": 498,
+      "sourceCount": 71195,
+      "stableAttributeCount": 71194,
+      "step": 25,
+      "targetSupportBudget": 71692,
+      "thresholdQualifiedBirthCount": 37250,
+      "transportedAttributeCount": 498
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 71690,
+      "destinationCandidateCount": 196529,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18353152,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 72192,
+      "selectedBirthCount": 502,
+      "sourceCount": 71692,
+      "stableAttributeCount": 71690,
+      "step": 26,
+      "targetSupportBudget": 72192,
+      "thresholdQualifiedBirthCount": 37405,
+      "transportedAttributeCount": 502
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 72191,
+      "destinationCandidateCount": 197180,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18481152,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 72695,
+      "selectedBirthCount": 504,
+      "sourceCount": 72192,
+      "stableAttributeCount": 72191,
+      "step": 27,
+      "targetSupportBudget": 72695,
+      "thresholdQualifiedBirthCount": 37609,
+      "transportedAttributeCount": 504
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 72694,
+      "destinationCandidateCount": 197837,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18609920,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 73202,
+      "selectedBirthCount": 508,
+      "sourceCount": 72695,
+      "stableAttributeCount": 72694,
+      "step": 28,
+      "targetSupportBudget": 73202,
+      "thresholdQualifiedBirthCount": 37781,
+      "transportedAttributeCount": 508
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 73201,
+      "destinationCandidateCount": 198493,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18739712,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 73713,
+      "selectedBirthCount": 512,
+      "sourceCount": 73202,
+      "stableAttributeCount": 73201,
+      "step": 29,
+      "targetSupportBudget": 73713,
+      "thresholdQualifiedBirthCount": 37971,
+      "transportedAttributeCount": 512
+    },
+    {
+      "activatedDeathCount": 3,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 73710,
+      "destinationCandidateCount": 199142,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 18870528,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 74227,
+      "selectedBirthCount": 517,
+      "sourceCount": 73713,
+      "stableAttributeCount": 73710,
+      "step": 30,
+      "targetSupportBudget": 74227,
+      "thresholdQualifiedBirthCount": 38146,
+      "transportedAttributeCount": 517
+    },
+    {
+      "activatedDeathCount": 3,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 74224,
+      "destinationCandidateCount": 199799,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 19002112,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 74745,
+      "selectedBirthCount": 521,
+      "sourceCount": 74227,
+      "stableAttributeCount": 74224,
+      "step": 31,
+      "targetSupportBudget": 74745,
+      "thresholdQualifiedBirthCount": 38315,
+      "transportedAttributeCount": 521
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 74744,
+      "destinationCandidateCount": 200466,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 19134720,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 75266,
+      "selectedBirthCount": 522,
+      "sourceCount": 74745,
+      "stableAttributeCount": 74744,
+      "step": 32,
+      "targetSupportBudget": 75266,
+      "thresholdQualifiedBirthCount": 38464,
+      "transportedAttributeCount": 522
+    },
+    {
+      "activatedDeathCount": 3,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 75263,
+      "destinationCandidateCount": 201140,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 19268096,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 75791,
+      "selectedBirthCount": 528,
+      "sourceCount": 75266,
+      "stableAttributeCount": 75263,
+      "step": 33,
+      "targetSupportBudget": 75791,
+      "thresholdQualifiedBirthCount": 38656,
+      "transportedAttributeCount": 528
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 75789,
+      "destinationCandidateCount": 201796,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 19402496,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 76320,
+      "selectedBirthCount": 531,
+      "sourceCount": 75791,
+      "stableAttributeCount": 75789,
+      "step": 34,
+      "targetSupportBudget": 76320,
+      "thresholdQualifiedBirthCount": 38827,
+      "transportedAttributeCount": 531
+    },
+    {
+      "activatedDeathCount": 4,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 76316,
+      "destinationCandidateCount": 202452,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 19537920,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 76852,
+      "selectedBirthCount": 536,
+      "sourceCount": 76320,
+      "stableAttributeCount": 76316,
+      "step": 35,
+      "targetSupportBudget": 76852,
+      "thresholdQualifiedBirthCount": 38976,
+      "transportedAttributeCount": 536
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 76851,
+      "destinationCandidateCount": 203131,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 19674112,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 77388,
+      "selectedBirthCount": 537,
+      "sourceCount": 76852,
+      "stableAttributeCount": 76851,
+      "step": 36,
+      "targetSupportBudget": 77388,
+      "thresholdQualifiedBirthCount": 39123,
+      "transportedAttributeCount": 537
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 77387,
+      "destinationCandidateCount": 203847,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 19811328,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 77928,
+      "selectedBirthCount": 541,
+      "sourceCount": 77388,
+      "stableAttributeCount": 77387,
+      "step": 37,
+      "targetSupportBudget": 77928,
+      "thresholdQualifiedBirthCount": 39319,
+      "transportedAttributeCount": 541
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 77927,
+      "destinationCandidateCount": 204581,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 19949568,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 78471,
+      "selectedBirthCount": 544,
+      "sourceCount": 77928,
+      "stableAttributeCount": 77927,
+      "step": 38,
+      "targetSupportBudget": 78471,
+      "thresholdQualifiedBirthCount": 39543,
+      "transportedAttributeCount": 544
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 78471,
+      "destinationCandidateCount": 205309,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 20088576,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 79018,
+      "selectedBirthCount": 547,
+      "sourceCount": 78471,
+      "stableAttributeCount": 78471,
+      "step": 39,
+      "targetSupportBudget": 79018,
+      "thresholdQualifiedBirthCount": 39750,
+      "transportedAttributeCount": 547
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 79018,
+      "destinationCandidateCount": 206041,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 20228608,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 79569,
+      "selectedBirthCount": 551,
+      "sourceCount": 79018,
+      "stableAttributeCount": 79018,
+      "step": 40,
+      "targetSupportBudget": 79569,
+      "thresholdQualifiedBirthCount": 39951,
+      "transportedAttributeCount": 551
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 79569,
+      "destinationCandidateCount": 206776,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 20369664,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 80124,
+      "selectedBirthCount": 555,
+      "sourceCount": 79569,
+      "stableAttributeCount": 79569,
+      "step": 41,
+      "targetSupportBudget": 80124,
+      "thresholdQualifiedBirthCount": 40148,
+      "transportedAttributeCount": 555
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 80124,
+      "destinationCandidateCount": 207518,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 20511744,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 80683,
+      "selectedBirthCount": 559,
+      "sourceCount": 80124,
+      "stableAttributeCount": 80124,
+      "step": 42,
+      "targetSupportBudget": 80683,
+      "thresholdQualifiedBirthCount": 40380,
+      "transportedAttributeCount": 559
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 80683,
+      "destinationCandidateCount": 208258,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 20654848,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 81246,
+      "selectedBirthCount": 563,
+      "sourceCount": 80683,
+      "stableAttributeCount": 80683,
+      "step": 43,
+      "targetSupportBudget": 81246,
+      "thresholdQualifiedBirthCount": 40589,
+      "transportedAttributeCount": 563
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 81245,
+      "destinationCandidateCount": 208992,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 20798976,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 81813,
+      "selectedBirthCount": 568,
+      "sourceCount": 81246,
+      "stableAttributeCount": 81245,
+      "step": 44,
+      "targetSupportBudget": 81813,
+      "thresholdQualifiedBirthCount": 40802,
+      "transportedAttributeCount": 568
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 81811,
+      "destinationCandidateCount": 209749,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 20944128,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 82384,
+      "selectedBirthCount": 573,
+      "sourceCount": 81813,
+      "stableAttributeCount": 81811,
+      "step": 45,
+      "targetSupportBudget": 82384,
+      "thresholdQualifiedBirthCount": 41028,
+      "transportedAttributeCount": 573
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 82382,
+      "destinationCandidateCount": 210483,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 21090304,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 82959,
+      "selectedBirthCount": 577,
+      "sourceCount": 82384,
+      "stableAttributeCount": 82382,
+      "step": 46,
+      "targetSupportBudget": 82959,
+      "thresholdQualifiedBirthCount": 41229,
+      "transportedAttributeCount": 577
+    },
+    {
+      "activatedDeathCount": 3,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 82956,
+      "destinationCandidateCount": 211254,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 21237504,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 83538,
+      "selectedBirthCount": 582,
+      "sourceCount": 82959,
+      "stableAttributeCount": 82956,
+      "step": 47,
+      "targetSupportBudget": 83538,
+      "thresholdQualifiedBirthCount": 41465,
+      "transportedAttributeCount": 582
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 83537,
+      "destinationCandidateCount": 212036,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 21385728,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 84121,
+      "selectedBirthCount": 584,
+      "sourceCount": 83538,
+      "stableAttributeCount": 83537,
+      "step": 48,
+      "targetSupportBudget": 84121,
+      "thresholdQualifiedBirthCount": 41727,
+      "transportedAttributeCount": 584
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 84119,
+      "destinationCandidateCount": 212825,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 21534976,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 84708,
+      "selectedBirthCount": 589,
+      "sourceCount": 84121,
+      "stableAttributeCount": 84119,
+      "step": 49,
+      "targetSupportBudget": 84708,
+      "thresholdQualifiedBirthCount": 41994,
+      "transportedAttributeCount": 589
+    },
+    {
+      "activatedDeathCount": 0,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 84708,
+      "destinationCandidateCount": 213632,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 21685248,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 85299,
+      "selectedBirthCount": 591,
+      "sourceCount": 84708,
+      "stableAttributeCount": 84708,
+      "step": 50,
+      "targetSupportBudget": 85299,
+      "thresholdQualifiedBirthCount": 42229,
+      "transportedAttributeCount": 591
+    },
+    {
+      "activatedDeathCount": 3,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 85296,
+      "destinationCandidateCount": 214447,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 21836544,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 85894,
+      "selectedBirthCount": 598,
+      "sourceCount": 85299,
+      "stableAttributeCount": 85296,
+      "step": 51,
+      "targetSupportBudget": 85894,
+      "thresholdQualifiedBirthCount": 42503,
+      "transportedAttributeCount": 598
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 85893,
+      "destinationCandidateCount": 215270,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 21988864,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 86493,
+      "selectedBirthCount": 600,
+      "sourceCount": 85894,
+      "stableAttributeCount": 85893,
+      "step": 52,
+      "targetSupportBudget": 86493,
+      "thresholdQualifiedBirthCount": 42765,
+      "transportedAttributeCount": 600
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 86491,
+      "destinationCandidateCount": 216113,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 22142208,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 87096,
+      "selectedBirthCount": 605,
+      "sourceCount": 86493,
+      "stableAttributeCount": 86491,
+      "step": 53,
+      "targetSupportBudget": 87096,
+      "thresholdQualifiedBirthCount": 43041,
+      "transportedAttributeCount": 605
+    },
+    {
+      "activatedDeathCount": 1,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 87095,
+      "destinationCandidateCount": 216962,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 22296576,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 87703,
+      "selectedBirthCount": 608,
+      "sourceCount": 87096,
+      "stableAttributeCount": 87095,
+      "step": 54,
+      "targetSupportBudget": 87703,
+      "thresholdQualifiedBirthCount": 43313,
+      "transportedAttributeCount": 608
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 87701,
+      "destinationCandidateCount": 217794,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 22451968,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 88315,
+      "selectedBirthCount": 614,
+      "sourceCount": 87703,
+      "stableAttributeCount": 87701,
+      "step": 55,
+      "targetSupportBudget": 88315,
+      "thresholdQualifiedBirthCount": 43563,
+      "transportedAttributeCount": 614
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 88313,
+      "destinationCandidateCount": 218629,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 22608640,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 88931,
+      "selectedBirthCount": 618,
+      "sourceCount": 88315,
+      "stableAttributeCount": 88313,
+      "step": 56,
+      "targetSupportBudget": 88931,
+      "thresholdQualifiedBirthCount": 43807,
+      "transportedAttributeCount": 618
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 88929,
+      "destinationCandidateCount": 219448,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 22766336,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 89551,
+      "selectedBirthCount": 622,
+      "sourceCount": 88931,
+      "stableAttributeCount": 88929,
+      "step": 57,
+      "targetSupportBudget": 89551,
+      "thresholdQualifiedBirthCount": 44047,
+      "transportedAttributeCount": 622
+    },
+    {
+      "activatedDeathCount": 3,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 89548,
+      "destinationCandidateCount": 220269,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 22925056,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 90176,
+      "selectedBirthCount": 628,
+      "sourceCount": 89551,
+      "stableAttributeCount": 89548,
+      "step": 58,
+      "targetSupportBudget": 90176,
+      "thresholdQualifiedBirthCount": 44267,
+      "transportedAttributeCount": 628
+    },
+    {
+      "activatedDeathCount": 3,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 90173,
+      "destinationCandidateCount": 221074,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 23085056,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 90805,
+      "selectedBirthCount": 632,
+      "sourceCount": 90176,
+      "stableAttributeCount": 90173,
+      "step": 59,
+      "targetSupportBudget": 90805,
+      "thresholdQualifiedBirthCount": 44488,
+      "transportedAttributeCount": 632
+    },
+    {
+      "activatedDeathCount": 2,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 90803,
+      "destinationCandidateCount": 221878,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 23246080,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 91438,
+      "selectedBirthCount": 635,
+      "sourceCount": 90805,
+      "stableAttributeCount": 90803,
+      "step": 60,
+      "targetSupportBudget": 91438,
+      "thresholdQualifiedBirthCount": 44690,
+      "transportedAttributeCount": 635
+    },
+    {
+      "activatedDeathCount": 6,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 91432,
+      "destinationCandidateCount": 222688,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 23408128,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 92076,
+      "selectedBirthCount": 644,
+      "sourceCount": 91438,
+      "stableAttributeCount": 91432,
+      "step": 61,
+      "targetSupportBudget": 92076,
+      "thresholdQualifiedBirthCount": 44893,
+      "transportedAttributeCount": 644
+    },
+    {
+      "activatedDeathCount": 8,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 92068,
+      "destinationCandidateCount": 223520,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 23571456,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 92718,
+      "selectedBirthCount": 650,
+      "sourceCount": 92076,
+      "stableAttributeCount": 92068,
+      "step": 62,
+      "targetSupportBudget": 92718,
+      "thresholdQualifiedBirthCount": 45107,
+      "transportedAttributeCount": 650
+    },
+    {
+      "activatedDeathCount": 8,
+      "birthThreshold": 0.6000000000000001,
+      "compositionAuthority": "copied-static-scaffold-with-eulerian-destination-occupancy-residual-v0",
+      "deathMarginThreshold": 2.09808349609375e-05,
+      "defaultStaticCount": 92710,
+      "destinationCandidateCount": 224328,
+      "gridLookup": {
+        "authority": "measured-bounding-volume-dense-or-exact-sparse-local-grid-v0",
+        "boundingVolumeCells": 2438400,
+        "denseCellBudget": 23735808,
+        "strategy": "dense-bounded-grid"
+      },
+      "invalidDonorCount": 0,
+      "predictedCount": 93365,
+      "selectedBirthCount": 655,
+      "sourceCount": 92718,
+      "stableAttributeCount": 92710,
+      "step": 63,
+      "targetSupportBudget": 93365,
+      "thresholdQualifiedBirthCount": 45293,
+      "transportedAttributeCount": 655
+    }
+  ],
+  "rolloutGate": {
+    "aggregateOrEarlyStepCanCloseClaim": false,
+    "allStepsBeatIdentity": true,
+    "authority": "every-recurrent-step-support-advantage-gate-v0",
+    "beatStepCount": 63,
+    "evaluatedStepCount": 63,
+    "firstIdentityLossStep": null,
+    "minimumPredictionToIdentityRatio": 1.033491941850016
+  },
+  "route": {
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+    "fallbackReason": null
+  },
+  "schema": "kaminos-boundary-splat-phase-transport-predictions-v0",
+  "status": "completed",
+  "supportMetrics": [
+    {
+      "beatsIdentity": true,
+      "exactCount": 60014,
+      "identityIoU": 0.43477638469705465,
+      "predictionCount": 60679,
+      "predictionIoU": 0.48042342320241394,
+      "predictionToIdentityRatio": 1.1049896915104196,
+      "step": 1
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 60597,
+      "identityIoU": 0.2951123589485303,
+      "predictionCount": 61102,
+      "predictionIoU": 0.35649159570199296,
+      "predictionToIdentityRatio": 1.2079859920884155,
+      "step": 2
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 60940,
+      "identityIoU": 0.22214603353870666,
+      "predictionCount": 61528,
+      "predictionIoU": 0.277731408062766,
+      "predictionToIdentityRatio": 1.2502199730447774,
+      "step": 3
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 61547,
+      "identityIoU": 0.18439936990723635,
+      "predictionCount": 61957,
+      "predictionIoU": 0.22858990300920168,
+      "predictionToIdentityRatio": 1.2396457923050157,
+      "step": 4
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 62908,
+      "identityIoU": 0.1637643501677139,
+      "predictionCount": 62389,
+      "predictionIoU": 0.20057682725844161,
+      "predictionToIdentityRatio": 1.2247893210764578,
+      "step": 5
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 63871,
+      "identityIoU": 0.14584006424753765,
+      "predictionCount": 62824,
+      "predictionIoU": 0.17848140121108394,
+      "predictionToIdentityRatio": 1.2238159804163513,
+      "step": 6
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 64940,
+      "identityIoU": 0.13565364101447697,
+      "predictionCount": 63262,
+      "predictionIoU": 0.16412868778773598,
+      "predictionToIdentityRatio": 1.2099099335654409,
+      "step": 7
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 67084,
+      "identityIoU": 0.12686936976797691,
+      "predictionCount": 63703,
+      "predictionIoU": 0.15110148830741338,
+      "predictionToIdentityRatio": 1.1910005431866888,
+      "step": 8
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68577,
+      "identityIoU": 0.12020589334933181,
+      "predictionCount": 64147,
+      "predictionIoU": 0.14298016723934517,
+      "predictionToIdentityRatio": 1.1894605435344903,
+      "step": 9
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69816,
+      "identityIoU": 0.11637028390950599,
+      "predictionCount": 64594,
+      "predictionIoU": 0.1390774498088967,
+      "predictionToIdentityRatio": 1.1951285597708834,
+      "step": 10
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70393,
+      "identityIoU": 0.11338167997477566,
+      "predictionCount": 65044,
+      "predictionIoU": 0.1342182396784189,
+      "predictionToIdentityRatio": 1.1837736017695168,
+      "step": 11
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70931,
+      "identityIoU": 0.11202468340481801,
+      "predictionCount": 65498,
+      "predictionIoU": 0.13248221534170618,
+      "predictionToIdentityRatio": 1.1826162887955844,
+      "step": 12
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71041,
+      "identityIoU": 0.11120514556533515,
+      "predictionCount": 65955,
+      "predictionIoU": 0.13094589462908846,
+      "predictionToIdentityRatio": 1.1775165075626401,
+      "step": 13
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70870,
+      "identityIoU": 0.11140399203288553,
+      "predictionCount": 66415,
+      "predictionIoU": 0.1310161308925541,
+      "predictionToIdentityRatio": 1.1760452071940044,
+      "step": 14
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70703,
+      "identityIoU": 0.11396345820149026,
+      "predictionCount": 66878,
+      "predictionIoU": 0.13475417137484225,
+      "predictionToIdentityRatio": 1.1824331544642448,
+      "step": 15
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69965,
+      "identityIoU": 0.11537077958785139,
+      "predictionCount": 67344,
+      "predictionIoU": 0.13569555759575858,
+      "predictionToIdentityRatio": 1.1761692005594058,
+      "step": 16
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69823,
+      "identityIoU": 0.11840770355085548,
+      "predictionCount": 67814,
+      "predictionIoU": 0.13666919926004228,
+      "predictionToIdentityRatio": 1.1542255711541909,
+      "step": 17
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70012,
+      "identityIoU": 0.11825400231769603,
+      "predictionCount": 68287,
+      "predictionIoU": 0.13474240422721268,
+      "predictionToIdentityRatio": 1.1394320833659366,
+      "step": 18
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69758,
+      "identityIoU": 0.1170997010001031,
+      "predictionCount": 68763,
+      "predictionIoU": 0.1333742431680576,
+      "predictionToIdentityRatio": 1.1389802196671721,
+      "step": 19
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70461,
+      "identityIoU": 0.11774262505344164,
+      "predictionCount": 69243,
+      "predictionIoU": 0.13381379041682898,
+      "predictionToIdentityRatio": 1.1364940297202721,
+      "step": 20
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71726,
+      "identityIoU": 0.12077750038212666,
+      "predictionCount": 69726,
+      "predictionIoU": 0.13472059554942323,
+      "predictionToIdentityRatio": 1.115444475363227,
+      "step": 21
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71677,
+      "identityIoU": 0.1272245717459097,
+      "predictionCount": 70212,
+      "predictionIoU": 0.14177999517180334,
+      "predictionToIdentityRatio": 1.1144073289157022,
+      "step": 22
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71481,
+      "identityIoU": 0.13528838944855698,
+      "predictionCount": 70702,
+      "predictionIoU": 0.14944582326167974,
+      "predictionToIdentityRatio": 1.1046463327032663,
+      "step": 23
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70978,
+      "identityIoU": 0.14032862095632,
+      "predictionCount": 71195,
+      "predictionIoU": 0.1541046684363052,
+      "predictionToIdentityRatio": 1.0981699056550498,
+      "step": 24
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70631,
+      "identityIoU": 0.14357356911329144,
+      "predictionCount": 71692,
+      "predictionIoU": 0.15566941665583994,
+      "predictionToIdentityRatio": 1.0842484282953493,
+      "step": 25
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70729,
+      "identityIoU": 0.1450100088287485,
+      "predictionCount": 72192,
+      "predictionIoU": 0.15779880429675475,
+      "predictionToIdentityRatio": 1.0881925018231626,
+      "step": 26
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71812,
+      "identityIoU": 0.1381702545717782,
+      "predictionCount": 72695,
+      "predictionIoU": 0.1558525699476892,
+      "predictionToIdentityRatio": 1.1279748338794962,
+      "step": 27
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71798,
+      "identityIoU": 0.13478328120166364,
+      "predictionCount": 73202,
+      "predictionIoU": 0.15547055542274285,
+      "predictionToIdentityRatio": 1.153485462266843,
+      "step": 28
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71998,
+      "identityIoU": 0.128723095567276,
+      "predictionCount": 73713,
+      "predictionIoU": 0.1532695930223355,
+      "predictionToIdentityRatio": 1.1906922557050414,
+      "step": 29
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72486,
+      "identityIoU": 0.12636080541012956,
+      "predictionCount": 74227,
+      "predictionIoU": 0.149275010379376,
+      "predictionToIdentityRatio": 1.181339497598751,
+      "step": 30
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 73212,
+      "identityIoU": 0.12143541313078694,
+      "predictionCount": 74745,
+      "predictionIoU": 0.14416845817158236,
+      "predictionToIdentityRatio": 1.1872027644548113,
+      "step": 31
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 73045,
+      "identityIoU": 0.1176658002850675,
+      "predictionCount": 75266,
+      "predictionIoU": 0.14001199114500062,
+      "predictionToIdentityRatio": 1.1899123688089086,
+      "step": 32
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72620,
+      "identityIoU": 0.11480347330005453,
+      "predictionCount": 75791,
+      "predictionIoU": 0.13588250151159142,
+      "predictionToIdentityRatio": 1.1836096731711592,
+      "step": 33
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72494,
+      "identityIoU": 0.11178761358402077,
+      "predictionCount": 76320,
+      "predictionIoU": 0.13282837894416322,
+      "predictionToIdentityRatio": 1.1882209010958802,
+      "step": 34
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 72177,
+      "identityIoU": 0.1128795072393133,
+      "predictionCount": 76852,
+      "predictionIoU": 0.13367108636284109,
+      "predictionToIdentityRatio": 1.1841926814886605,
+      "step": 35
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71690,
+      "identityIoU": 0.11297709923664122,
+      "predictionCount": 77388,
+      "predictionIoU": 0.1311698067394587,
+      "predictionToIdentityRatio": 1.1610300461398033,
+      "step": 36
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 71100,
+      "identityIoU": 0.11328734151467897,
+      "predictionCount": 77928,
+      "predictionIoU": 0.13137417155697942,
+      "predictionToIdentityRatio": 1.1596544662490547,
+      "step": 37
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70188,
+      "identityIoU": 0.11227926568268828,
+      "predictionCount": 78471,
+      "predictionIoU": 0.12930156945562832,
+      "predictionToIdentityRatio": 1.1516068320311843,
+      "step": 38
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70454,
+      "identityIoU": 0.11385404594723567,
+      "predictionCount": 79018,
+      "predictionIoU": 0.12933496532027744,
+      "predictionToIdentityRatio": 1.135971622652885,
+      "step": 39
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70663,
+      "identityIoU": 0.11436256234785422,
+      "predictionCount": 79569,
+      "predictionIoU": 0.1279864249996246,
+      "predictionToIdentityRatio": 1.1191286936220524,
+      "step": 40
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70468,
+      "identityIoU": 0.1148378403731846,
+      "predictionCount": 80124,
+      "predictionIoU": 0.1253157178939188,
+      "predictionToIdentityRatio": 1.0912406353749302,
+      "step": 41
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70829,
+      "identityIoU": 0.115737509575283,
+      "predictionCount": 80683,
+      "predictionIoU": 0.12400961452862103,
+      "predictionToIdentityRatio": 1.0714729821273485,
+      "step": 42
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70268,
+      "identityIoU": 0.11836829117828501,
+      "predictionCount": 81246,
+      "predictionIoU": 0.12250885329461098,
+      "predictionToIdentityRatio": 1.0349803319377948,
+      "step": 43
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70153,
+      "identityIoU": 0.11994503843016016,
+      "predictionCount": 81813,
+      "predictionIoU": 0.12544064934680216,
+      "predictionToIdentityRatio": 1.045817742764257,
+      "step": 44
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70214,
+      "identityIoU": 0.12086354420810282,
+      "predictionCount": 82384,
+      "predictionIoU": 0.12753254813873413,
+      "predictionToIdentityRatio": 1.0551779610165049,
+      "step": 45
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70045,
+      "identityIoU": 0.12350405242283152,
+      "predictionCount": 82959,
+      "predictionIoU": 0.12848123672409723,
+      "predictionToIdentityRatio": 1.0402997650977936,
+      "step": 46
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69595,
+      "identityIoU": 0.12453993574255454,
+      "predictionCount": 83538,
+      "predictionIoU": 0.1300828007615899,
+      "predictionToIdentityRatio": 1.044506727789658,
+      "step": 47
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69010,
+      "identityIoU": 0.12423467612885271,
+      "predictionCount": 84121,
+      "predictionIoU": 0.12997631293490852,
+      "predictionToIdentityRatio": 1.0462160564583494,
+      "step": 48
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68992,
+      "identityIoU": 0.12335517738879521,
+      "predictionCount": 84708,
+      "predictionIoU": 0.13278745310761111,
+      "predictionToIdentityRatio": 1.0764643683263242,
+      "step": 49
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69625,
+      "identityIoU": 0.11956418677217208,
+      "predictionCount": 85299,
+      "predictionIoU": 0.1321377939521492,
+      "predictionToIdentityRatio": 1.1051619846997827,
+      "step": 50
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69160,
+      "identityIoU": 0.12077282135217757,
+      "predictionCount": 85894,
+      "predictionIoU": 0.1322934466692956,
+      "predictionToIdentityRatio": 1.0953908767563152,
+      "step": 51
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68431,
+      "identityIoU": 0.11996866977068013,
+      "predictionCount": 86493,
+      "predictionIoU": 0.13164987837926678,
+      "predictionToIdentityRatio": 1.097368826635448,
+      "step": 52
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68340,
+      "identityIoU": 0.1208447365209964,
+      "predictionCount": 87096,
+      "predictionIoU": 0.13150519396379148,
+      "predictionToIdentityRatio": 1.0882161503239562,
+      "step": 53
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68400,
+      "identityIoU": 0.12086945158339504,
+      "predictionCount": 87703,
+      "predictionIoU": 0.13200145032632343,
+      "predictionToIdentityRatio": 1.0920993567613546,
+      "step": 54
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68553,
+      "identityIoU": 0.12047459160418225,
+      "predictionCount": 88315,
+      "predictionIoU": 0.12981475612918095,
+      "predictionToIdentityRatio": 1.07752808621826,
+      "step": 55
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 68658,
+      "identityIoU": 0.11720916528008875,
+      "predictionCount": 88931,
+      "predictionIoU": 0.12598155147652493,
+      "predictionToIdentityRatio": 1.0748438586306222,
+      "step": 56
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69517,
+      "identityIoU": 0.11637189457022916,
+      "predictionCount": 89551,
+      "predictionIoU": 0.1262567617321363,
+      "predictionToIdentityRatio": 1.0849420489235202,
+      "step": 57
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69955,
+      "identityIoU": 0.11634645885308162,
+      "predictionCount": 90176,
+      "predictionIoU": 0.12608120842182247,
+      "predictionToIdentityRatio": 1.0836703554599247,
+      "step": 58
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 69968,
+      "identityIoU": 0.11691753505724946,
+      "predictionCount": 90805,
+      "predictionIoU": 0.12591653652489967,
+      "predictionToIdentityRatio": 1.0769687922623736,
+      "step": 59
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70464,
+      "identityIoU": 0.1169946424451641,
+      "predictionCount": 91438,
+      "predictionIoU": 0.12692545956969936,
+      "predictionToIdentityRatio": 1.0848826657100121,
+      "step": 60
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70074,
+      "identityIoU": 0.11684961909903425,
+      "predictionCount": 92076,
+      "predictionIoU": 0.127161000159881,
+      "predictionToIdentityRatio": 1.0882448838117946,
+      "step": 61
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70098,
+      "identityIoU": 0.11979967528841776,
+      "predictionCount": 92718,
+      "predictionIoU": 0.1278392363588504,
+      "predictionToIdentityRatio": 1.0671083711293656,
+      "step": 62
+    },
+    {
+      "beatsIdentity": true,
+      "exactCount": 70612,
+      "identityIoU": 0.12233504279368129,
+      "predictionCount": 93365,
+      "predictionIoU": 0.12643228093314648,
+      "predictionToIdentityRatio": 1.033491941850016,
+      "step": 63
+    }
+  ],
+  "temporal": {
+    "authority": "frozen-model-recurrent-one-controlled-step-local-grid-continuation-v0",
+    "controlledStepDeltaMs": 160,
+    "heldoutReferenceFrameIds": [
+      "frame-0",
+      "frame-1",
+      "frame-2",
+      "frame-3",
+      "frame-4",
+      "frame-5",
+      "frame-6",
+      "frame-7",
+      "frame-8",
+      "frame-9",
+      "frame-10",
+      "frame-11",
+      "frame-12",
+      "frame-13",
+      "frame-14",
+      "frame-15",
+      "frame-16",
+      "frame-17",
+      "frame-18",
+      "frame-19",
+      "frame-20",
+      "frame-21",
+      "frame-22",
+      "frame-23",
+      "frame-24",
+      "frame-25",
+      "frame-26",
+      "frame-27",
+      "frame-28",
+      "frame-29",
+      "frame-30",
+      "frame-31",
+      "frame-32",
+      "frame-33",
+      "frame-34",
+      "frame-35",
+      "frame-36",
+      "frame-37",
+      "frame-38",
+      "frame-39",
+      "frame-40",
+      "frame-41",
+      "frame-42",
+      "frame-43",
+      "frame-44",
+      "frame-45",
+      "frame-46",
+      "frame-47",
+      "frame-48",
+      "frame-49",
+      "frame-50",
+      "frame-51",
+      "frame-52",
+      "frame-53",
+      "frame-54",
+      "frame-55",
+      "frame-56",
+      "frame-57",
+      "frame-58",
+      "frame-59",
+      "frame-60",
+      "frame-61",
+      "frame-62",
+      "frame-63"
+    ],
+    "inferenceCorpusSeenDuringTraining": false,
+    "sourceFrameId": "frame-0",
+    "trainingFrameIdsExcluded": [
+      "frame-0",
+      "frame-1",
+      "frame-2",
+      "frame-3",
+      "frame-4",
+      "frame-5",
+      "frame-6",
+      "frame-7",
+      "frame-8",
+      "frame-9",
+      "frame-10",
+      "frame-11",
+      "frame-12",
+      "frame-13",
+      "frame-14",
+      "frame-15",
+      "frame-16",
+      "frame-17",
+      "frame-18",
+      "frame-19",
+      "frame-20",
+      "frame-21",
+      "frame-22",
+      "frame-23",
+      "frame-24",
+      "frame-25",
+      "frame-26",
+      "frame-27",
+      "frame-28",
+      "frame-29",
+      "frame-30",
+      "frame-31",
+      "frame-32",
+      "frame-33",
+      "frame-34",
+      "frame-35",
+      "frame-36",
+      "frame-37",
+      "frame-38",
+      "frame-39",
+      "frame-40",
+      "frame-41",
+      "frame-42",
+      "frame-43",
+      "frame-44",
+      "frame-45",
+      "frame-46",
+      "frame-47",
+      "frame-48",
+      "frame-49",
+      "frame-50",
+      "frame-51",
+      "frame-52",
+      "frame-53",
+      "frame-54",
+      "frame-55",
+      "frame-56",
+      "frame-57",
+      "frame-58",
+      "frame-59",
+      "frame-60",
+      "frame-61",
+      "frame-62",
+      "frame-63"
+    ]
+  }
+}

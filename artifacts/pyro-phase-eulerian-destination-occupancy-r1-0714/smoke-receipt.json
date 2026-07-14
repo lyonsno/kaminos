@@ -1,0 +1,58 @@
+{
+  "schema": "kaminos-contextual-research-artifact-smoke-v0",
+  "status": "completed",
+  "capturedAt": "2026-07-14T20:59:46Z",
+  "repoRoot": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "branch": "cc/pyro-phase-lag-counterfeiter-0713",
+  "implementationHead": "2b58fe441436195da63aaa79fdedde8737283f92",
+  "server": {
+    "command": "python3 serve.py 18218",
+    "root": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+    "port": 18218,
+    "mountAuthority": "static-path-under-effective-worktree-server-root-v0",
+    "mounted": true
+  },
+  "route": {
+    "requested": "http://127.0.0.1:18218/artifacts/pyro-phase-eulerian-destination-occupancy-r1-0714/inspection-guide.html",
+    "effective": "http://127.0.0.1:18218/artifacts/pyro-phase-eulerian-destination-occupancy-r1-0714/inspection-guide.html",
+    "httpStatus": 200,
+    "fallback": null
+  },
+  "browser": {
+    "name": "Google Chrome",
+    "version": "150.0.7871.115",
+    "mode": "single-headless-browser",
+    "viewport": {
+      "width": 1280,
+      "height": 2600
+    },
+    "settleBudgetMs": 4000
+  },
+  "mediaValidation": {
+    "authority": "ffprobe-plus-routed-browser-frame-v0",
+    "beauty": {
+      "width": 960,
+      "height": 240,
+      "fps": 6.25,
+      "frameCount": 63,
+      "durationSeconds": 10.08
+    },
+    "debug": {
+      "width": 960,
+      "height": 240,
+      "fps": 6.25,
+      "frameCount": 63,
+      "durationSeconds": 10.08,
+      "requestedMix": 0.625,
+      "effectiveMix": 0.625
+    }
+  },
+  "screenshot": {
+    "path": "inspection-guide-smoke.png",
+    "bytes": 1815515,
+    "sha256": "57e1a8a9916d912594071f25f55226ce9f752a9d92a1dfbc58808278e14eefa3",
+    "inspected": true,
+    "visibleResult": "context text, loaded video frames, and both contact sheets render without overlap; role and timing descriptions are adjacent to their evidence"
+  },
+  "claimBoundary": "This receipt proves the contextual artifact route mounted and rendered the committed local evidence. It does not add analytical-raymarch, model-quality, or runtime-integration authority."
+}
