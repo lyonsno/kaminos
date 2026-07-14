@@ -15,6 +15,7 @@ const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0
 const DIAGNOSTIC_VELOCITY_ORACLE_AUTHORITY = 'offline-high-truth-diagnostic-velocity-oracle-v0';
 const DIAGNOSTIC_VELOCITY_ORACLE_APPLICATION = 'offline-diagnostic-velocity-oracle-application-v0';
 const SCALAR_ACTIVITY_CUE_SCHEMA = 'kaminos.volume.exact-basin-support-probe.v0';
+const FROZEN_TRANSFER_CUE_SCHEMA = 'kaminos.volume.fire-flow-carrier-frozen-transfer.v0';
 const SCALAR_ACTIVITY_CUE_APPLICATION = 'learned-fire-flow-visibility-carrier-v0';
 const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'exact-high-field-renderer-coupled-derived-target-v0',
@@ -23,6 +24,10 @@ const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'support-probability-weighted-derived-carrier-v0',
   'validation-selected-residual-gate-derived-carrier-v0',
   'accepted-splat-support-gated-derived-carrier-v0',
+  'frozen-earlier-replay-ridge-derived-carrier-v0',
+  'frozen-earlier-replay-ungated-derived-carrier-v0',
+  'frozen-earlier-replay-source-selected-gate-derived-carrier-v0',
+  'frozen-earlier-replay-constant-residual-scale-derived-carrier-v0',
 ]);
 const FIELD_LAYOUT_IDENTITY = 'x-fastest-zyx-c-interleaved-v0';
 
@@ -174,10 +179,21 @@ function resolveScalarActivityCueManifest() {
   if (!scalarActivityCueRole) throw new Error('--scalar-activity-cue-manifest requires --scalar-activity-cue-role');
   const raw = readFileSync(scalarActivityCueManifestPath, 'utf8');
   const manifest = JSON.parse(raw);
-  if (manifest.schema !== SCALAR_ACTIVITY_CUE_SCHEMA || manifest.status !== 'captured' || manifest.failurePhase !== null) {
+  const isSupportProbe = manifest.schema === SCALAR_ACTIVITY_CUE_SCHEMA;
+  const isFrozenTransfer = manifest.schema === FROZEN_TRANSFER_CUE_SCHEMA;
+  if ((!isSupportProbe && !isFrozenTransfer) || manifest.status !== 'captured' || manifest.failurePhase !== null) {
     throw new Error(`unsupported scalar activity cue manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
   }
-  const target = manifest.derivedTargets?.fireFlowVisibilityCarrier;
+  if (isFrozenTransfer
+    && (manifest.transfer?.distinctReplay !== true
+      || manifest.transfer?.targetDataUsedForTraining !== false
+      || manifest.transfer?.targetDataUsedForCalibration !== false
+      || manifest.transfer?.targetLabelsUsedForModelSelection !== false)) {
+    throw new Error('frozen scalar activity cue does not prove distinct replay and target-blind model selection');
+  }
+  const target = isFrozenTransfer
+    ? manifest.derivedTarget?.contract
+    : manifest.derivedTargets?.fireFlowVisibilityCarrier;
   if (target?.identity !== 'fire-flow-visibility-carrier-v0'
     || target.authority !== 'exact-high-field-renderer-coupled-derived-target-v0'
     || target.physicalTruth !== false) {

@@ -43,6 +43,9 @@ assert.match(exporter, /--scalar-activity-cue-manifest/, 'exporter accepts a che
 assert.match(exporter, /--scalar-activity-cue-role/, 'exporter requires an explicit semantic carrier role');
 assert.match(exporter, /scalarActivityCueImport/, 'render receipt preserves effective scalar activity cue import authority');
 assert.match(exporter, /validation-selected-residual-gate-derived-carrier-v0/, 'exporter admits the validation-calibrated dense carrier role');
+assert.match(exporter, /kaminos\.volume\.fire-flow-carrier-frozen-transfer\.v0/, 'exporter admits the checksum-bound frozen transfer schema');
+assert.match(exporter, /frozen-earlier-replay-constant-residual-scale-derived-carrier-v0/, 'exporter admits the frozen fixed-gain carrier authority');
+assert.match(exporter, /targetDataUsedForTraining/, 'exporter validates target-blind transfer authority before import');
 assert.match(exporter, /JSON\.parse\(String\(args\.get\('--render-control-overrides-json'\)/, 'render control overrides use structured JSON parsing instead of ad hoc text splitting');
 assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
 assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
@@ -87,5 +90,50 @@ const failed = JSON.parse(readFileSync(join(outDir, 'manifest.json'), 'utf8'));
 assert.equal(failed.status, 'failed', 'corrupt source capture writes a failed manifest');
 assert.equal(failed.failurePhase, 'source-capture-validation', 'corrupt source capture fails during source-capture validation');
 assert.match(failed.error, /payload SHA-256 mismatch/, 'failure report names the source payload hash mismatch');
+
+const badFrozenCuePath = join(fixtureRoot, 'bad-frozen-cue.json');
+const badFrozenCueOutDir = join(fixtureRoot, 'bad-frozen-cue-out');
+const badFrozenCueDataPath = join(fixtureRoot, 'bad-frozen-cue.f32');
+writeFileSync(badFrozenCueDataPath, Buffer.alloc(8 * Float32Array.BYTES_PER_ELEMENT));
+writeFileSync(badFrozenCuePath, `${JSON.stringify({
+  schema: 'kaminos.volume.fire-flow-carrier-frozen-transfer.v0',
+  status: 'captured',
+  failurePhase: null,
+  transfer: {
+    distinctReplay: true,
+    targetDataUsedForTraining: false,
+    targetDataUsedForCalibration: false,
+    targetLabelsUsedForModelSelection: false,
+  },
+  derivedTarget: {
+    contract: {
+      identity: 'fire-flow-visibility-carrier-v0',
+      authority: 'exact-high-field-renderer-coupled-derived-target-v0',
+      physicalTruth: false,
+    },
+  },
+  denseDerivedTargets: {
+    fireFlowVisibilityCarrier: {
+      frozenConstant: {
+        path: badFrozenCueDataPath,
+        sha256: '0'.repeat(64),
+        byteLength: 8 * Float32Array.BYTES_PER_ELEMENT,
+        shape: [2, 2, 2, 1],
+        channelOrder: ['fireFlowVisibilityCarrier'],
+        authority: 'unrecognized-frozen-carrier-authority',
+      },
+    },
+  },
+}, null, 2)}\n`);
+assert.throws(() => execFileSync(process.execPath, [
+  exporterPath,
+  '--scalar-activity-cue-manifest', badFrozenCuePath,
+  '--scalar-activity-cue-role', 'frozenConstant',
+  '--out-dir', badFrozenCueOutDir,
+], { stdio: 'pipe' }), /Command failed/, 'exporter rejects an unrecognized frozen cue authority before browser launch');
+const badFrozenCueReport = JSON.parse(readFileSync(join(badFrozenCueOutDir, 'manifest.json'), 'utf8'));
+assert.equal(badFrozenCueReport.status, 'failed');
+assert.equal(badFrozenCueReport.failurePhase, 'source-capture-validation');
+assert.match(badFrozenCueReport.error, /unsupported scalar activity cue authority/);
 
 console.log('exact-basin full-grid export contracts passed');
