@@ -716,6 +716,7 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     } : null,
     foregroundKilnHeartbeat: browserFiringEvidence.foregroundKilnHeartbeat || null,
     sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation || null,
+    hostEventCorrelation: browserFiringEvidence.foregroundKilnHeartbeat?.hostEventCorrelation || null,
     requestedFirePresentation: browserFiringEvidence.requestedFirePresentation || null,
     selectedFirePresentation: browserFiringEvidence.selectedFirePresentation || null,
     firePresentationFailures: browserFiringEvidence.firePresentationFailures || [],

@@ -545,6 +545,7 @@ for (const [pattern, message] of [
   [/crucible-viewport-presentation-select/, 'Full-route witness must actuate the real central presentation selector'],
   [/window\.runKilnRouteBenchRoute[\s\S]*schedulerProfileId/, 'Witness must invoke the requested hidden profile without adding it to the operator mode selector'],
   [/sharpDutyCorrelation/, 'Full-route witness must preserve the foreground-to-SHARP epoch correlation'],
+  [/hostEventCorrelation/, 'Full-route witness must preserve foreground host-event attribution'],
   [/kaminos\.foreground-sharp-duty-correlation\.v0/, 'Full-route witness must require the correlation schema'],
   [/sampleRetention[\s\S]*uncapped/, 'Full-route witness must reject capped foreground samples'],
   [/foregroundGaps/, 'Full-route witness must preserve every inference-window foreground gap'],
