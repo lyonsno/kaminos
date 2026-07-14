@@ -1,0 +1,149 @@
+{
+  "schema": "kaminos.titan-hammer-realistic-sourcegen-manifest.v0",
+  "created_at": "2026-07-14T01:02:22Z",
+  "agent": "handy-candyman",
+  "intent": "Use local image-generation conditioning to produce a more realistic Titan Hammer source image before reconstruction, after operator inspection found the prior neutral source too symbolic.",
+  "truth_boundary": "This manifest promotes a current visual/source-to-SF3D hammer candidate. It does not claim collision suitability, topology approval, final production readiness, or authoritative replacement of all future hammer routes.",
+  "inputs": {
+    "conditioning_image": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/inputs/hammer-square-neutral-rebuild-conditioning.png",
+    "mask": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/inputs/hammer-mask-square.png",
+    "conditioning_role": "pressure image only; not source truth"
+  },
+  "prompt": {
+    "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/prompts/flux2-realistic-hammer-source.txt",
+    "summary": "Realistic isolated source photograph of an old ball-peen workshop hammer; dark gunmetal head, tan worn wooden handle, plain matte light gray background, no symbolic/CG/icon look."
+  },
+  "image_generation": {
+    "requested_route": "mflux_flux2_edit_promptfile",
+    "backend": {
+      "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "model": "flux2-klein-9b",
+      "quantize": "4",
+      "width": "512",
+      "height": "512",
+      "steps": "10",
+      "guidance": "1.0",
+      "mlx_cache_limit_gb": "48"
+    },
+    "candidates": [
+      {
+        "seed": "61011",
+        "job_id": "b4eb9fb91bde",
+        "status": "done",
+        "output": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61011/output.png",
+        "sha256": "e255e66a3520d992928ccea2578c480d43e3f1eb0b9343104b7c505a9b04268f",
+        "visual_verdict": "Realistic tan handle and dark head, but the flat striking side is too rectangular/blocky for best reconstruction source."
+      },
+      {
+        "seed": "61012",
+        "job_id": "db001518b567",
+        "status": "done",
+        "output": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61012/output.png",
+        "sha256": "a1655eb05b305a7f45bf48a1d93de76e371792390610063a2d7a353d2917a472",
+        "visual_verdict": "Cleanest isolated source image; selected for SF3D probe because it has no floor/shadow clutter."
+      },
+      {
+        "seed": "61013",
+        "job_id": "021ffe123bfb",
+        "status": "done",
+        "output": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61013/output.png",
+        "sha256": "f88d27b9ea3ae7e8b55ab41e7072cd4e10b2f06e8828eb9638b8cc6b6ebaa8dd",
+        "visual_verdict": "Best realistic source; selected for SF3D probe and promoted after the tan handle survived reconstruction."
+      },
+      {
+        "seed": "61014",
+        "job_id": "f34bbe8ddbb8",
+        "status": "done",
+        "output": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61014/output.png",
+        "sha256": "8d0c054a4eb890b7bbd9a210d78dd7770b71e2eb3aa0689a0798ec5f72160b09",
+        "visual_verdict": "Realistic angled source, but weaker as a reconstruction source than 61013."
+      }
+    ]
+  },
+  "mesh_firings": [
+    {
+      "id": "sf3d-flux2-61012",
+      "source_seed": "61012",
+      "greenroom_job_id": "1a48a3529a17",
+      "status": "useful_miss",
+      "requested_route": {
+        "job_type": "sf3d",
+        "params": {
+          "texture_resolution": "1024",
+          "remesh": "none",
+          "dtype": "float16",
+          "foreground_ratio": "0.85"
+        }
+      },
+      "effective_route": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61012/output.png --output-dir /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/sf3d-flux2-61012 --texture-resolution 1024 --remesh none --dtype float16",
+      "backend": {
+        "model": "stabilityai/stable-fast-3d",
+        "device": "mps",
+        "dtype": "float16"
+      },
+      "timing": {
+        "load_time_s": 10.93,
+        "inference_time_s": 22.63,
+        "total_time_s": 43.15
+      },
+      "output_glb": {
+        "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/sf3d-flux2-61012/output.glb",
+        "sha256": "fe71fdc859cb7d7533b9740a52342019748944125f203072572a2894530a6f4d"
+      },
+      "viewer_witness": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/witnesses/hammer-sf3d-flux2-61012-kaminos-witness.json",
+      "visual_verdict": "Useful miss. Source was clean, but SF3D dragged black/metal fragments down the tan handle."
+    },
+    {
+      "id": "sf3d-flux2-61013",
+      "source_seed": "61013",
+      "greenroom_job_id": "cfd53ae12b32",
+      "status": "promoted_current_candidate",
+      "requested_route": {
+        "job_type": "sf3d",
+        "params": {
+          "texture_resolution": "1024",
+          "remesh": "none",
+          "dtype": "float16",
+          "foreground_ratio": "0.85"
+        }
+      },
+      "effective_route": "/Users/noahlyons/dev/sf3d/.venv/bin/python -u run_greenroom.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/flux2-edit/realistic-hammer-61013/output.png --output-dir /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/sf3d-flux2-61013 --texture-resolution 1024 --remesh none --dtype float16",
+      "backend": {
+        "model": "stabilityai/stable-fast-3d",
+        "device": "mps",
+        "dtype": "float16"
+      },
+      "timing": {
+        "load_time_s": 9.07,
+        "inference_time_s": 23.77,
+        "total_time_s": 42.68
+      },
+      "output_glb": {
+        "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/sf3d-flux2-61013/output.glb",
+        "sha256": "479f585792f89bcf386a2667d2411dba577ea0c37009f67dcaedc4e93f406dc5"
+      },
+      "viewer_witness": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/witnesses/hammer-sf3d-flux2-61013-kaminos-witness.json",
+      "visual_verdict": "Promoted current candidate. The tan handle survives, the head reads as metal, and the object is coherent in front and oblique viewer captures."
+    }
+  ],
+  "promoted": {
+    "source_image": {
+      "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-flux2-61013-source.png",
+      "sha256": "f88d27b9ea3ae7e8b55ab41e7072cd4e10b2f06e8828eb9638b8cc6b6ebaa8dd"
+    },
+    "glb": {
+      "path": "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/titan-hammer-sf3d-flux2-61013.glb",
+      "sha256": "479f585792f89bcf386a2667d2411dba577ea0c37009f67dcaedc4e93f406dc5"
+    },
+    "witness_captures": [
+      "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/hammer-sf3d-flux2-61013-front.png",
+      "artifacts/titan-hammer-realistic-sourcegen-2026-07-13/promoted/hammer-sf3d-flux2-61013-oblique.png"
+    ]
+  },
+  "comparison": {
+    "previous_best": "artifacts/titan-hammer-source-cleanup-2026-07-13/promoted/titan-hammer-sf3d-white.glb",
+    "improvement": "Better source realism and tan-handle survival than the neutral-source SF3D attempt; fewer severe random black patches than prior repaired/white-source candidates.",
+    "remaining_risk": "Simple handle geometry, imperfect head proportions, no collision/topology approval."
+  },
+  "next_decision_boundary": "If the operator accepts 61013 as visually better, next run should be Trellis or another geometry-first route only when interaction/collision/orbit completeness matters; otherwise use 61013 as the current source-realistic GLB candidate."
+}

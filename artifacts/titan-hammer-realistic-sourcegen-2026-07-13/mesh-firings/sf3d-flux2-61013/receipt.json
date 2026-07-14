@@ -1,0 +1,15 @@
+{
+  "model": "stabilityai/stable-fast-3d",
+  "device": "mps",
+  "dtype": "float16",
+  "input_image": "output.png",
+  "texture_resolution": 1024,
+  "remesh": "none",
+  "load_time_s": 9.07,
+  "inference_time_s": 23.77,
+  "total_time_s": 42.68,
+  "output_glb": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/titan-hammer-realistic-sourcegen-2026-07-13/mesh-firings/sf3d-flux2-61013/output.glb",
+  "output_size_mb": 0.3,
+  "mps_memory_after_load_mb": 4160.0,
+  "mps_memory_after_inference_mb": 20711.0
+}
