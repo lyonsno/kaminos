@@ -252,7 +252,7 @@ function wsRequest(socket, method, params = {}, requestTimeout = timeoutMs) {
 }
 async function evaluate(socket, expression, requestTimeout = timeoutMs) { const result = await wsRequest(socket, 'Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, requestTimeout); if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text); return result.result.value; }
 
-async function inspectPixels(socket, pngBase64, borderX, borderTop) {
+async function inspectPixels(socket, pngBase64, layout) {
   return evaluate(socket, `(async () => {
     const image = new Image(); image.src = ${JSON.stringify(`data:image/png;base64,${pngBase64}`)}; await image.decode();
     const canvas = document.createElement('canvas'); canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
@@ -260,10 +260,12 @@ async function inspectPixels(socket, pngBase64, borderX, borderTop) {
     const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
     let sampled = 0, nonBlack = 0, maximumChannel = 0;
     for (let offset = 0; offset < data.length; offset += 16) { const r=data[offset], g=data[offset+1], b=data[offset+2]; sampled++; if (r+g+b>24) nonBlack++; maximumChannel=Math.max(maximumChannel,r,g,b); }
-    const x=Math.max(0,Math.min(canvas.width-1,Math.round(${borderX}))), top=Math.max(0,Math.min(canvas.height-1,Math.round(${borderTop})));
+    const heading=${JSON.stringify(layout.heading)}, status=${JSON.stringify(layout.status)};
+    const brightFraction=(left,top,right,bottom)=>{let samples=0,signals=0;for(let y=Math.max(0,Math.floor(top));y<Math.min(canvas.height,Math.ceil(bottom));y++){for(let x=Math.max(0,Math.floor(left));x<Math.min(canvas.width,Math.ceil(right));x++){const offset=(y*canvas.width+x)*4,r=data[offset],g=data[offset+1],b=data[offset+2];samples++;if(Math.max(r,g,b)>160&&r+g+b>350)signals++;}}return samples?signals/samples:0;};
+    const x=Math.max(0,Math.min(canvas.width-1,Math.round(status.left+1))), top=Math.max(0,Math.min(canvas.height-1,Math.round(status.top+4)));
     let borderSamples=0,borderSignals=0;
     for(let y=top;y<canvas.height;y++){const offset=(y*canvas.width+x)*4,r=data[offset],g=data[offset+1],b=data[offset+2];borderSamples++;if(g>r+30&&g>b+30&&g>100)borderSignals++;}
-    return { width:canvas.width,height:canvas.height,nonBlackFraction:sampled?nonBlack/sampled:0,maximumChannel,borderSignalFraction:borderSamples?borderSignals/borderSamples:0 };
+    return { width:canvas.width,height:canvas.height,nonBlackFraction:sampled?nonBlack/sampled:0,maximumChannel,borderSignalFraction:borderSamples?borderSignals/borderSamples:0,headingSignalFraction:brightFraction(heading.left,heading.top,heading.right,heading.bottom),statusTopSignalFraction:brightFraction(status.left,status.top,status.right,Math.min(status.bottom,status.top+96)) };
   })()`);
 }
 
@@ -327,14 +329,15 @@ async function main() {
     }
     if (lastState?.status !== 'passed') throw new Error(lastState?.error || `browser ended in ${lastState?.status}`);
     phase = 'capture_screenshot';
-    viewportLayout = await evaluate(socket, `(() => { window.scrollTo(0,0); const h=document.querySelector('h1').getBoundingClientRect(),s=document.querySelector('#status').getBoundingClientRect(); return {innerWidth,innerHeight,scrollWidth:document.documentElement.scrollWidth,heading:{left:h.left,right:h.right,top:h.top},status:{left:s.left,right:s.right,top:s.top},layoutPassed:document.documentElement.scrollWidth<=innerWidth&&h.left>=0&&h.right<=innerWidth&&s.left>=0&&s.right<=innerWidth}; })()`);
+    viewportLayout = await evaluate(socket, `(() => { const statusElement=document.querySelector('#status'); window.scrollTo(0,0); statusElement.scrollTo(0, 0); const h=document.querySelector('h1').getBoundingClientRect(),s=statusElement.getBoundingClientRect(); return {innerWidth,innerHeight,scrollWidth:document.documentElement.scrollWidth,scrollX,scrollY,statusScrollLeft:statusElement.scrollLeft,statusScrollTop:statusElement.scrollTop,heading:{left:h.left,right:h.right,top:h.top,bottom:h.bottom},status:{left:s.left,right:s.right,top:s.top,bottom:s.bottom},layoutPassed:scrollX===0&&scrollY===0&&statusElement.scrollLeft===0&&statusElement.scrollTop===0&&document.documentElement.scrollWidth<=innerWidth&&h.left>=0&&h.right<=innerWidth&&h.top>=0&&h.bottom<=innerHeight&&s.left>=0&&s.right<=innerWidth&&s.top>=0}; })()`);
     if (!viewportLayout.layoutPassed) throw new Error(`receipt surface clipped: ${JSON.stringify(viewportLayout)}`);
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       await delay(attempt === 1 ? 300 : 750);
       await evaluate(socket, 'new Promise(resolveFrame => requestAnimationFrame(() => requestAnimationFrame(resolveFrame)))');
-      const shot = await wsRequest(socket, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
-      const pixels = await inspectPixels(socket, shot.data, viewportLayout.status.left + 1, viewportLayout.status.top + 4);
-      pixelCheck = { ...pixels, attempt, passed: pixels.nonBlackFraction >= 0.05 && pixels.maximumChannel > 24 && pixels.borderSignalFraction >= 0.25 };
+      await evaluate(socket, `(() => { window.scrollTo(0,0); const statusElement=document.querySelector('#status'); statusElement.scrollTo(0, 0); return {scrollX,scrollY,statusScrollLeft:statusElement.scrollLeft,statusScrollTop:statusElement.scrollTop}; })()`);
+      const shot = await wsRequest(socket, 'Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false, clip: { x: 0, y: 0, width: viewportLayout.innerWidth, height: viewportLayout.innerHeight, scale: 1 } });
+      const pixels = await inspectPixels(socket, shot.data, viewportLayout);
+      pixelCheck = { ...pixels, attempt, passed: pixels.nonBlackFraction >= 0.05 && pixels.maximumChannel > 24 && pixels.borderSignalFraction >= 0.25 && pixels.headingSignalFraction >= 0.01 && pixels.statusTopSignalFraction >= 0.005 };
       if (!pixelCheck.passed) continue;
       mkdirSync(dirname(screenshotPath), { recursive: true }); writeFileSync(screenshotPath, Buffer.from(shot.data, 'base64')); screenshotWritten = true; break;
     }

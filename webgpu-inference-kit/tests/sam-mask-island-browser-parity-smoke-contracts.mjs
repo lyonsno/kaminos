@@ -19,6 +19,7 @@ const smokeJs = readFileSync(new URL('../smokes/sam-mask-island-parity.js', impo
 const witness = readFileSync(new URL('../tools/sam-mask-island-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const trackerWitness = readFileSync(new URL('../tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 const trackerSmokeJs = readFileSync(new URL('../smokes/sam31-two-frame-tracker-parity.js', import.meta.url), 'utf8');
+const trackerSessionSource = readFileSync(new URL('../src/sam31-browser-tracker-session.js', import.meta.url), 'utf8');
 const trackerOrchestratorPath = new URL('../smokes/sam31-two-image-tracker-orchestrator.js', import.meta.url);
 const trackerInvocationHtmlPath = new URL('../smokes/sam31-two-image-tracker-invocation.html', import.meta.url);
 assert.ok(existsSync(trackerOrchestratorPath), 'the two-invocation witness must have a parent-realm orchestrator');
@@ -215,22 +216,26 @@ assert.match(trackerWitness, /sam31TwoFrameTrackerParityState\?\.\(\{ summary: t
 assert.match(trackerOrchestrator, /options\.evidence\s*\?\s*createTerminalEvidenceState\(state\)/, 'the parent state hook must expose a compact terminal evidence projection');
 assert.match(trackerOrchestrator, /timings:\s*compactReceiptTimings\(receipt\.timings\)/, 'terminal receipt evidence must retain timing identity without returning full phase metadata graphs');
 assert.match(trackerWitness, /sam31TwoFrameTrackerParityState\?\.\(\{ evidence: true \}\)/, 'the driver must fetch the compact evidence projection after terminal status');
+assert.match(trackerWitness, /statusElement\.scrollTo\(0,\s*0\)/, 'the screenshot witness must reset the scrollable receipt to its visible origin before capture');
+assert.match(trackerWitness, /captureBeyondViewport:\s*false/, 'the screenshot witness must capture the explicit visible viewport rather than an ambiguous compositor surface');
+assert.match(trackerWitness, /headingSignalFraction/, 'the screenshot pixel gate must prove the visible title region contains rendered text');
+assert.match(trackerWitness, /statusTopSignalFraction/, 'the screenshot pixel gate must prove the top of the receipt contains rendered evidence');
 assert.match(trackerOrchestrator, /statusElement\.textContent\s*=\s*JSON\.stringify\(createVisibleState\(state\),\s*null,\s*2\)/, 'the human-visible receipt must render a bounded truthful projection instead of the raw state graph');
 assert.match(trackerOrchestrator, /completedInvocationCount:\s*invocations\.length,\s*invocationIndex:\s*invocations\.length\s*-\s*1,\s*childStatus:\s*'passed'/, 'terminal parent state must report both completed invocations and no running child');
 assert.match(trackerOrchestrator, /dualInvocationPassed:\s*sourceState\.dualInvocationEvidence\?\.passed\s*\|\|\s*false/, 'the visible terminal receipt must surface the load-bearing dual-invocation gate');
 assert.match(trackerSmokeJs, /parent\.sam31SharedTrackerPackageCache/, 'child invocation loading must consume the parent-owned package cache');
-assert.match(trackerSmokeJs, /const invocationExecution = \{\}/, 'each tracker invocation must receive an isolated WebGPU execution context');
-assert.match(trackerSmokeJs, /runInvocation\(packageRoots\[index\],\s*index,\s*invocationExecution\)/, 'every package invocation must consume its own execution context');
-assert.match(trackerSmokeJs, /closeExecutionContext\(invocationExecution/, 'the dual loop must drain and destroy each invocation device before the next session');
+assert.match(trackerSmokeJs, /createSam31BrowserTrackerSession\(\{[\s\S]*?packageRoot:\s*packageRoots\[index\]/, 'every package invocation must consume a fresh exported tracker session');
+assert.match(trackerSmokeJs, /const sessionClose = await session\.close\(\)/, 'the dual loop must close each exported tracker session before the next invocation');
+assert.match(trackerSmokeJs, /closeEvidence:\s*sessionClose/, 'each invocation row must preserve the exported session close evidence');
 assert.match(
-  trackerSmokeJs,
-  /execution\.device\.destroy\(\);\s*await execution\.device\.lost;/,
+  trackerSessionSource,
+  /device\.destroy\(\);[\s\S]*?await device\.lost;/,
   'the next invocation must wait until intentional WebGPU device destruction is observed by the browser',
 );
 assert.match(trackerSmokeJs, /persistentStaticBacking:\s*params\.get\('staticBacking'\)\s*===\s*'opfs'/, 'OPFS package storage must be explicit rather than silently imposed on every same-page invocation');
-assert.match(trackerSmokeJs, /device\.lost\.then/, 'the repeated-invocation witness must surface WebGPU device loss instead of waiting for an opaque CDP timeout');
+assert.match(trackerSessionSource, /device\.lost\.then/, 'the repeated-invocation witness must surface WebGPU device loss instead of waiting for an opaque CDP timeout');
 assert.ok(
-  trackerSmokeJs.indexOf('if (execution.closing) return;') < trackerSmokeJs.indexOf('execution.deviceLoss = {'),
+  trackerSessionSource.indexOf('if (intentionalClose) return;') < trackerSessionSource.indexOf('deviceLoss = {'),
   'intentional device destruction must be excluded before recording device-loss evidence',
 );
 assert.match(trackerSmokeJs, /between-invocation-checkpoint/, 'the dual witness must drain the queue and yield between complete tracker invocations');

@@ -334,6 +334,19 @@ export {
 } from './sam31-browser-tracker-package-runtime.js';
 
 export {
+  SAM31_BROWSER_TRACKER_SESSION_SCHEMA,
+  createSam31BrowserTrackerSession,
+} from './sam31-browser-tracker-session.js';
+
+export {
+  runSam31BrowserTrackerPackageInvocation,
+} from './sam31-browser-tracker-session-driver.js';
+
+export {
+  runSam31TwoImageBackbone,
+} from './sam31-two-image-backbone.js';
+
+export {
   SAM31_TEMPORAL_MEMORY_BANK_PHASE_PROGRAM_ROUTE_ID,
   createSam31TemporalMemoryBankCpuOracle,
   createSam31TemporalMemoryBankPhaseProgramRouteDefinition,

@@ -2,6 +2,7 @@ import {
   classifySam31MemoryAttentionAdapter,
   createSam31BrowserTrackerDualInvocationEvidence,
   createSam31BrowserTrackerPackageCache,
+  createSam31BrowserTrackerSession,
   createRouteInvocationRequest,
   createSam31TrackerState,
   createSam31MemoryAttentionPhaseProgramRouteDefinition,
@@ -635,20 +636,45 @@ async function run() {
       await closeExecutionContext(invocationExecution).catch(() => {});
     }
   }
-  let activeExecution = null;
+  let activeSession = null;
   try {
     const invocations = [];
     const betweenInvocationCheckpoints = [];
     for (let index = 0; index < packageRoots.length; index += 1) {
-      const invocationExecution = {};
-      activeExecution = invocationExecution;
-      invocations.push(await runInvocation(packageRoots[index], index, invocationExecution));
-      const disposal = await closeExecutionContext(invocationExecution, { collectGarbage: index + 1 < packageRoots.length });
-      activeExecution = null;
+      const session = await createSam31BrowserTrackerSession({
+        packageRoot: packageRoots[index],
+        pageUrl: location.href,
+        cache: packageCache,
+        commit: params.get('commit') || null,
+        onProgress: phase => update('running', phase, { episodeMode, invocationIndex: index }),
+      });
+      activeSession = session;
+      const invocation = await session.run();
+      const sessionClose = await session.close();
+      const gcObserved = index + 1 < packageRoots.length && typeof globalThis.gc === 'function';
+      if (gcObserved) globalThis.gc();
+      invocations.push({
+        ...invocation,
+        invocationIndex: index,
+        deviceLoss: session.deviceLoss,
+        runtimeSession: {
+          schema: session.schema,
+          executionOwner: '@kaminos/webgpu-inference-kit',
+          status: session.status,
+          closeEvidence: sessionClose,
+        },
+      });
+      const disposal = {
+        queueDrained: sessionClose.queueDrained,
+        deviceDestroyed: sessionClose.deviceDestroyed,
+        deviceLossAwaited: sessionClose.deviceLossAwaited,
+        gcObserved,
+      };
+      activeSession = null;
       if (index + 1 >= packageRoots.length) continue;
       const checkpoint = { afterInvocationIndex: index, ...disposal, passed: disposal.queueDrained && disposal.deviceDestroyed };
       betweenInvocationCheckpoints.push(checkpoint);
-      update('running', 'between-invocation-checkpoint', { completedInvocationCount: invocations.length, invocations, betweenInvocationCheckpoints, deviceLoss: invocationExecution.deviceLoss || null });
+      update('running', 'between-invocation-checkpoint', { completedInvocationCount: invocations.length, invocations, betweenInvocationCheckpoints, deviceLoss: session.deviceLoss });
     }
     const final = invocations.at(-1);
     let dualInvocationEvidence = null;
@@ -658,7 +684,7 @@ async function run() {
     }
     update('passed', 'complete', { ...final, invocations, betweenInvocationCheckpoints, dualInvocationEvidence, deviceLoss: null });
   } finally {
-    await closeExecutionContext(activeExecution).catch(() => {});
+    await activeSession?.close().catch(() => {});
   }
 }
 

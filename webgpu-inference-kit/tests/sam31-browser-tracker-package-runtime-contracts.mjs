@@ -282,4 +282,14 @@ assert.equal(carriedFrameEvidence.trackerStateShapePassed, false, 'carried non-c
 assert.equal(carriedFrameEvidence.stateIsolationPassed, false);
 assert.equal(carriedFrameEvidence.passed, false);
 
+const changedDeterministicDigest = structuredClone(secondInvocationSummary);
+changedDeterministicDigest.trackerState.frames[0].tensorDigests.imagePosition = 'changed-image-position';
+const changedDeterministicEvidence = trackerPackageRuntime.createSam31BrowserTrackerDualInvocationEvidence({
+  invocations: [firstInvocationSummary, changedDeterministicDigest],
+  betweenInvocationCheckpoints: [{ afterInvocationIndex: 0, realmRemoved: true, passed: true }],
+});
+assert.equal(changedDeterministicEvidence.deterministicTrackerStateShared, false);
+assert.equal(changedDeterministicEvidence.stateIsolationPassed, false);
+assert.equal(changedDeterministicEvidence.passed, false);
+
 console.log('sam3.1 browser tracker package runtime contracts passed');
