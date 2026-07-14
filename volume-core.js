@@ -223,7 +223,8 @@ export function normalizeBoundarySplatLodMode(value) {
 
 export function boundarySplatProjectedTierBudget(projectedDiameterPx) {
   const diameter = Number(projectedDiameterPx);
-  if (!Number.isFinite(diameter) || diameter <= 0) return 800;
+  if (!Number.isFinite(diameter)) return 0;
+  if (diameter <= 0) return 800;
   if (diameter <= 64) return 800;
   if (diameter <= 128) return 1600;
   if (diameter <= 256) return 3200;
@@ -5692,7 +5693,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatLodMode: normalizeBoundarySplatLodMode(controlsSnapshot.boundarySplatLodMode),
     boundarySplatAdaptiveLodIdentity: BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY,
     boundarySplatTierGroups: [],
+    boundarySplatRequestedTierGroups: [],
     boundarySplatGlobalRenderedInstanceCount: null,
+    boundarySplatTelemetryLodMode: null,
     boundarySplatHistoryArchiveCandidateCount: null,
     boundarySplatRequestedCandidateBudget: normalizeBoundarySplatCandidateBudget(controlsSnapshot.boundarySplatCandidateBudget),
     boundarySplatTelemetryRequestedCandidateBudget: null,
@@ -6102,6 +6105,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatFeatureBufferCapacity = 0;
   let boundarySplatTelemetryCopyPending = false;
   let boundarySplatTelemetryMapPending = false;
+  let boundarySplatTelemetryLodModePending = null;
   let boundarySplatPbrDepthTexture = null;
   let boundarySplatPbrDepthTextureSize = '';
   let fluidBuffers = [];
@@ -6583,6 +6587,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureBuffer = null;
     boundarySplatFeatureBufferCapacity = 0;
     boundarySplatTelemetryCopyPending = false;
+    boundarySplatTelemetryMapPending = false;
+    boundarySplatTelemetryLodModePending = null;
     oracleActivityCueBuffer = null;
     fluidBuffers = [];
     frontBuffers = [];
@@ -9069,7 +9075,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatRequestedInstanceCount = requestedInstanceCount;
     state.boundarySplatLodMode = allocation.mode;
     state.boundarySplatAdaptiveLodIdentity = BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY;
-    state.boundarySplatTierGroups = allocation.groups.map(group => ({
+    state.boundarySplatRequestedTierGroups = allocation.groups.map(group => ({
       ...group,
       effectiveCandidateBudget: null,
       renderedInstanceCount: null,
@@ -9374,6 +9380,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       BOUNDARY_SPLAT_DRAW_GROUP_COUNT * BOUNDARY_SPLAT_DRAW_GROUP_STRIDE_BYTES,
     );
     boundarySplatTelemetryCopyPending = true;
+    boundarySplatTelemetryLodModePending = state.boundarySplatLodMode;
   }
 
   function boundarySplatTierGroupsFromReadback(groupState) {
@@ -9609,6 +9616,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!boundarySplatTelemetryCopyPending || boundarySplatTelemetryMapPending || !boundarySplatReadbackBuffer) return;
     boundarySplatTelemetryCopyPending = false;
     boundarySplatTelemetryMapPending = true;
+    const telemetryLodMode = boundarySplatTelemetryLodModePending;
     try {
       await boundarySplatReadbackBuffer.mapAsync(GPUMapMode.READ);
       const mappedRange = boundarySplatReadbackBuffer.getMappedRange();
@@ -9634,6 +9642,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatSelectorTelemetryFrameCount = state.frameCount;
       state.boundarySplatEffectiveCandidateBudget = drawState[14];
       state.boundarySplatSelectedCandidateCount = drawState[15];
+      state.boundarySplatTelemetryLodMode = telemetryLodMode;
       state.boundarySplatPhaseMode = normalizeBoundarySplatPhaseMode(controlsSnapshot.boundarySplatPhaseMode);
       state.boundarySplatPhaseModeIdentity = boundarySplatPhaseModeIdentity(state.boundarySplatPhaseMode);
       state.boundarySplatPhaseStride = normalizeBoundarySplatPhaseStride(controlsSnapshot.boundarySplatPhaseStride);
@@ -9649,6 +9658,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
     } finally {
       boundarySplatTelemetryMapPending = false;
+      boundarySplatTelemetryLodModePending = null;
     }
   }
 
@@ -9721,6 +9731,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatSelectorTelemetryFrameCount = state.frameCount;
     state.boundarySplatEffectiveCandidateBudget = result.effectiveCandidateBudget;
     state.boundarySplatSelectedCandidateCount = result.selectedCandidateCount;
+    state.boundarySplatTelemetryLodMode = result.lodMode;
     state.boundarySplatHistoryWriteSlot = result.historyWriteSlot;
     state.boundarySplatHistorySlots = result.historySlots;
     state.boundarySplatPhaseMode = result.phaseMode;
@@ -12107,7 +12118,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       boundarySplatLodMode: boundarySplatSample?.lodMode ?? state.boundarySplatLodMode,
       boundarySplatAdaptiveLodIdentity: boundarySplatSample?.adaptiveLodIdentity ?? state.boundarySplatAdaptiveLodIdentity,
       boundarySplatTierGroups: boundarySplatSample?.tierGroups ?? state.boundarySplatTierGroups,
+      boundarySplatRequestedTierGroups: state.boundarySplatRequestedTierGroups,
       boundarySplatGlobalRenderedInstanceCount: boundarySplatSample?.globalRenderedInstanceCount ?? state.boundarySplatGlobalRenderedInstanceCount,
+      boundarySplatTelemetryLodMode: boundarySplatSample?.lodMode ?? state.boundarySplatTelemetryLodMode,
       boundarySplatHistoryArchiveCandidateCount: boundarySplatSample?.historyArchiveCandidateCount ?? state.boundarySplatHistoryArchiveCandidateCount,
       boundarySplatRequestedCandidateBudget: boundarySplatSample?.requestedCandidateBudget ?? state.boundarySplatRequestedCandidateBudget,
       boundarySplatEffectiveCandidateBudget: boundarySplatSample?.effectiveCandidateBudget ?? state.boundarySplatEffectiveCandidateBudget,
@@ -12541,7 +12554,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatLodMode: state.boundarySplatLodMode,
         boundarySplatAdaptiveLodIdentity: state.boundarySplatAdaptiveLodIdentity,
         boundarySplatTierGroups: state.boundarySplatTierGroups,
+        boundarySplatRequestedTierGroups: state.boundarySplatRequestedTierGroups,
         boundarySplatGlobalRenderedInstanceCount: state.boundarySplatGlobalRenderedInstanceCount,
+        boundarySplatTelemetryLodMode: state.boundarySplatTelemetryLodMode,
         boundarySplatHistoryArchiveCandidateCount: state.boundarySplatHistoryArchiveCandidateCount,
         boundarySplatRequestedCandidateBudget: state.boundarySplatRequestedCandidateBudget,
         boundarySplatTelemetryRequestedCandidateBudget: state.boundarySplatTelemetryRequestedCandidateBudget,

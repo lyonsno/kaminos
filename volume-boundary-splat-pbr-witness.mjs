@@ -519,6 +519,9 @@ async function waitForBoundarySplatTelemetry() {
       && state?.boundarySplatInstanceCount != null
       && typeof state?.boundarySplatLodMode === 'string'
       && Array.isArray(state?.boundarySplatTierGroups)
+      && state.boundarySplatTierGroups.length > 0
+      && state.boundarySplatTierGroups.every(group => group?.countAuthority === 'gpu-tier-group-post-submit-readback')
+      && state?.boundarySplatTelemetryLodMode === state?.boundarySplatLodMode
       && Number.isFinite(Number(state?.boundarySplatGlobalRenderedInstanceCount))
       && Number(state?.boundarySplatHistoryArchiveCandidateCount) === Number(state?.boundarySplatSourceCandidateCount)
       && Number(state?.boundarySplatTelemetryRequestedCandidateBudget) === Number(state?.boundarySplatRequestedCandidateBudget)
@@ -891,7 +894,9 @@ function compactState(state) {
     lodMode: state?.boundarySplatLodMode,
     adaptiveLodIdentity: state?.boundarySplatAdaptiveLodIdentity,
     tierGroups: state?.boundarySplatTierGroups,
+    requestedTierGroups: state?.boundarySplatRequestedTierGroups,
     globalRenderedInstanceCount: state?.boundarySplatGlobalRenderedInstanceCount,
+    telemetryLodMode: state?.boundarySplatTelemetryLodMode,
     historyArchiveCandidateCount: state?.boundarySplatHistoryArchiveCandidateCount,
     phaseModeIdentity: state?.boundarySplatPhaseModeIdentity,
     phaseSourceCount: state?.boundarySplatPhaseSourceCount,

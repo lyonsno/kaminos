@@ -28,6 +28,8 @@ const projectedCases = [
 for (const [diameterPx, expectedBudget] of projectedCases) {
   assert.equal(core.boundarySplatProjectedTierBudget(diameterPx), expectedBudget, `wrong projected tier for ${diameterPx}px`);
 }
+assert.equal(core.boundarySplatProjectedTierBudget(Number.POSITIVE_INFINITY), 0, 'near-plane projection failure must conservatively request full source');
+assert.equal(core.boundarySplatProjectedTierBudget(Number.NaN), 0, 'invalid projection authority must never silently underallocate to 800');
 assert.equal(core.boundarySplatApplyBudgetCeiling(0, 0), 0, 'full-source tier with no ceiling must remain full source');
 assert.equal(core.boundarySplatApplyBudgetCeiling(12800, 6400), 6400, 'explicit ceiling must cap a finite adaptive tier');
 assert.equal(core.boundarySplatApplyBudgetCeiling(0, 6400), 6400, 'explicit ceiling must cap an adaptive full-source tier');
@@ -78,6 +80,9 @@ assert.match(coreSource, /finalizeBoundarySplats[\s\S]*archiveCandidateCount[\s\
 assert.match(coreSource, /boundarySplatVs[\s\S]*groupIndex[\s\S]*descriptorStart[\s\S]*descriptorCount[\s\S]*sourceCandidateIndex/, 'vertex decode must map each indirect tier draw to its descriptor range and nested rank');
 assert.match(coreSource, /for\s*\(let groupIndex = 0; groupIndex < BOUNDARY_SPLAT_DRAW_GROUP_COUNT; groupIndex \+= 1\)[\s\S]*drawIndirect\(boundarySplatIndirectBuffer,\s*groupIndex \* 16\)/, 'renderer must issue bounded indirect draws for actual tier groups');
 assert.match(coreSource, /boundarySplatLodMode[\s\S]*boundarySplatAdaptiveLodIdentity[\s\S]*boundarySplatTierGroups[\s\S]*boundarySplatGlobalRenderedInstanceCount/, 'debug state must preserve requested/effective allocation and global count evidence');
+const descriptorWriter = coreSource.match(/function writeBoundarySplatInstanceDescriptors\(\)[\s\S]*?\n  \}/)?.[0] || '';
+assert.doesNotMatch(descriptorWriter, /state\.boundarySplatTierGroups\s*=\s*allocation\.groups/, 'descriptor upload must not erase the last authoritative GPU tier report with pending placeholders');
+assert.match(descriptorWriter, /state\.boundarySplatRequestedTierGroups\s*=\s*allocation\.groups/, 'descriptor upload must preserve separately labeled requested tier groups');
 assert.match(coreSource, /addedSimulationPasses:\s*0[\s\S]*addedHistoryArchivePasses:\s*1/, 'adaptive allocation must preserve one-simulator and one-history-archive authority');
 
 assert.match(page, /id="volume-boundary-splat-lod-mode"[\s\S]*value="fixed"[\s\S]*value="projected-area"/, 'operator UI must expose fixed versus projected-area allocation');
@@ -86,6 +91,7 @@ assert.match(page, /boundarySplatCandidateBudget[\s\S]*max:\s*12800/, 'operator 
 
 assert.match(witness, /volume_boundary_splat_lod_mode/, 'PBR witness must record the requested LOD mode');
 assert.match(witness, /boundarySplatAdaptiveLodIdentity[\s\S]*boundarySplatTierGroups[\s\S]*boundarySplatGlobalRenderedInstanceCount/, 'PBR witness must preserve adaptive allocation authority');
+assert.match(witness, /waitForBoundarySplatTelemetry[\s\S]*gpu-tier-group-post-submit-readback[\s\S]*boundarySplatTelemetryLodMode/, 'PBR witness must wait for authoritative tier groups whose GPU-observed LOD mode agrees with current controls');
 assert.match(witness, /stale-or-default-adaptive-lod|adaptive-lod-allocation-mismatch/, 'PBR witness must fail loud on stale or inconsistent adaptive allocation evidence');
 
 console.log('boundary splat adaptive LOD contracts passed');
