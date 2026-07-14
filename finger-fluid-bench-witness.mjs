@@ -16,7 +16,7 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-finger-fluid-be
 const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1120);
 const deviceScaleFactor = Number(args.get('--device-scale-factor') || 1);
-const settleMs = Number(args.get('--settle-ms') || 3200);
+const settleMs = Number(args.get('--settle-ms') || 10000);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
 const cadenceMs = Number(args.get('--cadence-ms') || 1500);
 
@@ -225,6 +225,7 @@ async function main() {
     if (lastDebugState.runtime?.densityContract !== 'wgsl-pbf-density-constraint-v0') throw new Error(`density contract mismatch: ${lastDebugState.runtime?.densityContract}`);
     if (lastDebugState.runtime?.vorticityConfinementContract !== 'wgsl-neighbor-vorticity-confinement-v0') throw new Error(`vorticity contract mismatch: ${lastDebugState.runtime?.vorticityConfinementContract}`);
     if (lastDebugState.runtime?.freeSurfaceContract !== 'wgsl-neighbor-free-surface-cohesion-v0') throw new Error(`free-surface contract mismatch: ${lastDebugState.runtime?.freeSurfaceContract}`);
+    if (lastDebugState.runtime?.restStateContract !== 'wgsl-support-aware-persistent-rest-state-v0') throw new Error(`rest-state contract mismatch: ${lastDebugState.runtime?.restStateContract}`);
     if (lastDebugState.runtime?.playgroundContract !== 'wgsl-shared-multi-regime-toy-playground-v0') throw new Error(`playground contract mismatch: ${lastDebugState.runtime?.playgroundContract}`);
     if (!lastDebugState.runtime?.playground?.rendered || lastDebugState.runtime.playground.supportGeometryCount < 300) {
       throw new Error(`shared playground geometry is missing from the operator viewport: ${JSON.stringify(lastDebugState.runtime?.playground)}`);
@@ -265,6 +266,22 @@ async function main() {
     if (!Number.isFinite(averageSurfaceFactor) || averageSurfaceFactor < 0.01 || averageSurfaceFactor > 0.85 || !Number.isFinite(maxSurfaceFactor) || maxSurfaceFactor < 0.5 || maxSurfaceFactor > 1.001) {
       throw new Error(`free-surface confidence is absent or saturated: ${JSON.stringify({ averageSurfaceFactor, maxSurfaceFactor })}`);
     }
+    const interfaceChurnRatio = lastDebugState.runtime?.diagnostics?.interfaceChurnRatio;
+    const averageInterfaceAge = lastDebugState.runtime?.diagnostics?.averageInterfaceAge;
+    const supportedRestingParticleCount = lastDebugState.runtime?.diagnostics?.supportedRestingParticleCount;
+    const activeTransportParticleCount = lastDebugState.runtime?.diagnostics?.activeTransportParticleCount;
+    if (!Number.isFinite(interfaceChurnRatio) || interfaceChurnRatio < 0 || interfaceChurnRatio > 0.12) {
+      throw new Error(`persistent interface churn is missing or excessive: ${JSON.stringify({ interfaceChurnRatio })}`);
+    }
+    if (!Number.isFinite(averageInterfaceAge) || averageInterfaceAge <= 0.05) {
+      throw new Error(`persistent interface age did not accumulate: ${JSON.stringify({ averageInterfaceAge })}`);
+    }
+    if (!Number.isSafeInteger(supportedRestingParticleCount) || supportedRestingParticleCount < 128) {
+      throw new Error(`supported rest population is not material: ${JSON.stringify({ supportedRestingParticleCount })}`);
+    }
+    if (!Number.isSafeInteger(activeTransportParticleCount) || activeTransportParticleCount < 128) {
+      throw new Error(`active transport was erased by rest-state relaxation: ${JSON.stringify({ activeTransportParticleCount })}`);
+    }
     const zoneDiagnostics = lastDebugState.runtime?.playgroundZoneDiagnostics;
     if (zoneDiagnostics?.schema !== 'kaminos.finger-fluid.playground-zone-diagnostics.v0') throw new Error(`playground zone diagnostics missing: ${JSON.stringify(zoneDiagnostics)}`);
     const minimumMaterialOccupancy = Math.ceil(lastDebugState.runtime.particleCount * 0.01);
@@ -273,6 +290,32 @@ async function main() {
     if (lastDebugState.runtime?.sourceRecirculationCount < 1) throw new Error(`finite source recirculation did not execute: ${lastDebugState.runtime?.sourceRecirculationCount}`);
     if (zoneDiagnostics.particleCount !== lastDebugState.runtime.particleCount || zoneDiagnostics.zones?.length !== 6) {
       throw new Error(`playground zone accounting is incomplete: ${JSON.stringify(zoneDiagnostics)}`);
+    }
+    const zonesByName = new Map(zoneDiagnostics.zones.map(zone => [zone.name, zone]));
+    const requireZone = name => {
+      const zone = zonesByName.get(name);
+      if (!zone) throw new Error(`required playground zone is missing: ${name}`);
+      return zone;
+    };
+    const sourceShelf = requireZone('source_shelf');
+    const spillway = requireZone('spillway');
+    if (sourceShelf.averageKineticEnergy < 0.55 || sourceShelf.activeTransportRatio < 0.55) {
+      throw new Error(`source-shelf transport fell below the absolute motion floor: ${JSON.stringify(sourceShelf)}`);
+    }
+    if (spillway.averageKineticEnergy < 0.35 || spillway.activeTransportRatio < 0.4) {
+      throw new Error(`spillway transport fell below the absolute motion floor: ${JSON.stringify(spillway)}`);
+    }
+    const meanZoneEnergy = names => names.reduce((sum, name) => sum + (zonesByName.get(name)?.averageKineticEnergy || 0), 0) / names.length;
+    const settledPoolNames = ['shallow_pool', 'deep_pool', 'catch_basin'];
+    const settledPools = settledPoolNames.map(requireZone);
+    const quietSupportedPoolCount = settledPools.filter(zone => zone.averageKineticEnergy <= 0.12 && zone.supportedRestingRatio >= 0.12).length;
+    if (quietSupportedPoolCount < 2) {
+      throw new Error(`supported rest did not become local and quiet in at least two pools: ${JSON.stringify(settledPools)}`);
+    }
+    const settledPoolAverageEnergy = meanZoneEnergy(settledPoolNames);
+    const activeTransportAverageEnergy = meanZoneEnergy(['source_shelf', 'spillway']);
+    if (!Number.isFinite(settledPoolAverageEnergy) || !Number.isFinite(activeTransportAverageEnergy) || activeTransportAverageEnergy <= settledPoolAverageEnergy * 4) {
+      throw new Error(`rest-state relaxation did not separate supported pools from active transport: ${JSON.stringify({ settledPoolAverageEnergy, activeTransportAverageEnergy })}`);
     }
     const interfaceCarrier = lastDebugState.runtime?.interfaceCarrier;
     if (interfaceCarrier?.schema !== 'kaminos.liquid-interface-carrier.v0') throw new Error(`interface carrier schema mismatch: ${interfaceCarrier?.schema}`);
