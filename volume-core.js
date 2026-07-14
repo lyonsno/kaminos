@@ -16,6 +16,9 @@ const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
 const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
+const PHASE_ALIGNED_TRUTH_HELD_AUTHORITY = 'offline-high-truth-held-render-only-v0';
+const PHASE_ALIGNED_LOW_HELD_AUTHORITY = 'downsampled-same-high-history-held-control-v0';
+const PHASE_ALIGNED_HELD_APPLICATION_IDENTITY = 'phase-aligned-held-render-application-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
@@ -9062,7 +9065,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && payload.filterIdentity === 'volume-overlap-box-filter-high-to-receiver-v0';
     const isSelectiveComposition = payload.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
       && payload.filterIdentity === SELECTIVE_COMPOSITION_APPLICATION_IDENTITY;
-    if (!isCoarseReceiver && !isSelectiveComposition) {
+    const isPhaseAlignedHeld = (
+      payload.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
+      || payload.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY
+    ) && payload.filterIdentity === PHASE_ALIGNED_HELD_APPLICATION_IDENTITY;
+    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld) {
       return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
         requestedInitializationAuthority: payload.initializationAuthority || null,
         requestedFilterIdentity: payload.filterIdentity || null,
@@ -9293,14 +9300,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!Number.isInteger(requestedSteps) || requestedSteps < 0) {
       return fullFieldImportFailure('imported-advance', 'invalid-step-count', { requestedSteps });
     }
-    if (receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY && requestedSteps > 0) {
+    const phaseAlignedHeld = receipt.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
+      || receipt.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY;
+    if ((receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY || phaseAlignedHeld) && requestedSteps > 0) {
       return {
         ok: false,
         schema: FULL_FIELD_IMPORT_IDENTITY,
         identity: 'imported-receiver-advance-rejected-v0',
         status: 'rejected',
         failurePhase: 'imported-advance',
-        reason: 'selective-composition-held-only',
+        reason: phaseAlignedHeld ? 'phase-aligned-held-render-only' : 'selective-composition-held-only',
         sessionId: receipt.sessionId,
         requestedSteps,
         priorAppliedReceipt: receipt,
@@ -9324,6 +9333,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       identity: requestedSteps === 0
         ? receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
           ? 'learned-selective-composition-held-render-v0'
+          : phaseAlignedHeld
+            ? receipt.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
+              ? 'offline-high-truth-held-render-v0'
+              : 'downsampled-phase-aligned-held-control-v0'
           : 'imported-receiver-held-state-v0'
         : requestedSteps === 1
           ? 'ordinary-receiver-single-simulation-step-v0'

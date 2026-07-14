@@ -149,4 +149,13 @@ assert.notEqual(missingImage.result.status, 0, 'missing visual output must fail'
 const missingImageReport = JSON.parse(readFileSync(join(missingImage.outDir, 'manifest.json'), 'utf8'));
 assert.equal(missingImageReport.failurePhase, 'artifact-validation');
 
+const overflowPayload = JSON.parse(readFileSync(frame1, 'utf8'));
+overflowPayload.captures.selectiveFullResidual.renderReceipt.boundarySplatOverflowCount = 1;
+const overflowFrame = join(fixtureRoot, 'capacity-overflow.json');
+writeFileSync(overflowFrame, JSON.stringify(overflowPayload, null, 2));
+const overflow = run([frame0, overflowFrame], 'capacity-overflow');
+assert.notEqual(overflow.result.status, 0, 'capacity overflow must fail instead of silently clipping the learned field');
+const overflowReport = JSON.parse(readFileSync(join(overflow.outDir, 'manifest.json'), 'utf8'));
+assert.equal(overflowReport.failurePhase, 'render-identity-validation');
+
 rmSync(fixtureRoot, { recursive: true, force: true });

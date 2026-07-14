@@ -12,6 +12,12 @@ const COARSE_RECEIVER_FILTER = 'volume-overlap-box-filter-high-to-receiver-v0';
 const SELECTIVE_COMPOSITION_SCHEMA = 'kaminos.volume.exact-basin-selective-composition.v0';
 const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
 const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0';
+const PHASE_ALIGNED_HELD_SCHEMA = 'kaminos.volume.phase-aligned-held-field.v0';
+const PHASE_ALIGNED_HELD_APPLICATION = 'phase-aligned-held-render-application-v0';
+const PHASE_ALIGNED_HELD_ROLES = {
+  truthHigh: { authority: 'offline-high-truth-held-render-only-v0', runtimeTruthAvailable: true },
+  lowPhaseAligned: { authority: 'downsampled-same-high-history-held-control-v0', runtimeTruthAvailable: false },
+};
 const FIELD_LAYOUT_IDENTITY = 'x-fastest-zyx-c-interleaved-v0';
 
 const args = new Map();
@@ -32,6 +38,7 @@ const requestedUrl = String(args.get('--url') || 'http://127.0.0.1:8095/?kaminos
 const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get('--source-capture'))) : null;
 const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
+const secondaryRenderPngPath = args.has('--secondary-render-png') ? resolve(String(args.get('--secondary-render-png'))) : null;
 const renderOnly = args.has('--render-only');
 const renderWarmupCount = Math.max(0, Math.floor(Number(args.get('--render-warmup-count') || 0)));
 const renderCompositionExplicit = args.has('--render-composition');
@@ -79,7 +86,8 @@ function resolveInitialFieldManifest() {
   if (manifest.failurePhase !== null) throw new Error('initial field manifest carries a failure phase');
   const isCoarseReceiver = manifest.schema === COARSE_RECEIVER_SCHEMA;
   const isSelectiveComposition = manifest.schema === SELECTIVE_COMPOSITION_SCHEMA;
-  if (!isCoarseReceiver && !isSelectiveComposition) {
+  const isPhaseAlignedHeld = manifest.schema === PHASE_ALIGNED_HELD_SCHEMA;
+  if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld) {
     throw new Error(`unsupported initial field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
   }
   if (isCoarseReceiver && manifest.initializationAuthority !== COARSE_RECEIVER_AUTHORITY) {
@@ -97,7 +105,16 @@ function resolveInitialFieldManifest() {
       throw new Error('selective composition mustNotBeAcceptedAs filtered-high receiver state');
     }
   }
-  const layoutIdentity = isCoarseReceiver ? manifest.layoutIdentity : FIELD_LAYOUT_IDENTITY;
+  const heldRole = isPhaseAlignedHeld ? PHASE_ALIGNED_HELD_ROLES[manifest.role] : null;
+  if (isPhaseAlignedHeld && (
+    !heldRole
+    || manifest.initializationAuthority !== heldRole.authority
+    || manifest.runtimeTruthAvailable !== heldRole.runtimeTruthAvailable
+    || manifest.renderOnly !== true
+  )) {
+    throw new Error(`phase-aligned held role authority mismatch: ${manifest.role || '(missing)'}`);
+  }
+  const layoutIdentity = isCoarseReceiver || isPhaseAlignedHeld ? manifest.layoutIdentity : FIELD_LAYOUT_IDENTITY;
   if (layoutIdentity !== FIELD_LAYOUT_IDENTITY) throw new Error(`unsupported receiver layout: ${layoutIdentity || '(missing)'}`);
   const grid = Number(manifest.receiver?.grid);
   const fluid = manifest.receiver?.fluid;
@@ -121,12 +138,18 @@ function resolveInitialFieldManifest() {
     manifestPath: initialFieldManifestPath,
     manifestSha256: sha256(raw),
     grid,
-    initializationAuthority: isSelectiveComposition ? SELECTIVE_COMPOSITION_AUTHORITY : COARSE_RECEIVER_AUTHORITY,
-    filterIdentity: isSelectiveComposition ? SELECTIVE_COMPOSITION_APPLICATION : COARSE_RECEIVER_FILTER,
+    initializationAuthority: isSelectiveComposition
+      ? SELECTIVE_COMPOSITION_AUTHORITY
+      : isPhaseAlignedHeld
+        ? heldRole.authority
+        : COARSE_RECEIVER_AUTHORITY,
+    filterIdentity: isSelectiveComposition || isPhaseAlignedHeld
+      ? isPhaseAlignedHeld ? PHASE_ALIGNED_HELD_APPLICATION : SELECTIVE_COMPOSITION_APPLICATION
+      : COARSE_RECEIVER_FILTER,
     layoutIdentity,
     source: manifest.source || null,
     receiverInitialSimStepCount: Number(manifest.receiver?.initialSimStepCount || 0),
-    heldOnly: isSelectiveComposition,
+    heldOnly: isSelectiveComposition || isPhaseAlignedHeld,
     fluid: validateArtifact(fluid, 'initial fluid', [grid, grid, grid, 16], fluidChannels),
     front: validateArtifact(front, 'initial front', [grid, grid, grid, 1], ['frontTopology']),
   };
@@ -377,8 +400,10 @@ async function main() {
   let initialFieldImport = null;
   let importedAdvance = null;
   let importedRender = null;
+  let importedSecondaryRender = null;
   const renderWarmups = [];
   let renderControlOverrides = {};
+  let secondaryRenderControlOverrides = {};
   let browserSession = null;
   let ws = null;
   let begin = null;
@@ -395,6 +420,15 @@ async function main() {
       : {};
     if (!renderControlOverrides || typeof renderControlOverrides !== 'object' || Array.isArray(renderControlOverrides)) {
       throw new Error('--render-control-overrides-json must decode to an object');
+    }
+    secondaryRenderControlOverrides = args.has('--secondary-render-control-overrides-json')
+      ? JSON.parse(String(args.get('--secondary-render-control-overrides-json')))
+      : {};
+    if (!secondaryRenderControlOverrides || typeof secondaryRenderControlOverrides !== 'object' || Array.isArray(secondaryRenderControlOverrides)) {
+      throw new Error('--secondary-render-control-overrides-json must decode to an object');
+    }
+    if (secondaryRenderPngPath && !renderPngPath) {
+      throw new Error('--secondary-render-png requires --render-png so both same-state views retain ordered custody');
     }
     phase = 'source-capture-validation';
     initialField = resolveInitialFieldManifest();
@@ -637,6 +671,52 @@ async function main() {
           importedAdvanceIdentity: importedAdvance.identity,
           importedAdvanceCompletedSteps: importedAdvance.completedSteps,
         };
+        if (secondaryRenderPngPath) {
+          phase = 'render-imported-field-secondary';
+          const secondaryReceipt = await evaluateByValue(
+            ws,
+            `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
+              fullFieldImportSessionId: importFinish.sessionId,
+              renderScale: 1,
+              boundarySplatComposition: renderComposition,
+              controlOverrides: secondaryRenderControlOverrides,
+              now: deterministicReplayStartTimeMs + advanceImportedSteps * deterministicReplayTimeStepMs,
+              sameStateCaptureId: `imported-receiver-render-secondary-step-${advanceImportedSteps}`,
+            })})`,
+            phase,
+          );
+          if (secondaryReceipt?.ok !== true || secondaryReceipt?.imageAuthority !== 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state') {
+            throw new Error(`secondary imported receiver render failed: ${JSON.stringify(secondaryReceipt)}`);
+          }
+          if (renderCompositionExplicit && secondaryReceipt.boundarySplatCompositionEffective !== renderComposition) {
+            throw new Error(`requested secondary render composition was not effective: ${renderComposition} != ${secondaryReceipt.boundarySplatCompositionEffective || '(missing)'}`);
+          }
+          const secondaryRect = secondaryReceipt.canvasCssRect;
+          if (secondaryRect.x < 0 || secondaryRect.y < 0 || secondaryRect.width < 64 || secondaryRect.height < 64) {
+            throw new Error(`canvas-clip-offscreen: ${JSON.stringify(secondaryRect)}`);
+          }
+          await delay(100);
+          phase = 'capture-imported-render-secondary';
+          const secondaryScreenshot = await wsRequest(ws, 'Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            clip: { x: secondaryRect.x, y: secondaryRect.y, width: secondaryRect.width, height: secondaryRect.height, scale: 1 },
+          });
+          const secondaryPng = Buffer.from(secondaryScreenshot.data, 'base64');
+          mkdirSync(dirname(secondaryRenderPngPath), { recursive: true });
+          writeFileSync(secondaryRenderPngPath, secondaryPng);
+          importedSecondaryRender = {
+            ...secondaryReceipt,
+            canvasMount,
+            path: secondaryRenderPngPath,
+            byteLength: secondaryPng.byteLength,
+            sha256: sha256(secondaryPng),
+            importedFieldManifestPath: initialField.manifestPath,
+            importedFieldManifestSha256: initialField.manifestSha256,
+            importedAdvanceIdentity: importedAdvance.identity,
+            importedAdvanceCompletedSteps: importedAdvance.completedSteps,
+          };
+        }
       }
     }
 
@@ -662,6 +742,7 @@ async function main() {
         importedAdvance,
         renderWarmups,
         importedRender,
+        importedSecondaryRender,
         routeIdentity: importedRender?.routeIdentity || initialFieldImport?.effective?.routeIdentity || null,
         effectiveRoute: importedRender?.effectiveRoute || initialFieldImport?.effective?.effectiveRoute || null,
         prototypeIdentity: initialFieldImport?.effective?.prototypeIdentity || null,
@@ -757,6 +838,7 @@ async function main() {
       importedAdvance,
       renderWarmups,
       importedRender,
+      importedSecondaryRender,
       fluidComponents: begin.fluidComponents,
       fluidChannelOrder: begin.fluidChannelOrder,
       frontChannelOrder: begin.frontChannelOrder,
@@ -793,6 +875,7 @@ async function main() {
       importedAdvance,
       renderWarmups,
       importedRender,
+      importedSecondaryRender,
       targetOrigin,
       browserSession: browserReceipt(browserSession),
       lastDebugState,

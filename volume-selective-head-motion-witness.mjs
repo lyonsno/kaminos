@@ -218,6 +218,12 @@ function validateRenderIdentity(frames, partialDebugMix) {
       for (const countKey of ['boundarySplatCandidateCount', 'boundarySplatInstanceCount', 'boundarySplatOverflowCount']) {
         if (!Number.isFinite(receipt[countKey])) throw new Error(`frame ${frame.frameIndex}/${role} missing ${countKey}`);
       }
+      if (receipt.boundarySplatOverflowCount !== 0
+        || receipt.boundarySplatCandidateCount !== receipt.boundarySplatInstanceCount) {
+        throw new Error(
+          `frame ${frame.frameIndex}/${role} capacity clipping: candidates=${receipt.boundarySplatCandidateCount}, instances=${receipt.boundarySplatInstanceCount}, overflow=${receipt.boundarySplatOverflowCount}`,
+        );
+      }
       const debug = capture.partialFlowDebug || {};
       if (debug.requestedMix !== partialDebugMix || debug.effectiveMix !== partialDebugMix) {
         throw new Error(`frame ${frame.frameIndex}/${role} partial debug mismatch: ${debug.requestedMix}/${debug.effectiveMix}`);
