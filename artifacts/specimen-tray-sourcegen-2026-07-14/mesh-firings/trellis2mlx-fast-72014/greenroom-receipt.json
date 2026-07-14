@@ -1,0 +1,30 @@
+{
+  "job_id": "d1ca27325a05",
+  "job_type": "trellis2mlx_fast",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72014/output.png",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014",
+  "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72014/output.png --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014/output.glb --seed 72014 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first",
+  "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "seed": "42",
+    "steps": "6",
+    "target_faces": "200000",
+    "texture_size": "1024"
+  },
+  "effective_timeout": null,
+  "ignored_params": {
+    "resolution": "512"
+  },
+  "started_at": 1784003583.2398698,
+  "finished_at": 1784003746.787137,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}

@@ -1,0 +1,274 @@
+{
+  "schema": "kaminos.specimen-tray-sourcegen-trellis-glb-multiangle-witness.v0",
+  "status": "passed",
+  "requestedRoute": {
+    "url": "http://127.0.0.1:8096/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Fspecimen-tray-sourcegen-2026-07-14%2Fmesh-firings%2Ftrellis2mlx-fast-72014%2Foutput.glb",
+    "assetType": "mesh",
+    "source": "trellis2mlx-fast-72014"
+  },
+  "effectiveUrl": "http://127.0.0.1:8096/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Fspecimen-tray-sourcegen-2026-07-14%2Fmesh-firings%2Ftrellis2mlx-fast-72014%2Foutput.glb",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.115",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.245.15",
+    "WebKit-Version": "537.36 (@25f5b661e5b08141ec24b17d1ce96c5ceb5828da)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9482/devtools/browser/b5b33b8a-a0b7-46e9-a5d7-12ef8c0f1efb"
+  },
+  "userDataDir": "/tmp/kaminos-specimen-tray-multiangle-9482-12154",
+  "debugPort": 9482,
+  "phase": "writing-report",
+  "truthBoundary": "Kaminos viewer route, GLB load, scene registration, and top/oblique camera captures for the specimen tray Trellis2MLX 72014 source. This does not prove collision suitability, final topology, or production interaction readiness.",
+  "loaded": {
+    "state": {
+      "schema": "kaminos.asset-smoke-link.v0",
+      "assetType": "mesh",
+      "status": "loaded",
+      "requestedRoot": "lerms-preview",
+      "requestedPath": "kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014/output.glb",
+      "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Fspecimen-tray-sourcegen-2026-07-14%2Fmesh-firings%2Ftrellis2mlx-fast-72014%2Foutput.glb",
+      "fileName": "output.glb",
+      "label": "Trellis2mlx Fast 72014",
+      "registeredObjectId": "glb-3a0c2f8d-b669-4da9-ac02-1ecfcd5240ca",
+      "registeredAt": "2026-07-14T04:39:00.680Z",
+      "error": null
+    },
+    "objects": [
+      {
+        "id": "glb-3a0c2f8d-b669-4da9-ac02-1ecfcd5240ca",
+        "label": "Trellis2mlx Fast 72014",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Fspecimen-tray-sourcegen-2026-07-14%2Fmesh-firings%2Ftrellis2mlx-fast-72014%2Foutput.glb",
+        "type": "glb",
+        "groupId": "group-89f0cca7-14a8-4a91-a2f7-5469ab0afe3f",
+        "active": true,
+        "transform": {
+          "position": [
+            -0.0000036656856536865234,
+            -0.007032828405499458,
+            0.00007672607898712158
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.594933061470165,
+            1.594933061470165,
+            1.594933061470165
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      }
+    ]
+  },
+  "captures": {
+    "top": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/witnesses/specimen-tray-trellis2mlx-fast-72014-top.png",
+      "bytes": 270338
+    },
+    "oblique": {
+      "path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/witnesses/specimen-tray-trellis2mlx-fast-72014-oblique.png",
+      "bytes": 469691
+    }
+  },
+  "cameraStates": {
+    "top": {
+      "position": [
+        0,
+        4.6,
+        0.22000000000000683
+      ],
+      "target": [
+        0,
+        0,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0.04777148347941984,
+        0.9988582909332913,
+        0,
+        0,
+        -0.9988582909332913,
+        0.04777148347941984,
+        0,
+        0,
+        -3.3306690738754696e-16,
+        -4.605257864658612,
+        1
+      ]
+    },
+    "oblique": {
+      "position": [
+        2.5500000000000003,
+        2.15,
+        3.1000000000000005
+      ],
+      "target": [
+        0,
+        -0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.7722896750091114,
+        -0.3021088761905334,
+        0.5588370825215648,
+        0,
+        2.7755575615628914e-17,
+        0.879683612111678,
+        0.47555939963599814,
+        0,
+        -0.635270539120398,
+        -0.36726961419241305,
+        0.6793705709085688,
+        0,
+        2.3505503099485736e-16,
+        0.01759367224223342,
+        -4.553536039463951,
+        1
+      ]
+    }
+  },
+  "finalState": {
+    "asset": {
+      "schema": "kaminos.asset-smoke-link.v0",
+      "assetType": "mesh",
+      "status": "loaded",
+      "requestedRoot": "lerms-preview",
+      "requestedPath": "kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014/output.glb",
+      "effectiveUrl": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Fspecimen-tray-sourcegen-2026-07-14%2Fmesh-firings%2Ftrellis2mlx-fast-72014%2Foutput.glb",
+      "fileName": "output.glb",
+      "label": "Trellis2mlx Fast 72014",
+      "registeredObjectId": "glb-3a0c2f8d-b669-4da9-ac02-1ecfcd5240ca",
+      "registeredAt": "2026-07-14T04:39:00.680Z",
+      "error": null
+    },
+    "objects": [
+      {
+        "id": "glb-3a0c2f8d-b669-4da9-ac02-1ecfcd5240ca",
+        "label": "Trellis2mlx Fast 72014",
+        "source": "/api/read?root=lerms-preview&path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Fspecimen-tray-sourcegen-2026-07-14%2Fmesh-firings%2Ftrellis2mlx-fast-72014%2Foutput.glb",
+        "type": "glb",
+        "groupId": "group-89f0cca7-14a8-4a91-a2f7-5469ab0afe3f",
+        "active": true,
+        "transform": {
+          "position": [
+            -0.0000036656856536865234,
+            -0.007032828405499458,
+            0.00007672607898712158
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ],
+          "scale": [
+            1.594933061470165,
+            1.594933061470165,
+            1.594933061470165
+          ]
+        },
+        "sceneTransform": null,
+        "splat": null,
+        "image": null,
+        "renderRoute": null,
+        "renderCapabilities": null,
+        "renderHandoffSchema": null
+      }
+    ],
+    "camera": {
+      "position": [
+        2.550000000000001,
+        2.1499999999999995,
+        3.100000000000001
+      ],
+      "target": [
+        0,
+        -0.02,
+        0
+      ],
+      "projectionMatrix": [
+        2.063133319572083,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0001000100010002,
+        -1,
+        0,
+        0,
+        -0.010001000100010001,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.7722896750091113,
+        -0.30210887619053334,
+        0.5588370825215648,
+        0,
+        -2.7755575615628914e-17,
+        0.879683612111678,
+        0.475559399635998,
+        0,
+        -0.6352705391203982,
+        -0.367269614192413,
+        0.6793705709085689,
+        0,
+        4.978656376053436e-16,
+        0.017593672242233592,
+        -4.553536039463951,
+        1
+      ]
+    }
+  }
+}

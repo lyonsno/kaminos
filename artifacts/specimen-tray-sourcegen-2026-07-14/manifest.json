@@ -1,0 +1,162 @@
+{
+  "schema": "kaminos.specimen-tray-sourcegen-manifest.v0",
+  "created_at": "2026-07-14T04:41:03Z",
+  "agent": "handy-candyman",
+  "intent": "Produce a clean reconstruction source and first orbitability-seeking GLB for the Crucible Bench specimen tray + slot asset after Titan Hammer promotion.",
+  "truth_boundary": "Promotes a current visual/orbitability specimen-tray candidate. Does not claim collision suitability, topology approval, per-slot interaction readiness, or final production readiness.",
+  "source_armature": {
+    "authoritative_crop": "artifacts/crucible-bench-shards-2026-07-13/crops/01-specimen-tray.png",
+    "sam31_overlay": "artifacts/crucible-bench-shards-2026-07-13/masks/specimen-tray-sam31-probe/overlay.png",
+    "conditioning_image": "artifacts/specimen-tray-sourcegen-2026-07-14/inputs/specimen-tray-square-conditioning.png",
+    "conditioning_role": "source pressure preserving tray silhouette, 3x4 slot layout, and specimen vocabulary; not full source truth"
+  },
+  "prompt": {
+    "path": "artifacts/specimen-tray-sourcegen-2026-07-14/prompts/flux2-realistic-specimen-tray-source.txt",
+    "summary": "Realistic isolated black specimen display tray with exactly twelve square inset slots arranged 3 by 4, raised bevels, colorful shard specimens, plain gray studio background."
+  },
+  "image_generation": {
+    "requested_route": "mflux_flux2_edit_promptfile",
+    "backend": {
+      "runner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+      "model": "flux2-klein-9b",
+      "quantize": "4",
+      "width": "768",
+      "height": "768",
+      "steps": "10",
+      "guidance": "1.0",
+      "mlx_cache_limit_gb": "48"
+    },
+    "candidates": {
+      "72011": {
+        "job_id": "83f43c3ca82b",
+        "status": "done",
+        "output": "artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72011/output.png",
+        "sha256": "f78c467ccafb322b2d13de3c2c0b667bca24d9e4144ba975c71b2d3cca44da6c",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/inputs/specimen-tray-square-conditioning.png --prompt-file /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/prompts/flux2-realistic-specimen-tray-source.txt --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72011/output.png --metadata --model flux2-klein-9b --quantize 4 --height 768 --width 768 --steps 10 --guidance 1.0 --seed 72011 --mlx-cache-limit-gb 48",
+        "timing": {
+          "started_at": 1784002927.811383,
+          "finished_at": 1784003048.945245,
+          "duration_s": 121.1
+        },
+        "visual_verdict": "Strong source: exact 3x4 grid and bevels; slightly heavier shadow/perspective than preferred."
+      },
+      "72012": {
+        "job_id": "6613235254e8",
+        "status": "done",
+        "output": "artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72012/output.png",
+        "sha256": "9cd072aecdd86533f2217176b16ed8416d47ec71df31e1702f0e7a0cbd31c914",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/inputs/specimen-tray-square-conditioning.png --prompt-file /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/prompts/flux2-realistic-specimen-tray-source.txt --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72012/output.png --metadata --model flux2-klein-9b --quantize 4 --height 768 --width 768 --steps 10 --guidance 1.0 --seed 72012 --mlx-cache-limit-gb 48",
+        "timing": {
+          "started_at": 1784003048.948885,
+          "finished_at": 1784003196.3613818,
+          "duration_s": 147.4
+        },
+        "visual_verdict": "Strong source: clean slot depth and outer frame; slightly flatter/darker backing board."
+      },
+      "72013": {
+        "job_id": "a9a57757ec6a",
+        "status": "done",
+        "output": "artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72013/output.png",
+        "sha256": "15779cb709d79c9542b45eff65bb76acfa1f201b7f765306deadc57e35f92c30",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/inputs/specimen-tray-square-conditioning.png --prompt-file /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/prompts/flux2-realistic-specimen-tray-source.txt --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72013/output.png --metadata --model flux2-klein-9b --quantize 4 --height 768 --width 768 --steps 10 --guidance 1.0 --seed 72013 --mlx-cache-limit-gb 48",
+        "timing": {
+          "started_at": 1784003196.364063,
+          "finished_at": 1784003335.425953,
+          "duration_s": 139.1
+        },
+        "visual_verdict": "Strong source: clean perspective and bevels; near-promoted but background/frame separation slightly less tidy than 72014."
+      },
+      "72014": {
+        "job_id": "0bda4a607d02",
+        "status": "done",
+        "output": "artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72014/output.png",
+        "sha256": "84b9d6e544a0dcd7e15fc637bfae145aadc7f57cb38e9c9337c104835e04ae2a",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/inputs/specimen-tray-square-conditioning.png --prompt-file /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/prompts/flux2-realistic-specimen-tray-source.txt --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72014/output.png --metadata --model flux2-klein-9b --quantize 4 --height 768 --width 768 --steps 10 --guidance 1.0 --seed 72014 --mlx-cache-limit-gb 48",
+        "timing": {
+          "started_at": 1784003335.428586,
+          "finished_at": 1784003494.132786,
+          "duration_s": 158.7
+        },
+        "visual_verdict": "Promoted first mesh source: exact 3x4 grid, full tray frame, crisp raised square rims, readable specimen fragments, and clean reconstruction-friendly background."
+      }
+    },
+    "selected_seed": "72014"
+  },
+  "mesh_firing": {
+    "id": "trellis2mlx-fast-72014",
+    "greenroom_job_id": "d1ca27325a05",
+    "status": "done",
+    "requested_route": {
+      "job_type": "trellis2mlx_fast",
+      "params": {
+        "seed": "72014",
+        "resolution": "512",
+        "steps": "8",
+        "target_faces": "100000",
+        "texture_size": "512"
+      }
+    },
+    "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72014/output.png --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014/output.glb --seed 72014 --resolution 512 --steps 8 --no-cascade --target-faces 100000 --texture-size 512 --simplify-first",
+    "backend": {
+      "runner": "trellis2mlx MLX",
+      "cwd": "/Users/noahlyons/dev/trellis2mlx",
+      "effective_env": {
+        "PYTHONPATH": "."
+      },
+      "route_identity_evidence": [
+        "stdout: DINOv3 loaded 412 weight arrays",
+        "stdout: Features: (1, 1029, 1024) (MLX)",
+        "stdout: Rasterizing UV space (96,905 tris, 512x512, MLX)"
+      ]
+    },
+    "timing": {
+      "started_at": 1784003583.2398698,
+      "finished_at": 1784003746.787137,
+      "duration_s": 163.5
+    },
+    "mesh_summary": {
+      "sparse_voxels": 2360,
+      "decoded_voxels": 890997,
+      "vertices_after_cleanup": 48423,
+      "faces_after_cleanup": 96905,
+      "glb_size_mb": 3.4
+    },
+    "output_glb": {
+      "path": "artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014/output.glb",
+      "sha256": "e2ee9641e5596c2b0795cd664c0ff3b62cbc2fe72d9bef3c2be03c198023c887"
+    },
+    "receipt": "artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014/greenroom-receipt.json",
+    "stdout": "artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014/stdout.log",
+    "visual_verdict": "Promoted current tray candidate: the outer tray, raised 3x4 slot grid, real thickness, and colorful specimen surfaces survive in top/oblique Kaminos captures. Useful as a bench tray/slot prop; not collision/topology approved."
+  },
+  "viewer_routes": {
+    "direct_mesh_link": {
+      "requested_url": "http://127.0.0.1:8096/index.html?mesh_root=lerms-preview&mesh_path=kaminos-handy-candyman-crucible-shards-0713%2Fartifacts%2Fspecimen-tray-sourcegen-2026-07-14%2Fmesh-firings%2Ftrellis2mlx-fast-72014%2Foutput.glb",
+      "witness_json": "artifacts/specimen-tray-sourcegen-2026-07-14/witnesses/specimen-tray-trellis2mlx-fast-72014-direct-glb-link-witness.json",
+      "witness_png": "artifacts/specimen-tray-sourcegen-2026-07-14/witnesses/specimen-tray-trellis2mlx-fast-72014-direct-glb-link.png",
+      "proved": "requested/effective route identity, /api/read resource request, and registered GLB scene object"
+    },
+    "multiangle": {
+      "witness_json": "artifacts/specimen-tray-sourcegen-2026-07-14/witnesses/specimen-tray-trellis2mlx-fast-72014-multiangle-witness.json",
+      "top_png": "artifacts/specimen-tray-sourcegen-2026-07-14/witnesses/specimen-tray-trellis2mlx-fast-72014-top.png",
+      "oblique_png": "artifacts/specimen-tray-sourcegen-2026-07-14/witnesses/specimen-tray-trellis2mlx-fast-72014-oblique.png",
+      "proved": "top/oblique visual inspection surfaces for slot-grid and tray-depth survival"
+    }
+  },
+  "promoted": {
+    "source_image": {
+      "path": "artifacts/specimen-tray-sourcegen-2026-07-14/promoted/specimen-tray-flux2-72014-source.png",
+      "sha256": "84b9d6e544a0dcd7e15fc637bfae145aadc7f57cb38e9c9337c104835e04ae2a"
+    },
+    "glb": {
+      "path": "artifacts/specimen-tray-sourcegen-2026-07-14/promoted/specimen-tray-trellis2mlx-fast-72014.glb",
+      "sha256": "e2ee9641e5596c2b0795cd664c0ff3b62cbc2fe72d9bef3c2be03c198023c887"
+    },
+    "witness_captures": [
+      "artifacts/specimen-tray-sourcegen-2026-07-14/promoted/specimen-tray-trellis2mlx-fast-72014-top.png",
+      "artifacts/specimen-tray-sourcegen-2026-07-14/promoted/specimen-tray-trellis2mlx-fast-72014-oblique.png"
+    ],
+    "comparison_sheet": "artifacts/specimen-tray-sourcegen-2026-07-14/contact-sheets/sourcegen-comparison.html"
+  },
+  "next_decision_boundary": "Operator smoke the tray GLB. If interaction/collision matters, run topology/QEM or low-poly proxy extraction; if bench dressing is enough, register as a visual specimen-tray prop with a non-collision contract."
+}

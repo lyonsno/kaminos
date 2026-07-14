@@ -1,0 +1,21 @@
+{
+  "job_id": "83f43c3ca82b",
+  "status": "done",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "output_dir": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72011",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/prompts/flux2-realistic-specimen-tray-source.txt",
+    "seed": "72011",
+    "steps": "10",
+    "guidance": "1.0",
+    "height": "768",
+    "width": "768",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "started_at": 1784002927.811383,
+  "finished_at": 1784003048.945245,
+  "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/inputs/specimen-tray-square-conditioning.png --prompt-file /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/prompts/flux2-realistic-specimen-tray-source.txt --output /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72011/output.png --metadata --model flux2-klein-9b --quantize 4 --height 768 --width 768 --steps 10 --guidance 1.0 --seed 72011 --mlx-cache-limit-gb 48",
+  "error_message": null
+}

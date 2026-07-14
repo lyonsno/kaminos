@@ -1,0 +1,24 @@
+{
+  "name": "specimen-tray-square-conditioning",
+  "job_type": "mflux_flux2_edit_promptfile",
+  "job_id": "83f43c3ca82b",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/inputs/specimen-tray-square-conditioning.png",
+  "input_name": "specimen-tray-square-conditioning.png",
+  "params": {
+    "prompt_file": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/prompts/flux2-realistic-specimen-tray-source.txt",
+    "seed": "72011",
+    "steps": "10",
+    "guidance": "1.0",
+    "height": "768",
+    "width": "768",
+    "model": "flux2-klein-9b",
+    "quantize": "4",
+    "mlx_cache_limit_gb": "48"
+  },
+  "output_files": [
+    "output.metadata.json",
+    "output.png"
+  ],
+  "created_at": 1784003048.945245,
+  "duration_s": 121.1
+}

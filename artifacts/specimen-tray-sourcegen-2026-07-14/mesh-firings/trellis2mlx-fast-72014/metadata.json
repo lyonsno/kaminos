@@ -1,0 +1,19 @@
+{
+  "name": "output",
+  "job_type": "trellis2mlx_fast",
+  "job_id": "d1ca27325a05",
+  "input_path": "/private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72014/output.png",
+  "input_name": "output.png",
+  "params": {
+    "seed": "72014",
+    "resolution": "512",
+    "steps": "8",
+    "target_faces": "100000",
+    "texture_size": "512"
+  },
+  "output_files": [
+    "output.glb"
+  ],
+  "created_at": 1784003746.787137,
+  "duration_s": 163.5
+}

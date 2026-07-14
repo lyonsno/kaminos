@@ -1,0 +1,53 @@
+  Preprocessing /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/flux2-edit/specimen-tray-72014/output.png...
+  Background removed
+  DINOv3: loaded 412 weight arrays
+  Features: (1, 1029, 1024) (MLX)
+=== Stage 1: Sparse Structure ===
+  Sampled: 53.2s
+  2360 sparse voxels at 32³
+
+=== Stage 2a: LR Shape Latent ===
+  Sampled: 29.5s (2360 tokens)
+  No-cascade: using LR SLat directly (2,360 tokens, grid_size=512)
+
+=== Stage 3: Decode Shape ===
+  Level 0 → 1: 12024 voxels
+  Level 1 → 2: 51670 voxels
+  Level 2 → 3: 203549 voxels
+  Level 3 → 4: 890997 voxels
+  Decoded: 14.1s (890,997 voxels)
+  Subdivision masks: 4 levels
+
+=== Mesh Extraction ===
+  890,997 voxels, coord range [0, 511], grid_size=512
+  Extracted: 0.7s
+  890,997 vertices, 1,791,092 faces
+  Pre-simplify: 48,022V 99,999F (0.6s)
+  Removed 515 duplicate faces
+  Removed 4254 non-manifold faces
+  Filled 454 holes (264 too large, max_perimeter=0.03)
+  Cleanup: 48,022V 99,999F → 48,423V 96,905F
+  Cleanup: 3.1s
+
+=== Stage 4: Texture SLat ===
+  Sampled: 16.5s (2,360 tokens)
+
+=== Stage 5: Texture Decode ===
+  Level 0 → 1: 12024 voxels
+  Level 1 → 2: 51670 voxels
+  Level 2 → 3: 203549 voxels
+  Level 3 → 4: 890997 voxels
+  Decoded: 9.1s (890,997 voxels, 6 channels)
+  PBR attrs: RGB [-0.03, 0.85] metallic [-0.00, 0.00] roughness [0.59, 0.60]
+
+=== Stage 6: Texture Baking ===
+  UV unwrap (xatlas): 65,514V 96,905F (7.7s)
+    Rasterizing UV space (96,905 tris, 512x512, MLX)...
+    160,318 pixels covered (0.5s)
+    Interpolated 160,318 positions (0.0s)
+    Sampled voxel attrs (0.7s)
+    Inpainted seams (0.8s)
+
+  Saved: /private/tmp/kaminos-handy-candyman-crucible-shards-0713/artifacts/specimen-tray-sourcegen-2026-07-14/mesh-firings/trellis2mlx-fast-72014/output.glb (3.5MB)
+
+Total: 155.1s
