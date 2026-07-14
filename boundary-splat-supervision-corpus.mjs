@@ -14,6 +14,10 @@ export {
 };
 
 export const BOUNDARY_SPLAT_SUPERVISION_SCHEMA = 'kaminos-boundary-splat-supervision-corpus-v0';
+export const BOUNDARY_SPLAT_STRUCTURAL_SUPERVISION_IDENTITY = 'native-boundary-sidecar-structural-supervision-v0';
+
+const BOUNDARY_SPLAT_STRUCTURAL_STRUCTURE_CHANNELS = ['support', 'coverage', 'ridge', 'footprint'];
+const BOUNDARY_SPLAT_STRUCTURAL_META_CHANNELS = ['proximity', 'normalX', 'normalY', 'normalZ'];
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
@@ -47,8 +51,52 @@ async function validateArtifact(manifestPath, artifact, label) {
   return { path, bytes, digest };
 }
 
-export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
+function validateFloat32Artifact(bytes, label) {
+  if (bytes.length % 4 !== 0) throw new Error(`${label} bytes must align to float32 values`);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let byteOffset = 0; byteOffset < bytes.length; byteOffset += 4) {
+    if (!Number.isFinite(view.getFloat32(byteOffset, true))) throw new Error(`${label} contains non-finite values`);
+  }
+}
+
+export async function settleBoundarySplatRawRelease({
+  primaryError = null,
+  primaryPhase,
+  releasePhase,
+  release,
+}) {
+  if (typeof primaryPhase !== 'string' || !primaryPhase || typeof releasePhase !== 'string' || !releasePhase) {
+    throw new Error('raw sidecar release custody requires primary and release phases');
+  }
+  if (typeof release !== 'function') throw new Error('raw sidecar release custody requires a release function');
+  try {
+    const receipt = await release();
+    return {
+      phase: primaryError ? primaryPhase : releasePhase,
+      primaryError,
+      releaseError: null,
+      receipt,
+    };
+  } catch (releaseError) {
+    if (primaryError) {
+      primaryError.rawSidecarReleaseError = releaseError?.message || String(releaseError);
+      return {
+        phase: primaryPhase,
+        primaryError,
+        releaseError,
+        receipt: null,
+      };
+    }
+    releaseError.supervisionPhase = releasePhase;
+    throw releaseError;
+  }
+}
+
+export async function validateBoundarySplatSupervisionCorpus(manifestFile, options = {}) {
   const manifestPath = resolve(manifestFile);
+  const expectedGrid = Number.isInteger(options.expectedGrid) && options.expectedGrid > 0
+    ? options.expectedGrid
+    : 160;
   const manifestBytes = await readFile(manifestPath);
   if (manifestBytes.length === 0) throw new Error('corpus manifest is blank');
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
@@ -59,6 +107,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
   if (!Array.isArray(manifest.frames) || manifest.frames.length === 0) throw new Error('corpus must contain at least one frame');
 
   let candidateCount = 0;
+  let structuralFrameCount = 0;
   const frames = [];
   for (const [index, frame] of manifest.frames.entries()) {
     const label = `frame ${index}`;
@@ -113,6 +162,51 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
       if (frame.flowDebug.simStepCount !== frame.simStepCount) throw new Error(`${label} flow-debug simulator step does not match candidates and target`);
       if (frame.flowDebug.controlOverrides?.flowDebug !== 1) throw new Error(`${label} flow-debug control override is not exact`);
     }
+    let structureArtifact = null;
+    let metaArtifact = null;
+    if (frame.structuralSupervision != null) {
+      const structural = frame.structuralSupervision;
+      if (frame.grid !== expectedGrid) throw new Error(`${label} structural supervision requires exact grid ${expectedGrid}, received ${frame.grid}`);
+      if (manifest.warmup?.authority !== 'live-single-browser-sim-step-floor-v0'
+        || !Number.isInteger(manifest.warmup.requestedMinSimStepCount) || manifest.warmup.requestedMinSimStepCount < 0
+        || !Number.isInteger(manifest.warmup.achievedSimStepCount) || manifest.warmup.achievedSimStepCount < manifest.warmup.requestedMinSimStepCount
+        || manifest.warmup.uncapped !== true) {
+        throw new Error('structural supervision requires uncapped live single-browser warmup authority');
+      }
+      if (frame.simStepCount < manifest.warmup.requestedMinSimStepCount) throw new Error(`${label} structural supervision was captured before the warmup floor`);
+      if (structural.identity !== BOUNDARY_SPLAT_STRUCTURAL_SUPERVISION_IDENTITY) throw new Error(`${label} structural supervision identity is invalid`);
+      if (structural.authority !== 'live-native-boundary-sidecar-frozen-sim-state-v0') throw new Error(`${label} structural supervision authority is invalid`);
+      if (structural.sameStateCaptureId !== frame.sameStateCaptureId) throw new Error(`${label} structural same-state identity does not match candidates and target`);
+      if (structural.simStepCount !== frame.simStepCount) throw new Error(`${label} structural simulator step does not match candidates and target`);
+      if (structural.requestedRoute !== frame.requestedRoute || structural.effectiveRoute !== frame.effectiveRoute) throw new Error(`${label} structural requested/effective route does not match the frame`);
+      if (structural.prototypeIdentity !== 'kaminos-volume-prototype-v0') throw new Error(`${label} structural prototype identity is invalid`);
+      if (typeof structural.backend !== 'string' || !structural.backend.startsWith('WebGPU:')) throw new Error(`${label} structural backend is not WebGPU`);
+      if (structural.fallbackReason != null) throw new Error(`${label} structural supervision contains fallback evidence: ${structural.fallbackReason}`);
+      if (structural.dtype !== 'float32-le' || structural.gridAuthority !== 'exact-frame-grid-v0') throw new Error(`${label} structural layout authority is invalid`);
+      exactArray(structural.grid, [expectedGrid, expectedGrid, expectedGrid], `${label} structural grid`);
+      finiteArray(structural.gridToWorld?.scale, 3, `${label} structural gridToWorld scale`);
+      finiteArray(structural.gridToWorld?.translation, 3, `${label} structural gridToWorld translation`);
+      finiteArray(structural.gridToWorld?.matrixColumnMajor, 16, `${label} structural gridToWorld matrix`);
+      if (structural.gridToWorld?.identity !== 'boundary-sidecar-cell-center-index-to-volume-world-v0') throw new Error(`${label} structural gridToWorld identity is invalid`);
+      if (typeof structural.captureId !== 'string' || !structural.captureId
+        || structural.release?.released !== true || structural.release.captureId !== structural.captureId
+        || structural.release.sameStateCaptureId !== structural.sameStateCaptureId) {
+        throw new Error(`${label} structural release receipt is missing or mismatched`);
+      }
+
+      structureArtifact = await validateArtifact(manifestPath, structural.fields?.structure, `${label} structural structure`);
+      metaArtifact = await validateArtifact(manifestPath, structural.fields?.meta, `${label} structural meta`);
+      const expectedFieldBytes = expectedGrid ** 3 * 4 * 4;
+      if (structureArtifact.bytes.length !== expectedFieldBytes || metaArtifact.bytes.length !== expectedFieldBytes) {
+        throw new Error(`${label} structural field bytes must equal exact grid payload ${expectedFieldBytes}`);
+      }
+      if (structural.fields.structure.components !== 4 || structural.fields.meta.components !== 4) throw new Error(`${label} structural fields must contain four components`);
+      exactArray(structural.fields.structure.channels, BOUNDARY_SPLAT_STRUCTURAL_STRUCTURE_CHANNELS, `${label} structural structure channel`);
+      exactArray(structural.fields.meta.channels, BOUNDARY_SPLAT_STRUCTURAL_META_CHANNELS, `${label} structural meta channel`);
+      validateFloat32Artifact(structureArtifact.bytes, `${label} structural structure data`);
+      validateFloat32Artifact(metaArtifact.bytes, `${label} structural meta data`);
+      structuralFrameCount += 1;
+    }
     candidateCount += frame.candidates.count;
     frames.push({
       id: frame.id,
@@ -120,6 +214,9 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
       targetPath: targetArtifact.path,
       flowDebugPath: flowDebugArtifact?.path || null,
       flowDebugAuthority: frame.flowDebug?.authority || null,
+      structurePath: structureArtifact?.path || null,
+      metaPath: metaArtifact?.path || null,
+      structuralSupervisionIdentity: frame.structuralSupervision?.identity || null,
       candidateCount: frame.candidates.count,
     });
   }
@@ -130,6 +227,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile) {
     manifestPath,
     frameCount: frames.length,
     candidateCount,
+    structuralFrameCount,
     frames,
   };
 }

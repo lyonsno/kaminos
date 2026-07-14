@@ -7,7 +7,14 @@ const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8
 assert.match(witness, /--boundary-splat-supervision-dir/, 'witness exposes a direct fixed-candidate supervision output directory');
 assert.match(witness, /--boundary-splat-supervision-frames/, 'witness exposes a requested truthful supervision frame count');
 assert.match(witness, /--boundary-splat-supervision-step-delta-ms/, 'witness exposes deterministic simulator time spacing between supervision frames');
+assert.match(witness, /--boundary-splat-supervision-raw-sidecar/, 'witness exposes native raw sidecar supervision as an explicit requested surface');
+assert.match(witness, /--boundary-splat-supervision-min-sim-step/, 'witness exposes an uncapped simulator warmup floor');
+assert.match(witness, /live-single-browser-sim-step-floor-v0/, 'witness records truthful one-browser warmup authority');
+assert.match(witness, /while \(warmupSimStepCount\s*<\s*boundarySplatSupervisionMinSimStep\)/, 'witness warms the live simulator until the requested step floor instead of sleeping blindly');
+assert.match(witness, /warmup-progress-stalled|warmup.*stalled/i, 'witness fails loud if simulator warmup stops making progress');
 assert.match(witness, /captureBoundarySplatSupervisionFrame/, 'witness invokes the dedicated same-state live capture API');
+assert.match(witness, /captureBoundarySidecarRawFrame\?\.\(\{[\s\S]*sameStateCaptureId:\s*capture\.sameStateCaptureId/, 'raw sidecar capture is tied to the candidate and raymarch same-state identity');
+assert.match(core, /const sameStateCaptureId = options\.sameStateCaptureId[\s\S]*boundarySidecarRawCapture = \{[\s\S]*sameStateCaptureId,[\s\S]*return \{[\s\S]*sameStateCaptureId,/, 'core preserves same-state identity through retained raw sidecar capture metadata');
 assert.match(witness, /for \(let frameIndex = 0; frameIndex < boundarySplatSupervisionFrames; frameIndex \+= 1\)/, 'one browser session captures every requested supervision frame');
 assert.match(witness, /frameIndex > 0[\s\S]*sampleFrame\?\.\(\{[\s\S]*advanceSim:\s*true/, 'subsequent supervision frames advance the live simulator explicitly instead of reopening the browser');
 assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.candidates\.f32/, 'multi-frame candidate artifacts have stable distinct names');
@@ -16,6 +23,13 @@ assert.match(witness, /captureReplay\?\.capture\?\.camera[\s\S]*replayedCaptureC
 assert.match(witness, /window\.__kaminosBoundarySplatSupervisionCandidates\s*=\s*Uint8Array/, 'candidate payload remains in browser memory for bounded transport chunks');
 assert.match(witness, /window\.__kaminosBoundarySplatSupervisionTarget\s*=\s*Uint8Array/, 'raymarch target remains in browser memory for bounded transport chunks');
 assert.match(witness, /window\.__kaminosBoundarySplatSupervisionFlowDebug\s*=\s*Uint8Array/, 'same-state flow-debug pixels remain in browser memory for bounded transport chunks');
+assert.match(witness, /readBoundarySidecarRawCaptureChunk/, 'witness drains retained raw sidecar fields through the browser API');
+assert.match(witness, /for \(let offset = 0; offset < expectedBytes; offset \+= transportChunkBytes\)/, 'raw sidecar transport drains every retained byte without a hidden cap');
+assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.sidecar-structure\.f32/, 'witness materializes stable raw structure filenames');
+assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.sidecar-meta\.f32/, 'witness materializes stable raw meta filenames');
+assert.match(witness, /releaseBoundarySidecarRawCapture/, 'witness explicitly releases each retained raw sidecar capture');
+assert.match(witness, /finally\s*\{[\s\S]*releaseBoundarySidecarRawCapture/, 'raw sidecar release remains in failure-path custody');
+assert.match(witness, /raw sidecar.*exact grid|raw-sidecar.*exact-grid/i, 'witness rejects a raw sidecar grid that is not the requested supervision grid');
 assert.match(witness, /for \(let offset = 0; offset < expectedLength; offset \+= transportChunkBytes\)/, 'transport loops over the complete payload without a hidden row cap');
 assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.candidates\.f32/, 'witness materializes exact candidate float rows with stable multi-frame names');
 assert.match(witness, /frame-\$\{String\(frameIndex\)\.padStart\(3, '0'\)\}\.raymarch\.png/, 'witness materializes native raymarch targets with stable multi-frame names');
@@ -39,5 +53,10 @@ assert.match(witness, /targetVisualMetrics/, 'witness preserves target visual di
 assert.match(witness, /phase:\s*supervisionPhase/, 'supervision failure reports preserve the last trustworthy phase');
 assert.match(witness, /error\.supervisionPhase\s*=\s*supervisionPhase/, 'supervision failures carry their exact inner phase through the outer witness');
 assert.match(witness, /phase:\s*err\?\.supervisionPhase\s*\|\|\s*phase/, 'outer failure reporting does not overwrite the supervision failure phase');
+assert.match(
+  witness,
+  /rawSidecarReleaseError:\s*err\?\.rawSidecarReleaseError\s*\|\|\s*null/,
+  'outer witness failure report preserves a secondary raw sidecar release failure instead of overwriting it',
+);
 
 console.log('boundary splat supervision witness contracts passed');

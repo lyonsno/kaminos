@@ -12410,6 +12410,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         captureId: boundarySidecarRawCapture.captureId,
       };
     }
+    const sameStateCaptureId = options.sameStateCaptureId
+      ? String(options.sameStateCaptureId)
+      : `boundary-sidecar-raw-state-f${state.frameCount}-s${state.simStepCount}`;
     boundarySplatSupervisionCaptureActive = true;
     let structureReadback = null;
     let metaReadback = null;
@@ -12444,6 +12447,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         : `boundary-sidecar-raw-f${state.frameCount}-s${state.simStepCount}-${Math.round(performance.now())}`;
       boundarySidecarRawCapture = {
         captureId,
+        sameStateCaptureId,
         structure: new Uint8Array(structureReadback.getMappedRange()).slice(),
         meta: new Uint8Array(metaReadback.getMappedRange()).slice(),
       };
@@ -12451,6 +12455,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ok: true,
         identity: BOUNDARY_SIDECAR_RAW_EXPORT_IDENTITY,
         captureId,
+        sameStateCaptureId,
         dtype: 'float32-le',
         grid: [gridSize, gridSize, gridSize],
         gridToWorld: boundarySidecarGridToWorld(),
@@ -12508,6 +12513,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return {
       ok: true,
       captureId: boundarySidecarRawCapture.captureId,
+      sameStateCaptureId: boundarySidecarRawCapture.sameStateCaptureId,
       field: fieldName,
       byteOffset: offset,
       byteLength: chunk.length,
@@ -12522,8 +12528,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return { ok: false, reason: 'boundary-sidecar-raw-capture-not-found', captureId: String(captureId || '') };
     }
     const releasedCaptureId = boundarySidecarRawCapture.captureId;
+    const sameStateCaptureId = boundarySidecarRawCapture.sameStateCaptureId;
     boundarySidecarRawCapture = null;
-    return { ok: true, captureId: releasedCaptureId, released: true };
+    return { ok: true, captureId: releasedCaptureId, sameStateCaptureId, released: true };
   }
 
   async function sampleRenderScaleSet(options = {}) {

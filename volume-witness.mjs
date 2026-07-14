@@ -9,6 +9,7 @@ import { BOUNDARY_SPLAT_ATTRIBUTE_FEATURES } from './boundary-splat-attribute-mo
 import {
   BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER,
   BOUNDARY_SPLAT_SUPERVISION_SCHEMA,
+  settleBoundarySplatRawRelease,
   validateBoundarySplatSupervisionCorpus,
 } from './boundary-splat-supervision-corpus.mjs';
 
@@ -141,6 +142,8 @@ const boundarySplatSupervisionDir = typeof boundarySplatSupervisionDirArg === 's
   : null;
 const boundarySplatSupervisionFrames = Math.max(1, Math.floor(Number(args.get('--boundary-splat-supervision-frames') || 1)));
 const boundarySplatSupervisionStepDeltaMs = Math.max(0, Number(args.get('--boundary-splat-supervision-step-delta-ms') || 220));
+const boundarySplatSupervisionRawSidecar = args.has('--boundary-splat-supervision-raw-sidecar');
+const boundarySplatSupervisionMinSimStep = Math.max(0, Math.floor(Number(args.get('--boundary-splat-supervision-min-sim-step') || 120)));
 const out = resolve(args.get('--out') || '/tmp/kaminos-volume-witness.png');
 const reportPath = resolve(args.get('--report') || (boundarySplatSupervisionDir
   ? join(boundarySplatSupervisionDir, 'report.json')
@@ -2307,13 +2310,96 @@ async function readCachedBrowserBytes(ws, cacheName, expectedLength, label) {
   return { bytes, chunkBytes: transportChunkBytes, chunkCount: chunks.length };
 }
 
+async function readBoundarySidecarRawField(ws, captureId, sameStateCaptureId, field, expectedBytes, label) {
+  assert.ok(Number.isInteger(expectedBytes) && expectedBytes > 0, `${label} expected bytes must be positive`);
+  const transportChunkBytes = 256 * 1024;
+  const chunks = [];
+  for (let offset = 0; offset < expectedBytes; offset += transportChunkBytes) {
+    const length = Math.min(transportChunkBytes, expectedBytes - offset);
+    const chunkEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: `window.__kaminosVolumePrototype?.readBoundarySidecarRawCaptureChunk?.(${JSON.stringify(captureId)}, ${JSON.stringify(field)}, ${offset}, ${length})`,
+      returnByValue: true,
+    });
+    if (chunkEval.exceptionDetails) throw new Error(`${label} raw sidecar transport failed at ${offset}`);
+    const chunk = chunkEval.result.value;
+    if (chunk?.ok !== true || chunk.captureId !== captureId || chunk.sameStateCaptureId !== sameStateCaptureId || chunk.field !== field || chunk.byteOffset !== offset) {
+      throw new Error(`${label} raw sidecar chunk identity mismatch at ${offset}: ${JSON.stringify(chunk)}`);
+    }
+    const bytes = Buffer.from(chunk.base64 || '', 'base64');
+    if (bytes.length !== length || chunk.byteLength !== length) {
+      throw new Error(`${label} raw sidecar chunk was partial at ${offset}: ${bytes.length}/${length}`);
+    }
+    chunks.push(bytes);
+  }
+  const bytes = Buffer.concat(chunks);
+  if (bytes.length !== expectedBytes) throw new Error(`${label} raw sidecar transport was partial: ${bytes.length}/${expectedBytes}`);
+  return { bytes, chunkBytes: transportChunkBytes, chunkCount: chunks.length };
+}
+
 async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedCamera = null) {
   mkdirSync(outputDir, { recursive: true });
   const supervisionReportPath = join(outputDir, 'report.json');
   let supervisionPhase = 'initialize-sequence';
   let capturedFrameCount = 0;
+  let warmupReceipt = null;
   try {
     const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+    if (boundarySplatSupervisionRawSidecar && expectedGrid !== 160) {
+      throw new Error(`fixed-candidate supervision raw sidecar requires exact grid 160, received ${expectedGrid}`);
+    }
+    supervisionPhase = 'warmup-live-simulator';
+    const warmupStateEval = await wsRequest(ws, 'Runtime.evaluate', {
+      expression: 'window.__kaminosVolumePrototype?.debugState?.()',
+      returnByValue: true,
+    });
+    let warmupState = warmupStateEval.result.value;
+    let warmupSimStepCount = Number(warmupState?.simStepCount || 0);
+    const warmupStartSimStepCount = warmupSimStepCount;
+    let warmupAdvancedFrames = 0;
+    let consecutiveWarmupStalls = 0;
+    while (warmupSimStepCount < boundarySplatSupervisionMinSimStep) {
+      const warmupEval = await wsRequest(ws, 'Runtime.evaluate', {
+        expression: `(async () => {
+          const prototype = window.__kaminosVolumePrototype;
+          const before = prototype?.debugState?.();
+          const sample = await prototype?.sampleFrame?.({
+            advanceSim: true,
+            includeRgba: false,
+            sameStateCaptureId: 'supervision-warmup-' + String(before?.simStepCount ?? 'missing'),
+          });
+          const after = prototype?.debugState?.();
+          return {
+            ok: sample?.ok === true,
+            sampleAuthority: sample?.sampleAuthority || null,
+            beforeSimStepCount: before?.simStepCount ?? null,
+            after,
+          };
+        })()`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (warmupEval.exceptionDetails) throw new Error(`fixed-candidate supervision warmup failed: ${warmupEval.exceptionDetails.text || 'runtime exception'}`);
+      const warmupStep = warmupEval.result.value;
+      warmupState = warmupStep?.after;
+      const nextSimStepCount = Number(warmupState?.simStepCount || 0);
+      if (warmupStep?.ok !== true || warmupStep.sampleAuthority !== 'sim-advanced-frame-readback') {
+        throw new Error(`fixed-candidate supervision warmup rejected: ${JSON.stringify(warmupStep)}`);
+      }
+      consecutiveWarmupStalls = nextSimStepCount > warmupSimStepCount ? 0 : consecutiveWarmupStalls + 1;
+      if (consecutiveWarmupStalls >= 3) {
+        throw new Error(`fixed-candidate supervision warmup-progress-stalled at sim step ${warmupSimStepCount}`);
+      }
+      warmupSimStepCount = nextSimStepCount;
+      warmupAdvancedFrames += 1;
+    }
+    warmupReceipt = {
+      authority: 'live-single-browser-sim-step-floor-v0',
+      requestedMinSimStepCount: boundarySplatSupervisionMinSimStep,
+      startSimStepCount: warmupStartSimStepCount,
+      achievedSimStepCount: warmupSimStepCount,
+      advancedFrameCount: warmupAdvancedFrames,
+      uncapped: true,
+    };
     const sequenceStartEval = await wsRequest(ws, 'Runtime.evaluate', {
       expression: 'performance.now()',
       returnByValue: true,
@@ -2442,6 +2528,133 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         `fixed-candidate supervision flow debug ${frameId}`,
       );
 
+      let structuralSupervision = null;
+      if (boundarySplatSupervisionRawSidecar) {
+        supervisionPhase = `capture-raw-sidecar-${frameId}`;
+        let rawCapture = null;
+        let rawRelease = null;
+        let rawFailure = null;
+        try {
+          const rawCaptureEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: `(async () => window.__kaminosVolumePrototype?.captureBoundarySidecarRawFrame?.({
+              resumeRenderLoop: false,
+              now: ${JSON.stringify(controlledNowMs)},
+              sameStateCaptureId: ${JSON.stringify(capture.sameStateCaptureId)},
+            }))()`,
+            awaitPromise: true,
+            returnByValue: true,
+          });
+          if (rawCaptureEval.exceptionDetails) throw new Error(`fixed-candidate supervision raw sidecar capture failed: ${rawCaptureEval.exceptionDetails.text || 'runtime exception'}`);
+          rawCapture = rawCaptureEval.result.value;
+          if (rawCapture?.ok !== true || rawCapture.identity !== 'boundary-sidecar-raw-two-buffer-export-v0') {
+            throw new Error(`fixed-candidate supervision raw sidecar capture rejected: ${JSON.stringify(rawCapture)}`);
+          }
+          if (rawCapture.sameStateCaptureId !== capture.sameStateCaptureId || rawCapture.simStepCount !== capture.baseSimStepCount) {
+            throw new Error(`fixed-candidate supervision raw sidecar same-state drift: ${JSON.stringify({ capture: capture.sameStateCaptureId, raw: rawCapture.sameStateCaptureId, candidateStep: capture.baseSimStepCount, rawStep: rawCapture.simStepCount })}`);
+          }
+          if (rawCapture.effectiveRoute !== capture.effectiveRoute || rawCapture.backend !== capture.backend || rawCapture.fallbackReason != null) {
+            throw new Error(`fixed-candidate supervision raw sidecar route/backend/fallback drift: ${JSON.stringify(rawCapture)}`);
+          }
+          if (!Array.isArray(rawCapture.grid) || rawCapture.grid.some(value => value !== 160)) {
+            throw new Error(`fixed-candidate supervision raw sidecar exact grid mismatch: ${JSON.stringify(rawCapture.grid)}`);
+          }
+          supervisionPhase = `transport-raw-sidecar-structure-${frameId}`;
+          const structureTransport = await readBoundarySidecarRawField(
+            ws,
+            rawCapture.captureId,
+            rawCapture.sameStateCaptureId,
+            'structure',
+            Number(rawCapture.fields?.structure?.bytes),
+            `fixed-candidate supervision raw structure ${frameId}`,
+          );
+          supervisionPhase = `transport-raw-sidecar-meta-${frameId}`;
+          const metaTransport = await readBoundarySidecarRawField(
+            ws,
+            rawCapture.captureId,
+            rawCapture.sameStateCaptureId,
+            'meta',
+            Number(rawCapture.fields?.meta?.bytes),
+            `fixed-candidate supervision raw meta ${frameId}`,
+          );
+          const structurePath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.sidecar-structure.f32`);
+          const metaPath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.sidecar-meta.f32`);
+          writeFileSync(structurePath, structureTransport.bytes);
+          writeFileSync(metaPath, metaTransport.bytes);
+          structuralSupervision = {
+            identity: 'native-boundary-sidecar-structural-supervision-v0',
+            captureId: rawCapture.captureId,
+            authority: 'live-native-boundary-sidecar-frozen-sim-state-v0',
+            sameStateCaptureId: rawCapture.sameStateCaptureId,
+            frameCount: rawCapture.frameCount,
+            simStepCount: rawCapture.simStepCount,
+            requestedRoute: rawCapture.requestedRoute,
+            effectiveRoute: rawCapture.effectiveRoute,
+            prototypeIdentity: rawCapture.prototypeIdentity,
+            backend: rawCapture.backend,
+            fallbackReason: rawCapture.fallbackReason,
+            dtype: rawCapture.dtype,
+            grid: rawCapture.grid,
+            gridAuthority: 'exact-frame-grid-v0',
+            gridToWorld: rawCapture.gridToWorld,
+            fields: {
+              structure: {
+                path: structurePath,
+                bytes: structureTransport.bytes.length,
+                sha256: hash(structureTransport.bytes),
+                components: rawCapture.fields.structure.components,
+                channels: rawCapture.fields.structure.channels,
+                transportChunkBytes: structureTransport.chunkBytes,
+                transportChunkCount: structureTransport.chunkCount,
+              },
+              meta: {
+                path: metaPath,
+                bytes: metaTransport.bytes.length,
+                sha256: hash(metaTransport.bytes),
+                components: rawCapture.fields.meta.components,
+                channels: rawCapture.fields.meta.channels,
+                transportChunkBytes: metaTransport.chunkBytes,
+                transportChunkCount: metaTransport.chunkCount,
+              },
+            },
+          };
+        } catch (error) {
+          rawFailure = error;
+          throw error;
+        } finally {
+          if (rawCapture?.captureId) {
+            const primaryFailurePhase = supervisionPhase;
+            const releasePhase = `release-raw-sidecar-${frameId}`;
+            try {
+              const releaseDisposition = await settleBoundarySplatRawRelease({
+                primaryError: rawFailure,
+                primaryPhase: primaryFailurePhase,
+                releasePhase,
+                release: async () => {
+                  const releaseEval = await wsRequest(ws, 'Runtime.evaluate', {
+                    expression: `window.__kaminosVolumePrototype?.releaseBoundarySidecarRawCapture?.(${JSON.stringify(rawCapture.captureId)})`,
+                    returnByValue: true,
+                  });
+                  const receipt = releaseEval.result.value;
+                  if (releaseEval.exceptionDetails || receipt?.ok !== true || receipt.released !== true) {
+                    throw new Error(`fixed-candidate supervision raw sidecar release failed: ${JSON.stringify(receipt)}`);
+                  }
+                  if (receipt.captureId !== rawCapture.captureId || receipt.sameStateCaptureId !== rawCapture.sameStateCaptureId) {
+                    throw new Error(`fixed-candidate supervision raw sidecar release identity mismatch: ${JSON.stringify(receipt)}`);
+                  }
+                  return receipt;
+                },
+              });
+              supervisionPhase = releaseDisposition.phase;
+              rawRelease = releaseDisposition.receipt;
+            } catch (releaseError) {
+              supervisionPhase = releaseError?.supervisionPhase || releasePhase;
+              throw releaseError;
+            }
+            if (structuralSupervision) structuralSupervision.release = rawRelease;
+          }
+        }
+      }
+
       const candidatePath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.candidates.f32`);
       const targetPath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.raymarch.png`);
       const flowDebugPath = join(outputDir, `frame-${String(frameIndex).padStart(3, '0')}.flow-debug.png`);
@@ -2526,6 +2739,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
           transportChunkBytes: flowDebugTransport.chunkBytes,
           transportChunkCount: flowDebugTransport.chunkCount,
         },
+        structuralSupervision,
       });
       capturedFrameCount = frames.length;
     }
@@ -2554,11 +2768,15 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       requestedFrameCount: boundarySplatSupervisionFrames,
       stepDeltaMs: boundarySplatSupervisionStepDeltaMs,
       sameBrowserSequenceSuitable,
+      warmup: warmupReceipt,
       frames,
     };
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     supervisionPhase = 'validate-corpus';
-    const validation = await validateBoundarySplatSupervisionCorpus(manifestPath);
+    const validation = await validateBoundarySplatSupervisionCorpus(manifestPath, { expectedGrid });
+    if (boundarySplatSupervisionRawSidecar && validation.structuralFrameCount !== frames.length) {
+      throw new Error(`fixed-candidate supervision raw sidecar frame count mismatch: ${validation.structuralFrameCount}/${frames.length}`);
+    }
     const report = {
       ok: true,
       phase: 'complete',
@@ -2568,6 +2786,9 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       capturedFrameCount: frames.length,
       stepDeltaMs: boundarySplatSupervisionStepDeltaMs,
       sameBrowserSequenceSuitable,
+      warmup: warmupReceipt,
+      rawSidecarRequested: boundarySplatSupervisionRawSidecar,
+      structuralFrameCount: validation.structuralFrameCount,
       requestedRoute: frames[0].requestedRoute,
       effectiveRoute: frames[0].effectiveRoute,
       replayedCamera,
@@ -2588,7 +2809,10 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
       requestedRoute: url,
       requestedFrameCount: boundarySplatSupervisionFrames,
       capturedFrameCount,
+      warmup: warmupReceipt,
+      rawSidecarRequested: boundarySplatSupervisionRawSidecar,
       error: error?.message || String(error),
+      rawSidecarReleaseError: error?.rawSidecarReleaseError || null,
     };
     writeFileSync(supervisionReportPath, JSON.stringify(failure, null, 2));
     error.supervisionPhase = supervisionPhase;
@@ -4809,6 +5033,7 @@ async function main() {
       visualEvidenceMode,
       phase: err?.supervisionPhase || phase,
       error: err?.message || String(err),
+      rawSidecarReleaseError: err?.rawSidecarReleaseError || null,
       state,
       screenshot: out,
       fullScreenshot: fullScreenshot || null,
