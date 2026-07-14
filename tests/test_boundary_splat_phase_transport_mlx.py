@@ -239,10 +239,23 @@ class TransportDatasetContracts(unittest.TestCase):
         calibration = MODULE.calibrate_action_margin(probabilities, labels)
         self.assertEqual(calibration["authority"], "training-carrier-action-margin-f1-v0")
         self.assertEqual(calibration["algorithmAuthority"], "descending-margin-cumulative-confusion-v0")
-        self.assertEqual(calibration["thresholdCandidateCount"], 4)
+        self.assertEqual(calibration["thresholdCandidateCount"], 3)
         self.assertEqual(calibration["precision"], 1.0)
         self.assertEqual(calibration["recall"], 1.0)
         self.assertGreater(calibration["threshold"], 0.0)
+
+        hostile_probabilities = np.zeros((12, MODULE.DEATH_CLASS + 1), dtype=np.float32)
+        hostile_probabilities[:, stable_class] = 0.51
+        hostile_probabilities[:, motion_class] = 0.49
+        hostile_probabilities[-1, stable_class] = 0.10
+        hostile_probabilities[-1, motion_class] = 0.90
+        hostile_labels = np.full(12, motion_class, dtype=np.int32)
+        hostile_calibration = MODULE.calibrate_action_margin(hostile_probabilities, hostile_labels)
+        self.assertGreaterEqual(
+            hostile_calibration["threshold"],
+            0.0,
+            "learned actions may not override the static scaffold while stable-copy probability is higher",
+        )
 
     def test_static_scaffold_keeps_uncertain_support_and_applies_confident_motion(self):
         source = frame([
@@ -316,6 +329,11 @@ class TransportDatasetContracts(unittest.TestCase):
         hostile = copy.deepcopy(model_document)
         del hostile["calibration"]["carrierAction"]
         with self.assertRaisesRegex(ValueError, "action calibration"):
+            MODULE.validate_frozen_model_document(hostile)
+
+        hostile = copy.deepcopy(model_document)
+        hostile["calibration"]["carrierAction"]["threshold"] = -0.01
+        with self.assertRaisesRegex(ValueError, "nonnegative"):
             MODULE.validate_frozen_model_document(hostile)
 
     def test_frozen_model_hydration_preserves_serialized_head_logits(self):

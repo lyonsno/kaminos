@@ -458,8 +458,29 @@ def calibrate_action_margin(probabilities, labels):
     cumulative_true = np.cumsum(sorted_truth)
     group_ends = np.flatnonzero(np.r_[sorted_margins[1:] != sorted_margins[:-1], True])
     total_true = int(np.sum(truth))
-    best = None
-    for end in group_ends:
+    positive_group_ends = [int(end) for end in group_ends if float(sorted_margins[end]) > 0.0]
+    threshold_candidate_count = len(positive_group_ends) + 1
+    predicted_at_zero = margins >= 0.0
+    zero_tp = int(np.sum(predicted_at_zero & truth))
+    zero_fp = int(np.sum(predicted_at_zero & ~truth))
+    zero_fn = total_true - zero_tp
+    zero_precision = zero_tp / max(1, zero_tp + zero_fp)
+    zero_recall = zero_tp / max(1, zero_tp + zero_fn)
+    zero_f_score = 2 * zero_precision * zero_recall / max(1e-12, zero_precision + zero_recall)
+    best = {
+        "authority": "training-carrier-action-margin-f1-v0",
+        "algorithmAuthority": "descending-margin-cumulative-confusion-v0",
+        "thresholdCandidateCount": threshold_candidate_count,
+        "threshold": 0.0,
+        "precision": zero_precision,
+        "recall": zero_recall,
+        "fScore": zero_f_score,
+        "truePositive": zero_tp,
+        "falsePositive": zero_fp,
+        "falseNegative": zero_fn,
+        "sampleCount": len(labels),
+    }
+    for end in positive_group_ends:
         predicted_count = int(end) + 1
         tp = int(cumulative_true[end])
         fp = predicted_count - tp
@@ -470,7 +491,7 @@ def calibrate_action_margin(probabilities, labels):
         row = {
             "authority": "training-carrier-action-margin-f1-v0",
             "algorithmAuthority": "descending-margin-cumulative-confusion-v0",
-            "thresholdCandidateCount": int(len(group_ends)),
+            "thresholdCandidateCount": threshold_candidate_count,
             "threshold": float(sorted_margins[end]),
             "precision": precision,
             "recall": recall,
@@ -629,6 +650,8 @@ def validate_frozen_model_document(document):
             or not math.isfinite(float(action.get("recall", math.nan)))
         ):
             raise ValueError("frozen motion-balanced model action calibration mismatch")
+        if float(action["threshold"]) < 0:
+            raise ValueError("frozen motion-balanced model action calibration threshold must be nonnegative")
         composition_authority = "copied-static-scaffold-with-calibrated-carrier-actions-v0"
     return {
         "hiddenSize": hidden_size,
