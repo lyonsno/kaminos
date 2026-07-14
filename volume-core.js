@@ -313,6 +313,7 @@ export function boundarySplatHistoryAgeFrames(offsetSlots, historyFrameStride, f
 }
 
 export function boundarySplatBufferIntegrity(options = {}) {
+  const availableInteger = value => value != null && Number.isFinite(Number(value));
   const integer = (value, fallback = 0) => {
     const number = Number(value);
     return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : fallback;
@@ -338,6 +339,9 @@ export function boundarySplatBufferIntegrity(options = {}) {
     ? (historySlotCount - 1) * candidateCapacity + Math.min(sourceCandidateCount, candidateCapacity) - 1
     : null;
   const failureReasons = [];
+  if (!availableInteger(options.candidateCount)) failureReasons.push('candidate-count-unavailable');
+  if (!availableInteger(options.sourceCandidateCount)) failureReasons.push('source-candidate-count-unavailable');
+  if (!availableInteger(options.renderedInstanceCount)) failureReasons.push('rendered-instance-count-unavailable');
   if (candidateCount > candidateCapacity) failureReasons.push('candidate-count-exceeds-capacity');
   if (sourceCandidateCount > candidateCapacity) failureReasons.push('source-candidate-count-exceeds-capacity');
   if (historySlotCount === 0 || historyWriteSlot >= historySlotCount) failureReasons.push('history-write-slot-out-of-range');
@@ -8970,12 +8974,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function currentBoundarySplatBufferIntegrity(overrides = {}) {
     const integrity = boundarySplatBufferIntegrity({
       candidateCapacity: boundarySplatCapacity,
-      candidateCount: overrides.candidateCount ?? state.boundarySplatCandidateCount ?? 0,
-      sourceCandidateCount: overrides.sourceCandidateCount ?? state.boundarySplatSourceCandidateCount ?? 0,
+      candidateCount: overrides.candidateCount ?? state.boundarySplatCandidateCount,
+      sourceCandidateCount: overrides.sourceCandidateCount ?? state.boundarySplatSourceCandidateCount,
       historySlotCount: normalizeBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth),
       historyWriteSlot: overrides.historyWriteSlot ?? state.boundarySplatHistoryWriteSlot ?? 0,
       requestedInstanceCount: overrides.requestedInstanceCount ?? state.boundarySplatRequestedInstanceCount ?? 0,
-      renderedInstanceCount: overrides.renderedInstanceCount ?? state.boundarySplatInstanceCount ?? 0,
+      renderedInstanceCount: overrides.renderedInstanceCount ?? state.boundarySplatInstanceCount,
       descriptorCapacity: BOUNDARY_SPLAT_MAX_INSTANCES,
       maxBufferSize: device?.limits?.maxBufferSize,
       maxStorageBufferBindingSize: device?.limits?.maxStorageBufferBindingSize,

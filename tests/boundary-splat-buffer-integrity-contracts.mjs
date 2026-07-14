@@ -32,6 +32,25 @@ assert.equal(healthy.historyBufferBytes, 100_663_296);
 assert.equal(healthy.maxHistoryIndex, 1_969_296);
 assert.deepEqual(healthy.failureReasons, []);
 
+const unavailable = core.boundarySplatBufferIntegrity({
+  candidateCapacity: 131072,
+  candidateCount: null,
+  sourceCandidateCount: null,
+  historySlotCount: 16,
+  historyWriteSlot: 0,
+  requestedInstanceCount: 100,
+  renderedInstanceCount: null,
+  descriptorCapacity: 128,
+  maxBufferSize: 268_435_456,
+  maxStorageBufferBindingSize: 262_144_000,
+});
+assert.equal(unavailable.ok, false, 'missing post-submit GPU counts must never masquerade as a healthy empty buffer');
+assert.deepEqual(unavailable.failureReasons, [
+  'candidate-count-unavailable',
+  'source-candidate-count-unavailable',
+  'rendered-instance-count-unavailable',
+]);
+
 const unsafe = core.boundarySplatBufferIntegrity({
   candidateCapacity: 131072,
   candidateCount: 131073,
