@@ -286,6 +286,7 @@ function buildFramePlan(context, frameIndex) {
   const highArgs = [
     join(scriptRoot, 'volume-full-grid-field-export.mjs'),
     ...commonBrowser,
+    '--export-scope', 'fluid-front-only-v0',
     '--out-dir', highDir,
     '--deterministic-replay-steps', String(simulationStep),
   ];

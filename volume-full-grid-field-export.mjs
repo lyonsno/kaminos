@@ -6,6 +6,9 @@ import { spawn } from 'node:child_process';
 
 const MANIFEST_SCHEMA = 'kaminos.volume.full-grid-field-export.v0';
 const EXPORT_IDENTITY = 'full-grid-fluid-front-boundary-sidecars-v0';
+const FLUID_FRONT_EXPORT_IDENTITY = 'full-grid-fluid-front-only-v0';
+const FULL_EXPORT_SCOPE = 'full-field-with-boundary-v0';
+const FLUID_FRONT_EXPORT_SCOPE = 'fluid-front-only-v0';
 const COARSE_RECEIVER_SCHEMA = 'kaminos.volume.coarse-receiver-initial.v0';
 const COARSE_RECEIVER_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
 const COARSE_RECEIVER_FILTER = 'volume-overlap-box-filter-high-to-receiver-v0';
@@ -52,6 +55,7 @@ const userDataDir = String(args.get('--user-data-dir') || mkdtempSync('/tmp/kami
 const settleMs = Number(args.get('--settle-ms') || 1500);
 const windowSize = String(args.get('--window-size') || '960,720');
 const chunkFloats = Math.max(1, Math.floor(Number(args.get('--chunk-floats') || 262144)));
+const exportScope = String(args.get('--export-scope') || FULL_EXPORT_SCOPE);
 const deterministicReplaySteps = Number(args.get('--deterministic-replay-steps') || 0);
 const deterministicReplayRequested = Number.isFinite(deterministicReplaySteps) && deterministicReplaySteps > 0;
 const deterministicReplayTimeStepMs = Number(args.get('--deterministic-replay-time-step-ms') || (1000 / 60));
@@ -428,6 +432,12 @@ async function main() {
   const runtimeEvents = [];
   try {
     phase = 'render-option-validation';
+    if (![FULL_EXPORT_SCOPE, FLUID_FRONT_EXPORT_SCOPE].includes(exportScope)) {
+      throw new Error(`unsupported --export-scope: ${exportScope}`);
+    }
+    if (renderOnly && exportScope !== FULL_EXPORT_SCOPE) {
+      throw new Error('--render-only does not accept a narrowed --export-scope');
+    }
     if (!['splat-only-v0', 'raymarch-under-splats-v0'].includes(renderComposition)) {
       throw new Error(`unsupported --render-composition: ${renderComposition}`);
     }
@@ -796,30 +806,36 @@ async function main() {
     const fluid = await drainSidecar(ws, begin, 'fluid', join(outDir, 'fluid.f32'));
     phase = 'drain-front';
     const front = await drainSidecar(ws, begin, 'front', join(outDir, 'front.f32'));
-    phase = 'drain-boundary-sidecar';
-    const boundary = await drainSidecar(
-      ws,
-      begin,
-      'boundary',
-      join(outDir, 'boundary-sidecar.f32'),
-      begin.boundarySidecar?.sidecars?.boundary,
-    );
-    const boundarySidecar = {
-      ...begin.boundarySidecar,
-      sidecars: { boundary },
-    };
-    phase = 'drain-boundary-splats';
-    const boundarySplats = await drainSidecar(
-      ws,
-      begin,
-      'boundarySplat',
-      join(outDir, 'boundary-splats.f32'),
-      begin.boundarySplats?.sidecars?.boundarySplats,
-    );
-    const boundarySplatOutput = {
-      ...begin.boundarySplats,
-      sidecars: { boundarySplats },
-    };
+    let boundary = null;
+    let boundarySidecar = null;
+    let boundarySplats = null;
+    let boundarySplatOutput = null;
+    if (exportScope === 'full-field-with-boundary-v0') {
+      phase = 'drain-boundary-sidecar';
+      boundary = await drainSidecar(
+        ws,
+        begin,
+        'boundary',
+        join(outDir, 'boundary-sidecar.f32'),
+        begin.boundarySidecar?.sidecars?.boundary,
+      );
+      boundarySidecar = {
+        ...begin.boundarySidecar,
+        sidecars: { boundary },
+      };
+      phase = 'drain-boundary-splats';
+      boundarySplats = await drainSidecar(
+        ws,
+        begin,
+        'boundarySplat',
+        join(outDir, 'boundary-splats.f32'),
+        begin.boundarySplats?.sidecars?.boundarySplats,
+      );
+      boundarySplatOutput = {
+        ...begin.boundarySplats,
+        sidecars: { boundarySplats },
+      };
+    }
 
     phase = 'release';
     const release = await evaluateByValue(
@@ -830,10 +846,12 @@ async function main() {
 
     const manifest = {
       schema: MANIFEST_SCHEMA,
-      identity: EXPORT_IDENTITY,
+      identity: exportScope === FULL_EXPORT_SCOPE ? EXPORT_IDENTITY : FLUID_FRONT_EXPORT_IDENTITY,
       status: 'captured',
       failurePhase: null,
       completeFieldCoverage: true,
+      exportScope,
+      derivedBoundaryCoverage: exportScope === FULL_EXPORT_SCOPE ? 'included-v0' : 'omitted-by-caller-v0',
       url,
       sourceCapture,
       browserSession: browserReceipt(browserSession),
@@ -872,8 +890,8 @@ async function main() {
       sidecars: {
         fluid: { path: fluid.path, sha256: fluid.sha256, byteLength: fluid.byteLength },
         front: { path: front.path, sha256: front.sha256, byteLength: front.byteLength },
-        boundary: { path: boundary.path, sha256: boundary.sha256, byteLength: boundary.byteLength },
-        boundarySplats: { path: boundarySplats.path, sha256: boundarySplats.sha256, byteLength: boundarySplats.byteLength },
+        ...(boundary ? { boundary: { path: boundary.path, sha256: boundary.sha256, byteLength: boundary.byteLength } } : {}),
+        ...(boundarySplats ? { boundarySplats: { path: boundarySplats.path, sha256: boundarySplats.sha256, byteLength: boundarySplats.byteLength } } : {}),
       },
     }, null, 2));
   } catch (error) {
@@ -898,6 +916,7 @@ async function main() {
       pageDiagnostics,
       runtimeEvents,
       chunkFloats,
+      exportScope,
       begin,
       error: error?.message || String(error),
     });

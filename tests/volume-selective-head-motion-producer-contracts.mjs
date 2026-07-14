@@ -102,6 +102,7 @@ assert.deepEqual(manifest.frames[0].roles, [
 ]);
 assert.equal(manifest.frames[0].commands.highExport.includes('--deterministic-replay-steps 97'), true);
 assert.match(manifest.frames[0].commands.highExport, /--chunk-floats 262144/, 'producer uses the previously witnessed CDP transfer chunk instead of the renderer-resetting oversized chunk');
+assert.match(manifest.frames[0].commands.highExport, /--export-scope fluid-front-only-v0/, 'producer does not drain unused boundary sidecars for model pair construction');
 assert.equal(manifest.frames[1].commands.highExport.includes('--deterministic-replay-steps 98'), true);
 assert.match(manifest.frames[0].commands.selectiveFullResidual, /--residual-scale 1/);
 assert.match(manifest.frames[0].commands.selectiveCalibratedResidual, /--residual-scale 0\.5/);

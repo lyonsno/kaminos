@@ -30,6 +30,14 @@ assert.match(exporter, /--source-capture/, 'exporter accepts an operator exact-t
 assert.match(exporter, /--target-origin/, 'exporter can rebind the captured route to a caller-owned server origin');
 assert.match(exporter, /--render-composition/, 'exporter accepts an invocation-scoped frozen render composition');
 assert.match(exporter, /--render-control-overrides-json/, 'exporter accepts structured invocation-scoped render controls');
+assert.match(exporter, /--export-scope/, 'exporter accepts an explicit output scope');
+assert.match(exporter, /fluid-front-only-v0/, 'exporter names the narrow fluid/front-only scope used by model pair production');
+assert.match(
+  exporter,
+  /exportScope\s*===\s*'full-field-with-boundary-v0'[\s\S]*drain-boundary-sidecar/,
+  'boundary sidecars are drained only by the default full-field scope',
+);
+assert.match(exporter, /exportScope,[\s\S]*derivedBoundaryCoverage:/, 'manifest records effective scope and honest derived-boundary coverage');
 assert.match(exporter, /JSON\.parse\(String\(args\.get\('--render-control-overrides-json'\)/, 'render control overrides use structured JSON parsing instead of ad hoc text splitting');
 assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
 assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
