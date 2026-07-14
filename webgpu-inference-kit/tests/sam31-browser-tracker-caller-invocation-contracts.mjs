@@ -268,5 +268,7 @@ assert.match(invocationSmokeSource, /callerInputIndex/, 'an isolated one-root ch
 const terminalSmokeSource = await readFile(new URL('../tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', import.meta.url), 'utf8');
 assert.match(terminalSmokeSource, /--caller-inputs/, 'the terminal witness must expose caller-input mode');
 assert.match(terminalSmokeSource, /callerRequestEvidence/, 'the terminal witness must record caller and package request counts');
+assert.match(terminalSmokeSource, /browserParams\.set\('commit', requestedCommit\)/, 'the terminal witness must propagate requested commit identity into browser receipts');
+assert.match(terminalSmokeSource, /commitIdentityPassed/, 'the terminal witness must fail when effective receipt commit identity does not match the request');
 
 console.log('sam3.1 browser tracker caller invocation contracts passed');

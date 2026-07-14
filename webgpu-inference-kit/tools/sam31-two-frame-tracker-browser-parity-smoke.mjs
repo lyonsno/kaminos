@@ -30,6 +30,7 @@ const staticBacking = args.get('--static-backing') || 'memory';
 if (!['memory', 'opfs'].includes(staticBacking)) throw new Error(`unsupported --static-backing ${staticBacking}`);
 const reusePacket = args.get('--reuse-packet') === '1';
 const verifyOnly = args.get('--verify-only') === '1';
+const requestedCommit = args.get('--commit') || null;
 const episodeMode = packageMode ? 'two-image' : args.get('--episode-mode') || 'propagation-decoder';
 if (!['propagation-decoder', 'mask-conditioning', 'two-image'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
 const isTwoImage = episodeMode === 'two-image';
@@ -75,6 +76,7 @@ let pixelCheck = null;
 let viewportLayout = null;
 let packetAuthority = null;
 let packageAuthority = null;
+let commitIdentityEvidence = { requestedCommit, effectiveCommits: [], commitIdentityPassed: requestedCommit == null };
 const callerRequestEvidence = {
   schema: 'kaminos.sam31-browser-tracker-caller-request-evidence.v0',
   callerInputMode: callerInputs,
@@ -141,6 +143,7 @@ function writeReport(extra = {}) {
     packetAuthority,
     packageAuthority,
     callerRequestEvidence,
+    commitIdentityEvidence,
     browserPacketAuthority: lastState?.packetAuthority || null,
     reportPath,
     screenshot: screenshotWritten ? screenshotPath : null,
@@ -406,6 +409,7 @@ async function main() {
     } else {
       for (const name of Object.keys(packetTools)) browserParams.set(`expected-${name}-manifest-sha256`, expectedManifestSha256[name]);
     }
+    if (requestedCommit) browserParams.set('commit', requestedCommit);
     url = `${baseUrl}?${browserParams}`;
     phase = 'start_server'; await startServer();
     phase = 'launch_chrome';
@@ -431,6 +435,14 @@ async function main() {
       await delay(250);
     }
     if (lastState?.status !== 'passed') throw new Error(lastState?.error || `browser ended in ${lastState?.status}`);
+    const effectiveCommits = [...new Set((lastState.invocations || [lastState])
+      .flatMap(invocation => invocation.receipts || [])
+      .map(receipt => receipt.kernel?.commit ?? null))];
+    const commitIdentityPassed = requestedCommit == null
+      ? true
+      : effectiveCommits.length === 1 && effectiveCommits[0] === requestedCommit;
+    commitIdentityEvidence = { requestedCommit, effectiveCommits, commitIdentityPassed };
+    if (!commitIdentityPassed) throw new Error(`browser receipt commit identity mismatch: ${JSON.stringify(commitIdentityEvidence)}`);
     if (callerInputs) {
       const expectedCallerRequests = callerInputEntries.flatMap((_, index) => [
         `/caller/${index}/metadata.json`,
