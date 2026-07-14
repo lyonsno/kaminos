@@ -31,9 +31,16 @@ import {
   createSpatialStrataHybridSmokeSourceRuntime,
 } from './spatial-strata-hybrid-smoke-source-lifecycle.mjs';
 import {
+  COUPLED_PHASE_STATE_FAR_LAYOUT,
+  COUPLED_PHASE_STATE_HISTORY_AUTHORITY,
+  COUPLED_PHASE_STATE_NEAR_LAYOUT,
+  COUPLED_PHASE_STATE_PRODUCER_IDENTITY,
+  COUPLED_PHASE_STATE_RENDERER_AUTHORITY,
+  COUPLED_PHASE_STATE_SOCKET_IDENTITY,
   COUPLED_SMOKE_ATTACHMENT_IDENTITY,
   COUPLED_SMOKE_DEPTH_CONTRACT,
   COUPLED_SMOKE_OVERLAP_AUTHORITY,
+  createCoupledSmokePhaseStateDescriptor,
   coupledSmokeDomainShaderWGSL,
   smokeDomainMetricVelocityScale,
   smokeDomainWorldContract,
@@ -5703,6 +5710,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     coupledSmokeAttachmentIdentity: 'inactive',
     coupledSmokeOverlapAuthority: 'inactive',
     coupledSmokeDepthContract: 'inactive',
+    coupledPhaseStateSocketIdentity: 'inactive',
+    coupledPhaseStateProducerIdentity: 'inactive',
+    coupledPhaseStateStatus: 'inactive',
+    coupledPhaseStateGeneration: 0,
+    coupledPhaseStateRetainedHistoryEpoch: 0,
+    coupledPhaseStateWriteTick: 0,
+    coupledPhaseStateRetainedSlotCount: 0,
+    coupledPhaseStateCurrentFarStateIndex: null,
+    coupledPhaseStateHistoryAuthority: 'inactive',
+    coupledPhaseStateRendererAuthority: 'inactive',
+    coupledPhaseStateNearLayout: 'inactive',
+    coupledPhaseStateFarLayout: 'inactive',
     smokeDomainMode: 'single',
     smokeDomainStrategy: 'single-uniform-volume-v0',
     smokeDomainNearGrid: gridSize,
@@ -6742,6 +6761,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     smokeDomainOutletPipeline = null;
     smokeDomainFarInputPipeline = null;
     smokeDomainLayerPipeline = null;
+    state.coupledPhaseStateStatus = 'inactive-buffers-destroyed';
+    state.coupledPhaseStateGeneration = smokeDomainTransferGeneration;
+    state.coupledPhaseStateRetainedHistoryEpoch = smokeDomainTransferGeneration;
+    state.coupledPhaseStateWriteTick = 0;
+    state.coupledPhaseStateCurrentFarStateIndex = null;
     bindGroups = [];
     majorantFrontBindGroups = [];
     boundarySidecarReadBindGroups = [];
@@ -7520,6 +7544,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       : 'inactive';
     state.coupledSmokeDepthContract = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
       ? COUPLED_SMOKE_DEPTH_CONTRACT
+      : 'inactive';
+    state.coupledPhaseStateSocketIdentity = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_PHASE_STATE_SOCKET_IDENTITY
+      : 'inactive';
+    state.coupledPhaseStateProducerIdentity = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_PHASE_STATE_PRODUCER_IDENTITY
+      : 'inactive';
+    state.coupledPhaseStateStatus = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? 'live-current-state-only'
+      : 'inactive';
+    state.coupledPhaseStateGeneration = smokeDomainTransferGeneration;
+    state.coupledPhaseStateRetainedHistoryEpoch = smokeDomainTransferGeneration;
+    state.coupledPhaseStateWriteTick = 0;
+    state.coupledPhaseStateRetainedSlotCount = smokeDomain.mode === COUPLED_SMOKE_STRATEGY ? 1 : 0;
+    state.coupledPhaseStateCurrentFarStateIndex = smokeDomain.mode === COUPLED_SMOKE_STRATEGY ? currentSmokeDomainFarState : null;
+    state.coupledPhaseStateHistoryAuthority = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_PHASE_STATE_HISTORY_AUTHORITY
+      : 'inactive';
+    state.coupledPhaseStateRendererAuthority = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_PHASE_STATE_RENDERER_AUTHORITY
+      : 'inactive';
+    state.coupledPhaseStateNearLayout = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_PHASE_STATE_NEAR_LAYOUT
+      : 'inactive';
+    state.coupledPhaseStateFarLayout = smokeDomain.mode === COUPLED_SMOKE_STRATEGY
+      ? COUPLED_PHASE_STATE_FAR_LAYOUT
       : 'inactive';
     Object.assign(state, coupledSmokeDomainDebug(smokeDomain));
     state.hybridSmokeLayer = {
@@ -9167,6 +9217,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     state.smokeDomainTransferEncoded = true;
     state.smokeDomainTransferFrameCount += 1;
+    state.coupledPhaseStateWriteTick = state.smokeDomainTransferFrameCount;
+    state.coupledPhaseStateCurrentFarStateIndex = currentSmokeDomainFarState;
     state.smokeDomainHandoffStatus = 'gpu-transfer-live-metric-correct-coarse-far-advection';
     state.smokeDomainTransferReadbackPending = smokeDomainTransferReadbackPending || smokeDomainTransferReadbackMapping;
     return true;
@@ -12889,6 +12941,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  function getCoupledSmokePhaseState(options = {}) {
+    const smokeDomain = normalizeSmokeDomainControls(controlsSnapshot, gridSize);
+    return createCoupledSmokePhaseStateDescriptor({
+      active: state.active && smokeDomain.mode === COUPLED_SMOKE_STRATEGY,
+      generation: smokeDomainTransferGeneration,
+      retainedHistoryEpoch: smokeDomainTransferGeneration,
+      writeTick: state.smokeDomainTransferFrameCount,
+      nearGrid: smokeDomain.nearGrid,
+      farGrid: smokeDomain.farGrid,
+      nearBuffer: fluidBuffers[currentFluid],
+      farBuffer: smokeDomainFarStateBuffers[currentSmokeDomainFarState],
+      farBufferIndex: currentSmokeDomainFarState,
+      historyOffset: options.historyOffset ?? 0,
+      expectedGeneration: options.expectedGeneration ?? null,
+      expectedRetainedHistoryEpoch: options.expectedRetainedHistoryEpoch ?? null,
+      expectedWriteTick: options.expectedWriteTick ?? null,
+    });
+  }
+
   return {
     setControls(next) {
       const previousGrid = gridSize;
@@ -13127,6 +13198,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     controlledStepFrame,
     controlledStepSequence,
     renderFrozenScaleToCanvas,
+    getCoupledSmokePhaseState,
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
