@@ -5567,7 +5567,7 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(8) var<storage, read_write> boundarySplatHistory: array<BoundarySplat>;
 @group(0) @binding(9) var<storage, read> boundarySplatHistoryForRender: array<BoundarySplat>;
 @group(0) @binding(10) var<storage, read_write> boundarySplatDrawGroups: array<BoundarySplatDrawGroup>;
-@group(0) @binding(11) var<storage, read> boundarySplatHistoryArchiveControl: BoundarySplatHistoryArchiveControl;
+@group(0) @binding(11) var<uniform> boundarySplatHistoryArchiveControl: BoundarySplatHistoryArchiveControl;
 @group(0) @binding(12) var<storage, read_write> boundarySplatHistorySlotMetadata: array<BoundarySplatHistorySlotMetadata>;
 
 const BOUNDARY_SPLAT_DRAW_GROUP_COUNT: u32 = 6u;
@@ -7257,7 +7257,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatHistoryArchiveControlBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} history archive control`,
       size: BOUNDARY_SPLAT_HISTORY_ARCHIVE_CONTROL_BYTES,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatHistorySlotMetadataBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} history slot metadata`,
@@ -7822,7 +7822,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           .replace('@group(0) @binding(3) var<storage, read_write> boundarySplatDraw: BoundarySplatDraw;\n', '')
           .replace('@group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;\n', '')
           .replace('@group(0) @binding(8) var<storage, read_write> boundarySplatHistory: array<BoundarySplat>;\n', '')
-          .replace('@group(0) @binding(11) var<storage, read> boundarySplatHistoryArchiveControl: BoundarySplatHistoryArchiveControl;\n', '')
+          .replace('@group(0) @binding(11) var<uniform> boundarySplatHistoryArchiveControl: BoundarySplatHistoryArchiveControl;\n', '')
           .replace('@group(0) @binding(12) var<storage, read_write> boundarySplatHistorySlotMetadata: array<BoundarySplatHistorySlotMetadata>;\n', '')
           .replace('@group(0) @binding(10) var<storage, read_write> boundarySplatDrawGroups: array<BoundarySplatDrawGroup>;\n', '@group(0) @binding(10) var<storage, read> boundarySplatDrawGroups: array<BoundarySplatDrawGroup>;\n')
       : BOUNDARY_SPLAT_WGSL;
@@ -7969,7 +7969,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 10, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
-        { binding: 11, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 11, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
         { binding: 12, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       ],
     });

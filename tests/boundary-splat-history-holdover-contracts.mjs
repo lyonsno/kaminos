@@ -135,6 +135,9 @@ assert.deepEqual(boundarySplatHistoryHoldoverDrawPlan(completedSlot, validSelect
 
 const core = fs.readFileSync(new URL('../volume-core.js', import.meta.url), 'utf8');
 assert.match(core, /boundarySplatHistorySlotMetadataBuffer/, 'GPU archive must own compact per-slot metadata beside the candidate history ring');
+assert.match(core, /@binding\(11\) var<uniform> boundarySplatHistoryArchiveControl/, 'CPU-authored archive control must consume a uniform binding so history metadata stays within the WebGPU storage-buffer stage limit');
+assert.match(core, /boundarySplatHistoryArchiveControlBuffer = device\.createBuffer\([\s\S]{0,300}GPUBufferUsage\.UNIFORM \| GPUBufferUsage\.COPY_DST/, 'archive-control allocation must match its uniform WGSL authority');
+assert.match(core, /binding: 11, visibility: GPUShaderStage\.COMPUTE, buffer: \{ type: 'uniform' \}/, 'compute layout must bind archive control as uniform rather than a ninth storage buffer');
 assert.match(core, /historyAllocationGeneration/, 'runtime telemetry must expose the physical history allocation generation');
 assert.match(core, /boundarySplatHistorySlotOverride/, 'a single-flame descriptor must accept an explicit validated history slot');
 assert.match(core, /renderBoundarySplatHistorySlotToCanvas/, 'the public prototype must expose a draw-only history-slot render socket');
