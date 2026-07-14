@@ -13,8 +13,10 @@ function writeFloatFile(path, values) {
   writeFileSync(path, Buffer.from(data.buffer));
 }
 
-function runAnalyzer(inputDir, outputDir) {
-  return spawnSync(process.execPath, [analyzerPath, '--input-dir', inputDir, '--output-dir', outputDir], {
+function runAnalyzer(inputDir, outputDir, expectedGrid = 2) {
+  const analyzerArgs = [analyzerPath, '--input-dir', inputDir, '--output-dir', outputDir];
+  if (expectedGrid !== null) analyzerArgs.push('--expected-grid', String(expectedGrid));
+  return spawnSync(process.execPath, analyzerArgs, {
     cwd: repoRoot,
     encoding: 'utf8',
   });
@@ -78,6 +80,8 @@ try {
   assert.equal(report.effectiveRoute, 'native-3d-compute-fluid-raymarch-v0');
   assert.equal(report.backend, 'WebGPU:fixture');
   assert.equal(report.fallbackReason, null);
+  assert.deepEqual(report.expectedGrid, [2, 2, 2]);
+  assert.equal(report.expectedGridAuthority, 'explicit-cli-expected-grid-v0');
   assert.deepEqual(report.grid, [2, 2, 2]);
   assert.equal(report.cellCount, 8);
   assert.equal(report.files.structure.byteLength, structure.length * 4);
@@ -104,6 +108,14 @@ try {
     assert.equal(image.readUInt32BE(20), 2);
     assert.ok(image.length > 60, `${name} depth-integrated projection is not a credible PNG`);
   }
+
+  const implicitGridOutput = join(tempRoot, 'implicit-grid-output');
+  const implicitGrid = runAnalyzer(inputDir, implicitGridOutput, null);
+  assert.notEqual(implicitGrid.status, 0, 'non-160 grid was accepted without an explicit expected-grid contract');
+  const implicitGridReport = JSON.parse(readFileSync(join(implicitGridOutput, 'analysis-report.json'), 'utf8'));
+  assert.equal(implicitGridReport.ok, false);
+  assert.equal(implicitGridReport.failurePhase, 'validate-source-authority');
+  assert.match(implicitGridReport.error, /expected grid 160\^3/);
 
   const corruptInput = join(tempRoot, 'corrupt-input');
   const corruptOutput = join(tempRoot, 'corrupt-output');

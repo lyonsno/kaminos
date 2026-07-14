@@ -13,6 +13,14 @@ for (let index = 2; index < process.argv.length; index += 2) {
 const inputDir = resolve(args.get('--input-dir') || '.');
 const outputDir = resolve(args.get('--output-dir') || join(inputDir, 'analysis'));
 const outputReportPath = join(outputDir, 'analysis-report.json');
+const expectedGridArgument = args.get('--expected-grid');
+const expectedGridSize = expectedGridArgument === undefined ? 160 : Number(expectedGridArgument);
+const expectedGrid = Number.isInteger(expectedGridSize) && expectedGridSize > 0
+  ? [expectedGridSize, expectedGridSize, expectedGridSize]
+  : null;
+const expectedGridAuthority = expectedGridArgument === undefined
+  ? 'default-160-cubed-campaign-contract-v0'
+  : 'explicit-cli-expected-grid-v0';
 mkdirSync(outputDir, { recursive: true });
 
 const report = {
@@ -21,6 +29,8 @@ const report = {
   failurePhase: 'load-metadata',
   inputDir,
   outputDir,
+  expectedGrid,
+  expectedGridAuthority,
 };
 
 function sha256(buffer) {
@@ -156,6 +166,10 @@ function writeZProjection({ name, values, channelOffset, grid, mode, transform =
 }
 
 try {
+  if (!expectedGrid) {
+    report.failurePhase = 'validate-source-authority';
+    throw new Error(`invalid expected grid: ${expectedGridArgument}`);
+  }
   const metadataPath = join(inputDir, 'metadata.json');
   const sourceReportPath = join(inputDir, 'report.json');
   const metadataBuffer = readFileSync(metadataPath);
@@ -182,6 +196,9 @@ try {
   const grid = capture.grid;
   if (!Array.isArray(grid) || grid.length !== 3 || grid.some(value => !Number.isInteger(value) || value <= 0)) {
     throw new Error(`invalid grid: ${JSON.stringify(grid)}`);
+  }
+  if (grid.some((value, axis) => value !== expectedGrid[axis])) {
+    throw new Error(`capture grid ${grid.join('x')} does not match expected grid ${expectedGridSize}^3`);
   }
   const cellCount = grid[0] * grid[1] * grid[2];
   const expectedByteLength = cellCount * 4 * Float32Array.BYTES_PER_ELEMENT;
