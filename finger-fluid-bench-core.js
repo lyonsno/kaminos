@@ -6,6 +6,7 @@ export const KAMINOS_FINGER_FLUID_RENDERER_IDENTITY = 'webgpu-particle-sphere-re
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY = 'kaminos.liquid-interface-carrier.v0';
 export const KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY = 'wgsl-support-aware-persistent-rest-state-v0';
+export const KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY = 'wgsl-support-tangential-transport-v0';
 
 export const KAMINOS_FINGER_FLUID_DOWGRADES = [
   'kaminos_native_synthetic_fluid_not_lerms_source_truth',
@@ -62,6 +63,7 @@ export function createFingerFluidBenchState(options = {}) {
       vorticityConfinement: options.vorticityConfinementContract || 'wgsl-neighbor-vorticity-confinement-v0',
       freeSurfaceCohesion: options.freeSurfaceContract || 'wgsl-neighbor-free-surface-cohesion-v0',
       restStateContract: options.restStateContract || KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY,
+      supportTransportContract: options.supportTransportContract || KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY,
       playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
       interfaceCarrierSchema: options.interfaceCarrierSchema || KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY,
       stepCount: nonNegativeInteger(options.stepCount, 0),

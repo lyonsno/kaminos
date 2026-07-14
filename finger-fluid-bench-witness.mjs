@@ -226,6 +226,7 @@ async function main() {
     if (lastDebugState.runtime?.vorticityConfinementContract !== 'wgsl-neighbor-vorticity-confinement-v0') throw new Error(`vorticity contract mismatch: ${lastDebugState.runtime?.vorticityConfinementContract}`);
     if (lastDebugState.runtime?.freeSurfaceContract !== 'wgsl-neighbor-free-surface-cohesion-v0') throw new Error(`free-surface contract mismatch: ${lastDebugState.runtime?.freeSurfaceContract}`);
     if (lastDebugState.runtime?.restStateContract !== 'wgsl-support-aware-persistent-rest-state-v0') throw new Error(`rest-state contract mismatch: ${lastDebugState.runtime?.restStateContract}`);
+    if (lastDebugState.runtime?.supportTransportContract !== 'wgsl-support-tangential-transport-v0') throw new Error(`support-transport contract mismatch: ${lastDebugState.runtime?.supportTransportContract}`);
     if (lastDebugState.runtime?.playgroundContract !== 'wgsl-shared-multi-regime-toy-playground-v0') throw new Error(`playground contract mismatch: ${lastDebugState.runtime?.playgroundContract}`);
     if (!lastDebugState.runtime?.playground?.rendered || lastDebugState.runtime.playground.supportGeometryCount < 300) {
       throw new Error(`shared playground geometry is missing from the operator viewport: ${JSON.stringify(lastDebugState.runtime?.playground)}`);
@@ -282,6 +283,14 @@ async function main() {
     if (!Number.isSafeInteger(activeTransportParticleCount) || activeTransportParticleCount < 128) {
       throw new Error(`active transport was erased by rest-state relaxation: ${JSON.stringify({ activeTransportParticleCount })}`);
     }
+    const supportedTransportParticleCount = lastDebugState.runtime?.diagnostics?.supportedTransportParticleCount;
+    const averageSupportedTangentialSpeed = lastDebugState.runtime?.diagnostics?.averageSupportedTangentialSpeed;
+    if (!Number.isSafeInteger(supportedTransportParticleCount) || supportedTransportParticleCount < 128) {
+      throw new Error(`supported transport population was arrested before lateral spreading: ${JSON.stringify({ supportedTransportParticleCount })}`);
+    }
+    if (!Number.isFinite(averageSupportedTangentialSpeed) || averageSupportedTangentialSpeed < 0.32) {
+      throw new Error(`supported transport lacks material tangential speed: ${JSON.stringify({ averageSupportedTangentialSpeed })}`);
+    }
     const zoneDiagnostics = lastDebugState.runtime?.playgroundZoneDiagnostics;
     if (zoneDiagnostics?.schema !== 'kaminos.finger-fluid.playground-zone-diagnostics.v0') throw new Error(`playground zone diagnostics missing: ${JSON.stringify(zoneDiagnostics)}`);
     const minimumMaterialOccupancy = Math.ceil(lastDebugState.runtime.particleCount * 0.01);
@@ -308,6 +317,12 @@ async function main() {
     const meanZoneEnergy = names => names.reduce((sum, name) => sum + (zonesByName.get(name)?.averageKineticEnergy || 0), 0) / names.length;
     const settledPoolNames = ['shallow_pool', 'deep_pool', 'catch_basin'];
     const settledPools = settledPoolNames.map(requireZone);
+    const receivingTransportZones = ['shallow_pool', 'deep_pool', 'obstacle_channel', 'catch_basin']
+      .map(requireZone)
+      .filter(zone => zone.supportedTransportParticleCount >= 24 && zone.averageSupportedTangentialSpeed >= 0.3);
+    if (receivingTransportZones.length < 2) {
+      throw new Error(`support-adjacent transport did not spread through two receiving regimes: ${JSON.stringify(receivingTransportZones)}`);
+    }
     const quietSupportedPoolCount = settledPools.filter(zone => zone.averageKineticEnergy <= 0.12 && zone.supportedRestingRatio >= 0.12).length;
     if (quietSupportedPoolCount < 2) {
       throw new Error(`supported rest did not become local and quiet in at least two pools: ${JSON.stringify(settledPools)}`);

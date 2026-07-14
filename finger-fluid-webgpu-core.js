@@ -4,6 +4,7 @@ export const KAMINOS_FINGER_FLUID_DENSITY_CONTRACT = 'wgsl-pbf-density-constrain
 export const KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT = 'wgsl-neighbor-vorticity-confinement-v0';
 export const KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT = 'wgsl-neighbor-free-surface-cohesion-v0';
 export const KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT = 'wgsl-support-aware-persistent-rest-state-v0';
+export const KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT = 'wgsl-support-tangential-transport-v0';
 export const KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT = 'shared-solver-render-obstacle-v0';
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA = 'kaminos.liquid-interface-carrier.v0';
@@ -116,6 +117,25 @@ fn floorHeight(p: vec3<f32>) -> f32 {
 
 fn floorNormal(p: vec3<f32>) -> vec3<f32> {
   return toyFloorNormal(p);
+}
+
+fn supportPhaseWeights(position: vec3<f32>, velocity: vec3<f32>) -> vec4<f32> {
+  let radius = params.fluid.x * 0.22;
+  let floorSupportDistance = max(0.0, position.y - (floorHeight(position) + radius));
+  let floorSupport = 1.0 - smoothstep(0.012, 0.09, floorSupportDistance);
+  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
+  let fromSphere = position - sphereCenter;
+  let sphereSupportDistance = abs(length(fromSphere) - (${OBSTACLE_RADIUS} + radius));
+  let sphereSupport = 1.0 - smoothstep(0.012, 0.09, sphereSupportDistance);
+  let supportContact = max(floorSupport, sphereSupport);
+  let sphereNormal = normalize(fromSphere + vec3<f32>(0.00001, 0.00002, 0.00003));
+  let supportNormal = select(sphereNormal, floorNormal(position), floorSupport >= sphereSupport);
+  let tangentialVelocity = velocity - supportNormal * dot(velocity, supportNormal);
+  let tangentialSpeed = length(tangentialVelocity);
+  let speed = length(velocity);
+  let supportRestWeight = supportContact * (1.0 - smoothstep(0.06, 0.28, speed));
+  let supportTransportWeight = supportContact * smoothstep(0.22, 0.72, tangentialSpeed) * (1.0 - supportRestWeight);
+  return vec4<f32>(supportContact, supportRestWeight, supportTransportWeight, tangentialSpeed);
 }
 
 fn sourceParticleResetPosition(index: u32) -> vec3<f32> {
@@ -373,21 +393,18 @@ fn compute_velocity_viscosity(@builtin(global_invocation_id) gid: vec3<u32>) {
       }
     }
   }
-  let radius = params.fluid.x * 0.22;
-  let floorSupportDistance = max(0.0, position.y - (floorHeight(position) + radius));
-  let floorSupport = 1.0 - smoothstep(0.012, 0.09, floorSupportDistance);
-  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
-  let sphereSupportDistance = abs(length(position - sphereCenter) - (${OBSTACLE_RADIUS} + radius));
-  let sphereSupport = 1.0 - smoothstep(0.012, 0.09, sphereSupportDistance);
-  let supportContact = max(floorSupport, sphereSupport);
-  let speed = length(velocity);
-  let supportRestWeight = supportContact * (1.0 - smoothstep(0.06, 0.28, speed));
-  let restViscosityBlend = clamp(params.forces.z + supportRestWeight * 0.16, 0.0, 0.24);
+  let supportPhase = supportPhaseWeights(position, velocity);
+  let supportRestWeight = supportPhase.y;
+  let supportTransportWeight = supportPhase.z;
+  let transportViscosityScale = 1.0 - supportTransportWeight * 0.68;
+  let restViscosityBlend = clamp(params.forces.z * transportViscosityScale + supportRestWeight * 0.16, 0.0, 0.24);
   if (neighborWeight > 0.0001) {
     velocity = mix(velocity, neighborVelocity / neighborWeight, restViscosityBlend);
   }
   velocity = velocity * params.forces.y;
   restStates[index].z = supportRestWeight;
+  let radius = params.fluid.x * 0.22;
+  let sphereCenter = vec3<f32>(${OBSTACLE_CENTER[0]}, ${OBSTACLE_CENTER[1]}, ${OBSTACLE_CENTER[2]});
   if (position.y <= floorHeight(position) + radius + 0.01) {
     let normal = floorNormal(position);
     let normalSpeed = dot(velocity, normal);
@@ -520,7 +537,8 @@ fn apply_surface_cohesion(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
   }
 
-  let cohesionActivity = 1.0 - restStates[index].z * 0.72;
+  let supportTransportWeight = supportPhaseWeights(position, particle.delta.xyz).z;
+  let cohesionActivity = (1.0 - restStates[index].z * 0.72) * (1.0 - supportTransportWeight * 0.62);
   var cohesionAcceleration = attraction / max(attractionWeight, 0.0001) * surfaceFactor * 0.72 * cohesionActivity;
   let cohesionLength = length(cohesionAcceleration);
   if (cohesionLength > 0.58) { cohesionAcceleration = cohesionAcceleration * (0.58 / cohesionLength); }
@@ -817,6 +835,38 @@ export function sampleFingerFluidPlaygroundHeight(x, z) {
   return -1.02 + radial * 0.22 + sourceShelf + spillway + shallowPool + deepPool + catchBasin + leftGate + rightGate + toyRipple;
 }
 
+function smoothstepNumber(edge0, edge1, value) {
+  const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+export function measureSupportTransport(position, velocity, radius = 0.185 * 0.22) {
+  const [x, y, z] = position;
+  const floorY = sampleFingerFluidPlaygroundHeight(x, z) + radius;
+  const floorSupportDistance = Math.max(0, y - floorY);
+  const floorSupport = 1 - smoothstepNumber(0.012, 0.09, floorSupportDistance);
+  const fromSphere = [x - OBSTACLE_CENTER[0], y - OBSTACLE_CENTER[1], z - OBSTACLE_CENTER[2]];
+  const sphereDistance = Math.hypot(...fromSphere);
+  const sphereSupportDistance = Math.abs(sphereDistance - (OBSTACLE_RADIUS + radius));
+  const sphereSupport = 1 - smoothstepNumber(0.012, 0.09, sphereSupportDistance);
+  const supportContact = Math.max(floorSupport, sphereSupport);
+  const epsilon = 0.018;
+  const floorNormal = normalize3([
+    -(sampleFingerFluidPlaygroundHeight(x + epsilon, z) - sampleFingerFluidPlaygroundHeight(x - epsilon, z)) / (2 * epsilon),
+    1,
+    -(sampleFingerFluidPlaygroundHeight(x, z + epsilon) - sampleFingerFluidPlaygroundHeight(x, z - epsilon)) / (2 * epsilon),
+  ]);
+  const sphereNormal = normalize3(fromSphere);
+  const supportNormal = floorSupport >= sphereSupport ? floorNormal : sphereNormal;
+  const normalSpeed = velocity[0] * supportNormal[0] + velocity[1] * supportNormal[1] + velocity[2] * supportNormal[2];
+  const tangentialVelocity = velocity.map((component, axis) => component - supportNormal[axis] * normalSpeed);
+  const tangentialSpeed = Math.hypot(...tangentialVelocity);
+  const speed = Math.hypot(...velocity);
+  const supportRestWeight = supportContact * (1 - smoothstepNumber(0.06, 0.28, speed));
+  const supportTransportWeight = supportContact * smoothstepNumber(0.22, 0.72, tangentialSpeed) * (1 - supportRestWeight);
+  return { supportContact, tangentialSpeed, supportRestWeight, supportTransportWeight };
+}
+
 function playgroundZoneAt(x, z) {
   if (z < -1.35) return 'source_shelf';
   if (z < -0.34) return 'spillway';
@@ -834,10 +884,12 @@ function playgroundZoneDiagnostics(values, restStateValues, particleCount) {
     persistentInterfaceParticleCount: 0,
     supportedRestingParticleCount: 0,
     activeTransportParticleCount: 0,
+    supportedTransportParticleCount: 0,
     interfaceTransitionCount: 0,
     kineticEnergy: 0,
     supportRestWeightSum: 0,
     interfaceAgeSum: 0,
+    supportedTangentialSpeedSum: 0,
   }]));
   for (let index = 0; index < particleCount; index += 1) {
     const offset = index * PARTICLE_FLOATS;
@@ -846,12 +898,20 @@ function playgroundZoneDiagnostics(values, restStateValues, particleCount) {
     const speedSquared = values[offset + 8] ** 2 + values[offset + 9] ** 2 + values[offset + 10] ** 2;
     const speed = Math.sqrt(speedSquared);
     const supportRestWeight = restStateValues[restOffset + 2];
+    const supportTransport = measureSupportTransport(
+      [values[offset], values[offset + 1], values[offset + 2]],
+      [values[offset + 8], values[offset + 9], values[offset + 10]],
+    );
     zone.particleCount += 1;
     zone.kineticEnergy += 0.5 * speedSquared;
     zone.supportRestWeightSum += supportRestWeight;
     if (values[offset + 7] >= 0.5) zone.surfaceParticleCount += 1;
     if (supportRestWeight >= 0.5) zone.supportedRestingParticleCount += 1;
     if (speed >= 0.35) zone.activeTransportParticleCount += 1;
+    if (supportTransport.supportTransportWeight >= 0.5) {
+      zone.supportedTransportParticleCount += 1;
+      zone.supportedTangentialSpeedSum += supportTransport.tangentialSpeed;
+    }
     if (Math.abs(restStateValues[restOffset + 3]) >= 0.5) zone.interfaceTransitionCount += 1;
     if (restStateValues[restOffset] >= INTERFACE_THRESHOLD) {
       zone.persistentInterfaceParticleCount += 1;
@@ -867,6 +927,8 @@ function playgroundZoneDiagnostics(values, restStateValues, particleCount) {
       interfaceRatio: Number((zone.surfaceParticleCount / Math.max(1, zone.particleCount)).toFixed(4)),
       supportedRestingRatio: Number((zone.supportedRestingParticleCount / Math.max(1, zone.particleCount)).toFixed(4)),
       activeTransportRatio: Number((zone.activeTransportParticleCount / Math.max(1, zone.particleCount)).toFixed(4)),
+      supportedTransportRatio: Number((zone.supportedTransportParticleCount / Math.max(1, zone.particleCount)).toFixed(4)),
+      averageSupportedTangentialSpeed: Number((zone.supportedTangentialSpeedSum / Math.max(1, zone.supportedTransportParticleCount)).toFixed(4)),
       interfaceChurnRatio: Number((zone.interfaceTransitionCount / Math.max(1, zone.particleCount)).toFixed(4)),
       averageSupportRestWeight: Number((zone.supportRestWeightSum / Math.max(1, zone.particleCount)).toFixed(4)),
       averageInterfaceAge: Number((zone.interfaceAgeSum / Math.max(1, zone.persistentInterfaceParticleCount)).toFixed(4)),
@@ -1307,6 +1369,8 @@ export async function createWebGPUFingerFluidSolver({
       let interfaceTransitionCount = 0;
       let supportedRestingParticleCount = 0;
       let activeTransportParticleCount = 0;
+      let supportedTransportParticleCount = 0;
+      let supportedTangentialSpeedSum = 0;
       let supportRestWeightSum = 0;
       let interfaceAgeSum = 0;
       for (let index = 0; index < safeParticleCount; index += 1) {
@@ -1331,6 +1395,14 @@ export async function createWebGPUFingerFluidSolver({
         supportRestWeightSum += supportRestWeight;
         if (supportRestWeight >= 0.5) supportedRestingParticleCount += 1;
         if (speed >= 0.35) activeTransportParticleCount += 1;
+        const supportTransport = measureSupportTransport(
+          [values[offset], values[offset + 1], values[offset + 2]],
+          [values[offset + 8], values[offset + 9], values[offset + 10]],
+        );
+        if (supportTransport.supportTransportWeight >= 0.5) {
+          supportedTransportParticleCount += 1;
+          supportedTangentialSpeedSum += supportTransport.tangentialSpeed;
+        }
         if (Math.abs(restStateValues[restOffset + 3]) >= 0.5) interfaceTransitionCount += 1;
         if (restStateValues[restOffset] >= INTERFACE_THRESHOLD) {
           persistentInterfaceParticleCount += 1;
@@ -1397,6 +1469,7 @@ export async function createWebGPUFingerFluidSolver({
         averageSurfaceFactor: Number((surfaceFactorSum / safeParticleCount).toFixed(4)),
         maxSurfaceFactor: Number(maxSurfaceFactor.toFixed(4)),
         restStateContract: KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT,
+        supportTransportContract: KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT,
         interfaceTransitionCount,
         interfaceChurnRatio: Number((interfaceTransitionCount / safeParticleCount).toFixed(5)),
         persistentInterfaceParticleCount,
@@ -1406,6 +1479,9 @@ export async function createWebGPUFingerFluidSolver({
         averageSupportRestWeight: Number((supportRestWeightSum / safeParticleCount).toFixed(4)),
         activeTransportParticleCount,
         activeTransportParticleRatio: Number((activeTransportParticleCount / safeParticleCount).toFixed(4)),
+        supportedTransportParticleCount,
+        supportedTransportParticleRatio: Number((supportedTransportParticleCount / safeParticleCount).toFixed(4)),
+        averageSupportedTangentialSpeed: Number((supportedTangentialSpeedSum / Math.max(1, supportedTransportParticleCount)).toFixed(4)),
         playgroundZoneDiagnostics: playgroundZoneDiagnostics(values, restStateValues, safeParticleCount),
         sourceRecirculationCount: interfaceCounters[2],
         interfaceCarrier: {
@@ -1449,6 +1525,7 @@ export async function createWebGPUFingerFluidSolver({
       vorticityConfinementContract: KAMINOS_FINGER_FLUID_VORTICITY_CONTRACT,
       freeSurfaceContract: KAMINOS_FINGER_FLUID_FREE_SURFACE_CONTRACT,
       restStateContract: KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT,
+      supportTransportContract: KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT,
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
       obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
       playgroundContract: KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT,
