@@ -21,6 +21,7 @@ TARGET_DECOMPOSITION = "candidate-support-gated-unit-gain-direct-flame-native-ra
 MODEL_SCHEMA = "kaminos-boundary-splat-attribute-mlp-v0"
 SPATIAL_MODEL_SCHEMA = "kaminos-boundary-splat-spatial-attribute-mlp-v0"
 GRID_MESSAGE_MODEL_SCHEMA = "kaminos-boundary-splat-grid-message-attribute-mlp-v0"
+SPARSE_GRID_MODEL_SCHEMA = "kaminos-boundary-splat-sparse-grid-residual-v0"
 OPTICAL_DECODER_SCHEMA = "kaminos-boundary-splat-screen-residual-unet-v0"
 OPTICAL_INPUT_AUTHORITY = "screen-rgb-luma-gradient-v0"
 FLOW_DEBUG_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
@@ -257,6 +258,64 @@ class GridMessageAttributeMlp(nn.Module):
         return mx.sigmoid(self.output(hidden) + message_logits)
 
 
+class SparseGridResidualBlock(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.mix = nn.Linear(hidden_size * 3 + 1, hidden_size)
+
+    def __call__(self, state, neighbor_rows):
+        safe_rows = mx.maximum(neighbor_rows, mx.array(0, dtype=neighbor_rows.dtype))
+        present = (neighbor_rows >= 0)[:, :, None]
+        neighbor_state = state[safe_rows]
+        present_count = mx.sum(present, axis=1)
+        neighbor_sum = mx.sum(neighbor_state * present, axis=1)
+        neighbor_mean = neighbor_sum / mx.maximum(present_count, 1)
+        negative_infinity = mx.full_like(neighbor_state, -1e9)
+        neighbor_max = mx.max(mx.where(present, neighbor_state, negative_infinity), axis=1)
+        neighbor_max = mx.where(present_count > 0, neighbor_max, mx.zeros_like(neighbor_max))
+        occupancy = present_count.astype(state.dtype) / neighbor_rows.shape[1]
+        mixed = mx.concatenate([state, neighbor_mean, neighbor_max, occupancy], axis=1)
+        return state + nn.gelu(self.mix(mixed)) * 0.25
+
+
+class SparseGridResidualAttributeDecoder(nn.Module):
+    def __init__(self, input_size, hidden_size):
+        super().__init__()
+        self.mixing_rounds = 3
+        self.hidden = nn.Linear(input_size, hidden_size)
+        self.output = nn.Linear(hidden_size, len(OUTPUTS))
+        self.block0 = SparseGridResidualBlock(hidden_size)
+        self.block1 = SparseGridResidualBlock(hidden_size)
+        self.block2 = SparseGridResidualBlock(hidden_size)
+        self.residual_output = nn.Linear(hidden_size, len(OUTPUTS))
+        self.residual_output.weight = mx.zeros_like(self.residual_output.weight)
+        self.residual_output.bias = mx.zeros_like(self.residual_output.bias)
+
+    @classmethod
+    def from_base(cls, base_model):
+        hidden_size = int(base_model.hidden.weight.shape[0])
+        input_size = int(base_model.hidden.weight.shape[1])
+        model = cls(input_size, hidden_size)
+        model.load_weights([
+            ("hidden.weight", base_model.hidden.weight),
+            ("hidden.bias", base_model.hidden.bias),
+            ("output.weight", base_model.output.weight),
+            ("output.bias", base_model.output.bias),
+        ], strict=False)
+        model.hidden.freeze()
+        model.output.freeze()
+        mx.eval(model.parameters())
+        return model
+
+    def __call__(self, inputs, neighbor_rows):
+        base_hidden = mx.stop_gradient(nn.relu(self.hidden(inputs)))
+        base_logits = mx.stop_gradient(self.output(base_hidden))
+        state = self.block0(base_hidden, neighbor_rows)
+        state = self.block1(state, neighbor_rows)
+        state = self.block2(state, neighbor_rows)
+        return mx.sigmoid(base_logits + self.residual_output(state))
+
+
 class ScreenConvBlock(nn.Module):
     def __init__(self, input_channels, output_channels):
         super().__init__()
@@ -415,7 +474,10 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies, r
         raise ValueError(
             f"warm start Fourier frequencies {warm_frequencies!r} do not match requested Fourier frequencies {requested_frequencies!r}"
         )
-    mixing_expansion = warm_spatial_mixing == "none" and requested_spatial_mixing == "six-neighbor-hidden-residual"
+    mixing_expansion = warm_spatial_mixing == "none" and requested_spatial_mixing in (
+        "six-neighbor-hidden-residual",
+        "sparse-grid-residual",
+    )
     if warm_spatial_mixing != requested_spatial_mixing and not mixing_expansion:
         raise ValueError(
             f"warm start spatial mixing {warm_spatial_mixing!r} does not match requested spatial mixing {requested_spatial_mixing!r}"
@@ -463,7 +525,11 @@ def load_warm_start(path_value, requested_context_mode, requested_frequencies, r
         "spatialMixing": warm_spatial_mixing,
         "legacyFrequencyRecoveryAuthority": "exact-complete-feature-name-groups-v0" if recovered_frequencies else None,
         "contextExpansionAuthority": "zero-delta-local-grid-context-expansion-v0" if warm_context_mode == "world-fourier" and requested_context_mode == "world-grid-neighborhood" else None,
-        "spatialMixingExpansionAuthority": "zero-delta-active-six-neighbor-hidden-residual-v0" if mixing_expansion else None,
+        "spatialMixingExpansionAuthority": (
+            "zero-delta-three-round-sparse-grid-residual-v0"
+            if mixing_expansion and requested_spatial_mixing == "sparse-grid-residual"
+            else "zero-delta-active-six-neighbor-hidden-residual-v0" if mixing_expansion else None
+        ),
     }, schema, warm_context_mode, warm_frequencies, warm_spatial_mixing
 
 
@@ -502,11 +568,9 @@ def grid_neighborhood_feature_names(prefix):
     return names
 
 
-def local_grid_neighbor_rows(candidates, grid, radius=1):
+def local_grid_neighbor_rows_for_offsets(candidates, grid, offsets):
     if not isinstance(grid, int) or grid <= 0:
         raise ValueError("local-grid context requires a positive integer source grid")
-    if not isinstance(radius, int) or radius <= 0:
-        raise ValueError("local-grid context radius must be a positive integer")
     positions = candidates[:, :3].astype(np.float32)
     indices = np.rint((positions + 1.0) * 0.5 * grid - 0.5).astype(np.int32)
     if np.any(indices < 0) or np.any(indices >= grid):
@@ -519,11 +583,7 @@ def local_grid_neighbor_rows(candidates, grid, radius=1):
         raise ValueError("candidate positions contain duplicate source-grid cells")
     lookup = np.full(grid ** 3, -1, dtype=np.int32)
     lookup[linear] = np.arange(linear.size, dtype=np.int32)
-    offsets = radius * np.asarray([
-        [-1, 0, 0], [1, 0, 0],
-        [0, -1, 0], [0, 1, 0],
-        [0, 0, -1], [0, 0, 1],
-    ], dtype=np.int32)
+    offsets = np.asarray(offsets, dtype=np.int32)
     neighbor_rows = np.full((len(candidates), len(offsets)), -1, dtype=np.int32)
     for neighbor_index, offset in enumerate(offsets):
         neighbor_cells = indices + offset
@@ -531,6 +591,28 @@ def local_grid_neighbor_rows(candidates, grid, radius=1):
         neighbor_linear = neighbor_cells[:, 0] + grid * (neighbor_cells[:, 1] + grid * neighbor_cells[:, 2])
         neighbor_rows[in_bounds, neighbor_index] = lookup[neighbor_linear[in_bounds]]
     return neighbor_rows
+
+
+def local_grid_neighbor_rows(candidates, grid, radius=1):
+    if not isinstance(radius, int) or radius <= 0:
+        raise ValueError("local-grid context radius must be a positive integer")
+    offsets = radius * np.asarray([
+        [-1, 0, 0], [1, 0, 0],
+        [0, -1, 0], [0, 1, 0],
+        [0, 0, -1], [0, 0, 1],
+    ], dtype=np.int32)
+    return local_grid_neighbor_rows_for_offsets(candidates, grid, offsets)
+
+
+def local_grid_neighbor_rows_26(candidates, grid):
+    offsets = [
+        (offset_x, offset_y, offset_z)
+        for offset_z in (-1, 0, 1)
+        for offset_y in (-1, 0, 1)
+        for offset_x in (-1, 0, 1)
+        if (offset_x, offset_y, offset_z) != (0, 0, 0)
+    ]
+    return local_grid_neighbor_rows_for_offsets(candidates, grid, offsets)
 
 
 def local_grid_neighborhood_channels(candidates, grid, radius=1):
@@ -624,6 +706,10 @@ def expand_hidden_size(base_model, hidden_size):
 
 
 def model_attributes(model, inputs, neighbor_rows=None):
+    if isinstance(model, SparseGridResidualAttributeDecoder):
+        if neighbor_rows is None or neighbor_rows.shape[1] != 26:
+            raise ValueError("sparse-grid residual decoder requires exact 26-neighbor row indices")
+        return model(inputs, neighbor_rows)
     if isinstance(model, GridMessageAttributeMlp):
         if neighbor_rows is None:
             raise ValueError("grid-message model requires exact six-neighbor row indices")
@@ -652,7 +738,7 @@ def project_points(points, view_projection, width, height):
     return screen.astype(np.float32), valid, clip[:, 3].astype(np.float32)
 
 
-def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_mode, frequencies):
+def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_mode, frequencies, spatial_mixing):
     source_width, source_height = frame["viewport"]
     render_height = max(1, round(render_width * source_height / source_width))
     positions = frame["candidates"][:, :3]
@@ -720,7 +806,11 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_m
         "features": mx.array(features.astype(np.float32)),
         "inputs": encode_candidate_inputs(frame["candidates"], context_mode, frequencies, frame["grid"]),
         "neighborRows": (
-            mx.array(local_grid_neighbor_rows(frame["candidates"], frame["grid"]))
+            mx.array(
+                local_grid_neighbor_rows_26(frame["candidates"], frame["grid"])
+                if spatial_mixing == "sparse-grid-residual"
+                else local_grid_neighbor_rows(frame["candidates"], frame["grid"])
+            )
             if context_mode == "world-grid-neighborhood"
             else None
         ),
@@ -1041,7 +1131,7 @@ def parse_args():
     parser.add_argument("--context-mode", choices=["none", "world-xyz", "world-fourier", "world-grid-neighborhood", "world-grid-pyramid"], default="none")
     parser.add_argument("--fourier-frequencies", default="1,2,4,8")
     parser.add_argument("--hidden-size", type=int, default=0)
-    parser.add_argument("--spatial-mixing", choices=["none", "six-neighbor-hidden-residual"], default="none")
+    parser.add_argument("--spatial-mixing", choices=["none", "six-neighbor-hidden-residual", "sparse-grid-residual"], default="none")
     parser.add_argument("--message-size", type=int, default=0)
     parser.add_argument("--freeze-base", type=int, choices=[0, 1], default=0)
     parser.add_argument("--optical-decoder", choices=["none", "screen-unet"], default="none")
@@ -1073,8 +1163,8 @@ def main():
             raise ValueError("candidate table oracle cannot be combined with spatial conditioning")
         if args.spatial_mixing != "none" and args.context_mode != "world-grid-neighborhood":
             raise ValueError("learned spatial mixing requires world-grid-neighborhood context")
-        if args.freeze_base and args.spatial_mixing != "six-neighbor-hidden-residual":
-            raise ValueError("base-path freezing requires six-neighbor-hidden-residual mixing")
+        if args.freeze_base and args.spatial_mixing not in ("six-neighbor-hidden-residual", "sparse-grid-residual"):
+            raise ValueError("base-path freezing requires an explicit residual spatial mixer")
         feature_names = context_feature_names(args.context_mode, frequencies)
         phase = "corpus"
         corpus = load_corpus(args.corpus)
@@ -1085,10 +1175,14 @@ def main():
         )
         if args.optical_decoder == "screen-unet" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
             raise ValueError("screen-unet requires an explicit disjoint frame holdout")
+        if args.spatial_mixing == "sparse-grid-residual" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
+            raise ValueError("sparse-grid-residual requires an explicit disjoint frame holdout")
         if args.optical_decoder != "none" and args.candidate_table_oracle:
             raise ValueError("optical decoding cannot be combined with the candidate table oracle")
-        if args.partial_flow_debug_gain != 0.0 and args.optical_decoder != "screen-unet":
-            raise ValueError("partial flow-debug witness requires the screen-unet optical decoder")
+        if args.optical_decoder != "none" and args.spatial_mixing != "none":
+            raise ValueError("optical decoding and pre-raster spatial mixing are separate experimental families")
+        if args.partial_flow_debug_gain != 0.0 and args.optical_decoder != "screen-unet" and args.spatial_mixing != "sparse-grid-residual":
+            raise ValueError("partial flow-debug witness requires an image-bearing optical or sparse-grid decoder")
         if args.partial_flow_debug_gain != 0.0:
             missing_flow_debug = [
                 frame["id"]
@@ -1139,7 +1233,11 @@ def main():
             model = GridMessageAttributeMlp.from_base(model, message_size)
         elif isinstance(model, GridMessageAttributeMlp) and args.message_size not in (0, message_size):
             raise ValueError(f"requested message size {args.message_size} does not match warm message size {message_size}")
-        if args.freeze_base:
+        if args.spatial_mixing == "sparse-grid-residual":
+            if isinstance(model, GridMessageAttributeMlp):
+                raise ValueError("sparse-grid residual expansion requires the proven pointwise/local-grid base head")
+            model = SparseGridResidualAttributeDecoder.from_base(model)
+        elif args.freeze_base:
             freeze_grid_message_base(model)
         if args.candidate_table_oracle:
             if len(corpus["frames"]) != 1:
@@ -1148,7 +1246,15 @@ def main():
             model = CandidateAttributeTable(normalized_attributes)
         phase = "geometry"
         geometries = [
-            build_sparse_geometry(frame, args.render_width, args.depth_bins, output_ranges[4:6, 1], args.context_mode, frequencies)
+            build_sparse_geometry(
+                frame,
+                args.render_width,
+                args.depth_bins,
+                output_ranges[4:6, 1],
+                args.context_mode,
+                frequencies,
+                args.spatial_mixing,
+            )
             for frame in corpus["frames"]
         ]
         optical_decoder = None
@@ -1261,14 +1367,20 @@ def main():
         shutil.copyfile(trained_evaluation_rows[0]["preview"], trained_preview_path)
         partial_flow_debug_witnesses = []
         if args.partial_flow_debug_gain != 0.0:
+            initial_rows_by_frame = {row["frameIndex"]: row for row in initial_evaluation_rows}
             for row in trained_evaluation_rows:
                 frame_index = row["frameIndex"]
+                control = (
+                    base_predictions[frame_index]
+                    if base_predictions is not None
+                    else np.asarray(Image.open(initial_rows_by_frame[frame_index]["preview"]).convert("RGB"), dtype=np.float32) / 255.0
+                )
                 partial_flow_debug_witnesses.append(save_partial_flow_debug_witness(
                     output_dir,
                     frame_index,
                     corpus["frames"][frame_index],
                     row["targetPreview"],
-                    base_predictions[frame_index],
+                    control,
                     row["preview"],
                     args.partial_flow_debug_gain,
                 ))
@@ -1304,6 +1416,20 @@ def main():
                 "inputAuthority": OPTICAL_INPUT_AUTHORITY,
                 "baseChannels": args.optical_channels,
                 "residualScale": args.optical_residual_scale,
+                "deployable": False,
+            }
+        elif args.spatial_mixing == "sparse-grid-residual":
+            model_path = output_dir / "sparse-grid-residual.safetensors"
+            model.save_weights(str(model_path))
+            model_bytes = model_path.read_bytes()
+            model_receipt = {
+                "path": str(model_path),
+                "schema": SPARSE_GRID_MODEL_SCHEMA,
+                "identity": f"sha256:{sha256_bytes(model_bytes)}",
+                "authority": "three-round-sparse-grid-residual-attribute-decoder-v0",
+                "adjacencyAuthority": "exact-26-neighbor-source-grid-adjacency-v0",
+                "mixingRounds": model.mixing_rounds,
+                "baseFrozen": True,
                 "deployable": False,
             }
         elif args.candidate_table_oracle:
@@ -1396,14 +1522,22 @@ def main():
                 "partialFlowDebugRequestedGain": args.partial_flow_debug_gain,
                 "partialFlowDebugEffectiveGain": args.partial_flow_debug_gain if partial_flow_debug_witnesses else 0.0,
                 "messageSize": message_size,
-                "basePathFrozen": bool(args.freeze_base),
+                "basePathFrozen": bool(args.freeze_base or args.spatial_mixing == "sparse-grid-residual"),
+                "structuralAdjacencyAuthority": "exact-26-neighbor-source-grid-adjacency-v0" if args.spatial_mixing == "sparse-grid-residual" else None,
+                "structuralMixingRounds": model.mixing_rounds if args.spatial_mixing == "sparse-grid-residual" else None,
                 "frameSplitAuthority": frame_split["authority"],
                 "evaluationLossAuthority": "held-out-frame-mean-v0" if frame_split["authority"] == "explicit-disjoint-frame-holdout-v0" else "train-frame-mean-v0",
                 "trainFrameIndices": frame_split["trainIndices"],
                 "trainFrameIds": frame_split["trainFrameIds"],
                 "evaluationFrameIndices": frame_split["evaluationIndices"],
                 "evaluationFrameIds": frame_split["evaluationFrameIds"],
-                "spatialMixingExpansionAuthority": "zero-delta-active-six-neighbor-hidden-residual-v0" if warm_spatial_mixing == "none" and args.spatial_mixing == "six-neighbor-hidden-residual" else None,
+                "spatialMixingExpansionAuthority": (
+                    "zero-delta-three-round-sparse-grid-residual-v0"
+                    if warm_spatial_mixing == "none" and args.spatial_mixing == "sparse-grid-residual"
+                    else "zero-delta-active-six-neighbor-hidden-residual-v0"
+                    if warm_spatial_mixing == "none" and args.spatial_mixing == "six-neighbor-hidden-residual"
+                    else None
+                ),
                 "fourierFrequencies": frequencies if args.context_mode in ("world-fourier", "world-grid-neighborhood", "world-grid-pyramid") else [],
                 "gridContextAuthority": "multi-radius-axial-grid-context-v0" if args.context_mode == "world-grid-pyramid" else None,
                 "inputChannels": len(feature_names),

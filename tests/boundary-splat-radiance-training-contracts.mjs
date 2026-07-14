@@ -58,6 +58,7 @@ assert.match(script, /--spatial-mixing/, 'spatial trainer exposes an explicit le
 assert.match(script, /--freeze-base/, 'message ablations can prevent the pointwise path from absorbing the spatial gradient');
 assert.match(script, /"basePathFrozen"/, 'training receipts preserve whether only the message path was trainable');
 assert.match(script, /six-neighbor-hidden-residual/, 'learned spatial mixing has a stable model-family identity');
+assert.match(script, /sparse-grid-residual/, 'pre-raster structural decoding is a distinct learned spatial family');
 assert.match(script, /zero-delta-active-six-neighbor-hidden-residual-v0/, 'learned mixing starts as an exact no-op while retaining trainable internal features');
 assert.match(script, /mx\.sin\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes signed sine phase channels');
 assert.match(script, /mx\.cos\(positions[^\n]+frequency[^\n]+2\.0[^\n]+np\.pi\)/, 'Fourier conditioning includes cosine phase channels');
