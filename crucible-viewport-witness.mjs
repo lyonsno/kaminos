@@ -609,6 +609,181 @@ function validateRequestedFirePresentation({ requestedPresentation, firingId, ex
   return [...new Set(failures)];
 }
 
+function correlateForegroundGapsWithHostEvents({
+  firingId,
+  foregroundClock,
+  hostTelemetry,
+  foregroundGaps,
+  hostEventRetention,
+  hostEventCount,
+  hostEvents,
+} = {}) {
+  const failures = [];
+  const gaps = Array.isArray(foregroundGaps) ? foregroundGaps : [];
+  const events = Array.isArray(hostEvents) ? hostEvents : [];
+  if (hostEventRetention !== 'uncapped' || hostEventCount !== events.length) {
+    failures.push('host-events-capped-or-partial');
+  }
+
+  const hostTelemetryAvailable = hostTelemetry?.schema === 'kaminos.foreground-host-telemetry.v0'
+    && hostTelemetry.status === 'complete'
+    && hostTelemetry.longTaskSource?.status === 'complete';
+  if (!hostTelemetryAvailable) failures.push('host-telemetry-source-unavailable');
+  if (!firingId || hostTelemetry?.firingId !== firingId || !hostTelemetry?.episodeId) {
+    failures.push('host-telemetry-episode-mismatch');
+  }
+  const foregroundClockValid = foregroundClock?.schema === 'kaminos.browser-epoch-monotonic-clock.v0'
+    && foregroundClock.timingAuthority === 'performance-time-origin-plus-now'
+    && Number.isFinite(foregroundClock.timeOriginEpochMs);
+  if (!foregroundClockValid
+    || hostTelemetry?.clock?.schema !== foregroundClock?.schema
+    || hostTelemetry?.clock?.timingAuthority !== foregroundClock?.timingAuthority
+    || hostTelemetry?.clock?.timeOriginEpochMs !== foregroundClock?.timeOriginEpochMs) {
+    failures.push('host-telemetry-clock-mismatch');
+  }
+  const acceptedEventSources = new Set();
+  if (hostTelemetry?.longTaskSource?.status === 'complete'
+    && typeof hostTelemetry.longTaskSource.identity === 'string') {
+    acceptedEventSources.add(hostTelemetry.longTaskSource.identity);
+  }
+  if (hostTelemetry?.explicitEventSource?.status === 'available'
+    && typeof hostTelemetry.explicitEventSource.identity === 'string') {
+    acceptedEventSources.add(hostTelemetry.explicitEventSource.identity);
+  }
+
+  const validEvents = events.filter(event => {
+    let valid = typeof event?.kind === 'string'
+      && Boolean(event.kind)
+      && typeof event?.phase === 'string'
+      && Boolean(event.phase)
+      && typeof event?.source === 'string'
+      && Boolean(event.source)
+      && Number.isFinite(event.startMs)
+      && Number.isFinite(event.endMs)
+      && event.endMs >= event.startMs
+      && Number.isFinite(event.startEpochMs)
+      && Number.isFinite(event.endEpochMs)
+      && event.endEpochMs >= event.startEpochMs;
+    if (!valid && !failures.includes('host-event-interval-invalid')) {
+      failures.push('host-event-interval-invalid');
+    }
+    if (!acceptedEventSources.has(event?.source)) {
+      if (!failures.includes('host-event-source-unrecognized')) failures.push('host-event-source-unrecognized');
+      valid = false;
+    }
+    if (event?.firingId !== firingId) {
+      if (!failures.includes('host-event-firing-mismatch')) failures.push('host-event-firing-mismatch');
+      valid = false;
+    }
+    if (event?.episodeId !== hostTelemetry?.episodeId) {
+      if (!failures.includes('host-event-episode-mismatch')) failures.push('host-event-episode-mismatch');
+      valid = false;
+    }
+    const eventClockValid = foregroundClockValid
+      && event?.clockSchema === foregroundClock.schema
+      && event?.timingAuthority === foregroundClock.timingAuthority
+      && event?.timeOriginEpochMs === foregroundClock.timeOriginEpochMs
+      && Math.abs((foregroundClock.timeOriginEpochMs + event.startMs) - event.startEpochMs) <= 1
+      && Math.abs((foregroundClock.timeOriginEpochMs + event.endMs) - event.endEpochMs) <= 1;
+    if (!eventClockValid) {
+      if (!failures.includes('host-event-clock-mismatch')) failures.push('host-event-clock-mismatch');
+      valid = false;
+    }
+    if (!hostTelemetryAvailable) valid = false;
+    return valid;
+  });
+
+  const mergedDuration = intervals => {
+    const ordered = intervals
+      .filter(interval => Number.isFinite(interval?.startEpochMs)
+        && Number.isFinite(interval?.endEpochMs)
+        && interval.endEpochMs > interval.startEpochMs)
+      .map(interval => ({ startEpochMs: interval.startEpochMs, endEpochMs: interval.endEpochMs }))
+      .sort((left, right) => left.startEpochMs - right.startEpochMs || left.endEpochMs - right.endEpochMs);
+    if (!ordered.length) return 0;
+    let total = 0;
+    let start = ordered[0].startEpochMs;
+    let end = ordered[0].endEpochMs;
+    for (const interval of ordered.slice(1)) {
+      if (interval.startEpochMs <= end) {
+        end = Math.max(end, interval.endEpochMs);
+      } else {
+        total += end - start;
+        start = interval.startEpochMs;
+        end = interval.endEpochMs;
+      }
+    }
+    return total + end - start;
+  };
+  const rounded = value => Number(value.toFixed(3));
+
+  const correlatedGaps = gaps.map(gap => {
+    const startEpochMs = Number(gap?.startEpochMs);
+    const endEpochMs = Number(gap?.endEpochMs);
+    if (!Number.isFinite(startEpochMs) || !Number.isFinite(endEpochMs) || endEpochMs <= startEpochMs) {
+      if (!failures.includes('foreground-gap-interval-invalid')) {
+        failures.push('foreground-gap-interval-invalid');
+      }
+    }
+    const durationMs = Number.isFinite(gap?.durationMs)
+      ? Number(gap.durationMs)
+      : Math.max(0, endEpochMs - startEpochMs);
+    const hostOverlaps = validEvents.map(event => {
+      const overlapStartEpochMs = Math.max(startEpochMs, event.startEpochMs);
+      const overlapEndEpochMs = Math.min(endEpochMs, event.endEpochMs);
+      if (overlapEndEpochMs <= overlapStartEpochMs) return null;
+      return {
+        kind: event.kind,
+        phase: event.phase,
+        startEpochMs: rounded(overlapStartEpochMs),
+        endEpochMs: rounded(overlapEndEpochMs),
+        overlapDurationMs: rounded(overlapEndEpochMs - overlapStartEpochMs),
+        detail: event.detail ?? null,
+      };
+    }).filter(Boolean);
+    const schedulerOverlaps = Array.isArray(gap?.overlaps) ? gap.overlaps : [];
+    const hostOverlapDurationMs = mergedDuration(hostOverlaps);
+    const evidenceCoveredDurationMs = Math.min(
+      Math.max(0, durationMs),
+      mergedDuration([...schedulerOverlaps, ...hostOverlaps]),
+    );
+    return {
+      ...gap,
+      hostOverlapStatus: hostOverlaps.length ? 'observed' : 'none',
+      hostOverlaps,
+      hostOverlapDurationMs: rounded(hostOverlapDurationMs),
+      evidenceCoveredDurationMs: rounded(evidenceCoveredDurationMs),
+      remainingUnknownDurationMs: rounded(Math.max(0, durationMs - evidenceCoveredDurationMs)),
+    };
+  });
+  const totals = correlatedGaps.reduce((result, gap) => ({
+    foregroundGapDurationMs: result.foregroundGapDurationMs + (Number(gap.durationMs) || 0),
+    hostOverlapDurationMs: result.hostOverlapDurationMs + gap.hostOverlapDurationMs,
+    evidenceCoveredDurationMs: result.evidenceCoveredDurationMs + gap.evidenceCoveredDurationMs,
+    remainingUnknownDurationMs: result.remainingUnknownDurationMs + gap.remainingUnknownDurationMs,
+  }), {
+    foregroundGapDurationMs: 0,
+    hostOverlapDurationMs: 0,
+    evidenceCoveredDurationMs: 0,
+    remainingUnknownDurationMs: 0,
+  });
+  for (const key of Object.keys(totals)) totals[key] = rounded(totals[key]);
+
+  return {
+    schema: 'kaminos.foreground-host-gap-correlation.v0',
+    status: failures.length ? 'invalid' : 'verified',
+    evidenceSource: 'shared-epoch-interval-intersection',
+    disclaimer: 'host-event-overlap-not-causal-attribution; uncovered durations remain unknown',
+    hostEventRetention,
+    hostEventCount,
+    foregroundGapCount: gaps.length,
+    uncoveredGapCount: correlatedGaps.filter(gap => gap.remainingUnknownDurationMs > 0).length,
+    gaps: correlatedGaps,
+    totals,
+    failures,
+  };
+}
+
 function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }) {
   const report = pipelineReport || {};
   const stage = (report.stages || [])[0] || {};
@@ -1207,10 +1382,11 @@ try {
       window.__kaminosCrucibleWitnessSnapshot = {
         identity: Object.freeze({ ...snapshotIdentity }),
         foregroundSamples: Object.freeze([...(foregroundKilnHeartbeat?.samples || [])]),
+        hostEvents: Object.freeze([...(foregroundKilnHeartbeat?.hostEvents || [])]),
         foregroundGaps: Object.freeze([...(sharpDutyCorrelation?.foregroundGaps || [])]),
       };
       const foregroundKilnHeartbeatWitness = foregroundKilnHeartbeat
-        ? { ...foregroundKilnHeartbeat, samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined }
+        ? { ...foregroundKilnHeartbeat, samples: undefined, hostEvents: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined }
         : null;
       const sharpDutyCorrelationWitness = sharpDutyCorrelation
         ? { ...sharpDutyCorrelation, foregroundGaps: undefined }
@@ -1247,6 +1423,8 @@ try {
               firingId: browserFiringEvidence.foregroundKilnHeartbeat.firingId,
               sampleRetention: browserFiringEvidence.foregroundKilnHeartbeat.sampleRetention,
               sampleCount: browserFiringEvidence.foregroundKilnHeartbeat.sampleCount,
+              hostEventRetention: browserFiringEvidence.foregroundKilnHeartbeat.hostEventRetention,
+              hostEventCount: browserFiringEvidence.foregroundKilnHeartbeat.hostEventCount,
             }
           : null,
         sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation
@@ -1294,6 +1472,15 @@ try {
       timeoutMs: fireTimeoutMs,
       label: 'foreground heartbeat samples',
     });
+    browserFiringEvidence.foregroundKilnHeartbeat.hostEvents = await readBrowserArrayInChunks({
+      evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+      snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+      arrayKey: 'hostEvents',
+      expectedCount: browserFiringEvidence.foregroundKilnHeartbeat.hostEventCount,
+      expectedIdentity: browserFiringEvidence.snapshotIdentity,
+      timeoutMs: fireTimeoutMs,
+      label: 'foreground host events',
+    });
     browserFiringEvidence.sharpDutyCorrelation.foregroundGaps = await readBrowserArrayInChunks({
       evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
       snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
@@ -1307,6 +1494,15 @@ try {
     state.fullRoute = projectFriendlyFiringEvidence({
       browserFiringEvidence,
       pipelineReport,
+    });
+    state.fullRoute.hostGapCorrelation = correlateForegroundGapsWithHostEvents({
+      firingId: state.fullRoute.foregroundKilnHeartbeat?.firingId,
+      foregroundClock: state.fullRoute.foregroundKilnHeartbeat?.clock,
+      hostTelemetry: state.fullRoute.foregroundKilnHeartbeat?.hostTelemetry,
+      foregroundGaps: state.fullRoute.sharpDutyCorrelation?.foregroundGaps,
+      hostEventRetention: state.fullRoute.foregroundKilnHeartbeat?.hostEventRetention,
+      hostEventCount: state.fullRoute.foregroundKilnHeartbeat?.hostEventCount,
+      hostEvents: state.fullRoute.foregroundKilnHeartbeat?.hostEvents,
     });
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
     if (state.fullRoute.status !== 'complete') throw new Error(`Friendly firing failed: ${state.fullRoute.message || state.fullRoute.status}`);
@@ -1351,7 +1547,12 @@ try {
     if (foregroundKilnHeartbeat?.schema !== 'kaminos.foreground-kiln-heartbeat.v0'
       || foregroundKilnHeartbeat.status !== 'verified'
       || foregroundKilnHeartbeat.sampleRetention !== 'uncapped'
-      || foregroundKilnHeartbeat.sampleCount !== foregroundKilnHeartbeat.samples?.length) {
+      || foregroundKilnHeartbeat.sampleCount !== foregroundKilnHeartbeat.samples?.length
+      || foregroundKilnHeartbeat.hostEventRetention !== 'uncapped'
+      || foregroundKilnHeartbeat.hostEventCount !== foregroundKilnHeartbeat.hostEvents?.length
+      || foregroundKilnHeartbeat.hostTelemetry?.schema !== 'kaminos.foreground-host-telemetry.v0'
+      || foregroundKilnHeartbeat.hostTelemetry.status !== 'complete'
+      || foregroundKilnHeartbeat.hostTelemetry.longTaskSource?.status !== 'complete') {
       throw new Error('Friendly firing is missing an uncapped verified foreground firing heartbeat');
     }
     const sharpDutyCorrelation = state.fullRoute.sharpDutyCorrelation;
@@ -1369,6 +1570,10 @@ try {
         - correlationTotals.attributedDurationMs
         - correlationTotals.unattributedDurationMs) > 1) {
       throw new Error('Friendly firing correlation does not preserve its unattributed foreground remainder');
+    }
+    if (state.fullRoute.hostGapCorrelation?.status !== 'verified'
+      || state.fullRoute.hostGapCorrelation.foregroundGapCount !== sharpDutyCorrelation.foregroundGapCount) {
+      throw new Error(`Friendly firing is missing complete foreground host-event correlation: ${JSON.stringify(state.fullRoute.hostGapCorrelation)}`);
     }
     const expectedLateTailSteps = ['ply-blob-assembly', 'object-url-create', 'output-bind'];
     for (const step of expectedLateTailSteps) {

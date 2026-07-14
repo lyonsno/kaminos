@@ -19,11 +19,27 @@ const budget = {
 // SHARP submitted-work duties, so cadence gaps can be attributed honestly.
 {
   let nowMs = 100;
-  const events = [];
+  const observers = [];
+  class TestPerformanceObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.disconnected = false;
+      observers.push(this);
+    }
+
+    observe(options) {
+      this.options = options;
+    }
+
+    disconnect() {
+      this.disconnected = true;
+    }
+  }
   const episode = createForegroundKilnHeartbeatEpisode({
     routeId: 'sharp-image-to-splat-live-v0',
     profileId: 'cooperative-spn-gaussian',
     pipelineId: 'sharp-image-to-splat-live-v0',
+    firingId: 'firing-host-authority-a',
     expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
     requestedFireBudget: budget,
     timeOriginEpochMs: 1_700_000_000_000,
@@ -40,22 +56,84 @@ const budget = {
     now: () => nowMs,
     requestFrame: () => 1,
     cancelFrame: () => {},
+    PerformanceObserverClass: TestPerformanceObserver,
   });
   episode.start();
+  assert.deepEqual(observers[0].options, { type: 'longtask', buffered: true });
+  assert.equal(episode.report().hostTelemetry.status, 'recording');
+  assert.equal(episode.report().hostTelemetry.longTaskSource.status, 'recording');
+  observers[0].callback({
+    getEntries: () => [{
+      entryType: 'longtask',
+      name: 'self',
+      startTime: 104,
+      duration: 4,
+    }],
+  });
   nowMs = 120;
   episode.recordEvent({ kind: 'browser-host', phase: 'present', startMs: 110, endMs: 118, detail: 'test' });
   const report = episode.finish();
   assert.equal(typeof episode.recordEvent, 'function');
-  assert.deepEqual(report.hostEvents, [{
+  assert.equal(observers[0].disconnected, true);
+  assert.equal(report.hostTelemetry.schema, 'kaminos.foreground-host-telemetry.v0');
+  assert.equal(report.hostTelemetry.status, 'complete');
+  assert.equal(report.hostTelemetry.longTaskSource.status, 'complete');
+  assert.equal(report.hostTelemetry.longTaskSource.identity, 'performance-observer-longtask');
+  assert.equal(report.hostTelemetry.explicitEventSource.identity, 'explicit-record-event');
+  assert.equal(report.hostTelemetry.explicitEventSource.status, 'available');
+  assert.equal(report.hostTelemetry.firingId, 'firing-host-authority-a');
+  assert.equal(report.hostEvents.length, 2);
+  assert.deepEqual(report.hostEvents[1], {
     kind: 'browser-host',
     phase: 'present',
+    source: 'explicit-record-event',
+    firingId: 'firing-host-authority-a',
+    episodeId: report.hostTelemetry.episodeId,
+    clockSchema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now',
+    timeOriginEpochMs: 1_700_000_000_000,
     startMs: 110,
     endMs: 118,
     startEpochMs: 1_700_000_000_110,
     endEpochMs: 1_700_000_000_118,
     durationMs: 8,
     detail: 'test',
-  }]);
+  });
+}
+
+// Unsupported or failed browser long-task observation must be explicit rather
+// than masquerading as a complete zero-event capture.
+for (const [PerformanceObserverClass, expectedReason] of [
+  [null, 'performance-observer-unavailable'],
+  [class ThrowingPerformanceObserver {
+    observe() { throw new Error('longtask denied'); }
+    disconnect() {}
+  }, 'longtask-observe-failed'],
+]) {
+  const episode = createForegroundKilnHeartbeatEpisode({
+    firingId: 'firing-host-unavailable',
+    expectedVolumeRouteIdentity: 'native-3d-compute-fluid-raymarch-v0',
+    requestedFireBudget: budget,
+    timeOriginEpochMs: 1_700_000_000_000,
+    readVolumeState: () => ({
+      active: true,
+      routeIdentity: 'native-3d-compute-fluid-raymarch-v0',
+      frameCount: 1,
+      simStepCount: 1,
+      resolution: 90,
+      renderScale: 0.4,
+      adaptiveRaymarch: 1,
+    }),
+    now: () => 100,
+    requestFrame: () => 1,
+    cancelFrame: () => {},
+    PerformanceObserverClass,
+  });
+  episode.start();
+  const report = episode.finish();
+  assert.equal(report.hostTelemetry.status, 'unavailable');
+  assert.equal(report.hostTelemetry.longTaskSource.status, 'unavailable');
+  assert.equal(report.hostTelemetry.longTaskSource.reason, expectedReason);
 }
 
 const learnedHybridPresentation = {

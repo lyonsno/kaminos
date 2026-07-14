@@ -429,7 +429,7 @@ const projectorSource = witness.match(
 assert.ok(projectorSource, 'witness must expose a testable Node-side firing evidence projector');
 const projectFriendlyFiringEvidence = vm.runInNewContext(`(${projectorSource[0]})`);
 const presentationValidatorSource = witness.match(
-  /function validateRequestedFirePresentation\([\s\S]*?\n}\n(?=\nfunction projectFriendlyFiringEvidence)/,
+  /function validateRequestedFirePresentation\([\s\S]*?\n}\n(?=\nfunction correlateForegroundGapsWithHostEvents)/,
 );
 assert.ok(
   presentationValidatorSource,
@@ -563,6 +563,192 @@ assert.equal(projectedEvidence.foregroundKilnHeartbeat.sampleRetention, 'uncappe
 assert.equal(projectedEvidence.sharpDutyCorrelation.status, 'verified');
 assert.equal(projectedEvidence.volumeReleased, true);
 
+const hostGapCorrelationSource = witness.match(
+  /function correlateForegroundGapsWithHostEvents\([\s\S]*?\n}\n(?=\nfunction )/,
+);
+assert.ok(hostGapCorrelationSource, 'Witness must expose executable foreground-gap to host-event correlation');
+const correlateForegroundGapsWithHostEvents = vm.runInNewContext(`(${hostGapCorrelationSource[0]})`);
+const hostGapCorrelation = correlateForegroundGapsWithHostEvents({
+  firingId: 'firing-host-authority-a',
+  foregroundClock: {
+    schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now',
+    timeOriginEpochMs: 1_700_000_000_000,
+  },
+  hostTelemetry: {
+    schema: 'kaminos.foreground-host-telemetry.v0',
+    status: 'complete',
+    firingId: 'firing-host-authority-a',
+    episodeId: 'host-episode-a',
+    clock: {
+      schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+      timingAuthority: 'performance-time-origin-plus-now',
+      timeOriginEpochMs: 1_700_000_000_000,
+    },
+    longTaskSource: { identity: 'performance-observer-longtask', status: 'complete' },
+    explicitEventSource: { identity: 'explicit-record-event', status: 'available' },
+  },
+  foregroundGaps: [{
+    sampleIndex: 1,
+    startEpochMs: 1_700_000_000_100,
+    endEpochMs: 1_700_000_000_200,
+    durationMs: 100,
+    overlaps: [{
+      startEpochMs: 1_700_000_000_100,
+      endEpochMs: 1_700_000_000_120,
+    }],
+  }, {
+    sampleIndex: 2,
+    startEpochMs: 1_700_000_000_200,
+    endEpochMs: 1_700_000_000_240,
+    durationMs: 40,
+    overlaps: [],
+  }],
+  hostEventRetention: 'uncapped',
+  hostEventCount: 1,
+  hostEvents: [{
+    kind: 'browser-performance',
+    phase: 'longtask',
+    source: 'performance-observer-longtask',
+    firingId: 'firing-host-authority-a',
+    episodeId: 'host-episode-a',
+    clockSchema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now',
+    timeOriginEpochMs: 1_700_000_000_000,
+    startMs: 140,
+    endMs: 160,
+    startEpochMs: 1_700_000_000_140,
+    endEpochMs: 1_700_000_000_160,
+    durationMs: 20,
+  }],
+});
+assert.equal(hostGapCorrelation.schema, 'kaminos.foreground-host-gap-correlation.v0');
+assert.equal(hostGapCorrelation.status, 'verified');
+assert.equal(hostGapCorrelation.hostEventRetention, 'uncapped');
+assert.equal(hostGapCorrelation.hostEventCount, 1);
+assert.equal(hostGapCorrelation.foregroundGapCount, 2);
+assert.equal(hostGapCorrelation.gaps[0].hostOverlapStatus, 'observed');
+assert.equal(hostGapCorrelation.gaps[0].hostOverlapDurationMs, 20);
+assert.equal(hostGapCorrelation.gaps[0].evidenceCoveredDurationMs, 40);
+assert.equal(hostGapCorrelation.gaps[0].remainingUnknownDurationMs, 60);
+assert.equal(hostGapCorrelation.gaps[1].hostOverlapStatus, 'none');
+assert.equal(hostGapCorrelation.gaps[1].remainingUnknownDurationMs, 40);
+assert.equal(hostGapCorrelation.uncoveredGapCount, 2);
+assert.equal(hostGapCorrelation.totals.remainingUnknownDurationMs, 100);
+assert.match(hostGapCorrelation.disclaimer, /overlap-not-causal-attribution/);
+
+const partialHostGapCorrelation = correlateForegroundGapsWithHostEvents({
+  firingId: 'firing-host-authority-a',
+  foregroundClock: {
+    schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now',
+    timeOriginEpochMs: 1_700_000_000_000,
+  },
+  hostTelemetry: {
+    schema: 'kaminos.foreground-host-telemetry.v0',
+    status: 'complete',
+    firingId: 'firing-host-authority-a',
+    episodeId: 'host-episode-a',
+    clock: {
+      schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+      timingAuthority: 'performance-time-origin-plus-now',
+      timeOriginEpochMs: 1_700_000_000_000,
+    },
+    longTaskSource: { identity: 'performance-observer-longtask', status: 'complete' },
+    explicitEventSource: { identity: 'explicit-record-event', status: 'available' },
+  },
+  foregroundGaps: [],
+  hostEventRetention: 'uncapped',
+  hostEventCount: 2,
+  hostEvents: [{
+    kind: 'browser-performance',
+    phase: 'longtask',
+    source: 'performance-observer-longtask',
+    firingId: 'firing-host-authority-a',
+    episodeId: 'host-episode-a',
+    clockSchema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now',
+    timeOriginEpochMs: 1_700_000_000_000,
+    startMs: 140,
+    endMs: 160,
+    startEpochMs: 1_700_000_000_140,
+    endEpochMs: 1_700_000_000_160,
+  }],
+});
+assert.equal(partialHostGapCorrelation.status, 'invalid');
+assert.ok(partialHostGapCorrelation.failures.includes('host-events-capped-or-partial'));
+
+for (const [mutation, expectedFailure] of [
+  [{ hostTelemetry: { status: 'unavailable', longTaskSource: { status: 'unavailable' } } }, 'host-telemetry-source-unavailable'],
+  [{ hostEvents: [{
+    kind: 'browser-performance', phase: 'longtask', source: 'performance-observer-longtask',
+    firingId: 'stale-firing', episodeId: 'host-episode-a',
+    clockSchema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now', timeOriginEpochMs: 1_700_000_000_000,
+    startMs: 140, endMs: 160,
+    startEpochMs: 1_700_000_000_140, endEpochMs: 1_700_000_000_160,
+  }] }, 'host-event-firing-mismatch'],
+  [{ hostEvents: [{
+    kind: 'browser-performance', phase: 'longtask', source: 'performance-observer-longtask',
+    firingId: 'firing-host-authority-a', episodeId: 'host-episode-a',
+    clockSchema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now', timeOriginEpochMs: 1_700_000_000_000,
+    startMs: 140, endMs: 160,
+    startEpochMs: 1_700_000_009_140, endEpochMs: 1_700_000_009_160,
+  }] }, 'host-event-clock-mismatch'],
+  [{ hostEvents: [{
+    kind: 'browser-performance', phase: 'longtask', source: 'stale-side-channel',
+    firingId: 'firing-host-authority-a', episodeId: 'host-episode-a',
+    clockSchema: 'kaminos.browser-epoch-monotonic-clock.v0',
+    timingAuthority: 'performance-time-origin-plus-now', timeOriginEpochMs: 1_700_000_000_000,
+    startMs: 140, endMs: 160,
+    startEpochMs: 1_700_000_000_140, endEpochMs: 1_700_000_000_160,
+  }] }, 'host-event-source-unrecognized'],
+]) {
+  const base = {
+    firingId: 'firing-host-authority-a',
+    foregroundClock: {
+      schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+      timingAuthority: 'performance-time-origin-plus-now',
+      timeOriginEpochMs: 1_700_000_000_000,
+    },
+    hostTelemetry: {
+      schema: 'kaminos.foreground-host-telemetry.v0', status: 'complete',
+      firingId: 'firing-host-authority-a', episodeId: 'host-episode-a',
+      clock: {
+        schema: 'kaminos.browser-epoch-monotonic-clock.v0',
+        timingAuthority: 'performance-time-origin-plus-now',
+        timeOriginEpochMs: 1_700_000_000_000,
+      },
+      longTaskSource: { identity: 'performance-observer-longtask', status: 'complete' },
+      explicitEventSource: { identity: 'explicit-record-event', status: 'available' },
+    },
+    foregroundGaps: [{
+      startEpochMs: 1_700_000_000_100, endEpochMs: 1_700_000_000_200,
+      durationMs: 100, overlaps: [],
+    }],
+    hostEventRetention: 'uncapped',
+    hostEventCount: 1,
+    hostEvents: [{
+      kind: 'browser-performance', phase: 'longtask', source: 'performance-observer-longtask',
+      firingId: 'firing-host-authority-a', episodeId: 'host-episode-a',
+      clockSchema: 'kaminos.browser-epoch-monotonic-clock.v0',
+      timingAuthority: 'performance-time-origin-plus-now', timeOriginEpochMs: 1_700_000_000_000,
+      startMs: 140, endMs: 160,
+      startEpochMs: 1_700_000_000_140, endEpochMs: 1_700_000_000_160,
+    }],
+  };
+  const result = correlateForegroundGapsWithHostEvents({
+    ...base,
+    ...mutation,
+    hostTelemetry: { ...base.hostTelemetry, ...(mutation.hostTelemetry || {}) },
+  });
+  assert.equal(result.status, 'invalid');
+  assert.ok(result.failures.includes(expectedFailure));
+  assert.equal(result.gaps[0].hostOverlapDurationMs, 0);
+  assert.equal(result.gaps[0].remainingUnknownDurationMs, 100);
+}
+
 for (const [pattern, message] of [
   [/crucible-viewport-witness\.v0/, 'Witness must name the Crucible viewport contract it emits'],
   [/--url/, 'Witness must accept an explicit Kaminos URL instead of hardcoding a server'],
@@ -598,6 +784,10 @@ for (const [pattern, message] of [
   [/kaminos\.foreground-sharp-duty-correlation\.v0/, 'Full-route witness must require the correlation schema'],
   [/sampleRetention[\s\S]*uncapped/, 'Full-route witness must reject capped foreground samples'],
   [/foregroundGaps/, 'Full-route witness must preserve every inference-window foreground gap'],
+  [/hostEventRetention[\s\S]*uncapped/, 'Full-route witness must require uncapped foreground host events'],
+  [/hostEventCount/, 'Full-route witness must preserve the declared foreground host-event count'],
+  [/hostGapCorrelation/, 'Full-route witness must preserve host-event overlap and the remaining unknown gap duration'],
+  [/remainingUnknownDurationMs/, 'Host overlap must not erase the unexplained remainder of a foreground gap'],
   [/unattributedDurationMs/, 'Full-route witness must preserve delay outside named SHARP duty intervals'],
   [/phaseRankings/, 'Full-route witness must rank named SHARP phase overlap'],
   [/boundaryRankings/, 'Full-route witness must rank named SHARP boundary overlap'],
@@ -665,7 +855,8 @@ for (const [pattern, message] of [
   [/snapshotIdentity/, 'Witness must carry snapshot identity through every chunk read'],
   [/foregroundKilnHeartbeat\.samples = await readBrowserArrayInChunks/, 'Witness must reconstruct every uncapped foreground sample outside the browser payload'],
   [/sharpDutyCorrelation\.foregroundGaps = await readBrowserArrayInChunks/, 'Witness must reconstruct every correlated foreground gap outside the browser payload'],
-  [/samples: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined/, 'Initial CDP summary must omit duplicated large heartbeat evidence'],
+  [/foregroundKilnHeartbeat\.hostEvents = await readBrowserArrayInChunks/, 'Witness must reconstruct every uncapped host event outside the browser payload'],
+  [/samples: undefined, hostEvents: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined/, 'Initial CDP summary must omit duplicated large heartbeat and host-event evidence'],
   [/lastTrustworthyEvidence = \{[\s\S]*postFiringSummary:[\s\S]*reportPath: browserFiringEvidence\.reportPath[\s\S]*readBrowserArrayInChunks/, 'Chunk failures must preserve the compact post-firing identity and declared-count evidence'],
 ]) {
   assert.match(witness, pattern, message);
