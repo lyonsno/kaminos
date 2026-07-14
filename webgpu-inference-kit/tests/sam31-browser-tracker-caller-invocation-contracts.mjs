@@ -5,6 +5,18 @@ import {
   createSam31BrowserTrackerCallerDualInvocationEvidence,
   createSam31BrowserTrackerCallerInvocationRuntime,
 } from '../src/sam31-browser-tracker-caller-invocation.js';
+import * as callerInvocationModule from '../src/sam31-browser-tracker-caller-invocation.js';
+import { canonicalSam3IdentityJson } from '../src/sam-browser-package-manifest.js';
+import { SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT } from '../src/sam31-browser-tracker-package.js';
+
+async function canonicalInvocationId(invocation) {
+  const contract = Object.fromEntries(SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationFields
+    .filter(field => field !== 'invocationId')
+    .map(field => [field, invocation[field]]));
+  const text = new TextEncoder().encode(canonicalSam3IdentityJson(contract));
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', text));
+  return `${SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationPrefix}sha256:${Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
 
 const packetNames = ['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer'];
 const packageId = 'sam31-tracker-model-package:fixture';
@@ -86,6 +98,11 @@ assert.equal(first.componentAuthorities, null);
 assert.equal(first.packageResolution.verification.attached, false);
 assert.equal(first.packageResolution.invocation.source, 'browser-caller-inputs');
 assert.equal(first.invocationId, repeat.invocationId, 'identical caller bytes, mask, and session must derive one stable invocation id');
+assert.equal(
+  first.invocationId,
+  await canonicalInvocationId(first.invocation),
+  'a caller-derived invocation must reproduce exactly through the shared package invocation contract',
+);
 assert.equal(first.inputEvidence.dynamicOriginFetchCount, 0);
 assert.equal(first.cacheEvidence().dynamicNetworkLoadCount, 0);
 assert.deepEqual(first.manifests.ingress.sourceImages.map(image => image.frameIndex), [0, 1]);
@@ -128,6 +145,34 @@ const changed = await createSam31BrowserTrackerCallerInvocationRuntime({
 });
 assert.notEqual(first.invocationId, changed.invocationId);
 assert.equal(first.packageId, changed.packageId, 'caller inputs must not mutate immutable model-package identity');
+
+assert.equal(typeof callerInvocationModule.resizeRgbaMetaBicubic, 'function', 'the caller path must expose its pinned Meta resize primitive for exact fixture testing');
+const resizeSourceRgb = new Uint8Array([
+  0, 10, 20, 40, 50, 60, 80, 90, 100, 120, 130, 140, 160, 170, 180,
+  15, 25, 35, 55, 65, 75, 95, 105, 115, 135, 145, 155, 175, 185, 195,
+  30, 40, 50, 70, 80, 90, 110, 120, 130, 150, 160, 170, 190, 200, 210,
+  45, 55, 65, 85, 95, 105, 125, 135, 145, 165, 175, 185, 205, 215, 225,
+]);
+const resizeSourceRgba = new Uint8Array(5 * 4 * 4);
+for (let pixel = 0; pixel < 20; pixel += 1) {
+  resizeSourceRgba.set(resizeSourceRgb.subarray(pixel * 3, pixel * 3 + 3), pixel * 4);
+  resizeSourceRgba[pixel * 4 + 3] = 255;
+}
+const metaBicubicRgb = [
+  17, 27, 37, 83, 93, 103, 149, 159, 169,
+  37, 47, 57, 103, 113, 123, 169, 179, 189,
+  56, 66, 76, 122, 132, 142, 188, 198, 208,
+];
+const metaBicubicRgba = new Uint8Array(3 * 3 * 4);
+for (let pixel = 0; pixel < 9; pixel += 1) {
+  metaBicubicRgba.set(metaBicubicRgb.slice(pixel * 3, pixel * 3 + 3), pixel * 4);
+  metaBicubicRgba[pixel * 4 + 3] = 255;
+}
+assert.deepEqual(
+  callerInvocationModule.resizeRgbaMetaBicubic(resizeSourceRgba, 5, 4, 3, 3),
+  metaBicubicRgba,
+  'browser resize bytes must exactly match Pillow 12.2.0 RGB.resize default bicubic output used by pinned Meta SAM 3.1',
+);
 
 await assert.rejects(
   () => createSam31BrowserTrackerCallerInvocationRuntime({ modelPackageRuntime, sourceImages: [sourceImages[0], sourceImages[0]], initialMask, session, decodeImage }),
@@ -266,9 +311,19 @@ assert.match(invocationSmokeSource, /modelPackageRoot/, 'the invocation smoke mu
 assert.match(invocationSmokeSource, /callerMetadata/, 'the invocation smoke must preload caller-owned images, mask, and session metadata');
 assert.match(invocationSmokeSource, /callerInputIndex/, 'an isolated one-root child must address caller inputs by its parent invocation index');
 const terminalSmokeSource = await readFile(new URL('../tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', import.meta.url), 'utf8');
+const ingressExporterSource = await readFile(new URL('../tools/sam31-two-image-ingress-meta-packet.py', import.meta.url), 'utf8');
+const metaPreprocessSource = await readFile(new URL('../tools/sam31-meta-image-preprocess.py', import.meta.url), 'utf8');
 assert.match(terminalSmokeSource, /--caller-inputs/, 'the terminal witness must expose caller-input mode');
 assert.match(terminalSmokeSource, /callerRequestEvidence/, 'the terminal witness must record caller and package request counts');
+assert.match(terminalSmokeSource, /deriveMetaCallerImageAuthority/, 'the caller witness must derive expected RGBA bytes from pinned Meta preprocessing');
+assert.doesNotMatch(terminalSmokeSource, /rgbaSourceImageSha256:\s*invocation\.sourceImages\.map/, 'pregenerated invocation RGBA hashes must not certify browser caller preprocessing');
+assert.match(terminalSmokeSource, /metaPreprocessEvidence/, 'the caller witness must preserve effective source and Pillow preprocessing identity');
+assert.match(metaPreprocessSource, /5dd401d1c5c1d5c3eedff06d41b77af824517619/, 'the preprocessing witness must pin the reviewed Meta source commit');
+assert.match(metaPreprocessSource, /Image\.open\(path\)\.convert\("RGB"\)\.resize/, 'the preprocessing witness must execute the pinned Meta image-loader operation');
+assert.match(metaPreprocessSource, /failurePhase/, 'the preprocessing witness must preserve its failure phase');
+assert.match(metaPreprocessSource, /lastTrustworthyEvidence/, 'the preprocessing witness must preserve its last trustworthy evidence before failure');
 assert.match(terminalSmokeSource, /browserParams\.set\('commit', requestedCommit\)/, 'the terminal witness must propagate requested commit identity into browser receipts');
 assert.match(terminalSmokeSource, /commitIdentityPassed/, 'the terminal witness must fail when effective receipt commit identity does not match the request');
+assert.doesNotMatch(ingressExporterSource, /Image\.Resampling\.BILINEAR/, 'the local reference exporter must not fork pinned Meta default RGB bicubic resize semantics');
 
 console.log('sam3.1 browser tracker caller invocation contracts passed');

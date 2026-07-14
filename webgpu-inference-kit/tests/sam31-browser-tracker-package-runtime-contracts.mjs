@@ -23,7 +23,7 @@ async function entry(role, value, dtype = 'float32') {
   };
 }
 
-async function fixture(dynamicOffset, sessionId) {
+async function fixture(dynamicOffset, sessionId, geometry = null) {
   const records = {};
   async function add(packetName, role, value, dtype) {
     const record = await entry(role, value, dtype);
@@ -37,7 +37,7 @@ async function fixture(dynamicOffset, sessionId) {
   records[`decoder/${sharedWeight.file}`] = records[`ingress/${sharedWeight.file}`];
   const packets = {
     ingress: {
-      schema: 'ingress', routeIds: ['image-route'], shape: { imageHeight: 1, imageWidth: 1, imageChannels: 4 }, reference,
+      schema: 'ingress', routeIds: ['image-route'], shape: geometry?.ingress || { imageHeight: 1, imageWidth: 1, imageChannels: 4 }, reference,
       sourceImages: [
         { frameIndex: 0, originalSha256: `sha256:${String(dynamicOffset + 1).padStart(64, '0')}`, rgbaSha256: frame0.sha256 },
         { frameIndex: 1, originalSha256: `sha256:${String(dynamicOffset + 2).padStart(64, '0')}`, rgbaSha256: frame1.sha256 },
@@ -55,7 +55,7 @@ async function fixture(dynamicOffset, sessionId) {
       tolerances: { maximum: 0.001 },
     },
     episode: {
-      schema: 'episode', shape: { channels: 256 }, plan: { frameIndex: 1 }, imageIngress: { tensorManifestSha256: `dynamic-ingress-${dynamicOffset}` }, fixture: { maskVariant: dynamicOffset }, stateTransition: { conditioningObjects: [0], frame1AppearingObjectCount: dynamicOffset }, reference,
+      schema: 'episode', shape: geometry?.episode || { channels: 256 }, plan: { frameIndex: 1 }, imageIngress: { tensorManifestSha256: `dynamic-ingress-${dynamicOffset}` }, fixture: { maskVariant: dynamicOffset }, stateTransition: { conditioningObjects: [0], frame1AppearingObjectCount: dynamicOffset }, reference,
       tensors: [await add('episode', 'frame-0-binary-mask-inputs', 13 + dynamicOffset), await add('episode', 'frame-0-extra-per-object-embedding', 14), await add('episode', 'frame-1-extra-per-object-embedding', 15), await add('episode', 'expected-episode', 16 + dynamicOffset)],
       tolerances: { maximum: 0.001 },
     },
@@ -76,6 +76,39 @@ async function fixture(dynamicOffset, sessionId) {
 
 const first = await fixture(0, 'session-a');
 const second = await fixture(40, 'session-b');
+await assert.rejects(
+  () => fixture(80, 'session-incoherent-geometry', {
+    ingress: {
+      imageHeight: 56,
+      imageWidth: 56,
+      imageChannels: 3,
+      patchSize: 14,
+      patchHeight: 4,
+      patchWidth: 4,
+      patchTokens: 16,
+      fpnLevels: [
+        { level: 0, scaleFactor: 4, height: 16, width: 16 },
+        { level: 1, scaleFactor: 2, height: 8, width: 8 },
+        { level: 2, scaleFactor: 1, height: 4, width: 4 },
+      ],
+    },
+    episode: {
+      batch: 1,
+      multiplexCount: 16,
+      queryHeight: 2,
+      queryWidth: 2,
+      queryTokens: 4,
+      memorySpatialTokens: 4,
+      numObjPtrTokens: 16,
+      memoryTokens: 20,
+      channels: 256,
+      maskHeight: 8,
+      maskWidth: 8,
+    },
+  }),
+  /episode query geometry does not match ingress patch geometry/,
+  'the model package must reject a reduced episode attached to a larger authenticated ingress geometry',
+);
 assert.equal(first.projection.modelPackage.packageId, second.projection.modelPackage.packageId, 'dynamic invocation bytes must not alter the reusable model package identity');
 assert.notEqual(first.projection.invocation.invocationId, second.projection.invocation.invocationId, 'different images, mask, and session must alter invocation identity');
 assert.deepEqual(

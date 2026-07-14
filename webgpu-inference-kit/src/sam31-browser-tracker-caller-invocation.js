@@ -1,5 +1,5 @@
-import { canonicalSam3IdentityJson } from './sam-browser-package-manifest.js';
 import {
+  createSam31BrowserTrackerInvocationId,
   SAM31_BROWSER_TRACKER_INVOCATION_SCHEMA,
   SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
 } from './sam31-browser-tracker-package.js';
@@ -31,16 +31,6 @@ async function sha256Text(value) {
 
 function canonicalText(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
-}
-
-async function invocationIdentity(invocation) {
-  const contract = {
-    packageId: invocation.packageId,
-    ...Object.fromEntries(SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationFields
-    .filter(field => field !== 'invocationId' && Object.hasOwn(invocation, field))
-    .map(field => [field, invocation[field]])),
-  };
-  return `${SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationPrefix}${await sha256Text(canonicalSam3IdentityJson(contract))}`;
 }
 
 function validateSession(value, multiplexCount) {
@@ -98,28 +88,34 @@ export async function decodeSam31BrowserTrackerSourceImage(bytes, { width, heigh
     context.clearRect(0, 0, bitmap.width, bitmap.height);
     context.drawImage(bitmap, 0, 0);
     const image = context.getImageData(0, 0, bitmap.width, bitmap.height, { colorSpace: 'srgb' });
-    const rgba = resizeRgbaPillowCompatibleBilinear(image.data, bitmap.width, bitmap.height, width, height);
+    const rgba = resizeRgbaMetaBicubic(image.data, bitmap.width, bitmap.height, width, height);
     return {
       rgba: new Uint8Array(rgba.buffer.slice(rgba.byteOffset, rgba.byteOffset + rgba.byteLength)),
       width,
       height,
       sourceWidth: bitmap.width,
       sourceHeight: bitmap.height,
-      decoder: 'browser-createImageBitmap-native-rgba-pillow-compatible-bilinear',
+      decoder: 'browser-createImageBitmap-native-rgb-pillow-default-bicubic',
     };
   } finally {
     bitmap.close?.();
   }
 }
 
-function resizeRgbaPillowCompatibleBilinear(source, sourceWidth, sourceHeight, targetWidth, targetHeight) {
+export function resizeRgbaMetaBicubic(source, sourceWidth, sourceHeight, targetWidth, targetHeight) {
   const precisionBits = 22;
   const precisionScale = 2 ** precisionBits;
   const rounding = 2 ** (precisionBits - 1);
+  const cubic = value => {
+    const x = Math.abs(value);
+    if (x < 1) return ((1.5 * x - 2.5) * x * x) + 1;
+    if (x < 2) return (((-0.5 * x + 2.5) * x - 4) * x) + 2;
+    return 0;
+  };
   const coefficients = (inputSize, outputSize) => {
     const scale = inputSize / outputSize;
     const filterScale = Math.max(scale, 1);
-    const support = filterScale;
+    const support = 2 * filterScale;
     return Array.from({ length: outputSize }, (_, outputIndex) => {
       const center = (outputIndex + 0.5) * scale;
       const start = Math.max(0, Math.floor(center - support + 0.5));
@@ -127,12 +123,12 @@ function resizeRgbaPillowCompatibleBilinear(source, sourceWidth, sourceHeight, t
       const weights = new Float64Array(end - start);
       let total = 0;
       for (let index = start; index < end; index += 1) {
-        const weight = Math.max(0, 1 - Math.abs((index - center + 0.5) / filterScale));
+        const weight = cubic((index - center + 0.5) / filterScale);
         weights[index - start] = weight;
         total += weight;
       }
       for (let index = 0; index < weights.length; index += 1) weights[index] /= total;
-      return { start, end, weights: Int32Array.from(weights, weight => Math.floor(weight * precisionScale + 0.5)) };
+      return { start, end, weights: Int32Array.from(weights, weight => Math.trunc(weight * precisionScale + 0.5)) };
     });
   };
   const horizontal = new Uint8Array(sourceHeight * targetWidth * 3);
@@ -160,7 +156,7 @@ function resizeRgbaPillowCompatibleBilinear(source, sourceWidth, sourceHeight, t
       output[(y * targetWidth + x) * 4 + 3] = 255;
     }
   }
-  return output;
+  return new Uint8Array(output.buffer);
 }
 
 export async function createSam31BrowserTrackerCallerInvocationRuntime({
@@ -219,7 +215,7 @@ export async function createSam31BrowserTrackerCallerInvocationRuntime({
   const invocation = {
     schema: SAM31_BROWSER_TRACKER_INVOCATION_SCHEMA,
     invocationId: 'pending',
-    packageId: modelPackage.packageId,
+    modelPackageId: modelPackage.packageId,
     sourceImages: decoded.map((frame, frameIndex) => ({
       frameIndex,
       role: `frame-${frameIndex}-rgba`,
@@ -233,7 +229,7 @@ export async function createSam31BrowserTrackerCallerInvocationRuntime({
     session: effectiveSession,
     dynamicArtifacts,
   };
-  invocation.invocationId = await invocationIdentity(invocation);
+  invocation.invocationId = await createSam31BrowserTrackerInvocationId(invocation);
   const invocationSha256 = await sha256Text(canonicalText(invocation));
   const manifests = composeManifests(modelPackage, invocation);
   const inputEvidence = {

@@ -206,9 +206,19 @@ await assert.rejects(
 );
 
 const smokeSource = await readFile(new URL('../smokes/sam31-two-frame-tracker-parity.js', import.meta.url), 'utf8');
+const driverSource = await readFile(new URL('../src/sam31-browser-tracker-session-driver.js', import.meta.url), 'utf8');
 assert.match(smokeSource, /createSam31BrowserTrackerSession/, 'package smoke must consume the exported session');
 assert.doesNotMatch(smokeSource, /invocations\.push\(await runInvocation\(packageRoots\[index\]/, 'package smoke must not bypass the exported session with its private invocation function');
 assert.match(smokeSource, /runtimeSession:\s*\{/, 'package smoke must preserve public session identity in each invocation row');
 assert.match(smokeSource, /closeEvidence:\s*sessionClose/, 'package smoke must preserve session close evidence after awaiting device loss');
+assert.match(
+  driverSource,
+  /validateSam31BrowserTrackerGeometry\(ingress\.shape, episode\.shape\)/,
+  'the tracker driver must derive every execution shape from the package-authenticated ingress and episode geometry',
+);
+assert.doesNotMatch(driverSource, /shape:\s*\[16,\s*1,\s*8,\s*8\]/, 'the tracker driver must not stamp reduced mask geometry into route receipts');
+assert.doesNotMatch(driverSource, /shape:\s*\[1,\s*2,\s*2,\s*256\]/, 'the tracker driver must not stamp reduced feature geometry into route receipts');
+assert.doesNotMatch(driverSource, /featureHeight:\s*2,\s*featureWidth:\s*2/, 'the memory encoder must consume authenticated query geometry');
+assert.doesNotMatch(driverSource, /const attentionShape = \{ batch: 1, queryHeight: 2/, 'memory attention must consume authenticated query and bank geometry');
 
 console.log('sam3.1 browser tracker session contracts passed');

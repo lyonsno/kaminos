@@ -360,6 +360,14 @@ function assertVerificationBinding(verification, modelPackage, invocation) {
   }
 }
 
+function assertInvocationBinding(invocation, modelPackage) {
+  if (!Object.hasOwn(invocation, 'modelPackageId')) return;
+  requireNonEmptyString(invocation.modelPackageId, 'invocation.modelPackageId');
+  if (invocation.modelPackageId !== modelPackage.packageId) {
+    throw new Error(`invocation model package binding mismatch: ${invocation.modelPackageId} !== ${modelPackage.packageId}`);
+  }
+}
+
 export function resolveSam3BrowserArtifactUrl(file, manifestUrl, pageUrl) {
   const artifactRef = requireNonEmptyString(file, 'artifact file');
   const page = new URL(requireNonEmptyString(pageUrl, 'page URL'));
@@ -437,6 +445,7 @@ export async function resolveSam3BrowserPackageManifest(rootManifest, { readArti
     contract.invocationPrefix,
     await sha256Text(canonicalSam3IdentityJson(identityContract(invocation, contract.invocationFields, 'invocationId'))),
   );
+  assertInvocationBinding(invocation, modelPackage);
   if (verification) {
     assertVerificationBinding(verification, modelPackage, invocation);
     assertIdentity(
@@ -479,6 +488,7 @@ export function resolveSam3BrowserPackageManifestSync(rootManifest, { readArtifa
     contract.invocationPrefix,
     sha256Text(canonicalSam3IdentityJson(identityContract(invocation, contract.invocationFields, 'invocationId'))),
   );
+  assertInvocationBinding(invocation, modelPackage);
   if (verification) {
     assertVerificationBinding(verification, modelPackage, invocation);
     assertIdentity(

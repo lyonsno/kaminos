@@ -322,7 +322,7 @@ def main():
     source_images = []
     frame_tensors = []
     for frame_index, frame_path in enumerate(frame_paths):
-        image = Image.open(frame_path).convert("RGB").resize((args.resolution, args.resolution), Image.Resampling.BILINEAR)
+        image = Image.open(frame_path).convert("RGB").resize((args.resolution, args.resolution))
         source_file = out_dir / f"frame-{frame_index}-source.png"
         image.save(source_file)
         rgb = np.asarray(image, dtype=np.uint8)
@@ -341,7 +341,7 @@ def main():
             "resizedSha256": sha256_file(source_file),
             "rgbaSha256": sha256_bytes(rgba.tobytes(order="C")),
             "resolution": [args.resolution, args.resolution],
-            "resize": "Pillow Image.Resampling.BILINEAR",
+            "resize": "Pillow RGB.resize default (Resampling.BICUBIC in Pillow 12.2.0)",
         })
     if source_images[0]["originalSha256"] == source_images[1]["originalSha256"] or source_images[0]["rgbaSha256"] == source_images[1]["rgbaSha256"]:
         raise RuntimeError("two-image fixture collapsed to identical source content")

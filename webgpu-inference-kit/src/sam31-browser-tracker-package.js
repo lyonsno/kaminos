@@ -14,7 +14,7 @@ export const SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT = Object.freeze({
   verificationPrefix: 'sam31-tracker-verification:',
   evidenceSchema: 'kaminos.sam31-browser-tracker-package-invocation-evidence.v0',
   modelPackageFields: Object.freeze(['packageId', 'model', 'source', 'routeIds', 'geometry', 'components', 'staticArtifacts', 'claims']),
-  invocationFields: Object.freeze(['invocationId', 'sourceImages', 'initialMask', 'session', 'dynamicArtifacts']),
+  invocationFields: Object.freeze(['invocationId', 'modelPackageId', 'sourceImages', 'initialMask', 'session', 'dynamicArtifacts']),
   verificationFields: Object.freeze(['verificationId', 'verifiedPackageId', 'verifiedInvocationId', 'reference', 'stateTransition', 'tolerances', 'componentAuthorities', 'tensors']),
 });
 
@@ -105,6 +105,84 @@ function sourceImageAuthority(sourceImages, frameArtifacts) {
   return result;
 }
 
+function positiveInteger(value, label) {
+  if (!Number.isInteger(value) || value <= 0) throw new Error(`${label} must be a positive integer`);
+  return value;
+}
+
+export function validateSam31BrowserTrackerGeometry(ingressShape, episodeShape) {
+  requireObject(ingressShape, 'tracker ingress geometry');
+  requireObject(episodeShape, 'tracker episode geometry');
+  const carriesSpatialContract = ['patchSize', 'patchHeight', 'patchWidth', 'patchTokens']
+    .some(field => Object.hasOwn(ingressShape, field))
+    || ['queryHeight', 'queryWidth', 'queryTokens', 'maskHeight', 'maskWidth']
+      .some(field => Object.hasOwn(episodeShape, field));
+  if (!carriesSpatialContract) return null;
+
+  const imageHeight = positiveInteger(ingressShape.imageHeight, 'ingress imageHeight');
+  const imageWidth = positiveInteger(ingressShape.imageWidth, 'ingress imageWidth');
+  const patchSize = positiveInteger(ingressShape.patchSize, 'ingress patchSize');
+  const patchHeight = positiveInteger(ingressShape.patchHeight, 'ingress patchHeight');
+  const patchWidth = positiveInteger(ingressShape.patchWidth, 'ingress patchWidth');
+  const patchTokens = positiveInteger(ingressShape.patchTokens, 'ingress patchTokens');
+  if (imageHeight !== patchHeight * patchSize || imageWidth !== patchWidth * patchSize || patchTokens !== patchHeight * patchWidth) {
+    throw new Error('ingress image and patch geometry are inconsistent');
+  }
+  if (!Array.isArray(ingressShape.fpnLevels) || ingressShape.fpnLevels.length !== 3) {
+    throw new Error('ingress geometry requires the three SAM 3.1 FPN levels');
+  }
+  for (const [index, scaleFactor] of [4, 2, 1].entries()) {
+    const level = ingressShape.fpnLevels[index];
+    if (level?.level !== index || level.scaleFactor !== scaleFactor
+        || level.height !== patchHeight * scaleFactor || level.width !== patchWidth * scaleFactor) {
+      throw new Error(`ingress FPN level ${index} does not match the patch geometry`);
+    }
+  }
+
+  const queryHeight = positiveInteger(episodeShape.queryHeight, 'episode queryHeight');
+  const queryWidth = positiveInteger(episodeShape.queryWidth, 'episode queryWidth');
+  const queryTokens = positiveInteger(episodeShape.queryTokens, 'episode queryTokens');
+  if (queryHeight !== patchHeight || queryWidth !== patchWidth || queryTokens !== patchTokens) {
+    throw new Error('episode query geometry does not match ingress patch geometry');
+  }
+  const maskHeight = positiveInteger(episodeShape.maskHeight, 'episode maskHeight');
+  const maskWidth = positiveInteger(episodeShape.maskWidth, 'episode maskWidth');
+  if (maskHeight !== queryHeight * 4 || maskWidth !== queryWidth * 4) {
+    throw new Error('episode mask geometry must be four times the query geometry');
+  }
+  const memorySpatialTokens = positiveInteger(episodeShape.memorySpatialTokens, 'episode memorySpatialTokens');
+  const numObjPtrTokens = positiveInteger(episodeShape.numObjPtrTokens, 'episode numObjPtrTokens');
+  const memoryTokens = positiveInteger(episodeShape.memoryTokens, 'episode memoryTokens');
+  if (memorySpatialTokens !== queryTokens || memoryTokens !== memorySpatialTokens + numObjPtrTokens) {
+    throw new Error('episode memory geometry does not match query and pointer tokens');
+  }
+  return Object.freeze({
+    imageHeight,
+    imageWidth,
+    patchSize,
+    patchHeight,
+    patchWidth,
+    patchTokens,
+    queryHeight,
+    queryWidth,
+    queryTokens,
+    maskHeight,
+    maskWidth,
+    memorySpatialTokens,
+    numObjPtrTokens,
+    memoryTokens,
+  });
+}
+
+export function createSam31BrowserTrackerInvocationId(invocation) {
+  return identity(
+    SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationPrefix,
+    invocation,
+    SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationFields,
+    'invocationId',
+  );
+}
+
 export async function createSam31BrowserTrackerPackageProjection({ packets, sessionId = 'sam31-session-0', componentAuthorities = {} }) {
   requireObject(packets, 'packets');
   for (const name of PACKET_NAMES) requireObject(packets[name], `${name} packet`);
@@ -169,6 +247,7 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
 
   const ingress = packets.ingress;
   const episode = packets.episode;
+  validateSam31BrowserTrackerGeometry(ingress.shape, episode.shape);
   const frameArtifacts = dynamicArtifacts.filter(entry => entry.invocationRole === 'source-image').sort((left, right) => left.role.localeCompare(right.role));
   const maskArtifact = dynamicArtifacts.find(entry => entry.invocationRole === 'initial-mask');
   if (frameArtifacts.length !== 2 || !maskArtifact) throw new Error('tracker invocation requires two source-image tensors and one initial mask');
@@ -198,6 +277,7 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
   const invocation = {
     schema: SAM31_BROWSER_TRACKER_INVOCATION_SCHEMA,
     invocationId: 'pending',
+    modelPackageId: modelPackage.packageId,
     sourceImages,
     initialMask: { role: maskArtifact.role, file: maskArtifact.file, sha256: maskArtifact.sha256, byteLength: maskArtifact.byteLength },
     session: {
@@ -209,7 +289,7 @@ export async function createSam31BrowserTrackerPackageProjection({ packets, sess
     },
     dynamicArtifacts: dynamicArtifacts.map(({ invocationRole, ...entry }) => ({ ...entry, invocationRole })),
   };
-  invocation.invocationId = await identity(SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationPrefix, invocation, SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT.invocationFields, 'invocationId');
+  invocation.invocationId = await createSam31BrowserTrackerInvocationId(invocation);
 
   const verification = {
     schema: SAM31_BROWSER_TRACKER_VERIFICATION_SCHEMA,

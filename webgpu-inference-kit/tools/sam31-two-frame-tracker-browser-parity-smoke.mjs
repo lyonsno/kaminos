@@ -92,20 +92,65 @@ function sha256File(path) {
   return `sha256:${createHash('sha256').update(readFileSync(path)).digest('hex')}`;
 }
 
+function deriveMetaCallerImageAuthority(index, framePaths, resolution, sourceRoot) {
+  const report = join(userDataDir, `caller-${index}-meta-preprocess.json`);
+  const toolArgs = [
+    resolve(root, 'tools/sam31-meta-image-preprocess.py'),
+    '--source-root', sourceRoot,
+    '--resolution', String(resolution),
+    '--out', report,
+    ...framePaths.flatMap(path => ['--image', path]),
+  ];
+  const result = spawnSync(python, toolArgs, { cwd: root, encoding: 'utf8', timeout: 120000 });
+  if (!existsSync(report)) {
+    throw new Error(`caller ${index} Meta preprocessing witness wrote no durable report: ${result.stderr || result.stdout}`);
+  }
+  const evidence = JSON.parse(readFileSync(report, 'utf8'));
+  if (result.status !== 0 || !evidence.ok || !evidence.primaryOutputWritten) {
+    throw new Error(`caller ${index} Meta preprocessing witness failed: ${JSON.stringify(evidence)}`);
+  }
+  const effective = evidence.effective || {};
+  if (effective.sourceRoot !== sourceRoot || effective.sourceCommit !== '5dd401d1c5c1d5c3eedff06d41b77af824517619') {
+    throw new Error(`caller ${index} Meta preprocessing source identity mismatch`);
+  }
+  if (effective.algorithm !== 'Meta Image.open(path).convert(RGB).resize((size,size)) default Pillow bicubic'
+      || effective.defaultResizeFilter !== 'Resampling.BICUBIC'
+      || effective.resolution !== resolution) {
+    throw new Error(`caller ${index} Meta preprocessing algorithm identity mismatch`);
+  }
+  if (evidence.images?.length !== framePaths.length
+      || evidence.images.some((image, frameIndex) => image.path !== framePaths[frameIndex]
+        || JSON.stringify(image.outputSize) !== JSON.stringify([resolution, resolution])
+        || image.rgbaByteLength !== resolution * resolution * 4)) {
+    throw new Error(`caller ${index} Meta preprocessing image evidence mismatch`);
+  }
+  return evidence;
+}
+
 function loadCallerInput(index) {
   const directory = packageDirs[index];
   const invocation = JSON.parse(readFileSync(join(directory, 'sam31-invocation.json'), 'utf8'));
+  const modelPackage = JSON.parse(readFileSync(join(directory, 'sam31-model-package.json'), 'utf8'));
   const sourceRoot = resolve(args.get('--source-root') || '/Users/noahlyons/dev/sam3');
   const framePaths = index === 0
     ? [resolve(args.get('--caller-frame-0') || join(sourceRoot, 'assets/videos/0001/0.jpg')), resolve(args.get('--caller-frame-1') || join(sourceRoot, 'assets/videos/0001/1.jpg'))]
     : [resolve(args.get('--second-caller-frame-0') || join(sourceRoot, 'assets/videos/0001/2.jpg')), resolve(args.get('--second-caller-frame-1') || join(sourceRoot, 'assets/videos/0001/3.jpg'))];
   const maskPath = resolve(directory, invocation.initialMask.file);
   for (const path of [...framePaths, maskPath]) if (!existsSync(path)) throw new Error(`caller input missing: ${path}`);
+  const imageHeight = modelPackage.geometry?.ingress?.imageHeight;
+  const imageWidth = modelPackage.geometry?.ingress?.imageWidth;
+  if (!Number.isInteger(imageHeight) || imageHeight <= 0 || imageHeight !== imageWidth) {
+    throw new Error(`caller ${index} model package requires unsupported ingress geometry ${imageHeight}x${imageWidth}`);
+  }
+  const metaPreprocessEvidence = deriveMetaCallerImageAuthority(index, framePaths, imageHeight, sourceRoot);
   const authority = {
     encodedSourceImageSha256: framePaths.map(sha256File),
-    rgbaSourceImageSha256: invocation.sourceImages.map(image => image.rgbaSha256),
+    rgbaSourceImageSha256: metaPreprocessEvidence.images.map(image => image.rgbaSha256),
     initialMaskSha256: sha256File(maskPath),
   };
+  if (JSON.stringify(authority.encodedSourceImageSha256) !== JSON.stringify(metaPreprocessEvidence.images.map(image => image.encodedSha256))) {
+    throw new Error(`caller ${index} encoded images do not match the pinned Meta preprocessing witness`);
+  }
   if (JSON.stringify(authority.encodedSourceImageSha256) !== JSON.stringify(invocation.sourceImages.map(image => image.originalSha256))) {
     throw new Error(`caller ${index} encoded images do not match the authenticated ingress authority`);
   }
@@ -113,6 +158,7 @@ function loadCallerInput(index) {
   return {
     framePaths,
     maskPath,
+    metaPreprocessEvidence,
     metadata: {
       schema: 'kaminos.sam31-browser-tracker-caller-preload.v0',
       frameUrls: [`/caller/${index}/frame-0`, `/caller/${index}/frame-1`],
@@ -142,6 +188,7 @@ function writeReport(extra = {}) {
     packetTools,
     packetAuthority,
     packageAuthority,
+    metaPreprocessEvidence: callerInputEntries.map(entry => entry.metaPreprocessEvidence),
     callerRequestEvidence,
     commitIdentityEvidence,
     browserPacketAuthority: lastState?.packetAuthority || null,
