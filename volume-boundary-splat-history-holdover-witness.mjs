@@ -156,6 +156,23 @@ try {
       controlOverrides: { boundarySplatInstances: 100 },
     })})`, true);
     validateHoldoverRow(row, selectedSlot, index, holdoverFrames);
+    lastTrustworthyEvidence.pendingHoldoverRow = {
+      index,
+      holdoverOrdinal: row.holdoverOrdinal,
+      slot: row.slot,
+      selection: row.selection,
+      plan: row.plan,
+      physicalCommand: row.physicalCommand,
+      physicalCommandAgreement: row.physicalCommandAgreement,
+      physicalCommandAuthority: row.physicalCommandAuthority,
+      simulationSubmitted: row.simulationSubmitted,
+      sidecarSubmitted: row.sidecarSubmitted,
+      compactionSubmitted: row.compactionSubmitted,
+      archiveSubmitted: row.archiveSubmitted,
+      simStepCount: row.simStepCount,
+      renderFrameCount: row.renderFrameCount,
+    };
+    lastTrustworthyEvidence.holdoverFrameCount = holdoverRows.length;
     const image = await captureCanvas();
     const imagePath = resolve(outDir, `history-holdover-${String(index).padStart(4, '0')}-slot${selectedSlot.slotIndex}.png`);
     writeFileSync(imagePath, image.bytes);
@@ -171,6 +188,7 @@ try {
       },
     };
     holdoverRows.push(retainedRow);
+    lastTrustworthyEvidence.pendingHoldoverRow = null;
     lastTrustworthyEvidence.holdoverFrameCount = holdoverRows.length;
     lastTrustworthyEvidence.lastHoldoverRow = retainedRow;
   }
@@ -562,10 +580,16 @@ function requestedRouteAgrees(requested, effective) {
   const requestedUrl = new URL(requested);
   const effectiveUrl = new URL(effective);
   if (requestedUrl.origin !== effectiveUrl.origin || requestedUrl.pathname !== effectiveUrl.pathname) return false;
-  for (const [key, value] of requestedUrl.searchParams.entries()) {
-    if (effectiveUrl.searchParams.get(key) !== value) return false;
-  }
-  return true;
+  const requestedEntries = canonicalRouteEntries(requestedUrl);
+  const effectiveEntries = canonicalRouteEntries(effectiveUrl);
+  if (requestedEntries.length !== effectiveEntries.length) return false;
+  return JSON.stringify(requestedEntries) === JSON.stringify(effectiveEntries);
+}
+
+function canonicalRouteEntries(url) {
+  return [...url.searchParams.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) => (
+    leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue)
+  ));
 }
 
 function classifyFailure(error, phase) {

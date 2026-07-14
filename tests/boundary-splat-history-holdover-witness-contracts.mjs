@@ -25,6 +25,18 @@ assert.match(witness, /sameBrowserTargetPreserved/, 'report must prove the exist
 assert.match(witness, /simStepCountAfterResume/, 'witness must prove the ordinary live simulator resumed after holdover');
 assert.doesNotMatch(witness, /spawn\(/, 'the holdover witness must never launch a second browser');
 assert.doesNotMatch(witness, /slice\(0,\s*\d+\)/, 'the witness must not hide a caller-requested repeat count behind a cap');
+const rowValidationIndex = witness.indexOf('validateHoldoverRow(row, selectedSlot, index, holdoverFrames)');
+const pendingRowEvidenceIndex = witness.indexOf('lastTrustworthyEvidence.pendingHoldoverRow', rowValidationIndex);
+const canvasCaptureIndex = witness.indexOf('const image = await captureCanvas()', rowValidationIndex);
+assert.ok(rowValidationIndex >= 0, 'witness must validate the physical row before visual evidence');
+assert.ok(
+  pendingRowEvidenceIndex > rowValidationIndex && pendingRowEvidenceIndex < canvasCaptureIndex,
+  'blank visual failure must retain the validated GPU row before canvas capture',
+);
+assert.match(witness, /const requestedEntries = canonicalRouteEntries\(requestedUrl\)/, 'route agreement must canonicalize every requested query entry');
+assert.match(witness, /const effectiveEntries = canonicalRouteEntries\(effectiveUrl\)/, 'route agreement must canonicalize every effective query entry');
+assert.match(witness, /requestedEntries\.length !== effectiveEntries\.length/, 'route agreement must reject hidden extra effective entries');
+assert.match(witness, /JSON\.stringify\(requestedEntries\) === JSON\.stringify\(effectiveEntries\)/, 'route agreement must compare canonical query multisets in both directions');
 
 const invalidOutDir = mkdtempSync(join(tmpdir(), 'kaminos-history-holdover-invalid-'));
 const invalidReport = join(invalidOutDir, 'nested', 'report.json');
