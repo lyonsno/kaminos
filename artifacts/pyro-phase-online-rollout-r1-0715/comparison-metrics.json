@@ -1,0 +1,129 @@
+{
+  "schema": "kaminos-pyro-phase-online-rollout-comparison-v0",
+  "status": "completed",
+  "baseline": {
+    "name": "generation-two-frozen-seed-h12",
+    "modelSha256": "5eeb7e8563d59d59d7c8b69e4360634d7931db3399e993a36a27eb27f783f267"
+  },
+  "intervention": {
+    "name": "epoch-refreshed-current-model-h12",
+    "modelSha256": "64098ba1e5282b384d5c325a356e4a9446248762471fa3c59974007517c4bd8c"
+  },
+  "support": {
+    "predictionStepCount": 63,
+    "mismatchSteps": [],
+    "candidateStateProtectedEveryStep": true,
+    "occupancyFeedbackEnabled": false
+  },
+  "aggregateStateMseRatio": {
+    "semantics": "prediction mean state MSE divided by copied-control mean state MSE; lower is better",
+    "generationTwo": {
+      "stableQ1": 0.8639038911191714,
+      "stableQ2": 0.8862433218148117,
+      "stableQ3": 0.8847816964291085,
+      "stableQ4": 0.9323406198877421,
+      "transported": 0.9383608571532154,
+      "birth": 0.9638138727097
+    },
+    "online": {
+      "stableQ1": 0.8858168530494633,
+      "stableQ2": 0.9050003267306421,
+      "stableQ3": 0.9028223035839467,
+      "stableQ4": 0.9405205145721058,
+      "transported": 0.9509317657795046,
+      "birth": 0.9791865601098412
+    }
+  },
+  "lateStateMseRatio": {
+    "semantics": "support-count-weighted prediction/control state MSE over steps 49 through 63",
+    "generationTwo": {
+      "stableQ1": 0.8865880753009582,
+      "stableQ2": 0.9073711205974142,
+      "stableQ3": 0.9202953004493066,
+      "stableQ4": 0.9872154340297778,
+      "transported": 1.0143490532840995,
+      "birth": 1.0415200358870276
+    },
+    "online": {
+      "stableQ1": 0.929896863912468,
+      "stableQ2": 0.9454796732924112,
+      "stableQ3": 0.9572783463582833,
+      "stableQ4": 1.0078990924228037,
+      "transported": 1.0390770989759632,
+      "birth": 1.067816472666098
+    }
+  },
+  "aggregateEnergyRetention": {
+    "semantics": "predicted visible energy divided by exact visible energy; higher is more retained energy, not necessarily lower state error",
+    "generationTwo": {
+      "stableQ1": 0.4758757371284264,
+      "stableQ2": 0.32171427988064644,
+      "stableQ3": 0.27868233267454284,
+      "stableQ4": 0.23555077024699395,
+      "transported": 0.18821731011459886,
+      "birth": 0.18581256403010918
+    },
+    "online": {
+      "stableQ1": 0.5091503689207002,
+      "stableQ2": 0.34137570856108107,
+      "stableQ3": 0.2954593346610031,
+      "stableQ4": 0.24957230541670983,
+      "transported": 0.20029671755650374,
+      "birth": 0.1984508748288112
+    }
+  },
+  "lateEnergyRetention": {
+    "semantics": "target-count-weighted energy retention over steps 49 through 63",
+    "generationTwo": {
+      "stableQ1": 0.440313420163552,
+      "stableQ2": 0.2965041805155848,
+      "stableQ3": 0.2567425560850865,
+      "stableQ4": 0.2145979022248665,
+      "transported": 0.19755324414870534,
+      "birth": 0.20354411889396873
+    },
+    "online": {
+      "stableQ1": 0.48567057704348515,
+      "stableQ2": 0.3219306351072348,
+      "stableQ3": 0.2776394413807322,
+      "stableQ4": 0.23173904435743492,
+      "transported": 0.21420348734915134,
+      "birth": 0.22135755275943253
+    }
+  },
+  "firstPersistentStateLossStep": {
+    "semantics": "first step whose prediction/control state MSE ratio is at least one for every remaining step; null means no persistent loss",
+    "generationTwo": {
+      "stableQ1": null,
+      "stableQ2": null,
+      "stableQ3": null,
+      "stableQ4": null,
+      "transported": 58,
+      "birth": 58
+    },
+    "online": {
+      "stableQ1": null,
+      "stableQ2": null,
+      "stableQ3": 63,
+      "stableQ4": 61,
+      "transported": 53,
+      "birth": 45
+    }
+  },
+  "decodedVideoPsnrDb": {
+    "semantics": "mean per-frame FFmpeg PSNR between decoded 320x240 reference and predicted thirds of each H.264 comparison video; this is isolated raster evidence, not analytical-raymarch agreement",
+    "generationTwo": {
+      "beautyAll": 16.207777777777782,
+      "beautyLate": 16.262000000000004,
+      "debugAll": 15.551587301587302,
+      "debugLate": 15.585333333333335
+    },
+    "online": {
+      "beautyAll": 16.36301587301588,
+      "beautyLate": 16.482666666666667,
+      "debugAll": 15.651746031746036,
+      "debugLate": 15.732666666666663
+    }
+  },
+  "result": "online exposure raises retained energy and decoded-raster PSNR but worsens aligned recurrent state error and moves hard-cohort persistent loss earlier"
+}
