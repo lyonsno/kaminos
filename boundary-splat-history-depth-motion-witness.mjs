@@ -257,7 +257,7 @@ async function captureHistoryDepth(requestedDepth, expectedSubstrate, preactivat
 
   failurePhase = `${label}:history-prime`;
   const historyPrime = await evaluate(`window.__kaminosVolumePrototype.primeBoundarySplatLiveHistory(${JSON.stringify({
-    minimumHistoryFrames: (requestedDepth - 1) * Number(initialState.boundarySplatHistoryFrameStride) + 1,
+    minimumHistoryFrames: Number(depthTransition.frameCountAfter) + (requestedDepth - 1) * Number(initialState.boundarySplatHistoryFrameStride) + 1,
   })})`, true);
   validateHistoryPrime(historyPrime, requestedDepth);
   const slotMetadata = await evaluate('window.__kaminosVolumePrototype.sampleBoundarySplatHistorySlotMetadata()', true);
@@ -447,6 +447,7 @@ async function loadInitialDepthRoute(requestedDepth, rowRoute) {
     effectiveDepth: Number(state.boundarySplatHistoryDepth),
     simStepCountBefore: null,
     simStepCountAfter: Number(state.simStepCount),
+    frameCountAfter: Number(state.frameCount),
     pageId,
   };
 }

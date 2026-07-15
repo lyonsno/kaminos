@@ -24,7 +24,7 @@ assert.match(witness, /matchedSubstrateIdentity/, 'rows must prove matched basin
 assert.match(witness, /boundarySplatHistoryAllocatedSlots/, 'rows must preserve physical allocation depth');
 assert.match(witness, /boundarySplatBufferIntegrity/, 'rows must preserve physical history memory authority');
 assert.match(witness, /primeBoundarySplatLiveHistory/, 'every depth must be fully primed before capture');
-assert.match(witness, /minimumHistoryFrames:\s*\(requestedDepth\s*-\s*1\)\s*\*\s*Number\(initialState\.boundarySplatHistoryFrameStride\)\s*\+\s*1/, 'in-place transition priming must derive span from requested depth rather than stale effective-window telemetry');
+assert.match(witness, /minimumHistoryFrames:\s*Number\(depthTransition\.frameCountAfter\)\s*\+\s*\(requestedDepth\s*-\s*1\)\s*\*\s*Number\(initialState\.boundarySplatHistoryFrameStride\)\s*\+\s*1/, 'in-place transition priming must use an allocation-generation absolute frame target rather than a relative or stale effective-window value');
 assert.match(witness, /sampleBoundarySplatPbrCostLadder/, 'every depth must record measured raster work');
 assert.match(witness, /perSourceReuse/, 'rows must report selected history-slot reuse');
 assert.match(witness, /Page\.captureScreenshot/, 'motion frames must come from the effective browser canvas');
@@ -38,6 +38,9 @@ assert.match(witness, /browserProcessId/, 'one persistent browser identity must 
 assert.match(witness, /pageId/, 'one page target identity must span every depth');
 assert.match(witness, /simStepCountBefore/, 'depth transition receipts must preserve the simulator continuity boundary');
 assert.match(witness, /simStepCountAfter/, 'depth transition receipts must preserve the simulator continuity boundary');
+const initialDepthRouteSource = witness.match(/async function loadInitialDepthRoute\(requestedDepth, rowRoute\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(initialDepthRouteSource, 'initial depth route transition must remain directly contract-testable');
+assert.match(initialDepthRouteSource, /frameCountAfter:\s*Number\(state\.frameCount\)/, 'initial route receipt must carry the absolute allocation-generation frame used by history priming');
 assert.match(witness, /CDP debug port already in use before launch/, 'witness must refuse a stale browser endpoint before launch');
 assert.doesNotMatch(witness, /slice\(0,\s*\d+\)/, 'caller-requested frame/depth flow must not be silently capped');
 
