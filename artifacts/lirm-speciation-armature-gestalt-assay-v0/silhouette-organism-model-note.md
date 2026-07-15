@@ -67,7 +67,7 @@ Cons: scoring is the hard part unless the operator stays in the loop or we train
 
 ## Recommended First Experiment
 
-Do not start with neural training. Start with a silhouette corpus and a scorer.
+Start with a silhouette corpus and a scorer.
 
 1. Generate 2,000 to 10,000 procedural silhouettes from the current SDF armature machinery.
 2. Save alpha mask, clay render, normal/depth render, params, and semantic packet.
@@ -93,15 +93,20 @@ The practical mantra:
 
 > Grow silhouettes until a creature becomes selectable, then fire the selected body plan into richer generators.
 
-## Decision Boundary
+## Measured Update: 2026-07-14
 
-Proceed with procedural silhouette corpus and human/agent scoring now.
+The earlier neural-training boundary has now been crossed. Two identity-free Internet silhouette corpora provide 2,421 canonical masks and signed-distance fields, and the imagegen/Trellis assay established strong sensitivity to silhouette family. A small MLX convolutional SDF VAE was trained at three KL weights and reassayed from its saved fields after correcting a witness-only polarity error.
 
-Defer neural generator training until one of these happens:
+The model learns the corpus convention `positive SDF = foreground`. The initial witness decoded the opposite sign, so its masks, occupancy, novelty, and acceptance claims described the background complement. Training itself remained valid. The immutable reassay route preserves each source receipt hash and saved field, decodes the correct polarity, measures frame contact and component topology, and emits replacement receipts and contact sheets.
 
-- procedural variation feels too narrow after a real corpus pass;
-- the selected masks cluster in a way a learned latent model could exploit;
-- we have at least a few hundred labeled silhouettes;
-- imagegen/Trellis results show strong sensitivity to silhouette families.
+| KL beta | Accepted | Global prior | Visual character |
+| --- | ---: | --- | --- |
+| `0.001` | 31/48 | 0/16 usable prior samples; all touch the frame | wildest and most articulate posterior interpolation/mutation |
+| `0.01` | 48/48 | 16/16 usable prior samples | best balance of coherent global sampling and varied organism gestalt |
+| `0.05` | 47/48 | 16/16 usable prior samples | stable but visibly regularized toward rounded sacks and slabs |
 
-Current read: promising enough to build the corpus/scorer path, too early to train the generator itself.
+The corrected sheets live under `../lirm-silhouette-latent-model-assay-v0/`. They were inspected at original resolution. Beta `0.01` is the selected global silhouette-harvest regime. Beta `0.001` remains useful for mutation and interpolation around selected corpus seeds where its higher morphological appetite is desirable.
+
+## Current Decision
+
+The learned latent route is now justified and demonstrated. The next useful boundary is checkpoint-only sampling: generate a larger beta `0.01` prior harvest without retraining, preserve topology/usability/novelty receipts, and feed selected silhouettes back through the existing 3D extrusion and imagegen/Trellis firing chain.

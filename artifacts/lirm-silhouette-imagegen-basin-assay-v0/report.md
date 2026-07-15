@@ -125,3 +125,11 @@ The cross-shape result is stronger than generic object coherence:
 - shape 073 resolves as a low plated beetle-mammal whose layered shell remains its dominant silhouette event.
 
 The three casts share a coherent material and creature-design prior, but they do not collapse to one body plan. Anonymous silhouette topology survives both imagegen and Trellis strongly enough to steer gestalt, while the learned priors supply anatomy, articulation, and finish. This satisfies the assay's central predicate for a first speciation armature: crude generated shape can function as selectable ancestry rather than merely as a segmentation mask.
+
+## Learned Silhouette Prior
+
+The two identity-free full corpora were subsequently combined into a 2,421-shape SDF dataset and used to train three small MLX convolutional VAEs. An inverted witness decode initially assayed the background complement; the saved fields were reassayed immutably using the corpus's actual positive-inside convention.
+
+The corrected visual and receipt evidence is under `../lirm-silhouette-latent-model-assay-v0/`. Beta `0.01` is the first demonstrated globally sampleable organism-silhouette prior: all 16 direct prior samples, all 16 posterior mutations, and all 16 posterior interpolations were usable, non-copy silhouettes. Beta `0.001` retains more extreme morphology around known seeds but fails direct global sampling because all 16 prior samples contact the image frame. Beta `0.05` samples reliably but visibly compresses the corpus toward blander rounded masses.
+
+This closes the next upstream gap exposed by the imagegen/Trellis assay. The crucible can now harvest anonymous silhouette archetypes, learn an identity-free body-plan manifold, sample or mutate within it, convert selected masks into actual 3D controls, and fire those controls into models that hallucinate anatomy and finish.

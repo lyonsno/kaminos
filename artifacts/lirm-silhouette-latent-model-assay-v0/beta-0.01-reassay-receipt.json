@@ -1,0 +1,1879 @@
+{
+  "schema": "kaminos.lirm-silhouette-latent-reassay.v0",
+  "status": "complete",
+  "phase": "witness_written",
+  "routeIdentity": {
+    "requestedRoute": "kaminos/lirm-speciation-armature/silhouette-latent-reassay-v0",
+    "effectiveRoute": "positive-inside-sdf-reassay-v0"
+  },
+  "sourceRun": {
+    "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-vae-beta001-30e-20260714",
+    "receiptHash": "sha256:409bda0f52afd99f13ac40e4d681396826846faab01aa7381902e4793a8adee4"
+  },
+  "falseClosureGuards": {
+    "sourceRunValidated": true,
+    "sourceFieldsReused": 48,
+    "sourceRunMutated": false,
+    "contactSheetRasterWritten": true
+  },
+  "generatedSampleCount": 48,
+  "acceptedSampleCount": 48,
+  "generations": [
+    {
+      "generationId": "latent-shape-000",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.478281
+      },
+      "parentTensorHashes": [
+        "sha256:d9627ef84c99df4f9ffb2a11b088f1fce2e03ab52bacc443e3c1d2b3ca6b560c",
+        "sha256:79bf52b2a94200f529ffdddfc9e0a06197987fe811dc9c433e73f5cd6b208b5a"
+      ],
+      "maskHash": "sha256:34de743ee8ecb3d6f07f689f01c5a6978e1151ae50b183d2e49d04a1fd157bd7",
+      "foregroundOccupancy": 0.286926,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 345,
+          "similarity": 0.754153,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.286926,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-000.pgm",
+      "signedDistancePath": "generated/latent-shape-000.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-000.f32"
+    },
+    {
+      "generationId": "latent-shape-001",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:16c4991ee523e38ef6c161fec6eb1b9dea1976dabad260584c4658f83acfe218"
+      ],
+      "maskHash": "sha256:21729a3e5c36eeab6e79127630b03271b7fb291596adae6d569dbd00b6cf7e89",
+      "foregroundOccupancy": 0.305115,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1719,
+          "similarity": 0.607731,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.305115,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-001.pgm",
+      "signedDistancePath": "generated/latent-shape-001.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-001.f32"
+    },
+    {
+      "generationId": "latent-shape-002",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:3b1b94ff8e7a122ef429592b856624e3c3c6dd1feb7f8fea807113755074635d",
+      "foregroundOccupancy": 0.524109,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 242,
+          "similarity": 0.819911,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.524109,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-002.pgm",
+      "signedDistancePath": "generated/latent-shape-002.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-002.f32"
+    },
+    {
+      "generationId": "latent-shape-003",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.391267
+      },
+      "parentTensorHashes": [
+        "sha256:383699eae906b9aafa620c9744a907ef504f4d6d04c2e6c9a2e068cf6368aca0",
+        "sha256:887e178e34a5b73505198e27e9e101dd85ebb5007458445ac17f05fc0498310c"
+      ],
+      "maskHash": "sha256:19ef376ab8bb54f8250b8c76dc0b46d82a24de45864c0672ad026fcbef7609c0",
+      "foregroundOccupancy": 0.60614,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1528,
+          "similarity": 0.870624,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.60614,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999899
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-003.pgm",
+      "signedDistancePath": "generated/latent-shape-003.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-003.f32"
+    },
+    {
+      "generationId": "latent-shape-004",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:3c53827101d1f701e78956bb44baee5c7b6684b4561fbf1eb161488f3f4f80af"
+      ],
+      "maskHash": "sha256:10eb037620c38ac6870781eabe33760d857ee005fb79ff238379b1c8315a29e9",
+      "foregroundOccupancy": 0.397705,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 496,
+          "similarity": 0.761059,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.397705,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-004.pgm",
+      "signedDistancePath": "generated/latent-shape-004.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-004.f32"
+    },
+    {
+      "generationId": "latent-shape-005",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:1ca8da932624f3328c0f77f2d167e57cf046f6b27a48cb0f24ec08c01eb2ab09",
+      "foregroundOccupancy": 0.371521,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 969,
+          "similarity": 0.78255,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.371521,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999671
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-005.pgm",
+      "signedDistancePath": "generated/latent-shape-005.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-005.f32"
+    },
+    {
+      "generationId": "latent-shape-006",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.360108
+      },
+      "parentTensorHashes": [
+        "sha256:7f162c47074a56467e94568c55f1f14514969138b4cc9496582edba8ea685361",
+        "sha256:96f87bfe0f4cf56c817e0c12efbce4b8d2d0e4c3a073234c51415edaf26bae04"
+      ],
+      "maskHash": "sha256:ffada17efd2d8d09cae139742cff6d334a9e166f67f3e58e3ca73f23c5e5d0bf",
+      "foregroundOccupancy": 0.41272,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 303,
+          "similarity": 0.834134,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.41272,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-006.pgm",
+      "signedDistancePath": "generated/latent-shape-006.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-006.f32"
+    },
+    {
+      "generationId": "latent-shape-007",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:7abfcfeb22d79fffea34764d9fb729f2331a747d4d48ecd94bb0ca9b9a196683"
+      ],
+      "maskHash": "sha256:679748c1e9c99a3b1725422a21b4636a4e1d1e4b7a5af4e0b3120e6917850f4c",
+      "foregroundOccupancy": 0.338318,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1475,
+          "similarity": 0.739698,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.338318,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999639
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-007.pgm",
+      "signedDistancePath": "generated/latent-shape-007.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-007.f32"
+    },
+    {
+      "generationId": "latent-shape-008",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:c177edf7cbb80c694c61eb57e07c3ec879e5170d1df3dc956aa878023a8fd08e",
+      "foregroundOccupancy": 0.612122,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1417,
+          "similarity": 0.813451,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.612122,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-008.pgm",
+      "signedDistancePath": "generated/latent-shape-008.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-008.f32"
+    },
+    {
+      "generationId": "latent-shape-009",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.545494
+      },
+      "parentTensorHashes": [
+        "sha256:f0ac6e2c2a20edbedd68eb735b5ff8f03b2694a470f6bfb8c71305bdb9a3f6cd",
+        "sha256:b1b1b8c140b738e8e12ac6cf2d132fa2765d4579982dc1a3085684fddf5e31b6"
+      ],
+      "maskHash": "sha256:063f86689cc5b77147cb128828406690544735d7feab2597c6c24ceb182247f6",
+      "foregroundOccupancy": 0.438904,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1717,
+          "similarity": 0.833662,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.438904,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-009.pgm",
+      "signedDistancePath": "generated/latent-shape-009.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-009.f32"
+    },
+    {
+      "generationId": "latent-shape-010",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:53b93e1168f193266e941c9dc110e7d36066ddceb2cd00d133a31d95ca50dafe"
+      ],
+      "maskHash": "sha256:d64360a19dd43b8be84f3fa9fb4fcccf41b63a0553adf8ec7fde3a4ba1234e30",
+      "foregroundOccupancy": 0.474365,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 759,
+          "similarity": 0.819775,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.474365,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-010.pgm",
+      "signedDistancePath": "generated/latent-shape-010.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-010.f32"
+    },
+    {
+      "generationId": "latent-shape-011",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:2460d3759cc63a78da707445f226be5041b9b81dfd0a717f518e868d56249e7f",
+      "foregroundOccupancy": 0.555176,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 735,
+          "similarity": 0.869744,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.555176,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-011.pgm",
+      "signedDistancePath": "generated/latent-shape-011.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-011.f32"
+    },
+    {
+      "generationId": "latent-shape-012",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.281814
+      },
+      "parentTensorHashes": [
+        "sha256:a3f9841b286c58e9614ffaf5de618953526ac13dbeff2713df9e0868765b8199",
+        "sha256:4cf0c8a94e2c6f787d151fdf2a2977c2c3dbc7f832a9dbb0f156316cfb6ef386"
+      ],
+      "maskHash": "sha256:754467973701491950b4bc3108ffeafa3372b184903a3b7674a9465e0b9fd102",
+      "foregroundOccupancy": 0.678101,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1528,
+          "similarity": 0.931916,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.678101,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-012.pgm",
+      "signedDistancePath": "generated/latent-shape-012.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-012.f32"
+    },
+    {
+      "generationId": "latent-shape-013",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:92ea10fd3de47c831d37bc06b9663d8dcc31ad0a81e387df5bc50a1064f71b4b"
+      ],
+      "maskHash": "sha256:48fae9bbb221e82331f22abcff1c3322491b5232b2c2f4686087e6a937c775bc",
+      "foregroundOccupancy": 0.425659,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 303,
+          "similarity": 0.819924,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.425659,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-013.pgm",
+      "signedDistancePath": "generated/latent-shape-013.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-013.f32"
+    },
+    {
+      "generationId": "latent-shape-014",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:acb65ef51ba6119baedfa2b56e05aa22704b618b96721e86e730503cbb8de45e",
+      "foregroundOccupancy": 0.424683,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1499,
+          "similarity": 0.817702,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.424683,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-014.pgm",
+      "signedDistancePath": "generated/latent-shape-014.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-014.f32"
+    },
+    {
+      "generationId": "latent-shape-015",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.536503
+      },
+      "parentTensorHashes": [
+        "sha256:3c92fda2ba47d4ad7e8dfd329b6f7320f1b8c6ad0d6e5271ee96b743c07a8811",
+        "sha256:ea0e6c7bc0273c898408c6609e224bccbeca737a132e9831f50e932748d7611f"
+      ],
+      "maskHash": "sha256:c4eb9ccc322a264b482d49d9f457a9b3c0bf2690360f1b8bc5974487243b75e3",
+      "foregroundOccupancy": 0.357178,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 526,
+          "similarity": 0.804325,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.357178,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999829
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-015.pgm",
+      "signedDistancePath": "generated/latent-shape-015.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-015.f32"
+    },
+    {
+      "generationId": "latent-shape-016",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:58d8222182410b283b701594f8bb11ffe303794079aebb58433177e958b647d8"
+      ],
+      "maskHash": "sha256:511a9c2ecd9d35c33dde37f0340385a3a61a26db86f2dd76ee0eafa5bdcf74bc",
+      "foregroundOccupancy": 0.450439,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2198,
+          "similarity": 0.817742,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.450439,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-016.pgm",
+      "signedDistancePath": "generated/latent-shape-016.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-016.f32"
+    },
+    {
+      "generationId": "latent-shape-017",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:af6919d87c193cd31f0f0d808a223b4598b9488a07318f91da4ec5bca3092980",
+      "foregroundOccupancy": 0.446716,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1379,
+          "similarity": 0.818497,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.446716,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-017.pgm",
+      "signedDistancePath": "generated/latent-shape-017.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-017.f32"
+    },
+    {
+      "generationId": "latent-shape-018",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.318009
+      },
+      "parentTensorHashes": [
+        "sha256:14730848f248bf0adaf01be219d01b3711f1017d59833817cfd4b2d3a64660bf",
+        "sha256:7ee34816985bfb04e5a31e9b5403a13ba72ef13460cca6856403e989b253601b"
+      ],
+      "maskHash": "sha256:af5c2a04ef420b4a9a6644b032ddedc7acefeb9dd537a008028740550d087cd0",
+      "foregroundOccupancy": 0.367065,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1506,
+          "similarity": 0.783106,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.367065,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999667
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-018.pgm",
+      "signedDistancePath": "generated/latent-shape-018.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-018.f32"
+    },
+    {
+      "generationId": "latent-shape-019",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:fb4230f7e8bab834c3fa5a3f976b3fb74580e6fc090a20c184e060191e071cd5"
+      ],
+      "maskHash": "sha256:3a17b8648e3106aca466671d22b0a4491f8ec779eac71334a8aae20092ab1209",
+      "foregroundOccupancy": 0.264893,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1054,
+          "similarity": 0.593628,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.264893,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 6,
+        "largestComponentFraction": 0.897005
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-019.pgm",
+      "signedDistancePath": "generated/latent-shape-019.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-019.f32"
+    },
+    {
+      "generationId": "latent-shape-020",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:cc56f2e37134c521ef74cb423cfb6db7fe0339971eea3cea33db029a03c74926",
+      "foregroundOccupancy": 0.509521,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 346,
+          "similarity": 0.841698,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.509521,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-020.pgm",
+      "signedDistancePath": "generated/latent-shape-020.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-020.f32"
+    },
+    {
+      "generationId": "latent-shape-021",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.723786
+      },
+      "parentTensorHashes": [
+        "sha256:7bb366402c91202700997aa5fe591c1706b3adf4b877c396ce60a394fa92cd86",
+        "sha256:4b0581ac3909ca58bcc72f31075e081380e96ebb00774ae89b2bc9ba8dd387b7"
+      ],
+      "maskHash": "sha256:fa082016014dbf1516fe42dc9c539ae9e5f801feb9485e74f8b752c9a0f70189",
+      "foregroundOccupancy": 0.503906,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1429,
+          "similarity": 0.847104,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.503906,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-021.pgm",
+      "signedDistancePath": "generated/latent-shape-021.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-021.f32"
+    },
+    {
+      "generationId": "latent-shape-022",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:ea9f9595657a04e76d59888d8b32f7ccabc4dde1fa720a8dbf0bc1fad8f1e44d"
+      ],
+      "maskHash": "sha256:5f71d81f63d6fa4efe0f10e9eb13de34761a98fa0959231d47d3eff6faef78f8",
+      "foregroundOccupancy": 0.376831,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1647,
+          "similarity": 0.801682,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.376831,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-022.pgm",
+      "signedDistancePath": "generated/latent-shape-022.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-022.f32"
+    },
+    {
+      "generationId": "latent-shape-023",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:dd081dc09b54d546659e77d75bbac08618a91a9bf658e9e4d514698d0fe5e175",
+      "foregroundOccupancy": 0.48291,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 616,
+          "similarity": 0.814588,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.48291,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999747
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-023.pgm",
+      "signedDistancePath": "generated/latent-shape-023.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-023.f32"
+    },
+    {
+      "generationId": "latent-shape-024",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.435787
+      },
+      "parentTensorHashes": [
+        "sha256:463dbe3623caded8f06193362ff1293d8ec64b2fc86a1924cca5e2254b618406",
+        "sha256:6137de09934ee44ec42e6a801f1053c92f9af7ac92b66ab06f871c7ecfb432e3"
+      ],
+      "maskHash": "sha256:f30bdf3f1c6e1fc535dff6ff563a96e72bc16133088a5da9011ba70de813b9fa",
+      "foregroundOccupancy": 0.531799,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 242,
+          "similarity": 0.836527,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.531799,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999885
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-024.pgm",
+      "signedDistancePath": "generated/latent-shape-024.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-024.f32"
+    },
+    {
+      "generationId": "latent-shape-025",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:3155899f7d62ac009d9557b681cc2630801464b5c90e09ab1eb3adc18ea8809e"
+      ],
+      "maskHash": "sha256:37c573d92e962f75a2bc825b37809f4f6b72f5640f6fddccb61666c8dd97e2d5",
+      "foregroundOccupancy": 0.46283,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 183,
+          "similarity": 0.836667,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.46283,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-025.pgm",
+      "signedDistancePath": "generated/latent-shape-025.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-025.f32"
+    },
+    {
+      "generationId": "latent-shape-026",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:aee97b7028e200c927602b074ec7433fd795ebcf2dce6d8637970807eba16c5b",
+      "foregroundOccupancy": 0.360779,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2332,
+          "similarity": 0.772109,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.360779,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999831
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-026.pgm",
+      "signedDistancePath": "generated/latent-shape-026.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-026.f32"
+    },
+    {
+      "generationId": "latent-shape-027",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.670222
+      },
+      "parentTensorHashes": [
+        "sha256:b473a57dd5cdf5f44b1c039d0827a5733e37583bf076f8f26b1cfc18a44fade5",
+        "sha256:621c43245f02cdb4e396cc589c096956dd8395907b02b339eda91c1c4206a56c"
+      ],
+      "maskHash": "sha256:f77ccb6a037c08b1504d5ca8039cad4dcc2e938d014f3553b0b56e990cb24404",
+      "foregroundOccupancy": 0.242432,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2251,
+          "similarity": 0.6757,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.242432,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999748
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-027.pgm",
+      "signedDistancePath": "generated/latent-shape-027.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-027.f32"
+    },
+    {
+      "generationId": "latent-shape-028",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:ede4069f46ef1d054590559e043c2bf6d0a38479aa60f60ca20a353703c9e38e"
+      ],
+      "maskHash": "sha256:463d8a8c5117ed39396af5f816a3391c739e5c0c1a50fdb6bfdd355be7c123d5",
+      "foregroundOccupancy": 0.333435,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2229,
+          "similarity": 0.73388,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.333435,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.913418
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-028.pgm",
+      "signedDistancePath": "generated/latent-shape-028.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-028.f32"
+    },
+    {
+      "generationId": "latent-shape-029",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:e4c9599f60ba3dd371d0dbef02d7c12a52095f2930bec84ac1a4f69d647181c0",
+      "foregroundOccupancy": 0.425171,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1830,
+          "similarity": 0.78855,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.425171,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-029.pgm",
+      "signedDistancePath": "generated/latent-shape-029.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-029.f32"
+    },
+    {
+      "generationId": "latent-shape-030",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.693943
+      },
+      "parentTensorHashes": [
+        "sha256:f1f46f2a27f50ad533a94bed2c3844615b3c2cec884ed1c8499c468211d60b14",
+        "sha256:60409104377cde0c0a66d97f9a8ff8d124644b89df6f534b36f179d1f3620dd8"
+      ],
+      "maskHash": "sha256:d0232e080b703f4ca06d388c62959def12ae3295c1bff576e518d75c84d086ae",
+      "foregroundOccupancy": 0.483154,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1924,
+          "similarity": 0.880655,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.483154,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-030.pgm",
+      "signedDistancePath": "generated/latent-shape-030.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-030.f32"
+    },
+    {
+      "generationId": "latent-shape-031",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:3e435b103e59bd31ecc5517485d6035160e5c01c1f57a20bd4f753d03fa5dd1f"
+      ],
+      "maskHash": "sha256:36ae5d09489ea9a5224cefd73b97361674c5c9480abab3fc9529cee01d7e4b2b",
+      "foregroundOccupancy": 0.399597,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1398,
+          "similarity": 0.727502,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.399597,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 5,
+        "largestComponentFraction": 0.896899
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-031.pgm",
+      "signedDistancePath": "generated/latent-shape-031.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-031.f32"
+    },
+    {
+      "generationId": "latent-shape-032",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:bf86fea1ff030f3a64513ec5b337123fa311d036dc7a3bd3ac1c7d502965cb0c",
+      "foregroundOccupancy": 0.47467,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1300,
+          "similarity": 0.844268,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.47467,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999743
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-032.pgm",
+      "signedDistancePath": "generated/latent-shape-032.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-032.f32"
+    },
+    {
+      "generationId": "latent-shape-033",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.63729
+      },
+      "parentTensorHashes": [
+        "sha256:e83b428c11137077fc2fc234fc2e93015da3dff9efdc63bf63f42d2895a7fcd7",
+        "sha256:5ce10aaf86980db22dc7ad02dbcc50f7798dadd91d44ff39855ec909b5850db1"
+      ],
+      "maskHash": "sha256:e6c5b3707373d498f5556356914b52802f0846cf2af0ae8bef06f5f3aa19ef46",
+      "foregroundOccupancy": 0.418091,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2169,
+          "similarity": 0.767851,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.418091,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-033.pgm",
+      "signedDistancePath": "generated/latent-shape-033.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-033.f32"
+    },
+    {
+      "generationId": "latent-shape-034",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:9f8e95e7e4eb95a566ea60bc332625e5bcbf21c583ffeed884ad82cb1d2395f6"
+      ],
+      "maskHash": "sha256:2a79eab832faa045bd913a6866d25add66c711e8e2e28165633f79733f079985",
+      "foregroundOccupancy": 0.393616,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1486,
+          "similarity": 0.770431,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.393616,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-034.pgm",
+      "signedDistancePath": "generated/latent-shape-034.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-034.f32"
+    },
+    {
+      "generationId": "latent-shape-035",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:f93b8ec8f4d4a5721e918f72695835386a790f174bcafddef36180ed6b60005d",
+      "foregroundOccupancy": 0.537231,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1095,
+          "similarity": 0.855856,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.537231,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-035.pgm",
+      "signedDistancePath": "generated/latent-shape-035.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-035.f32"
+    },
+    {
+      "generationId": "latent-shape-036",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.464853
+      },
+      "parentTensorHashes": [
+        "sha256:d65ec2d154b087bcbcc5d05f13349491c744e5313fc711cab2ae6c3c6aec8252",
+        "sha256:7dab014e512be3b435bdb8dcb776ed781ac660b3f793d7b1f94cd5a617da06fc"
+      ],
+      "maskHash": "sha256:a0e9414190de43f3464f38b9d78fe138a8d87fc7f902e42296c1f8adea6f84d3",
+      "foregroundOccupancy": 0.455139,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1119,
+          "similarity": 0.838294,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.455139,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-036.pgm",
+      "signedDistancePath": "generated/latent-shape-036.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-036.f32"
+    },
+    {
+      "generationId": "latent-shape-037",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:e09839e4a99045ccaf4b20cb450395861ac572e6236f130cb32d3f00a2378eec"
+      ],
+      "maskHash": "sha256:4b5716df799dcb76ac9e1694ebc22285f639f856f243fe68ad241977fa895671",
+      "foregroundOccupancy": 0.366638,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2048,
+          "similarity": 0.74725,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.366638,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-037.pgm",
+      "signedDistancePath": "generated/latent-shape-037.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-037.f32"
+    },
+    {
+      "generationId": "latent-shape-038",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:82ad35deb11828a4a1bd550e6d44ff9120d90df528b991d104d9947f9dc69495",
+      "foregroundOccupancy": 0.390442,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2239,
+          "similarity": 0.750558,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.390442,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-038.pgm",
+      "signedDistancePath": "generated/latent-shape-038.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-038.f32"
+    },
+    {
+      "generationId": "latent-shape-039",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.333687
+      },
+      "parentTensorHashes": [
+        "sha256:f4c0d563a2c03ca7ef99028db42a8adf9331ab8daf29ab6ce1c6f61358187242",
+        "sha256:b8efa06352c5231ac3d66fe8a2bd20c667656b07783d85f31a49b1046da97b3f"
+      ],
+      "maskHash": "sha256:703b82239de4c53fb7af5d47a9196c03a0acd6a025dd6a47a6401264bac794ac",
+      "foregroundOccupancy": 0.390076,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1641,
+          "similarity": 0.757564,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.390076,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-039.pgm",
+      "signedDistancePath": "generated/latent-shape-039.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-039.f32"
+    },
+    {
+      "generationId": "latent-shape-040",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:7fbaca32078bbeb650727e0a200c01f51bde6e4719a6136796af06153d7eaf8d"
+      ],
+      "maskHash": "sha256:c40c55237c41959255037565f589d29cb219896f209f03bb40fb7e128d06fef5",
+      "foregroundOccupancy": 0.50354,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 993,
+          "similarity": 0.80169,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.50354,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-040.pgm",
+      "signedDistancePath": "generated/latent-shape-040.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-040.f32"
+    },
+    {
+      "generationId": "latent-shape-041",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:c58fb965f75478be1b5a2b50eb2741a9ac794bee9a113a8bc10d2b6b9b95a5b1",
+      "foregroundOccupancy": 0.483337,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 616,
+          "similarity": 0.876156,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.483337,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.999874
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-041.pgm",
+      "signedDistancePath": "generated/latent-shape-041.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-041.f32"
+    },
+    {
+      "generationId": "latent-shape-042",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.487942
+      },
+      "parentTensorHashes": [
+        "sha256:934542ad84d98413a6d73a4c0743d8235f31c02118844fd6f3b598c52105ff10",
+        "sha256:82af28953bd3a66b8d29b4f1299bc667d516c7b4aa3dc46acdd08893e892ed2b"
+      ],
+      "maskHash": "sha256:b1b40d2882e34bac9b0c93d6813e84d5646f630f821d1e5ee6113a59180f3749",
+      "foregroundOccupancy": 0.438965,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 2341,
+          "similarity": 0.763309,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.438965,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-042.pgm",
+      "signedDistancePath": "generated/latent-shape-042.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-042.f32"
+    },
+    {
+      "generationId": "latent-shape-043",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:1dc9acd0f70f9498b01db7cb2c7ee922c106d0db86fc376ac609aa15d8b7d92a"
+      ],
+      "maskHash": "sha256:03376da48d4db9b95bd173de9ab4a1709aa38dec7e55b03ab05ea8a3435c03d2",
+      "foregroundOccupancy": 0.469727,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1682,
+          "similarity": 0.769089,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.469727,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 2,
+        "largestComponentFraction": 0.99987
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-043.pgm",
+      "signedDistancePath": "generated/latent-shape-043.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-043.f32"
+    },
+    {
+      "generationId": "latent-shape-044",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:decc18a6f5a30f46367bef48f374ad4916d2979f56469b5392c4421f069139dd",
+      "foregroundOccupancy": 0.374329,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1340,
+          "similarity": 0.728832,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.374329,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 3,
+        "largestComponentFraction": 0.999674
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-044.pgm",
+      "signedDistancePath": "generated/latent-shape-044.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-044.f32"
+    },
+    {
+      "generationId": "latent-shape-045",
+      "mode": "posterior-interpolation",
+      "parameters": {
+        "amount": 0.730202
+      },
+      "parentTensorHashes": [
+        "sha256:b220bebf375d4fe374f5148104b109ea3062ad5a65d0c58ebca11bffef3ee892",
+        "sha256:d64ab666ce4b3802f1aed6978d9113790611d79d6fc7c296eb2c0435f1afa05b"
+      ],
+      "maskHash": "sha256:879c81b127f9d8343b4a2d87284141643955986776d5b80976a537fb9e9da41c",
+      "foregroundOccupancy": 0.438049,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1734,
+          "similarity": 0.76167,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.438049,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 5,
+        "largestComponentFraction": 0.999443
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-045.pgm",
+      "signedDistancePath": "generated/latent-shape-045.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-045.f32"
+    },
+    {
+      "generationId": "latent-shape-046",
+      "mode": "posterior-mutation",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [
+        "sha256:fc971124b495dd62412bb2abe7c85482ae36c5347c36c932e96f6e1f8ef99be3"
+      ],
+      "maskHash": "sha256:003eae439ab01140dcb665456a3d83f7a8863f18bdb3dab6203599c8a6360b8b",
+      "foregroundOccupancy": 0.410828,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1679,
+          "similarity": 0.77902,
+          "transform": "direct"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.410828,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-046.pgm",
+      "signedDistancePath": "generated/latent-shape-046.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-046.f32"
+    },
+    {
+      "generationId": "latent-shape-047",
+      "mode": "prior-sample",
+      "parameters": {
+        "temperature": 0.7
+      },
+      "parentTensorHashes": [],
+      "maskHash": "sha256:27ab1e72c53dcceed270a92f1ca009680061fc5c0e469210c6fe1c506ebd820e",
+      "foregroundOccupancy": 0.501099,
+      "noveltyAssay": {
+        "schema": "kaminos.lirm-silhouette-novelty-assay.v0",
+        "metric": "canonical-mask-iou",
+        "copyThreshold": 0.94,
+        "includeMirror": true,
+        "copied": false,
+        "nearest": {
+          "index": 1920,
+          "similarity": 0.82671,
+          "transform": "mirror_x"
+        }
+      },
+      "usabilityAssay": {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": true,
+        "nonempty": true,
+        "full": false,
+        "touchesFrame": false,
+        "foregroundOccupancy": 0.501099,
+        "borderForegroundFraction": 0.0,
+        "componentCount": 1,
+        "largestComponentFraction": 1.0
+      },
+      "acceptedForDownstream": true,
+      "maskPath": "generated/latent-shape-047.pgm",
+      "signedDistancePath": "generated/latent-shape-047.f32",
+      "sourceSignedDistancePath": "generated/latent-shape-047.f32"
+    }
+  ]
+}

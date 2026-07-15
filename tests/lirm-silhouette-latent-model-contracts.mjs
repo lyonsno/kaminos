@@ -6,7 +6,9 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const trainer = new URL('../lirm-silhouette-latent-model.py', import.meta.url);
+const reassay = new URL('../lirm-silhouette-latent-reassay.py', import.meta.url);
 assert.ok(existsSync(trainer), 'silhouette latent-model trainer must exist');
+assert.ok(existsSync(reassay), 'silhouette latent-model reassay must exist');
 
 function writePgm(size, inset, variant) {
   const data = Buffer.alloc(size * size);
@@ -27,7 +29,7 @@ function writeSdf(size, inset, variant) {
       const dy = Math.max(inset - y, 0, y - (size - inset - 1));
       const outside = Math.hypot(dx, dy);
       const inside = Math.min(x - inset, y - inset, size - inset - 1 - x, size - inset - 1 - y);
-      values[y * size + x] = outside > 0 ? outside : -Math.max(0.25, inside + 0.25 + variant * 0.01);
+      values[y * size + x] = outside > 0 ? -outside : Math.max(0.25, inside + 0.25 + variant * 0.01);
     }
   }
   return Buffer.from(values.buffer);
@@ -151,3 +153,85 @@ module.rasterize_svg(Path(${JSON.stringify(svgPath)}), Path(${JSON.stringify(png
 `], { encoding: 'utf8' });
 assert.equal(rasterize.status, 0, `contact-sheet rasterization failed: ${rasterize.stderr || rasterize.stdout}`);
 assert.ok(existsSync(pngPath), 'successful witness rasterization must produce the PNG');
+
+const decodePolarity = spawnSync('python3', ['-c', `
+import importlib.util
+import numpy as np
+spec = importlib.util.spec_from_file_location("latent_model", ${JSON.stringify(trainer.pathname)})
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+field = np.array([[-1.0, 0.0, 0.25], [2.0, -3.0, 4.0]], dtype=np.float32)
+decoded = module.decode_sdf_mask(field)
+expected = np.array([[0, 0, 1], [1, 0, 1]], dtype=np.uint8)
+if not np.array_equal(decoded, expected):
+    raise SystemExit(f"positive-inside SDF decoded incorrectly: {decoded.tolist()}")
+interior = np.zeros((8, 8), dtype=np.uint8)
+interior[2:6, 2:6] = 1
+interior_assay = module.mask_usability_assay(interior)
+if not interior_assay["usable"] or interior_assay["touchesFrame"]:
+    raise SystemExit(f"padded silhouette rejected: {interior_assay}")
+multipart = interior.copy()
+multipart[1, 1] = 1
+multipart_assay = module.mask_usability_assay(multipart)
+if not multipart_assay["usable"] or multipart_assay["componentCount"] != 2:
+    raise SystemExit(f"multipart silhouette rejected: {multipart_assay}")
+clipped = interior.copy()
+clipped[3, :3] = 1
+clipped_assay = module.mask_usability_assay(clipped)
+if clipped_assay["usable"] or not clipped_assay["touchesFrame"]:
+    raise SystemExit(f"frame-clipped silhouette accepted: {clipped_assay}")
+`], { encoding: 'utf8' });
+assert.equal(
+  decodePolarity.status,
+  0,
+  `corpus SDF polarity must decode positive values as foreground: ${decodePolarity.stderr || decodePolarity.stdout}`,
+);
+
+const sourceRun = join(root, 'source-run');
+await mkdir(join(sourceRun, 'generated'), { recursive: true });
+const interiorField = new Float32Array(16 * 16).fill(-1);
+const clippedField = new Float32Array(16 * 16).fill(-1);
+for (let y = 3; y < 13; y += 1) {
+  for (let x = 5; x < 11; x += 1) interiorField[y * 16 + x] = 1;
+}
+for (let y = 4; y < 12; y += 1) {
+  for (let x = 0; x < 8; x += 1) clippedField[y * 16 + x] = 1;
+}
+await writeFile(join(sourceRun, 'generated', 'latent-shape-000.f32'), Buffer.from(interiorField.buffer));
+await writeFile(join(sourceRun, 'generated', 'latent-shape-001.f32'), Buffer.from(clippedField.buffer));
+await writeFile(join(sourceRun, 'receipt.json'), `${JSON.stringify({
+  schema: 'kaminos.lirm-silhouette-latent-model.v0',
+  status: 'complete',
+  phase: 'witness_written',
+  routeIdentity: {
+    requestedRoute: 'kaminos/lirm-speciation-armature/silhouette-latent-model-v0',
+    effectiveRoute: 'mlx-convolutional-sdf-vae-v0',
+  },
+  requestedConfig: { seed: 713, validationFraction: 0.22, copyThreshold: 0.94 },
+  effectiveConfig: { inputShape: [16, 16, 1], maskDecode: 'normalized_sdf < 0' },
+  corpora: [{ path: corpusA }, { path: corpusB }],
+  generations: [
+    { generationId: 'latent-shape-000', mode: 'posterior-interpolation', parameters: {}, parentTensorHashes: [], signedDistancePath: 'generated/latent-shape-000.f32' },
+    { generationId: 'latent-shape-001', mode: 'prior-sample', parameters: {}, parentTensorHashes: [], signedDistancePath: 'generated/latent-shape-001.f32' },
+  ],
+}, null, 2)}\n`);
+const reassayDir = join(root, 'reassay');
+const reassayRun = spawnSync('python3', [
+  reassay.pathname,
+  '--run-dir', sourceRun,
+  '--out-dir', reassayDir,
+], { encoding: 'utf8' });
+assert.equal(reassayRun.status, 0, `latent reassay failed: ${reassayRun.stderr || reassayRun.stdout}`);
+const reassayReceipt = JSON.parse(readFileSync(join(reassayDir, 'receipt.json'), 'utf8'));
+assert.equal(reassayReceipt.schema, 'kaminos.lirm-silhouette-latent-reassay.v0');
+assert.equal(reassayReceipt.status, 'complete');
+assert.equal(reassayReceipt.phase, 'witness_written');
+assert.equal(reassayReceipt.routeIdentity.effectiveRoute, 'positive-inside-sdf-reassay-v0');
+assert.match(reassayReceipt.sourceRun.receiptHash, /^sha256:/);
+assert.equal(reassayReceipt.falseClosureGuards.sourceFieldsReused, 2);
+assert.equal(reassayReceipt.generations[0].acceptedForDownstream, true);
+assert.equal(reassayReceipt.generations[0].usabilityAssay.touchesFrame, false);
+assert.equal(reassayReceipt.generations[1].acceptedForDownstream, false);
+assert.equal(reassayReceipt.generations[1].usabilityAssay.touchesFrame, true);
+assert.equal(reassayReceipt.acceptedSampleCount, 1);
+assert.ok(existsSync(join(reassayDir, 'contact-sheet.png')));

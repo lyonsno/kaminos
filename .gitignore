@@ -3,3 +3,7 @@ scratch/*
 !scratch/.gitkeep
 scenes/*
 !scenes/.gitkeep
+artifacts/lirm-silhouette-archetype-corpus-digiapi-full-v0/
+artifacts/lirm-silhouette-archetype-corpus-pokeapi-full-v0/
+artifacts/lirm-silhouette-local-shape-space-digiapi-full-v0/
+artifacts/lirm-silhouette-local-shape-space-pokeapi-full-v0/

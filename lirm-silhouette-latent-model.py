@@ -94,6 +94,56 @@ def tensor_hash(tensor: np.ndarray) -> str:
     return sha256_bytes(np.asarray(tensor, dtype="<f4").tobytes())
 
 
+def decode_sdf_mask(field: np.ndarray) -> np.ndarray:
+    """Decode the corpus convention: positive signed distance is foreground."""
+    return (np.asarray(field) > 0).astype(np.uint8)
+
+
+def mask_usability_assay(mask: np.ndarray) -> dict:
+    mask = np.asarray(mask, dtype=np.uint8)
+    if mask.ndim != 2:
+        raise ValueError(f"silhouette mask must be two-dimensional, got {mask.shape}")
+    foreground = mask != 0
+    foreground_count = int(foreground.sum())
+    pixel_count = int(foreground.size)
+    border = np.concatenate((foreground[0], foreground[-1], foreground[1:-1, 0], foreground[1:-1, -1]))
+    border_count = int(border.sum())
+
+    visited = np.zeros_like(foreground, dtype=bool)
+    component_sizes = []
+    height, width = foreground.shape
+    for start_y, start_x in np.argwhere(foreground):
+        if visited[start_y, start_x]:
+            continue
+        stack = [(int(start_y), int(start_x))]
+        visited[start_y, start_x] = True
+        size = 0
+        while stack:
+            y, x = stack.pop()
+            size += 1
+            for next_y, next_x in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if 0 <= next_y < height and 0 <= next_x < width and foreground[next_y, next_x] and not visited[next_y, next_x]:
+                    visited[next_y, next_x] = True
+                    stack.append((next_y, next_x))
+        component_sizes.append(size)
+
+    nonempty = foreground_count > 0
+    full = foreground_count == pixel_count
+    touches_frame = border_count > 0
+    largest_component = max(component_sizes, default=0)
+    return {
+        "schema": "kaminos.lirm-silhouette-mask-usability-assay.v0",
+        "usable": bool(nonempty and not full and not touches_frame),
+        "nonempty": nonempty,
+        "full": full,
+        "touchesFrame": touches_frame,
+        "foregroundOccupancy": round(foreground_count / pixel_count, 6),
+        "borderForegroundFraction": round(border_count / max(1, border.size), 6),
+        "componentCount": len(component_sizes),
+        "largestComponentFraction": round(largest_component / max(1, foreground_count), 6),
+    }
+
+
 def initial_receipt(args) -> dict:
     return {
         "schema": SCHEMA,
@@ -251,7 +301,13 @@ def mask_path(mask: np.ndarray) -> str:
     return "".join(commands)
 
 
-def render_contact_sheet(generations: list[dict], masks: list[np.ndarray], columns: int) -> str:
+def render_contact_sheet(
+    generations: list[dict],
+    masks: list[np.ndarray],
+    columns: int,
+    requested_route: str = REQUESTED_ROUTE,
+    effective_route: str = MLX_ROUTE,
+) -> str:
     cell_width = 180
     cell_height = 205
     rows = max(1, math.ceil(len(generations) / columns))
@@ -269,10 +325,56 @@ def render_contact_sheet(generations: list[dict], masks: list[np.ndarray], colum
 </g>''')
     width = columns * cell_width
     height = rows * cell_height
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" data-route="{REQUESTED_ROUTE}" data-effective-route="{MLX_ROUTE}">
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" data-route="{requested_route}" data-effective-route="{effective_route}">
 <rect width="100%" height="100%" fill="#050706"/>
 {''.join(cells)}
 </svg>'''
+
+
+def build_mlx_vae(input_size: int, latent_dim: int, channels: list[int]):
+    import mlx.core as mx
+    import mlx.nn as nn
+
+    if input_size % 8:
+        raise ValueError("MLX convolutional VAE input size must be divisible by eight")
+    if len(channels) != 3:
+        raise ValueError(f"MLX convolutional VAE requires three channel widths, got {channels}")
+    feature_size = input_size // 8
+
+    class SilhouetteVAE(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.encoder1 = nn.Conv2d(1, channels[0], 4, stride=2, padding=1)
+            self.encoder2 = nn.Conv2d(channels[0], channels[1], 4, stride=2, padding=1)
+            self.encoder3 = nn.Conv2d(channels[1], channels[2], 4, stride=2, padding=1)
+            self.mu = nn.Linear(feature_size * feature_size * channels[2], latent_dim)
+            self.logvar = nn.Linear(feature_size * feature_size * channels[2], latent_dim)
+            self.decoder_input = nn.Linear(latent_dim, feature_size * feature_size * channels[2])
+            self.decoder1 = nn.ConvTranspose2d(channels[2], channels[1], 4, stride=2, padding=1)
+            self.decoder2 = nn.ConvTranspose2d(channels[1], channels[0], 4, stride=2, padding=1)
+            self.decoder3 = nn.ConvTranspose2d(channels[0], 1, 4, stride=2, padding=1)
+
+        def encode(self, value):
+            value = nn.relu(self.encoder1(value))
+            value = nn.relu(self.encoder2(value))
+            value = nn.relu(self.encoder3(value))
+            value = value.reshape((value.shape[0], -1))
+            return self.mu(value), mx.clip(self.logvar(value), -8.0, 8.0)
+
+        def decode(self, value):
+            value = nn.relu(self.decoder_input(value))
+            value = value.reshape((value.shape[0], feature_size, feature_size, channels[2]))
+            value = nn.relu(self.decoder1(value))
+            value = nn.relu(self.decoder2(value))
+            return mx.tanh(self.decoder3(value))
+
+        def __call__(self, value):
+            mu, logvar = self.encode(value)
+            epsilon = mx.random.normal(mu.shape)
+            latent = mu + mx.exp(0.5 * logvar) * epsilon
+            return self.decode(latent), mu, logvar
+
+    return SilhouetteVAE()
 
 
 def train_mlx(args, samples, dimensions, out_dir: Path):
@@ -285,42 +387,7 @@ def train_mlx(args, samples, dimensions, out_dir: Path):
         raise ValueError("MLX convolutional VAE requires square dimensions divisible by eight")
     train_data = np.stack([sample["tensor"] for sample in samples if sample["split"] == "training"])[..., None]
     validation_data = np.stack([sample["tensor"] for sample in samples if sample["split"] == "validation"])[..., None]
-    feature_size = height // 8
-
-    class SilhouetteVAE(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.encoder1 = nn.Conv2d(1, 16, 4, stride=2, padding=1)
-            self.encoder2 = nn.Conv2d(16, 32, 4, stride=2, padding=1)
-            self.encoder3 = nn.Conv2d(32, 64, 4, stride=2, padding=1)
-            self.mu = nn.Linear(feature_size * feature_size * 64, args.latent_dim)
-            self.logvar = nn.Linear(feature_size * feature_size * 64, args.latent_dim)
-            self.decoder_input = nn.Linear(args.latent_dim, feature_size * feature_size * 64)
-            self.decoder1 = nn.ConvTranspose2d(64, 32, 4, stride=2, padding=1)
-            self.decoder2 = nn.ConvTranspose2d(32, 16, 4, stride=2, padding=1)
-            self.decoder3 = nn.ConvTranspose2d(16, 1, 4, stride=2, padding=1)
-
-        def encode(self, value):
-            value = nn.relu(self.encoder1(value))
-            value = nn.relu(self.encoder2(value))
-            value = nn.relu(self.encoder3(value))
-            value = value.reshape((value.shape[0], -1))
-            return self.mu(value), mx.clip(self.logvar(value), -8.0, 8.0)
-
-        def decode(self, value):
-            value = nn.relu(self.decoder_input(value))
-            value = value.reshape((value.shape[0], feature_size, feature_size, 64))
-            value = nn.relu(self.decoder1(value))
-            value = nn.relu(self.decoder2(value))
-            return mx.tanh(self.decoder3(value))
-
-        def __call__(self, value):
-            mu, logvar = self.encode(value)
-            epsilon = mx.random.normal(mu.shape)
-            latent = mu + mx.exp(0.5 * logvar) * epsilon
-            return self.decode(latent), mu, logvar
-
-    model = SilhouetteVAE()
+    model = build_mlx_vae(height, args.latent_dim, [16, 32, 64])
     optimizer = optim.Adam(learning_rate=args.learning_rate)
     mx.random.seed(args.seed)
     rng = np.random.default_rng(args.seed)
@@ -372,7 +439,7 @@ def train_mlx(args, samples, dimensions, out_dir: Path):
         "channels": [16, 32, 64],
         "beta": args.beta,
         "normalization": "clip(sdf / (max(width,height)*0.25), -1, 1)",
-        "maskDecode": "normalized_sdf < 0",
+        "maskDecode": "normalized_sdf > 0",
     }
     write_json(checkpoint_dir / "model-config.json", model_config)
     write_jsonl(out_dir / "training-metrics.jsonl", metrics)
@@ -407,8 +474,9 @@ def train_mlx(args, samples, dimensions, out_dir: Path):
         decoded = model.decode(mx.array(latent[None, :].astype(np.float32)))
         mx.eval(decoded)
         field = np.array(decoded)[0, ..., 0]
-        mask = (field < 0).astype(np.uint8)
+        mask = decode_sdf_mask(field)
         novelty = novelty_assay(mask, training_masks, args.copy_threshold)
+        usability = mask_usability_assay(mask)
         generation_id = f"latent-shape-{index:03d}"
         write_pgm(generated_dir / f"{generation_id}.pgm", mask)
         field.astype("<f4").tofile(generated_dir / f"{generation_id}.f32")
@@ -420,7 +488,8 @@ def train_mlx(args, samples, dimensions, out_dir: Path):
             "maskHash": sha256_bytes(mask.tobytes()),
             "foregroundOccupancy": round(float(mask.mean()), 6),
             "noveltyAssay": novelty,
-            "acceptedForDownstream": bool(mask.any() and not mask.all() and not novelty["copied"]),
+            "usabilityAssay": usability,
+            "acceptedForDownstream": bool(usability["usable"] and not novelty["copied"]),
             "maskPath": f"generated/{generation_id}.pgm",
             "signedDistancePath": f"generated/{generation_id}.f32",
         })
