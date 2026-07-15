@@ -164,6 +164,7 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `runtime.runInvocation(input, fn)`, `runtime.applySchedulerDecision(decision)`, and `runtime.schedulerSnapshot()`: run arbitrary adapter code against an immutable scheduler revision, apply a guarded decision between invocations, and inspect the scheduler that the next invocation will receive.
 - `runtime.createInferenceQueue(options)`: retain an uncapped FIFO of background jobs, run one immutable route invocation at a time, record uncapped progress and terminal outcomes, cancel pending work, and place adaptive decisions between jobs.
 - `createWebGpuInferenceCoordinator(input)`: admit eligible heads from multiple route queues through one uncapped global FIFO, preserving route-local barriers, pending cancellation, and honest non-preemption boundaries.
+- `createWebGpuInferenceSession(input)`: own one browser WebGPU device, backend identity, and coordinator across explicitly registered route runtimes, with device-loss and idle-close lifecycle truth.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
 - `defineTensorManifest(input)`: normalize model tensor metadata, dtype sizes, byte lengths, offsets, and shapes for browser-loaded weight bundles.
@@ -388,6 +389,35 @@ const sf3dQueue = sf3dRuntime.createInferenceQueue();
 ```
 
 Each queue offers only its locally eligible head job after scheduler barriers have applied. The coordinator grants those heads in global FIFO order, so one route cannot reserve the browser GPU with its entire backlog. Pending jobs can cancel while awaiting admission; active invocations remain explicitly non-preemptible. Coordinator snapshots retain every admission until `forgetAdmission(sequence)`, and `drain()` resolves only when no admission is active, pending, or scheduled.
+
+## Shared Inference Session
+
+Use a session when several routes should share the same physical WebGPU device and admission coordinator:
+
+```js
+const session = await createWebGpuInferenceSession({
+  sessionId: crypto.randomUUID(),
+  gpu: navigator.gpu,
+  adapterName: "browser-primary-adapter",
+});
+
+const sharp = await session.registerRoute({
+  routeId: SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
+  runtimeOptions: { schedulerApplication: sharpScheduler },
+});
+const sf3d = await session.registerRoute({
+  routeId: SF3D_IMAGE_TO_MESH_ROUTE_ID,
+});
+
+const sharpJob = sharp.enqueue({
+  jobId: crypto.randomUUID(),
+  execute: invocation => runSharpInference(sharp.runtime, invocation),
+});
+```
+
+The session retains route registrations until `unregisterRoute(routeId)`. Its managed route handles gate enqueue and scheduler changes after device loss while still exposing each runtime for adapter kernels and buffers. If `device.lost` resolves, the session preserves the opaque browser reason/message, cancels pending jobs, rejects new managed work, and leaves active work to complete or fail without claiming preemption. Recovery requires a new session and rebuilt device resources.
+
+`close()` requires every route queue to be idle. It destroys a device requested by the session and leaves a borrowed device untouched. `session.deviceLost` remains the exact asynchronous loss record, including intentional `destroyed` loss after an owned session closes.
 
 ## Receipt And Evidence Layer
 
