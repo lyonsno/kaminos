@@ -12116,8 +12116,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     } else {
       state.majorantBuiltThisFrame = false;
     }
-    encodeBoundarySidecar(encoder);
-    encodeBoundarySplats(encoder);
+    if (!forceNativeRaymarchCapture) {
+      encodeBoundarySidecar(encoder);
+      encodeBoundarySplats(encoder);
+    }
     if (boundarySplatRequested() && !forceNativeRaymarchCapture) {
       const splatApplied = boundarySplatHybridRequested()
         ? encodeBoundarySplatSmokeHybrid(encoder, frameTexture.createView(), hybridCompositorReadbackPipeline)

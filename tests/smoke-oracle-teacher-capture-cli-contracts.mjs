@@ -115,6 +115,12 @@ assert.match(
 );
 
 assert.match(
+  volumeCoreSource,
+  /if \(!forceNativeRaymarchCapture\) \{\s*encodeBoundarySidecar\(encoder\);\s*encodeBoundarySplats\(encoder\);\s*\}/,
+  'native raymarch capture must bypass sidecar and splat compute instead of only replacing their final draw pass',
+);
+
+assert.match(
   viewerSource,
   /volume_capture_hold/,
   'the viewer route must consume the explicit capture-hold request during initial activation',
