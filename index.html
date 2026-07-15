@@ -490,9 +490,52 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #finger-juice-host-overlay { position: absolute; top: 16px; left: 16px; min-width: 360px; max-width: min(560px, calc(100% - 32px)); background: rgba(4,7,10,0.78); border: 1px solid #31485a; border-radius: 8px; padding: 10px 12px; color: #b7d4dc; box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
 #finger-juice-host-overlay-title { font: 11px 'SF Mono', monospace; color: #8fc7d6; text-transform: uppercase; letter-spacing: 0.8px; }
 #finger-juice-host-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #d4ecf3; overflow-wrap: anywhere; }
+
+/* First-class image witness route */
+#kaminos-image-witness { position: fixed; inset: 0; z-index: 1000; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: #0b0c0e; color: #e8eaed; }
+#kaminos-image-witness[hidden] { display: none; }
+.image-witness-head { min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 18px; border-bottom: 1px solid #2a2d31; background: #14161a; }
+.image-witness-heading { min-width: 0; }
+.image-witness-brand { color: #d5b966; font: 11px 'SF Mono', monospace; text-transform: uppercase; }
+.image-witness-title { margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 650; }
+.image-witness-status { flex: 0 0 auto; border: 1px solid #515860; border-radius: 4px; padding: 4px 7px; color: #c7ccd2; background: #24272c; font: 10px 'SF Mono', monospace; }
+.image-witness-status[data-status="registered"] { border-color: #3e7356; color: #a8dfbc; background: #17271e; }
+.image-witness-status[data-status="failed"] { border-color: #874448; color: #ffb1b5; background: #301719; }
+.image-witness-stage { min-width: 0; min-height: 0; display: grid; place-items: center; overflow: auto; padding: 18px; background: #050607; }
+#kaminos-image-witness-image { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }
+.image-witness-meta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px 22px; padding: 12px 18px 14px; border-top: 1px solid #2a2d31; background: #14161a; font: 10px 'SF Mono', monospace; }
+.image-witness-meta-row { min-width: 0; display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px; }
+.image-witness-meta-key { color: #777f88; }
+.image-witness-meta-value { color: #c7ccd2; overflow-wrap: anywhere; }
+.image-witness-meta-value.downgrade { color: #e8bd75; }
+@media (max-width: 760px) {
+  .image-witness-head { padding: 11px 12px; }
+  .image-witness-title { white-space: normal; font-size: 14px; }
+  .image-witness-stage { padding: 8px; }
+  .image-witness-meta { grid-template-columns: 1fr; padding: 10px 12px; }
+}
 </style>
 </head>
 <body>
+
+<section id="kaminos-image-witness" hidden aria-label="Kaminos image witness">
+  <header class="image-witness-head">
+    <div class="image-witness-heading">
+      <div class="image-witness-brand">Kaminos / Smoke Oracle</div>
+      <div class="image-witness-title" id="kaminos-image-witness-title">Image witness</div>
+    </div>
+    <div class="image-witness-status" id="kaminos-image-witness-status" data-status="loading">loading</div>
+  </header>
+  <main class="image-witness-stage">
+    <img id="kaminos-image-witness-image" alt="Smoke oracle comparison witness">
+  </main>
+  <footer class="image-witness-meta">
+    <div class="image-witness-meta-row"><span class="image-witness-meta-key">Route</span><span class="image-witness-meta-value" id="kaminos-image-witness-route"></span></div>
+    <div class="image-witness-meta-row"><span class="image-witness-meta-key">Registration</span><span class="image-witness-meta-value" id="kaminos-image-witness-registration">pending</span></div>
+    <div class="image-witness-meta-row"><span class="image-witness-meta-key">Authority</span><span class="image-witness-meta-value" id="kaminos-image-witness-authority"></span></div>
+    <div class="image-witness-meta-row"><span class="image-witness-meta-key">Downgrade</span><span class="image-witness-meta-value downgrade" id="kaminos-image-witness-downgrade"></span></div>
+  </footer>
+</section>
 
 <div id="sidebar">
   <h1>Kaminos</h1>
@@ -2688,6 +2731,102 @@ import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
 function escapeHtml(s) {
   if (s === null || s === undefined) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function initKaminosImageWitnessRoute() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('kaminos_image_witness') !== '1') return false;
+
+  const root = (params.get('image_root') || '').trim();
+  const path = (params.get('image_path') || '').trim();
+  const title = (params.get('image_title') || path.split('/').pop() || 'Image witness').trim();
+  const authority = (params.get('image_authority') || 'unverified-image-source').trim();
+  const downgrade = (params.get('image_downgrade') || 'authority-not-declared').trim();
+  const sourceUrl = root && path
+    ? `/api/read?${new URLSearchParams({ root, path })}`
+    : null;
+  const requestedRoute = {
+    identity: 'kaminos.image-witness-route.v0',
+    root,
+    path,
+    authority,
+    downgrade,
+  };
+  const state = {
+    schema: 'kaminos.image-witness-state.v0',
+    requestedRoute,
+    effectiveRoute: null,
+    status: sourceUrl ? 'loading' : 'failed',
+    registered: false,
+    naturalWidth: 0,
+    naturalHeight: 0,
+    nonblankPixelCount: 0,
+    error: sourceUrl ? null : 'image_root and image_path are required',
+  };
+  window.__kaminosImageWitnessState = state;
+
+  const surface = document.getElementById('kaminos-image-witness');
+  const image = document.getElementById('kaminos-image-witness-image');
+  const status = document.getElementById('kaminos-image-witness-status');
+  const registration = document.getElementById('kaminos-image-witness-registration');
+  surface.hidden = false;
+  document.getElementById('kaminos-image-witness-title').textContent = title;
+  document.getElementById('kaminos-image-witness-route').textContent = sourceUrl || 'missing route parameters';
+  document.getElementById('kaminos-image-witness-authority').textContent = authority;
+  document.getElementById('kaminos-image-witness-downgrade').textContent = downgrade;
+
+  const updateStatus = () => {
+    status.dataset.status = state.status;
+    status.textContent = state.status;
+    registration.textContent = state.registered
+      ? `${state.naturalWidth}x${state.naturalHeight} / ${state.nonblankPixelCount} sampled nonblank pixels`
+      : state.error || 'pending';
+  };
+  const fail = error => {
+    state.status = 'failed';
+    state.registered = false;
+    state.error = String(error?.message || error || 'image witness failed');
+    updateStatus();
+  };
+  updateStatus();
+  if (!sourceUrl) return true;
+
+  image.addEventListener('load', () => {
+    try {
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error('decoded image has zero dimensions');
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.min(128, image.naturalWidth);
+      canvas.height = Math.min(128, image.naturalHeight);
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let nonblankPixelCount = 0;
+      for (let offset = 0; offset < pixels.length; offset += 4) {
+        if (pixels[offset + 3] > 0 && Math.max(pixels[offset], pixels[offset + 1], pixels[offset + 2]) > 8) {
+          nonblankPixelCount += 1;
+        }
+      }
+      if (!nonblankPixelCount) throw new Error('decoded image sampled as blank');
+      state.effectiveRoute = {
+        identity: 'kaminos.image-witness-route.v0',
+        sourceUrl,
+        root,
+        path,
+      };
+      state.status = 'registered';
+      state.registered = true;
+      state.naturalWidth = image.naturalWidth;
+      state.naturalHeight = image.naturalHeight;
+      state.nonblankPixelCount = nonblankPixelCount;
+      state.error = null;
+      updateStatus();
+    } catch (error) {
+      fail(error);
+    }
+  }, { once: true });
+  image.addEventListener('error', () => fail(`image load failed: ${sourceUrl}`), { once: true });
+  image.src = sourceUrl;
+  return true;
 }
 
 // --- State ---
@@ -20786,6 +20925,7 @@ window.addEventListener('keydown', e => {
 });
 
 // --- Init ---
+initKaminosImageWitnessRoute();
 grInit();
 initKaminosFingerJuiceHostRoute();
 initScene().then(() => {

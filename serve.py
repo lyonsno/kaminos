@@ -40,6 +40,10 @@ KAMINOS_IMAGE_INBOX_DIR = Path(os.environ.get(
     "KAMINOS_IMAGE_INBOX_DIR",
     str(KAMINOS_ASSETS_DIR / "images" / "inbox"),
 )).expanduser()
+KAMINOS_SMOKE_ORACLE_DIR = Path(os.environ.get(
+    "KAMINOS_SMOKE_ORACLE_DIR",
+    str(ROOT / "artifacts" / "smoke-gaussian-oracle-ceiling-0715"),
+)).expanduser()
 
 BROWSE_ROOTS = {
     "scratch": ROOT / "scratch",
@@ -47,6 +51,7 @@ BROWSE_ROOTS = {
     "splat-inbox": KAMINOS_SPLAT_INBOX_DIR,
     "splat-production": KAMINOS_SPLAT_PRODUCTION_DIR,
     "image-inbox": KAMINOS_IMAGE_INBOX_DIR,
+    "smoke-oracle": KAMINOS_SMOKE_ORACLE_DIR,
     "pipeline-runs": KAMINOS_PIPELINE_RUNS_DIR,
     "greenroom": Path(os.environ.get(
         "GPU_GREENROOM_DIR",
