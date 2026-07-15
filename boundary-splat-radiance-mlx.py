@@ -40,6 +40,10 @@ OPTICAL_DECODER_SCHEMA = "kaminos-boundary-splat-screen-residual-unet-v0"
 OPTICAL_INPUT_AUTHORITY = "screen-rgb-luma-gradient-v0"
 PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY = "candidate-attached-native-fields-weight-normalized-screen-projection-v0"
 EMITTER_LIFECYCLE_OPTICAL_INPUT_AUTHORITY = "broadcast-effective-emitter-lifecycle-controls-v0"
+FULL_FRAME_OPTICAL_ROI_AUTHORITY = "full-source-viewport-v0"
+CANDIDATE_FLAME_OPTICAL_ROI_AUTHORITY = "projected-live-candidate-fire-support-bounds-v0"
+CANDIDATE_FLAME_ROI_THRESHOLD = 0.01
+CANDIDATE_FLAME_ROI_PADDING_FRACTION = 0.12
 FLOW_DEBUG_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
 PARTIAL_FLOW_DEBUG_AUTHORITY = "display-only-linear-mix-v0"
 BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER = [
@@ -819,18 +823,104 @@ def project_points(points, view_projection, width, height):
     return screen.astype(np.float32), valid, clip[:, 3].astype(np.float32)
 
 
-def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_mode, frequencies, spatial_mixing):
-    source_width, source_height = frame["viewport"]
-    render_height = max(1, round(render_width * source_height / source_width))
+def resolve_optical_roi(frame, max_radius, mode):
+    source_width_float, source_height_float = frame["viewport"]
+    source_width = int(round(float(source_width_float)))
+    source_height = int(round(float(source_height_float)))
+    if source_width <= 0 or source_height <= 0 or abs(source_width_float - source_width) > 1e-5 or abs(source_height_float - source_height) > 1e-5:
+        raise ValueError(f"frame {frame['id']} source viewport must contain positive integer dimensions")
+    source_bounds = [0, 0, source_width, source_height]
+    if mode == "full-frame":
+        return {
+            "frameId": frame["id"],
+            "sameStateCaptureId": frame["sameStateCaptureId"],
+            "requestedMode": mode,
+            "effectiveMode": mode,
+            "authority": FULL_FRAME_OPTICAL_ROI_AUTHORITY,
+            "sourceViewport": [source_width, source_height],
+            "sourceBounds": source_bounds,
+            "fireChannelThreshold": None,
+            "selectedCandidateCount": frame["candidates"].shape[0],
+            "projectedCandidateCount": frame["candidates"].shape[0],
+        }
+    if mode != "candidate-flame-bounds":
+        raise ValueError(f"unsupported optical ROI mode {mode}")
+    features = frame["candidates"][:, 3:]
+    fire_channel_indices = [
+        FEATURES.index("fire.energy"),
+        FEATURES.index("fire.temperature"),
+        FEATURES.index("fire.emission"),
+    ]
+    fire_score = np.maximum.reduce([features[:, index] for index in fire_channel_indices])
+    selected = fire_score > CANDIDATE_FLAME_ROI_THRESHOLD
+    selected_candidate_count = int(np.sum(selected))
+    if selected_candidate_count == 0:
+        raise ValueError(f"frame {frame['id']} candidate-flame-bounds produced no candidate fire support")
+    positions = frame["candidates"][:, :3]
+    base_radius = (2.0 / frame["grid"]) * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
+    shape = base_radius * frame["radius"]
+    center, center_valid, _ = project_points(positions, frame["viewProjection"], source_width, source_height)
+    right_points = positions + frame["cameraRight"][None, :] * shape[:, None]
+    up_points = positions + frame["cameraUp"][None, :] * shape[:, None]
+    right_screen, right_valid, _ = project_points(right_points, frame["viewProjection"], source_width, source_height)
+    up_screen, up_valid, _ = project_points(up_points, frame["viewProjection"], source_width, source_height)
+    projected = selected & center_valid & right_valid & up_valid
+    projected_candidate_count = int(np.sum(projected))
+    if projected_candidate_count == 0:
+        raise ValueError(f"frame {frame['id']} candidate-flame-bounds produced no valid projected fire support")
+    axis_x = right_screen - center
+    axis_y = up_screen - center
+    extent = np.abs(axis_x) * float(max_radius[0]) + np.abs(axis_y) * float(max_radius[1])
+    lower = np.min(center[projected] - extent[projected], axis=0)
+    upper = np.max(center[projected] + extent[projected], axis=0)
+    span = np.maximum(upper - lower, 1.0)
+    padding = np.maximum(span * CANDIDATE_FLAME_ROI_PADDING_FRACTION, 4.0)
+    lower = np.floor(lower - padding).astype(np.int64)
+    upper = np.ceil(upper + padding).astype(np.int64)
+    x0 = int(np.clip(lower[0], 0, source_width - 1))
+    y0 = int(np.clip(lower[1], 0, source_height - 1))
+    x1 = int(np.clip(upper[0], x0 + 1, source_width))
+    y1 = int(np.clip(upper[1], y0 + 1, source_height))
+    if x1 <= x0 or y1 <= y0:
+        raise ValueError(f"frame {frame['id']} candidate-flame-bounds produced an empty source crop")
+    return {
+        "frameId": frame["id"],
+        "sameStateCaptureId": frame["sameStateCaptureId"],
+        "requestedMode": mode,
+        "effectiveMode": mode,
+        "authority": CANDIDATE_FLAME_OPTICAL_ROI_AUTHORITY,
+        "sourceViewport": [source_width, source_height],
+        "sourceBounds": [x0, y0, x1, y1],
+        "fireChannels": [FEATURES[index] for index in fire_channel_indices],
+        "fireChannelThreshold": CANDIDATE_FLAME_ROI_THRESHOLD,
+        "paddingFraction": CANDIDATE_FLAME_ROI_PADDING_FRACTION,
+        "selectedCandidateCount": selected_candidate_count,
+        "projectedCandidateCount": projected_candidate_count,
+    }
+
+
+def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_mode, frequencies, spatial_mixing, optical_roi_mode):
+    roi = resolve_optical_roi(frame, max_radius, optical_roi_mode)
+    source_width, source_height = roi["sourceViewport"]
+    x0, y0, x1, y1 = roi["sourceBounds"]
+    roi_width = x1 - x0
+    roi_height = y1 - y0
+    render_height = max(16, round(render_width * roi_height / roi_width))
+    roi["outputSize"] = [render_width, render_height]
+    source_offset = np.asarray([x0, y0], dtype=np.float32)
+    source_to_render = np.asarray([render_width / roi_width, render_height / roi_height], dtype=np.float32)
     positions = frame["candidates"][:, :3]
     features = frame["candidates"][:, 3:]
     base_radius = (2.0 / frame["grid"]) * (0.60 + features[:, 3] * 2.65 + features[:, 2] * 0.48)
     shape = base_radius * frame["radius"]
-    center, valid, view_depth = project_points(positions, frame["viewProjection"], render_width, render_height)
+    center, valid, view_depth = project_points(positions, frame["viewProjection"], source_width, source_height)
     right_points = positions + frame["cameraRight"][None, :] * shape[:, None]
     up_points = positions + frame["cameraUp"][None, :] * shape[:, None]
-    right_screen, right_valid, _ = project_points(right_points, frame["viewProjection"], render_width, render_height)
-    up_screen, up_valid, _ = project_points(up_points, frame["viewProjection"], render_width, render_height)
+    right_screen, right_valid, _ = project_points(right_points, frame["viewProjection"], source_width, source_height)
+    up_screen, up_valid, _ = project_points(up_points, frame["viewProjection"], source_width, source_height)
+    center = (center - source_offset) * source_to_render
+    right_screen = (right_screen - source_offset) * source_to_render
+    up_screen = (up_screen - source_offset) * source_to_render
     axis_x = right_screen - center
     axis_y = up_screen - center
     valid &= right_valid & up_valid
@@ -879,7 +969,12 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_m
         depth_bin_parts.append(np.full(pixel.shape, splat_depth_bins[splat_index], dtype=np.int32))
     if not pixel_parts:
         raise ValueError(f"frame {frame['id']} produced no projected splat fragments")
-    target = Image.open(frame["targetPath"]).convert("RGB").resize((render_width, render_height), Image.Resampling.LANCZOS)
+    with Image.open(frame["targetPath"]) as target_image:
+        if target_image.size != (source_width, source_height):
+            raise ValueError(
+                f"frame {frame['id']} target image dimensions {target_image.size} do not match source viewport {(source_width, source_height)}"
+            )
+        target = target_image.convert("RGB").crop(tuple(roi["sourceBounds"])).resize((render_width, render_height), Image.Resampling.LANCZOS)
     target_array = np.asarray(target, dtype=np.float32) / 255.0
     return {
         "width": render_width,
@@ -904,6 +999,7 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_m
         "target": mx.array(target_array),
         "targetNumpy": target_array,
         "fragmentCount": int(sum(part.size for part in pixel_parts)),
+        "roi": roi,
     }
 
 
@@ -996,7 +1092,7 @@ def save_preview(path, image):
     Image.fromarray(pixels, mode="RGB").save(path)
 
 
-def save_partial_flow_debug_witness(output_dir, frame_index, frame, reference_path, control, predicted_path, requested_gain):
+def save_partial_flow_debug_witness(output_dir, frame_index, frame, geometry, reference_path, control, predicted_path, requested_gain):
     if frame.get("flowDebugPath") is None:
         raise ValueError("partial flow-debug witness requires a verified same-state flow-debug artifact")
     control_pixels = np.clip(np.asarray(control), 0.0, 1.0)
@@ -1009,10 +1105,13 @@ def save_partial_flow_debug_witness(output_dir, frame_index, frame, reference_pa
         Image.open(predicted_path).convert("RGB").resize((width, height), Image.Resampling.LANCZOS),
         dtype=np.float32,
     ) / 255.0
-    flow_debug_pixels = np.asarray(
-        Image.open(frame["flowDebugPath"]).convert("RGB").resize((width, height), Image.Resampling.LANCZOS),
-        dtype=np.float32,
-    ) / 255.0
+    with Image.open(frame["flowDebugPath"]) as flow_debug_image:
+        if flow_debug_image.size != tuple(geometry["roi"]["sourceViewport"]):
+            raise ValueError("partial flow-debug witness dimensions do not match the exact ROI source viewport")
+        flow_debug_pixels = np.asarray(
+            flow_debug_image.convert("RGB").crop(tuple(geometry["roi"]["sourceBounds"])).resize((width, height), Image.Resampling.LANCZOS),
+            dtype=np.float32,
+        ) / 255.0
     control_path = output_dir / f"preview-control-frame-{frame_index:03d}.png"
     save_preview(control_path, control_pixels)
     role_images = {
@@ -1043,6 +1142,7 @@ def save_partial_flow_debug_witness(output_dir, frame_index, frame, reference_pa
         "rendererIdentity": frame["rendererIdentity"],
         "sourceAuthority": frame["sourceAuthority"],
         "fallbackReason": frame["fallbackReason"],
+        "opticalRoi": geometry["roi"],
         "flowDebug": {
             "path": frame["flowDebugPath"],
             "authority": frame["flowDebugAuthority"],
@@ -1245,6 +1345,7 @@ def parse_args():
     parser.add_argument("--optical-decoder", choices=["none", "screen-unet"], default="none")
     parser.add_argument("--optical-feature-mode", choices=["screen-only", "projected-native"], default="screen-only")
     parser.add_argument("--optical-condition-mode", choices=["none", "emitter-lifecycle"], default="none")
+    parser.add_argument("--optical-roi-mode", choices=["full-frame", "candidate-flame-bounds"], default="full-frame")
     parser.add_argument("--optical-channels", type=int, default=8)
     parser.add_argument("--optical-residual-scale", type=float, default=1.0)
     parser.add_argument("--partial-flow-debug-gain", type=float, default=0.0)
@@ -1303,6 +1404,8 @@ def main():
             raise ValueError("projected-native optical features require an optical decoder")
         if args.optical_decoder == "none" and args.optical_condition_mode != "none":
             raise ValueError("emitter lifecycle conditioning requires an optical decoder")
+        if args.optical_decoder == "none" and args.optical_roi_mode != "full-frame":
+            raise ValueError("candidate flame ROI normalization requires an optical decoder")
         if args.partial_flow_debug_gain != 0.0:
             missing_flow_debug = [
                 frame["id"]
@@ -1374,6 +1477,7 @@ def main():
                 args.context_mode,
                 frequencies,
                 args.spatial_mixing,
+                args.optical_roi_mode,
             )
             for frame in corpus["frames"]
         ]
@@ -1566,6 +1670,7 @@ def main():
                     output_dir,
                     frame_index,
                     corpus["frames"][frame_index],
+                    geometries[frame_index],
                     row["targetPreview"],
                     control,
                     row["preview"],
@@ -1614,6 +1719,8 @@ def main():
                 "conditionAuthority": EMITTER_LIFECYCLE_CONDITION_AUTHORITY if args.optical_condition_mode == "emitter-lifecycle" else None,
                 "conditionOrder": list(EMITTER_LIFECYCLE_CONDITION_ORDER) if args.optical_condition_mode == "emitter-lifecycle" else [],
                 "conditionNormalization": EMITTER_LIFECYCLE_CONDITION_NORMALIZATION if args.optical_condition_mode == "emitter-lifecycle" else {},
+                "roiMode": args.optical_roi_mode,
+                "roiAuthorities": sorted({geometry["roi"]["authority"] for geometry in geometries}),
                 "inputChannels": optical_decoder.input_channels,
                 "baseChannels": args.optical_channels,
                 "residualScale": args.optical_residual_scale,
@@ -1707,6 +1814,7 @@ def main():
             "render": {
                 "width": geometries[0]["width"],
                 "height": geometries[0]["height"],
+                "frameSizes": [[geometry["width"], geometry["height"]] for geometry in geometries],
                 "fragmentCount": sum(item["fragmentCount"] for item in geometries),
                 "depthBins": args.depth_bins,
                 "blend": "depth-binned-alpha-over-v0" if args.depth_bins > 1 else "src-alpha-plus-destination-additive-v0",
@@ -1726,6 +1834,8 @@ def main():
                 "opticalConditionAuthority": EMITTER_LIFECYCLE_CONDITION_AUTHORITY if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else None,
                 "opticalConditionOrder": list(EMITTER_LIFECYCLE_CONDITION_ORDER) if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else [],
                 "opticalConditionNormalization": EMITTER_LIFECYCLE_CONDITION_NORMALIZATION if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else {},
+                "opticalRoiMode": args.optical_roi_mode,
+                "opticalRois": [geometry["roi"] for geometry in geometries],
                 "opticalInputAuthority": (
                     model_receipt["inputAuthority"] if optical_decoder is not None else None
                 ),

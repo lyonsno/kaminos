@@ -119,5 +119,60 @@ assert.match(
   /"requestedGain"\s*:\s*args\.partial_flow_debug_gain[\s\S]*"effectiveGain"/,
   'training receipts preserve requested and effective diagnostic gain',
 );
+assert.match(
+  script,
+  /--optical-roi-mode[\s\S]*choices=\["full-frame",\s*"candidate-flame-bounds"\]/,
+  'optical training exposes candidate-derived flame-local normalization as an explicit mode',
+);
+assert.match(
+  script,
+  /projected-live-candidate-fire-support-bounds-v0/,
+  'candidate flame crops carry a source-authoritative receipt rather than target-image authority',
+);
+assert.match(
+  script,
+  /def\s+resolve_optical_roi\([^)]*frame[^)]*max_radius[^)]*mode[^)]*\):[\s\S]*fire\.energy[\s\S]*fire\.temperature[\s\S]*fire\.emission[\s\S]*project_points/,
+  'flame-local bounds derive from projected live candidate fire channels',
+);
+assert.doesNotMatch(
+  script,
+  /def\s+resolve_optical_roi\([^)]*\):[\s\S]{0,5000}targetPath/,
+  'the ROI resolver cannot inspect target pixels and leak the answer into crop selection',
+);
+assert.match(
+  script,
+  /candidate-flame-bounds produced no valid projected fire support/,
+  'missing candidate flame support fails loud instead of silently reverting to full-frame supervision',
+);
+assert.match(
+  script,
+  /target image dimensions[^\n]+source viewport/,
+  'ROI target loading rejects viewport mismatch rather than training against a misregistered crop',
+);
+assert.match(
+  script,
+  /\.crop\(tuple\(roi\["sourceBounds"\]\)\)\.resize/,
+  'target supervision is cropped to the exact candidate-derived source bounds before resizing',
+);
+assert.match(
+  script,
+  /"opticalRoiMode"\s*:\s*args\.optical_roi_mode/,
+  'training receipts preserve the requested optical ROI mode',
+);
+assert.match(
+  script,
+  /"opticalRois"\s*:\s*\[geometry\["roi"\]\s+for\s+geometry\s+in\s+geometries\]/,
+  'reports preserve every frame crop and effective ROI authority instead of only the first frame',
+);
+assert.match(
+  script,
+  /"frameId"\s*:\s*frame\["id"\][\s\S]*"sameStateCaptureId"\s*:\s*frame\["sameStateCaptureId"\]/,
+  'each ROI receipt remains attributable to its exact frozen simulator state',
+);
+assert.match(
+  script,
+  /"frameSizes"\s*:\s*\[\[geometry\["width"\],\s*geometry\["height"\]\]\s+for\s+geometry\s+in\s+geometries\]/,
+  'render receipts preserve variable candidate-local frame dimensions instead of laundering the first frame as global',
+);
 
 console.log('boundary splat optical decoder contracts passed');
