@@ -77,6 +77,21 @@ def validate_alphas(alphas):
     return values
 
 
+def receipt_alpha(alpha):
+    try:
+        numeric = float(alpha)
+    except (TypeError, ValueError):
+        return repr(alpha)
+    return numeric if math.isfinite(numeric) else str(numeric).lower()
+
+
+def source_request(path):
+    return {
+        "requestedPath": str(path),
+        "effectivePath": str(Path(path).expanduser().resolve()),
+    }
+
+
 def read_model(path):
     resolved = Path(path).resolve()
     data = resolved.read_bytes()
@@ -293,19 +308,25 @@ def endpoint_error(document, source_document):
 def run_interpolation(from_model, to_model, alphas, out_dir):
     out_dir = Path(out_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    stale_outputs = list(out_dir.glob("destination-state-model-alpha-*.json"))
-    for stale_output in stale_outputs:
-        stale_output.unlink()
+    stale_outputs = sorted(out_dir.glob("destination-state-model-alpha-*.json"))
 
     report_path = out_dir / "interpolation-report.json"
     report = {
         "schema": REPORT_SCHEMA,
         "status": "running",
         "failurePhase": None,
-        "requestedAlphas": list(alphas),
+        "requestedAlphas": [receipt_alpha(alpha) for alpha in alphas],
         "outputDirectory": str(out_dir),
-        "staleOutputCountRemoved": len(stale_outputs),
-        "lastTrustworthyEvidence": {},
+        "constructionRoute": construction_route(),
+        "sourceRequests": {
+            "from": source_request(from_model),
+            "to": source_request(to_model),
+        },
+        "staleOutputPaths": [str(path.resolve()) for path in stale_outputs],
+        "staleOutputCountRemoved": 0,
+        "lastTrustworthyEvidence": {
+            "staleOutputCountObserved": len(stale_outputs),
+        },
     }
     write_json_atomic(report_path, report)
 
@@ -315,13 +336,22 @@ def run_interpolation(from_model, to_model, alphas, out_dir):
         effective_alphas = validate_alphas(alphas)
         report["requestedAlphas"] = effective_alphas
 
-        phase = "read-source-models"
+        phase = "remove-stale-outputs"
+        for stale_output in stale_outputs:
+            stale_output.unlink()
+            report["staleOutputCountRemoved"] += 1
+        write_json_atomic(report_path, report)
+
+        phase = "read-from-source-model"
         from_source = read_model(from_model)
-        to_source = read_model(to_model)
         report["lastTrustworthyEvidence"] = {
             "from": source_receipt(from_source),
-            "to": source_receipt(to_source),
         }
+        write_json_atomic(report_path, report)
+
+        phase = "read-to-source-model"
+        to_source = read_model(to_model)
+        report["lastTrustworthyEvidence"]["to"] = source_receipt(to_source)
         write_json_atomic(report_path, report)
 
         phase = "validate-source-models"
@@ -372,7 +402,6 @@ def run_interpolation(from_model, to_model, alphas, out_dir):
             "status": "completed",
             "failurePhase": None,
             "authority": INTERPOLATION_AUTHORITY,
-            "constructionRoute": construction_route(),
             "sources": {
                 "from": source_receipt(from_source),
                 "to": source_receipt(to_source),
@@ -388,15 +417,23 @@ def run_interpolation(from_model, to_model, alphas, out_dir):
         return report
     except Exception as error:
         removed_partial_outputs = 0
+        partial_cleanup_errors = []
         for output_path in written_output_paths:
             if output_path.exists():
-                output_path.unlink()
-                removed_partial_outputs += 1
+                try:
+                    output_path.unlink()
+                    removed_partial_outputs += 1
+                except OSError as cleanup_error:
+                    partial_cleanup_errors.append({
+                        "path": str(output_path),
+                        "error": f"{type(cleanup_error).__name__}: {cleanup_error}",
+                    })
         report.update({
             "status": "failed",
             "failurePhase": phase,
             "error": f"{type(error).__name__}: {error}",
             "removedPartialOutputCount": removed_partial_outputs,
+            "partialCleanupErrors": partial_cleanup_errors,
         })
         write_json_atomic(report_path, report)
         raise

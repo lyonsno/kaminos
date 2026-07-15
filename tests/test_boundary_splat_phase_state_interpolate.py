@@ -206,6 +206,92 @@ class DestinationStateCheckpointInterpolationContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "finite"):
             module.validate_alphas([math.nan])
 
+    def test_invalid_alpha_failure_records_constructor_and_requested_source_paths(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as root:
+            out_dir = Path(root) / "output"
+            with self.assertRaisesRegex(ValueError, "finite"):
+                module.run_interpolation(
+                    GENERATION_TWO_MODEL,
+                    ONLINE_MODEL,
+                    [math.nan],
+                    out_dir,
+                )
+
+            report = json.loads((out_dir / "interpolation-report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "validate-request")
+            self.assertEqual(report["constructionRoute"]["backend"], "python-cpu")
+            self.assertEqual(report["requestedAlphas"], ["nan"])
+            self.assertEqual(
+                report["sourceRequests"]["from"]["requestedPath"],
+                str(GENERATION_TWO_MODEL),
+            )
+            self.assertEqual(
+                report["sourceRequests"]["from"]["effectivePath"],
+                str(GENERATION_TWO_MODEL.resolve()),
+            )
+            self.assertEqual(
+                report["sourceRequests"]["to"]["effectivePath"],
+                str(ONLINE_MODEL.resolve()),
+            )
+
+    def test_missing_second_source_failure_retains_first_source_hash(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            missing_path = root_path / "missing-online-model.json"
+            out_dir = root_path / "output"
+            with self.assertRaises(FileNotFoundError):
+                module.run_interpolation(
+                    GENERATION_TWO_MODEL,
+                    missing_path,
+                    [0.5],
+                    out_dir,
+                )
+
+            report = json.loads((out_dir / "interpolation-report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "read-to-source-model")
+            self.assertEqual(report["constructionRoute"]["backend"], "python-cpu")
+            self.assertEqual(
+                report["lastTrustworthyEvidence"]["from"]["sha256"],
+                sha256(GENERATION_TWO_MODEL),
+            )
+            self.assertEqual(
+                report["sourceRequests"]["to"]["effectivePath"], str(missing_path.resolve())
+            )
+
+    def test_stale_output_cleanup_failure_writes_report_before_removal(self):
+        module = load_module()
+        real_unlink = Path.unlink
+        with tempfile.TemporaryDirectory() as root:
+            out_dir = Path(root) / "output"
+            out_dir.mkdir()
+            stale_path = out_dir / "destination-state-model-alpha-0p5.json"
+            stale_path.write_text("stale")
+
+            def fail_stale_unlink(path, *args, **kwargs):
+                if path.resolve() == stale_path.resolve():
+                    raise PermissionError("synthetic stale-output cleanup failure")
+                return real_unlink(path, *args, **kwargs)
+
+            with patch.object(Path, "unlink", new=fail_stale_unlink):
+                with self.assertRaisesRegex(PermissionError, "stale-output cleanup failure"):
+                    module.run_interpolation(
+                        GENERATION_TWO_MODEL,
+                        ONLINE_MODEL,
+                        [0.5],
+                        out_dir,
+                    )
+
+            report = json.loads((out_dir / "interpolation-report.json").read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["failurePhase"], "remove-stale-outputs")
+            self.assertEqual(report["constructionRoute"]["backend"], "python-cpu")
+            self.assertEqual(report["staleOutputPaths"], [str(stale_path.resolve())])
+            self.assertTrue(stale_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
