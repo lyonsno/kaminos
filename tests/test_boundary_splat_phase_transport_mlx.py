@@ -407,6 +407,47 @@ class TransportDatasetContracts(unittest.TestCase):
                 predict_step=predict_step,
             )
 
+    def test_frozen_seed_rollout_exposure_rejects_malformed_predictor_accounting(self):
+        docs = [
+            {"id": f"frame-{index}", "controlledStepFrameIndex": index}
+            for index in range(3)
+        ]
+        frames = {
+            doc["id"]: frame([((0.0, 0.0, 0.0), float(doc["controlledStepFrameIndex"]))])
+            for doc in docs
+        }
+
+        malformed_receipts = [
+            {
+                "compositionAuthority": "test-frozen-seed-recurrent-support-v0",
+                "predictedCount": True,
+            },
+            {
+                "compositionAuthority": True,
+                "predictedCount": 1,
+            },
+            {
+                "compositionAuthority": "",
+                "predictedCount": 1,
+            },
+            {
+                "compositionAuthority": "test-frozen-seed-recurrent-support-v0",
+                "predictedCount": 1.0,
+            },
+        ]
+        for malformed_receipt in malformed_receipts:
+            with self.subTest(malformed_receipt=malformed_receipt):
+                def predict_step(source, _source_reference_frame_id, _rollout_depth):
+                    return source, malformed_receipt
+
+                with self.assertRaisesRegex(ValueError, "predictor accounting mismatch"):
+                    MODULE.build_frozen_seed_eulerian_exposure(
+                        [(docs[0], docs[1]), (docs[1], docs[2])],
+                        frames,
+                        grid_step=1.0,
+                        predict_step=predict_step,
+                    )
+
     def test_eulerian_sampler_spends_equal_batch_on_each_destination_cohort(self):
         cohorts = np.asarray([
             cohort

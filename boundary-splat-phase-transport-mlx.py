@@ -596,10 +596,17 @@ def build_frozen_seed_eulerian_exposure(training_pairs, frames, grid_step, predi
                 previous_left["id"],
                 rollout_depth,
             )
+            predicted_count = accounting.get("predictedCount") if isinstance(accounting, dict) else None
+            composition_authority = (
+                accounting.get("compositionAuthority") if isinstance(accounting, dict) else None
+            )
             if (
                 not isinstance(accounting, dict)
-                or accounting.get("predictedCount") != len(recurrent_source["keys"])
-                or not accounting.get("compositionAuthority")
+                or not isinstance(predicted_count, int)
+                or isinstance(predicted_count, bool)
+                or predicted_count != len(recurrent_source["keys"])
+                or not isinstance(composition_authority, str)
+                or not composition_authority.strip()
             ):
                 raise ValueError("frozen-seed rollout exposure predictor accounting mismatch")
             source_doc, target_doc = segment[rollout_depth]
