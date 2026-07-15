@@ -41,6 +41,7 @@
     <div id="compositions" role="group" aria-label="Renderer composition">
       <button type="button" data-composition="splat-only-v0">Splat only</button>
       <button type="button" data-composition="smoke-raymarch-under-splats-v0">Smoke hybrid</button>
+      <button type="button" data-composition="smoke-raymarch-only-v0">Smoke only</button>
       <button type="button" data-composition="raymarch-only-v0">Raymarch only</button>
       <button type="button" data-composition="full-raymarch-under-splats-diagnostic-v0">Full hybrid diagnostic</button>
     </div>
@@ -63,15 +64,28 @@
     const COMPOSITIONS = new Set([
       'splat-only-v0',
       'smoke-raymarch-under-splats-v0',
+      'smoke-raymarch-only-v0',
       'raymarch-only-v0',
       'full-raymarch-under-splats-diagnostic-v0',
     ]);
+    const COMPARISON_PROFILES = Object.freeze({
+      'dense-splat-competence-v0': Object.freeze({
+        authority: 'source-extinction-coefficient-matched-smoke-transfer-v0',
+        controls: Object.freeze({
+          canonicalRenderMode: 'smoke_only',
+          density: 1.35,
+          absorption: 0,
+        }),
+      }),
+    });
     const params = new URLSearchParams(location.search);
     const embedded = params.get('embed') === '1';
     document.body.classList.toggle('embedded', embedded);
     const manifestRequested = params.get('manifest');
     const manifestSha256Requested = String(params.get('manifest_sha256') || '').toLowerCase();
     const compositionParam = params.get('composition');
+    const comparisonProfileRequested = params.get('comparison_profile') || null;
+    const comparisonProfile = comparisonProfileRequested ? COMPARISON_PROFILES[comparisonProfileRequested] : null;
     const basin = document.getElementById('basin');
     const status = document.getElementById('status');
     const statusTitle = document.getElementById('status-title');
@@ -111,6 +125,10 @@
       cameraEffective: null,
       compositionRequested: null,
       compositionEffective: null,
+      comparisonProfileRequested: null,
+      comparisonProfileEffective: null,
+      comparisonProfileAuthority: null,
+      comparisonProfileControlsEffective: null,
       compositionAuthority: null,
       raymarchFireAuthority: null,
       raymarchEncoded: null,
@@ -349,6 +367,7 @@
         boundarySplatComposition: compositionRequested,
         controlOverrides: {
           ...manifest.controls,
+          ...(comparisonProfile?.controls || {}),
           boundarySidecarSource: 'override',
           selectiveHeadLiveRole: 'truthHigh',
           selectiveHeadLiveRenderComposition: compositionRequested,
@@ -369,6 +388,10 @@
       state.cameraRequested = manifest.camera;
       state.cameraEffective = cameraReceipt;
       state.compositionEffective = compositionEffective;
+      state.comparisonProfileRequested = comparisonProfileRequested;
+      state.comparisonProfileEffective = comparisonProfileRequested;
+      state.comparisonProfileAuthority = comparisonProfile?.authority || null;
+      state.comparisonProfileControlsEffective = comparisonProfile ? { ...comparisonProfile.controls } : null;
       state.compositionAuthority = receipt.compositionAuthority;
       state.raymarchFireAuthority = receipt.raymarchFireAuthority;
       state.raymarchEncoded = receipt.raymarchEncoded;
@@ -393,6 +416,11 @@
     setButtonsEnabled(false);
 
     try {
+      failurePhase = 'comparison-profile-admission';
+      state.comparisonProfileRequested = comparisonProfileRequested;
+      if (comparisonProfileRequested && !comparisonProfile) {
+        throw new Error(`unsupported-comparison-profile:${comparisonProfileRequested}`);
+      }
       manifest = await loadManifest();
       compositionRequested = COMPOSITIONS.has(compositionParam)
         ? compositionParam

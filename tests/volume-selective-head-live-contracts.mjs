@@ -71,6 +71,11 @@ assert.match(core, /sampleSelectiveHeadLiveFields/, 'frame-locked samples derive
 assert.match(core, /SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION\s*=\s*'smoke-raymarch-under-splats-v0'/, 'selective live defaults to smoke raymarch under splat fire instead of duplicate full-fire hybrid');
 assert.match(core, /splat-only-v0/, 'selective live exposes splat-only attribution composition');
 assert.match(core, /raymarch-only-v0/, 'selective live exposes raymarch-only diagnostic composition');
+assert.match(
+  core,
+  /'smoke-raymarch-only-v0'\s*:\s*\{[\s\S]*?raymarch:\s*true,[\s\S]*?splat:\s*false,[\s\S]*?raymarchFireAuthority:\s*0,/,
+  'selective live exposes a smoke-only raymarch authority without a splat flame pass',
+);
 assert.match(core, /full-raymarch-under-splats-diagnostic-v0/, 'selective live preserves the old full hybrid as an explicit diagnostic');
 assert.match(core, /selectiveHeadLiveCompositionRequested/, 'live debug state records requested renderer composition');
 assert.match(core, /selectiveHeadLiveCompositionEffective/, 'live debug state records effective renderer composition');

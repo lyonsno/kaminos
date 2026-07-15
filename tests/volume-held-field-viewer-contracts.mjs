@@ -26,6 +26,11 @@ assert.match(viewer, /advanceDebugImportedFieldSteps[\s\S]*steps:\s*0/, 'viewer 
 assert.match(viewer, /kaminosSetCameraDebugPose/, 'viewer applies the captured camera position and target');
 assert.match(viewer, /renderFrozenScaleToCanvas/, 'viewer renders from the held import session');
 assert.match(viewer, /compositionEffective\s*!==\s*compositionRequested/, 'viewer rejects silent composition substitution');
+assert.match(viewer, /data-composition="smoke-raymarch-only-v0"/, 'viewer exposes the smoke-only raymarch comparator');
+assert.match(viewer, /COMPOSITIONS[\s\S]*'smoke-raymarch-only-v0'/, 'viewer admits the smoke-only raymarch comparator as an exact requested route');
+assert.match(viewer, /dense-splat-competence-v0[\s\S]*canonicalRenderMode:\s*'smoke_only'[\s\S]*density:\s*1\.35[\s\S]*absorption:\s*0/, 'viewer defines the competence transfer profile from the dense product extinction coefficient');
+assert.match(viewer, /comparisonProfileRequested:\s*null[\s\S]*comparisonProfileEffective:\s*null/, 'viewer exposes requested and effective comparison-profile identity');
+assert.match(viewer, /unsupported-comparison-profile/, 'viewer fails loud instead of silently substituting an optical-transfer profile');
 assert.match(viewer, /raymarchEncoded[\s\S]*raymarchApplied[\s\S]*splatEncoded[\s\S]*splatApplied/, 'viewer receipt exposes exact pass encoding and application');
 assert.match(viewer, /compositionAuthority:\s*null[\s\S]*raymarchFireAuthority:\s*null/, 'viewer state exposes composition and raymarch fire authority independently from pass application');
 assert.match(viewer, /state\.compositionAuthority\s*=\s*receipt\.compositionAuthority[\s\S]*state\.raymarchFireAuthority\s*=\s*receipt\.raymarchFireAuthority/, 'viewer records effective authority from the submitted frozen-render receipt');

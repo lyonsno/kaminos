@@ -172,6 +172,123 @@ export async function writeHeldSmokeAssayManifest(options = {}) {
   }
 }
 
+export async function writeHeldSmokeCompetenceManifest(options = {}) {
+  const outputPath = resolve(identity(options.outputPath, 'held smoke competence output path'));
+  await mkdir(dirname(outputPath), { recursive: true });
+  let phase = 'viewer-admission';
+  let primaryManifestWritten = false;
+  let viewerIdentity = null;
+  const admittedRoutes = [];
+  try {
+    const viewerPath = resolve(identity(options.viewerManifestPath, 'viewer manifest path'));
+    const viewerBytes = await readFile(viewerPath);
+    const viewerSha = sha256(viewerBytes);
+    if (typeof options.expectedViewerManifestSha256 !== 'string'
+      || !/^[a-f0-9]{64}$/.test(options.expectedViewerManifestSha256)
+      || viewerSha !== options.expectedViewerManifestSha256) {
+      throw new Error(`requested viewer manifest sha256 mismatch: ${viewerSha} != ${options.expectedViewerManifestSha256 || '(missing)'}`);
+    }
+    const viewer = JSON.parse(viewerBytes.toString('utf8'));
+    if (viewer.schema !== 'kaminos.volume.operator-basin-replay.v0' || viewer.status !== 'captured' || viewer.failurePhase !== null) {
+      throw new Error('viewer manifest is not a captured operator basin replay');
+    }
+    viewerIdentity = `sha256:${viewerSha}`;
+    phase = 'report-read';
+    const routeUReportPath = resolve(identity(options.routeUReportPath, 'Route U report path'));
+    const routeBReportPath = resolve(identity(options.routeBReportPath, 'Route B report path'));
+    const routeU = await readJson(routeUReportPath, 'Route U report');
+    const routeB = await readJson(routeBReportPath, 'Route B report');
+    phase = 'source-coherence';
+    const expectedCameraIdentity = `sha256:${sha256(Buffer.from(JSON.stringify(viewer.camera)))}`;
+    if (routeU.source?.cameraIdentity !== expectedCameraIdentity || routeB.source?.cameraIdentity !== expectedCameraIdentity) {
+      throw new Error('Route U and B camera identities do not match the checksum-bound viewer camera');
+    }
+    viewer.__cameraIdentity = expectedCameraIdentity.replace(/^sha256:/, '');
+    sameSource(routeU, 'U', viewerIdentity, viewer);
+    admittedRoutes.push('U');
+    sameSource(routeB, 'B', viewerIdentity, viewer);
+    admittedRoutes.push('B');
+    phase = 'competence-admission';
+    const dense = routeU.product || {};
+    if (routeU.allocation?.authority !== 'dense-occupied-fine-bin-lift-v0'
+      || dense.producerKind !== 'dense-occupied-fine-bin-lift'
+      || dense.hierarchyCounts?.coarse !== 0
+      || dense.hierarchyCounts?.fine !== dense.sourceStatistics?.occupiedFineBinCount
+      || dense.hierarchyCounts?.total !== dense.sourceStatistics?.occupiedFineBinCount
+      || dense.coarseConsolidation?.transferredTailExtinctionMass !== 0
+      || dense.fineOccupancy?.occupancyTransferredFineBinCount !== 0
+      || dense.accounting?.rejectedExtinctionMass !== 0
+      || dense.capacity?.requested !== null
+      || dense.capacity?.overflowCount !== 0
+      || dense.capacity?.outputWasTruncated !== false) {
+      throw new Error('Route U does not satisfy the dense competence occupied fine-bin count and accounting contract');
+    }
+    phase = 'artifact-verification';
+    const products = [
+      await productFromReport(routeU, 'U', routeUReportPath, outputPath),
+      await productFromReport(routeB, 'B', routeBReportPath, outputPath),
+    ];
+    const manifest = {
+      schema: HELD_SMOKE_ASSAY_MANIFEST_SCHEMA,
+      status: 'passed',
+      requestedRoute: HELD_SMOKE_ASSAY_ROUTE_IDENTITY,
+      effectiveRoute: HELD_SMOKE_ASSAY_ROUTE_IDENTITY,
+      fallbackReason: null,
+      temporalAuthority: HELD_SMOKE_ASSAY_TEMPORAL_AUTHORITY,
+      producerAuthority: PRODUCER_AUTHORITY,
+      experiment: {
+        identity: 'dense-splat-competence-floor-v0',
+        claimUnderTest: 'splat-raster-and-optical-transfer-can-reconstruct-held-smoke-before-sparsification',
+        falsifyingObservation: 'complete-dense-lift-remains-implausible-against-route-d',
+        competenceFloor: 'all-occupied-fine-bins-no-coarse-transfer-no-cap-no-rejected-extinction',
+        floorFailureDisposition: 'narrow-to-raster-transfer-covariance-or-source-semantics-not-learned-sparsification',
+      },
+      source: {
+        manifestIdentity: viewerIdentity,
+        sourceCaptureIdentity: `sha256:${viewer.source.sourceCaptureManifestSha256}`,
+        fluidIdentity: `sha256:${viewer.fluid.sha256}`,
+        cameraIdentity: expectedCameraIdentity,
+        simStepCount: viewer.initialSimStepCount,
+        grid: viewer.grid,
+        backend: viewer.source.backend,
+        effectiveRoute: viewer.source.effectiveRoute,
+      },
+      camera: viewer.camera,
+      products,
+    };
+    phase = 'manifest-validation';
+    validateSmokeSplatMotionManifest(manifest);
+    phase = 'manifest-write';
+    await writeFile(outputPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    primaryManifestWritten = true;
+    return manifest;
+  } catch (error) {
+    const failure = {
+      schema: HELD_SMOKE_ASSAY_MANIFEST_SCHEMA,
+      status: 'failed',
+      failurePhase: phase,
+      requested: {
+        viewerManifestPath: options.viewerManifestPath || null,
+        viewerManifestSha256: options.expectedViewerManifestSha256 || null,
+        routeUReportPath: options.routeUReportPath || null,
+        routeBReportPath: options.routeBReportPath || null,
+        outputPath,
+      },
+      lastTrustworthyEvidence: {
+        viewerManifestIdentity: viewerIdentity,
+        admittedRoutes,
+        primaryManifestWritten,
+      },
+      error: {
+        name: error instanceof Error ? error.name : 'Error',
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+    await writeFile(`${outputPath}.failure.json`, `${JSON.stringify(failure, null, 2)}\n`);
+    throw error;
+  }
+}
+
 function parseArgs(argv) {
   const args = new Map();
   for (let index = 0; index < argv.length; index += 2) args.set(argv[index], argv[index + 1]);

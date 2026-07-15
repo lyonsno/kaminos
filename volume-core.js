@@ -69,6 +69,12 @@ const SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS = Object.freeze({
     raymarchFireAuthority: 1,
     compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
   },
+  'smoke-raymarch-only-v0': {
+    raymarch: true,
+    splat: false,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0',
+  },
   'smoke-raymarch-under-splats-v0': {
     raymarch: true,
     splat: true,

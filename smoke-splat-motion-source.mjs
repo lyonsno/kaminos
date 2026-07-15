@@ -175,7 +175,7 @@ function validateProduct(product, index) {
   const coarse = requireInteger(counts.coarse, `product ${index} coarse count`);
   const fine = requireInteger(counts.fine, `product ${index} fine count`);
   const total = requireInteger(counts.total, `product ${index} total count`);
-  if (coarse <= 0 || fine < 0 || total !== coarse + fine) throw new Error(`product ${index} hierarchy counts are incoherent`);
+  if (coarse < 0 || fine < 0 || total <= 0 || total !== coarse + fine) throw new Error(`product ${index} hierarchy counts are incoherent`);
   const accounting = requireObject(product.accounting, `product ${index} accounting`);
   requireNonNegative(accounting.sourceExtinctionMass, `product ${index} source extinction`);
   requireNonNegative(accounting.representedExtinctionMass, `product ${index} represented extinction`);

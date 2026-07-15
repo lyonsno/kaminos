@@ -11,10 +11,15 @@ const COCKPIT_SCHEMA = 'kaminos.held-smoke-assay-cockpit.v0';
 const AB_ROUTE = 'webgpu-held-smoke-assay-v0';
 const D_ROUTE = 'kaminos.volume.held-field-viewer.v0';
 const D_COMPOSITION = 'smoke-raymarch-under-splats-v0';
+const DENSE_D_COMPOSITION = 'smoke-raymarch-only-v0';
+const DENSE_COMPARISON_PROFILE = 'dense-splat-competence-v0';
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = requireIdentity(args.get('--url'), '--url');
 const url = new URL(requestedUrl);
-const requestedRoute = 'held-smoke-a-b-c-d-cockpit-v0';
+const competenceMode = url.searchParams.get('comparison') === 'competence';
+const expectedDComposition = competenceMode ? DENSE_D_COMPOSITION : D_COMPOSITION;
+const expectedDComparisonProfile = competenceMode ? DENSE_COMPARISON_PROFILE : null;
+const requestedRoute = competenceMode ? 'held-smoke-u-b-d-competence-cockpit-v0' : 'held-smoke-a-b-c-d-cockpit-v0';
 const expectedManifestSha256 = requireSha256(url.searchParams.get('manifest_sha256'), 'manifest_sha256');
 const expectedAssayManifestSha256 = requireSha256(url.searchParams.get('assay_manifest_sha256'), 'assay_manifest_sha256');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-held-smoke-assay-witness'));
@@ -67,11 +72,16 @@ try {
     captureBeyondViewport: false,
   });
   const bytes = Buffer.from(screenshot.data, 'base64');
-  const imagePath = join(outDir, 'held-smoke-assay.png');
+  const imagePath = join(outDir, competenceMode ? 'held-smoke-competence.png' : 'held-smoke-assay.png');
   writeFileSync(imagePath, bytes);
   const pixels = inspectPng(bytes);
   assert.ok(pixels.nonUniformPixelCount > Math.max(256, pixels.pixelCount * 0.01), 'blank or uniform cockpit capture');
   assert.ok(pixels.luminanceStdDev > 4, 'blank cockpit capture has insufficient visual variation');
+  const panelEvidence = pixels.panelEvidence;
+  lastTrustworthyEvidence.panelEvidence = panelEvidence;
+  if (competenceMode) {
+    assert.ok(panelEvidence.dSmokeProbe.edgeMean > 0.45, 'blank D smoke contribution: central comparator probe contains only smooth background');
+  }
   assert.equal(runtimeExceptionCount, 0, 'browser runtime exceptions were observed');
   const report = {
     schema: SCHEMA,
@@ -104,6 +114,7 @@ try {
       luminanceMean: pixels.luminanceMean,
       luminanceStdDev: pixels.luminanceStdDev,
       nonUniformPixelCount: pixels.nonUniformPixelCount,
+      panelEvidence,
     },
     falseClosureChecks: {
       rejectsWrongOrFallbackChildRoute: true,
@@ -113,7 +124,9 @@ try {
       rejectsMissingOrBlankOutput: true,
       preservesFailurePhaseBeforePrimaryOutput: true,
     },
-    claimBoundary: 'Static same-source representation comparison. A/B are smoke-only splat products; D is raymarched smoke under splat flame. C remains open. This does not prove neural temporal smoke decode.',
+    claimBoundary: competenceMode
+      ? 'dense-splat-competence-floor-v0: static same-source U dense lift versus B learned selector and D raymarch. This tests the splat representation ceiling before sparsification; it does not prove neural temporal smoke decode.'
+      : 'Static same-source representation comparison. A/B are smoke-only splat products; D is raymarched smoke under splat flame. C remains open. This does not prove neural temporal smoke decode.',
   };
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
@@ -316,12 +329,17 @@ function validateState(state) {
   assert.equal(state.status, 'running');
   assert.equal(state.failurePhase, null);
   assert.equal(state.error, null);
+  assert.equal(state.comparisonMode, competenceMode ? 'competence' : 'assay');
+  assert.equal(state.experimentIdentity, competenceMode ? 'dense-splat-competence-floor-v0' : null);
   assert.equal(state.source.mountRegistered, true, 'held source mount was not registered');
   assert.equal(state.source.manifestSha256Requested, expectedManifestSha256);
   assert.equal(state.source.manifestSha256Effective, expectedManifestSha256);
   assert.equal(state.source.assayManifestSha256Requested, expectedAssayManifestSha256);
   assert.equal(state.source.assayManifestSha256Effective, expectedAssayManifestSha256);
-  assert.equal(state.source.comparisonAuthority, 'same-source-camera-independent-viewports-v0');
+  assert.equal(
+    state.source.comparisonAuthority,
+    competenceMode ? 'dense-competence-independent-viewports-v0' : 'same-source-camera-independent-viewports-v0',
+  );
   assert.equal(state.children.a.status, 'running', 'A child route is partial');
   assert.equal(state.children.a.requestedRoute, AB_ROUTE);
   assert.equal(state.children.a.effectiveRoute, AB_ROUTE);
@@ -337,8 +355,10 @@ function validateState(state) {
   assert.equal(state.children.d.status, 'running', 'D child route is partial');
   assert.equal(state.children.d.requestedRoute, D_ROUTE);
   assert.match(state.children.d.effectiveRoute || '', /^native-3d-compute-fluid-raymarch-v0$/);
-  assert.equal(state.children.d.compositionRequested, D_COMPOSITION);
-  assert.equal(state.children.d.compositionEffective, D_COMPOSITION);
+  assert.equal(state.children.d.compositionRequested, expectedDComposition);
+  assert.equal(state.children.d.compositionEffective, expectedDComposition);
+  assert.equal(state.children.d.comparisonProfileRequested, expectedDComparisonProfile);
+  assert.equal(state.children.d.comparisonProfileEffective, expectedDComparisonProfile);
   assert.equal(state.children.d.manifestSha256Effective, expectedManifestSha256);
 }
 
@@ -369,6 +389,11 @@ function inspectPng(bytes) {
   let luminanceSquared = 0;
   let nonUniformPixelCount = 0;
   let firstLuminance = null;
+  const dProbe = {
+    x0: Math.floor(width * 0.72), x1: Math.ceil(width * 0.96),
+    y0: Math.floor(height * 0.27), y1: Math.ceil(height * 0.42),
+    edgeSum: 0, edgeCount: 0, luminanceSum: 0, luminanceSquared: 0, pixelCount: 0,
+  };
   for (let y = 0; y < height; y += 1) {
     const filter = raw[offset++];
     for (let x = 0; x < stride; x += 1) {
@@ -391,13 +416,38 @@ function inspectPng(bytes) {
       if (Math.abs(luminance - firstLuminance) > 2) nonUniformPixelCount += 1;
       luminanceSum += luminance;
       luminanceSquared += luminance * luminance;
+      if (x >= dProbe.x0 && x < dProbe.x1 && y >= dProbe.y0 && y < dProbe.y1) {
+        dProbe.luminanceSum += luminance;
+        dProbe.luminanceSquared += luminance * luminance;
+        dProbe.pixelCount += 1;
+        if (x > dProbe.x0 && y > dProbe.y0) {
+          const leftPixel = (x - 1) * channels;
+          const leftLuminance = current[leftPixel] * 0.2126 + current[leftPixel + 1] * 0.7152 + current[leftPixel + 2] * 0.0722;
+          const upLuminance = previous[pixel] * 0.2126 + previous[pixel + 1] * 0.7152 + previous[pixel + 2] * 0.0722;
+          dProbe.edgeSum += (Math.abs(luminance - leftLuminance) + Math.abs(luminance - upLuminance)) * 0.5;
+          dProbe.edgeCount += 1;
+        }
+      }
     }
     current.copy(previous);
   }
   const pixelCount = width * height;
   const luminanceMean = luminanceSum / pixelCount;
   const variance = Math.max(0, luminanceSquared / pixelCount - luminanceMean * luminanceMean);
-  return { width, height, pixelCount, nonUniformPixelCount, luminanceMean, luminanceStdDev: Math.sqrt(variance) };
+  const dMean = dProbe.luminanceSum / Math.max(1, dProbe.pixelCount);
+  const dVariance = Math.max(0, dProbe.luminanceSquared / Math.max(1, dProbe.pixelCount) - dMean * dMean);
+  return {
+    width, height, pixelCount, nonUniformPixelCount, luminanceMean, luminanceStdDev: Math.sqrt(variance),
+    panelEvidence: {
+      dSmokeProbe: {
+        bounds: [dProbe.x0, dProbe.y0, dProbe.x1, dProbe.y1],
+        pixelCount: dProbe.pixelCount,
+        luminanceMean: dMean,
+        luminanceStdDev: Math.sqrt(dVariance),
+        edgeMean: dProbe.edgeSum / Math.max(1, dProbe.edgeCount),
+      },
+    },
+  };
 }
 
 function paeth(left, up, upperLeft) {

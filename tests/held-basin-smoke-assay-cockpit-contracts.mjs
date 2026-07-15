@@ -11,6 +11,11 @@ assert.match(cockpit, /kaminos\.held-smoke-assay-cockpit\.v0/, 'cockpit exposes 
 assert.match(cockpit, /window\.__kaminosHeldSmokeAssay/, 'cockpit exposes a live operator-readable receipt');
 assert.match(cockpit, /webgpu-held-smoke-assay-v0/, 'cockpit requests the exact A\/B raster route');
 assert.match(cockpit, /smoke-raymarch-under-splats-v0/, 'D requests raymarched smoke under splat flame');
+assert.match(cockpit, /DENSE_D_COMPOSITION\s*=\s*'smoke-raymarch-only-v0'/, 'competence D names a smoke-only raymarch authority');
+assert.match(cockpit, /comparisonMode\s*===\s*'competence'[\s\S]*DENSE_D_COMPOSITION/, 'competence mode selects smoke-only D instead of composited splat flame');
+assert.match(cockpit, /DENSE_COMPARISON_PROFILE\s*=\s*'dense-splat-competence-v0'/, 'competence mode names its optical-transfer calibration profile');
+assert.match(cockpit, /searchParams\.set\('comparison_profile',\s*dComparisonProfile\)/, 'D requests the exact competence transfer profile');
+assert.match(cockpit, /comparisonProfileEffective\s*===\s*dComparisonProfile/, 'cockpit refuses a substituted or missing D transfer profile');
 assert.match(cockpit, /searchParams\.set\('embed',\s*'1'\)/, 'D uses the chrome-free embedded viewer mode');
 assert.match(cockpit, /manifest_sha256/, 'D route binds the expected held manifest digest');
 assert.match(cockpit, /assay_manifest_sha256/, 'A/B route binds the expected assay manifest digest');
@@ -20,6 +25,10 @@ assert.match(cockpit, /effectiveRoute/, 'cockpit records child effective routes,
 assert.match(cockpit, /manifestSha256Effective/, 'cockpit records D effective source identity');
 assert.match(cockpit, /assayManifestSha256Effective/, 'cockpit records A/B effective manifest identity');
 assert.match(cockpit, /same-source-camera-independent-viewports-v0/, 'cockpit states the exact comparison framing authority');
+assert.match(cockpit, /dense-splat-competence-floor-v0/, 'cockpit exposes the dense competence experiment identity');
+assert.match(cockpit, /dense-competence-independent-viewports-v0/, 'competence mode carries its narrower comparison authority');
+assert.match(cockpit, /U Dense occupied-bin lift/, 'competence mode visibly identifies the dense upper-bound route');
+assert.match(cockpit, /comparisonMode/, 'cockpit records whether it is rendering the original assay or competence mode');
 assert.match(cockpit, /assay\.source\?\.manifestIdentity/, 'cockpit proves A/B and D share the same held source identity');
 assert.match(cockpit, /id="a-frame"/, 'Route A gets an independent centered viewport');
 assert.match(cockpit, /id="b-frame"/, 'Route B gets an independent centered viewport');
@@ -37,6 +46,13 @@ assert.match(witness, /requestedRoute/, 'witness preserves requested route ident
 assert.match(witness, /effectiveRoute/, 'witness rejects child route substitution');
 assert.match(witness, /manifestSha256Effective/, 'witness verifies the effective D source digest');
 assert.match(witness, /assayManifestSha256Effective/, 'witness verifies the effective A/B assay digest');
+assert.match(witness, /dense-splat-competence-floor-v0/, 'witness preserves the dense competence claim boundary');
+assert.match(witness, /dense-competence-independent-viewports-v0/, 'witness validates competence-mode comparison authority');
+assert.match(witness, /dense-splat-competence-v0/, 'witness verifies the exact dense-smoke transfer profile');
+assert.match(witness, /comparisonProfileEffective/, 'witness rejects a substituted D transfer profile');
+assert.match(witness, /panelEvidence/, 'witness records panel-local visual evidence instead of relying on whole-page nonblankness');
+assert.match(witness, /dSmokeProbe[\s\S]*edgeMean/, 'witness measures local smoke contribution inside D');
+assert.match(witness, /blank D smoke contribution/, 'competence evidence fails loud when D is only smooth background');
 assert.match(witness, /mountRegistered/, 'witness rejects an unregistered held-source mount');
 assert.match(witness, /failurePhase/, 'pre-capture failures retain their phase');
 assert.match(witness, /lastTrustworthyEvidence/, 'pre-capture failures retain partial evidence');

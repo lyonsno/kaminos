@@ -130,6 +130,21 @@ const heldManifest = {
   },
 };
 assert.equal(validateSmokeSplatMotionManifest(heldManifest).schema, HELD_SMOKE_ASSAY_MANIFEST_SCHEMA);
+const denseManifestProduct = {
+  ...heldManifest.products[0],
+  identity: 'dense-held-upper-bound',
+  producerKind: 'dense-occupied-fine-bin-lift',
+  hierarchyCounts: {
+    coarse: 0,
+    fine: heldManifest.products[0].hierarchyCounts.total,
+    total: heldManifest.products[0].hierarchyCounts.total,
+  },
+};
+assert.equal(
+  validateSmokeSplatMotionManifest({ ...heldManifest, products: [denseManifestProduct] }).products[0].producerKind,
+  'dense-occupied-fine-bin-lift',
+  'a complete fine-only dense lift must enter the held renderer without fabricating a coarse tier',
+);
 assert.throws(
   () => validateSmokeSplatMotionManifest({ ...heldManifest, effectiveRoute: SMOKE_SPLAT_MOTION_ROUTE_IDENTITY }),
   /requested.*effective route|route mismatch/i,
@@ -213,6 +228,22 @@ assert.equal(uncappedPlan.productUploads.length, 2);
 assert.equal(uncappedPlan.instanceBindings.length, 257);
 assert.equal(uncappedPlan.coarseSplatsAlwaysPresent, true);
 assert.equal(uncappedPlan.rejectedExtinctionMass, 0);
+
+const denseOnlyProduct = {
+  identity: 'dense:u',
+  hierarchyCounts: { coarse: 0, fine: 2, total: 2 },
+  splats: [
+    { index: 0, hierarchyRoleCode: 1, extinctionMass: 0.55 },
+    { index: 1, hierarchyRoleCode: 1, extinctionMass: 0.45 },
+  ],
+};
+const denseOnlyPlan = buildSmokeSplatDrawPlan({ products: [denseOnlyProduct], instanceCount: 1, fineLodFraction: 1 });
+assert.equal(denseOnlyPlan.uniqueProductCount, 1);
+assert.equal(denseOnlyPlan.productUploads[0].coarseCount, 0);
+assert.equal(denseOnlyPlan.productUploads[0].fineCount, 2);
+assert.equal(denseOnlyPlan.productUploads[0].representedExtinctionMass, 1);
+assert.equal(denseOnlyPlan.rejectedExtinctionMass, 0);
+assert.equal(denseOnlyPlan.coarseSplatsAlwaysPresent, false, 'the dense competence route truthfully has no coarse transport tier');
 
 const packed = new Float32Array([
   0, 0, 0, 0, 1, 0, 0.1, 0.2, 0.1, 0.5, 0.25, 0.1, 0, 0.2, 0, 0,

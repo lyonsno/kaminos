@@ -6,6 +6,7 @@ import { join } from 'node:path';
 const moduleUrl = new URL('../held-basin-smoke-products.mjs', import.meta.url);
 const {
   buildHeldAnalyticalSmokeHierarchyProduct,
+  buildHeldDenseSmokeLiftProduct,
   buildHeldSmokeHierarchyProduct,
   compileHeldSmokeHierarchyProduct,
   writeHeldSmokeHierarchyArtifacts,
@@ -97,6 +98,29 @@ assert.equal(analytical.product.accounting.rejectedExtinctionMass, 0);
 assert.equal(analytical.product.capacity.outputWasTruncated, false);
 assert.ok(analytical.product.hierarchyCounts.total > 0);
 
+assert.equal(typeof buildHeldDenseSmokeLiftProduct, 'function');
+const dense = buildHeldDenseSmokeLiftProduct({ frame: makeFrame(), config: { fineBlockSize: 2, extinctionCoefficient: 1.35 } });
+assert.equal(dense.schema, 'kaminos.held-smoke-hierarchy-product.v0');
+assert.equal(dense.routeCell, 'U');
+assert.equal(dense.allocation.authority, 'dense-occupied-fine-bin-lift-v0');
+assert.equal(dense.product.producerKind, 'dense-occupied-fine-bin-lift');
+assert.equal(dense.product.slotIdentity.modelIdentity, 'dense-occupied-fine-bin-lift-v0');
+assert.equal(dense.product.hierarchyCounts.coarse, 0);
+assert.equal(dense.product.hierarchyCounts.fine, dense.product.sourceStatistics.occupiedFineBinCount);
+assert.equal(dense.product.hierarchyCounts.total, dense.product.sourceStatistics.occupiedFineBinCount);
+assert.equal(dense.product.coarseConsolidation.transferredTailExtinctionMass, 0);
+assert.equal(dense.product.fineOccupancy.occupancyTransferredFineBinCount, 0);
+assert.equal(dense.product.fineOccupancy.emittedFineBinCount, dense.product.sourceStatistics.occupiedFineBinCount);
+assert.equal(dense.product.accounting.rejectedExtinctionMass, 0);
+assert.ok(Math.abs(dense.product.accounting.retentionRatio - 1) < 1e-12);
+assert.equal(dense.product.capacity.requested, null);
+assert.equal(dense.product.capacity.outputWasTruncated, false);
+assert.throws(
+  () => buildHeldDenseSmokeLiftProduct({ frame: makeFrame(), config: { fineBlockSize: 2, capacity: 32 } }),
+  /dense competence floor must remain uncapped/i,
+  'a caller cap cannot silently weaken the representation competence floor',
+);
+
 const wrongRoute = makeFrame();
 wrongRoute.manifest.effectiveRoute = 'cached-smoke-demo-v0';
 assert.throws(
@@ -155,6 +179,12 @@ try {
   assert.equal(writtenA.model, null);
   assert.equal(writtenA.artifact.path, 'route-a.splats.f32');
 
+  const writtenU = await writeHeldSmokeHierarchyArtifacts(dense, join(outputRoot, 'captured-u'));
+  assert.equal(writtenU.routeCell, 'U');
+  assert.equal(writtenU.allocation.authority, 'dense-occupied-fine-bin-lift-v0');
+  assert.equal(writtenU.model, null);
+  assert.equal(writtenU.artifact.path, 'route-u.splats.f32');
+
   const failedOut = join(outputRoot, 'failed');
   await assert.rejects(
     () => compileHeldSmokeHierarchyProduct({
@@ -187,6 +217,21 @@ try {
   assert.equal(failureA.requested.routeCell, 'A');
   assert.equal(failureA.requested.modelPath, null);
   assert.equal(failureA.requested.modelSha256, null);
+
+  const failedUOut = join(outputRoot, 'failed-u');
+  await assert.rejects(
+    () => compileHeldSmokeHierarchyProduct({
+      routeCell: 'U',
+      manifestPath: join(outputRoot, 'missing-viewer-manifest.json'),
+      expectedManifestSha256: 'a'.repeat(64),
+      outDir: failedUOut,
+    }),
+    /ENOENT/,
+  );
+  const failureU = JSON.parse(await readFile(join(failedUOut, 'route-u-report.json'), 'utf8'));
+  assert.equal(failureU.requested.routeCell, 'U');
+  assert.equal(failureU.requested.modelPath, null);
+  assert.equal(failureU.requested.modelSha256, null);
 } finally {
   await rm(outputRoot, { recursive: true, force: true });
 }

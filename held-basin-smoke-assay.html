@@ -77,6 +77,7 @@
       pointer-events: none;
     }
     .open-route strong { color: #f0c77c; font-size: 11px; }
+    .open-route[hidden] { display: none; }
     #failure {
       display: none;
       position: absolute;
@@ -102,22 +103,22 @@
 </head>
 <body>
   <header>
-    <strong>Held smoke A/B/C/D</strong>
+    <strong id="cockpit-title">Held smoke A/B/C/D</strong>
     <span id="source-receipt">Binding exact source...</span>
     <span id="status" data-kind="loading">loading</span>
   </header>
   <main>
     <section class="route" aria-label="Analytical and learned splat smoke comparison">
-      <span class="route-label label-a">A Analytical</span>
+      <span id="a-label" class="route-label label-a">A Analytical</span>
       <iframe id="a-frame" title="Route A analytical splat smoke"></iframe>
     </section>
     <section class="route" aria-label="Learned splat smoke comparison">
-      <span class="route-label label-b">B Learned</span>
+      <span id="b-label" class="route-label label-b">B Learned</span>
       <iframe id="b-frame" title="Route B learned splat smoke"></iframe>
-      <div class="open-route"><strong>C Open</strong><span>neural history smoke decoder has no checksum-bound production raster product for this held source</span></div>
+      <div id="open-route" class="open-route"><strong>C Open</strong><span>neural history smoke decoder has no checksum-bound production raster product for this held source</span></div>
     </section>
     <section class="route" aria-label="Raymarched smoke control">
-      <span class="route-label label-d">D Raymarch smoke + splat flame</span>
+      <span id="d-label" class="route-label label-d">D Raymarch smoke + splat flame</span>
       <iframe id="d-frame" title="Route D held raymarch control"></iframe>
     </section>
   </main>
@@ -126,7 +127,13 @@
     const HELD_SPLAT_ROUTE = 'webgpu-held-smoke-assay-v0';
     const HELD_VIEWER_ROUTE = 'kaminos.volume.held-field-viewer.v0';
     const HELD_COMPOSITION = 'smoke-raymarch-under-splats-v0';
+    const DENSE_D_COMPOSITION = 'smoke-raymarch-only-v0';
+    const DENSE_COMPARISON_PROFILE = 'dense-splat-competence-v0';
+    const DENSE_COMPETENCE_EXPERIMENT = 'dense-splat-competence-floor-v0';
     const params = new URLSearchParams(location.search);
+    const comparisonMode = params.get('comparison') === 'competence' ? 'competence' : 'assay';
+    const dComposition = comparisonMode === 'competence' ? DENSE_D_COMPOSITION : HELD_COMPOSITION;
+    const dComparisonProfile = comparisonMode === 'competence' ? DENSE_COMPARISON_PROFILE : null;
     const assayManifest = params.get('assay_manifest') || './artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json';
     const assayManifestSha256Requested = (params.get('assay_manifest_sha256') || 'f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8').toLowerCase();
     const mountRequested = params.get('held_manifest') || './artifacts/operator-live-basin-0715/viewer-manifest.json';
@@ -137,19 +144,30 @@
     const sourceReceipt = document.getElementById('source-receipt');
     const status = document.getElementById('status');
     const failure = document.getElementById('failure');
+    if (comparisonMode === 'competence') {
+      document.getElementById('cockpit-title').textContent = 'Held smoke competence U/B/D';
+      document.getElementById('a-label').textContent = 'U Dense occupied-bin lift';
+      document.getElementById('b-label').textContent = 'B Learned selector';
+      document.getElementById('d-label').textContent = 'D Raymarch smoke only';
+      document.getElementById('open-route').hidden = true;
+    }
     const requested = {
       a: { requestedRoute: HELD_SPLAT_ROUTE, manifest: assayManifest, productIndex: 0 },
       b: { requestedRoute: HELD_SPLAT_ROUTE, manifest: assayManifest, productIndex: 1 },
-      d: { requestedRoute: HELD_VIEWER_ROUTE, composition: HELD_COMPOSITION },
+      d: { requestedRoute: HELD_VIEWER_ROUTE, composition: dComposition, comparisonProfile: dComparisonProfile },
     };
     const state = {
       schema: 'kaminos.held-smoke-assay-cockpit.v0',
       status: 'initializing',
+      comparisonMode,
+      experimentIdentity: comparisonMode === 'competence' ? DENSE_COMPETENCE_EXPERIMENT : null,
       failurePhase: null,
       error: null,
       requested,
       source: {
-        comparisonAuthority: 'same-source-camera-independent-viewports-v0',
+        comparisonAuthority: comparisonMode === 'competence'
+          ? 'dense-competence-independent-viewports-v0'
+          : 'same-source-camera-independent-viewports-v0',
         mountRequested,
         mountEffective: null,
         mountRegistered: false,
@@ -164,7 +182,7 @@
       children: {
         a: { status: 'loading', requestedRoute: HELD_SPLAT_ROUTE, effectiveRoute: null, requestedProductIndex: 0, effectiveProductIndex: null, frameCount: 0, error: null },
         b: { status: 'loading', requestedRoute: HELD_SPLAT_ROUTE, effectiveRoute: null, requestedProductIndex: 1, effectiveProductIndex: null, frameCount: 0, error: null },
-        d: { status: 'loading', requestedRoute: HELD_VIEWER_ROUTE, effectiveRoute: null, compositionRequested: HELD_COMPOSITION, compositionEffective: null, manifestSha256Effective: null, error: null },
+        d: { status: 'loading', requestedRoute: HELD_VIEWER_ROUTE, effectiveRoute: null, compositionRequested: dComposition, compositionEffective: null, comparisonProfileRequested: dComparisonProfile, comparisonProfileEffective: null, manifestSha256Effective: null, error: null },
       },
       lastObservedAt: null,
     };
@@ -225,6 +243,8 @@
             effectiveRoute: d.effectiveRoute,
             compositionRequested: d.compositionRequested,
             compositionEffective: d.compositionEffective,
+            comparisonProfileRequested: d.comparisonProfileRequested,
+            comparisonProfileEffective: d.comparisonProfileEffective,
             manifestSha256Effective: d.manifestSha256Effective,
             error: d.error,
           };
@@ -243,7 +263,8 @@
           && state.children.b.effectiveProductIndex === 1
           && state.children.d.status === 'running'
           && state.children.d.requestedRoute === HELD_VIEWER_ROUTE
-          && state.children.d.compositionEffective === HELD_COMPOSITION
+          && state.children.d.compositionEffective === dComposition
+          && state.children.d.comparisonProfileEffective === dComparisonProfile
           && state.children.d.manifestSha256Effective === manifestSha256Requested
           && state.source.mountRegistered;
         if (running) {
@@ -282,6 +303,15 @@
         if (assay.schema !== 'kaminos.held-smoke-assay-source.v0' || assay.status !== 'passed') {
           throw new Error(`assay-manifest-status-mismatch:${assay.schema || 'missing'}/${assay.status || 'missing'}`);
         }
+        if (comparisonMode === 'competence') {
+          if (assay.experiment?.identity !== DENSE_COMPETENCE_EXPERIMENT
+            || assay.products?.[0]?.routeCell !== 'U'
+            || assay.products?.[1]?.routeCell !== 'B') {
+            throw new Error(`dense-competence-manifest-mismatch:${assay.experiment?.identity || 'missing'}`);
+          }
+        } else if (assay.products?.[0]?.routeCell !== 'A' || assay.products?.[1]?.routeCell !== 'B') {
+          throw new Error('A/B assay product ordering mismatch');
+        }
         if (assay.source?.manifestIdentity !== `sha256:${digest}`) {
           throw new Error(`A/B held source substitution:${assay.source?.manifestIdentity || 'missing'}`);
         }
@@ -310,7 +340,8 @@
         const dUrl = new URL('./volume-held-field-viewer.html', location.href);
         dUrl.searchParams.set('manifest', mountRequested);
         dUrl.searchParams.set('manifest_sha256', manifestSha256Requested);
-        dUrl.searchParams.set('composition', HELD_COMPOSITION);
+        dUrl.searchParams.set('composition', dComposition);
+        if (dComparisonProfile) dUrl.searchParams.set('comparison_profile', dComparisonProfile);
         dUrl.searchParams.set('embed', '1');
         aFrame.src = splatUrl(0).href;
         bFrame.src = splatUrl(1).href;

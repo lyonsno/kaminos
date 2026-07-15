@@ -186,6 +186,70 @@ export function buildHeldAnalyticalSmokeHierarchyProduct({ frame, config = {} } 
   };
 }
 
+export function buildHeldDenseSmokeLiftProduct({ frame, config = {} } = {}) {
+  const source = validateFrame(frame);
+  if (config.capacity !== undefined && config.capacity !== null) {
+    throw new Error('dense competence floor must remain uncapped');
+  }
+  const allocationAuthority = 'dense-occupied-fine-bin-lift-v0';
+  const fineBlockSize = config.fineBlockSize ?? 4;
+  const product = compileSmokeFieldHierarchy({
+    grid: source.grid,
+    channelOrder: KAMINOS_FLUID_CHANNEL_ORDER,
+    field: source.field,
+    sourceIdentity: source.fluidIdentity,
+    slotIdentity: {
+      historySlot: 0,
+      slotWriteTick: source.simStepCount,
+      simulatorGeneration: 0,
+      modelIdentity: allocationAuthority,
+    },
+    coarseBlockSize: fineBlockSize,
+    fineBlockSize,
+    extinctionCoefficient: config.extinctionCoefficient ?? 1.35,
+    fineMassFraction: 1,
+    articulationThreshold: 0,
+    coarseAnchorMassRatio: 0,
+    coarseStratumSize: 0,
+    fineOccupancyMassRatio: 0,
+    capacity: null,
+  });
+  product.producerKind = 'dense-occupied-fine-bin-lift';
+  if (product.hierarchyCounts.coarse !== 0
+    || product.hierarchyCounts.fine !== product.sourceStatistics.occupiedFineBinCount
+    || product.coarseConsolidation.transferredTailExtinctionMass !== 0
+    || product.fineOccupancy.occupancyTransferredFineBinCount !== 0
+    || product.accounting.rejectedExtinctionMass !== 0) {
+    throw new Error('dense competence floor lost occupied support or transferred extinction');
+  }
+  return {
+    schema: 'kaminos.held-smoke-hierarchy-product.v0',
+    status: 'compiled',
+    routeCell: 'U',
+    source: {
+      sourceSchema: source.sourceSchema,
+      captureId: source.captureId,
+      simStepCount: source.simStepCount,
+      manifestIdentity: source.manifestIdentity,
+      sourceCaptureIdentity: source.sourceCaptureIdentity,
+      cameraIdentity: source.cameraIdentity,
+      fluidIdentity: source.fluidIdentity,
+      effectiveRoute: source.manifest.effectiveRoute,
+      prototypeIdentity: source.manifest.prototypeIdentity,
+      backend: source.manifest.backend,
+      grid: source.grid,
+    },
+    allocation: {
+      authority: allocationAuthority,
+      learned: false,
+      competenceFloor: true,
+      supportAuthority: 'all-occupied-fine-bins-v0',
+    },
+    model: null,
+    product,
+  };
+}
+
 function packSplats(splats) {
   const packed = new Float32Array(splats.length * PACKED_SPLAT_CHANNELS.length);
   for (let index = 0; index < splats.length; index += 1) {
@@ -233,7 +297,8 @@ export async function writeHeldSmokeHierarchyArtifacts(built, outDir) {
   }
   requireIdentity(outDir, 'Route B output directory');
   await mkdir(outDir, { recursive: true });
-  const routeCell = built.routeCell === 'A' ? 'A' : 'B';
+  const routeCell = ['A', 'B', 'U'].includes(built.routeCell) ? built.routeCell : null;
+  if (!routeCell) throw new Error(`unsupported held smoke route cell: ${built.routeCell || '(missing)'}`);
   const routeSlug = `route-${routeCell.toLowerCase()}`;
   const artifactPath = resolve(outDir, `${routeSlug}.splats.f32`);
   const bytes = packSplats(built.product.splats);
@@ -272,9 +337,9 @@ function requestedIdentity(options) {
 }
 
 export async function compileHeldSmokeHierarchyProduct(options = {}) {
-  const outDir = requireIdentity(options.outDir, 'Route B output directory');
+  const outDir = requireIdentity(options.outDir, 'held smoke output directory');
   const routeCell = options.routeCell || 'B';
-  if (routeCell !== 'A' && routeCell !== 'B') throw new Error(`unsupported held smoke route cell: ${routeCell}`);
+  if (!['A', 'B', 'U'].includes(routeCell)) throw new Error(`unsupported held smoke route cell: ${routeCell}`);
   const routeSlug = `route-${routeCell.toLowerCase()}`;
   await mkdir(outDir, { recursive: true });
   let phase = 'teacher-load';
@@ -289,6 +354,9 @@ export async function compileHeldSmokeHierarchyProduct(options = {}) {
     if (routeCell === 'A') {
       phase = 'product-build';
       built = buildHeldAnalyticalSmokeHierarchyProduct({ frame, config: options.config });
+    } else if (routeCell === 'U') {
+      phase = 'product-build';
+      built = buildHeldDenseSmokeLiftProduct({ frame, config: options.config });
     } else {
       phase = 'model-load';
       const modelPath = resolve(requireIdentity(options.modelPath, 'Route B model path'));
