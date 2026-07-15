@@ -52,7 +52,10 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
   assert.deepEqual(manifest.shape, {
     batch: 16, queryTokens: 8, sparsePromptTokens: 2, imageHeight: 2, imageWidth: 2,
     imageTokens: 4, channels: 256, heads: 8, attentionChannels: 128, mlpHidden: 2048,
-    inputMaskHeight: 8, inputMaskWidth: 8, decoderMaskHeight: 8, decoderMaskWidth: 8,
+    sourceImageHeight: 28, sourceImageWidth: 28,
+    sourceMaskHeight: 32, sourceMaskWidth: 32,
+    promptMaskHeight: 8, promptMaskWidth: 8,
+    decoderMaskHeight: 8, decoderMaskWidth: 8,
     maskOutputs: 4, layerCount: 2,
   });
   assert.equal(manifest.checkpointAudit.mappedTensorCount, 158);
@@ -63,6 +66,8 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
   assert.ok(manifest.outputSummary.absentObjectCount > 0);
 
   const tensors = Object.fromEntries(manifest.tensors.map(entry => [entry.role, load(entry)]));
+  assert.deepEqual(manifest.tensors.find(entry => entry.role === 'binary-mask-inputs').shape, [16, 1, 32, 32]);
+  assert.deepEqual(manifest.tensors.find(entry => entry.role === 'expected-mask-downsample').shape, [16, 1, 8, 8]);
   const weights = {};
   for (const entry of manifest.weights) weights[`${entry.group}.${entry.localKey}`] = load(entry);
   const oracle = createSam31InteractivePointerPhaseProgramCpuOracle({
@@ -87,7 +92,8 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
   assert.ok(maxAbs(oracle.decoderObjectScores, tensors['expected-decoder-object-scores']) < 0.0001);
   assert.ok(maxAbs(oracle.projectedPointers, tensors['expected-projected-pointers']) < 0.00015);
   assert.ok(maxAbs(oracle.forwardObjectPointers, tensors['expected-forward-object-pointers']) < 0.00015);
-  assert.ok(maxAbs(oracle.finalObjectPointers, tensors['expected-final-object-pointers']) < 0.00015);
+  const finalPointerMaxAbs = maxAbs(oracle.finalObjectPointers, tensors['expected-final-object-pointers']);
+  assert.ok(finalPointerMaxAbs < 0.00015, `standalone final pointer max abs ${finalPointerMaxAbs}`);
 
   const ingressManifest = {
     schema: 'kaminos.sam31-two-image-ingress-meta-packet.v0',
@@ -134,10 +140,22 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
       imageHeight: dynamicManifest.shape.imageHeight,
       imageWidth: dynamicManifest.shape.imageWidth,
       imageTokens: dynamicManifest.shape.imageTokens,
-      inputMaskHeight: dynamicManifest.shape.inputMaskHeight,
-      inputMaskWidth: dynamicManifest.shape.inputMaskWidth,
+      sourceImageHeight: dynamicManifest.shape.sourceImageHeight,
+      sourceImageWidth: dynamicManifest.shape.sourceImageWidth,
+      sourceMaskHeight: dynamicManifest.shape.sourceMaskHeight,
+      sourceMaskWidth: dynamicManifest.shape.sourceMaskWidth,
+      promptMaskHeight: dynamicManifest.shape.promptMaskHeight,
+      promptMaskWidth: dynamicManifest.shape.promptMaskWidth,
+      decoderMaskHeight: dynamicManifest.shape.decoderMaskHeight,
+      decoderMaskWidth: dynamicManifest.shape.decoderMaskWidth,
     },
-    { imageHeight: 4, imageWidth: 4, imageTokens: 16, inputMaskHeight: 16, inputMaskWidth: 16 },
+    {
+      imageHeight: 4, imageWidth: 4, imageTokens: 16,
+      sourceImageHeight: 56, sourceImageWidth: 56,
+      sourceMaskHeight: 64, sourceMaskWidth: 64,
+      promptMaskHeight: 16, promptMaskWidth: 16,
+      decoderMaskHeight: 16, decoderMaskWidth: 16,
+    },
   );
   assert.equal(dynamicManifest.fixture.sourceFeaturesSynthetic, false);
   assert.equal(dynamicManifest.ingressAuthority.passed, true);
@@ -164,7 +182,8 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
     },
     weights: dynamicWeights,
   });
-  assert.ok(maxAbs(dynamicOracle.finalObjectPointers, dynamicTensors['expected-final-object-pointers']) < 0.00015);
+  const dynamicFinalPointerMaxAbs = maxAbs(dynamicOracle.finalObjectPointers, dynamicTensors['expected-final-object-pointers']);
+  assert.ok(dynamicFinalPointerMaxAbs < 0.00015, `dynamic final pointer max abs ${dynamicFinalPointerMaxAbs}`);
 
   const rejectedResult = spawnSync(python, [
     tool,

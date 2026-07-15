@@ -52,6 +52,22 @@ const TWO_FRAME_EPISODE_SHAPE = Object.freeze({
   channels: 256,
   maskHeight: 8,
   maskWidth: 8,
+  sourceImageHeight: 28,
+  sourceImageWidth: 28,
+  sourceMaskHeight: 32,
+  sourceMaskWidth: 32,
+  promptMaskHeight: 8,
+  promptMaskWidth: 8,
+  decoderMaskHeight: 8,
+  decoderMaskWidth: 8,
+  memoryInputMaskHeight: 8,
+  memoryInputMaskWidth: 8,
+});
+
+const MASK_CONDITIONED_TWO_FRAME_EPISODE_SHAPE = Object.freeze({
+  ...TWO_FRAME_EPISODE_SHAPE,
+  memoryInputMaskHeight: 32,
+  memoryInputMaskWidth: 32,
 });
 
 const TWO_FRAME_DECODER_SHAPE = Object.freeze({
@@ -84,8 +100,12 @@ const INTERACTIVE_POINTER_SHAPE = Object.freeze({
   heads: 8,
   attentionChannels: 128,
   mlpHidden: 2048,
-  inputMaskHeight: 8,
-  inputMaskWidth: 8,
+  sourceImageHeight: 28,
+  sourceImageWidth: 28,
+  sourceMaskHeight: 32,
+  sourceMaskWidth: 32,
+  promptMaskHeight: 8,
+  promptMaskWidth: 8,
   decoderMaskHeight: 8,
   decoderMaskWidth: 8,
   maskOutputs: 4,
@@ -213,7 +233,7 @@ export const SAM31_TWO_FRAME_PACKET_AUTHORITIES = Object.freeze({
     receiptSchema: 'kaminos.sam31-mask-conditioned-two-frame-tracker-meta-reference-receipt.v0',
     boundary: 'frame-0-mask-conditioning-to-memory-state-to-frame-1-conditioned-decoder',
     mode: 'official-meta-mask-conditioning-memory-attention-propagation-decoder',
-    shape: TWO_FRAME_EPISODE_SHAPE,
+    shape: MASK_CONDITIONED_TWO_FRAME_EPISODE_SHAPE,
     plan: TWO_FRAME_EPISODE_PLAN,
     stateTransition: Object.freeze({
       frame0OriginKind: 'mask-conditioning',
@@ -229,7 +249,9 @@ export const SAM31_TWO_FRAME_PACKET_AUTHORITIES = Object.freeze({
       checkpointBackedInteractivePointers: true,
       fullProductionInteractiveGeometryExecuted: false,
       effectiveInteractiveImageEmbeddingSize: Object.freeze([2, 2]),
-      effectiveMaskInputSize: Object.freeze([8, 8]),
+      effectiveSourceMaskSize: Object.freeze([32, 32]),
+      effectivePromptMaskSize: Object.freeze([8, 8]),
+      effectiveDecoderMaskSize: Object.freeze([8, 8]),
       officialMemoryMethodExecuted: true,
       officialTemporalMethodExecuted: true,
       officialMemoryAttentionExecuted: true,
@@ -241,7 +263,7 @@ export const SAM31_TWO_FRAME_PACKET_AUTHORITIES = Object.freeze({
     receiptSchema: 'kaminos.sam31-two-image-tracker-meta-reference-receipt.v0',
     boundary: 'two-distinct-raw-images-through-browser-backbone-to-mask-conditioned-temporal-tracker',
     mode: 'official-meta-two-image-mask-conditioning-memory-attention-propagation-decoder',
-    shape: TWO_FRAME_EPISODE_SHAPE,
+    shape: MASK_CONDITIONED_TWO_FRAME_EPISODE_SHAPE,
     plan: TWO_FRAME_EPISODE_PLAN,
     stateTransition: Object.freeze({
       frame0OriginKind: 'mask-conditioning',
@@ -386,6 +408,12 @@ const TWO_IMAGE_EPISODE_INGRESS_BINDINGS = Object.freeze({
   frame1HighResolutionS1: 'frame-1-high-resolution-s1',
 });
 
+const INTERACTIVE_POINTER_INGRESS_BINDINGS = Object.freeze({
+  frame0ImageEmbedding: 'frame-0-interactive-feature-2',
+  frame0HighResolutionS0: 'frame-0-interactive-high-resolution-s0',
+  frame0HighResolutionS1: 'frame-0-interactive-high-resolution-s1',
+});
+
 function verifyTwoImageEpisodeIngressBindings({ authorityName, manifest, authenticatedIngress }) {
   const ingressAuthority = authenticatedIngress?.authority;
   const ingressManifest = authenticatedIngress?.manifest;
@@ -414,6 +442,9 @@ function verifyTwoImageEpisodeIngressBindings({ authorityName, manifest, authent
 function verifyTwoImageEpisodeGeometry({ authorityName, manifest, authenticatedIngress }) {
   const ingress = authenticatedIngress.manifest.shape;
   const episode = manifest.shape;
+  assertNamedEqual(authorityName, ingress?.patchSize, 14, 'authenticatedIngress.manifest.shape.patchSize');
+  assertNamedEqual(authorityName, ingress?.imageHeight, ingress?.patchHeight * 14, 'authenticatedIngress.manifest.shape.imageHeight');
+  assertNamedEqual(authorityName, ingress?.imageWidth, ingress?.patchWidth * 14, 'authenticatedIngress.manifest.shape.imageWidth');
   const expected = {
     batch: 1,
     multiplexCount: 16,
@@ -426,12 +457,20 @@ function verifyTwoImageEpisodeGeometry({ authorityName, manifest, authenticatedI
     channels: 256,
     maskHeight: ingress?.patchHeight * 4,
     maskWidth: ingress?.patchWidth * 4,
+    sourceImageHeight: ingress?.imageHeight,
+    sourceImageWidth: ingress?.imageWidth,
+    sourceMaskHeight: ingress?.patchHeight * 16,
+    sourceMaskWidth: ingress?.patchWidth * 16,
+    promptMaskHeight: ingress?.patchHeight * 4,
+    promptMaskWidth: ingress?.patchWidth * 4,
+    decoderMaskHeight: ingress?.patchHeight * 4,
+    decoderMaskWidth: ingress?.patchWidth * 4,
+    memoryInputMaskHeight: ingress?.patchHeight * 16,
+    memoryInputMaskWidth: ingress?.patchWidth * 16,
   };
   for (const [field, value] of Object.entries(expected)) {
     assertNamedEqual(authorityName, episode?.[field], value, `manifest.shape.${field}`);
   }
-  assertNamedEqual(authorityName, ingress?.imageHeight, ingress?.patchHeight * ingress?.patchSize, 'authenticatedIngress.manifest.shape.imageHeight');
-  assertNamedEqual(authorityName, ingress?.imageWidth, ingress?.patchWidth * ingress?.patchSize, 'authenticatedIngress.manifest.shape.imageWidth');
   return { passed: true, queryTokens: episode.queryTokens, memoryTokens: episode.memoryTokens };
 }
 
@@ -449,8 +488,12 @@ function verifyInteractivePointerGeometry({ authorityName, manifest, authenticat
     heads: 8,
     attentionChannels: 128,
     mlpHidden: 2048,
-    inputMaskHeight: ingress?.patchHeight * 4,
-    inputMaskWidth: ingress?.patchWidth * 4,
+    sourceImageHeight: ingress?.patchHeight * 14,
+    sourceImageWidth: ingress?.patchWidth * 14,
+    sourceMaskHeight: ingress?.patchHeight * 16,
+    sourceMaskWidth: ingress?.patchWidth * 16,
+    promptMaskHeight: ingress?.patchHeight * 4,
+    promptMaskWidth: ingress?.patchWidth * 4,
     decoderMaskHeight: ingress?.patchHeight * 4,
     decoderMaskWidth: ingress?.patchWidth * 4,
     maskOutputs: 4,
@@ -459,7 +502,41 @@ function verifyInteractivePointerGeometry({ authorityName, manifest, authenticat
   for (const [field, value] of Object.entries(expected)) {
     assertNamedEqual(authorityName, pointer?.[field], value, `manifest.shape.${field}`);
   }
+  assertNamedEqual(authorityName, ingress?.patchSize, 14, 'authenticatedIngress.manifest.shape.patchSize');
+  assertNamedEqual(authorityName, ingress?.imageHeight, ingress?.patchHeight * 14, 'authenticatedIngress.manifest.shape.imageHeight');
+  assertNamedEqual(authorityName, ingress?.imageWidth, ingress?.patchWidth * 14, 'authenticatedIngress.manifest.shape.imageWidth');
   return { passed: true, imageTokens: pointer.imageTokens };
+}
+
+function verifyInteractivePointerIngressBindings({ authorityName, manifest, referenceReceipt, authenticatedIngress }) {
+  const ingressAuthority = authenticatedIngress?.authority;
+  const ingressManifest = authenticatedIngress?.manifest;
+  assertNamedEqual(authorityName, ingressAuthority?.passed, true, 'authenticatedIngress.authority.passed');
+  if (!ingressManifest || typeof ingressManifest !== 'object') {
+    throw new Error(`${authorityName} packet authority mismatch for authenticatedIngress.manifest`);
+  }
+
+  const entriesByRole = new Map();
+  for (const entry of ingressManifest.tensors || []) {
+    if (entriesByRole.has(entry.role)) throw new Error(`${authorityName} packet authority mismatch for duplicate ingress tensor role ${entry.role}`);
+    entriesByRole.set(entry.role, entry);
+  }
+
+  for (const [surfaceName, pointerIngressAuthority] of [
+    ['manifest', manifest.ingressAuthority],
+    ['referenceReceipt', referenceReceipt.ingressAuthority],
+  ]) {
+    assertNamedEqual(authorityName, pointerIngressAuthority?.passed, true, `${surfaceName}.ingressAuthority.passed`);
+    assertNamedEqual(authorityName, pointerIngressAuthority?.schema, ingressManifest.schema, `${surfaceName}.ingressAuthority.schema`);
+    assertNamedEqual(authorityName, pointerIngressAuthority?.manifestSha256, ingressAuthority.manifestSha256, `${surfaceName}.ingressAuthority.manifestSha256`);
+    for (const [binding, role] of Object.entries(INTERACTIVE_POINTER_INGRESS_BINDINGS)) {
+      const entry = entriesByRole.get(role);
+      if (!entry?.sha256) throw new Error(`${authorityName} packet authority mismatch for authenticatedIngress.manifest.tensors.${role}`);
+      assertNamedEqual(authorityName, pointerIngressAuthority?.bindings?.[binding], entry.sha256, `${surfaceName}.ingressAuthority.bindings.${binding}`);
+    }
+  }
+  assertNamedJsonEqual(authorityName, referenceReceipt.ingressAuthority, manifest.ingressAuthority, 'referenceReceipt.ingressAuthority');
+  return { passed: true, bindingCount: Object.keys(INTERACTIVE_POINTER_INGRESS_BINDINGS).length };
 }
 
 export async function verifySam31TwoFramePacketAuthority({ name, authorityName = name, manifestText, manifest, referenceReceipt, expectedManifestSha256, authenticatedIngress = null }) {
@@ -527,6 +604,9 @@ export async function verifySam31TwoFramePacketAuthority({ name, authorityName =
   const pointerGeometry = authorityName === 'pointer' && authenticatedIngress != null
     ? verifyInteractivePointerGeometry({ authorityName, manifest, authenticatedIngress })
     : null;
+  const pointerIngressBindings = authorityName === 'pointer' && authenticatedIngress != null
+    ? verifyInteractivePointerIngressBindings({ authorityName, manifest, referenceReceipt, authenticatedIngress })
+    : null;
 
   return {
     passed: true,
@@ -545,10 +625,10 @@ export async function verifySam31TwoFramePacketAuthority({ name, authorityName =
     sourceRepository: manifest.reference.source.repository,
     sourceCommit: manifest.reference.source.commit,
     sourceWorkingTreeClean: manifest.reference.source.workingTreeClean,
-    ingressBindingsPassed: ingressBindings?.passed ?? null,
+    ingressBindingsPassed: ingressBindings?.passed ?? pointerIngressBindings?.passed ?? null,
     ingressGeometryPassed: ingressGeometry?.passed ?? null,
     pointerGeometryPassed: pointerGeometry?.passed ?? null,
-    ingressBindingCount: ingressBindings?.bindingCount ?? 0,
+    ingressBindingCount: ingressBindings?.bindingCount ?? pointerIngressBindings?.bindingCount ?? 0,
   };
 }
 

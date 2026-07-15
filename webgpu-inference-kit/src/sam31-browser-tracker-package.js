@@ -115,7 +115,12 @@ export function validateSam31BrowserTrackerGeometry(ingressShape, episodeShape) 
   requireObject(episodeShape, 'tracker episode geometry');
   const carriesSpatialContract = ['patchSize', 'patchHeight', 'patchWidth', 'patchTokens']
     .some(field => Object.hasOwn(ingressShape, field))
-    || ['queryHeight', 'queryWidth', 'queryTokens', 'maskHeight', 'maskWidth']
+    || [
+      'queryHeight', 'queryWidth', 'queryTokens', 'maskHeight', 'maskWidth',
+      'sourceImageHeight', 'sourceImageWidth', 'sourceMaskHeight', 'sourceMaskWidth',
+      'promptMaskHeight', 'promptMaskWidth', 'decoderMaskHeight', 'decoderMaskWidth',
+      'memoryInputMaskHeight', 'memoryInputMaskWidth',
+    ]
       .some(field => Object.hasOwn(episodeShape, field));
   if (!carriesSpatialContract) return null;
 
@@ -148,7 +153,33 @@ export function validateSam31BrowserTrackerGeometry(ingressShape, episodeShape) 
   const maskHeight = positiveInteger(episodeShape.maskHeight, 'episode maskHeight');
   const maskWidth = positiveInteger(episodeShape.maskWidth, 'episode maskWidth');
   if (maskHeight !== queryHeight * 4 || maskWidth !== queryWidth * 4) {
-    throw new Error('episode mask geometry must be four times the query geometry');
+    throw new Error('episode mask geometry alias must name the H*4 decoder mask');
+  }
+  const sourceImageHeight = positiveInteger(episodeShape.sourceImageHeight, 'episode sourceImageHeight');
+  const sourceImageWidth = positiveInteger(episodeShape.sourceImageWidth, 'episode sourceImageWidth');
+  if (sourceImageHeight !== imageHeight || sourceImageWidth !== imageWidth) {
+    throw new Error('episode source image geometry does not match authenticated ingress');
+  }
+  const sourceMaskHeight = positiveInteger(episodeShape.sourceMaskHeight, 'episode sourceMaskHeight');
+  const sourceMaskWidth = positiveInteger(episodeShape.sourceMaskWidth, 'episode sourceMaskWidth');
+  if (sourceMaskHeight !== queryHeight * 16 || sourceMaskWidth !== queryWidth * 16) {
+    throw new Error('episode source mask geometry must be sixteen times the query geometry');
+  }
+  const promptMaskHeight = positiveInteger(episodeShape.promptMaskHeight, 'episode promptMaskHeight');
+  const promptMaskWidth = positiveInteger(episodeShape.promptMaskWidth, 'episode promptMaskWidth');
+  if (promptMaskHeight !== queryHeight * 4 || promptMaskWidth !== queryWidth * 4) {
+    throw new Error('episode prompt mask geometry must be four times the query geometry');
+  }
+  const decoderMaskHeight = positiveInteger(episodeShape.decoderMaskHeight, 'episode decoderMaskHeight');
+  const decoderMaskWidth = positiveInteger(episodeShape.decoderMaskWidth, 'episode decoderMaskWidth');
+  if (decoderMaskHeight !== promptMaskHeight || decoderMaskWidth !== promptMaskWidth
+      || maskHeight !== decoderMaskHeight || maskWidth !== decoderMaskWidth) {
+    throw new Error('episode decoder mask geometry must equal the prompt mask and legacy mask alias');
+  }
+  const memoryInputMaskHeight = positiveInteger(episodeShape.memoryInputMaskHeight, 'episode memoryInputMaskHeight');
+  const memoryInputMaskWidth = positiveInteger(episodeShape.memoryInputMaskWidth, 'episode memoryInputMaskWidth');
+  if (memoryInputMaskHeight !== sourceMaskHeight || memoryInputMaskWidth !== sourceMaskWidth) {
+    throw new Error('mask-conditioned memory input must retain the H*16 source mask geometry');
   }
   const memorySpatialTokens = positiveInteger(episodeShape.memorySpatialTokens, 'episode memorySpatialTokens');
   const numObjPtrTokens = positiveInteger(episodeShape.numObjPtrTokens, 'episode numObjPtrTokens');
@@ -168,6 +199,16 @@ export function validateSam31BrowserTrackerGeometry(ingressShape, episodeShape) 
     queryTokens,
     maskHeight,
     maskWidth,
+    sourceImageHeight,
+    sourceImageWidth,
+    sourceMaskHeight,
+    sourceMaskWidth,
+    promptMaskHeight,
+    promptMaskWidth,
+    decoderMaskHeight,
+    decoderMaskWidth,
+    memoryInputMaskHeight,
+    memoryInputMaskWidth,
     memorySpatialTokens,
     numObjPtrTokens,
     memoryTokens,

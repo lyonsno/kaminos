@@ -267,10 +267,10 @@ async function decoderInvocation({ frame, inputs, expected, manifest, weights, w
     },
     outputs: {
       'sam31-multiplex-sam-output-tokens': { artifactId: scopedOutputId(`sam31-two-frame-sam-tokens:${frame}`), shape: [1, 16, 3, 256] },
-      'sam31-multiplex-mask-logits': { artifactId: scopedOutputId(`sam31-two-frame-mask-logits:${frame}`), shape: [16, 3, 8, 8] },
-      'sam31-multiplex-selected-masks': { artifactId: scopedOutputId(`sam31-two-frame-selected-masks:${frame}`), shape: [16, 1, 8, 8] },
-      'sam31-multiplex-object-scores': { artifactId: scopedOutputId(`sam31-two-frame-object-scores:${frame}`), shape: [16, 1] },
-      'sam31-multiplex-object-pointers': { artifactId: scopedOutputId(`sam31-two-frame-object-pointers:${frame}`), shape: [16, 256] },
+      'sam31-multiplex-mask-logits': { artifactId: scopedOutputId(`sam31-two-frame-mask-logits:${frame}`), shape: [manifest.shape.multiplexCount, manifest.shape.maskOutputsPerObject, manifest.shape.maskHeight, manifest.shape.maskWidth] },
+      'sam31-multiplex-selected-masks': { artifactId: scopedOutputId(`sam31-two-frame-selected-masks:${frame}`), shape: [manifest.shape.multiplexCount, 1, manifest.shape.maskHeight, manifest.shape.maskWidth] },
+      'sam31-multiplex-object-scores': { artifactId: scopedOutputId(`sam31-two-frame-object-scores:${frame}`), shape: [manifest.shape.multiplexCount, 1] },
+      'sam31-multiplex-object-pointers': { artifactId: scopedOutputId(`sam31-two-frame-object-pointers:${frame}`), shape: [manifest.shape.multiplexCount, manifest.shape.channels] },
     },
   });
   const result = await runSam31MultiplexMaskDecoderPhaseProgramRoute({ request, route, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: navigator.userAgent, model: { revision: manifest.reference.model.revision, weightsHash }, kernel: route.kernel, tensors: { shape: manifest.shape, tensors: inputs, weights }, includeReadback: true });
@@ -287,10 +287,10 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
     requestId: `sam31-two-frame-mask-conditioning-${Date.now()}`,
     inputs: {
       'source-frame': { artifactId: 'sam31-two-frame:0', sha256: sourceHash, shape: [1] },
-      'sam31-binary-mask-inputs': { artifactId: 'sam31-frame-0-binary-mask-inputs', sha256: binaryHash, shape: [manifest.shape.multiplexCount, 1, manifest.shape.maskHeight, manifest.shape.maskWidth] },
+      'sam31-binary-mask-inputs': { artifactId: 'sam31-frame-0-binary-mask-inputs', sha256: binaryHash, shape: [manifest.shape.multiplexCount, 1, manifest.shape.sourceMaskHeight, manifest.shape.sourceMaskWidth] },
     },
     outputs: {
-      'sam31-mask-conditioning-logits': { artifactId: scopedOutputId('sam31-frame-0-mask-conditioning-logits'), shape: [manifest.shape.multiplexCount, 1, manifest.shape.maskHeight, manifest.shape.maskWidth] },
+      'sam31-mask-conditioning-logits': { artifactId: scopedOutputId('sam31-frame-0-mask-conditioning-logits'), shape: [manifest.shape.multiplexCount, 1, manifest.shape.sourceMaskHeight, manifest.shape.sourceMaskWidth] },
       'sam31-mask-conditioning-object-scores': { artifactId: scopedOutputId('sam31-frame-0-mask-conditioning-object-scores'), shape: [manifest.shape.multiplexCount, 1] },
     },
   });
@@ -304,7 +304,7 @@ async function maskConditioningInvocation({ inputs, expected, manifest, adapter,
     browser: navigator.userAgent,
     model: { revision: manifest.reference.model.revision },
     kernel: route.kernel,
-    tensors: { binaryMasks: inputs.binaryMasks, shape: { multiplexCount: manifest.shape.multiplexCount, maskHeight: manifest.shape.maskHeight, maskWidth: manifest.shape.maskWidth } },
+    tensors: { binaryMasks: inputs.binaryMasks, shape: { multiplexCount: manifest.shape.multiplexCount, maskHeight: manifest.shape.sourceMaskHeight, maskWidth: manifest.shape.sourceMaskWidth } },
     includeReadback: true,
   });
   const parity = expected ? {
@@ -324,11 +324,11 @@ async function interactivePointerInvocation({ inputs, expected, manifest, weight
     requestId: `sam31-two-frame-interactive-pointer-${Date.now()}`,
     inputs: {
       'source-frame': { artifactId: 'sam31-two-frame:0', sha256: sourceHash, shape: [1] },
-      'sam31-binary-mask-inputs': { artifactId: 'sam31-frame-0-binary-mask-inputs', sha256: binaryHash, shape: [16, 1, 8, 8] },
-      'sam31-interactive-image-embedding': { artifactId: 'sam31-frame-0-interactive-image-embedding', sha256: sourceHash, shape: [1, 2, 2, 256] },
+      'sam31-binary-mask-inputs': { artifactId: 'sam31-frame-0-binary-mask-inputs', sha256: binaryHash, shape: [manifest.shape.batch, 1, manifest.shape.sourceMaskHeight, manifest.shape.sourceMaskWidth] },
+      'sam31-interactive-image-embedding': { artifactId: 'sam31-frame-0-interactive-image-embedding', sha256: sourceHash, shape: [1, manifest.shape.imageHeight, manifest.shape.imageWidth, manifest.shape.channels] },
       'sam31-interactive-pointer-weights': { artifactId: 'sam31-interactive-pointer-weights:official', sha256: weightsHash, shape: [manifest.weights.length] },
     },
-    outputs: { 'sam31-interactive-object-pointers': { artifactId: scopedOutputId('sam31-frame-0-interactive-object-pointers'), shape: [16, 256] } },
+    outputs: { 'sam31-interactive-object-pointers': { artifactId: scopedOutputId('sam31-frame-0-interactive-object-pointers'), shape: [manifest.shape.batch, manifest.shape.channels] } },
   });
   const result = await runSam31InteractivePointerPhaseProgramRoute({
     request, route, adapter, device, queue: device.queue,
@@ -505,7 +505,7 @@ async function runInvocation(packageRoot = null, invocationIndex = 0, execution 
     inputs: {
       'source-image': { artifactId: 'sam31-two-frame:0', sha256: featureHash, shape: [1] },
       'sam31-propagation-feature-2': { artifactId: 'sam31-frame-0-propagation-feature', sha256: featureHash, shape: [1, 2, 2, 256] },
-      'sam31-multiplex-mask-logits': { artifactId: 'sam31-frame-0-memory-input-masks', sha256: memoryInputMaskHash, shape: [16, 1, 8, 8] },
+      'sam31-multiplex-mask-logits': { artifactId: 'sam31-frame-0-memory-input-masks', sha256: memoryInputMaskHash, shape: [episode.shape.multiplexCount, 1, episode.shape.memoryInputMaskHeight, episode.shape.memoryInputMaskWidth] },
       'sam31-multiplex-conditioning': { artifactId: 'sam31-frame-0-conditioning', sha256: conditioningHash, shape: [1, 16] },
       'sam31-multiplex-object-scores': { artifactId: scoreOutput.artifactId, sha256: scoreOutput.sha256, shape: scoreOutput.shape },
       'sam31-memory-encoder-weights': { artifactId: 'sam31-memory-weights:official', sha256: memoryWeightsHash },
@@ -513,7 +513,7 @@ async function runInvocation(packageRoot = null, invocationIndex = 0, execution 
     outputs: { 'sam31-mask-memory-features': { artifactId: scopedOutputId('sam31-frame-0-memory-features'), shape: [1, 2, 2, 256] }, 'sam31-mask-memory-position-encoding': { artifactId: scopedOutputId('sam31-frame-0-memory-position'), shape: [1, 2, 2, 256] } },
   });
   update('running', 'frame-0-memory', { frame0ProducerReceipt: frame0Producer.receipt });
-  const frame0MemoryResult = await runSam31MemoryEncoderPhaseProgramRoute({ request: memoryRequest, route: memoryRoute, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: navigator.userAgent, model: { revision: episode.reference.model.revision, weightsHash: memoryWeightsHash }, kernel: memoryRoute.kernel, tensors: { propagationFeature: frame0PropagationEmbedding, maskLogits: frame0Producer.memoryInputMasks, objectScores: frame0Producer.objectScores, shape: { batch: 1, featureHeight: 2, featureWidth: 2, featureChannels: 256, maskHeight: 8, maskWidth: 8, multiplexCount: 16, conditionChannels: true, conditioning, resampledMaskHeight: 32, resampledMaskWidth: 32 }, config: memoryManifest.config, weights: memoryWeights }, includeReadback: true });
+  const frame0MemoryResult = await runSam31MemoryEncoderPhaseProgramRoute({ request: memoryRequest, route: memoryRoute, adapter, device, queue: device.queue, adapterName: adapterInfo.description || 'browser-webgpu-adapter', browser: navigator.userAgent, model: { revision: episode.reference.model.revision, weightsHash: memoryWeightsHash }, kernel: memoryRoute.kernel, tensors: { propagationFeature: frame0PropagationEmbedding, maskLogits: frame0Producer.memoryInputMasks, objectScores: frame0Producer.objectScores, shape: { batch: episode.shape.batch, featureHeight: episode.shape.queryHeight, featureWidth: episode.shape.queryWidth, featureChannels: episode.shape.channels, maskHeight: episode.shape.memoryInputMaskHeight, maskWidth: episode.shape.memoryInputMaskWidth, multiplexCount: episode.shape.multiplexCount, conditionChannels: true, conditioning, resampledMaskHeight: episode.shape.sourceMaskHeight, resampledMaskWidth: episode.shape.sourceMaskWidth }, config: memoryManifest.config, weights: memoryWeights }, includeReadback: true });
   const memoryParity = verificationAttached ? { features: maxAbs(frame0MemoryResult.debugReadback.memoryFeatures, await expectedEpisodeTensor('frame-0-memory-features')), position: maxAbs(frame0MemoryResult.debugReadback.memoryPositionEncoding, await expectedEpisodeTensor('frame-0-memory-position')) } : null;
 
   const trackerState = createSam31TrackerState({
@@ -521,8 +521,8 @@ async function runInvocation(packageRoot = null, invocationIndex = 0, execution 
     frameTokenCount: episode.shape.queryTokens,
     multiplexCount: episode.shape.multiplexCount,
     channels: episode.shape.channels,
-    maskHeight: episode.shape.maskHeight,
-    maskWidth: episode.shape.maskWidth,
+    maskHeight: episode.shape.memoryInputMaskHeight,
+    maskWidth: episode.shape.memoryInputMaskWidth,
     numMaskmem: episode.plan.numMaskmem,
     maxConditioningFrames: episode.plan.maxConditioningFrames,
     maxObjectPointerFrames: episode.plan.maxObjectPointerFrames,

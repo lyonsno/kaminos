@@ -80,8 +80,14 @@ assert.equal(manifest.fixture.sourceFeaturesSynthetic, false);
 const queryHeight = ingressManifest.shape.patchHeight;
 const queryWidth = ingressManifest.shape.patchWidth;
 const queryTokens = queryHeight * queryWidth;
-const maskHeight = queryHeight * 4;
-const maskWidth = queryWidth * 4;
+const sourceImageHeight = ingressManifest.shape.imageHeight;
+const sourceImageWidth = ingressManifest.shape.imageWidth;
+const sourceMaskHeight = queryHeight * 16;
+const sourceMaskWidth = queryWidth * 16;
+const promptMaskHeight = queryHeight * 4;
+const promptMaskWidth = queryWidth * 4;
+const decoderMaskHeight = promptMaskHeight;
+const decoderMaskWidth = promptMaskWidth;
 assert.deepEqual(manifest.shape, {
   batch: 1,
   multiplexCount: 16,
@@ -92,12 +98,24 @@ assert.deepEqual(manifest.shape, {
   numObjPtrTokens: 16,
   memoryTokens: queryTokens + 16,
   channels: 256,
-  maskHeight,
-  maskWidth,
+  maskHeight: decoderMaskHeight,
+  maskWidth: decoderMaskWidth,
+  sourceImageHeight,
+  sourceImageWidth,
+  sourceMaskHeight,
+  sourceMaskWidth,
+  promptMaskHeight,
+  promptMaskWidth,
+  decoderMaskHeight,
+  decoderMaskWidth,
+  memoryInputMaskHeight: sourceMaskHeight,
+  memoryInputMaskWidth: sourceMaskWidth,
 });
 assert.equal(manifest.claims.fullProductionInteractiveGeometryExecuted, queryHeight === 72 && queryWidth === 72);
 assert.deepEqual(manifest.claims.effectiveInteractiveImageEmbeddingSize, [queryHeight, queryWidth]);
-assert.deepEqual(manifest.claims.effectiveMaskInputSize, [maskHeight, maskWidth]);
+assert.deepEqual(manifest.claims.effectiveSourceMaskSize, [sourceMaskHeight, sourceMaskWidth]);
+assert.deepEqual(manifest.claims.effectivePromptMaskSize, [promptMaskHeight, promptMaskWidth]);
+assert.deepEqual(manifest.claims.effectiveDecoderMaskSize, [decoderMaskHeight, decoderMaskWidth]);
 
 const forbiddenPacketOwnedRoles = [
   'frame-0-image-embedding', 'frame-0-image-position',
@@ -120,14 +138,14 @@ for (const role of [
   assert.ok(entry, `composed packet is missing ${role}`);
   assert.equal((await stat(join(outDir, entry.file))).size, entry.byteLength, `${role} byte length must match`);
 }
-assert.deepEqual(tensorsByRole.get('frame-0-binary-mask-inputs').shape, [16, 1, maskHeight, maskWidth]);
-assert.deepEqual(tensorsByRole.get('frame-0-memory-input-masks').shape, [16, 1, maskHeight, maskWidth]);
+assert.deepEqual(tensorsByRole.get('frame-0-binary-mask-inputs').shape, [16, 1, sourceMaskHeight, sourceMaskWidth]);
+assert.deepEqual(tensorsByRole.get('frame-0-memory-input-masks').shape, [16, 1, sourceMaskHeight, sourceMaskWidth]);
 assert.deepEqual(tensorsByRole.get('frame-0-memory-features').shape, [1, queryHeight, queryWidth, 256]);
 assert.deepEqual(tensorsByRole.get('frame-0-memory-position').shape, [1, queryHeight, queryWidth, 256]);
 assert.deepEqual(tensorsByRole.get('frame-1-assembled-memory-image').shape, [1, queryTokens, 256]);
 assert.deepEqual(tensorsByRole.get('frame-1-assembled-memory').shape, [1, queryTokens + 16, 256]);
 assert.deepEqual(tensorsByRole.get('frame-1-memory-conditioned-features').shape, [1, queryHeight, queryWidth, 256]);
-assert.deepEqual(tensorsByRole.get('frame-1-selected-masks').shape, [16, 1, maskHeight, maskWidth]);
+assert.deepEqual(tensorsByRole.get('frame-1-selected-masks').shape, [16, 1, decoderMaskHeight, decoderMaskWidth]);
 
 const failureDir = await mkdtemp(join(tmpdir(), 'sam31-two-image-tracker-meta-failure-'));
 const failure = spawnSync(python, [

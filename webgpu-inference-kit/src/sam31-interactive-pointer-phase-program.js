@@ -84,21 +84,34 @@ export function deriveSam31InteractivePointerGeometry(inputShape = {}) {
   for (const [key, expected] of Object.entries(fixed)) {
     if (shape[key] !== expected) throw new Error(`shape.${key} must equal ${expected}`);
   }
-  for (const key of ['imageHeight', 'imageWidth', 'imageTokens', 'inputMaskHeight', 'inputMaskWidth']) {
+  for (const key of [
+    'imageHeight', 'imageWidth', 'imageTokens',
+    'sourceImageHeight', 'sourceImageWidth',
+    'sourceMaskHeight', 'sourceMaskWidth',
+    'promptMaskHeight', 'promptMaskWidth',
+    'decoderMaskHeight', 'decoderMaskWidth',
+  ]) {
     if (!Number.isInteger(shape[key]) || shape[key] <= 0) throw new Error(`shape.${key} must be a positive integer`);
   }
   if (shape.imageTokens !== shape.imageHeight * shape.imageWidth) {
     throw new Error('shape.imageTokens must equal imageHeight * imageWidth');
   }
-  if (shape.inputMaskHeight !== shape.imageHeight * 4 || shape.inputMaskWidth !== shape.imageWidth * 4) {
-    throw new Error('input mask geometry must be four times image geometry');
+  if (shape.sourceImageHeight !== shape.imageHeight * 14 || shape.sourceImageWidth !== shape.imageWidth * 14) {
+    throw new Error('source image geometry must be fourteen times feature geometry');
   }
-  if (shape.inputMaskHeight % 4 !== 0 || shape.inputMaskWidth % 4 !== 0) {
-    throw new Error('input mask geometry must be divisible by four');
+  if (shape.sourceMaskHeight !== shape.imageHeight * 16 || shape.sourceMaskWidth !== shape.imageWidth * 16) {
+    throw new Error('source mask geometry must be sixteen times feature geometry');
   }
-  const maskPixels = shape.inputMaskHeight * shape.inputMaskWidth;
-  const promptIntermediateHeight = shape.inputMaskHeight / 2;
-  const promptIntermediateWidth = shape.inputMaskWidth / 2;
+  if (shape.promptMaskHeight !== shape.imageHeight * 4 || shape.promptMaskWidth !== shape.imageWidth * 4) {
+    throw new Error('prompt mask geometry must be four times feature geometry');
+  }
+  if (shape.decoderMaskHeight !== shape.promptMaskHeight || shape.decoderMaskWidth !== shape.promptMaskWidth) {
+    throw new Error('decoder mask geometry must equal prompt mask geometry');
+  }
+  const sourceMaskPixels = shape.sourceMaskHeight * shape.sourceMaskWidth;
+  const promptMaskPixels = shape.promptMaskHeight * shape.promptMaskWidth;
+  const promptIntermediateHeight = shape.promptMaskHeight / 2;
+  const promptIntermediateWidth = shape.promptMaskWidth / 2;
   const promptIntermediatePixels = promptIntermediateHeight * promptIntermediateWidth;
   const batch = fixed.batch;
   const channels = fixed.channels;
@@ -108,18 +121,22 @@ export function deriveSam31InteractivePointerGeometry(inputShape = {}) {
     imageHeight: shape.imageHeight,
     imageWidth: shape.imageWidth,
     imageTokens: shape.imageTokens,
-    inputMaskHeight: shape.inputMaskHeight,
-    inputMaskWidth: shape.inputMaskWidth,
-    maskPixels,
-    outerMaskHeight: shape.imageHeight,
-    outerMaskWidth: shape.imageWidth,
+    sourceImageHeight: shape.sourceImageHeight,
+    sourceImageWidth: shape.sourceImageWidth,
+    sourceMaskHeight: shape.sourceMaskHeight,
+    sourceMaskWidth: shape.sourceMaskWidth,
+    sourceMaskPixels,
+    promptMaskHeight: shape.promptMaskHeight,
+    promptMaskWidth: shape.promptMaskWidth,
+    promptMaskPixels,
+    decoderMaskHeight: shape.decoderMaskHeight,
+    decoderMaskWidth: shape.decoderMaskWidth,
     promptIntermediateHeight,
     promptIntermediateWidth,
     promptIntermediatePixels,
-    binaryMaskLength: batch * maskPixels,
+    binaryMaskLength: batch * sourceMaskPixels,
     imageEmbeddingLength: shape.imageTokens * channels,
-    outerMaskLength: batch * shape.imageTokens,
-    resizedMaskLength: batch * maskPixels,
+    maskDownsampleLength: batch * promptMaskPixels,
     promptConv0Length: batch * 4 * promptIntermediatePixels,
     promptConv1Length: batch * 16 * shape.imageTokens,
     denseEmbeddingLength: batch * channels * shape.imageTokens,
@@ -283,36 +300,10 @@ function geluInPlace(values) {
   return values;
 }
 
-function bilinearNchw(input, batch, channels, inputHeight, inputWidth, outputHeight, outputWidth) {
-  const output = new Float32Array(batch * channels * outputHeight * outputWidth);
-  for (let item = 0; item < batch; item += 1) {
-    for (let channel = 0; channel < channels; channel += 1) {
-      for (let outputY = 0; outputY < outputHeight; outputY += 1) {
-        const sourceY = Math.max(0, Math.min(inputHeight - 1, (outputY + 0.5) * inputHeight / outputHeight - 0.5));
-        const y0 = Math.floor(sourceY);
-        const y1 = Math.min(inputHeight - 1, y0 + 1);
-        const wy = sourceY - y0;
-        for (let outputX = 0; outputX < outputWidth; outputX += 1) {
-          const sourceX = Math.max(0, Math.min(inputWidth - 1, (outputX + 0.5) * inputWidth / outputWidth - 0.5));
-          const x0 = Math.floor(sourceX);
-          const x1 = Math.min(inputWidth - 1, x0 + 1);
-          const wx = sourceX - x0;
-          const base = (item * channels + channel) * inputHeight * inputWidth;
-          const top = input[base + y0 * inputWidth + x0] * (1 - wx) + input[base + y0 * inputWidth + x1] * wx;
-          const bottom = input[base + y1 * inputWidth + x0] * (1 - wx) + input[base + y1 * inputWidth + x1] * wx;
-          output[(item * channels + channel) * outputHeight * outputWidth + outputY * outputWidth + outputX] = top * (1 - wy) + bottom * wy;
-        }
-      }
-    }
-  }
-  return output;
-}
-
 function promptEncode(binaryMasks, weights, geometry) {
-  const outer = conv2dNchw(binaryMasks, geometry.batch, 1, geometry.inputMaskHeight, geometry.inputMaskWidth, 1, 4, 4,
+  const promptMasks = conv2dNchw(binaryMasks, geometry.batch, 1, geometry.sourceMaskHeight, geometry.sourceMaskWidth, 1, 4, 4,
     weight(weights, 'mask-downsample.weight', 16), weight(weights, 'mask-downsample.bias', 1));
-  const promptMasks = bilinearNchw(outer.values, geometry.batch, 1, geometry.outerMaskHeight, geometry.outerMaskWidth, geometry.inputMaskHeight, geometry.inputMaskWidth);
-  let dense = conv2dNchw(promptMasks, geometry.batch, 1, geometry.inputMaskHeight, geometry.inputMaskWidth, 4, 2, 2,
+  let dense = conv2dNchw(promptMasks.values, geometry.batch, 1, geometry.promptMaskHeight, geometry.promptMaskWidth, 4, 2, 2,
     weight(weights, 'prompt.mask_downscaling.0.weight', 16), weight(weights, 'prompt.mask_downscaling.0.bias', 4));
   dense.values = geluInPlace(layerNorm2d(dense.values, geometry.batch, 4, geometry.promptIntermediateHeight, geometry.promptIntermediateWidth,
     weight(weights, 'prompt.mask_downscaling.1.weight', 4), weight(weights, 'prompt.mask_downscaling.1.bias', 4)));
@@ -328,7 +319,7 @@ function promptEncode(binaryMasks, weights, geometry) {
     sparse.set(notPoint, (item * 2) * 256);
     sparse.set(notPoint, (item * 2 + 1) * 256);
   }
-  return { maskDownsample: outer.values, sparseEmbeddings: sparse, denseEmbeddings: dense.values };
+  return { maskDownsample: promptMasks.values, sparseEmbeddings: sparse, denseEmbeddings: dense.values };
 }
 
 function densePosition(weights, geometry) {
@@ -434,7 +425,9 @@ export function createSam31InteractivePointerPhaseProgramCpuOracle(input = {}) {
   const finalObjectPointers = new Float32Array(projectedPointers.length);
   for (let item = 0; item < 16; item += 1) {
     let appearing = false;
-    for (let pixel = 0; pixel < geometry.maskPixels; pixel += 1) appearing ||= binaryMasks[item * geometry.maskPixels + pixel] > 0;
+    for (let pixel = 0; pixel < geometry.sourceMaskPixels; pixel += 1) {
+      appearing ||= binaryMasks[item * geometry.sourceMaskPixels + pixel] > 0;
+    }
     const source = appearing ? forwardObjectPointers : finalNoObject;
     finalObjectPointers.set(source.subarray(item * 256, (item + 1) * 256), item * 256);
   }
@@ -506,30 +499,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
   }
   output_values[index] = sum;
-}
-`;
-
-const BILINEAR_WGSL = `
-struct BilinearDims { batch: u32, input_height: u32, input_width: u32, output_height: u32, output_width: u32, total_output: u32, };
-@group(0) @binding(0) var<storage, read> input_values: array<f32>;
-@group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
-@group(0) @binding(2) var<uniform> dims: BilinearDims;
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
-  if (index >= dims.total_output) { return; }
-  let output_plane = dims.output_height * dims.output_width;
-  let x = index % dims.output_width;
-  let y = (index / dims.output_width) % dims.output_height;
-  let batch = index / output_plane;
-  let source_x = clamp((f32(x) + 0.5) * f32(dims.input_width) / f32(dims.output_width) - 0.5, 0.0, f32(dims.input_width - 1u));
-  let source_y = clamp((f32(y) + 0.5) * f32(dims.input_height) / f32(dims.output_height) - 0.5, 0.0, f32(dims.input_height - 1u));
-  let x0 = u32(floor(source_x)); let x1 = min(dims.input_width - 1u, x0 + 1u); let wx = source_x - f32(x0);
-  let y0 = u32(floor(source_y)); let y1 = min(dims.input_height - 1u, y0 + 1u); let wy = source_y - f32(y0);
-  let base = batch * dims.input_height * dims.input_width;
-  let top = input_values[base + y0 * dims.input_width + x0] * (1.0 - wx) + input_values[base + y0 * dims.input_width + x1] * wx;
-  let bottom = input_values[base + y1 * dims.input_width + x0] * (1.0 - wx) + input_values[base + y1 * dims.input_width + x1] * wx;
-  output_values[index] = top * (1.0 - wy) + bottom * wy;
 }
 `;
 
@@ -771,8 +740,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     gpu = {
       binaryMasks: create('binary-masks', geometry.binaryMaskLength, readonly),
       imageEmbedding: create('image-embedding', geometry.imageEmbeddingLength, readonly),
-      maskDownsample: create('mask-downsample', geometry.outerMaskLength),
-      resizedMasks: create('resized-masks', geometry.resizedMaskLength),
+      maskDownsample: create('mask-downsample', geometry.maskDownsampleLength),
       promptConv0: create('prompt-conv-0', geometry.promptConv0Length),
       promptNorm0: create('prompt-norm-0', geometry.promptConv0Length),
       promptGelu0: create('prompt-gelu-0', geometry.promptConv0Length),
@@ -822,7 +790,6 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
       { name: 'kernel', type: 'u32' }, { name: 'stride', type: 'u32' }, { name: 'total_output', type: 'u32' },
     ];
     const norm2dSchema = [{ name: 'batch', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'height', type: 'u32' }, { name: 'width', type: 'u32' }, { name: 'total_spatial', type: 'u32' }];
-    const bilinearSchema = [{ name: 'batch', type: 'u32' }, { name: 'input_height', type: 'u32' }, { name: 'input_width', type: 'u32' }, { name: 'output_height', type: 'u32' }, { name: 'output_width', type: 'u32' }, { name: 'total_output', type: 'u32' }];
     const imagePositionSchema = [{ name: 'batch', type: 'u32' }, { name: 'height', type: 'u32' }, { name: 'width', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total', type: 'u32' }];
     const keySeedSchema = [{ name: 'batch', type: 'u32' }, { name: 'image_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total', type: 'u32' }];
     const maskBlendSchema = [{ name: 'batch', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'mask_pixels', type: 'u32' }, { name: 'total', type: 'u32' }];
@@ -832,16 +799,15 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     const addSchema = [{ name: 'total', type: 'u32' }, { name: 'scale', type: 'f32' }];
     const gatherSchema = [{ name: 'token_offset', type: 'u32' }, { name: 'batch', type: 'u32' }, { name: 'query_tokens', type: 'u32' }, { name: 'channels', type: 'u32' }, { name: 'total', type: 'u32' }];
     gpu.uniforms = {
-      outerConv: uniform('outer-conv', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.inputMaskHeight, input_width: geometry.inputMaskWidth, output_channels: 1, output_height: geometry.outerMaskHeight, output_width: geometry.outerMaskWidth, kernel: 4, stride: 4, total_output: geometry.outerMaskLength }),
-      resizePromptMask: uniform('resize-prompt-mask', bilinearSchema, { batch: geometry.batch, input_height: geometry.outerMaskHeight, input_width: geometry.outerMaskWidth, output_height: geometry.inputMaskHeight, output_width: geometry.inputMaskWidth, total_output: geometry.resizedMaskLength }),
-      promptConv0: uniform('prompt-conv-0', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.inputMaskHeight, input_width: geometry.inputMaskWidth, output_channels: 4, output_height: geometry.promptIntermediateHeight, output_width: geometry.promptIntermediateWidth, kernel: 2, stride: 2, total_output: geometry.promptConv0Length }),
+      outerConv: uniform('outer-conv', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.sourceMaskHeight, input_width: geometry.sourceMaskWidth, output_channels: 1, output_height: geometry.promptMaskHeight, output_width: geometry.promptMaskWidth, kernel: 4, stride: 4, total_output: geometry.maskDownsampleLength }),
+      promptConv0: uniform('prompt-conv-0', convSchema, { batch: geometry.batch, input_channels: 1, input_height: geometry.promptMaskHeight, input_width: geometry.promptMaskWidth, output_channels: 4, output_height: geometry.promptIntermediateHeight, output_width: geometry.promptIntermediateWidth, kernel: 2, stride: 2, total_output: geometry.promptConv0Length }),
       promptConv1: uniform('prompt-conv-1', convSchema, { batch: geometry.batch, input_channels: 4, input_height: geometry.promptIntermediateHeight, input_width: geometry.promptIntermediateWidth, output_channels: 16, output_height: geometry.imageHeight, output_width: geometry.imageWidth, kernel: 2, stride: 2, total_output: geometry.promptConv1Length }),
       promptConv2: uniform('prompt-conv-2', convSchema, { batch: geometry.batch, input_channels: 16, input_height: geometry.imageHeight, input_width: geometry.imageWidth, output_channels: 256, output_height: geometry.imageHeight, output_width: geometry.imageWidth, kernel: 1, stride: 1, total_output: geometry.denseEmbeddingLength }),
       promptNorm0: uniform('prompt-norm-0', norm2dSchema, { batch: geometry.batch, channels: 4, height: geometry.promptIntermediateHeight, width: geometry.promptIntermediateWidth, total_spatial: geometry.batch * geometry.promptIntermediatePixels }),
       promptNorm1: uniform('prompt-norm-1', norm2dSchema, { batch: geometry.batch, channels: 16, height: geometry.imageHeight, width: geometry.imageWidth, total_spatial: geometry.batch * geometry.imageTokens }),
       imagePosition: uniform('image-position', imagePositionSchema, { batch: geometry.batch, height: geometry.imageHeight, width: geometry.imageWidth, channels: geometry.channels, total: geometry.imagePositionLength }),
       keySeed: uniform('key-seed', keySeedSchema, { batch: geometry.batch, image_tokens: geometry.imageTokens, channels: geometry.channels, total: geometry.keyValueLength }),
-      maskBlend: uniform('mask-blend', maskBlendSchema, { batch: geometry.batch, channels: geometry.channels, mask_pixels: geometry.maskPixels, total: geometry.pointerLength }),
+      maskBlend: uniform('mask-blend', maskBlendSchema, { batch: geometry.batch, channels: geometry.channels, mask_pixels: geometry.sourceMaskPixels, total: geometry.pointerLength }),
       addQueries: uniform('add-queries', addSchema, { total: geometry.queryValueLength, scale: 1 }),
       addKeys: uniform('add-keys', addSchema, { total: geometry.keyValueLength, scale: 1 }),
       normQueries: uniform('norm-queries', normSchema, { total_tokens: geometry.batch * geometry.queryTokens, channels: 256 }),
@@ -879,8 +845,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   const dispatch = (name, kernel, total) => ({ name, kernel, dispatch: [workgroups(total)] });
 
   addKernel('outerMaskDownsample', CONV2D_WGSL, [tb('binaryMasks'), tb(w('mask-downsample.weight')), tb(w('mask-downsample.bias')), tb('maskDownsample', 'storage'), uniformBinding('outerConv')]);
-  addKernel('resizePromptMask', BILINEAR_WGSL, [tb('maskDownsample'), tb('resizedMasks', 'storage'), uniformBinding('resizePromptMask')]);
-  addKernel('promptConv0Kernel', CONV2D_WGSL, [tb('resizedMasks'), tb(w('prompt.mask_downscaling.0.weight')), tb(w('prompt.mask_downscaling.0.bias')), tb('promptConv0', 'storage'), uniformBinding('promptConv0')]);
+  addKernel('promptConv0Kernel', CONV2D_WGSL, [tb('maskDownsample'), tb(w('prompt.mask_downscaling.0.weight')), tb(w('prompt.mask_downscaling.0.bias')), tb('promptConv0', 'storage'), uniformBinding('promptConv0')]);
   addKernel('promptNorm0Kernel', LAYERNORM2D_WGSL, [tb('promptConv0'), tb(w('prompt.mask_downscaling.1.weight')), tb(w('prompt.mask_downscaling.1.bias')), tb('promptNorm0', 'storage'), uniformBinding('promptNorm0')]);
   addKernel('promptGelu0Kernel', GELU_WGSL, [tb('promptNorm0'), tb('promptGelu0', 'storage')]);
   addKernel('promptConv1Kernel', CONV2D_WGSL, [tb('promptGelu0'), tb(w('prompt.mask_downscaling.3.weight')), tb(w('prompt.mask_downscaling.3.bias')), tb('promptConv1', 'storage'), uniformBinding('promptConv1')]);
@@ -891,8 +856,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   addKernel('querySeedKernel', QUERY_SEED_WGSL, [tb(w('decoder.obj_score_token.weight')), tb(w('decoder.iou_token.weight')), tb(w('decoder.mask_tokens.weight')), tb(w('prompt.not_a_point_embed.weight')), tb('point', 'storage'), tb('hiddenA', 'storage')]);
   addKernel('keySeedKernel', KEY_SEED_WGSL, [tb('imageEmbedding'), tb('denseEmbedding'), tb('keyA', 'storage'), uniformBinding('keySeed')]);
   phases.push(
-    dispatch('interactive-pointer-mask-downsample', 'outerMaskDownsample', geometry.outerMaskLength),
-    dispatch('interactive-pointer-mask-resize', 'resizePromptMask', geometry.resizedMaskLength),
+    dispatch('interactive-pointer-mask-downsample', 'outerMaskDownsample', geometry.maskDownsampleLength),
     dispatch('interactive-pointer-prompt-conv-0', 'promptConv0Kernel', geometry.promptConv0Length),
     dispatch('interactive-pointer-prompt-norm-0', 'promptNorm0Kernel', geometry.batch * geometry.promptIntermediatePixels),
     dispatch('interactive-pointer-prompt-gelu-0', 'promptGelu0Kernel', geometry.promptConv0Length),
@@ -1037,7 +1001,23 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     uniforms: gpu.uniforms,
     kernels,
     phases,
-    metadata: { routeId: route.routeId, sourceBoundary: 'Meta PromptEncoder + MaskDecoder pointer subgraph + double no-object transition', batch: geometry.batch, queryTokens: geometry.queryTokens, imageTokens: geometry.imageTokens, imageHeight: geometry.imageHeight, imageWidth: geometry.imageWidth, inputMaskHeight: geometry.inputMaskHeight, inputMaskWidth: geometry.inputMaskWidth },
+    metadata: {
+      routeId: route.routeId,
+      sourceBoundary: 'Meta _use_mask_as_output H*16 source mask -> interactive_mask_downsample H*4 prompt mask -> PromptEncoder H feature grid',
+      batch: geometry.batch,
+      queryTokens: geometry.queryTokens,
+      imageTokens: geometry.imageTokens,
+      imageHeight: geometry.imageHeight,
+      imageWidth: geometry.imageWidth,
+      sourceImageHeight: geometry.sourceImageHeight,
+      sourceImageWidth: geometry.sourceImageWidth,
+      sourceMaskHeight: geometry.sourceMaskHeight,
+      sourceMaskWidth: geometry.sourceMaskWidth,
+      promptMaskHeight: geometry.promptMaskHeight,
+      promptMaskWidth: geometry.promptMaskWidth,
+      decoderMaskHeight: geometry.decoderMaskHeight,
+      decoderMaskWidth: geometry.decoderMaskWidth,
+    },
   });
   const run = await runtime.runProgram(program);
   const objectPointers = run.outputs.objectPointers;

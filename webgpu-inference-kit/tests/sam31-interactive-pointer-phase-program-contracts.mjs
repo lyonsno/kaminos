@@ -65,7 +65,9 @@ for (const token of [
   'const geometry = deriveSam31InteractivePointerGeometry(shape)',
   "imagePosition: create('image-position', geometry.imagePositionLength)",
   "keyA: create('key-a', geometry.keyValueLength)",
-  "resizePromptMask: uniform('resize-prompt-mask'",
+  'sourceMaskHeight',
+  'promptMaskHeight',
+  'decoderMaskHeight',
   "imagePosition: uniform('image-position'",
   "keySeed: uniform('key-seed'",
   "maskBlend: uniform('mask-blend'",
@@ -94,8 +96,14 @@ const largerGeometry = deriveSam31InteractivePointerGeometry({
   imageHeight: 4,
   imageWidth: 4,
   imageTokens: 16,
-  inputMaskHeight: 16,
-  inputMaskWidth: 16,
+  sourceImageHeight: 56,
+  sourceImageWidth: 56,
+  sourceMaskHeight: 64,
+  sourceMaskWidth: 64,
+  promptMaskHeight: 16,
+  promptMaskWidth: 16,
+  decoderMaskHeight: 16,
+  decoderMaskWidth: 16,
   channels: 256,
   heads: 8,
   attentionChannels: 128,
@@ -105,20 +113,26 @@ const largerGeometry = deriveSam31InteractivePointerGeometry({
 assert.deepEqual(
   {
     imageTokens: largerGeometry.imageTokens,
-    maskPixels: largerGeometry.maskPixels,
-    outerMaskHeight: largerGeometry.outerMaskHeight,
+    sourceMaskPixels: largerGeometry.sourceMaskPixels,
+    promptMaskPixels: largerGeometry.promptMaskPixels,
     promptIntermediateHeight: largerGeometry.promptIntermediateHeight,
     denseEmbeddingLength: largerGeometry.denseEmbeddingLength,
     keyValueLength: largerGeometry.keyValueLength,
   },
-  { imageTokens: 16, maskPixels: 256, outerMaskHeight: 4, promptIntermediateHeight: 8, denseEmbeddingLength: 65536, keyValueLength: 65536 },
+  { imageTokens: 16, sourceMaskPixels: 4096, promptMaskPixels: 256, promptIntermediateHeight: 8, denseEmbeddingLength: 65536, keyValueLength: 65536 },
   'the pointer runtime must derive its larger buffer geometry from the authenticated query/mask shape',
 );
 assert.throws(
-  () => deriveSam31InteractivePointerGeometry({ ...largerGeometry.shape, inputMaskHeight: 8 }),
-  /input mask geometry must be four times image geometry/,
-  'a stale reduced mask must not compose with larger authenticated image features',
+  () => deriveSam31InteractivePointerGeometry({ ...largerGeometry.shape, sourceMaskHeight: 16 }),
+  /source mask geometry must be sixteen times feature geometry/,
+  'a decoder-resolution mask must not impersonate the authenticated source mask',
 );
+assert.throws(
+  () => deriveSam31InteractivePointerGeometry({ ...largerGeometry.shape, promptMaskHeight: 64 }),
+  /prompt mask geometry must be four times feature geometry/,
+  'a source-resolution mask must not impersonate the prompt mask',
+);
+assert.doesNotMatch(routeSource, /resizePromptMask/, 'the learned H*16 to H*4 result must feed PromptEncoder without an H resize round trip');
 assert.doesNotMatch(routeSource, /requires witnessed 2x2 \/ 8x8 geometry/, 'the runtime must not retain the reduced-fixture geometry gate');
 const route = createSam31InteractivePointerPhaseProgramRouteDefinition({
   kernel: { profile: 'sam31-interactive-pointer-phase-program-v0', commit: 'abc1234' },

@@ -348,6 +348,11 @@ function generatePackets() {
         toolArgs.push('--ingress-packet-dir', packetDirs.ingress, '--expected-ingress-manifest-sha256', ingressDigest);
       }
     }
+    if (name === 'pointer' && isTwoImage) {
+      const ingressManifestPath = join(packetDirs.ingress, 'tensor-manifest.json');
+      const ingressDigest = expectedManifestSha256.ingress || `sha256:${createHash('sha256').update(readFileSync(ingressManifestPath)).digest('hex')}`;
+      toolArgs.push('--ingress-dir', packetDirs.ingress, '--expected-ingress-manifest-sha256', ingressDigest);
+    }
     const result = spawnSync(python, toolArgs, { cwd: root, encoding: 'utf8', timeout: 240000 });
     if (result.status !== 0) throw new Error(`${name} official packet generation failed: ${result.stderr || result.stdout}`);
   }

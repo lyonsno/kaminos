@@ -223,10 +223,16 @@ def main():
     image_width = ingress["imageWidth"] if ingress else 2
     if image_height != image_width:
         raise ValueError("interactive pointer exporter currently requires square authenticated image geometry")
-    input_mask_height = image_height * 4
-    input_mask_width = image_width * 4
+    source_image_height = ingress["manifest"]["shape"]["imageHeight"] if ingress else image_height * 14
+    source_image_width = ingress["manifest"]["shape"]["imageWidth"] if ingress else image_width * 14
+    source_mask_height = image_height * 16
+    source_mask_width = image_width * 16
+    prompt_mask_height = image_height * 4
+    prompt_mask_width = image_width * 4
+    decoder_mask_height = prompt_mask_height
+    decoder_mask_width = prompt_mask_width
     proxy = helper.build_interactive_mask_proxy(
-        video_module, state, image_embedding_size=image_height, input_image_size=input_mask_height,
+        video_module, state, image_embedding_size=image_height, input_image_size=source_image_height,
     )
     multiplex_state = multiplex_module.MultiplexState(
         assignments=[list(range(16))], device=torch.device("cpu"), dtype=torch.float32, allowed_bucket_capacity=16,
@@ -260,8 +266,8 @@ def main():
     generator = torch.Generator(device="cpu").manual_seed(args.seed)
     random = lambda shape, scale: torch.randn(shape, generator=generator, dtype=torch.float32) * scale
     binary_masks = helper.create_binary_mask_fixture()
-    if (input_mask_height, input_mask_width) != tuple(binary_masks.shape[-2:]):
-        binary_masks = F.interpolate(binary_masks, size=(input_mask_height, input_mask_width), mode="nearest")
+    if (source_mask_height, source_mask_width) != tuple(binary_masks.shape[-2:]):
+        binary_masks = F.interpolate(binary_masks, size=(source_mask_height, source_mask_width), mode="nearest")
     image_embedding = ingress["imageEmbedding"] if ingress else random((1, 256, image_height, image_width), 0.04)
     high_resolution_s0 = ingress["highResolutionS0"] if ingress else random((1, 32, image_height * 4, image_width * 4), 0.03)
     high_resolution_s1 = ingress["highResolutionS1"] if ingress else random((1, 64, image_height * 2, image_width * 2), 0.03)
@@ -288,9 +294,9 @@ def main():
     captures["final-no-object-projection"] = no_object_outputs[1]
 
     expected_shapes = {
-        "mask-downsample": (16, 1, image_height, image_width), "sparse-embeddings": (16, 2, 256),
+        "mask-downsample": (16, 1, prompt_mask_height, prompt_mask_width), "sparse-embeddings": (16, 2, 256),
         "dense-embeddings": (16, 256, image_height, image_width), "image-position": (1, 256, image_height, image_width),
-        "decoder-masks": (16, 1, input_mask_height, input_mask_width), "decoder-ious": (16, 1),
+        "decoder-masks": (16, 1, decoder_mask_height, decoder_mask_width), "decoder-ious": (16, 1),
         "sam-output-tokens": (16, 1, 256), "decoder-object-scores": (16, 1),
         "projected-pointers": (16, 256), "forward-object-pointers": (16, 256),
         "final-object-pointers": (16, 256),
@@ -346,7 +352,10 @@ def main():
     shape = {
         "batch": 16, "queryTokens": 8, "sparsePromptTokens": 2, "imageHeight": image_height, "imageWidth": image_width,
         "imageTokens": image_height * image_width, "channels": 256, "heads": 8, "attentionChannels": 128, "mlpHidden": 2048,
-        "inputMaskHeight": input_mask_height, "inputMaskWidth": input_mask_width, "decoderMaskHeight": input_mask_height, "decoderMaskWidth": input_mask_width,
+        "sourceImageHeight": source_image_height, "sourceImageWidth": source_image_width,
+        "sourceMaskHeight": source_mask_height, "sourceMaskWidth": source_mask_width,
+        "promptMaskHeight": prompt_mask_height, "promptMaskWidth": prompt_mask_width,
+        "decoderMaskHeight": decoder_mask_height, "decoderMaskWidth": decoder_mask_width,
         "maskOutputs": 4, "layerCount": 2,
     }
     manifest = {
@@ -377,7 +386,13 @@ def main():
             "referenceReceiptSha256": ingress["receiptSha256"],
             "bindings": ingress["bindings"],
         } if ingress else {"passed": False, "state": "not-attached"}),
-        "tensorLayouts": {"image-embedding": "B,H,W,C-token-major", "expected-image-position": "B,H,W,C-token-major"},
+        "tensorLayouts": {
+            "binary-mask-inputs": "B,1,H*16,W*16-source-mask",
+            "expected-mask-downsample": "B,1,H*4,W*4-prompt-mask",
+            "expected-decoder-masks": "B,1,H*4,W*4-decoder-low-resolution-mask",
+            "image-embedding": "B,H,W,C-token-major",
+            "expected-image-position": "B,H,W,C-token-major",
+        },
         "shape": shape,
         "configuration": {
             "multimaskOutput": False, "repeatImage": True, "useHighResolutionFeatures": True,

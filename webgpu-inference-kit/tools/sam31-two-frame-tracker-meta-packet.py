@@ -392,8 +392,16 @@ def main():
     query_height = ingress_manifest["shape"]["patchHeight"] if ingress_manifest is not None else 2
     query_width = ingress_manifest["shape"]["patchWidth"] if ingress_manifest is not None else 2
     query_tokens = query_height * query_width
-    mask_height = query_height * 4
-    mask_width = query_width * 4
+    source_image_height = ingress_manifest["shape"]["imageHeight"] if ingress_manifest is not None else query_height * 14
+    source_image_width = ingress_manifest["shape"]["imageWidth"] if ingress_manifest is not None else query_width * 14
+    source_mask_height = query_height * 16
+    source_mask_width = query_width * 16
+    prompt_mask_height = query_height * 4
+    prompt_mask_width = query_width * 4
+    decoder_mask_height = prompt_mask_height
+    decoder_mask_width = prompt_mask_width
+    mask_height = decoder_mask_height
+    mask_width = decoder_mask_width
     if ingress_manifest is not None and ingress_manifest["shape"].get("patchTokens") != query_tokens:
         raise ValueError("ingress patch geometry is inconsistent")
     tool_root = Path(__file__).resolve().parent
@@ -413,7 +421,7 @@ def main():
     if args.frame0_mode == "mask-conditioning" and query_height != query_width:
         raise ValueError("mask-conditioned tracker currently requires square image feature geometry")
     interactive_mask_proxy = build_interactive_mask_proxy(
-        video_module, state, image_embedding_size=query_height, input_image_size=mask_height,
+        video_module, state, image_embedding_size=query_height, input_image_size=source_image_height,
     ) if args.frame0_mode == "mask-conditioning" else None
     memory_encoder = build_memory_encoder(memory_classes, state, feature_height=query_height, feature_width=query_width)
     memory_proxy = build_memory_proxy(memory_encoder, state)
@@ -471,7 +479,7 @@ def main():
         }
     with torch.inference_mode():
         if args.frame0_mode == "mask-conditioning":
-            frame0_binary_masks = create_binary_mask_fixture(args.mask_variant, mask_height, mask_width)
+            frame0_binary_masks = create_binary_mask_fixture(args.mask_variant, source_mask_height, source_mask_width)
             interactive_high_res_features = [frame0_inputs["interactive_high0"], frame0_inputs["interactive_high1"]]
             frame0_outputs = video_module.VideoTrackingMultiplex._use_mask_as_output(
                 interactive_mask_proxy,
@@ -507,7 +515,7 @@ def main():
         frame0_tokens = frame0_inputs["propagation_image"].flatten(2).permute(2, 0, 1)
         frame0_memory, frame0_memory_pos = video_module.VideoTrackingMultiplex._encode_new_memory(
             memory_proxy,
-            image=torch.zeros((1, 3, mask_height, mask_width), dtype=torch.float32),
+            image=torch.zeros((1, 3, source_image_height, source_image_width), dtype=torch.float32),
             current_vision_feats=[frame0_tokens],
             feat_sizes=[(query_height, query_width)],
             pred_masks_high_res=frame0_memory_input_masks,
@@ -649,7 +657,19 @@ def main():
         "fixture": {"seed": args.seed, "maskVariant": args.mask_variant, "kind": "two-distinct-source-images-with-deterministic-mixed-object-mask" if two_image else "deterministic-two-frame-mixed-object-presence", "sourceFeaturesSynthetic": not two_image},
         "imageIngress": image_ingress,
         "componentManifests": {"decoder": "/oracle/decoder/tensor-manifest.json", "memory": "/oracle/memory/tensor-manifest.json", "temporal": "/oracle/temporal/tensor-manifest.json"},
-        "shape": {"batch": 1, "multiplexCount": 16, "queryHeight": query_height, "queryWidth": query_width, "queryTokens": query_tokens, "memorySpatialTokens": query_tokens, "numObjPtrTokens": 16, "memoryTokens": query_tokens + 16, "channels": 256, "maskHeight": mask_height, "maskWidth": mask_width},
+        "shape": {
+            "batch": 1, "multiplexCount": 16,
+            "queryHeight": query_height, "queryWidth": query_width, "queryTokens": query_tokens,
+            "memorySpatialTokens": query_tokens, "numObjPtrTokens": 16, "memoryTokens": query_tokens + 16,
+            "channels": 256,
+            "maskHeight": decoder_mask_height, "maskWidth": decoder_mask_width,
+            "sourceImageHeight": source_image_height, "sourceImageWidth": source_image_width,
+            "sourceMaskHeight": source_mask_height, "sourceMaskWidth": source_mask_width,
+            "promptMaskHeight": prompt_mask_height, "promptMaskWidth": prompt_mask_width,
+            "decoderMaskHeight": decoder_mask_height, "decoderMaskWidth": decoder_mask_width,
+            "memoryInputMaskHeight": source_mask_height if mask_conditioned else decoder_mask_height,
+            "memoryInputMaskWidth": source_mask_width if mask_conditioned else decoder_mask_width,
+        },
         "plan": {"frameIndex": 1, "numFrames": 2, "conditioningFrameIndices": [0], "nonConditioningFrameIndices": [], "selectedConditioningFrameIndices": [0], "spatialFrameIndices": [0], "spatialTemporalPositionIndices": [5], "pointerFrameIndices": [0], "pointerRelativePositions": [1], "numMaskmem": 7, "maxConditioningFrames": 4, "maxObjectPointerFrames": 2, "memoryTemporalStride": 1, "useMaskmemTemporalPositionV2": True, "trackInReverse": False},
         "stateTransition": {
             "frame0Kind": "conditioning",
@@ -674,7 +694,9 @@ def main():
             "checkpointBackedInteractivePointers": mask_conditioned,
             "fullProductionInteractiveGeometryExecuted": query_height == 72 and query_width == 72,
             "effectiveInteractiveImageEmbeddingSize": [query_height, query_width] if mask_conditioned else None,
-            "effectiveMaskInputSize": [mask_height, mask_width] if mask_conditioned else None,
+            "effectiveSourceMaskSize": [source_mask_height, source_mask_width] if mask_conditioned else None,
+            "effectivePromptMaskSize": [prompt_mask_height, prompt_mask_width] if mask_conditioned else None,
+            "effectiveDecoderMaskSize": [decoder_mask_height, decoder_mask_width] if mask_conditioned else None,
             "officialMemoryMethodExecuted": True,
             "officialTemporalMethodExecuted": True,
             "officialMemoryAttentionExecuted": True,

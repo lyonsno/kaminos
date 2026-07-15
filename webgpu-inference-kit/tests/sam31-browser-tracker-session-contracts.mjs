@@ -109,6 +109,16 @@ const executionContracts = deriveSam31BrowserTrackerExecutionContracts({
     queryTokens: 16,
     maskHeight: 16,
     maskWidth: 16,
+    sourceImageHeight: 56,
+    sourceImageWidth: 56,
+    sourceMaskHeight: 64,
+    sourceMaskWidth: 64,
+    promptMaskHeight: 16,
+    promptMaskWidth: 16,
+    decoderMaskHeight: 16,
+    decoderMaskWidth: 16,
+    memoryInputMaskHeight: 64,
+    memoryInputMaskWidth: 64,
     memorySpatialTokens: 16,
     numObjPtrTokens: 16,
     memoryTokens: 32,
@@ -141,8 +151,10 @@ assert.deepEqual(
     imageTokens: executionContracts.decoder.imageTokens,
     maskHeight: executionContracts.decoder.maskHeight,
     maskWidth: executionContracts.decoder.maskWidth,
+    sourceMaskHeight: executionContracts.geometry.sourceMaskHeight,
+    promptMaskHeight: executionContracts.geometry.promptMaskHeight,
   },
-  { imageHeight: 4, imageWidth: 4, imageTokens: 16, maskHeight: 16, maskWidth: 16 },
+  { imageHeight: 4, imageWidth: 4, imageTokens: 16, maskHeight: 16, maskWidth: 16, sourceMaskHeight: 64, promptMaskHeight: 16 },
   'decoder execution geometry must come from the authenticated ingress and episode, not the component verification fixture',
 );
 assert.deepEqual(
@@ -154,8 +166,8 @@ assert.deepEqual(
     resampledMaskHeight: executionContracts.memory.resampledMaskHeight,
     resampledMaskWidth: executionContracts.memory.resampledMaskWidth,
   },
-  { featureHeight: 4, featureWidth: 4, maskHeight: 16, maskWidth: 16, resampledMaskHeight: 64, resampledMaskWidth: 64 },
-  'memory execution geometry must preserve the official sixteen-fold mask-tower input ratio at the authenticated query size',
+  { featureHeight: 4, featureWidth: 4, maskHeight: 64, maskWidth: 64, resampledMaskHeight: 64, resampledMaskWidth: 64 },
+  'memory execution geometry must preserve the source-resolution H*16 mask without a decoder-mask impersonation',
 );
 
 const lifecycle = [];

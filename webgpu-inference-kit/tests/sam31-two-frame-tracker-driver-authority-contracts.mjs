@@ -12,13 +12,19 @@ const driverSource = await readFile(driver, 'utf8');
 assert.match(driverSource, /args\.get\('--user-data-dir'\)/, 'the browser witness must accept a caller-owned profile for reusable package storage');
 assert.match(driverSource, /userDataDir,/, 'the durable report must expose the effective browser profile path');
 assert.match(driverSource, /args\.get\('--static-backing'\)/, 'the browser witness must expose retained-memory versus OPFS package storage');
+assert.match(
+  driverSource,
+  /name === 'pointer' && isTwoImage[\s\S]*?toolArgs\.push\('--ingress-dir', packetDirs\.ingress, '--expected-ingress-manifest-sha256', ingressDigest\)/,
+  'fresh two-image generation must bind the pointer exporter to the generated ingress directory and digest',
+);
 const packetDir = await mkdtemp(join(tmpdir(), 'sam31-two-frame-authority-'));
 const reportPath = join(packetDir, 'report.json');
 const pinnedReference = {
   model: { id: 'facebook/sam3.1', revision: 'daa63191845a41281374e725f4c9e51c7a824460', sha256: 'sha256:0567debeec80ba4ac6369540c6c248025283cb3ff2b92827509e57e2b3541cb6' },
   source: { repository: 'facebookresearch/sam3', commit: '5dd401d1c5c1d5c3eedff06d41b77af824517619', workingTreeClean: true },
 };
-const episodeShape = { batch: 1, multiplexCount: 16, queryHeight: 2, queryWidth: 2, queryTokens: 4, memorySpatialTokens: 4, numObjPtrTokens: 16, memoryTokens: 20, channels: 256, maskHeight: 8, maskWidth: 8 };
+const episodeShape = { batch: 1, multiplexCount: 16, queryHeight: 2, queryWidth: 2, queryTokens: 4, memorySpatialTokens: 4, numObjPtrTokens: 16, memoryTokens: 20, channels: 256, maskHeight: 8, maskWidth: 8, sourceImageHeight: 28, sourceImageWidth: 28, sourceMaskHeight: 32, sourceMaskWidth: 32, promptMaskHeight: 8, promptMaskWidth: 8, decoderMaskHeight: 8, decoderMaskWidth: 8, memoryInputMaskHeight: 8, memoryInputMaskWidth: 8 };
+const conditionedEpisodeShape = { ...episodeShape, memoryInputMaskHeight: 32, memoryInputMaskWidth: 32 };
 const episodePlan = { frameIndex: 1, numFrames: 2, conditioningFrameIndices: [0], nonConditioningFrameIndices: [], selectedConditioningFrameIndices: [0], spatialFrameIndices: [0], spatialTemporalPositionIndices: [5], pointerFrameIndices: [0], pointerRelativePositions: [1], numMaskmem: 7, maxConditioningFrames: 4, maxObjectPointerFrames: 2, memoryTemporalStride: 1, useMaskmemTemporalPositionV2: true, trackInReverse: false };
 const specs = {
   decoder: { manifestSchema: 'kaminos.sam31-multiplex-mask-decoder-meta-packet.v0', receiptSchema: 'kaminos.sam31-multiplex-mask-decoder-meta-reference-receipt.v0', boundary: 'sam31-propagation-features-to-multiplex-masks-scores-and-object-pointers', manifestExtra: { routeId: 'sam3.1.multiplex-mask-decoder.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.decoder.shape }, receiptExtra: { routeId: 'sam3.1.multiplex-mask-decoder.phase-program.webgpu-local.v0', shape: SAM31_TWO_FRAME_PACKET_AUTHORITIES.decoder.shape } },
@@ -38,12 +44,12 @@ const specs = {
     boundary: 'frame-0-mask-conditioning-to-memory-state-to-frame-1-conditioned-decoder',
     manifestExtra: {
       mode: 'official-meta-mask-conditioning-memory-attention-propagation-decoder',
-      shape: episodeShape,
+      shape: conditionedEpisodeShape,
       plan: episodePlan,
       stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' },
-      claims: { officialFrame0DecoderExecuted: false, officialMaskConditioningMethodExecuted: true, officialInteractiveSamHeadsExecuted: true, officialInteractivePromptEncoderExecuted: true, officialInteractiveMaskDecoderExecuted: true, checkpointBackedInteractivePointers: true, fullProductionInteractiveGeometryExecuted: false, effectiveInteractiveImageEmbeddingSize: [2, 2], effectiveMaskInputSize: [8, 8], officialMemoryMethodExecuted: true, officialTemporalMethodExecuted: true, officialMemoryAttentionExecuted: true, officialFrame1DecoderExecuted: true },
+      claims: { officialFrame0DecoderExecuted: false, officialMaskConditioningMethodExecuted: true, officialInteractiveSamHeadsExecuted: true, officialInteractivePromptEncoderExecuted: true, officialInteractiveMaskDecoderExecuted: true, checkpointBackedInteractivePointers: true, fullProductionInteractiveGeometryExecuted: false, effectiveInteractiveImageEmbeddingSize: [2, 2], effectiveSourceMaskSize: [32, 32], effectivePromptMaskSize: [8, 8], effectiveDecoderMaskSize: [8, 8], officialMemoryMethodExecuted: true, officialTemporalMethodExecuted: true, officialMemoryAttentionExecuted: true, officialFrame1DecoderExecuted: true },
     },
-    receiptExtra: { shape: episodeShape, plan: episodePlan, stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' } },
+    receiptExtra: { shape: conditionedEpisodeShape, plan: episodePlan, stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' } },
   },
   twoImageEpisode: {
     manifestSchema: 'kaminos.sam31-two-image-tracker-meta-packet.v0',
@@ -51,12 +57,12 @@ const specs = {
     boundary: 'two-distinct-raw-images-through-browser-backbone-to-mask-conditioned-temporal-tracker',
     manifestExtra: {
       mode: 'official-meta-two-image-mask-conditioning-memory-attention-propagation-decoder',
-      shape: episodeShape,
+      shape: conditionedEpisodeShape,
       plan: episodePlan,
       stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' },
       claims: { fullImageBackboneExecuted: true, twoDistinctRawImagesComposed: true, distinctInteractiveAndPropagationFeatures: true, packetOwnsImageEmbeddingsAtBrowserRuntime: false },
     },
-    receiptExtra: { shape: episodeShape, plan: episodePlan, stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' } },
+    receiptExtra: { shape: conditionedEpisodeShape, plan: episodePlan, stateTransition: { frame0OriginKind: 'mask-conditioning', maskOwner: 'browser-webgpu', pointerOwner: 'official-reference-bridge' } },
   },
 };
 
@@ -235,13 +241,38 @@ assert.match(JSON.parse(await readFile(wrongIdentityReportPath, 'utf8')).error, 
 const ingressPacket = await writeIngressPacket();
 const validImageIngress = imageIngressFor(ingressPacket.digest, ingressPacket.manifest);
 const twoImageEpisodeDigest = await writePacket('episode', { authorityName: 'twoImageEpisode', overrides: { imageIngress: validImageIngress } });
-const twoImageDigests = { ...digests, ingress: ingressPacket.digest, episode: twoImageEpisodeDigest, pointer: pointerDigest };
+const ingressEntries = Object.fromEntries(ingressPacket.manifest.tensors.map(entry => [entry.role, entry]));
+const pointerIngressAuthority = {
+  passed: true,
+  schema: ingressPacket.manifest.schema,
+  manifestSha256: ingressPacket.digest,
+  bindings: {
+    frame0ImageEmbedding: ingressEntries['frame-0-interactive-feature-2'].sha256,
+    frame0HighResolutionS0: ingressEntries['frame-0-interactive-high-resolution-s0'].sha256,
+    frame0HighResolutionS1: ingressEntries['frame-0-interactive-high-resolution-s1'].sha256,
+  },
+};
+const twoImagePointerDigest = await writePacket('pointer', { overrides: {
+  shape: {
+    ...SAM31_TWO_FRAME_PACKET_AUTHORITIES.pointer.shape,
+    sourceImageHeight: 28,
+    sourceImageWidth: 28,
+    sourceMaskHeight: 32,
+    sourceMaskWidth: 32,
+    promptMaskHeight: 8,
+    promptMaskWidth: 8,
+  },
+  ingressAuthority: pointerIngressAuthority,
+} });
+const twoImageDigests = { ...digests, ingress: ingressPacket.digest, episode: twoImageEpisodeDigest, pointer: twoImagePointerDigest };
 const twoImageReportPath = join(packetDir, 'two-image-report.json');
 const twoImage = verifyOnly(twoImageReportPath, twoImageDigests, 'two-image');
 assert.equal(twoImage.status, 0, twoImage.stderr || twoImage.stdout);
 const twoImageReport = JSON.parse(await readFile(twoImageReportPath, 'utf8'));
 assert.equal(twoImageReport.packetAuthority.packets.episode.ingressBindingsPassed, true);
 assert.equal(twoImageReport.packetAuthority.packets.episode.ingressBindingCount, 9);
+assert.equal(twoImageReport.packetAuthority.packets.pointer.ingressBindingsPassed, true);
+assert.equal(twoImageReport.packetAuthority.packets.pointer.ingressBindingCount, 3);
 
 const falseBindings = { ...validImageIngress.bindings, frame0PropagationPosition: `sha256:${'0'.repeat(64)}` };
 const falseEpisodeDigest = await writePacket('episode', { authorityName: 'twoImageEpisode', overrides: { imageIngress: imageIngressFor(ingressPacket.digest, ingressPacket.manifest, falseBindings) } });
