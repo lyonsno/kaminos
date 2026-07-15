@@ -126,6 +126,7 @@ export async function materializeSmokeOracleTeacherFrameExport({
   const manifestPath = join(destination, `${label}.manifest.json`);
   const sidecarPath = join(destination, fluidPath);
   const worldSpace = source.worldSpace ? { ...source.worldSpace } : null;
+  const camera = source.camera ? structuredClone(source.camera) : null;
   const manifest = {
     schema: FULL_GRID_FIELD_EXPORT_SCHEMA,
     identity: FULL_GRID_FIELD_EXPORT_IDENTITY,
@@ -138,6 +139,7 @@ export async function materializeSmokeOracleTeacherFrameExport({
     grid,
     fluidChannelOrder: VOLUME_FULL_GRID_FIELD_CHANNEL_ORDER,
     worldSpace,
+    camera,
     sidecars: {
       fluid: {
         kind: 'fluid',

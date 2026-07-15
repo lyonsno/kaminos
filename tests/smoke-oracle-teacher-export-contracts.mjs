@@ -78,6 +78,13 @@ const metadata = {
     transformAuthority: 'native-volume-grid-world-transform-v0',
     bounds: { minimum: [-1, -1, -1], maximum: [1, 1, 1] },
   },
+  camera: {
+    identity: 'checksum-bound-native-camera-matrices-v0',
+    position: [-4.24, 2.14, 8.18],
+    target: [0, 0.02, 0],
+    projectionMatrix: Array.from({ length: 16 }, (_, index) => index + 0.25),
+    matrixWorldInverse: Array.from({ length: 16 }, (_, index) => index + 10.25),
+  },
 };
 const chunks = [
   {
@@ -115,6 +122,7 @@ try {
   assert.equal(writtenManifest.sidecars.fluid.byteLength, bytes.byteLength);
   assert.deepEqual(writtenManifest.sidecars.fluid.shape, [2, 2, 2, 16]);
   assert.equal(writtenManifest.deterministicReplay.simStepCount, 96);
+  assert.deepEqual(writtenManifest.camera, metadata.camera, 'dense teacher manifest must preserve checksum-bound camera matrices');
   assert.deepEqual(Buffer.from(await readFile(join(directory, 'sim-step-96.fluid.f32'))), bytes);
 
   await assert.rejects(

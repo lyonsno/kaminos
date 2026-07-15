@@ -5513,6 +5513,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const previousViewProj = new THREE.Matrix4();
   const uniforms = new Float32Array(340);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
+  let lockedCameraState = null;
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
   let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
@@ -5538,6 +5539,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     effectiveRoute: ROUTE_IDENTITY,
     backend: 'inactive',
     active: false,
+    frameSubmissionAuthority: 'inactive',
     width: 0,
     height: 0,
     cssWidth: 0,
@@ -6878,6 +6880,58 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       camera.quaternion.w.toFixed(4),
       camera.projectionMatrix.elements.map(value => value.toFixed(4)).join(','),
     ].join('|');
+  }
+
+  function finiteCameraArray(value, length, label) {
+    if (!Array.isArray(value) || value.length !== length || value.some(item => !Number.isFinite(Number(item)))) {
+      throw new Error(`${label} must contain ${length} finite numbers`);
+    }
+    return value.map(Number);
+  }
+
+  function currentCameraState() {
+    return {
+      identity: 'checksum-bound-native-camera-matrices-v0',
+      position: [camera.position.x, camera.position.y, camera.position.z],
+      target: controls?.target
+        ? [controls.target.x, controls.target.y, controls.target.z]
+        : [0, 0, 0],
+      projectionMatrix: Array.from(camera.projectionMatrix.elements),
+      matrixWorldInverse: Array.from(camera.matrixWorldInverse.elements),
+    };
+  }
+
+  function applyLockedCameraState() {
+    if (!lockedCameraState) return;
+    const next = lockedCameraState;
+    camera.position.fromArray(next.position);
+    if (controls?.target) controls.target.fromArray(next.target);
+    camera.projectionMatrix.fromArray(next.projectionMatrix);
+    camera.projectionMatrixInverse?.copy(camera.projectionMatrix).invert();
+    camera.matrixWorldInverse.fromArray(next.matrixWorldInverse);
+    camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+  }
+
+  function setCameraState(next = {}) {
+    const normalized = {
+      identity: 'checksum-bound-native-camera-matrices-v0',
+      position: finiteCameraArray(next.position, 3, 'camera.position'),
+      target: finiteCameraArray(next.target, 3, 'camera.target'),
+      projectionMatrix: finiteCameraArray(next.projectionMatrix, 16, 'camera.projectionMatrix'),
+      matrixWorldInverse: finiteCameraArray(next.matrixWorldInverse, 16, 'camera.matrixWorldInverse'),
+    };
+    camera.position.fromArray(normalized.position);
+    if (controls?.target) {
+      controls.target.fromArray(normalized.target);
+      controls.update?.();
+    } else {
+      camera.lookAt(new THREE.Vector3(...normalized.target));
+    }
+    camera.updateMatrixWorld(true);
+    lockedCameraState = next.lock === false ? null : normalized;
+    if (lockedCameraState) applyLockedCameraState();
+    resetTemporalHistory('checksum-bound-camera-state');
+    return currentCameraState();
   }
 
   function temporalControlSignature(snapshot = controlsSnapshot) {
@@ -8392,6 +8446,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function updateUniforms(now) {
     resize();
     camera.updateMatrixWorld();
+    applyLockedCameraState();
     maybeResetTemporalHistoryForCamera();
     ensureTemporalHistoryTexture();
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
@@ -11869,6 +11924,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
+      camera: currentCameraState(),
     };
   }
 
@@ -11922,6 +11978,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       nextOffsetBytes,
       complete: nextOffsetBytes === totalByteLength,
       deterministicReplay: currentFullGridReplay(),
+      camera: currentCameraState(),
       worldSpace: {
         coordinateFrame: 'kaminos-volume-world-v0',
         transformAuthority: 'native-volume-grid-world-transform-v0',
@@ -12032,6 +12089,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const advanceSim = options.advanceSim !== false;
     const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const includeRgba = options.includeRgba === true;
+    const captureRendererRequested = String(options.captureRenderer || 'route-default');
+    const forceNativeRaymarchCapture = captureRendererRequested === 'native-raymarch';
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
     const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
     const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
@@ -12059,7 +12118,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     encodeBoundarySidecar(encoder);
     encodeBoundarySplats(encoder);
-    if (boundarySplatRequested()) {
+    if (boundarySplatRequested() && !forceNativeRaymarchCapture) {
       const splatApplied = boundarySplatHybridRequested()
         ? encodeBoundarySplatSmokeHybrid(encoder, frameTexture.createView(), hybridCompositorReadbackPipeline)
         : encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline);
@@ -12093,7 +12152,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       { width: state.width, height: state.height, depthOrArrayLayers: 1 }
     );
     device.queue.submit([encoder.finish()]);
-    if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+    if (boundarySplatTelemetryCopyPending && !forceNativeRaymarchCapture) await resolveBoundarySplatTelemetry();
     const validationError = await device.popErrorScope();
     if (validationError) {
       buffer.destroy();
@@ -12303,12 +12362,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
       };
     }
-    const boundarySplatSample = boundarySplatRequested() ? await sampleBoundarySplatDrawState() : null;
+    const boundarySplatSample = boundarySplatRequested() && !forceNativeRaymarchCapture ? await sampleBoundarySplatDrawState() : null;
     const boundarySplatFeatureCapture = state.boundarySplatFeatureCaptureRequested && boundarySplatSample
       ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.sourceCandidateCount || boundarySplatSample.candidateCount)
       : null;
     state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
-    const boundarySplatGpuProfile = boundarySplatRequested()
+    const boundarySplatGpuProfile = boundarySplatRequested() && !forceNativeRaymarchCapture
       ? await sampleBoundarySplatGpuProfile({ advanceSimulation: false })
       : state.boundarySplatGpuProfile;
     await buffer.mapAsync(GPUMapMode.READ);
@@ -12478,9 +12537,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     buffer.unmap();
     buffer.destroy();
-    const simReadback = await sampleSimReadback();
-    updatePyroDynamicDetailState({ simReadback, inputKind: 'sim-readback' });
-    const majorantReadback = await sampleMajorantReadback();
+    const simReadback = options.includeSimReadback === false ? null : await sampleSimReadback();
+    if (simReadback) updatePyroDynamicDetailState({ simReadback, inputKind: 'sim-readback' });
+    const majorantReadback = options.includeMajorantReadback === false ? null : await sampleMajorantReadback();
     const fireLumaMean = fireLumaSum / Math.max(1, fireEdgeSamples);
     const fireRoughnessMean = Math.sqrt(Math.max(0, fireLumaSqSum / Math.max(1, fireEdgeSamples) - fireLumaMean * fireLumaMean)) / 255;
     const fireEdgeEnergy = fireEdgeSum / Math.max(1, fireEdgeSamples * 255);
@@ -12728,6 +12787,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
+      camera: currentCameraState(),
+      captureRendererRequested,
+      captureRendererEffective: forceNativeRaymarchCapture
+        ? 'native-raymarch-teacher-capture-v0'
+        : 'route-default-capture-v0',
       sampleAuthority: advanceSim ? 'sim-advanced-frame-readback' : 'render-only-frozen-sim-state',
       simAdvanced: advanceSim,
       sameStateCaptureId,
@@ -12811,6 +12875,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           baseFrameCount,
           baseSimStepCount,
           renderScaleSetIndex: index,
+          captureRenderer: options.captureRenderer,
+          includeSimReadback: options.includeSimReadback,
+          includeMajorantReadback: options.includeMajorantReadback,
         });
         samples.push({
           role: index === renderScales.length - 1 ? 'high' : `low-${index + 1}`,
@@ -12872,6 +12939,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const stepSample = await sampleFrame({
         advanceSim: true,
         includeRgba: false,
+        captureRenderer: options.captureRenderer,
+        includeSimReadback: options.includeSimReadback,
+        includeMajorantReadback: false,
         now: controlledStepNowMs,
         sameStateCaptureId: `${sameBrowserSessionId}-advance-${controlledStepFrameIndex}`,
         baseFrameCount: beforeFrameCount,
@@ -12904,6 +12974,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       includeRgba: options.includeRgba === true,
       includeFeatureRgba: options.includeFeatureRgba === true,
       compactSamples: options.compactSamples === true,
+      captureRenderer: options.captureRenderer,
+      includeSimReadback: options.includeSimReadback,
+      includeMajorantReadback: options.includeMajorantReadback,
       now: controlledStepNowMs,
       sameStateCaptureId,
       resumeRenderLoop: false,
@@ -13368,7 +13441,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return { ...state.scalarActivityReceiver };
     },
     syntheticHandTrailEmitters,
-    async setActive(active) {
+    async setActive(active, options = {}) {
       if (active) {
         try {
           await ensureGpu();
@@ -13378,10 +13451,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           state.error = null;
           canvas.classList.add('active');
           cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(render);
+          if (options.startRenderLoop === false) {
+            raf = 0;
+            state.frameSubmissionAuthority = 'capture-hold-explicit-step-v0';
+          } else {
+            state.frameSubmissionAuthority = 'autonomous-animation-frame-v0';
+            raf = requestAnimationFrame(render);
+          }
           emitStatus({ phase: 'active' });
         } catch (err) {
           state.active = false;
+          state.frameSubmissionAuthority = 'inactive';
           state.error = err?.message || String(err);
           state.backend = 'unavailable';
           canvas.classList.remove('active');
@@ -13390,6 +13470,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         }
       } else {
         state.active = false;
+        state.frameSubmissionAuthority = 'inactive';
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
         emitStatus({ phase: 'inactive' });
@@ -13415,6 +13496,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    currentCameraState,
+    setCameraState,
     sampleFullGridFluidFieldChunk,
     resolveSmokeSplatPhaseSlots,
     primeBoundarySplatLiveHistory,

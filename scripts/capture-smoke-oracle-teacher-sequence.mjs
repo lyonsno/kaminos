@@ -2,9 +2,14 @@
 
 import { createHash, randomInt } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { materializeSmokeOracleTeacherFrameExport } from '../smoke-oracle-teacher-export.mjs';
+import {
+  assessMinimumRadiusMaturityCandidate,
+  buildMinimumRadiusTeacherContract,
+  validateMinimumRadiusEffectiveState,
+} from '../smoke-oracle-minimum-radius-teacher.mjs';
 
 const DEFAULT_URL = 'http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1';
 const DEFAULT_DENSE_CHUNK_BYTES = 256 * 1024;
@@ -147,6 +152,7 @@ function compactReadinessExpression() {
       height: state.height,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
+      frameSubmissionAuthority: state.frameSubmissionAuthority,
       error: state.error || null
     };
   })()`;
@@ -288,6 +294,9 @@ async function captureTeacherFrameSample(ws, {
       stepDeltaMs,
       renderScales: [teacherRenderScale],
       includeRgba: true,
+      captureRenderer: 'native-raymarch',
+      includeSimReadback: false,
+      includeMajorantReadback: true,
       compactSamples: false,
       resumeRenderLoop: false,
     })})`);
@@ -337,6 +346,9 @@ async function captureTeacherFrameSample(ws, {
   const sample = await evaluate(ws, `window.__kaminosVolumePrototype.sampleFrame(${JSON.stringify({
     advanceSim: frameIndex > 0,
     includeRgba: true,
+    captureRenderer: 'native-raymarch',
+    includeSimReadback: false,
+    includeMajorantReadback: true,
     now: performance.now() + frameIndex * stepDeltaMs,
   })})`);
   return { sample, sequence: null };
@@ -345,7 +357,7 @@ async function captureTeacherFrameSample(ws, {
 const args = parseArgs(process.argv.slice(2));
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-smoke-oracle-teacher-sequence'));
 const reportPath = resolve(String(args.get('--report') || `${outDir}/teacher-capture-report.json`));
-const url = String(args.get('--url') || DEFAULT_URL);
+const requestedRoute = String(args.get('--url') || DEFAULT_URL);
 const frames = Math.max(1, Math.floor(Number(args.get('--frames') || 2)));
 const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const stepDeltaMs = Math.max(0, Number(args.get('--step-delta-ms') || 220));
@@ -358,7 +370,9 @@ const userDataDir = resolve(String(args.get('--user-data-dir') || `/tmp/kaminos-
 const keepBrowserOpen = args.has('--keep-browser-open');
 const reuseBrowser = args.has('--reuse-browser');
 const controlledStep = !args.has('--no-controlled-step');
-const routeRenderScale = Number(new URL(url).searchParams.get('volume_render_scale'));
+const probeUntilMature = args.has('--probe-until-mature');
+const heldManifestPath = args.get('--held-manifest') ? resolve(String(args.get('--held-manifest'))) : null;
+const routeRenderScale = Number(new URL(requestedRoute).searchParams.get('volume_render_scale'));
 const teacherRenderScale = Math.max(0.1, Math.min(1, Number.isFinite(Number(args.get('--teacher-render-scale')))
   ? Number(args.get('--teacher-render-scale'))
   : (Number.isFinite(routeRenderScale) ? routeRenderScale : 1)));
@@ -366,10 +380,38 @@ cdpRequestTimeoutMs = Math.max(5000, Math.floor(Number(args.get('--cdp-timeout-m
 cdpStartupTimeoutMs = Math.max(1000, Math.floor(Number(args.get('--cdp-startup-timeout-ms') || cdpStartupTimeoutMs)));
 cdpProbeTimeoutMs = Math.max(250, Math.floor(Number(args.get('--cdp-probe-timeout-ms') || Math.min(1000, cdpStartupTimeoutMs))));
 
+let teacherContract = null;
+if (heldManifestPath) {
+  const heldManifestBytes = await readFile(heldManifestPath);
+  teacherContract = buildMinimumRadiusTeacherContract({
+    heldManifest: JSON.parse(heldManifestBytes),
+    heldManifestIdentity: `sha256:${sha256(heldManifestBytes)}`,
+    requestedRoute,
+  });
+}
+if (probeUntilMature && !teacherContract) {
+  throw new Error('--probe-until-mature requires --held-manifest so maturity cannot detach from source authority');
+}
+if (probeUntilMature && frames < 2) {
+  throw new Error('--probe-until-mature requires at least two adjacent teacher frames');
+}
+
+const captureRouteUrl = new URL(requestedRoute);
+if (teacherContract) captureRouteUrl.searchParams.set('volume_capture_hold', '1');
+const url = captureRouteUrl.toString();
+
 const report = {
   schema: 'kaminos.smoke-oracle-teacher-capture-report.v0',
   status: 'running',
-  requestedRoute: url,
+  requestedRoute,
+  effectiveCaptureRoute: url,
+  captureExecution: teacherContract ? {
+    requested: 'explicit-step-no-autonomous-frame-submission',
+    effectiveRouteParameter: 'volume_capture_hold=1',
+    expectedAuthority: 'capture-hold-explicit-step-v0',
+    simulatorControlEffect: 'none',
+    rendererControlEffect: 'none',
+  } : null,
   outDir,
   reportPath,
   frames: [],
@@ -387,6 +429,10 @@ const report = {
   cdpStartupTimeoutMs,
   cdpProbeTimeoutMs,
   controlledStep,
+  probeUntilMature,
+  heldManifestPath,
+  teacherContract,
+  maturityProbes: [],
   teacherRenderScale,
   port,
   windowSize,
@@ -474,28 +520,53 @@ try {
       observedAt: new Date().toISOString(),
     };
     if (attempt === 0 || attempt % 10 === 0) await writeJson(reportPath, report);
-    if (state?.active
-        && state.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0'
-        && state.width > 0
-        && state.height > 0
-        && state.frameCount > 0) break;
+    const routeActive = state?.active
+      && state.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0';
+    const captureHoldActive = teacherContract
+      && state.frameSubmissionAuthority === 'capture-hold-explicit-step-v0'
+      && state.frameCount === 0
+      && state.simStepCount === 0;
+    const autonomousRouteActive = !teacherContract
+      && state.width > 0
+      && state.height > 0
+      && state.frameCount > 0;
+    if (routeActive && (captureHoldActive || autonomousRouteActive)) break;
     await delay(250);
     if (attempt === 119) throw new Error(`native volume route did not become active: ${JSON.stringify(lastReadinessState)}`);
   }
-  let sameBrowserSessionId = null;
-  let sequenceStartNowMs = null;
-  for (let frameIndex = 0; frameIndex < frames; frameIndex += 1) {
-    await updateReportPhase(`frame-${frameIndex}-sample`);
-    const captured = await captureTeacherFrameSample(ws, {
-      frameIndex,
-      sameBrowserSessionId,
-      sequenceStartNowMs,
-    });
-    const { sample, sequence } = captured;
-    if (sequence) {
-      sameBrowserSessionId = sequence.sameBrowserSessionId;
-      sequenceStartNowMs = sequence.sequenceStartNowMs;
-    }
+
+  if (teacherContract) {
+    await updateReportPhase('minimum-radius-effective-state-validation');
+    const effectiveState = await evaluate(ws, `(() => {
+      const prototype = window.__kaminosVolumePrototype;
+      prototype.setControls(${JSON.stringify(teacherContract.expectedControls)});
+      const camera = prototype.setCameraState(${JSON.stringify({ ...teacherContract.expectedCamera, lock: true })});
+      const state = prototype.debugState();
+      return {
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+        controls: state.controls,
+        camera
+      };
+    })()`);
+    report.minimumRadiusEffectiveState = effectiveState;
+    report.lastTrustworthyEvidence = {
+      phase: 'minimum-radius-effective-state-observed',
+      effectiveState,
+      observedAt: new Date().toISOString(),
+    };
+    await writeJson(reportPath, report);
+    report.effectiveStateParity = validateMinimumRadiusEffectiveState(teacherContract, effectiveState);
+    report.lastTrustworthyEvidence = {
+      phase: 'minimum-radius-effective-state-validation',
+      effectiveStateParity: report.effectiveStateParity,
+      observedAt: new Date().toISOString(),
+    };
+    await writeJson(reportPath, report);
+  }
+
+  function validateCapturedSample(sample, frameIndex) {
     if (sample?.ok !== true) throw new Error(`sampleFrame failed for frame ${frameIndex}: ${JSON.stringify(sample)}`);
     if (sample.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0') throw new Error(`wrong effective route: ${sample.effectiveRoute}`);
     if (!sample.image || !Array.isArray(sample.image.rgba)) {
@@ -505,9 +576,14 @@ try {
     if (sample.image.rgba.length !== expectedRgbaLength) {
       throw new Error(`sampleFrame RGBA image was partial for frame ${frameIndex}: ${sample.image.rgba.length}/${expectedRgbaLength}`);
     }
+  }
+
+  async function persistTeacherFrame({ captured, frameIndex, existingImage = null }) {
+    const { sample, sequence } = captured;
+    validateCapturedSample(sample, frameIndex);
     const frameId = `sim-step-${sample.simStepCount}`;
     const imagePath = resolve(outDir, `${frameId}.raymarch.png`);
-    const image = await writeRgbaPng(imagePath, sample.image.width, sample.image.height, sample.image.rgba);
+    const image = existingImage || await writeRgbaPng(imagePath, sample.image.width, sample.image.height, sample.image.rgba);
     report.lastTrustworthyEvidence = {
       phase: `frame-${frameIndex}-sample`,
       frameId,
@@ -516,6 +592,7 @@ try {
       effectiveRoute: sample.effectiveRoute,
       prototypeIdentity: sample.prototypeIdentity,
       backend: sample.backend,
+      camera: sample.camera || null,
       image,
       sequence,
       observedAt: new Date().toISOString(),
@@ -538,6 +615,7 @@ try {
       prototypeIdentity: sample.prototypeIdentity,
       backend: sample.backend,
       sampleAuthority: sample.sampleAuthority,
+      camera: sample.camera || metadata.camera || null,
       sequence,
       render: {
         path: image.path,
@@ -564,9 +642,91 @@ try {
         smokeVisualRiseDisplacement: sample.simReadback?.smokeVisualRiseDisplacement,
         liveVoxels: sample.simReadback?.liveVoxels,
       },
+      majorantReadback: sample.majorantReadback || null,
     });
     report.updatedAt = new Date().toISOString();
     await writeJson(reportPath, report);
+    return { sample, sequence, image };
+  }
+
+  let sameBrowserSessionId = null;
+  let sequenceStartNowMs = null;
+  let sequenceFrameIndex = 0;
+  let firstCaptured = null;
+  let firstCapturedImage = null;
+  if (probeUntilMature) {
+    let previousProbe = null;
+    while (!firstCaptured) {
+      await updateReportPhase(`maturity-probe-${sequenceFrameIndex}`);
+      const captured = await captureTeacherFrameSample(ws, {
+        frameIndex: sequenceFrameIndex,
+        sameBrowserSessionId,
+        sequenceStartNowMs,
+      });
+      const { sample, sequence } = captured;
+      validateCapturedSample(sample, sequenceFrameIndex);
+      if (sequence) {
+        sameBrowserSessionId = sequence.sameBrowserSessionId;
+        sequenceStartNowMs = sequence.sequenceStartNowMs;
+      }
+      const probePath = resolve(outDir, 'maturity-probes', `sim-step-${sample.simStepCount}.png`);
+      const image = await writeRgbaPng(probePath, sample.image.width, sample.image.height, sample.image.rgba);
+      const currentProbe = {
+        simStepCount: sample.simStepCount,
+        render: {
+          width: sample.image.width,
+          height: sample.image.height,
+          litPixels: sample.litPixels,
+          smokeLikePixels: sample.smokeLikePixels,
+          sha256: image.sha256,
+          path: image.path,
+        },
+        support: {
+          liveVoxels: sample.majorantReadback?.occupiedBricks,
+          smokeWeight: Number(sample.majorantReadback?.extinctionMean || 0) * Number(sample.majorantReadback?.bricks || 0),
+          smokeVisualRiseDisplacement: sample.smokeBounds?.verticalFillRatio,
+        },
+      };
+      const assessment = assessMinimumRadiusMaturityCandidate({ current: currentProbe, previous: previousProbe });
+      report.maturityProbes.push({ ...assessment, capturedAt: new Date().toISOString() });
+      report.lastTrustworthyEvidence = {
+        phase: `maturity-probe-${sequenceFrameIndex}`,
+        assessment,
+        image,
+        observedAt: new Date().toISOString(),
+      };
+      await writeJson(reportPath, report);
+      if (assessment.candidate) {
+        firstCaptured = captured;
+        firstCapturedImage = image;
+        report.maturityCandidate = assessment;
+        break;
+      }
+      previousProbe = currentProbe;
+      sequenceFrameIndex += 1;
+    }
+  }
+
+  for (let frameIndex = 0; frameIndex < frames; frameIndex += 1) {
+    await updateReportPhase(`frame-${frameIndex}-sample`);
+    let captured = frameIndex === 0 && firstCaptured ? firstCaptured : null;
+    if (!captured) {
+      if (frameIndex > 0 || firstCaptured) sequenceFrameIndex += 1;
+      captured = await captureTeacherFrameSample(ws, {
+        frameIndex: sequenceFrameIndex,
+        sameBrowserSessionId,
+        sequenceStartNowMs,
+      });
+    }
+    if (captured.sequence) {
+      sameBrowserSessionId = captured.sequence.sameBrowserSessionId;
+      sequenceStartNowMs = captured.sequence.sequenceStartNowMs;
+    }
+    await persistTeacherFrame({
+      captured,
+      frameIndex,
+      existingImage: frameIndex === 0 ? firstCapturedImage : null,
+    });
   }
   report.status = 'captured';
   report.updatedAt = new Date().toISOString();

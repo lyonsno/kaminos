@@ -18076,12 +18076,15 @@ async function initKaminosVolumeRoute() {
     setActiveTab('volume');
     if (camera && controls) frameVolumeCamera();
     try {
-      await volumePrototype.setActive(true);
+      const captureHold = params.get('volume_capture_hold') === '1';
+      await volumePrototype.setActive(true, { startRenderLoop: !captureHold });
       refreshSyntheticExternalEmitters();
       if (routeExternalEmitters === 'synthetic_hand_trails') {
         syntheticEmitterTimer = window.setInterval(refreshSyntheticExternalEmitters, 100);
       }
-      setInfo('Volume renderer — native WebGPU compute fluid raymarch');
+      setInfo(captureHold
+        ? 'Volume renderer — capture hold; explicit frame submission'
+        : 'Volume renderer — native WebGPU compute fluid raymarch');
     } catch (err) {
       console.error('Volume route activation failed:', err);
       setInfo(`Volume route controls loaded; renderer failed: ${err?.message || err}`);
