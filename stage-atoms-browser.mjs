@@ -1,0 +1,509 @@
+import {
+  simulateStageMaterialFrame,
+  spatializeFromStageMaterial,
+} from './stage-atoms-core.mjs';
+
+const REPORT_URL = './artifacts/stage-atoms/ccmixter-geppetto-decoded-stage-atoms-witness.json';
+const AUDIO_URL = './artifacts/stage-atoms/local-audio/coruscate-geppetto-dry-main.mp3';
+const ROUTE_IDENTITY = 'stage-atoms-pulp-shaped-material-spatializer-v0';
+const FEATURE_AUTHORITY = 'decoded-audio-clock-frame-v0';
+
+const canvas = document.querySelector('#stage-atoms-canvas');
+const context = canvas.getContext('2d');
+const playButton = document.querySelector('#stage-atoms-play');
+const seek = document.querySelector('#stage-atoms-seek');
+const stateNode = document.querySelector('#stage-atoms-state');
+const failureNode = document.querySelector('#stage-atoms-failure');
+const sourceAuthorityNode = document.querySelector('[data-stage-source-authority]');
+const routeAuthorityNode = document.querySelector('[data-stage-route-authority]');
+const fallbackAuthorityNode = document.querySelector('[data-stage-fallback-authority]');
+const sourceLink = document.querySelector('#stage-atoms-source-link');
+
+const controls = {
+  coupling: document.querySelector('#stage-atoms-coupling'),
+  memory: document.querySelector('#stage-atoms-memory'),
+  depth: document.querySelector('#stage-atoms-depth'),
+};
+
+const nodes = {
+  audioClock: document.querySelector('#stage-atoms-audio-clock'),
+  visualClock: document.querySelector('#stage-atoms-visual-clock'),
+  featureFrame: document.querySelector('#stage-atoms-feature-frame'),
+  energy: document.querySelector('#feature-energy'),
+  onset: document.querySelector('#feature-onset'),
+  recurrence: document.querySelector('#feature-recurrence'),
+  centroid: document.querySelector('#feature-centroid'),
+  time: document.querySelector('#stage-atoms-time'),
+  duration: document.querySelector('#stage-atoms-duration'),
+};
+
+const runtime = {
+  status: 'loading',
+  report: null,
+  stage: null,
+  frames: [],
+  materialFrame: null,
+  spatialization: null,
+  audioContext: null,
+  audioBuffer: null,
+  audioInputBus: null,
+  audioBufferSource: null,
+  audioMaster: null,
+  audioAnalyser: null,
+  audioOutput: { rms: 0, peak: 0 },
+  audioSends: new Map(),
+  audioEffectiveSource: null,
+  audioBrowserSha256: null,
+  transportOffsetSeconds: 0,
+  playbackContextStartedAt: 0,
+  playing: false,
+  visualStartedAt: performance.now(),
+  frameNumber: 0,
+  sourceRequested: REPORT_URL,
+  sourceEffective: null,
+  representativeSelection: null,
+  fallbackAuthority: 'none',
+  failure: null,
+};
+
+function authority(node, value, state) {
+  node.dataset.state = state;
+  node.querySelector('strong').textContent = value;
+}
+
+function formatTime(seconds) {
+  const value = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+  return `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, '0')}`;
+}
+
+async function sha256Hex(buffer) {
+  const digest = await crypto.subtle.digest('SHA-256', buffer);
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function controlledStage() {
+  const couplingScale = Number(controls.coupling.value);
+  return {
+    ...runtime.stage,
+    atoms: runtime.stage.atoms.map(atom => ({
+      ...atom,
+      materialRegion: {
+        ...atom.materialRegion,
+        coupling: Math.max(0, Math.min(1, atom.materialRegion.coupling * couplingScale)),
+      },
+    })),
+  };
+}
+
+function featureFrameAt(timeSeconds) {
+  if (runtime.frames.length === 0) return null;
+  const rate = runtime.report.lastTrustworthyEvidence.audioInput.featureClock.rateHz;
+  const index = Math.min(runtime.frames.length - 1, Math.max(0, Math.round(timeSeconds * rate)));
+  return runtime.frames[index];
+}
+
+function materialStateAt(timeSeconds) {
+  const sourceFrame = featureFrameAt(timeSeconds);
+  if (!sourceFrame) return null;
+  const audioFeatures = {
+    ...sourceFrame,
+    recurrenceConfidence: Math.max(0, Math.min(1, sourceFrame.recurrenceConfidence * Number(controls.memory.value))),
+  };
+  const materialFrame = simulateStageMaterialFrame(controlledStage(), {
+    t: timeSeconds,
+    audioFeatures,
+    featureAuthority: FEATURE_AUTHORITY,
+  });
+  const spatialization = spatializeFromStageMaterial(materialFrame);
+  const depth = Number(controls.depth.value);
+  spatialization.emitters = spatialization.emitters.map(emitter => ({
+    ...emitter,
+    position: [emitter.position[0] * depth, emitter.position[1], emitter.position[2] * depth],
+    send: { ...emitter.send, pan: Math.max(-1, Math.min(1, emitter.send.pan * depth)) },
+  }));
+  return { sourceFrame, materialFrame, spatialization };
+}
+
+function ensureAudioGraph() {
+  if (runtime.audioMaster) return;
+  runtime.audioInputBus = runtime.audioContext.createGain();
+  runtime.audioMaster = runtime.audioContext.createGain();
+  runtime.audioAnalyser = runtime.audioContext.createAnalyser();
+  runtime.audioAnalyser.fftSize = 2048;
+  runtime.audioMaster.connect(runtime.audioAnalyser);
+  runtime.audioAnalyser.connect(runtime.audioContext.destination);
+  for (const atom of runtime.stage.atoms) {
+    const filter = runtime.audioContext.createBiquadFilter();
+    filter.type = 'lowpass';
+    const panner = runtime.audioContext.createStereoPanner();
+    const directGain = runtime.audioContext.createGain();
+    const delay = runtime.audioContext.createDelay(1);
+    const feedbackGain = runtime.audioContext.createGain();
+    const wetGain = runtime.audioContext.createGain();
+    directGain.gain.value = 0;
+    wetGain.gain.value = 0;
+    feedbackGain.gain.value = 0;
+    runtime.audioInputBus.connect(filter);
+    filter.connect(panner);
+    panner.connect(directGain);
+    directGain.connect(runtime.audioMaster);
+    panner.connect(delay);
+    delay.connect(feedbackGain);
+    feedbackGain.connect(delay);
+    delay.connect(wetGain);
+    wetGain.connect(runtime.audioMaster);
+    runtime.audioSends.set(atom.id, { filter, panner, directGain, delay, feedbackGain, wetGain });
+  }
+}
+
+function updateTransportButton() {
+  playButton.innerHTML = runtime.playing ? '&#10074;&#10074;' : '&#9654;';
+  playButton.setAttribute('aria-label', runtime.playing ? 'Pause' : 'Play');
+}
+
+function audioClockTime() {
+  if (!runtime.playing || !runtime.audioContext) return runtime.transportOffsetSeconds;
+  const elapsed = runtime.audioContext.currentTime - runtime.playbackContextStartedAt;
+  return Math.min(runtime.audioBuffer.duration, runtime.transportOffsetSeconds + elapsed);
+}
+
+function stopBufferSource({ preserveTime = true } = {}) {
+  if (!runtime.audioBufferSource) return;
+  if (preserveTime) runtime.transportOffsetSeconds = audioClockTime();
+  const source = runtime.audioBufferSource;
+  runtime.audioBufferSource = null;
+  runtime.playing = false;
+  source.onended = null;
+  source.stop();
+  updateTransportButton();
+}
+
+function startBufferSource() {
+  stopBufferSource({ preserveTime: false });
+  if (runtime.transportOffsetSeconds >= runtime.audioBuffer.duration) runtime.transportOffsetSeconds = 0;
+  const source = runtime.audioContext.createBufferSource();
+  source.buffer = runtime.audioBuffer;
+  source.connect(runtime.audioInputBus);
+  source.onended = () => {
+    if (runtime.audioBufferSource !== source) return;
+    runtime.transportOffsetSeconds = runtime.audioBuffer.duration;
+    runtime.audioBufferSource = null;
+    runtime.playing = false;
+    updateTransportButton();
+  };
+  runtime.playbackContextStartedAt = runtime.audioContext.currentTime;
+  runtime.audioBufferSource = source;
+  runtime.playing = true;
+  source.start(0, runtime.transportOffsetSeconds);
+  updateTransportButton();
+}
+
+function measureAudioOutput() {
+  if (!runtime.audioAnalyser) return runtime.audioOutput;
+  const waveform = new Float32Array(runtime.audioAnalyser.fftSize);
+  runtime.audioAnalyser.getFloatTimeDomainData(waveform);
+  let sumSquares = 0;
+  let peak = 0;
+  for (const sample of waveform) {
+    sumSquares += sample * sample;
+    peak = Math.max(peak, Math.abs(sample));
+  }
+  runtime.audioOutput = {
+    rms: Math.sqrt(sumSquares / waveform.length),
+    peak,
+  };
+  return runtime.audioOutput;
+}
+
+function updateAudioSends(spatialization) {
+  if (!runtime.audioContext) return;
+  const now = runtime.audioContext.currentTime;
+  const byId = new Map(spatialization.emitters.map(emitter => [emitter.id, emitter]));
+  const directTotal = spatialization.emitters.reduce((sum, emitter) => sum + emitter.send.direct, 0) || 1;
+  for (const [id, sendNodes] of runtime.audioSends) {
+    const emitter = byId.get(id);
+    const direct = emitter ? emitter.send.direct / directTotal * 0.84 : 0;
+    const wet = emitter ? emitter.send.reverb / Math.max(1, spatialization.emitters.length) * 0.42 : 0;
+    const latencySamples = runtime.stage.atoms.find(atom => atom.id === id)?.graph.latencySamples || 0;
+    sendNodes.filter.frequency.setTargetAtTime(emitter?.send.lowpassHz || 1200, now, 0.025);
+    sendNodes.panner.pan.setTargetAtTime(emitter?.send.pan || 0, now, 0.025);
+    sendNodes.directGain.gain.setTargetAtTime(direct, now, 0.025);
+    sendNodes.delay.delayTime.setTargetAtTime(Math.min(0.32, latencySamples / 44100 + (emitter?.send.spread || 0) * 0.11), now, 0.04);
+    sendNodes.feedbackGain.gain.setTargetAtTime(Math.min(0.64, (emitter?.send.reverb || 0) * 0.58), now, 0.04);
+    sendNodes.wetGain.gain.setTargetAtTime(wet, now, 0.04);
+  }
+}
+
+function stagePoint(position, width, height) {
+  const mobile = window.innerWidth <= 820;
+  const railSpace = mobile ? 0 : 276;
+  const stageWidth = width - railSpace;
+  const depth = Number(controls.depth.value);
+  const stageTop = mobile ? 98 : 72;
+  const stageBottom = mobile ? height - 294 : height - 92;
+  const stageHeight = Math.max(1, stageBottom - stageTop);
+  return {
+    x: stageWidth * 0.5 + position[0] * stageWidth * (mobile ? 0.27 : 0.34) * depth,
+    y: stageTop + stageHeight * 0.5 - position[2] * stageHeight * 0.31 * depth,
+  };
+}
+
+function atomColor(index) {
+  return ['#ff806e', '#77e6d5', '#fff0a8', '#9faf63', '#da8fff'][index % 5];
+}
+
+function drawStage(timeSeconds) {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const pixelWidth = Math.round(width * dpr);
+  const pixelHeight = Math.round(height * dpr);
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.fillStyle = '#101216';
+  context.fillRect(0, 0, width, height);
+
+  context.strokeStyle = 'rgba(245,242,233,0.055)';
+  context.lineWidth = 1;
+  for (let row = 0; row < 9; row += 1) {
+    const y = 92 + row * (height - 190) / 8;
+    context.beginPath();
+    context.moveTo(0, y);
+    context.lineTo(width, y + Math.sin(row * 1.7) * 10);
+    context.stroke();
+  }
+
+  if (!runtime.materialFrame) {
+    context.fillStyle = '#777e82';
+    context.font = '12px ui-monospace, monospace';
+    context.fillText(runtime.status === 'failed' ? 'SOURCE GATE FAILED' : 'RESOLVING MATERIAL SOURCE', 24, 116);
+    return;
+  }
+
+  const atomByGraphId = new Map(runtime.stage.atoms.map(atom => [String(atom.graph.nodeId), atom]));
+  context.lineCap = 'round';
+  for (const connection of runtime.stage.sourceGraph.connections || []) {
+    const from = atomByGraphId.get(String(connection.sourceNode));
+    const to = atomByGraphId.get(String(connection.destNode));
+    if (!from || !to) continue;
+    const a = stagePoint(from.stage.position, width, height);
+    const b = stagePoint(to.stage.position, width, height);
+    const pulse = 0.4 + 0.6 * Math.sin(timeSeconds * 3 + Number(connection.sourceNode));
+    context.strokeStyle = connection.feedback ? `rgba(255,128,110,${0.18 + pulse * 0.22})` : `rgba(119,230,213,${0.09 + pulse * 0.12})`;
+    context.lineWidth = connection.feedback ? 2 : 1;
+    context.setLineDash(connection.feedback ? [7, 8] : []);
+    context.beginPath();
+    context.moveTo(a.x, a.y);
+    context.bezierCurveTo(a.x, a.y - 70, b.x, b.y + 70, b.x, b.y);
+    context.stroke();
+  }
+  context.setLineDash([]);
+
+  for (const [index, atom] of runtime.materialFrame.materialAtoms.entries()) {
+    const sourceAtom = runtime.stage.atoms.find(candidate => candidate.id === atom.id);
+    const point = stagePoint(atom.position, width, height);
+    const color = atomColor(index);
+    const heat = atom.field.heat;
+    const radius = 24 + heat * 72 + atom.field.feedbackMemory * 22;
+
+    context.save();
+    context.translate(point.x, point.y);
+    context.rotate(Math.sin(timeSeconds * 0.37 + index) * 0.13);
+    context.strokeStyle = color;
+    context.globalAlpha = 0.18 + heat * 0.52;
+    context.lineWidth = 2 + heat * 4;
+    context.beginPath();
+    for (let step = 0; step <= 36; step += 1) {
+      const phase = step / 36 * Math.PI * 2;
+      const warp = 1 + 0.17 * Math.sin(phase * 3 + timeSeconds * (1.2 + atom.field.coupling) + index);
+      const x = Math.cos(phase) * radius * warp;
+      const y = Math.sin(phase) * radius * (0.42 + atom.field.occlusion * 0.25) * warp;
+      if (step === 0) context.moveTo(x, y); else context.lineTo(x, y);
+    }
+    context.closePath();
+    context.stroke();
+
+    context.globalAlpha = 1;
+    const particleCount = 10 + Math.round(heat * 18 + atom.field.feedbackMemory * 10);
+    for (let particle = 0; particle < particleCount; particle += 1) {
+      const phase = particle * 2.399 + timeSeconds * (0.4 + atom.field.coupling * 1.3);
+      const radial = radius * (0.18 + ((particle * 37) % 83) / 100);
+      const x = Math.cos(phase) * radial;
+      const y = Math.sin(phase * 1.13) * radial * 0.5 - Math.sin(timeSeconds * 2.1 + particle) * heat * 13;
+      context.fillStyle = particle % 4 === 0 ? '#f5f2e9' : color;
+      context.globalAlpha = 0.24 + heat * 0.66;
+      context.fillRect(x - 1.5, y - 1.5, 3 + heat * 2, 3 + heat * 2);
+    }
+    context.restore();
+
+    context.globalAlpha = 1;
+    context.fillStyle = '#f5f2e9';
+    context.font = '600 11px ui-sans-serif, system-ui';
+    context.fillText(atom.label, point.x - radius, point.y + radius * 0.7 + 18);
+    context.fillStyle = '#747c7e';
+    context.font = '9px ui-monospace, monospace';
+    const authorityText = sourceAtom?.materialRegion.bindingAuthority === 'pulp-design-ir-param-key' ? 'DESIGNIR' : 'GRAPH';
+    context.fillText(`${authorityText} / ${atom.field.heat.toFixed(2)}`, point.x - radius, point.y + radius * 0.7 + 32);
+  }
+}
+
+function updateReadouts(sourceFrame, visualSeconds) {
+  const audioTime = audioClockTime();
+  nodes.audioClock.textContent = `${audioTime.toFixed(3)} s`;
+  nodes.visualClock.textContent = `${visualSeconds.toFixed(3)} s`;
+  nodes.featureFrame.textContent = `${sourceFrame.index + 1} / ${runtime.frames.length}`;
+  nodes.energy.textContent = sourceFrame.energy.toFixed(2);
+  nodes.onset.textContent = sourceFrame.onsetStrength.toFixed(2);
+  nodes.recurrence.textContent = sourceFrame.recurrenceConfidence.toFixed(2);
+  nodes.centroid.textContent = sourceFrame.spectralCentroid.toFixed(2);
+  nodes.time.textContent = formatTime(audioTime);
+  nodes.duration.textContent = formatTime(runtime.audioBuffer?.duration);
+  seek.value = runtime.audioBuffer?.duration ? String(audioTime / runtime.audioBuffer.duration) : '0';
+}
+
+function publishDebug(sourceFrame, visualSeconds) {
+  const audioOutput = measureAudioOutput();
+  window.kaminosStageAtomsDebugState = {
+    schema: 'kaminos.stage-atoms-browser-debug.v0',
+    status: runtime.status,
+    requestedRoute: ROUTE_IDENTITY,
+    effectiveRoute: runtime.report?.effectiveRoute || null,
+    requestedSource: runtime.sourceRequested,
+    effectiveSource: runtime.sourceEffective,
+    sourceAuthority: runtime.report?.lastTrustworthyEvidence?.audioInput?.authority || null,
+    decodedSha256: runtime.report?.lastTrustworthyEvidence?.audioInput?.decode?.sha256 || null,
+    downloadSha256: runtime.report?.lastTrustworthyEvidence?.downloadReceipt?.sha256 || null,
+    browserAudioSha256: runtime.audioBrowserSha256,
+    browserAudioEffectiveSource: runtime.audioEffectiveSource,
+    fallbackAuthority: runtime.fallbackAuthority,
+    audioClock: { authority: 'webaudio-context-plus-transport-offset', timeSeconds: audioClockTime(), paused: !runtime.playing },
+    simulationClock: { authority: 'request-animation-frame-performance-now', timeSeconds: visualSeconds, frameNumber: runtime.frameNumber },
+    clockBoundary: 'decoded feature frame selected by AudioContext currentTime plus transport offset; render sampled by performance.now()',
+    representativeSelection: runtime.representativeSelection,
+    controls: {
+      coupling: Number(controls.coupling.value),
+      memory: Number(controls.memory.value),
+      depth: Number(controls.depth.value),
+    },
+    featureFrame: sourceFrame,
+    materialFrame: runtime.materialFrame,
+    spatialization: runtime.spatialization,
+    audioGraph: {
+      authority: 'material-spatialization-emitter-sends',
+      sendCount: runtime.audioSends.size,
+      outputRms: audioOutput.rms,
+      outputPeak: audioOutput.peak,
+    },
+    failure: runtime.failure,
+  };
+}
+
+function frame(now) {
+  runtime.frameNumber += 1;
+  const visualSeconds = (now - runtime.visualStartedAt) / 1000;
+  if (runtime.status === 'live') {
+    const state = materialStateAt(audioClockTime());
+    runtime.materialFrame = state.materialFrame;
+    runtime.spatialization = state.spatialization;
+    updateAudioSends(state.spatialization);
+    updateReadouts(state.sourceFrame, visualSeconds);
+    publishDebug(state.sourceFrame, visualSeconds);
+  }
+  drawStage(visualSeconds);
+  requestAnimationFrame(frame);
+}
+
+function fail(error) {
+  runtime.status = 'failed';
+  runtime.failure = String(error?.message || error);
+  runtime.fallbackAuthority = 'none-failed-loud';
+  document.body.dataset.stageAtomsStatus = 'failed';
+  failureNode.hidden = false;
+  failureNode.textContent = runtime.failure;
+  stateNode.dataset.state = 'failed';
+  stateNode.querySelector('span').textContent = 'Failed';
+  authority(sourceAuthorityNode, 'unverified', 'failed');
+  authority(routeAuthorityNode, 'rejected', 'failed');
+  authority(fallbackAuthorityNode, 'none / failed', 'failed');
+  playButton.disabled = true;
+  window.kaminosStageAtomsDebugState = {
+    schema: 'kaminos.stage-atoms-browser-debug.v0',
+    status: 'failed',
+    requestedRoute: ROUTE_IDENTITY,
+    effectiveRoute: runtime.report?.effectiveRoute || null,
+    requestedSource: runtime.sourceRequested,
+    effectiveSource: runtime.sourceEffective,
+    fallbackAuthority: runtime.fallbackAuthority,
+    failure: runtime.failure,
+  };
+}
+
+async function boot() {
+  const response = await fetch(REPORT_URL, { cache: 'no-store' });
+  runtime.sourceEffective = response.url;
+  if (!response.ok) throw new Error(`witness report HTTP ${response.status}: ${response.url}`);
+  const report = await response.json();
+  runtime.report = report;
+  const evidence = report.lastTrustworthyEvidence || {};
+  const decode = evidence.audioInput?.decode;
+  const download = evidence.downloadReceipt;
+  if (report.status !== 'passed') throw new Error(`witness report status ${report.status}`);
+  if (report.effectiveRoute !== ROUTE_IDENTITY) throw new Error(`effective route mismatch: ${report.effectiveRoute}`);
+  if (report.witness?.materialFrame?.featureAuthority !== FEATURE_AUTHORITY) throw new Error(`feature authority mismatch: ${report.witness?.materialFrame?.featureAuthority}`);
+  if (download?.status !== 'downloaded' || !decode?.sha256 || decode.sha256 !== download.sha256) throw new Error('download/decode hash authority mismatch');
+  if (!Array.isArray(evidence.audioInput?.frames) || evidence.audioInput.frames.length === 0) throw new Error('decoded feature frames missing');
+  runtime.stage = report.witness.stage;
+  runtime.frames = evidence.audioInput.frames;
+  runtime.representativeSelection = evidence.featureSelection || null;
+  sourceLink.href = report.witness.stage.sourceAccess.sourcePageUrl;
+  sourceLink.textContent = `${report.witness.stage.sourceAccess.artist} / ${report.witness.stage.sourceAccess.title}`;
+
+  const audioResponse = await fetch(AUDIO_URL, { cache: 'no-store' });
+  runtime.audioEffectiveSource = audioResponse.url;
+  if (!audioResponse.ok) throw new Error(`verified audio asset HTTP ${audioResponse.status}: ${audioResponse.url}`);
+  const encodedAudio = await audioResponse.arrayBuffer();
+  runtime.audioBrowserSha256 = await sha256Hex(encodedAudio);
+  if (runtime.audioBrowserSha256 !== decode.sha256) throw new Error('browser audio hash does not match decoded source receipt');
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  runtime.audioContext = new AudioContextClass();
+  runtime.audioBuffer = await runtime.audioContext.decodeAudioData(encodedAudio.slice(0));
+  ensureAudioGraph();
+  const selectedTime = evidence.featureSelection?.effectiveTimeSeconds || 0;
+  runtime.transportOffsetSeconds = Math.min(runtime.audioBuffer.duration, selectedTime);
+  runtime.status = 'live';
+  document.body.dataset.stageAtomsStatus = 'live';
+  authority(sourceAuthorityNode, `decoded / ${decode.sha256.slice(0, 8)}`, 'verified');
+  authority(routeAuthorityNode, 'material stage', 'verified');
+  authority(fallbackAuthorityNode, 'none', 'verified');
+  stateNode.dataset.state = 'live';
+  stateNode.querySelector('span').textContent = 'Live source';
+  playButton.disabled = false;
+  const initial = materialStateAt(audioClockTime());
+  runtime.materialFrame = initial.materialFrame;
+  runtime.spatialization = initial.spatialization;
+  publishDebug(initial.sourceFrame, 0);
+}
+
+playButton.addEventListener('click', async () => {
+  if (runtime.status !== 'live') return;
+  await runtime.audioContext.resume();
+  if (runtime.playing) stopBufferSource(); else startBufferSource();
+});
+seek.addEventListener('input', () => {
+  if (!runtime.audioBuffer) return;
+  const wasPlaying = runtime.playing;
+  if (wasPlaying) stopBufferSource({ preserveTime: false });
+  runtime.transportOffsetSeconds = Number(seek.value) * runtime.audioBuffer.duration;
+  if (wasPlaying) startBufferSource();
+});
+
+for (const [name, input] of Object.entries(controls)) {
+  const output = document.querySelector(`#stage-atoms-${name}-value`);
+  input.addEventListener('input', () => { output.value = Number(input.value).toFixed(2); });
+}
+
+requestAnimationFrame(frame);
+boot().catch(fail);

@@ -273,7 +273,11 @@ function audioFeature(features, key, fallback = 0) {
   return clamp(features?.[key] ?? fallback, 0, 1);
 }
 
-export function simulateStageMaterialFrame(stage, { t = 0, audioFeatures = {} } = {}) {
+export function simulateStageMaterialFrame(stage, {
+  t = 0,
+  audioFeatures = {},
+  featureAuthority = 'fixture-audio-features-v0',
+} = {}) {
   const energy = audioFeature(audioFeatures, 'energy');
   const onsetStrength = audioFeature(audioFeatures, 'onsetStrength');
   const recurrenceConfidence = audioFeature(audioFeatures, 'recurrenceConfidence');
@@ -323,6 +327,13 @@ export function simulateStageMaterialFrame(stage, { t = 0, audioFeatures = {} } 
     schema: MATERIAL_STAGE_FRAME_SCHEMA,
     routeIdentity: stage.routeIdentity || STAGE_ATOMS_ROUTE_IDENTITY,
     t: finiteNumber(t, 0),
+    featureAuthority,
+    audioFeatures: {
+      energy: Number(energy.toFixed(6)),
+      onsetStrength: Number(onsetStrength.toFixed(6)),
+      recurrenceConfidence: Number(recurrenceConfidence.toFixed(6)),
+      spectralCentroid: Number(spectralCentroid.toFixed(6)),
+    },
     materialAuthority: 'stage-atoms-plus-lawful-audio-v0',
     sourceAccess: stage.sourceAccess,
     materialAtoms,
@@ -380,6 +391,7 @@ export function buildStageAtomsWitness({
   design = {},
   graph = {},
   audioFeatures = {},
+  featureAuthority = 'fixture-audio-features-v0',
   t = 0,
 } = {}) {
   const classifiedSource = sourceAccess?.schema === STAGE_AUDIO_SOURCE_ACCESS_SCHEMA
@@ -392,7 +404,7 @@ export function buildStageAtomsWitness({
   }
 
   const stage = buildStageAtoms({ sourceAccess: classifiedSource, design, graph });
-  const materialFrame = simulateStageMaterialFrame(stage, { t, audioFeatures });
+  const materialFrame = simulateStageMaterialFrame(stage, { t, audioFeatures, featureAuthority });
   const spatialization = spatializeFromStageMaterial(materialFrame, {
     rawAudioFeatures: { energy: 0, onsetStrength: 0, recurrenceConfidence: 0, spectralCentroid: 0 },
   });

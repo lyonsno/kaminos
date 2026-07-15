@@ -7,6 +7,12 @@ import {
   buildStageAtomsWitness,
   classifyAudioSourceAccess,
 } from './stage-atoms-core.mjs';
+import {
+  DECODED_AUDIO_FEATURE_AUTHORITY,
+  analyzeAudioFile,
+  downloadAudioSource,
+  selectAudioFeatureFrame,
+} from './stage-audio-core.mjs';
 
 const REPORT_SCHEMA = 'kaminos.stage-atoms-witness-report.v0';
 
@@ -14,6 +20,12 @@ function parseArgs(argv) {
   const options = {
     fixture: 'ccmixter',
     output: 'artifacts/stage-atoms/stage-atoms-witness.json',
+    audioFile: '',
+    featureRate: 20,
+    downloadUrl: '',
+    sourcePageUrl: '',
+    cacheFile: '',
+    audioTime: null,
   };
   for (let index = 2; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -22,6 +34,24 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === '--output') {
       options.output = argv[index + 1] || options.output;
+      index += 1;
+    } else if (arg === '--audio-file') {
+      options.audioFile = argv[index + 1] || '';
+      index += 1;
+    } else if (arg === '--feature-rate') {
+      options.featureRate = Number(argv[index + 1]);
+      index += 1;
+    } else if (arg === '--download-url') {
+      options.downloadUrl = argv[index + 1] || '';
+      index += 1;
+    } else if (arg === '--source-page-url') {
+      options.sourcePageUrl = argv[index + 1] || '';
+      index += 1;
+    } else if (arg === '--cache-file') {
+      options.cacheFile = argv[index + 1] || '';
+      index += 1;
+    } else if (arg === '--audio-time') {
+      options.audioTime = Number(argv[index + 1]);
       index += 1;
     } else if (arg === '--help' || arg === '-h') {
       options.help = true;
@@ -139,14 +169,14 @@ function writeJson(path, value) {
 
 function helpText() {
   return [
-    'Usage: node stage-atoms-witness.mjs [--fixture ccmixter|spotify-reference] [--output path]',
+    'Usage: node stage-atoms-witness.mjs [--fixture name] [--audio-file path | --download-url url --source-page-url url --cache-file path] [--feature-rate hz] [--audio-time seconds] [--output path]',
     '',
     'Writes a stage-atoms witness report. The spotify-reference fixture is expected',
     'to fail and still write last trustworthy source-access evidence.',
   ].join('\n');
 }
 
-function main() {
+async function main() {
   const options = parseArgs(process.argv);
   if (options.help) {
     console.log(helpText());
@@ -154,7 +184,51 @@ function main() {
   }
 
   const input = fixtureInput(options.fixture);
+  let audioInput = options.audioFile ? {
+    effectivePath: resolve(options.audioFile),
+    authority: 'requested-local-audio-file',
+    decode: null,
+  } : null;
+  let downloadReceipt = options.downloadUrl ? {
+    requestedUrl: options.downloadUrl,
+    effectiveUrl: '',
+    sourcePageUrl: options.sourcePageUrl,
+    effectivePath: options.cacheFile ? resolve(options.cacheFile) : '',
+    statusCode: null,
+    contentType: '',
+    status: 'requested',
+  } : null;
+  let featureSelection = null;
   try {
+    if (options.audioFile && options.downloadUrl) {
+      const error = new Error('audio_file_and_download_url_are_mutually_exclusive');
+      error.code = 'audio_input_ambiguous';
+      throw error;
+    }
+    let effectiveAudioFile = options.audioFile;
+    if (options.downloadUrl) {
+      downloadReceipt = await downloadAudioSource({
+        downloadUrl: options.downloadUrl,
+        sourcePageUrl: options.sourcePageUrl,
+        cacheFile: options.cacheFile,
+      });
+      effectiveAudioFile = downloadReceipt.effectivePath;
+    }
+    if (effectiveAudioFile) {
+      audioInput = analyzeAudioFile(effectiveAudioFile, { featureRateHz: options.featureRate });
+      const selection = selectAudioFeatureFrame(audioInput, { timeSeconds: options.audioTime });
+      featureSelection = selection.receipt;
+      input.audioFeatures = selection.frame;
+      input.t = selection.frame.t;
+      input.featureAuthority = DECODED_AUDIO_FEATURE_AUTHORITY;
+      input.sourceAccess = {
+        ...input.sourceAccess,
+        localPath: audioInput.effectivePath,
+        receiptWarnings: (input.sourceAccess.receiptWarnings || []).filter(
+          warning => warning !== 'direct_mp3_probe_returned_403_use_ccmixter_page_or_download_flow' || downloadReceipt?.status !== 'downloaded',
+        ),
+      };
+    }
     const witness = buildStageAtomsWitness(input);
     const report = {
       schema: REPORT_SCHEMA,
@@ -166,6 +240,9 @@ function main() {
       lastTrustworthyEvidence: {
         sourceAccess: input.sourceAccess,
         fixture: options.fixture,
+        audioInput,
+        downloadReceipt,
+        featureSelection,
       },
     };
     writeJson(options.output, report);
@@ -174,7 +251,13 @@ function main() {
     const report = {
       schema: REPORT_SCHEMA,
       status: 'failed',
-      failurePhase: error?.code === 'analysis_not_allowed' ? 'source_access' : 'witness_build',
+      failurePhase: error?.code === 'analysis_not_allowed'
+        ? 'source_access'
+        : error?.code === 'audio_decode_failed'
+          ? 'audio_decode'
+          : error?.code === 'audio_download_failed'
+            ? 'audio_download'
+          : 'witness_build',
       errorCode: error?.code || 'unknown_error',
       errorMessage: String(error?.message || error),
       requestedFixture: options.fixture,
@@ -183,6 +266,9 @@ function main() {
       lastTrustworthyEvidence: {
         sourceAccess: input.sourceAccess,
         fixture: options.fixture,
+        audioInput,
+        downloadReceipt: error?.receipt || downloadReceipt,
+        featureSelection,
       },
     };
     writeJson(options.output, report);
@@ -190,4 +276,4 @@ function main() {
   }
 }
 
-process.exitCode = main();
+process.exitCode = await main();

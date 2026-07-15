@@ -4,3 +4,4 @@ scratch/*
 scenes/*
 !scenes/.gitkeep
 artifacts/volume-captures/
+artifacts/stage-atoms/local-audio/
