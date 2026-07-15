@@ -70,8 +70,17 @@ assert.match(witness, /siblingPngPath\('-ao-on'\)/, 'AO route witness captures a
 assert.match(witness, /siblingPngPath\('-ao-off'\)/, 'AO route witness captures an AO-off screenshot artifact');
 assert.match(witness, /assertPngScreenshot\(/, 'witness validates screenshot output before claiming visual evidence');
 assert.match(witness, /mesh asset link did not preserve requested\/effective route identity/, 'direct GLB asset witness proves requested and effective route identity');
+assert.match(witness, /mesh asset link used the wrong requested route identity/, 'direct GLB witness compares app state to the independently requested smoke URL');
 assert.match(witness, /mesh asset link did not register the loaded GLB as a scene object/, 'direct GLB asset witness proves the route mounts a registered scene object');
 assert.match(witness, /mesh asset link registered without a matching browser resource request/, 'direct GLB asset witness proves the browser requested the effective asset route');
+assert.match(witness, /splat asset link did not preserve requested\/effective route identity/, 'direct PLY asset witness proves requested and effective route identity');
+assert.match(witness, /splat asset link used the wrong requested route identity/, 'direct PLY witness compares app state to the independently requested smoke URL');
+assert.match(witness, /splat asset link did not register the loaded splat as a scene object/, 'direct PLY asset witness proves the route mounts a registered scene object');
+assert.match(witness, /splat asset link registered without a matching browser resource request/, 'direct PLY asset witness proves the browser requested the effective asset route');
+assert.match(witness, /image asset link did not preserve requested\/effective route identity/, 'direct image asset witness proves requested and effective route identity');
+assert.match(witness, /image asset link used the wrong requested route identity/, 'direct image witness compares app state to the independently requested smoke URL');
+assert.match(witness, /image asset link did not register the loaded image as a scene object/, 'direct image asset witness proves the route mounts a registered scene object');
+assert.match(witness, /image asset link registered without a matching browser resource request/, 'direct image asset witness proves the browser requested the effective asset route');
 assert.match(witness, /default replace did not keep one row/, 'witness proves unchecked imports replace rather than append');
 assert.match(witness, /default replace did not create one explicit demo row before proving replace/, 'witness creates an explicit demo row before proving replace behavior');
 assert.match(witness, /default replace did not complete with a new row/, 'witness waits for unchecked replace to complete instead of accepting a stale single row');
