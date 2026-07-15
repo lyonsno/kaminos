@@ -478,6 +478,10 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   if (schedulerApplication && schedulerApplication.snapshot().routeId !== input.routeId) {
     throw new Error('schedulerApplication route mismatch');
   }
+  const admissionCoordinator = input.admissionCoordinator || null;
+  if (admissionCoordinator != null && typeof admissionCoordinator.requestAdmission !== 'function') {
+    throw new Error('admissionCoordinator must expose requestAdmission');
+  }
   let invocationSequence = 0;
 
   function fallbackInvocation(invocationId) {
@@ -545,6 +549,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     hostPhases,
     commandDuties,
     schedulerApplication,
+    admissionCoordinator,
 
     getShaderModule(label, code, descriptor) {
       return resourceCaches.getShaderModule(label, code, descriptor);
@@ -662,6 +667,9 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       return createWebGpuInferenceQueue({
         ...options,
         routeId: options.routeId || input.routeId,
+        admissionCoordinator: Object.hasOwn(options, 'admissionCoordinator')
+          ? options.admissionCoordinator
+          : admissionCoordinator,
         runtime,
       });
     },

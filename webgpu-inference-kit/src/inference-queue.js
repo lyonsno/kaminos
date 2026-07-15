@@ -49,6 +49,13 @@ export function createWebGpuInferenceQueue(input = {}) {
   if (input.maxJobs != null || input.maxPendingJobs != null || input.progressLimit != null) {
     throw new Error('the inference queue does not impose a hidden job cap; retention is uncapped until explicit forget');
   }
+  const admissionCoordinator = input.admissionCoordinator || null;
+  if (admissionCoordinator != null && (
+    typeof admissionCoordinator.requestAdmission !== 'function'
+    || typeof admissionCoordinator.snapshot !== 'function'
+  )) {
+    throw new Error('admissionCoordinator must expose requestAdmission and snapshot');
+  }
   const now = input.now || (() => globalThis.performance?.now?.() ?? Date.now());
   if (typeof now !== 'function') throw new Error('now must be a function');
 
@@ -85,6 +92,8 @@ export function createWebGpuInferenceQueue(input = {}) {
       failure: clone(job.failure),
       cancellation: clone(job.cancellation),
       progress: clone(job.progress),
+      admissionSequence: job.admissionSequence,
+      admissionStatus: job.admissionStatus,
     };
   }
 
@@ -109,6 +118,9 @@ export function createWebGpuInferenceQueue(input = {}) {
         : (isIdle() ? 'idle' : 'processing'),
       retention: 'uncapped-until-explicit-forget',
       cancellationAuthority: 'pending-jobs-only-no-active-work-preemption',
+      admissionPolicy: admissionCoordinator == null
+        ? 'route-local-fifo'
+        : 'shared-global-fifo-by-eligible-route-head',
       activeJobId: state.activeJob?.jobId || null,
       pendingJobCount: state.pendingJobs.length,
       pendingDecisionCount: state.pendingDecisions.length,
@@ -156,6 +168,7 @@ export function createWebGpuInferenceQueue(input = {}) {
       ...(job.outputPresent ? { output: inputCompletion.output } : {}),
       ...(job.failure ? { failure: deepFreeze(clone(job.failure)) } : {}),
       ...(job.cancellation ? { cancellation: deepFreeze(clone(job.cancellation)) } : {}),
+      ...(job.admission ? { admission: deepFreeze(clone(job.admission)) } : {}),
     });
     job.completion.resolve(completion);
     return completion;
@@ -232,6 +245,31 @@ export function createWebGpuInferenceQueue(input = {}) {
     }
   }
 
+  async function awaitAdmission(job) {
+    if (admissionCoordinator == null) return true;
+    const admissionHandle = admissionCoordinator.requestAdmission({
+      routeId,
+      jobId: job.jobId,
+      metadata: job.metadata,
+    });
+    job.admissionHandle = admissionHandle;
+    job.admissionSequence = admissionHandle.sequence;
+    job.admissionStatus = 'pending';
+    const admission = await admissionHandle.admission;
+    job.admissionStatus = admission.status;
+    if (admission.status !== 'granted' || job.status !== 'pending') return false;
+    job.admission = {
+      schema: admission.schema,
+      schedulingPolicy: admission.schedulingPolicy,
+      sequence: admission.sequence,
+      routeId: admission.routeId,
+      jobId: admission.jobId,
+      requestedAtMs: admission.requestedAtMs,
+      grantedAtMs: admission.grantedAtMs,
+    };
+    return true;
+  }
+
   async function pump() {
     if (state.pumping) return;
     state.pumpScheduled = false;
@@ -241,8 +279,29 @@ export function createWebGpuInferenceQueue(input = {}) {
         while (state.pendingDecisions.length > 0) {
           await applyDecision(state.pendingDecisions.shift());
         }
-        const job = state.pendingJobs.shift();
-        if (job) await executeJob(job);
+        const job = state.pendingJobs[0];
+        if (job) {
+          const admitted = await awaitAdmission(job);
+          if (!admitted) continue;
+          const pendingIndex = state.pendingJobs.indexOf(job);
+          if (pendingIndex === -1) {
+            job.admissionHandle.cancel('job-left-pending-queue-before-start');
+            continue;
+          }
+          state.pendingJobs.splice(pendingIndex, 1);
+          if (job.admissionHandle) {
+            job.admissionHandle.begin();
+            job.admissionStatus = 'running';
+          }
+          try {
+            await executeJob(job);
+          } finally {
+            if (job.admissionHandle) {
+              const release = job.admissionHandle.release({ jobStatus: job.status });
+              job.admissionStatus = release.status;
+            }
+          }
+        }
       }
     } finally {
       state.pumping = false;
@@ -277,6 +336,10 @@ export function createWebGpuInferenceQueue(input = {}) {
       failure: null,
       cancellation: null,
       progress: [],
+      admissionHandle: null,
+      admission: null,
+      admissionSequence: null,
+      admissionStatus: admissionCoordinator == null ? 'route-local' : 'not-requested',
       completion: createDeferred(),
     };
     state.jobs.set(job.jobId, job);
@@ -292,6 +355,13 @@ export function createWebGpuInferenceQueue(input = {}) {
         }
         if (job.status !== 'pending') {
           return cancellationReceipt(job, 'not-cancelled-terminal', normalizedReason);
+        }
+        if (job.admissionHandle) {
+          const admissionCancellation = job.admissionHandle.cancel(normalizedReason);
+          if (admissionCancellation.status === 'not-cancelled-active') {
+            return cancellationReceipt(job, 'not-cancelled-active', normalizedReason);
+          }
+          job.admissionStatus = admissionCancellation.status;
         }
         const pendingIndex = state.pendingJobs.indexOf(job);
         if (pendingIndex === -1) {

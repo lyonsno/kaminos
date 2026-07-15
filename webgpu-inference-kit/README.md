@@ -363,6 +363,31 @@ const applicationReceipt = await inferenceQueue.scheduleSchedulerDecision(decisi
 
 A queued decision waits for the active invocation to finish and applies before the next pending job. The queue owns an immutable copy of the decision, records applied and failed control attempts, and continues processing after job or decision failure. `snapshot()` exposes every retained job and decision without a hidden cap; `forgetJob(jobId)` is the explicit reclamation boundary, and `drain()` resolves once no job, decision, or active invocation remains.
 
+## Multi-Route Admission
+
+SHARP, SF3D, Kimodo, and other long routes can share one admission coordinator while keeping separate route runtimes and queues:
+
+```js
+const coordinator = createWebGpuInferenceCoordinator();
+const sharpRuntime = await createWebGpuInferenceRuntime({
+  routeId: SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
+  device,
+  adapterName,
+  admissionCoordinator: coordinator,
+});
+const sf3dRuntime = await createWebGpuInferenceRuntime({
+  routeId: SF3D_IMAGE_TO_MESH_ROUTE_ID,
+  device,
+  adapterName,
+  admissionCoordinator: coordinator,
+});
+
+const sharpQueue = sharpRuntime.createInferenceQueue();
+const sf3dQueue = sf3dRuntime.createInferenceQueue();
+```
+
+Each queue offers only its locally eligible head job after scheduler barriers have applied. The coordinator grants those heads in global FIFO order, so one route cannot reserve the browser GPU with its entire backlog. Pending jobs can cancel while awaiting admission; active invocations remain explicitly non-preemptible. Coordinator snapshots retain every admission until `forgetAdmission(sequence)`, and `drain()` resolves only when no admission is active, pending, or scheduled.
+
 ## Receipt And Evidence Layer
 
 Receipts answer: did this output actually come from the route, backend, model, and kernel the consumer thinks it did?

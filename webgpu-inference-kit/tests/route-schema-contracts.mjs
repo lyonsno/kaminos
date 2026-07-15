@@ -15,7 +15,7 @@ import {
 
 const contract = createWebGpuRouteSchemaContract();
 
-assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.17');
+assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.18');
 assert.equal(WEBGPU_ROUTE_DEFINITION_SCHEMA, 'kaminos.webgpu-route-definition.v0');
 assert.equal(WEBGPU_ROUTE_REQUEST_SCHEMA, 'kaminos.webgpu-route-request.v0');
 assert.equal(WEBGPU_ROUTE_RESULT_SCHEMA, 'kaminos.webgpu-route-result.v0');
