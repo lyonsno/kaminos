@@ -61,6 +61,11 @@ assert.match(
   /oracleActivityFireDetailRequested[\s\S]*?oracleActivityFireDetailEffective[\s\S]*?scalar-activity-fire-detail-gain-mismatch/,
   'scalar-cue witnesses fail loud unless the requested signed fire-detail gain is the effective bounded gain',
 );
+assert.match(
+  exporter,
+  /oracleActivitySplatOpacityRequested[\s\S]*?oracleActivitySplatOpacityEffective[\s\S]*?scalar-activity-splat-opacity-gain-mismatch/,
+  'scalar-cue witnesses fail loud unless the requested signed learned-splat opacity gain is the effective bounded gain',
+);
 assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
 assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
 assert.match(exporter, /deterministicReplay/, 'exporter preserves deterministic replay identity');

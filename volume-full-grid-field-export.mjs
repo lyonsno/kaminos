@@ -628,8 +628,17 @@ async function main() {
       const oracleActivityFireDetail = Object.hasOwn(renderControlOverrides, 'oracleActivityFireDetail')
         ? Number(renderControlOverrides.oracleActivityFireDetail)
         : 0;
+      const oracleActivitySplatOpacity = Object.hasOwn(renderControlOverrides, 'oracleActivitySplatOpacity')
+        ? Number(renderControlOverrides.oracleActivitySplatOpacity)
+        : 0;
       if (!Number.isFinite(oracleActivityFireDetail) || oracleActivityFireDetail < -2 || oracleActivityFireDetail > 2) {
         throw new Error(`scalar activity cue fire-detail gain is outside [-2, 2]: ${renderControlOverrides.oracleActivityFireDetail}`);
+      }
+      if (!Number.isFinite(oracleActivitySplatOpacity) || oracleActivitySplatOpacity < -2 || oracleActivitySplatOpacity > 2) {
+        throw new Error(`scalar activity cue splat-opacity gain is outside [-2, 2]: ${renderControlOverrides.oracleActivitySplatOpacity}`);
+      }
+      if (oracleActivitySplatOpacity !== 0 && renderComposition === 'raymarch-only-v0') {
+        throw new Error('scalar activity cue splat-opacity assay requires a splat render composition');
       }
       renderControlOverrides = {
         ...renderControlOverrides,
@@ -639,6 +648,7 @@ async function main() {
         oracleActivityVorticity: 0,
         oracleActivityMaterial: 0,
         oracleActivityFireDetail,
+        oracleActivitySplatOpacity,
       };
     }
     const resolved = resolveSourceCapture();
@@ -858,6 +868,16 @@ async function main() {
             throw new Error(`scalar-activity-fire-detail-gain-mismatch: requested=${requestedFireDetail} receipt=${JSON.stringify({
               oracleActivityFireDetailRequested: renderReceipt.oracleActivityFireDetailRequested,
               oracleActivityFireDetailEffective: renderReceipt.oracleActivityFireDetailEffective,
+            })}`);
+          }
+          const requestedSplatOpacity = Number(renderControlOverrides.oracleActivitySplatOpacity || 0);
+          if (
+            renderReceipt.oracleActivitySplatOpacityRequested !== requestedSplatOpacity
+            || renderReceipt.oracleActivitySplatOpacityEffective !== requestedSplatOpacity
+          ) {
+            throw new Error(`scalar-activity-splat-opacity-gain-mismatch: requested=${requestedSplatOpacity} receipt=${JSON.stringify({
+              oracleActivitySplatOpacityRequested: renderReceipt.oracleActivitySplatOpacityRequested,
+              oracleActivitySplatOpacityEffective: renderReceipt.oracleActivitySplatOpacityEffective,
             })}`);
           }
         }

@@ -690,6 +690,11 @@ assert.match(
 );
 assert.match(
   core,
+  /splatOpacityGain:\s*clampFinite\(snapshot\.oracleActivitySplatOpacity,\s*-2,\s*2,\s*0\)/,
+  'render-only scalar activity splat opacity gain is signed, bounded, and inert by default',
+);
+assert.match(
+  core,
   /fn renderOnlyScalarActivityCueHighPassAtCell[\s\S]*?oracle_activity_controls2\.y[\s\S]*?oracleActivityCue\[centerIdx\][\s\S]*?neighborMean[\s\S]*?centerCue - neighborMean/,
   'render-only fire detail consumes an uploaded external cue through local six-neighbor high-pass contrast',
 );
@@ -703,6 +708,24 @@ assert.doesNotMatch(core, /stockFireAlpha[\s\S]{0,800}?oracleFireDetail/, 'rende
 assert.equal((core.match(/oracleFireDetailColorGain/g) || []).length, 2, 'fire-detail color gain has one definition and one final-material application');
 assert.match(core, /oracleActivityFireDetailRequested/, 'frozen render receipt records requested fire-detail gain');
 assert.match(core, /oracleActivityFireDetailEffective/, 'frozen render receipt records effective bounded fire-detail gain');
+assert.match(core, /activityControls:\s*vec4<f32>/, 'boundary-splat uniforms carry isolated scalar-activity composition controls');
+assert.match(core, /@group\(0\)\s*@binding\(7\)\s*var<storage,\s*read>\s*scalarActivityCue:\s*array<f32>/, 'boundary-splat compaction reads the imported scalar activity cue directly');
+assert.match(
+  core,
+  /fn boundarySplatScalarActivityHighPass[\s\S]*?scalarActivityCue\[centerIndex\][\s\S]*?neighborMean[\s\S]*?centerCue - neighborMean/,
+  'boundary-splat opacity composition derives local six-neighbor contrast from the imported cue',
+);
+assert.match(
+  core,
+  /let attributeOutput = applyBoundarySplatAttributeHook[\s\S]*?var composedColorOpacity = attributeOutput\.colorOpacity[\s\S]*?composedColorOpacity\.a \*= [^;]+[\s\S]*?boundarySplats\[candidateIndex\]\.colorOpacity = composedColorOpacity/,
+  'scalar activity modulates learned-splat opacity after the attribute head without replacing its color prediction',
+);
+assert.doesNotMatch(core, /structuralSignal\s*[+*=-][^;]*oracleActivity|candidateCount[\s\S]{0,300}?oracleActivity|radius[\s\S]{0,300}?oracleActivity/, 'splat activity composition does not alter candidate birth or splat radius');
+assert.match(core, /binding:\s*7,\s*visibility:\s*GPUShaderStage\.COMPUTE,\s*buffer:\s*\{\s*type:\s*'read-only-storage'\s*\}/, 'boundary-splat compute layout declares the scalar activity cue binding');
+assert.match(core, /\{ binding:\s*7,\s*resource:\s*\{ buffer:\s*oracleActivityCueBuffer \}\s*\}/, 'boundary-splat compute bind groups bind the effective imported cue buffer');
+assert.match(core, /oracleActivitySplatOpacityRequested/, 'frozen render receipt records requested splat-opacity gain');
+assert.match(core, /oracleActivitySplatOpacityEffective/, 'frozen render receipt records effective bounded splat-opacity gain');
+assert.match(core, /render-only-external-carrier-high-pass-learned-splat-opacity-v0/, 'frozen render receipt names the isolated learned-splat opacity application route');
 assert.match(core, /oracleActivityCurlNoiseForce/, 'fluid shader exposes scalar activity gated curl-noise force hook');
 assert.match(core, /oracleActivityVorticityConfinement/, 'fluid shader exposes scalar activity gated vorticity confinement hook');
 assert.match(core, /oracleActivityMaterialBirth/, 'fluid shader exposes scalar activity gated material/interface birth hook');
