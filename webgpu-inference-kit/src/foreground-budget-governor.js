@@ -1,3 +1,8 @@
+import {
+  WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
+  WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
+} from './command-duty-descriptor.js';
+
 export const FOREGROUND_BUDGET_GOVERNOR_SCHEMA = 'kaminos.foreground-budget-governor-decision.v0';
 
 const HOST_CORRELATION_SCHEMA = 'kaminos.foreground-host-event-correlation.v0';
@@ -117,7 +122,98 @@ function validateConfig(input) {
   return scheduler;
 }
 
-function validateObservation(observation) {
+function validateCommandDutyObservation(observation, state, failures) {
+  const profile = observation?.commandDutyObservation;
+  if (profile == null) return;
+  if (profile?.schema !== WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA || profile?.status !== 'observed') {
+    failures.push('command-duty-observation-invalid');
+  }
+  const executionIdentity = observation?.executionIdentity;
+  if (!isPlainObject(executionIdentity)
+    || !isNonEmptyString(executionIdentity.routeId)
+    || !isNonEmptyString(executionIdentity.runId)
+    || !isNonEmptyString(executionIdentity.clockId)) {
+    failures.push('command-duty-execution-identity-invalid');
+  }
+  const profileIdentity = profile?.identity;
+  if (!isPlainObject(profileIdentity)) {
+    failures.push('command-duty-identity-invalid');
+  } else {
+    if (profileIdentity.routeId !== executionIdentity?.routeId) failures.push('command-duty-route-mismatch');
+    if (profileIdentity.runId !== executionIdentity?.runId) failures.push('command-duty-run-mismatch');
+    if (profileIdentity.clockId !== executionIdentity?.clockId) failures.push('command-duty-clock-mismatch');
+    if (profileIdentity.firingId !== observation?.firingId) failures.push('command-duty-firing-mismatch');
+  }
+  if (profile?.retention !== 'uncapped') failures.push('command-duty-retention-invalid');
+  if (!Array.isArray(profile?.duties)) {
+    failures.push('command-duty-detail-missing');
+    return;
+  }
+  if (profile.dutyCount !== profile.duties.length) failures.push('command-duty-count-mismatch');
+
+  let observedDurationMs = 0;
+  let foregroundOverlapDurationMs = 0;
+  const dutyIds = new Set();
+  for (const row of profile.duties) {
+    const descriptor = row?.descriptor;
+    if (descriptor?.schema !== WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA
+      || !isNonEmptyString(descriptor?.dutyId)
+      || !isNonEmptyString(descriptor?.phase)
+      || !['compute', 'copy', 'render', 'mixed'].includes(descriptor?.kind)) {
+      failures.push('command-duty-descriptor-invalid');
+      continue;
+    }
+    if (dutyIds.has(descriptor.dutyId)) failures.push('command-duty-duplicate-id');
+    dutyIds.add(descriptor.dutyId);
+    if (descriptor.routeId !== profileIdentity?.routeId
+      || descriptor.runId !== profileIdentity?.runId
+      || descriptor.clockId !== profileIdentity?.clockId) {
+      failures.push('command-duty-descriptor-identity-mismatch');
+    }
+    const boundary = descriptor.submissionBoundary;
+    if (!isPlainObject(boundary)
+      || boundary.interruptible !== false
+      || boundary.canSplitBefore !== true
+      || boundary.canSplitAfter !== true
+      || boundary.authority !== 'submitted-command-buffer-non-preemptible') {
+      failures.push('command-duty-boundary-invalid');
+    }
+    if (!isFiniteNonNegative(row?.observedDurationMs)
+      || !isFiniteNonNegative(row?.foregroundOverlapDurationMs)
+      || row.foregroundOverlapDurationMs > row.observedDurationMs) {
+      failures.push('command-duty-duration-invalid');
+      continue;
+    }
+    observedDurationMs += row.observedDurationMs;
+    foregroundOverlapDurationMs += row.foregroundOverlapDurationMs;
+
+    const control = descriptor.chunkControl;
+    if (control == null) continue;
+    if (!isPlainObject(control) || !isNonEmptyString(control.controlId)) {
+      failures.push('command-duty-control-invalid');
+      continue;
+    }
+    const expectedBounds = state.bounds.phaseChunkSize[control.controlId];
+    const current = state.scheduler.phaseChunkSize[control.controlId];
+    if (!expectedBounds || !Number.isInteger(current)) {
+      failures.push('command-duty-control-unknown');
+      continue;
+    }
+    if (control.current !== current) failures.push('command-duty-control-current-mismatch');
+    if (stableSerialize(control.bounds) !== stableSerialize(expectedBounds)) {
+      failures.push('command-duty-control-bounds-mismatch');
+    }
+  }
+  if (!isPlainObject(profile.totals)
+    || !isFiniteNonNegative(profile.totals.observedDurationMs)
+    || !isFiniteNonNegative(profile.totals.foregroundOverlapDurationMs)
+    || Math.abs(profile.totals.observedDurationMs - observedDurationMs) > 0.001
+    || Math.abs(profile.totals.foregroundOverlapDurationMs - foregroundOverlapDurationMs) > 0.001) {
+    failures.push('command-duty-totals-incoherent');
+  }
+}
+
+function validateObservation(observation, state) {
   const failures = [];
   const host = observation?.hostEventCorrelation;
   const sharp = observation?.sharpDutyCorrelation;
@@ -142,6 +238,8 @@ function validateObservation(observation) {
     failures.push('host-correlation-detail-missing');
   }
   if (!Array.isArray(sharp?.phaseRankings)) failures.push('sharp-correlation-detail-missing');
+
+  validateCommandDutyObservation(observation, state, failures);
 
   const totals = host?.totals;
   const totalFields = [
@@ -177,6 +275,14 @@ function rankedLeader(rankings, key) {
       || left[key].localeCompare(right[key]))[0] || null;
 }
 
+function rankedCommandDuty(duties) {
+  return [...duties]
+    .filter(row => isNonEmptyString(row?.descriptor?.dutyId)
+      && isFiniteNonNegative(row?.foregroundOverlapDurationMs))
+    .sort((left, right) => right.foregroundOverlapDurationMs - left.foregroundOverlapDurationMs
+      || left.descriptor.dutyId.localeCompare(right.descriptor.dutyId))[0] || null;
+}
+
 function makeDecision({
   state,
   observation,
@@ -184,6 +290,8 @@ function makeDecision({
   action,
   target = null,
   measuredPhase = null,
+  commandDutyId = null,
+  commandDutyKind = null,
   schedulerChanged = false,
   failures = [],
   attribution = null,
@@ -194,6 +302,8 @@ function makeDecision({
     action,
     target,
     measuredPhase,
+    commandDutyId,
+    commandDutyKind,
     schedulerChanged,
     applicationAuthority: 'decision-state-only-not-runtime-application',
     revision: state.revision,
@@ -268,7 +378,7 @@ export function createForegroundBudgetGovernor(input = {}) {
 
   function observe(observation = {}) {
     state.previousScheduler = clone(state.scheduler);
-    const failures = validateObservation(observation);
+    const failures = validateObservation(observation, state);
     if (isNonEmptyString(observation?.episodeEpochId)
       && observation.episodeEpochId !== state.episodeEpochId) {
       failures.push('episode-epoch-mismatch');
@@ -418,20 +528,29 @@ export function createForegroundBudgetGovernor(input = {}) {
       }), evidenceFingerprint);
     }
 
-    const sharpLeader = rankedLeader(observation.sharpDutyCorrelation.phaseRankings, 'phase');
-    const leaderFraction = sharpLeader && totals.sharpCoveredDurationMs > 0
-      ? sharpLeader.overlapDurationMs / totals.sharpCoveredDurationMs
-      : 0;
-    const phaseControl = sharpLeader
-      ? (state.phaseControlMap[sharpLeader.phase] || sharpLeader.phase)
+    const commandDutyLeader = observation.commandDutyObservation
+      ? rankedCommandDuty(observation.commandDutyObservation.duties)
       : null;
-    const canReducePhase = sharpLeader
+    const sharpLeader = commandDutyLeader
+      ? null
+      : rankedLeader(observation.sharpDutyCorrelation.phaseRankings, 'phase');
+    const leaderOverlapDurationMs = commandDutyLeader?.foregroundOverlapDurationMs
+      ?? sharpLeader?.overlapDurationMs
+      ?? 0;
+    const leaderFraction = totals.sharpCoveredDurationMs > 0
+      ? leaderOverlapDurationMs / totals.sharpCoveredDurationMs
+      : 0;
+    const phaseControl = commandDutyLeader?.descriptor.chunkControl?.controlId
+      || (sharpLeader ? (state.phaseControlMap[sharpLeader.phase] || sharpLeader.phase) : null);
+    const canReducePhase = (commandDutyLeader || sharpLeader)
       && leaderFraction >= state.dominantPhaseFraction
       && state.bounds.phaseChunkSize[phaseControl]
       && Number.isInteger(state.scheduler.phaseChunkSize[phaseControl]);
     const action = canReducePhase ? 'reduce-phase-chunk' : 'increase-yield-budget';
     const target = canReducePhase ? phaseControl : 'yieldMs';
-    const measuredPhase = sharpLeader?.phase || null;
+    const measuredPhase = commandDutyLeader?.descriptor.phase || sharpLeader?.phase || null;
+    const commandDutyId = commandDutyLeader?.descriptor.dutyId || null;
+    const commandDutyKind = commandDutyLeader?.descriptor.kind || null;
     const pressureKey = `${action}:${target}`;
     if (state.pressureKey === pressureKey) state.consecutivePressureWindows += 1;
     else {
@@ -446,6 +565,8 @@ export function createForegroundBudgetGovernor(input = {}) {
         action,
         target,
         measuredPhase,
+        commandDutyId,
+        commandDutyKind,
         attribution,
       }), evidenceFingerprint);
     }
@@ -472,6 +593,8 @@ export function createForegroundBudgetGovernor(input = {}) {
       action,
       target,
       measuredPhase,
+      commandDutyId,
+      commandDutyKind,
       schedulerChanged,
       attribution,
     }), evidenceFingerprint);

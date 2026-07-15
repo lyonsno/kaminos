@@ -82,6 +82,13 @@ export {
 } from './foreground-budget-governor.js';
 
 export {
+  WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
+  WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
+  createWebGpuCommandDutyDescriptor,
+  createWebGpuCommandDutyObservation,
+} from './command-duty-descriptor.js';
+
+export {
   WEBGPU_HOST_PHASE,
   WEBGPU_HOST_PHASE_EVENT_BATCH_SCHEMA,
   WEBGPU_HOST_PHASE_RECORDER_SCHEMA,

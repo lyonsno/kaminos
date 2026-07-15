@@ -18,6 +18,8 @@ npm install @kaminos/webgpu-inference-kit
 import {
   WEBGPU_BUFFER_USAGE,
   WEBGPU_HOST_PHASE,
+  createWebGpuCommandDutyDescriptor,
+  createWebGpuCommandDutyObservation,
   createWebGpuInferenceRuntime,
 } from "@kaminos/webgpu-inference-kit";
 
@@ -124,6 +126,7 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `createWebGpuResourceCaches(device)`: cache shader modules and compute pipelines by label plus descriptor so repeated stage invocations do not rebuild obvious resources.
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
 - `createForegroundBudgetGovernor(input)`: adapt cooperative yield time or named phase chunk sizes from attributed foreground frame pressure while failing closed when route, host, and GPU duty evidence is incomplete or ambiguous.
+- `createWebGpuCommandDutyDescriptor(input)` and `createWebGpuCommandDutyObservation(input)`: describe non-preemptible submitted command work, preserve uncapped measured duty, and bind reusable chunk controls to effective route/run/clock identity.
 - `createWebGpuHostPhaseRecorder(input)`: record uncapped, route/run/clock-bound CPU preprocessing, command encoding, queue submission, readback, presentation, and custom host intervals while preserving failed phases and the last trustworthy interval.
 - `runtime.createBuffer(descriptor)`, `runtime.writeBuffer(buffer, data, ...)`, and `runtime.readBuffer(buffer, options)`: small buffer helpers for model weights, activations, and readback paths.
 - `runtime.createTensor(input)`, `runtime.uploadTensor(tensor, data)`, and `runtime.readTensor(tensor)`: create GPU-backed tensors with dtype, shape, strides, byte-length validation, and upload/readback helpers.
@@ -155,6 +158,39 @@ await runtime.runHostPhase(
 
 `runtime.finishHostPhases()` returns every completed interval with effective route, run, monotonic clock, epoch projection, outcome, and failure identity. `projectWebGpuHostPhaseEvents(report, expectations)` converts a complete snapshot into foreground-correlation events only when the caller's expected route, run, and clock all match. This lets a scheduler distinguish host work from submitted GPU duty without joining unrelated pages or stale runs on timestamps alone.
 
+Submitted WebGPU command buffers cannot be preempted after `queue.submit()`. Ports expose the useful control boundary before submission with a command-duty descriptor:
+
+```js
+const descriptor = createWebGpuCommandDutyDescriptor({
+  routeId,
+  runId,
+  clockId,
+  dutyId: `${runId}:attention:12`,
+  phase: "triplane-attention",
+  kind: "compute",
+  chunkControl: {
+    controlId: "attentionTiles",
+    unit: "attention-tile",
+    current: scheduler.phaseChunkSize.attentionTiles,
+    bounds: { min: 1, max: 16, stepFactor: 2 },
+  },
+});
+
+const commandDutyObservation = createWebGpuCommandDutyObservation({
+  routeId,
+  runId,
+  clockId,
+  firingId,
+  duties: [{
+    descriptor,
+    observedDurationMs: 24.8,
+    foregroundOverlapDurationMs: 19.2,
+  }],
+});
+```
+
+Observations retain every duty and reject capped, stale, duplicate, identity-mismatched, or incoherent input. The foreground governor can consume `commandDutyObservation` directly and reduce its declared `controlId` without a model-specific phase map. Descriptors without a chunk control remain useful attribution and cause the governor to donate yield time instead of inventing a split point.
+
 ## Route Composition Layer
 
 The runtime helpers are the lowest useful layer. Route helpers sit above them so model ports can compose inside Kaminos without every repo inventing its own envelope:
@@ -174,6 +210,7 @@ Long browser WebGPU routes need to say how they behave under contention. The pac
 - `createWebGpuRouteSchedulerProfile(input)` and `validateWebGpuRouteSchedulerProfile(profile)` for requested versus effective scheduling, phase chunk sizes, yield cadence, submitted-work waits, breathability spans, checkpoints, and unsupported fields.
 - `createSchedulerVerificationReceipt(input)` and `classifySchedulerVerificationReceipt(receipt)` for observation-bound scheduler proof. A route is not verified just because a config asked it to yield; observed events and boundary assertions must agree.
 - `createWebGpuRouteBackpressureProfile(input)` and `validateWebGpuRouteBackpressureProfile(profile)` for visible-wait/furnace pressure, warm/cache posture, memory-sharing posture, and frame-tail impact.
+- `createWebGpuCommandDutyDescriptor(input)` and `createWebGpuCommandDutyObservation(input)` for portable command-boundary attribution and adaptive chunk-control selection across model ports.
 - `createForegroundBudgetGovernor(input)` for a long-lived adaptive control loop. The caller supplies scheduler bounds, attribution policy, hysteresis, and an `episodeEpochId`; each observation carries the same epoch plus a unique episode/firing identity. Exact replays cannot vote twice. `forgetEpisode()` and `clearDecisionHistory()` discard cached decisions while preserving replay protection, and `beginEpisodeEpoch(nextId)` is the explicit boundary that reclaims those identities and resets hysteresis while preserving the tuned scheduler.
 - `validateSharpBreathingRoomComparisonEvidence(comparison)` and `classifySharpBreathingRoomComparisonEvidence(comparison)` for the current SHARP default-vs-cooperative comparison contract.
 
@@ -197,7 +234,6 @@ const governor = createForegroundBudgetGovernor({
       attentionTiles: { min: 1, max: 16, stepFactor: 2 },
     },
   },
-  phaseControlMap: { "attention-tile": "attentionTiles" },
   attributionPolicy: {
     minimumCoveredFraction: 0.8,
     maximumSharedFraction: 0.25,
@@ -211,6 +247,8 @@ const decision = governor.observe({
   frameTail,
   hostEventCorrelation,
   sharpDutyCorrelation: gpuDutyCorrelation,
+  executionIdentity: { routeId, runId, clockId },
+  commandDutyObservation,
 });
 
 // Apply decision.effectiveScheduler to a subsequent invocation only when
