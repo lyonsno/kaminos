@@ -180,8 +180,8 @@ export async function createSam31BrowserTrackerCallerInvocationRuntime({
   const imageHeight = modelPackage.geometry?.ingress?.imageHeight;
   const imageWidth = modelPackage.geometry?.ingress?.imageWidth;
   const multiplexCount = modelPackage.geometry?.episode?.multiplexCount;
-  const maskHeight = modelPackage.geometry?.episode?.maskHeight;
-  const maskWidth = modelPackage.geometry?.episode?.maskWidth;
+  const maskHeight = modelPackage.geometry?.episode?.sourceMaskHeight;
+  const maskWidth = modelPackage.geometry?.episode?.sourceMaskWidth;
   if (![imageHeight, imageWidth, multiplexCount, maskHeight, maskWidth].every(Number.isInteger)) throw new Error('model package caller-input geometry is incomplete');
   const effectiveSession = validateSession(session, multiplexCount);
   if (!(initialMask instanceof Float32Array)) throw new Error('caller initial mask must be Float32Array');

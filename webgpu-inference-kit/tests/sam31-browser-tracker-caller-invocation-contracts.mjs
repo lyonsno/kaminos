@@ -28,7 +28,7 @@ const modelPackage = {
   source: { repository: 'facebookresearch/sam3', commit: 'fixture' },
   geometry: {
     ingress: { imageHeight: 1, imageWidth: 1 },
-    episode: { multiplexCount: 2, maskHeight: 1, maskWidth: 1 },
+    episode: { multiplexCount: 2, maskHeight: 1, maskWidth: 1, sourceMaskHeight: 2, sourceMaskWidth: 1 },
     plan: { frameIndex: 1 },
   },
   components: Object.fromEntries(packetNames.map(name => [name, {
@@ -69,7 +69,7 @@ const decodeImage = async (bytes, target) => ({
   height: target.height,
   decoder: 'fixture-browser-decoder',
 });
-const initialMask = new Float32Array([1, 0]);
+const initialMask = new Float32Array([1, 0, 0, 1]);
 const session = {
   sessionId: 'caller-session-a',
   conditioningFrameIndex: 0,
@@ -146,6 +146,7 @@ assert.equal(first.manifests.episode.tensors.some(entry => entry.role === 'frame
 
 const frame0 = first.manifests.ingress.tensors.find(entry => entry.role === 'frame-0-rgba');
 const mask = first.manifests.episode.tensors.find(entry => entry.role === 'frame-0-binary-mask-inputs');
+assert.deepEqual(mask.shape, [2, 1, 2, 1], 'caller mask geometry must use the reference source-mask surface rather than decoder mask geometry');
 assert.deepEqual(await first.loadUint8(frame0), decodedByFirstByte.get(1));
 assert.deepEqual(await first.loadFloat32(mask), initialMask);
 assert.equal(first.inputEvidence.callerArtifactReadCount, 2, 'reads must be serviced from invocation-local caller memory');
@@ -245,11 +246,11 @@ await assert.rejects(
   /initial mask length/,
 );
 await assert.rejects(
-  () => createSam31BrowserTrackerCallerInvocationRuntime({ modelPackageRuntime, sourceImages, initialMask: new Float32Array([1, Number.NaN]), session, decodeImage }),
+  () => createSam31BrowserTrackerCallerInvocationRuntime({ modelPackageRuntime, sourceImages, initialMask: new Float32Array([1, Number.NaN, 0, 1]), session, decodeImage }),
   /initial mask contains non-finite values/,
 );
 await assert.rejects(
-  () => createSam31BrowserTrackerCallerInvocationRuntime({ modelPackageRuntime, sourceImages, initialMask: new Float32Array([1, 0.5]), session, decodeImage }),
+  () => createSam31BrowserTrackerCallerInvocationRuntime({ modelPackageRuntime, sourceImages, initialMask: new Float32Array([1, 0.5, 0, 1]), session, decodeImage }),
   /initial mask must contain only binary values/,
 );
 
@@ -257,7 +258,7 @@ let releaseFirstDecode;
 const firstDecodeWaiting = new Promise(resolve => { releaseFirstDecode = resolve; });
 const mutableFrame0 = new Uint8Array([1, 2, 3]);
 const mutableFrame1 = new Uint8Array([4, 5, 6]);
-const mutableMask = new Float32Array([1, 0]);
+const mutableMask = new Float32Array([1, 0, 0, 1]);
 let decodeCount = 0;
 const racingRuntimePromise = createSam31BrowserTrackerCallerInvocationRuntime({
   modelPackageRuntime,
@@ -272,7 +273,7 @@ const racingRuntimePromise = createSam31BrowserTrackerCallerInvocationRuntime({
 });
 await new Promise(resolve => setTimeout(resolve, 0));
 mutableFrame1.fill(7);
-mutableMask.set([0, 1]);
+mutableMask.set([0, 1, 1, 0]);
 releaseFirstDecode();
 const racingRuntime = await racingRuntimePromise;
 assert.deepEqual(racingRuntime.encodedSourceImageSha256, first.encodedSourceImageSha256, 'all encoded inputs must be snapshotted before asynchronous decode');
