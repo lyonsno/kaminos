@@ -15,6 +15,7 @@ import {
   runSam31ImagePropagationNeckPhaseProgramRoute,
   runSam31InteractiveNeckPhaseProgramRoute,
   passesSam3LayerParityCheckpoint,
+  evaluateSam31ImageBackboneParity,
   summarizeSam3LayerParityCheckpoint,
   summarizeSam3TensorParityCheckpoint,
   verifySam31PacketFloat32Bytes,
@@ -454,7 +455,10 @@ export async function runSam31TwoImageBackbone({
   const parityMaximum = maximumSam31ParityValue(maximums);
   const routeChainPassed = receipts.every((receipt, index) => receipt.status === 'real' && receipt.fallbackReason == null && receipt.effectiveRouteId === requestedRouteIds[index]);
   const tolerances = manifest.tolerances;
-  const parityPassed = !verificationAttached || (backbones.every(frame => frame.parity.pixelValues <= tolerances.pixelValuesMaxAbsDiff && frame.parity.patchEmbeddings <= tolerances.patchEmbeddingsMaxAbsDiff && passesVitPrefixParity(frame.parity.vitPrefixDiagnostics, tolerances) && passesVitBackboneParity(frame.parity.vitBackboneDiagnostics, tolerances) && Object.values(frame.parity.vitLayers).every(value => value <= tolerances.vitBackboneMaxAbsDiff) && Object.values(frame.parity.vitPhases).every(value => value <= tolerances.vitBackboneMaxAbsDiff))
+  const compoundParity = verificationAttached
+    ? evaluateSam31ImageBackboneParity({ diagnostics: layerDiagnostics, tolerances })
+    : null;
+  const parityPassed = !verificationAttached || (compoundParity.passed && backbones.every(frame => frame.parity.pixelValues <= tolerances.pixelValuesMaxAbsDiff && frame.parity.patchEmbeddings <= tolerances.patchEmbeddingsMaxAbsDiff && Object.values(frame.parity.vitLayers).every(value => value <= tolerances.vitBackboneMaxAbsDiff) && Object.values(frame.parity.vitPhases).every(value => value <= tolerances.vitBackboneMaxAbsDiff))
     && Object.values(interactive.parity).every(value => value <= (value === interactive.parity.position2 ? tolerances.positionMaxAbsDiff : tolerances.neckMaxAbsDiff))
     && propagation.every(neck => Object.entries(neck.parity).every(([name, value]) => value <= (name === 'position2' ? tolerances.positionMaxAbsDiff : tolerances.neckMaxAbsDiff)))
     && [frame0High, frame1High].every(item => Object.values(item.parity).every(value => value <= tolerances.highResolutionMaxAbsDiff)));
@@ -463,7 +467,7 @@ export async function runSam31TwoImageBackbone({
   return {
     frame0: { interactiveEmbedding: interactive.features[2], interactivePosition: interactive.position2, interactiveHighResolutionS0: frame0High.highResolutionS0, interactiveHighResolutionS1: frame0High.highResolutionS1, propagationEmbedding: propagation[0].features[2], propagationPosition: propagation[0].position2 },
     frame1: { propagationEmbedding: propagation[1].features[2], propagationPosition: propagation[1].position2, highResolutionS0: frame1High.highResolutionS0, highResolutionS1: frame1High.highResolutionS1 },
-    receipts, requestIds, requestedRouteIds, effectiveRouteIds: receipts.map(receipt => receipt.effectiveRouteId), parity: verificationAttached ? maximums : null, parityDiagnostics: verificationAttached ? layerDiagnostics : null, parityMaximum: verificationAttached ? parityMaximum : null, routeChainPassed, parityPassed, verificationAttached,
+    receipts, requestIds, requestedRouteIds, effectiveRouteIds: receipts.map(receipt => receipt.effectiveRouteId), parity: verificationAttached ? maximums : null, parityDiagnostics: verificationAttached ? layerDiagnostics : null, compoundParity, parityMaximum: verificationAttached ? parityMaximum : null, routeChainPassed, parityPassed, verificationAttached,
     sourceImageSha256: manifest.sourceImages.map(image => image.rgbaSha256),
   };
 }

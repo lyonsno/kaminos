@@ -13,6 +13,7 @@ assert.equal(typeof kit.createSam31BrowserTrackerSession, 'function', 'the infer
 assert.equal(typeof kit.runSam31TwoImageBackbone, 'function', 'the inference kit must export the promoted two-image backbone');
 assert.equal(typeof kit.runSam31BrowserTrackerPackageInvocation, 'function', 'the inference kit must export the package-backed invocation driver');
 assert.equal(typeof kit.evaluateSam31TrackerDownstreamParity, 'function', 'the inference kit must export the compound downstream parity evaluator');
+assert.equal(typeof kit.evaluateSam31ImageBackboneParity, 'function', 'the inference kit must export the image-backbone compound parity evaluator');
 assert.equal(kit.createSam31BrowserTrackerSessionForTest, undefined, 'the lifecycle test seam must not be part of the package API');
 assert.equal(kit.createSam31BrowserTrackerPackageAuthority, undefined, 'the raw runtime authority helper must not be part of the package API');
 
@@ -87,6 +88,61 @@ if (typeof kit.evaluateSam31TrackerDownstreamParity === 'function') {
     kit.evaluateSam31TrackerDownstreamParity({ diagnostics, tolerances: { decoderMaxAbsDiff: 0.01 } }).passed,
     false,
     'legacy absolute-only tolerances must not silently authorize the compound gate',
+  );
+}
+
+if (typeof kit.evaluateSam31ImageBackboneParity === 'function') {
+  const summary = ({ maxAbsDiff, meanAbsDiff, rootMeanSquareDiff, expectedAtMaxAbsDiff }) => ({
+    elementCount: 1_048_576,
+    maxAbsDiff,
+    meanAbsDiff,
+    rootMeanSquareDiff,
+    maxAbsExpected: Math.abs(expectedAtMaxAbsDiff),
+    maxAbsActual: Math.abs(expectedAtMaxAbsDiff + maxAbsDiff),
+    maxAbsDiffIndex: 448,
+    expectedAtMaxAbsDiff,
+    actualAtMaxAbsDiff: expectedAtMaxAbsDiff + maxAbsDiff,
+  });
+  const diagnostics = {
+    frame0: {
+      vitPrefix: summary({ maxAbsDiff: 0.00836181640625, meanAbsDiff: 0.00005, rootMeanSquareDiff: 0.00015, expectedAtMaxAbsDiff: 6 }),
+      vitBackbone: summary({ maxAbsDiff: 0.093658447265625, meanAbsDiff: 0.00008, rootMeanSquareDiff: 0.00025, expectedAtMaxAbsDiff: 40 }),
+    },
+    frame1: {
+      vitPrefix: summary({ maxAbsDiff: 0.008340835571289062, meanAbsDiff: 0.00005, rootMeanSquareDiff: 0.00015, expectedAtMaxAbsDiff: -6 }),
+      vitBackbone: summary({ maxAbsDiff: 0.06201171875, meanAbsDiff: 0.00008, rootMeanSquareDiff: 0.00025, expectedAtMaxAbsDiff: -40 }),
+    },
+  };
+  const tolerances = {
+    vitPrefixMaxAbsDiff: 0.006,
+    vitPrefixMeanAbsDiff: 0.000075,
+    vitPrefixRootMeanSquareDiff: 0.0002,
+    vitPrefixRelativeDiffAtMaxAbsDiff: 0.0005,
+    vitBackboneMaxAbsDiff: 0.02,
+    vitBackboneMeanAbsDiff: 0.0001,
+    vitBackboneRootMeanSquareDiff: 0.0003,
+    vitBackboneRelativeDiffAtMaxAbsDiff: 0.002,
+  };
+  const accepted = kit.evaluateSam31ImageBackboneParity({ diagnostics, tolerances });
+  assert.equal(accepted.passed, true, 'sparse 448 ViT maxima must remain auditable through their compound distributions');
+  assert.equal(accepted.checkpointCount, 4);
+  assert.deepEqual(accepted.failedCheckpoints, []);
+  for (const checkpoint of accepted.checkpoints) {
+    assert.equal(Number.isInteger(checkpoint.elementCount), true);
+    assert.equal(Number.isInteger(checkpoint.maxAbsDiffIndex), true);
+    assert.equal(Number.isFinite(checkpoint.expectedAtMaxAbsDiff), true);
+    assert.equal(Number.isFinite(checkpoint.actualAtMaxAbsDiff), true);
+    assert.equal(Number.isFinite(checkpoint.maximumAllowed), true);
+    assert.equal(Number.isFinite(checkpoint.meanAbsDiffAllowed), true);
+    assert.equal(Number.isFinite(checkpoint.rootMeanSquareDiffAllowed), true);
+    assert.equal(typeof checkpoint.toleranceProfile, 'object');
+  }
+  const hiddenBroadDrift = structuredClone(diagnostics);
+  hiddenBroadDrift.frame0.vitBackbone.meanAbsDiff = 0.00011;
+  assert.equal(
+    kit.evaluateSam31ImageBackboneParity({ diagnostics: hiddenBroadDrift, tolerances }).passed,
+    false,
+    'a report-level image-backbone evaluator must reject broad drift hidden beneath an allowed sparse maximum',
   );
 }
 
@@ -377,6 +433,7 @@ for (const token of [
   'attentionFromTemporal',
   'decoderFromAttention',
 ]) assert.match(driverSource, new RegExp(token), `package tracker driver must preserve downstream parity evidence through ${token}`);
+assert.match(driverSource, /imageBackboneCompoundParity/, 'the successful package report must preserve the image-backbone compound verdict and diagnostics');
 assert.match(smokeSource, /createSam31BrowserTrackerSession/, 'package smoke must consume the exported session');
 assert.doesNotMatch(smokeSource, /invocations\.push\(await runInvocation\(packageRoots\[index\]/, 'package smoke must not bypass the exported session with its private invocation function');
 assert.match(smokeSource, /runtimeSession:\s*\{/, 'package smoke must preserve public session identity in each invocation row');
