@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  WEBGPU_BUFFER_USAGE,
   WEBGPU_INFERENCE_RUNTIME_SCHEMA,
   createCooperativeYield,
   createWebGpuInferenceRuntime,
@@ -163,6 +164,60 @@ assert.equal(profile.profile.stages[0].metadata.yields.length, 1);
 assert.equal(profile.profile.stages[0].metadata.yields[0].reason, 'between-encoder-tiles');
 assert.equal(profile.profile.timingSource, 'host-stage-timer');
 assert.equal(profile.kernel.profile, 'sam3-mask-decoder-minimal');
+
+const residentSource = new Float32Array([1, 2, 3, 4]);
+let residentDestroyCount = 0;
+const residentBuffer = {
+  label: 'resident.encoder.weight',
+  destroy() { residentDestroyCount += 1; },
+};
+const buffersBeforeResidentTensor = calls.buffers.length;
+const writesBeforeResidentTensor = calls.writes.length;
+const residentRuntime = await createWebGpuInferenceRuntime({
+  routeId: 'sam31.resident-tensor-contract.webgpu-local.v0',
+  device,
+  queue,
+  adapter,
+  adapterName: 'Test WebGPU Adapter',
+  kernel: { profile: 'sam31-resident-tensor-contract-v0' },
+  requiredStages: ['load-resident'],
+  residentTensorResolver(tensorInput) {
+    assert.equal(tensorInput.sourceData, residentSource);
+    return {
+      buffer: residentBuffer,
+      bufferOffset: 0,
+      dtype: 'f32',
+      shape: [4],
+      byteLength: 16,
+      usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+      sourceData: residentSource,
+      resourceId: 'sam31.static:encoder.weight',
+    };
+  },
+});
+const residentTensor = residentRuntime.createTensor({
+  name: 'sam31.encoder.weight',
+  shape: [4],
+  dtype: 'f32',
+  usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+  sourceData: residentSource,
+});
+assert.equal(residentTensor.buffer, residentBuffer);
+assert.equal(residentTensor.ownsBuffer, false);
+assert.equal(calls.buffers.length, buffersBeforeResidentTensor, 'resident tensors must not allocate invocation buffers');
+residentRuntime.uploadTensor(residentTensor, residentSource);
+assert.equal(calls.writes.length, writesBeforeResidentTensor, 'resident tensors must not re-upload authenticated bytes');
+assert.throws(
+  () => residentRuntime.uploadTensor(residentTensor, Float32Array.from(residentSource)),
+  /resident tensor source identity mismatch/i,
+);
+assert.deepEqual(residentRuntime.dispose(), {
+  disposed: true,
+  ownedBufferCount: 0,
+  ownedBufferBytes: 0,
+  destroyedBufferCount: 0,
+});
+assert.equal(residentDestroyCount, 0, 'invocation runtime disposal must not destroy resident model resources');
 
 const disposal = runtime.dispose();
 assert.deepEqual(disposal, {

@@ -14,6 +14,9 @@ import {
 import {
   createWebGpuResourceFactory,
 } from './resource-factory.js';
+import {
+  loadWebGpuModelResources,
+} from './model-resource-manifest.js';
 
 export const WEBGPU_INFERENCE_SESSION_SCHEMA = 'kaminos.webgpu-inference-session.v0';
 export const WEBGPU_INFERENCE_SESSION_DEVICE_LOSS_SCHEMA = 'kaminos.webgpu-inference-session-device-loss.v0';
@@ -281,6 +284,15 @@ export async function createWebGpuInferenceSession(input = {}) {
         runtime,
         residency: routeResidency,
         acquireResource,
+        loadModelResources(modelInput = {}) {
+          assertAttached(route);
+          assertActive();
+          if (!isPlainObject(modelInput)) throw new Error('model resource input must be an object');
+          if (Object.hasOwn(modelInput, 'route')) {
+            throw new Error('session route owns route; loadModelResources cannot override it');
+          }
+          return loadWebGpuModelResources({ ...modelInput, route: route.handle });
+        },
         enqueue(jobInput = {}) {
           assertAttached(route);
           assertActive();

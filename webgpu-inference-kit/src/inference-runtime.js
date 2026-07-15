@@ -406,6 +406,9 @@ function createStageFacade(runtime, stageState, stageName, stageMetadata) {
 export async function createWebGpuInferenceRuntime(input = {}) {
   if (!input || typeof input !== 'object') throw new Error('runtime input must be an object');
   if (!isNonEmptyString(input.routeId)) throw new Error('routeId must be a non-empty string');
+  if (input.residentTensorResolver != null && typeof input.residentTensorResolver !== 'function') {
+    throw new TypeError('residentTensorResolver must be a function when provided');
+  }
 
   let context = null;
   if (input.device) {
@@ -445,6 +448,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   });
   const kernel = normalizeKernel(input.kernel);
   const ownedBuffers = new Map();
+  const residentTensorSources = new WeakMap();
   let disposalReport = null;
   if (input.hostPhases != null && (!input.hostPhases || typeof input.hostPhases !== 'object')) {
     throw new TypeError('hostPhases must be an object when provided');
@@ -568,6 +572,11 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       return buffer;
     },
 
+    createManagedBuffer(descriptor) {
+      if (disposalReport) throw new Error('runtime is disposed');
+      return createBuffer(device, descriptor);
+    },
+
     writeBuffer(buffer, data, offset = 0, dataOffset = 0, size = undefined) {
       return queueWriteBuffer(queue, buffer, data, offset, dataOffset, size);
     },
@@ -582,6 +591,39 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     },
 
     createTensor(tensorInput = {}) {
+      const resident = input.residentTensorResolver && Object.hasOwn(tensorInput, 'sourceData')
+        ? input.residentTensorResolver({ ...tensorInput, routeId: input.routeId })
+        : null;
+      if (resident != null) {
+        if (!resident || typeof resident !== 'object' || !resident.buffer) {
+          throw new Error(`resident tensor resolver returned an invalid binding for ${tensorInput.name || '<unnamed>'}`);
+        }
+        if (resident.sourceData !== tensorInput.sourceData) {
+          throw new Error(`resident tensor source identity mismatch for ${tensorInput.name || '<unnamed>'}`);
+        }
+        const tensor = createGpuTensor({
+          ...tensorInput,
+          buffer: resident.buffer,
+          bufferOffset: resident.bufferOffset || 0,
+          paddingReserved: resident.paddingReserved !== false,
+          metadata: {
+            ...(tensorInput.metadata || {}),
+            residentResourceId: resident.resourceId || null,
+            residentAllocationId: resident.allocationId || null,
+          },
+        });
+        if (resident.dtype !== tensor.dtype) throw new Error(`resident tensor dtype mismatch for ${tensor.name}`);
+        if (JSON.stringify(resident.shape) !== JSON.stringify(tensor.shape)) throw new Error(`resident tensor shape mismatch for ${tensor.name}`);
+        if (resident.byteLength !== tensor.byteLength) throw new Error(`resident tensor byte length mismatch for ${tensor.name}`);
+        if (!Number.isInteger(resident.usage) || (resident.usage & tensor.usage) !== tensor.usage) {
+          throw new Error(`resident tensor usage mismatch for ${tensor.name}`);
+        }
+        if (!Number.isInteger(tensor.bufferOffset) || tensor.bufferOffset < 0) {
+          throw new Error(`resident tensor buffer offset mismatch for ${tensor.name}`);
+        }
+        residentTensorSources.set(tensor, tensorInput.sourceData);
+        return tensor;
+      }
       return createGpuTensor(tensorInput, {
         createBuffer: descriptor => runtime.createBuffer(descriptor),
       });
@@ -590,6 +632,16 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     uploadTensor(tensor, data, offset = undefined) {
       if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
       if (!tensor.buffer) throw new Error('tensor must expose buffer');
+      if (residentTensorSources.has(tensor)) {
+        if (residentTensorSources.get(tensor) !== data) {
+          throw new Error(`resident tensor source identity mismatch for ${tensor.name || '<unnamed>'}`);
+        }
+        assertTensorDataByteLength(tensor, data);
+        if (offset != null && offset !== tensor.bufferOffset) {
+          throw new Error(`resident tensor upload offset mismatch for ${tensor.name || '<unnamed>'}`);
+        }
+        return tensor;
+      }
       runtime.writeBuffer(tensor.buffer, tensorUploadData(tensor, data), offset ?? tensor.bufferOffset ?? 0);
       return tensor;
     },

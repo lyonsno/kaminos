@@ -37,6 +37,26 @@ assert.equal(preAbortedCreateCount, 0, 'a pre-aborted first waiter must not star
 assert.equal(factory.snapshot().activeFlightCount, 0, 'a pre-aborted first waiter must not strand an active flight');
 assert.equal(factory.snapshot().flights.at(-1)?.status, 'cancelled');
 
+const sameTurnAbort = new AbortController();
+let sameTurnCreateCount = 0;
+const sameTurnRequest = factory.acquireOrCreate({
+  resourceId: 'same-turn-abort',
+  routeId: 'same-turn-gone',
+  declaredBytes: 64,
+  signal: sameTurnAbort.signal,
+  async create() {
+    sameTurnCreateCount += 1;
+    return new Promise(() => {});
+  },
+  dispose() {},
+});
+sameTurnAbort.abort('cancelled-before-creator-dispatch');
+await assert.rejects(sameTurnRequest, /aborted|cancelled-before-creator-dispatch/i);
+await Promise.resolve();
+assert.equal(sameTurnCreateCount, 0, 'same-turn final-waiter cancellation must win before creator dispatch');
+assert.equal(factory.snapshot().activeFlightCount, 0, 'same-turn cancellation must not strand an active flight');
+assert.equal(factory.snapshot().flights.find(flight => flight.resourceId === 'same-turn-abort')?.status, 'cancelled');
+
 const creation = deferred();
 let createCount = 0;
 const requests = Array.from({ length: 32 }, (_, index) => factory.acquireOrCreate({
@@ -114,6 +134,8 @@ const abandoned = factory.acquireOrCreate({
   resourceId: 'abandoned', routeId: 'gone', declaredBytes: 4, signal: allAbort.signal,
   async create({ signal }) { allAbortCreatorSignal = signal; return allAbortGate.promise; }, dispose() {},
 });
+await Promise.resolve();
+assert.ok(allAbortCreatorSignal, 'the running-creator cancellation case must cross the dispatch boundary before abort');
 allAbort.abort('all-waiters-left');
 await assert.rejects(abandoned, /aborted|all-waiters-left/i);
 assert.equal(allAbortCreatorSignal.aborted, true);
@@ -122,7 +144,7 @@ await factory.drain();
 assert.equal(factory.snapshot().activeFlightCount, 0);
 
 assert.equal(factory.snapshot().retention, 'uncapped-until-explicit-forget-flight');
-assert.equal(factory.snapshot().flights.length, 6);
+assert.equal(factory.snapshot().flights.length, 7);
 assert.equal(factory.forgetFlight(factory.snapshot().flights[0].flightId), true);
 
 const lost = deferred();
@@ -156,10 +178,13 @@ sessionLeaseB.release();
 
 const detachedCreatorGate = deferred();
 const detachedCreatorAbort = new AbortController();
+let detachedCreatorStarted = false;
 const detachedCreator = routeB.residency.acquireOrCreate({
   resourceId: 'detached.creator', declaredBytes: 32, signal: detachedCreatorAbort.signal,
-  async create() { return detachedCreatorGate.promise; }, dispose() {},
+  async create() { detachedCreatorStarted = true; return detachedCreatorGate.promise; }, dispose() {},
 });
+await Promise.resolve();
+assert.equal(detachedCreatorStarted, true, 'the detach-blocking case must cross creator dispatch before cancellation');
 detachedCreatorAbort.abort('route-cancelled');
 await assert.rejects(detachedCreator, /aborted|route-cancelled/i);
 assert.throws(

@@ -7,6 +7,7 @@ import {
 } from '../src/sam31-browser-tracker-package-runtime.js';
 import * as trackerPackageRuntime from '../src/sam31-browser-tracker-package-runtime.js';
 import { createSam31BrowserTrackerPackageProjection } from '../src/sam31-browser-tracker-package.js';
+import { createSam3BrowserStaticArtifactCache } from '../src/sam-browser-package-manifest.js';
 
 async function digest(bytes) {
   const value = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
@@ -76,6 +77,34 @@ async function fixture(dynamicOffset, sessionId, geometry = null) {
 
 const first = await fixture(0, 'session-a');
 const second = await fixture(40, 'session-b');
+
+const staleDynamicUrl = 'https://example.test/stale-dynamic.bin';
+const authenticStaleDynamic = new TextEncoder().encode('authentic-dynamic');
+const corruptStaleDynamic = new TextEncoder().encode('corrupted-dynamic');
+assert.equal(authenticStaleDynamic.byteLength, corruptStaleDynamic.byteLength);
+const directCache = createSam3BrowserStaticArtifactCache({
+  fetchArrayBuffer: async () => corruptStaleDynamic.buffer.slice(0),
+  fetchText: async () => new TextDecoder().decode(corruptStaleDynamic),
+});
+directCache.configure({
+  packageId: 'direct-cache-package',
+  artifacts: [{ url: 'https://example.test/static.bin', sha256: await digest(new Uint8Array([1, 2, 3, 4])), kind: 'array-buffer' }],
+});
+directCache.configureInvocation({
+  invocationId: 'direct-cache-first',
+  artifacts: [{ url: staleDynamicUrl, sha256: await digest(authenticStaleDynamic), kind: 'array-buffer' }],
+});
+directCache.configureInvocation({
+  invocationId: 'direct-cache-second',
+  artifacts: [{ url: 'https://example.test/second-dynamic.bin', sha256: await digest(new Uint8Array([5, 6, 7, 8])), kind: 'array-buffer' }],
+});
+await assert.rejects(
+  () => directCache.fetchArray(staleDynamicUrl, Uint8Array),
+  /dynamic artifact identity.*required|undeclared dynamic artifact/i,
+  'the public cache API must not turn a stale expected dynamic artifact into an unverified fallback read',
+);
+assert.equal(directCache.evidence().dynamicHashVerificationCount, 0, 'undeclared dynamic input must fail before origin bytes masquerade as verified evidence');
+
 await assert.rejects(
   () => fixture(80, 'session-incoherent-geometry', {
     ingress: {

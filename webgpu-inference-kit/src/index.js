@@ -59,6 +59,24 @@ export {
 } from './resource-factory.js';
 
 export {
+  WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA,
+  defineWebGpuModelResourceManifest,
+  loadWebGpuModelResources,
+  prepareWebGpuModelResourceBundle,
+  validateWebGpuModelResourceManifest,
+  verifyWebGpuModelResourceBundle,
+} from './model-resource-manifest.js';
+
+export {
+  SAM31_RESIDENT_MODEL_RESOURCES_SCHEMA,
+  createSam31ResidentModelResources,
+} from './sam31-resident-model-resources.js';
+
+export {
   WEBGPU_INFERENCE_ADMISSION_CANCELLATION_SCHEMA,
   WEBGPU_INFERENCE_ADMISSION_RELEASE_SCHEMA,
   WEBGPU_INFERENCE_ADMISSION_SCHEMA,

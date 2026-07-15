@@ -111,6 +111,11 @@ export function createWebGpuResourceFactory(input = {}) {
         reject(abortError(request.signal?.reason));
         if (flight.waiters.size === 0 && flight.status === 'active') {
           flight.controller.abort('all-resource-waiters-cancelled');
+          if (!flight.creatorStarted) {
+            flight.status = 'cancelled';
+            flight.settledAtMs = now();
+            if (activeByResource.get(flight.resourceId) === flight) activeByResource.delete(flight.resourceId);
+          }
         }
       }
       waiter.abortListener = cancel;
@@ -136,16 +141,26 @@ export function createWebGpuResourceFactory(input = {}) {
 
   function startFlight(flight, request) {
     flight.task = Promise.resolve()
-      .then(() => request.create({
-        signal: flight.controller.signal,
-        flightId: flight.flightId,
-        resourceId: flight.resourceId,
-        generation: flight.generation,
-      }))
-      .then(resource => {
+      .then(async () => {
+        if (invalidation || flight.waiters.size === 0 || flight.controller.signal.aborted) {
+          flight.status = invalidation ? 'invalidated' : 'cancelled';
+          return { created: false, resource: null };
+        }
+        flight.creatorStarted = true;
+        const resource = await request.create({
+          signal: flight.controller.signal,
+          flightId: flight.flightId,
+          resourceId: flight.resourceId,
+          generation: flight.generation,
+        });
+        return { created: true, resource };
+      })
+      .then(outcome => {
+        if (!outcome.created) return;
+        const resource = outcome.resource;
         if (invalidation || flight.waiters.size === 0) {
           flight.status = invalidation ? 'invalidated' : 'cancelled';
-          if (!invalidation) request.dispose(resource);
+          request.dispose(resource);
           return;
         }
         let first = true;
@@ -173,7 +188,7 @@ export function createWebGpuResourceFactory(input = {}) {
       })
       .finally(() => {
         flight.settledAtMs = now();
-        activeByResource.delete(flight.resourceId);
+        if (activeByResource.get(flight.resourceId) === flight) activeByResource.delete(flight.resourceId);
       });
   }
 
@@ -212,6 +227,7 @@ export function createWebGpuResourceFactory(input = {}) {
       settledAtMs: null,
       failure: null,
       task: null,
+      creatorStarted: false,
     };
     flights.push(flight);
     activeByResource.set(flight.resourceId, flight);
@@ -220,7 +236,7 @@ export function createWebGpuResourceFactory(input = {}) {
       flight.controller.abort('resource-request-cancelled-before-creation');
       flight.status = 'cancelled';
       flight.settledAtMs = now();
-      activeByResource.delete(flight.resourceId);
+      if (activeByResource.get(flight.resourceId) === flight) activeByResource.delete(flight.resourceId);
       return promise;
     }
     startFlight(flight, request);
@@ -244,6 +260,7 @@ export function createWebGpuResourceFactory(input = {}) {
         flight.controller.abort(reason);
         flight.status = 'invalidated';
         settleWaiters(flight, waiter => waiter.reject(new Error(`resource factory invalidated: ${reason}`)));
+        if (activeByResource.get(flight.resourceId) === flight) activeByResource.delete(flight.resourceId);
       }
       return invalidation;
     },
@@ -253,7 +270,10 @@ export function createWebGpuResourceFactory(input = {}) {
       }
       return false;
     },
-    async drain() { await Promise.all([...activeByResource.values()].map(flight => flight.task)); return deepFreeze(snapshot()); },
+    async drain() {
+      await Promise.all(flights.filter(flight => flight.task && flight.settledAtMs == null).map(flight => flight.task));
+      return deepFreeze(snapshot());
+    },
     snapshot() { return deepFreeze(snapshot()); },
   });
 }

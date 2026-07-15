@@ -209,11 +209,12 @@ export function createSam3BrowserStaticArtifactCache({
       const identity = staticIdentity(url, 'array-buffer');
       const expected = expectedIdentity('array-buffer', expectedSha256);
       if (!identity) {
-        dynamicNetworkLoadCount += 1;
         const dynamicIdentity = expected || dynamicArtifacts.urls.get(url);
-        const value = dynamicIdentity?.startsWith('array-buffer:')
-          ? await loadVerifiedDynamic(url, 'array-buffer', dynamicIdentity)
-          : await fetchArrayBuffer(url);
+        if (!dynamicIdentity?.startsWith('array-buffer:')) {
+          throw new Error(`dynamic artifact identity is required for ${url}; unverified fallback reads are forbidden`);
+        }
+        dynamicNetworkLoadCount += 1;
+        const value = await loadVerifiedDynamic(url, 'array-buffer', dynamicIdentity);
         return new Type(value);
       }
       if (expected && identity !== expected) {
@@ -226,11 +227,12 @@ export function createSam3BrowserStaticArtifactCache({
       const identity = staticIdentity(url, 'text');
       const expected = expectedIdentity('text', expectedSha256);
       if (!identity) {
-        dynamicNetworkLoadCount += 1;
         const dynamicIdentity = expected || dynamicArtifacts.urls.get(url);
-        return dynamicIdentity?.startsWith('text:')
-          ? loadVerifiedDynamic(url, 'text', dynamicIdentity)
-          : fetchText(url);
+        if (!dynamicIdentity?.startsWith('text:')) {
+          throw new Error(`dynamic artifact identity is required for ${url}; unverified fallback reads are forbidden`);
+        }
+        dynamicNetworkLoadCount += 1;
+        return loadVerifiedDynamic(url, 'text', dynamicIdentity);
       }
       if (expected && identity !== expected) {
         throw new Error(`static artifact identity mismatch for ${url}: ${identity} !== ${expected}`);
