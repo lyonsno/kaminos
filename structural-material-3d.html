@@ -109,7 +109,8 @@
       "imports": {
         "three": "./lib/three.webgpu.js",
         "three/webgpu": "./lib/three.webgpu.js",
-        "three/tsl": "./lib/three.tsl.js"
+        "three/tsl": "./lib/three.tsl.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.171.0/examples/jsm/"
       }
     }
   </script>
@@ -129,6 +130,7 @@
   </main>
   <script type="module">
     import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import {
       STRUCTURAL_MATERIAL_3D_ROUTE,
       STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
@@ -144,11 +146,14 @@
     const readout = document.querySelector('#readout');
     const route = document.querySelector('#route');
     const gesture = document.querySelector('#gesture');
+    const CAMERA_CONTROL_AUTHORITY = 'operator-camera-controls-v0';
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0a0d10);
-    const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 100);
-    camera.position.set(0.2, 1.2, 3.35);
+    const initialStageRect = stage.getBoundingClientRect();
+    const initialAspect = initialStageRect.width / Math.max(1, initialStageRect.height);
+    const camera = new THREE.PerspectiveCamera(42, initialAspect, 0.01, 100);
+    camera.position.set(0.2, 1.2, initialAspect < 0.75 ? 8.5 : 3.35);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGPURenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -157,7 +162,29 @@
     stage.prepend(renderer.domElement);
     await renderer.init();
 
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = false;
+    controls.rotateSpeed = 0.72;
+    controls.panSpeed = 0.6;
+    controls.zoomSpeed = 0.85;
+    controls.screenSpacePanning = true;
+    controls.minDistance = 1.2;
+    controls.maxDistance = 14;
+    controls.target.set(0, 0, 0);
+    controls.mouseButtons = {
+      LEFT: null,
+      MIDDLE: THREE.MOUSE.PAN,
+      RIGHT: THREE.MOUSE.ROTATE,
+    };
+    controls.touches = {
+      ONE: null,
+      TWO: THREE.TOUCH.DOLLY_PAN,
+    };
+    controls.update();
+    renderer.domElement.addEventListener('contextmenu', event => event.preventDefault());
+
     const world = new THREE.Group();
+    world.rotation.set(-0.18, -0.45, 0);
     scene.add(world);
     scene.add(new THREE.HemisphereLight(0xe8f3ff, 0x1d2530, 2.3));
     const key = new THREE.DirectionalLight(0xffffff, 2.1);
@@ -176,12 +203,11 @@
     const forceNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff785a });
 
     let material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
-    let pointerDown = false;
+    let materialPointerId = null;
     let dragStart = null;
     let forceEnvelope = null;
     let lastPoint = { x: 0.92, y: 0.52, z: 0.85 };
-    let yaw = -0.45;
-    let pitch = -0.18;
+    const cameraInvariantViolations = [];
 
     function worldPoint(node) {
       return new THREE.Vector3(
@@ -239,8 +265,6 @@
         contact.position.copy(end);
         world.add(contact);
       }
-      world.rotation.y = yaw;
-      world.rotation.x = pitch;
     }
 
     function updateReadout() {
@@ -252,10 +276,54 @@
         : `drag 0.000 | mag 0.000 | z 0.500 | stress ${summary.maxStress.toFixed(3)}`;
     }
 
+    function renderScene() {
+      renderer.render(scene, camera);
+    }
+
     function render() {
       renderMaterial();
       updateReadout();
-      renderer.render(scene, camera);
+      renderScene();
+    }
+
+    controls.addEventListener('change', renderScene);
+
+    function cameraState() {
+      return {
+        position: camera.position.toArray(),
+        quaternion: camera.quaternion.toArray(),
+        up: camera.up.toArray(),
+        zoom: camera.zoom,
+        target: controls.target.toArray(),
+      };
+    }
+
+    function sameCameraState(a, b, epsilon = 1e-10) {
+      return ['position', 'quaternion', 'up', 'target'].every(field =>
+        a[field].every((value, index) => Math.abs(value - b[field][index]) <= epsilon)
+      ) && Math.abs(a.zoom - b.zoom) <= epsilon;
+    }
+
+    function restoreCameraState(state) {
+      camera.position.fromArray(state.position);
+      camera.quaternion.fromArray(state.quaternion);
+      camera.up.fromArray(state.up);
+      camera.zoom = state.zoom;
+      controls.target.fromArray(state.target);
+      camera.updateProjectionMatrix();
+    }
+
+    function runStructuralMutation(action, mutation) {
+      const before = cameraState();
+      const result = mutation();
+      const after = cameraState();
+      if (!sameCameraState(before, after)) {
+        restoreCameraState(before);
+        cameraInvariantViolations.push({ action, before, after });
+        throw new Error(`structural action changed operator camera state: ${action}`);
+      }
+      render();
+      return result;
     }
 
     function resize() {
@@ -263,10 +331,9 @@
       const width = Math.max(320, Math.floor(rect.width));
       const height = Math.max(280, Math.floor(rect.height));
       camera.aspect = width / height;
-      camera.position.z = camera.aspect < 0.75 ? 8.5 : 3.35;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
-      render();
+      renderScene();
     }
 
     function eventPoint(event) {
@@ -278,65 +345,76 @@
     }
 
     function applyDrag(point, steps = 1) {
-      const depthBias = -0.65;
-      forceEnvelope = createLayeredStructuralDragInteraction({
-        start: dragStart || point,
-        current: point,
-        depthBias,
+      return runStructuralMutation('material-drag', () => {
+        const depthBias = -0.65;
+        forceEnvelope = createLayeredStructuralDragInteraction({
+          start: dragStart || point,
+          current: point,
+          depthBias,
+        });
+        lastPoint = forceEnvelope.point;
+        material = applyLayeredStructuralInteraction(material, forceEnvelope, { steps });
       });
-      lastPoint = forceEnvelope.point;
-      material = applyLayeredStructuralInteraction(material, forceEnvelope, { steps });
-      render();
     }
 
-    stage.addEventListener('pointerdown', (event) => {
-      pointerDown = true;
-      dragStart = eventPoint(event);
-      forceEnvelope = createLayeredStructuralDragInteraction({ start: dragStart, current: dragStart, depthBias: -0.65 });
-      stage.setPointerCapture(event.pointerId);
-      render();
+    renderer.domElement.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      materialPointerId = event.pointerId;
+      renderer.domElement.setPointerCapture(event.pointerId);
+      runStructuralMutation('material-drag-start', () => {
+        dragStart = eventPoint(event);
+        forceEnvelope = createLayeredStructuralDragInteraction({ start: dragStart, current: dragStart, depthBias: -0.65 });
+      });
     });
-    stage.addEventListener('pointermove', (event) => {
-      if (!pointerDown) {
-        yaw += event.movementX * 0.0008;
-        return;
-      }
+    renderer.domElement.addEventListener('pointermove', (event) => {
+      if (event.pointerId !== materialPointerId) return;
       applyDrag(eventPoint(event), 1);
     });
-    stage.addEventListener('pointerup', (event) => {
-      if (pointerDown) applyDrag(eventPoint(event), 1);
-      pointerDown = false;
-      stage.releasePointerCapture(event.pointerId);
+    renderer.domElement.addEventListener('pointerup', (event) => {
+      if (event.pointerId !== materialPointerId) return;
+      applyDrag(eventPoint(event), 1);
+      materialPointerId = null;
+      if (renderer.domElement.hasPointerCapture(event.pointerId)) {
+        renderer.domElement.releasePointerCapture(event.pointerId);
+      }
+    });
+    renderer.domElement.addEventListener('pointercancel', (event) => {
+      if (event.pointerId !== materialPointerId) return;
+      materialPointerId = null;
+      dragStart = null;
     });
     document.querySelector('#reset').addEventListener('click', () => {
-      material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
-      dragStart = null;
-      forceEnvelope = null;
-      render();
+      runStructuralMutation('reset', () => {
+        material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        dragStart = null;
+        forceEnvelope = null;
+      });
     });
     document.querySelector('#fracture').addEventListener('click', () => {
-      forceEnvelope = {
-        kind: 'screen-space-layered-drag',
-        authority: 'screen-space-drag-to-layered-force-envelope-v0',
-        start: { x: Math.max(0, lastPoint.x - 0.38), y: lastPoint.y, z: 0.5 },
-        point: lastPoint,
-        vector: { x: 0.84, y: 0.07, z: -0.54 },
-        dragLength: 0.5,
-        magnitude: 1.46,
-        radius: 0.26,
-      };
-      material = applyLayeredStructuralInteraction(material, forceEnvelope, { steps: 4 });
-      render();
+      runStructuralMutation('shear', () => {
+        forceEnvelope = {
+          kind: 'screen-space-layered-drag',
+          authority: 'screen-space-drag-to-layered-force-envelope-v0',
+          start: { x: Math.max(0, lastPoint.x - 0.38), y: lastPoint.y, z: 0.5 },
+          point: lastPoint,
+          vector: { x: 0.84, y: 0.07, z: -0.54 },
+          dragLength: 0.5,
+          magnitude: 1.46,
+          radius: 0.26,
+        };
+        material = applyLayeredStructuralInteraction(material, forceEnvelope, { steps: 4 });
+      });
     });
     document.querySelector('#bind').addEventListener('click', () => {
-      const summary = summarizeLayeredStructuralState(material);
-      const bindPoint = summary.crackPath.find(edge => edge.bondKind === 'depth')?.midpoint || lastPoint;
-      material = bindLayeredStructuralConnectivity(material, {
-        point: bindPoint,
-        radius: 0.22,
-        strength: 1.25,
+      runStructuralMutation('bind', () => {
+        const summary = summarizeLayeredStructuralState(material);
+        const bindPoint = summary.crackPath.find(edge => edge.bondKind === 'depth')?.midpoint || lastPoint;
+        material = bindLayeredStructuralConnectivity(material, {
+          point: bindPoint,
+          radius: 0.22,
+          strength: 1.25,
+        });
       });
-      render();
     });
 
     window.__structuralMaterial3dWitness = () => ({
@@ -346,6 +424,19 @@
       summary: summarizeLayeredStructuralState(material),
       forceEnvelope,
       renderer: 'THREE.WebGPURenderer',
+      cameraControlAuthority: CAMERA_CONTROL_AUTHORITY,
+      cameraInvariantViolationCount: cameraInvariantViolations.length,
+    });
+
+    window.__structuralMaterial3dCameraWitness = () => ({
+      authority: CAMERA_CONTROL_AUTHORITY,
+      state: cameraState(),
+      materialInput: 'primary-pointer-drag',
+      orbitInput: 'secondary-pointer-drag',
+      panInput: 'auxiliary-pointer-drag',
+      zoomInput: 'wheel',
+      invariantViolationCount: cameraInvariantViolations.length,
+      invariantViolations: cameraInvariantViolations.slice(),
     });
 
     async function countCanvasPixelsFromBlob() {
@@ -394,20 +485,37 @@
 
     window.__structuralMaterial3dApplyWitnessForce = () => {
       const scenario = buildLayeredStructuralWitnessScenario();
-      material = scenario.states.cracked;
-      forceEnvelope = {
-        ...scenario.force,
-        authority: 'screen-space-drag-to-layered-force-envelope-v0',
-        start: { x: Math.max(0, scenario.force.point.x - 0.38), y: scenario.force.point.y, z: 0.5 },
-        dragLength: 0.5,
-      };
-      lastPoint = scenario.force.point;
-      render();
+      runStructuralMutation('witness-force', () => {
+        material = scenario.states.cracked;
+        forceEnvelope = {
+          ...scenario.force,
+          authority: 'screen-space-drag-to-layered-force-envelope-v0',
+          start: { x: Math.max(0, scenario.force.point.x - 0.38), y: scenario.force.point.y, z: 0.5 },
+          dragLength: 0.5,
+        };
+        lastPoint = scenario.force.point;
+      });
       return window.__structuralMaterial3dWitness();
+    };
+
+    window.__structuralMaterial3dCameraIsolationSmoke = () => {
+      const before = cameraState();
+      document.querySelector('#reset').click();
+      document.querySelector('#fracture').click();
+      document.querySelector('#bind').click();
+      const after = cameraState();
+      return {
+        ok: sameCameraState(before, after) && cameraInvariantViolations.length === 0,
+        authority: CAMERA_CONTROL_AUTHORITY,
+        before,
+        after,
+        invariantViolationCount: cameraInvariantViolations.length,
+      };
     };
 
     window.addEventListener('resize', resize);
     resize();
+    render();
   </script>
 </body>
 </html>

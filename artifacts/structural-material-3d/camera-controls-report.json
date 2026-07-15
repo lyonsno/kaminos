@@ -1,0 +1,82 @@
+{
+  "schema": "kaminos.structural-material.camera-browser-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "requestedRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "effectiveRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "requestedCameraAuthority": "operator-camera-controls-v0",
+  "effectiveCameraAuthority": "operator-camera-controls-v0",
+  "requestedConfig": {
+    "url": "http://127.0.0.1:8195/structural-material-3d.html",
+    "debugPort": 9223,
+    "width": 1280,
+    "height": 820,
+    "deviceScaleFactor": 1,
+    "loadTimeoutMs": 30000,
+    "reportPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/camera-controls-report.json",
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/camera-controls.png"
+  },
+  "effectiveConfig": {
+    "url": "http://127.0.0.1:8195/structural-material-3d.html",
+    "debugPort": 9223,
+    "loadTimeoutMs": 30000,
+    "initialViewport": {
+      "width": 1280,
+      "height": 820,
+      "deviceScaleFactor": 1
+    },
+    "reportPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/camera-controls-report.json",
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/camera-controls.png",
+    "browserTarget": "first-page-target",
+    "resizeProbeViewport": {
+      "width": 1075,
+      "height": 738,
+      "deviceScaleFactor": 1
+    },
+    "captureViewport": {
+      "width": 1075,
+      "height": 738,
+      "devicePixelRatio": 1
+    }
+  },
+  "checks": {
+    "routeIdentity": true,
+    "cameraAuthority": true,
+    "idlePointerPreservedCamera": true,
+    "buttonIsolationPassed": true,
+    "materialDragPreservedCamera": true,
+    "materialDragProducedForce": true,
+    "orbitChangedCamera": true,
+    "panChangedTarget": true,
+    "postCameraActionsPreservedCamera": true,
+    "zoomChangedDistance": true,
+    "resizePreservedCamera": true,
+    "screenshotWritten": true,
+    "noRuntimeErrors": true,
+    "noCameraInvariantViolations": true
+  },
+  "pixelProbe": {
+    "ok": true,
+    "source": "canvas-blob-pixels",
+    "nonDarkPixels": 2617,
+    "width": 1075,
+    "height": 683,
+    "sampleWidth": 96,
+    "sampleHeight": 96
+  },
+  "runtimeErrors": [],
+  "lastTrustworthyEvidence": {
+    "phase": "visual-evidence",
+    "pixelProbe": {
+      "ok": true,
+      "source": "canvas-blob-pixels",
+      "nonDarkPixels": 2617,
+      "width": 1075,
+      "height": 683,
+      "sampleWidth": 96,
+      "sampleHeight": 96
+    },
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/camera-controls.png"
+  },
+  "error": null
+}

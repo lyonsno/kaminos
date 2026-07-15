@@ -18,14 +18,17 @@ import {
 const root = new URL('..', import.meta.url).pathname;
 const corePath = join(root, 'structural-material-3d-core.js');
 const witnessPath = join(root, 'structural-material-3d-witness.mjs');
+const cameraWitnessPath = join(root, 'structural-material-3d-camera-witness.mjs');
 const pagePath = join(root, 'structural-material-3d.html');
 
 assert.ok(existsSync(corePath), 'layered structural sidecar core module exists');
 assert.ok(existsSync(witnessPath), 'layered structural sidecar witness runner exists');
+assert.ok(existsSync(cameraWitnessPath), 'operator camera ownership has a reusable browser witness');
 assert.ok(existsSync(pagePath), 'layered structural sidecar browser route exists');
 
 const coreSource = readFileSync(corePath, 'utf8');
 const witnessSource = readFileSync(witnessPath, 'utf8');
+const cameraWitnessSource = readFileSync(cameraWitnessPath, 'utf8');
 const pageSource = readFileSync(pagePath, 'utf8');
 
 assert.equal(STRUCTURAL_MATERIAL_3D_SCHEMA, 'kaminos.structural-material.layered-sidecar.v0');
@@ -37,11 +40,24 @@ assert.match(coreSource, /material-derived-sound-impulses-v0/, '3D path preserve
 assert.match(witnessSource, /failurePhase/, 'witness writes failure phase if primary output cannot complete');
 assert.match(witnessSource, /requestedRoute/, 'witness records requested route identity');
 assert.match(witnessSource, /effectiveRoute/, 'witness records effective route identity');
+assert.match(cameraWitnessSource, /failurePhase/, 'camera witness records failure phase before primary evidence completes');
+assert.match(cameraWitnessSource, /requestedRoute/, 'camera witness records requested structural route');
+assert.match(cameraWitnessSource, /effectiveRoute/, 'camera witness records effective structural route');
+assert.match(cameraWitnessSource, /materialDragPreservedCamera/, 'camera witness rejects material/camera ownership collisions');
+assert.match(cameraWitnessSource, /orbitChangedCamera/, 'camera witness proves camera controls are not inert');
+assert.match(cameraWitnessSource, /pixelProbe/, 'camera witness rejects blank visual output');
 assert.match(pageSource, /threejs-sidecar-consumer-not-truth-v0/, 'browser declares the Three.js consumer is not structural authority');
 assert.match(pageSource, /window\.__structuralMaterial3dWitness/, 'browser exposes smoke witness state for automation');
 assert.match(pageSource, /window\.__structuralMaterial3dPixelProbe/, 'browser exposes renderer pixel probe for visual smoke');
 assert.match(pageSource, /pointermove/, 'browser route keeps click-drag interaction live');
 assert.match(pageSource, /readPixels/, 'browser route supports canvas pixel evidence');
+assert.match(pageSource, /OrbitControls/, 'browser provides independent operator camera controls');
+assert.match(pageSource, /operator-camera-controls-v0/, 'browser reports operator camera-control authority');
+assert.match(pageSource, /runStructuralMutation/, 'structural actions enforce camera-state isolation');
+assert.doesNotMatch(pageSource, /yaw\s*\+=\s*event\.movementX/, 'idle pointer motion cannot rotate the material or camera');
+const resizeSource = pageSource.match(/function resize\(\) \{[\s\S]*?\n    \}/)?.[0] || '';
+assert.ok(resizeSource, 'browser route exposes a bounded resize handler');
+assert.doesNotMatch(resizeSource, /camera\.position/, 'viewport resize preserves the operator camera position');
 
 const force = {
   kind: 'screen-space-layered-drag',
