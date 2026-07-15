@@ -8,14 +8,14 @@ import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deflateSync, inflateSync } from 'node:zlib';
 
-export const SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY = 'smoke-gaussian-oracle-render-witness-v0';
+export const SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY = 'smoke-gaussian-oracle-render-witness-v1';
 
 const STATIC_FIT_IDENTITY = 'smoke-gaussian-oracle-static-fit-v0';
 const EXPECTED_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE = 'kaminos-volume-prototype-v0';
 const REQUIRED_CHANNELS = [
   'positionX', 'positionY', 'positionZ',
-  'radius0', 'radius1', 'radius2',
+  'covXX', 'covXY', 'covYY',
   'extinctionMass',
 ];
 
@@ -164,6 +164,15 @@ function normalizeScales(scales) {
   }))).sort((left, right) => left - right);
 }
 
+function normalizeCoverageScales(scales) {
+  if (!Array.isArray(scales) || scales.length === 0) throw new Error('at least one positive coverage scale is required');
+  return Array.from(new Set(scales.map(value => {
+    const scale = Number(value);
+    if (!(scale > 0)) throw new Error(`positive coverage scale required, got ${value}`);
+    return scale;
+  }))).sort((left, right) => left - right);
+}
+
 async function readJson(path) {
   return JSON.parse((await readFile(path)).toString('utf8'));
 }
@@ -208,7 +217,14 @@ async function loadRows(reportPath, entry) {
     rows.push({
       index,
       position: [values[offset + map.positionX], values[offset + map.positionY], values[offset + map.positionZ]],
-      radii: [values[offset + map.radius0], values[offset + map.radius1], values[offset + map.radius2]],
+      covariance: [
+        values[offset + map.covXX],
+        values[offset + map.covXY],
+        Number.isInteger(map.covXZ) ? values[offset + map.covXZ] : 0,
+        values[offset + map.covYY],
+        Number.isInteger(map.covYZ) ? values[offset + map.covYZ] : 0,
+        Number.isInteger(map.covZZ) ? values[offset + map.covZZ] : 0,
+      ],
       extinctionMass: values[offset + map.extinctionMass],
     });
   }
@@ -224,28 +240,108 @@ function lumaFromRgba(rgba) {
   return luma;
 }
 
-function renderLuma(rows, width, height, worldSpace, extinctionScale) {
-  const luma = new Float32Array(width * height);
+export function projectOrthographicGaussianFootprint(covariance, varianceFloor = 0, coverageScale = 1) {
+  if (!Array.isArray(covariance) || covariance.length !== 6) throw new Error('six-channel symmetric covariance is required');
+  if (!(varianceFloor >= 0)) throw new Error(`nonnegative variance floor required, got ${varianceFloor}`);
+  if (!(coverageScale > 0)) throw new Error(`positive coverage scale required, got ${coverageScale}`);
+  const covarianceScale = coverageScale * coverageScale;
+  let varianceX = Math.max(Number(covariance[0]) * covarianceScale, varianceFloor);
+  const covarianceXY = Number(covariance[1]) * covarianceScale;
+  let varianceY = Math.max(Number(covariance[3]) * covarianceScale, varianceFloor);
+  if (![varianceX, covarianceXY, varianceY].every(Number.isFinite)) throw new Error('finite projected covariance is required');
+  const minimumDeterminant = Math.max(varianceFloor * varianceFloor, Number.EPSILON);
+  let determinant = varianceX * varianceY - covarianceXY * covarianceXY;
+  if (determinant < minimumDeterminant) {
+    let jitter = Math.max(varianceFloor, 1e-12);
+    for (let iteration = 0; iteration < 12 && determinant < minimumDeterminant; iteration += 1) {
+      varianceX += jitter;
+      varianceY += jitter;
+      determinant = varianceX * varianceY - covarianceXY * covarianceXY;
+      jitter *= 10;
+    }
+  }
+  if (!(determinant > 0)) throw new Error(`projected covariance is not positive definite: determinant ${determinant}`);
+  return {
+    varianceX,
+    covarianceXY,
+    varianceY,
+    determinant,
+    inverseXX: varianceY / determinant,
+    inverseXY: -covarianceXY / determinant,
+    inverseYY: varianceX / determinant,
+    normalization: 1 / (2 * Math.PI * Math.sqrt(determinant)),
+  };
+}
+
+function projectOrthographicOpticalDepth(rows, width, height, worldSpace, coverageScale) {
+  const opticalDepth = new Float32Array(width * height);
   const minimum = worldSpace?.bounds?.minimum || [-1, -1, -1];
   const maximum = worldSpace?.bounds?.maximum || [1, 1, 1];
   const pixelWorldX = (maximum[0] - minimum[0]) / width;
   const pixelWorldY = (maximum[1] - minimum[1]) / height;
-  const floorSigma = Math.max(pixelWorldX, pixelWorldY);
+  const varianceFloor = Math.max(pixelWorldX * pixelWorldX, pixelWorldY * pixelWorldY) / 12;
+  const footprints = rows.map(row => ({
+    ...row,
+    footprint: projectOrthographicGaussianFootprint(row.covariance, varianceFloor, coverageScale),
+  }));
+  let supportPixelCount = 0;
+  let singleContributorPixelCount = 0;
+  let contributorSum = 0;
+  let maxContributors = 0;
+  let peakDominanceSum = 0;
   for (let y = 0; y < height; y += 1) {
     const worldY = maximum[1] - (y + 0.5) * pixelWorldY;
     for (let x = 0; x < width; x += 1) {
       const worldX = minimum[0] + (x + 0.5) * pixelWorldX;
-      let opticalDepth = 0;
-      for (const row of rows) {
-        const sx = Math.max(Math.abs(row.radii[0]), floorSigma);
-        const sy = Math.max(Math.abs(row.radii[1]), floorSigma);
-        const dx = (worldX - row.position[0]) / sx;
-        const dy = (worldY - row.position[1]) / sy;
-        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) continue;
-        opticalDepth += row.extinctionMass * Math.exp(-0.5 * (dx * dx + dy * dy)) / (2 * Math.PI * sx * sy);
+      let pixelOpticalDepth = 0;
+      let contributors = 0;
+      let peakContribution = 0;
+      for (const row of footprints) {
+        const dx = worldX - row.position[0];
+        const dy = worldY - row.position[1];
+        const footprint = row.footprint;
+        const mahalanobisSquared = footprint.inverseXX * dx * dx
+          + 2 * footprint.inverseXY * dx * dy
+          + footprint.inverseYY * dy * dy;
+        if (mahalanobisSquared > 32) continue;
+        const contribution = row.extinctionMass * footprint.normalization * Math.exp(-0.5 * mahalanobisSquared);
+        pixelOpticalDepth += contribution;
+        peakContribution = Math.max(peakContribution, contribution);
+        if (mahalanobisSquared <= 16) contributors += 1;
       }
-      luma[y * width + x] = Math.min(1, 1 - Math.exp(-extinctionScale * opticalDepth));
+      const index = y * width + x;
+      opticalDepth[index] = pixelOpticalDepth;
+      if (contributors > 0) {
+        supportPixelCount += 1;
+        contributorSum += contributors;
+        maxContributors = Math.max(maxContributors, contributors);
+        if (contributors === 1) singleContributorPixelCount += 1;
+        if (pixelOpticalDepth > 0) peakDominanceSum += peakContribution / pixelOpticalDepth;
+      }
     }
+  }
+  const determinants = footprints.map(row => row.footprint.determinant);
+  return {
+    opticalDepth,
+    diagnostics: {
+      identity: 'orthographic-full-covariance-overlap-diagnostics-v0',
+      coverageScale,
+      supportPixelCount,
+      singleContributorPixelCount,
+      singleContributorPixelFraction: supportPixelCount ? singleContributorPixelCount / supportPixelCount : 0,
+      meanContributorsPerSupportPixel: supportPixelCount ? contributorSum / supportPixelCount : 0,
+      maxContributors,
+      meanPeakContributionFraction: supportPixelCount ? peakDominanceSum / supportPixelCount : 0,
+      minimumProjectedCovarianceDeterminant: Math.min(...determinants),
+      maximumProjectedCovarianceDeterminant: Math.max(...determinants),
+    },
+  };
+}
+
+function lumaFromOpticalDepth(opticalDepth, extinctionScale) {
+  const luma = new Float32Array(opticalDepth.length);
+  for (let index = 0; index < opticalDepth.length; index += 1) {
+    luma[index] = Math.min(1, 1 - Math.exp(-extinctionScale * opticalDepth[index]));
   }
   return luma;
 }
@@ -326,16 +422,27 @@ function makeContactSheet(images, width, height) {
   return { width: sheetWidth, height: height * images.length, rgba: sheet };
 }
 
-async function renderBudget({ reportPath, report, raymarch, teacherLuma, entry, budget, outDir, extinctionScales }) {
+async function renderBudget({ reportPath, report, raymarch, teacherLuma, entry, budget, outDir, extinctionScales, coverageScales }) {
   if (entry.activeGaussianCount !== budget) throw new Error(`budget ${budget} has active count ${entry.activeGaussianCount}; refusing hidden cap/substitution`);
   if (entry.extinctionAccounting?.relativeError > 1e-5) throw new Error(`budget ${budget} does not conserve extinction`);
   const loaded = await loadRows(reportPath, entry);
   const started = performance.now();
   let best = null;
-  for (const scale of extinctionScales) {
-    const luma = renderLuma(loaded.rows, raymarch.width, raymarch.height, report.teacher.worldSpace, scale);
-    const metrics = compareLuma(teacherLuma, luma);
-    if (!best || metrics.lumaMse < best.metrics.lumaMse) best = { scale, luma, metrics };
+  for (const coverageScale of coverageScales) {
+    const projected = projectOrthographicOpticalDepth(
+      loaded.rows,
+      raymarch.width,
+      raymarch.height,
+      report.teacher.worldSpace,
+      coverageScale,
+    );
+    for (const scale of extinctionScales) {
+      const luma = lumaFromOpticalDepth(projected.opticalDepth, scale);
+      const metrics = compareLuma(teacherLuma, luma);
+      if (!best || metrics.lumaMse < best.metrics.lumaMse) {
+        best = { scale, coverageScale, luma, metrics, projectionDiagnostics: projected.diagnostics };
+      }
+    }
   }
   const renderMs = performance.now() - started;
   if (best.metrics.renderActivePixels <= 0) throw new Error(`budget ${budget} rendered blank output`);
@@ -349,8 +456,11 @@ async function renderBudget({ reportPath, report, raymarch, teacherLuma, entry, 
     requestedBudget: budget,
     activeGaussianCount: entry.activeGaussianCount,
     selectedExtinctionScale: best.scale,
+    selectedCoverageScale: best.coverageScale,
     scaleSweep: extinctionScales,
+    coverageSweep: coverageScales,
     timing: { cpuProxyRenderMs: renderMs },
+    projectionDiagnostics: best.projectionDiagnostics,
     gaussianArtifact: {
       path: loaded.artifactPath,
       identity: loaded.artifactIdentity,
@@ -371,6 +481,7 @@ export async function renderSmokeGaussianOracleWitness({
   outDir,
   budgets = [32, 64, 128],
   extinctionScales = [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016],
+  coverageScales = [1],
   inspectedNote = null,
 } = {}) {
   if (!fitReportPath) throw new Error('fitReportPath is required');
@@ -378,6 +489,7 @@ export async function renderSmokeGaussianOracleWitness({
   if (!outDir) throw new Error('outDir is required');
   const requestedBudgets = normalizeBudgets(budgets);
   const requestedScales = normalizeScales(extinctionScales);
+  const requestedCoverageScales = normalizeCoverageScales(coverageScales);
   await mkdir(outDir, { recursive: true });
   const reportPath = resolve(fitReportPath);
   const report = await readJson(reportPath);
@@ -399,6 +511,7 @@ export async function renderSmokeGaussianOracleWitness({
       budget,
       outDir,
       extinctionScales: requestedScales,
+      coverageScales: requestedCoverageScales,
     }));
   }
   const sheet = makeContactSheet(budgetCurve.map(entry => entry.contactSheetRow), raymarch.width, raymarch.height);
@@ -422,11 +535,14 @@ export async function renderSmokeGaussianOracleWitness({
       worldSpace: report.teacher.worldSpace,
     },
     renderer: {
-      identity: 'cpu-orthographic-projected-anisotropic-gaussian-smoke-v0',
+      identity: 'cpu-orthographic-full-covariance-gaussian-smoke-v1',
       cameraAuthority: 'orthographic-world-proxy-not-native-camera-v0',
       compositorAuthority: 'single-channel-smoke-luma-proxy-not-production-compositor-v0',
+      projectionAuthority: 'exact-world-xy-covariance-line-integral-v0',
       scaleSelection: 'explicit-extinction-scale-sweep-min-luma-mse-v0',
       requestedExtinctionScales: requestedScales,
+      coverageSelection: 'explicit-mass-preserving-covariance-dilation-sweep-min-luma-mse-v0',
+      requestedCoverageScales,
     },
     requestedBudgets,
     budgetCurve: budgetCurve.map(({ contactSheetRow, ...entry }) => entry),
@@ -471,6 +587,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     .split(',')
     .map(value => Number(value.trim()))
     .filter(value => value || value === 0);
+  const coverageScales = String(args.get('--coverage-scales') || '1')
+    .split(',')
+    .map(value => Number(value.trim()))
+    .filter(value => value || value === 0);
   try {
     const report = await renderSmokeGaussianOracleWitness({
       fitReportPath: args.get('--fit-report'),
@@ -478,6 +598,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       outDir: args.get('--out-dir'),
       budgets,
       extinctionScales,
+      coverageScales,
       inspectedNote: args.get('--inspected-note') || null,
     });
     console.log(JSON.stringify({

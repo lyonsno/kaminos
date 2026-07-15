@@ -9,10 +9,28 @@ import { deflateSync } from 'node:zlib';
 const rendererUrl = new URL('../smoke-gaussian-oracle-renderer.mjs', import.meta.url);
 const {
   SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY,
+  projectOrthographicGaussianFootprint,
   renderSmokeGaussianOracleWitness,
 } = await import(rendererUrl);
 
-assert.equal(SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY, 'smoke-gaussian-oracle-render-witness-v0');
+assert.equal(SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY, 'smoke-gaussian-oracle-render-witness-v1');
+
+const tiltedFootprint = projectOrthographicGaussianFootprint([4, 1.5, 0.25, 1, 0.1, 2]);
+assert.equal(tiltedFootprint.varianceX, 4, 'orthographic footprint preserves world X variance');
+assert.equal(tiltedFootprint.covarianceXY, 1.5, 'orthographic footprint preserves covariance rotation instead of discarding it');
+assert.equal(tiltedFootprint.varianceY, 1, 'orthographic footprint preserves world Y variance');
+assert.ok(Math.abs(tiltedFootprint.determinant - 1.75) < 1e-12, 'projected covariance determinant is exact');
+assert.ok(Math.abs(tiltedFootprint.inverseXX - (1 / 1.75)) < 1e-12);
+assert.ok(Math.abs(tiltedFootprint.inverseXY - (-1.5 / 1.75)) < 1e-12);
+assert.ok(Math.abs(tiltedFootprint.inverseYY - (4 / 1.75)) < 1e-12);
+assert.ok(Math.abs(tiltedFootprint.normalization - (1 / (2 * Math.PI * Math.sqrt(1.75)))) < 1e-12);
+
+const dilatedFootprint = projectOrthographicGaussianFootprint([4, 1.5, 0.25, 1, 0.1, 2], 0, 2);
+assert.equal(dilatedFootprint.varianceX, 16, 'coverage dilation scales projected variance quadratically');
+assert.equal(dilatedFootprint.covarianceXY, 6, 'coverage dilation preserves covariance orientation');
+assert.equal(dilatedFootprint.varianceY, 4);
+assert.ok(Math.abs(dilatedFootprint.determinant - 28) < 1e-12, '2x footprint dilation scales 2D determinant by 16');
+assert.ok(Math.abs(dilatedFootprint.normalization - (tiltedFootprint.normalization / 4)) < 1e-12, 'mass normalization falls with projected area');
 
 const gaussianChannels = [
   'positionX', 'positionY', 'positionZ',
@@ -192,15 +210,19 @@ try {
     outDir: join(directory, 'render'),
     budgets: [2],
     extinctionScales: [0.04, 0.08],
+    coverageScales: [1, 1.7],
   });
   assert.equal(report.identity, SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY);
   assert.equal(report.status, 'passed');
   assert.equal(report.teacher.raymarchSha256, raymarchSha);
   assert.equal(report.renderer.cameraAuthority, 'orthographic-world-proxy-not-native-camera-v0');
+  assert.equal(report.renderer.projectionAuthority, 'exact-world-xy-covariance-line-integral-v0');
+  assert.deepEqual(report.renderer.requestedCoverageScales, [1, 1.7]);
   assert.equal(report.hiddenBudgetCapApplied, false);
   assert.equal(report.budgetCurve[0].activeGaussianCount, 2);
   assert.ok(report.budgetCurve[0].metrics.renderActivePixels > 0, 'render witness must reject blank Gaussian output');
   assert.ok(report.budgetCurve[0].metrics.lumaMse >= 0);
+  assert.ok([1, 1.7].includes(report.budgetCurve[0].selectedCoverageScale));
   assert.ok(existsSync(report.budgetCurve[0].images.renderPngPath));
   assert.ok(existsSync(report.budgetCurve[0].images.diffPngPath));
   assert.ok(existsSync(report.contactSheet.path));
