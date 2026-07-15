@@ -5,6 +5,10 @@ export const WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA = 'kaminos.webgpu-
 export const WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA = 'kaminos.webgpu-model-resource-bundle-custody.v0';
 export const WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-lease.v0';
 export const WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA = 'kaminos.webgpu-model-resource-tensor.v0';
+export const WEBGPU_MODEL_RESOURCE_SHARING_POLICIES = Object.freeze({
+  semanticIdentity: 'semantic-identity',
+  contentAddressedPhysicalDedupe: 'content-addressed-physical-dedupe',
+});
 
 const bundleCustody = new WeakMap();
 
@@ -80,8 +84,33 @@ function bundleIdentity(modelId, revision, sha256) {
   return `${modelId}@${revision}#sha256:${sha256}`;
 }
 
-function allocationResourceId(sha256, allocation) {
+function physicalResourceId(sha256, allocation) {
   return `kaminos:model-resource:sha256:${sha256}:${allocation.byteOffset}:${allocation.byteLength}:${allocation.usage}`;
+}
+
+function semanticResourceId(modelId, revision, manifestMetadata, physicalId, allocation) {
+  const semantics = canonicalJson({
+    modelId,
+    revision,
+    manifestMetadata,
+    allocationId: allocation.allocationId,
+    allocationMetadata: allocation.metadata,
+    tensors: allocation.tensors,
+  });
+  return `${physicalId}:semantic:${encodeURIComponent(semantics)}`;
+}
+
+function normalizeResourceSharing(input) {
+  if (input != null && (typeof input !== 'object' || Array.isArray(input))) {
+    throw new Error('resourceSharing must be an object');
+  }
+  const policy = input?.policy ?? WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.semanticIdentity;
+  if (!Object.values(WEBGPU_MODEL_RESOURCE_SHARING_POLICIES).includes(policy)) {
+    throw new Error(
+      `resourceSharing.policy must be ${WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.semanticIdentity} or ${WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe}`,
+    );
+  }
+  return { policy };
 }
 
 function byteView(data) {
@@ -122,6 +151,12 @@ export function validateWebGpuModelResourceManifest(manifest) {
   }
   if (!isNonEmptyString(manifest.modelId)) errors.push('modelId must be a non-empty string');
   if (!isNonEmptyString(manifest.revision)) errors.push('revision must be a non-empty string');
+  const resourceSharingPolicy = manifest.resourceSharing?.policy;
+  if (!Object.values(WEBGPU_MODEL_RESOURCE_SHARING_POLICIES).includes(resourceSharingPolicy)) {
+    errors.push(
+      `resourceSharing.policy must be ${WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.semanticIdentity} or ${WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe}`,
+    );
+  }
   if (!manifest.bundle || typeof manifest.bundle !== 'object' || Array.isArray(manifest.bundle)) {
     errors.push('bundle must be an object');
   }
@@ -198,9 +233,27 @@ export function validateWebGpuModelResourceManifest(manifest) {
       typeof bundleSha256 === 'string'
       && allocationRangeValid
       && Number.isSafeInteger(allocation.usage)
-      && allocation.resourceId !== allocationResourceId(bundleSha256, allocation)
     ) {
-      errors.push(`${prefix}.resourceId must be content-derived from bundle and allocation identity`);
+      const expectedPhysicalResourceId = physicalResourceId(bundleSha256, allocation);
+      const expectedSemanticResourceId = semanticResourceId(
+        manifest.modelId,
+        manifest.revision,
+        manifest.metadata ?? null,
+        expectedPhysicalResourceId,
+        allocation,
+      );
+      if (allocation.physicalResourceId !== expectedPhysicalResourceId) {
+        errors.push(`${prefix}.physicalResourceId must be content-derived from bundle and allocation bytes`);
+      }
+      if (allocation.semanticResourceId !== expectedSemanticResourceId) {
+        errors.push(`${prefix}.semanticResourceId must bind model, revision, manifest, allocation, and tensor semantics`);
+      }
+      const expectedResourceId = resourceSharingPolicy === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe
+        ? expectedPhysicalResourceId
+        : expectedSemanticResourceId;
+      if (allocation.resourceId !== expectedResourceId) {
+        errors.push(`${prefix}.resourceId must match the declared resourceSharing policy`);
+      }
     }
     if (!Array.isArray(allocation.tensors) || allocation.tensors.length === 0) {
       errors.push(`${prefix}.tensors must be a non-empty array`);
@@ -287,14 +340,16 @@ export function defineWebGpuModelResourceManifest(input = {}) {
   const modelId = input.modelId;
   const revision = input.revision;
   const sha256 = typeof input.bundle?.sha256 === 'string' ? input.bundle.sha256.toLowerCase() : input.bundle?.sha256;
-  const allocations = (input.allocations || []).map(allocation => ({
-    allocationId: allocation.allocationId,
-    resourceId: allocationResourceId(sha256, allocation),
-    byteOffset: allocation.byteOffset,
-    byteLength: allocation.byteLength,
-    usage: allocation.usage,
-    metadata: cloneJson(allocation.metadata ?? null, 'allocation metadata'),
-    tensors: (allocation.tensors || []).map(tensor => {
+  const metadata = cloneJson(input.metadata ?? null, 'manifest metadata');
+  const resourceSharing = normalizeResourceSharing(input.resourceSharing);
+  const allocations = (input.allocations || []).map(allocation => {
+    const normalized = {
+      allocationId: allocation.allocationId,
+      byteOffset: allocation.byteOffset,
+      byteLength: allocation.byteLength,
+      usage: allocation.usage,
+      metadata: cloneJson(allocation.metadata ?? null, 'allocation metadata'),
+      tensors: (allocation.tensors || []).map(tensor => {
       const dtype = normalizeDtype(tensor.dtype);
       const shape = Array.isArray(tensor.shape) ? [...tensor.shape] : tensor.shape;
       const elements = tensorElements(shape);
@@ -309,8 +364,19 @@ export function defineWebGpuModelResourceManifest(input = {}) {
         byteLength: tensor.byteLength,
         metadata: cloneJson(tensor.metadata ?? null, 'tensor metadata'),
       };
-    }),
-  }));
+      }),
+    };
+    const physicalId = physicalResourceId(sha256, normalized);
+    const semanticId = semanticResourceId(modelId, revision, metadata, physicalId, normalized);
+    return {
+      ...normalized,
+      resourceId: resourceSharing.policy === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe
+        ? physicalId
+        : semanticId,
+      physicalResourceId: physicalId,
+      semanticResourceId: semanticId,
+    };
+  });
   const manifest = {
     schema: WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA,
     identity: bundleIdentity(modelId, revision, sha256),
@@ -320,7 +386,8 @@ export function defineWebGpuModelResourceManifest(input = {}) {
       byteLength: input.bundle?.byteLength,
       sha256,
     },
-    metadata: cloneJson(input.metadata ?? null, 'manifest metadata'),
+    metadata,
+    resourceSharing,
     allocations,
   };
   const validation = validateWebGpuModelResourceManifest(manifest);
@@ -525,16 +592,29 @@ export async function loadWebGpuModelResources(input = {}) {
       throwIfAborted(signal);
       let lease;
       try {
+        const sharedPhysical = manifest.resourceSharing.policy
+          === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe;
         lease = await route.residency.acquireOrCreate({
           resourceId: allocation.resourceId,
           declaredBytes: allocation.byteLength,
           kind: 'model-weight-buffer',
           metadata: {
+            resourceSharingPolicy: manifest.resourceSharing.policy,
+            physicalResourceId: allocation.physicalResourceId,
             bundleSha256: manifest.bundle.sha256,
             bundleByteLength: manifest.bundle.byteLength,
             sourceByteOffset: allocation.byteOffset,
             byteLength: allocation.byteLength,
             usage: allocation.usage,
+            ...(sharedPhysical ? {} : {
+              semanticResourceId: allocation.semanticResourceId,
+              modelId: manifest.modelId,
+              revision: manifest.revision,
+              manifestMetadata: manifest.metadata,
+              allocationId: allocation.allocationId,
+              allocationMetadata: allocation.metadata,
+              tensorSemantics: allocation.tensors,
+            }),
           },
           signal,
           create({ signal: flightSignal }) {
@@ -572,6 +652,10 @@ export async function loadWebGpuModelResources(input = {}) {
       allocations.push(Object.freeze({
         allocationId: allocation.allocationId,
         resourceId: allocation.resourceId,
+        physicalResourceId: allocation.physicalResourceId,
+        semanticResourceId: allocation.semanticResourceId,
+        semanticLeaseId: `${allocation.semanticResourceId}:lease:${lease.leaseId}`,
+        resourceSharingPolicy: manifest.resourceSharing.policy,
         leaseId: lease.leaseId,
         generation: lease.generation,
         byteOffset: allocation.byteOffset,
@@ -606,6 +690,10 @@ export async function loadWebGpuModelResources(input = {}) {
         usage: manifestAllocation.usage,
         allocationId: manifestAllocation.allocationId,
         resourceId: manifestAllocation.resourceId,
+        physicalResourceId: manifestAllocation.physicalResourceId,
+        semanticResourceId: manifestAllocation.semanticResourceId,
+        semanticLeaseId: allocation.semanticLeaseId,
+        resourceSharingPolicy: manifest.resourceSharing.policy,
         buffer: allocation.buffer,
         bufferOffset: tensor.byteOffset,
         metadata: tensor.metadata,
@@ -619,6 +707,7 @@ export async function loadWebGpuModelResources(input = {}) {
     identity: manifest.identity,
     modelId: manifest.modelId,
     revision: manifest.revision,
+    resourceSharing: manifest.resourceSharing,
     routeId: route.routeId,
     manifest,
     verification,

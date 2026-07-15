@@ -7,6 +7,7 @@ assert.equal(typeof kit.validateWebGpuModelResourceManifest, 'function');
 assert.equal(typeof kit.verifyWebGpuModelResourceBundle, 'function');
 assert.equal(typeof kit.loadWebGpuModelResources, 'function');
 assert.equal(typeof kit.prepareWebGpuModelResourceBundle, 'function');
+assert.equal(Object.isFrozen(kit.WEBGPU_MODEL_RESOURCE_SHARING_POLICIES), true);
 
 const {
   WEBGPU_BUFFER_USAGE,
@@ -107,7 +108,10 @@ const manifest = manifestFor(bundle);
 assert.equal(manifest.schema, 'kaminos.webgpu-model-resource-manifest.v0');
 assert.equal(manifest.identity, `acme/vision-model@0123456789abcdef#sha256:${sha256(bundle)}`);
 assert.equal(manifest.allocations.length, 2);
-assert.equal(manifest.allocations[0].resourceId, `kaminos:model-resource:sha256:${sha256(bundle)}:0:16:${WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst}`);
+assert.equal(manifest.resourceSharing.policy, 'semantic-identity');
+assert.match(manifest.allocations[0].physicalResourceId, new RegExp(`sha256:${sha256(bundle)}:0:16:${WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst}$`));
+assert.equal(manifest.allocations[0].resourceId, manifest.allocations[0].semanticResourceId);
+assert.notEqual(manifest.allocations[0].resourceId, manifest.allocations[0].physicalResourceId);
 assert.equal(Object.isFrozen(manifest), true);
 assert.equal(Object.isFrozen(manifest.allocations), true);
 assert.equal(Object.isFrozen(manifest.allocations[0].tensors[0].shape), true);
@@ -319,6 +323,105 @@ assert.equal(residency.snapshot().activeLeaseCount, 2);
 assert.equal(modelB.release().status, 'released');
 assert.equal(residency.snapshot().activeLeaseCount, 0);
 assert.equal(residency.snapshot().evictionCandidates.length, 2);
+
+const revisionManifest = manifestFor(bundle, { revision: 'fedcba9876543210' });
+const roleManifest = manifestFor(bundle, {
+  metadata: {
+    role: 'depth-backbone',
+    kernelProfile: { family: 'vit', precision: 'f16' },
+  },
+});
+const tensorSemanticManifest = manifestFor(bundle, {
+  allocations: manifest.allocations.map((allocation, allocationIndex) => ({
+    ...allocation,
+    tensors: allocation.tensors.map((tensor, tensorIndex) => ({
+      ...tensor,
+      metadata: allocationIndex === 0 && tensorIndex === 0
+        ? { role: 'query-projection', layout: 'row-major' }
+        : tensor.metadata,
+    })),
+  })),
+});
+assert.notEqual(
+  manifest.allocations[0].resourceId,
+  revisionManifest.allocations[0].resourceId,
+  'identical bytes under different model revisions must not share authenticated resource identity by default',
+);
+assert.notEqual(
+  manifest.allocations[0].resourceId,
+  roleManifest.allocations[0].resourceId,
+  'manifest role and kernel-profile metadata must participate in default resource identity',
+);
+assert.notEqual(
+  manifest.allocations[0].resourceId,
+  tensorSemanticManifest.allocations[0].resourceId,
+  'tensor semantic metadata must participate in default resource identity',
+);
+
+const semanticResidency = createWebGpuResourceResidency({ sessionId: 'semantic-isolation' });
+const semanticFactory = createWebGpuResourceFactory({ sessionId: 'semantic-isolation', residency: semanticResidency });
+const semanticRuntimeA = runtimeFixture();
+const semanticRuntimeB = runtimeFixture();
+const semanticModelA = await loadWebGpuModelResources({
+  manifest,
+  bundle,
+  route: routeFixture({ routeId: 'semantic-a', runtime: semanticRuntimeA, residency: semanticResidency, factory: semanticFactory }),
+});
+const semanticModelB = await loadWebGpuModelResources({
+  manifest: revisionManifest,
+  bundle,
+  route: routeFixture({ routeId: 'semantic-b', runtime: semanticRuntimeB, residency: semanticResidency, factory: semanticFactory }),
+});
+assert.equal(
+  semanticRuntimeA.created.length + semanticRuntimeB.created.length,
+  4,
+  'default semantic isolation must materialize both revisions instead of silently reusing one physical allocation pair',
+);
+assert.notEqual(semanticModelA.allocations[0].buffer, semanticModelB.allocations[0].buffer);
+semanticModelA.release();
+semanticModelB.release();
+
+const physicalSharing = { policy: 'content-addressed-physical-dedupe' };
+const physicalManifestA = manifestFor(bundle, { resourceSharing: physicalSharing });
+const physicalManifestB = manifestFor(bundle, {
+  revision: 'physically-compatible-revision',
+  metadata: { role: 'alternate-consumer', kernelProfile: { family: 'vit', precision: 'f32' } },
+  resourceSharing: physicalSharing,
+});
+assert.equal(physicalManifestA.resourceSharing.policy, 'content-addressed-physical-dedupe');
+assert.equal(physicalManifestA.allocations[0].resourceId, physicalManifestA.allocations[0].physicalResourceId);
+assert.equal(physicalManifestA.allocations[0].physicalResourceId, physicalManifestB.allocations[0].physicalResourceId);
+assert.notEqual(physicalManifestA.allocations[0].semanticResourceId, physicalManifestB.allocations[0].semanticResourceId);
+
+const physicalResidency = createWebGpuResourceResidency({ sessionId: 'explicit-physical-sharing' });
+const physicalFactory = createWebGpuResourceFactory({ sessionId: 'explicit-physical-sharing', residency: physicalResidency });
+const physicalRuntimeA = runtimeFixture();
+const physicalRuntimeB = runtimeFixture();
+const physicalModelA = await loadWebGpuModelResources({
+  manifest: physicalManifestA,
+  bundle,
+  route: routeFixture({ routeId: 'physical-a', runtime: physicalRuntimeA, residency: physicalResidency, factory: physicalFactory }),
+});
+const physicalModelB = await loadWebGpuModelResources({
+  manifest: physicalManifestB,
+  bundle,
+  route: routeFixture({ routeId: 'physical-b', runtime: physicalRuntimeB, residency: physicalResidency, factory: physicalFactory }),
+});
+assert.equal(physicalRuntimeA.created.length + physicalRuntimeB.created.length, 2, 'explicit content policy may reuse each physical allocation once');
+assert.equal(physicalModelA.allocations[0].buffer, physicalModelB.allocations[0].buffer);
+assert.notEqual(physicalModelA.allocations[0].semanticLeaseId, physicalModelB.allocations[0].semanticLeaseId);
+assert.notEqual(physicalModelA.allocations[0].semanticResourceId, physicalModelB.allocations[0].semanticResourceId);
+physicalModelA.release();
+physicalModelB.release();
+
+assert.throws(
+  () => manifestFor(bundle, { resourceSharing: { policy: 'implicit-byte-equality' } }),
+  /resourceSharing.*policy|semantic-identity|content-addressed-physical-dedupe/i,
+);
+assert.throws(
+  () => manifestFor(bundle, { resourceSharing: 'content-addressed-physical-dedupe' }),
+  /resourceSharing must be an object/i,
+);
 
 const mutableSource = Uint8Array.from(bundle);
 const mutationResidency = createWebGpuResourceResidency({ sessionId: 'mutation' });

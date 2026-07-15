@@ -218,7 +218,20 @@ sf3dWeights.release();
 preparedWeights.release();
 ```
 
-Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with Web Crypto before any GPU allocation. `prepareWebGpuModelResourceBundle()` makes ownership explicit: `copy` preserves mutable caller input, while `transfer` accepts a full `ArrayBuffer`, detaches it, and verifies/uploads the transferred storage without the loader allocating its own second full-size byte array. Transfer is ownership-consuming even when digest verification later fails; use `copy` when the caller must retain retry bytes. Prepared handles are module-authenticated, bound to the complete normalized manifest, do not expose mutable bytes, and reject reuse after release. Bundle length or digest mismatch fails before upload. Concurrent loads single-flight each content-derived allocation, while cancellation and partial failure release every model lease already acquired. Released GPU buffers remain visible in session residency as explicit eviction candidates until caller policy evicts them; they are not reported as an active model.
+Resource sharing is semantic by default. Model id, revision, manifest metadata, allocation metadata, tensor layout and metadata, bundle bytes, range, and usage all participate in the authenticated allocation identity. Equal bytes under different model semantics therefore produce different resident buffers.
+
+Cross-semantic physical deduplication is available only as an explicit manifest policy:
+
+```js
+const sharedPhysicalManifest = defineWebGpuModelResourceManifest({
+  ...manifestInput,
+  resourceSharing: { policy: "content-addressed-physical-dedupe" },
+});
+```
+
+That policy selects the content-addressed `physicalResourceId` for residency while retaining a distinct `semanticResourceId` and `semanticLeaseId` on every returned allocation and tensor view. Callers can inspect both identities instead of treating byte equality as semantic authorization.
+
+Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with Web Crypto before any GPU allocation. `prepareWebGpuModelResourceBundle()` makes ownership explicit: `copy` preserves mutable caller input, while `transfer` accepts a full `ArrayBuffer`, detaches it, and verifies/uploads the transferred storage without the loader allocating its own second full-size byte array. Transfer is ownership-consuming even when digest verification later fails; use `copy` when the caller must retain retry bytes. Prepared handles are module-authenticated, bound to the complete normalized manifest, do not expose mutable bytes, and reject reuse after release. Bundle length or digest mismatch fails before upload. Concurrent loads single-flight each policy-selected allocation identity, while cancellation and partial failure release every model lease already acquired. Released GPU buffers remain visible in session residency as explicit eviction candidates until caller policy evicts them; they are not reported as an active model.
 
 ## What The Kit Gives A Port
 
