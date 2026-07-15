@@ -107,8 +107,12 @@
     const stepIntervalMs = Math.max(100, Number(params.get('step_ms') || 500));
     const treatmentSplatRadianceGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_radiance_gain') || 1.12)));
     const treatmentSplatOpacityGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_opacity_gain') || 1.05)));
+    const native64SourceManifestUrl = params.get('native64_source_manifest') || '';
+    const native64PredictionManifestUrl = params.get('native64_prediction_manifest') || '';
+    const native64ManifestMode = Boolean(native64SourceManifestUrl && native64PredictionManifestUrl);
     const requestedCalibration = 'native-low-learned-splat-calibration-v0';
     const status = document.getElementById('status');
+    const title = document.getElementById('title');
     const runnerFrame = document.getElementById('runner');
     const controlImage = document.getElementById('controlImage');
     const treatmentImage = document.getElementById('treatmentImage');
@@ -123,11 +127,18 @@
     let lastControlObjectUrl = null;
     let lastTreatmentObjectUrl = null;
 
+    if (native64ManifestMode) {
+      title.querySelector('strong').textContent = 'Native 64 control vs frozen 128-trained prediction';
+      title.querySelector('span').textContent = 'Manifest-backed same source state, shared-device WebGPU buffers, splat-only-v0';
+      document.querySelector('#controlImage + .pane-label').innerHTML = 'native64NoModelControl<span>Untouched native 64^3 source field, splat-only-v0</span>';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'native64SelectivePredicted<span>Frozen 128-trained model prediction at 160^3, splat-only-v0</span>';
+    }
+
     const baseControls = {
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
-      volume_resolution: '128',
+      volume_resolution: native64ManifestMode ? '64' : '128',
       volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
@@ -165,7 +176,7 @@
       volume_temporal_accum: '0',
       volume_temporal_jitter: '0',
       volume_history_clamp: '0',
-      volume_quality_reason: 'native-low-selective-shared-device-transfer',
+      volume_quality_reason: native64ManifestMode ? 'native-low-cross-grid-64-shared-device-manifest' : 'native-low-selective-shared-device-transfer',
     };
 
     runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
@@ -204,23 +215,37 @@
     async function tick() {
       failurePhase = 'shared-device-capture';
       const prototype = proto();
-      if (!prototype?.captureNativeLowSelectiveSharedDeviceFrame) {
+      if (native64ManifestMode && !prototype?.captureNativeLowCrossGridManifestFrame) {
+        throw new Error('captureNativeLowCrossGridManifestFrame missing from renderer prototype');
+      }
+      if (!native64ManifestMode && !prototype?.captureNativeLowSelectiveSharedDeviceFrame) {
         throw new Error('captureNativeLowSelectiveSharedDeviceFrame missing from renderer prototype');
       }
-      const receipt = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
+      const captureOptions = {
         boundarySplatComposition: requestedComposition,
         now: performance.now(),
         captureVisuals: true,
         treatmentSplatRadianceGain,
         treatmentSplatOpacityGain,
-      });
+      };
+      const receipt = native64ManifestMode
+        ? await prototype.captureNativeLowCrossGridManifestFrame({
+          ...captureOptions,
+          sourceManifestUrl: native64SourceManifestUrl,
+          predictionManifestUrl: native64PredictionManifestUrl,
+        })
+        : await prototype.captureNativeLowSelectiveSharedDeviceFrame(captureOptions);
       if (!receipt?.ok) throw new Error(`${receipt?.failurePhase || 'shared-device-capture'}:${receipt?.error || receipt?.reason || 'unknown'}`);
       replaceImageUrls(receipt);
       latestReceipt = receipt;
       latestRunnerState = prototype.debugState?.() || null;
       frameIndex += 1;
       lastTrustworthyEvidence = { frameIndex, receipt, runner: latestRunnerState };
-      status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount} | cal ${receipt.treatmentSplatRadianceGain}/${receipt.treatmentSplatOpacityGain} | ${Math.round(receipt.endToEndFrameMs)} ms`;
+      if (native64ManifestMode) {
+        status.textContent = `native64 step ${receipt.sourceStep} | support ${receipt.predictedPositiveCount}/${Math.round(160 ** 3)} @ ${receipt.supportThreshold} | splats ${receipt.treatmentSplatInstanceCount} | ${receipt.macroStructureDecision} | ${Math.round(receipt.endToEndFrameMs)} ms`;
+      } else {
+        status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount} | cal ${receipt.treatmentSplatRadianceGain}/${receipt.treatmentSplatOpacityGain} | ${Math.round(receipt.endToEndFrameMs)} ms`;
+      }
     }
 
     function debugState() {
@@ -248,8 +273,18 @@
         featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
         runtimeTruthAvailable,
         syntheticDownsampleApplied,
-        nativeLowControl: { grid: 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
+        nativeLowControl: { grid: native64ManifestMode ? 64 : 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
         nativeLowSelectivePredicted: { grid: 160, step: receipt.treatmentStep ?? null, backend: runner?.backend || null },
+        native64CrossGridDiscriminant: receipt.native64CrossGridDiscriminant || null,
+        native64NoModelControl: receipt.native64NoModelControl || null,
+        native64SelectivePredicted: receipt.native64SelectivePredicted || null,
+        macroStructureDecision: receipt.macroStructureDecision || null,
+        coarseMacroStructurePreserved: receipt.coarseMacroStructurePreserved ?? null,
+        templateReplacementRisk: receipt.templateReplacementRisk || null,
+        native64SourceManifestUrl: native64ManifestMode ? native64SourceManifestUrl : null,
+        native64PredictionManifestUrl: native64ManifestMode ? native64PredictionManifestUrl : null,
+        sourceManifestSha256: receipt.sourceManifestSha256 || null,
+        predictionManifestSha256: receipt.predictionManifestSha256 || null,
         sameNativeStateIdentity: receipt.sameNativeStateIdentity || null,
         sourceStepIdentity: receipt.sourceStepIdentity || null,
         sourceStepDrift: drift,
@@ -272,6 +307,8 @@
         nativeLowHeadCostProfile: receipt.nativeLowHeadCostProfile || null,
         headCostTimingAuthority: receipt.headCostTimingAuthority || null,
         supportPositiveCount: receipt.supportPositiveCount ?? null,
+        supportThreshold: receipt.supportThreshold ?? null,
+        predictedPositiveCount: receipt.predictedPositiveCount ?? null,
         supportPrevalence: receipt.supportPrevalence ?? null,
         treatmentSplatCandidateCount: receipt.treatmentSplatCandidateCount ?? null,
         treatmentSplatInstanceCount: receipt.treatmentSplatInstanceCount ?? null,
@@ -311,7 +348,7 @@
       failurePhase = 'route-initialize';
       const prototype = await waitForPrototype();
       prototype.setControls({
-        resolution: 128,
+        resolution: native64ManifestMode ? 64 : 128,
         boundarySplatMode: 'learned',
         selectiveHeadLiveRole: 'off',
         selectiveHeadLiveRenderComposition: requestedComposition,
@@ -319,6 +356,11 @@
       prototype.setSelectiveHeadLiveCapturePaused?.(true);
       startedAtMs = performance.now();
       await tick();
+      if (native64ManifestMode) {
+        routeStatus = 'captured';
+        failurePhase = null;
+        return;
+      }
       routeStatus = 'running';
       failurePhase = null;
       requestAnimationFrame(loop);

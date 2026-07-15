@@ -6,6 +6,7 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const routePath = join(root, 'volume-native-low-selective-live.html');
 const witnessPath = join(root, 'volume-native-low-selective-live-witness.mjs');
+const native64WitnessPath = join(root, 'volume-native-low-cross-grid-64-witness.mjs');
 const runtimePath = join(root, 'native-low-selective-live-runtime.mjs');
 const corePath = join(root, 'volume-core.js');
 const modelManifestPath = join(root, 'models/selective-head-live/exact-basin-160-to-128-v0/manifest.json');
@@ -22,13 +23,15 @@ assert.equal(modelManifest.source?.highGrid, 160);
 
 assert.ok(existsSync(routePath), 'native-low selective live browser route exists');
 assert.ok(existsSync(witnessPath), 'native-low selective live witness exists');
+assert.ok(existsSync(native64WitnessPath), 'native-64 cross-grid witness exists');
 assert.ok(existsSync(runtimePath), 'native-low selective live runtime exists');
 
 const route = readFileSync(routePath, 'utf8');
 const witness = readFileSync(witnessPath, 'utf8');
+const native64Witness = existsSync(native64WitnessPath) ? readFileSync(native64WitnessPath, 'utf8') : '';
 const runtime = readFileSync(runtimePath, 'utf8');
 const core = readFileSync(corePath, 'utf8');
-const combined = `${route}\n${witness}\n${runtime}\n${core}`;
+const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
 assert.match(route, /kaminos\.volume\.native-low-selective-live-comparison\.v0/, 'route publishes a stable live comparison report schema');
@@ -82,6 +85,12 @@ assert.match(combined, /native-low-shared-device-buffer-inference-v0/, 'route na
 assert.match(runtime, /createNativeLowSelectiveSharedDeviceRuntime/, 'runtime exposes a shared-device constructor instead of creating a second WebGPU device');
 assert.doesNotMatch(runtime, /requestAdapter\(\)/, 'native-low runtime must not create a separate WebGPU adapter/device for the production route');
 assert.match(core, /captureNativeLowSelectiveSharedDeviceFrame/, 'renderer exposes a one-device native-low control/treatment capture API');
+assert.match(core, /captureNativeLowCrossGridManifestFrame/, 'renderer exposes manifest-backed native-64 cross-grid capture API');
+assert.match(route, /native64_source_manifest[\s\S]*native64_prediction_manifest/, 'route accepts explicit native-64 source and prediction manifests');
+assert.match(combined, /native-low-cross-grid-64-shared-device-manifest-v0/, 'native-64 route names shared-device manifest consumption authority');
+assert.match(combined, /native64CrossGridDiscriminant[\s\S]*native64NoModelControl[\s\S]*native64SelectivePredicted/, 'native-64 route preserves no-model control and predicted treatment identities');
+assert.match(combined, /macroStructureDecision[\s\S]*coarseMacroStructurePreserved[\s\S]*templateReplacementRisk/, 'native-64 route exposes macro-structure decision fields');
+assert.match(combined, /predictedPositiveCount[\s\S]*131573[\s\S]*supportThreshold[\s\S]*0\.98/, 'native-64 route preserves parent support count and threshold');
 assert.match(core, /nativeLowSelectiveSharedDevice/, 'renderer debug state exposes native-low shared-device transfer receipts');
 assert.match(core, /supportPositiveCount/, 'shared-device route reports model support count for blank-treatment attribution');
 assert.match(core, /supportPrevalence/, 'shared-device route reports model support prevalence for blank-treatment attribution');
@@ -115,5 +124,8 @@ assert.match(witness, /supportCompactionIdentity[\s\S]*native-low-support-positi
 assert.match(witness, /residualDispatchMode[\s\S]*support-positive-direct-covered-dispatch-v0/, 'witness preserves support-positive residual dispatch mode');
 assert.match(witness, /supportCompactedCount[\s\S]*residualDispatchWorkgroups[\s\S]*residualDispatchThreadCount/, 'witness preserves support-positive residual dispatch work size');
 assert.match(witness, /headCostTimingAuthority[\s\S]*webgpu-timestamp-query-stage-split-v0/, 'witness preserves head-cost timing authority');
+assert.match(native64Witness, /native-low-cross-grid-64-witness-v0/, 'native-64 witness names evidence authority');
+assert.match(native64Witness, /native64CrossGridDiscriminant[\s\S]*native64NoModelControl[\s\S]*native64SelectivePredicted/, 'native-64 witness preserves cross-grid discriminant and both panes');
+assert.match(native64Witness, /macroStructureDecision[\s\S]*blankFrameRejection[\s\S]*cachedFrameRejection/, 'native-64 witness preserves visual decision and false-closure checks');
 
 console.log('native-low selective live route contracts passed');

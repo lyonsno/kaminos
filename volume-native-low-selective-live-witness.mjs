@@ -110,7 +110,7 @@ try {
       && state?.effectiveCalibration === 'native-low-learned-splat-calibration-v0'
       && state?.modelOutputMutation === false
       && state?.requestedBackend === 'WebGPU'
-      && state?.effectiveBackend === 'WebGPU'
+      && isWebGpuBackend(state?.effectiveBackend)
       && state?.fallbackBackend === null
       && state?.transportMode === TRANSPORT_MODE
       && state?.runtimeTruthAvailable === false
@@ -156,7 +156,7 @@ try {
   assert.equal(state?.effectiveCalibration, 'native-low-learned-splat-calibration-v0', 'wrong effective calibration');
   assert.equal(state?.modelOutputMutation, false, 'calibration mutated model outputs');
   assert.equal(state?.requestedBackend, 'WebGPU', 'wrong requested backend');
-  assert.equal(state?.effectiveBackend, 'WebGPU', 'fallback backend used');
+  assert.ok(isWebGpuBackend(state?.effectiveBackend), `fallback backend used: ${state?.effectiveBackend}`);
   assert.equal(state?.fallbackBackend, null, 'fallback backend evidence is not admissible');
   assert.equal(state?.transportMode, TRANSPORT_MODE, 'wrong shared-device transport mode');
   assert.equal(state?.runtimeTruthAvailable, false, 'truth authority leaked into runtime');
@@ -202,7 +202,7 @@ try {
   assert.equal(endState?.effectiveComposition, startState?.effectiveComposition, 'composition drift during observation');
   assert.equal(endState?.effectiveCalibration, startState?.effectiveCalibration, 'calibration drift during observation');
   assert.equal(endState?.modelOutputMutation, false, 'model-output mutation during observation');
-  assert.equal(endState?.effectiveBackend, 'WebGPU', 'backend drift during observation');
+  assert.ok(isWebGpuBackend(endState?.effectiveBackend), `backend drift during observation: ${endState?.effectiveBackend}`);
   assert.equal(endState?.fallbackBackend, null, 'fallback backend during observation');
   assert.equal(endState?.transportMode, TRANSPORT_MODE, 'transport mode drift during observation');
   assert.equal(endState?.sourceStepDrift, null, 'source-step drift during observation');
@@ -367,4 +367,8 @@ function delay(ms) {
 function writeReport(value) {
   mkdirSync(dirname(reportPath), { recursive: true });
   writeFileSync(reportPath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function isWebGpuBackend(value) {
+  return String(value || '').startsWith('WebGPU');
 }

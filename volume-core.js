@@ -12517,6 +12517,286 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function native64PathToFetchUrl(path, manifestUrl) {
+    const value = String(path || '');
+    if (/^https?:\/\//i.test(value)) return value;
+    if (value.startsWith('/private/tmp/')) return `${globalThis.location.origin}/${value.slice('/private/tmp/'.length)}`;
+    if (value.startsWith('/tmp/')) return `${globalThis.location.origin}/${value.slice('/tmp/'.length)}`;
+    return new URL(value, manifestUrl).href;
+  }
+
+  async function sha256ArrayBuffer(bytes) {
+    const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function fetchJsonWithSha256(url) {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`manifest-fetch-failed:${response.status}:${url}`);
+    const text = await response.text();
+    const encoded = new TextEncoder().encode(text);
+    return {
+      json: JSON.parse(text),
+      sha256: await sha256ArrayBuffer(encoded.buffer),
+      byteLength: encoded.byteLength,
+    };
+  }
+
+  async function fetchArrayBufferWithSha256(url, expectedSha256, expectedByteLength, label) {
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`${label}-fetch-failed:${response.status}:${url}`);
+    const bytes = await response.arrayBuffer();
+    if (Number.isFinite(Number(expectedByteLength)) && bytes.byteLength !== Number(expectedByteLength)) {
+      throw new Error(`${label}-byte-length-mismatch:${bytes.byteLength}:${expectedByteLength}`);
+    }
+    const sha256 = await sha256ArrayBuffer(bytes);
+    if (expectedSha256 && sha256 !== String(expectedSha256).toLowerCase()) {
+      throw new Error(`${label}-sha256-mismatch:${sha256}:${expectedSha256}`);
+    }
+    return { bytes, sha256, byteLength: bytes.byteLength };
+  }
+
+  function validateManifestField(field, grid, channels, label) {
+    if (!field) throw new Error(`${label}-missing`);
+    const shape = Array.isArray(field.shape) ? field.shape : [];
+    if (shape[0] !== grid || shape[1] !== grid || shape[2] !== grid || shape[3] !== channels) {
+      throw new Error(`${label}-shape-mismatch:${shape.join('x')}:${grid}x${grid}x${grid}x${channels}`);
+    }
+    if (!/float32/i.test(String(field.dtype || ''))) throw new Error(`${label}-dtype-mismatch:${field.dtype}`);
+    return field;
+  }
+
+  function writeArrayBufferToTargets(targets, bytes, expectedBytes, label) {
+    if (bytes.byteLength !== expectedBytes) throw new Error(`${label}-write-byte-length-mismatch:${bytes.byteLength}:${expectedBytes}`);
+    const chunkBytes = 16 * 1024 * 1024;
+    for (const target of targets) {
+      for (let offset = 0; offset < bytes.byteLength; offset += chunkBytes) {
+        const byteLength = Math.min(chunkBytes, bytes.byteLength - offset);
+        device.queue.writeBuffer(target, offset, new Uint8Array(bytes, offset, byteLength));
+      }
+    }
+  }
+
+  async function fetchNative64FieldPair(manifestUrl, manifestRole, grid, fieldRoot) {
+    const manifestFetch = await fetchJsonWithSha256(manifestUrl);
+    const manifest = manifestFetch.json;
+    const root = fieldRoot(manifest);
+    const fluid = validateManifestField(root.fluid, grid, 16, `${manifestRole}-fluid`);
+    const front = validateManifestField(root.front, grid, 1, `${manifestRole}-front`);
+    const fluidFetch = await fetchArrayBufferWithSha256(
+      native64PathToFetchUrl(fluid.path, manifestUrl),
+      fluid.sha256,
+      fluid.byteLength,
+      `${manifestRole}-fluid`,
+    );
+    const frontFetch = await fetchArrayBufferWithSha256(
+      native64PathToFetchUrl(front.path, manifestUrl),
+      front.sha256,
+      front.byteLength,
+      `${manifestRole}-front`,
+    );
+    return { manifest, manifestSha256: manifestFetch.sha256, fluid, front, fluidFetch, frontFetch };
+  }
+
+  async function captureNativeLowCrossGridManifestFrame(options = {}) {
+    let failurePhase = 'native-64-cross-grid-preflight';
+    let lastTrustworthyEvidence = {};
+    const requestedComposition = options.boundarySplatComposition ?? 'splat-only-v0';
+    const captureVisuals = options.captureVisuals === true;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sourceManifestUrl = String(options.sourceManifestUrl || '');
+    const predictionManifestUrl = String(options.predictionManifestUrl || '');
+    const calibration = nativeLowTreatmentSplatCalibrationDebug({
+      radianceGain: options.treatmentSplatRadianceGain,
+      opacityGain: options.treatmentSplatOpacityGain,
+    });
+    const startedAt = performance.now();
+    try {
+      if (!state.active || !device) throw new Error('inactive');
+      if (!sourceManifestUrl || !predictionManifestUrl) throw new Error('native-64-manifest-url-missing');
+      if (requestedComposition !== 'splat-only-v0') throw new Error(`unsupported-native-64-cross-grid-composition:${requestedComposition}`);
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+
+      failurePhase = 'native-64-manifest-fetch';
+      const sourceFetchStart = performance.now();
+      const source = await fetchNative64FieldPair(sourceManifestUrl, 'native64-source', 64, manifest => manifest.sidecars || {});
+      const prediction = await fetchNative64FieldPair(predictionManifestUrl, 'native64-prediction', 160, manifest => manifest.receiver || {});
+      const manifestFetchMs = performance.now() - sourceFetchStart;
+      const nativeStep = Number(prediction.manifest?.source?.nativeSimStepCount ?? source.manifest?.deterministicReplay?.simStepCount ?? 96);
+      const sourceMajorantGrid = Number(source.manifest?.deterministicReplay?.majorantGrid || source.manifest?.lastDebugState?.majorantGrid || 24);
+      const sourceIdentity = prediction.manifest?.sameNativeStateIdentity || `${source.manifestSha256}:${nativeStep}`;
+      const sourceStepIdentity = `native-64-cross-grid-step-${nativeStep}:${sourceIdentity}`;
+      lastTrustworthyEvidence = { sourceManifestUrl, predictionManifestUrl, sourceManifestSha256: source.manifestSha256, predictionManifestSha256: prediction.manifestSha256 };
+
+      failurePhase = 'native-64-control-materialization';
+      const controlMaterializeStart = performance.now();
+      const controlRebuildStart = performance.now();
+      rebuildFluidState(64, sourceMajorantGrid, 'native-64-cross-grid-control-materialize', { skipInitialFluid: true });
+      const controlRebuildMs = performance.now() - controlRebuildStart;
+      const controlWriteStart = performance.now();
+      writeArrayBufferToTargets(fluidBuffers, source.fluidFetch.bytes, fluidBufferBytes(64), 'native64-control-fluid');
+      writeArrayBufferToTargets(frontBuffers, source.frontFetch.bytes, frontFieldBufferBytes(64), 'native64-control-front');
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      setSharedDeviceCopiedState(nativeStep, 0);
+      const controlWriteMs = performance.now() - controlWriteStart;
+      const controlMaterializeMs = performance.now() - controlMaterializeStart;
+
+      failurePhase = 'native-64-control-splat-render';
+      const controlRenderStart = performance.now();
+      const controlRender = await renderFrozenScaleToCanvas({
+        boundarySplatComposition: requestedComposition,
+        now: fixedNow,
+        sameStateCaptureId: `${sourceStepIdentity}:native64-control`,
+        baseFrameCount: 0,
+        baseSimStepCount: nativeStep,
+        restoreControls: true,
+      });
+      if (!controlRender?.ok) throw new Error(`native-64-control-render:${controlRender?.reason || 'unknown'}`);
+      const controlVisualUrl = captureVisuals ? await captureCanvasObjectUrl() : null;
+      const controlRenderMs = performance.now() - controlRenderStart;
+
+      failurePhase = 'native-64-treatment-materialization';
+      const treatmentMaterializeStart = performance.now();
+      const treatmentRebuildStart = performance.now();
+      rebuildFluidState(160, sourceMajorantGrid, 'native-64-cross-grid-treatment-materialize', { skipInitialFluid: true });
+      const treatmentRebuildMs = performance.now() - treatmentRebuildStart;
+      const treatmentWriteStart = performance.now();
+      writeArrayBufferToTargets(fluidBuffers, prediction.fluidFetch.bytes, fluidBufferBytes(160), 'native64-treatment-fluid');
+      writeArrayBufferToTargets(frontBuffers, prediction.frontFetch.bytes, frontFieldBufferBytes(160), 'native64-treatment-front');
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      setSharedDeviceCopiedState(nativeStep, 0);
+      const treatmentWriteMs = performance.now() - treatmentWriteStart;
+      const treatmentMaterializeMs = performance.now() - treatmentMaterializeStart;
+
+      failurePhase = 'native-64-treatment-splat-render';
+      const treatmentRenderStart = performance.now();
+      const treatmentRender = await renderFrozenScaleToCanvas({
+        boundarySplatComposition: requestedComposition,
+        now: fixedNow,
+        sameStateCaptureId: `${sourceStepIdentity}:native64-treatment`,
+        baseFrameCount: 0,
+        baseSimStepCount: nativeStep,
+        controlOverrides: {
+          nativeLowTreatmentSplatRadianceGain: calibration.effectiveRadianceGain,
+          nativeLowTreatmentSplatOpacityGain: calibration.effectiveOpacityGain,
+        },
+        restoreControls: true,
+      });
+      if (!treatmentRender?.ok) throw new Error(`native-64-treatment-render:${treatmentRender?.reason || 'unknown'}`);
+      const treatmentVisualUrl = captureVisuals ? await captureCanvasObjectUrl() : null;
+      const treatmentRenderMs = performance.now() - treatmentRenderStart;
+
+      const supportPositiveCount = Number(prediction.manifest?.support?.predictedPositiveCount || 0);
+      const supportPrevalence = Number(prediction.manifest?.support?.predictedPrevalence || 0);
+      const supportThreshold = Number(prediction.manifest?.support?.threshold || 0);
+      const treatmentSplatInstanceCount = treatmentRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      const controlSplatInstanceCount = controlRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      const receipt = {
+        ok: true,
+        status: 'captured',
+        identity: 'native-low-cross-grid-64-shared-device-manifest-v0',
+        routeIdentity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+        manifestTransport: 'same-origin-fetch-arraybuffer-to-shared-device-gpu-buffers-v0',
+        inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
+        compositionAuthority: prediction.manifest?.compositionAuthority || 'frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0',
+        runtimeTruthAvailable: false,
+        syntheticDownsampleApplied: false,
+        highTruthUse: 'unavailable-not-loaded-not-used',
+        sourceManifestUrl,
+        predictionManifestUrl,
+        sourceManifestSha256: source.manifestSha256,
+        predictionManifestSha256: prediction.manifestSha256,
+        sourceStepIdentity,
+        sameNativeStateIdentity: `${sourceIdentity}:native64-cross-grid:model-${prediction.manifest?.model?.modelSha256 || 'unknown'}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`,
+        sourceStep: nativeStep,
+        controlStep: nativeStep,
+        treatmentStep: nativeStep,
+        sourceStepDrift: null,
+        controlTreatmentCausalDivergence: null,
+        native64CrossGridDiscriminant: {
+          identity: 'native-64-cross-grid-zero-shot-discriminant-v0',
+          nativeGrid: 64,
+          trainedLowGrid: Number(prediction.manifest?.model?.trainedLowGrid || 128),
+          outputGrid: 160,
+          crossGridApplication: true,
+          native64NoModelControl: { grid: 64, manifestSha256: source.manifestSha256, fluidSha256: source.fluid.sha256, frontSha256: source.front.sha256 },
+          native64SelectivePredicted: { grid: 160, manifestSha256: prediction.manifestSha256, fluidSha256: prediction.fluid.sha256, frontSha256: prediction.front.sha256 },
+          macroStructureDecision: 'requires-visual-inspection-v0',
+          coarseMacroStructurePreserved: null,
+          templateReplacementRisk: 'unjudged',
+        },
+        native64NoModelControl: { grid: 64, step: nativeStep, backend: state.backend || 'WebGPU', splatInstanceCount: controlSplatInstanceCount },
+        native64SelectivePredicted: { grid: 160, step: nativeStep, backend: state.backend || 'WebGPU', splatInstanceCount: treatmentSplatInstanceCount },
+        macroStructureDecision: 'requires-visual-inspection-v0',
+        coarseMacroStructurePreserved: null,
+        templateReplacementRisk: 'unjudged',
+        requestedComposition,
+        effectiveComposition: treatmentRender.boundarySplatCompositionEffective,
+        compositionMismatch: treatmentRender.boundarySplatCompositionEffective !== requestedComposition ? 'compositionMismatch' : null,
+        requestedBackend: 'WebGPU',
+        effectiveBackend: state.backend || 'WebGPU',
+        fallbackBackend: null,
+        modelIdentity: prediction.manifest?.model?.identity || 'exact-basin-selective-carrier-heads-160-to-128-v0',
+        modelSha256: prediction.manifest?.model?.modelSha256 || 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
+        modelOutputMutation: false,
+        supportThreshold,
+        predictedPositiveCount: supportPositiveCount,
+        supportPositiveCount,
+        supportPrevalence,
+        treatmentSplatCandidateCount: treatmentRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount,
+        treatmentSplatInstanceCount,
+        controlSplatCandidateCount: controlRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount,
+        controlSplatInstanceCount,
+        calibrationGain: calibration.calibrationGain,
+        calibrationAuthority: calibration.authority,
+        requestedCalibration: calibration.requestedCalibration,
+        effectiveCalibration: calibration.effectiveCalibration,
+        treatmentSplatRadianceGain: calibration.treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain: calibration.treatmentSplatOpacityGain,
+        nativeLowTreatmentSplatCalibration: calibration,
+        manifestFetchMs,
+        controlMaterializeMs,
+        controlRebuildMs,
+        controlWriteMs,
+        controlRenderMs,
+        treatmentMaterializeMs,
+        treatmentRebuildMs,
+        treatmentWriteMs,
+        treatmentRenderMs,
+        endToEndFrameMs: performance.now() - startedAt,
+        stageTiming: { manifestFetchMs, controlRebuildMs, controlWriteMs, controlMaterializeMs, controlRenderMs, treatmentRebuildMs, treatmentWriteMs, treatmentMaterializeMs, treatmentRenderMs },
+        blankTreatmentAttribution: supportPositiveCount <= 0 ? 'model-support-zero' : treatmentSplatInstanceCount <= 0 ? 'splat-materialization-zero' : 'macro-structure-visual-discriminant',
+        visuals: {
+          controlObjectUrl: controlVisualUrl,
+          treatmentObjectUrl: treatmentVisualUrl,
+        },
+        controlRender,
+        treatmentRender,
+        failurePhase: null,
+        lastTrustworthyEvidence,
+      };
+      state.nativeLowSelectiveSharedDevice = receipt;
+      state.nativeLowTreatmentSplatCalibration = calibration;
+      return receipt;
+    } catch (error) {
+      const failed = {
+        ok: false,
+        status: 'failed',
+        identity: 'native-low-cross-grid-64-shared-device-manifest-v0',
+        routeIdentity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+        failurePhase,
+        error: error?.message || String(error),
+        lastTrustworthyEvidence,
+      };
+      state.nativeLowSelectiveSharedDevice = failed;
+      return failed;
+    }
+  }
+
   async function readTimestampPairMs(source, label) {
     await source.mapAsync(GPUMapMode.READ);
     const values = new BigUint64Array(source.getMappedRange().slice(0));
@@ -13388,6 +13668,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     sampleFrame,
     sampleDeterministicReplayFrame,
+    captureNativeLowCrossGridManifestFrame,
     captureNativeLowSelectiveSharedDeviceFrame,
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
