@@ -14,6 +14,7 @@ export const NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH = 'native-low-support
 export const NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH = 'native-low-support-positive-indirect-residual-dispatch-v0';
 export const NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION = 'native-low-fixed-source-delta-admission-v0';
 export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-fixed-source-delta-timing-history-epoch-repair-v1';
 
 const LOW_GRID = 128;
 const HIGH_GRID = 160;
@@ -639,6 +640,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     effectiveFeatureCount: SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
     noHiddenCaps: true,
     supportCompactionIdentity: NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH,
+    runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
     buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs },
     encodeFromNativeLow(encoder, sourceFluid, sourceFront, options = {}) {
       const currentHistoryEpochIdentity = String(options.historyEpochIdentity || 'native-low-source-history-epoch-unspecified-v0');
@@ -1006,6 +1008,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       const nativeLowInferenceWorkProfile = lastStats.nativeLowInferenceWorkProfile || makeInferenceWorkProfile(lastStats);
       return {
         routeIdentity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
         transportMode: NATIVE_LOW_TRANSPORT_MODE,
         requestedBackend: 'WebGPU',
         effectiveBackend: 'WebGPU',

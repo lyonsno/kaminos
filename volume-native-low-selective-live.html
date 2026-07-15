@@ -53,6 +53,7 @@
     import {
       NATIVE_LOW_INPUT_AUTHORITY,
       NATIVE_LOW_FEATURE_AUTHORITY,
+      NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
       NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
       NATIVE_LOW_SHARED_DEVICE_ROUTE,
       NATIVE_LOW_TRANSPORT_MODE,
@@ -64,6 +65,7 @@
     const CONTRACT_MARKERS = Object.freeze({
       routeIdentity: 'native-low-live-browser-webgpu-inference-v0',
       sharedDeviceRoute: 'native-low-shared-device-buffer-inference-v0',
+      runtimeBuildIdentity: 'native-low-fixed-source-delta-timing-history-epoch-repair-v1',
       schema: REPORT_SCHEMA,
       modelIdentity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
       modelSha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
@@ -333,6 +335,8 @@
         failurePhase,
         routeIdentity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         sharedDeviceRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        runtimeBuildCacheKey: `${NATIVE_LOW_RUNTIME_BUILD_IDENTITY}:${location.search}`,
         transportMode: receipt.transportMode || NATIVE_LOW_TRANSPORT_MODE,
         modelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
         modelSha256: SELECTIVE_HEAD_LIVE_MODEL.packed.sha256,

@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { randomInt } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createHash, randomInt } from 'node:crypto';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 
 const SCHEMA = 'kaminos.volume.native-low-selective-live-witness.v0';
 const IDENTITY = 'native-low-live-witness-v0';
@@ -11,6 +12,7 @@ const ROUTE = 'native-low-live-browser-webgpu-inference-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 const MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9';
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
+const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-fixed-source-delta-timing-history-epoch-repair-v1';
 const WITNESS_CONTRACT_MARKERS = Object.freeze({
   transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
   requestedCalibration: 'native-low-learned-splat-calibration-v0',
@@ -31,6 +33,7 @@ const WITNESS_CONTRACT_MARKERS = Object.freeze({
 });
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
+const expectedRuntimeBuildIdentity = String(args.get('--expected-runtime-build') || REQUIRED_RUNTIME_BUILD_IDENTITY);
 const frontTopologyAblationRequested = new URL(url).searchParams.get('front_topology_ablation') === '1';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-native-low-selective-live.json'));
@@ -40,7 +43,10 @@ const port = Number(args.get('--debug-port') || randomInt(42000, 62000));
 let failurePhase = 'argument-validation';
 let browser = null;
 let socket = null;
+let browserProfileDir = null;
 let lastTrustworthyEvidence = {};
+const witnessGitHead = gitHead();
+let servedSourceBundle = null;
 
 class CdpSocket {
   constructor(socketUrl) {
@@ -85,9 +91,14 @@ try {
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   failurePhase = 'browser-launch';
+  browserProfileDir = mkdtempSync(`${tmpdir()}/kaminos-native-low-live-witness-`);
   browser = spawn(chromeExecutable(), [
     '--headless=new',
     '--enable-unsafe-webgpu',
+    `--user-data-dir=${browserProfileDir}`,
+    '--disable-application-cache',
+    '--disk-cache-size=1',
+    '--media-cache-size=1',
     '--disable-background-timer-throttling',
     '--disable-renderer-backgrounding',
     '--disable-backgrounding-occluded-windows',
@@ -102,7 +113,18 @@ try {
   await socket.open();
   await socket.call('Page.enable');
   await socket.call('Runtime.enable');
-  await socket.call('Page.navigate', { url });
+  await socket.call('Network.enable');
+  await socket.call('Network.setCacheDisabled', { cacheDisabled: true });
+  const effectiveUrl = cacheBustUrl(url, expectedRuntimeBuildIdentity, witnessGitHead);
+  failurePhase = 'served-source-bundle-fetch';
+  servedSourceBundle = await fetchServedSourceBundle(effectiveUrl, [
+    'volume-native-low-selective-live.html',
+    'native-low-selective-live-runtime.mjs',
+    'volume-core.js',
+  ]);
+  assert.equal(servedSourceBundle.runtimeBuildIdentityPresent, true, 'served runtime source lacks expected runtime build identity');
+  failurePhase = 'browser-navigate';
+  await socket.call('Page.navigate', { url: effectiveUrl });
 
   failurePhase = 'route-settle';
   const settleStarted = performance.now();
@@ -113,6 +135,7 @@ try {
     if (state?.status === 'failed') throw new Error(state?.lastTrustworthyEvidence?.error || state?.failurePhase || 'native-low live route failed');
     if (
       state?.routeIdentity === ROUTE
+      && state?.runtimeBuildIdentity === expectedRuntimeBuildIdentity
       && state?.status === 'running'
       && state?.frameIndex >= 1
       && state?.modelIdentity === MODEL
@@ -155,6 +178,9 @@ try {
       && state?.nativeLowHeadCostProfile?.identity === 'native-low-head-cost-profile-v0'
       && state?.headCostTimingAuthority === 'webgpu-timestamp-query-stage-split-v0'
       && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
+      && Array.isArray(state?.nativeLowHeadCostProfile?.values)
+      && state?.nativeLowHeadCostProfile?.values.length === 6
+      && nativeLowInferenceSumMatches(state?.nativeLowHeadCostProfile)
       && Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0
       && Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0
       && state?.nativeLowSupportTileProfile?.identity === 'native-low-support-proximal-tile-profile-v0'
@@ -260,7 +286,10 @@ try {
   );
   assert.equal(state?.nativeLowHeadCostProfile?.identity, 'native-low-head-cost-profile-v0', 'head cost profile missing');
   assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
+  assert.equal(state?.runtimeBuildIdentity, expectedRuntimeBuildIdentity, 'runtime build identity mismatch');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0, 'sourceDeltaAdmissionGpuMs missing');
+  assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 6, 'head cost profile did not record six timestamp values');
+  assert.ok(nativeLowInferenceSumMatches(state?.nativeLowHeadCostProfile), 'inferenceGpuMs is not the exact sum of source-delta/support-front/residual stages');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0, 'supportFrontGpuMs missing');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0, 'supportPositiveResidualGpuMs missing');
   assert.equal(state?.nativeLowSupportTileProfile?.identity, 'native-low-support-proximal-tile-profile-v0', 'support-proximal tile profile missing');
@@ -341,6 +370,7 @@ try {
   assert.ok(isWebGpuBackend(endState?.effectiveBackend), `backend drift during observation: ${endState?.effectiveBackend}`);
   assert.equal(endState?.fallbackBackend, null, 'fallback backend during observation');
   assert.equal(endState?.transportMode, TRANSPORT_MODE, 'transport mode drift during observation');
+  assert.equal(endState?.runtimeBuildIdentity, expectedRuntimeBuildIdentity, 'runtime build identity drift during observation');
   assert.equal(endState?.sourceStepDrift, null, 'source-step drift during observation');
   assert.equal(endState?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator stopped stepping during observation');
   assert.equal(endState?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model stopped consuming current source frames during observation');
@@ -365,6 +395,17 @@ try {
     status: 'captured',
     failurePhase: null,
     requestedUrl: url,
+    effectiveUrl,
+    runtimeBuildIdentity: endState.runtimeBuildIdentity,
+    expectedRuntimeBuildIdentity,
+    runtimeBuildCacheKey: endState.runtimeBuildCacheKey,
+    witnessGitHead,
+    servedSourceBundleSha256: servedSourceBundle.sha256,
+    servedSourceBundleFiles: servedSourceBundle.files,
+    servedSourceBundleAuthority: 'fresh-http-served-source-bundle-sha256-v0',
+    browserProfileDir,
+    cacheDisabled: true,
+    cachedCodeRejection: 'passed-runtime-build-identity-and-cache-busted-url-v0',
     effectiveRoute: endState.routeIdentity,
     requestedComposition: endState.requestedComposition,
     effectiveComposition: endState.effectiveComposition,
@@ -463,6 +504,11 @@ try {
     failurePhase,
     error: error?.stack || error?.message || String(error),
     requestedUrl: url,
+    expectedRuntimeBuildIdentity,
+    witnessGitHead,
+    servedSourceBundleSha256: servedSourceBundle?.sha256 || null,
+    servedSourceBundleAuthority: servedSourceBundle ? 'fresh-http-served-source-bundle-sha256-v0' : null,
+    browserProfileDir,
     minimumContinuousSeconds,
     lastTrustworthyEvidence,
     failureScreenshot,
@@ -472,6 +518,9 @@ try {
 } finally {
   try { socket?.close(); } catch {}
   browser?.kill('SIGTERM');
+  if (browserProfileDir) {
+    try { rmSync(browserProfileDir, { recursive: true, force: true }); } catch {}
+  }
 }
 
 function parseArgs(argv) {
@@ -545,4 +594,61 @@ function writeReport(value) {
 
 function isWebGpuBackend(value) {
   return String(value || '').startsWith('WebGPU');
+}
+
+function cacheBustUrl(rawUrl, runtimeBuildIdentity, head) {
+  const parsed = new URL(rawUrl);
+  parsed.searchParams.set('runtime_build_expect', runtimeBuildIdentity);
+  parsed.searchParams.set('witness_git_head', head);
+  parsed.searchParams.set('cache_bust', `${Date.now()}-${randomInt(1_000_000, 9_999_999)}`);
+  return parsed.toString();
+}
+
+function nativeLowInferenceSumMatches(profile) {
+  const sourceDelta = Number(profile?.sourceDeltaAdmissionGpuMs);
+  const supportFront = Number(profile?.supportFrontGpuMs);
+  const residual = Number(profile?.supportPositiveResidualGpuMs);
+  const total = Number(profile?.inferenceGpuMs);
+  if (![sourceDelta, supportFront, residual, total].every(Number.isFinite)) return false;
+  return Math.abs(total - (sourceDelta + supportFront + residual)) < 1e-6;
+}
+
+function gitHead() {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  } catch {
+    return 'git-head-unavailable';
+  }
+}
+
+async function fetchServedSourceBundle(rawUrl, paths) {
+  const base = new URL(rawUrl);
+  const files = [];
+  const hash = createHash('sha256');
+  let runtimeBuildIdentityPresent = false;
+  for (const path of paths) {
+    const fileUrl = new URL(path, base);
+    fileUrl.searchParams.set('source_bundle_cache_bust', `${Date.now()}-${randomInt(1_000_000, 9_999_999)}`);
+    const response = await fetch(fileUrl);
+    if (!response.ok) throw new Error(`served-source-fetch-failed:${path}:${response.status}`);
+    const text = await response.text();
+    const fileSha256 = createHash('sha256').update(text).digest('hex');
+    hash.update(path);
+    hash.update('\0');
+    hash.update(text);
+    hash.update('\0');
+    if (text.includes(REQUIRED_RUNTIME_BUILD_IDENTITY)) runtimeBuildIdentityPresent = true;
+    files.push({
+      path,
+      url: fileUrl.toString(),
+      sha256: fileSha256,
+      byteLength: Buffer.byteLength(text),
+    });
+  }
+  return {
+    authority: 'fresh-http-served-source-bundle-sha256-v0',
+    sha256: hash.digest('hex'),
+    runtimeBuildIdentityPresent,
+    files,
+  };
 }

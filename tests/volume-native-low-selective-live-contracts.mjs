@@ -34,6 +34,10 @@ const core = readFileSync(corePath, 'utf8');
 const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
+assert.match(combined, /native-low-fixed-source-delta-timing-history-epoch-repair-v1/, 'route and witness carry fail-loud runtime build identity');
+assert.match(witness, /expectedRuntimeBuildIdentity[\s\S]*runtimeBuildIdentity[\s\S]*cachedCodeRejection/, 'witness records expected/effective runtime build identity and cached-code rejection');
+assert.match(witness, /user-data-dir[\s\S]*Network\.setCacheDisabled[\s\S]*cacheBustUrl/, 'witness uses a fresh browser profile, disables cache, and cache-busts the route URL');
+assert.match(witness, /servedSourceBundleSha256[\s\S]*fresh-http-served-source-bundle-sha256-v0[\s\S]*runtimeBuildIdentityPresent/, 'witness binds receipt to the HTTP-served source bundle hash and runtime marker');
 assert.match(route, /kaminos\.volume\.native-low-selective-live-comparison\.v0/, 'route publishes a stable live comparison report schema');
 assert.match(route, /exact-basin-selective-carrier-heads-160-to-128-v0/, 'route binds the frozen model identity');
 assert.match(route, /dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9/, 'route binds the frozen model checksum');
@@ -118,6 +122,7 @@ assert.match(combined, /runtimeTopK:\s*false[\s\S]*dynamicPercentile:\s*false[\s
 assert.match(combined, /uncappedCandidateCount[\s\S]*uncappedCandidateCoverage[\s\S]*mohelWarning/, 'fixed source-delta admission exposes uncapped count/coverage and Mohel warning');
 assert.match(core, /sourceDeltaAdmissionGpuMs[\s\S]*sourceDeltaAdmissionStage[\s\S]*fixed-source-delta-admission-plus-finalize-v0/, 'head-cost profile isolates fixed source-delta admission GPU timing before support/front');
 assert.match(core, /inferenceGpuMs[\s\S]*sourceDeltaAdmissionGpuMs[\s\S]*supportFrontGpuMs[\s\S]*supportPositiveResidualGpuMs/, 'whole inference timing includes source-delta admission plus support/front plus residual spans');
+assert.match(witness, /values\.length === 6[\s\S]*nativeLowInferenceSumMatches/, 'witness requires six timestamps and exact three-stage inference sum');
 assert.match(runtime, /sourceDeltaAdmission[\s\S]*timestampWrites/, 'runtime accepts timestamp writes for source-delta admission pass');
 assert.match(combined, /historyEpochIdentity[\s\S]*priorHistoryEpochIdentity[\s\S]*currentHistoryEpochIdentity[\s\S]*historyEpochChanged/, 'fixed source-delta admission records prior/current history epoch identity and epoch-change state');
 assert.match(combined, /sourceHistoryResetReason[\s\S]*epoch-changed-first-frame-invalidated/, 'fixed source-delta admission records reset reason when history epoch changes');
