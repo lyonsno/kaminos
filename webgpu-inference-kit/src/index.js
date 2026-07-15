@@ -173,6 +173,7 @@ export {
 export {
   SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
   createSam3ImageVitBlockStackDispatchPlan,
+  createSam3ImageVitBlockStackWorkspacePlan,
   createSam3ImageVitBlockStackPhaseProgramCpuOracle,
   createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
   createSam3ImageVitBlockStackPhaseProgramRouteReceipt,

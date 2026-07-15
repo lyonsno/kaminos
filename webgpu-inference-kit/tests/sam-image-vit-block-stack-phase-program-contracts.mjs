@@ -78,6 +78,7 @@ assert.match(witness, /--vit-finite-phase-layer/, 'browser witness must expose a
 const {
   SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
   createSam3ImageVitBlockStackDispatchPlan,
+  createSam3ImageVitBlockStackWorkspacePlan,
   createSam3ImageVitBlockStackPhaseProgramCpuOracle,
   createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
   summarizeSam3FiniteValues,
@@ -133,6 +134,12 @@ const dispatchShape = {
   fullBackbone: true,
   globalAttnIndexes: [7, 15, 23, 31],
 };
+const workspace224 = createSam3ImageVitBlockStackWorkspacePlan({ batch: 1, height: 16, width: 16, hiddenSize: 1024, windowSize: 24 });
+assert.deepEqual(workspace224, { localWindowTokensPerBatch: 576, globalWindowTokensPerBatch: 256, maxWindowTokensPerBatch: 576, maxWindowValues: 589_824 });
+const workspace448 = createSam3ImageVitBlockStackWorkspacePlan({ batch: 1, height: 32, width: 32, hiddenSize: 1024, windowSize: 24 });
+assert.deepEqual(workspace448, { localWindowTokensPerBatch: 2_304, globalWindowTokensPerBatch: 1_024, maxWindowTokensPerBatch: 2_304, maxWindowValues: 2_359_296 });
+const workspace1008 = createSam3ImageVitBlockStackWorkspacePlan({ batch: 1, height: 72, width: 72, hiddenSize: 1024, windowSize: 24 });
+assert.deepEqual(workspace1008, { localWindowTokensPerBatch: 5_184, globalWindowTokensPerBatch: 5_184, maxWindowTokensPerBatch: 5_184, maxWindowValues: 5_308_416 });
 const dispatch448 = createSam3ImageVitBlockStackDispatchPlan({
   shape: dispatchShape,
   layerIndex: 0,

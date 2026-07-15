@@ -499,6 +499,23 @@ function ensureFloat32Array(value, name) {
   return value;
 }
 
+export function createSam3ImageVitBlockStackWorkspacePlan(shape = {}) {
+  for (const key of ['batch', 'height', 'width', 'hiddenSize', 'windowSize']) {
+    if (!Number.isInteger(shape[key]) || shape[key] <= 0) throw new Error(`workspace shape.${key} must be a positive integer`);
+  }
+  const localPaddedHeight = Math.ceil(shape.height / shape.windowSize) * shape.windowSize;
+  const localPaddedWidth = Math.ceil(shape.width / shape.windowSize) * shape.windowSize;
+  const localWindowTokensPerBatch = localPaddedHeight * localPaddedWidth;
+  const globalWindowTokensPerBatch = shape.height * shape.width;
+  const maxWindowTokensPerBatch = Math.max(localWindowTokensPerBatch, globalWindowTokensPerBatch);
+  return {
+    localWindowTokensPerBatch,
+    globalWindowTokensPerBatch,
+    maxWindowTokensPerBatch,
+    maxWindowValues: shape.batch * maxWindowTokensPerBatch * shape.hiddenSize,
+  };
+}
+
 function normalizeShape(shape = {}) {
   const out = {
     batch: shape.batch,
@@ -524,14 +541,7 @@ function normalizeShape(shape = {}) {
   out.tokenCount = out.batch * out.height * out.width;
   out.totalValues = out.tokenCount * out.hiddenSize;
   out.globalWindowSize = out.height === out.width ? out.width : out.windowSize;
-  out.maxWindowSize = Math.max(out.windowSize, out.globalWindowSize);
-  out.maxPaddedHeight = Math.ceil(out.height / out.maxWindowSize) * out.maxWindowSize;
-  out.maxPaddedWidth = Math.ceil(out.width / out.maxWindowSize) * out.maxWindowSize;
-  out.maxWindowsPerColumn = out.maxPaddedHeight / out.maxWindowSize;
-  out.maxWindowsPerRow = out.maxPaddedWidth / out.maxWindowSize;
-  out.maxWindowCount = out.maxWindowsPerColumn * out.maxWindowsPerRow;
-  out.maxWindowTokens = out.maxWindowSize * out.maxWindowSize;
-  out.maxPaddedTotalValues = out.batch * out.maxWindowCount * out.maxWindowTokens * out.hiddenSize;
+  Object.assign(out, createSam3ImageVitBlockStackWorkspacePlan(out));
   out.layerCount = out.endLayerIndex - out.startLayerIndex + 1;
   for (const key of ['batch', 'height', 'width', 'hiddenSize', 'numHeads', 'windowSize', 'intermediateSize', 'endLayerIndex', 'firstGlobalLayerIndex']) {
     if (!Number.isInteger(out[key]) || out[key] <= 0) throw new Error(`shape.${key} must be a positive integer`);
@@ -1110,14 +1120,14 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
       hiddenA: tensor('sam3.image-vit-block-stack.hidden-a', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
       hiddenB: tensor('sam3.image-vit-block-stack.hidden-b', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
       layerNorm1: tensor('sam3.image-vit-block-stack.layernorm1.out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
-      windows: tensor('sam3.image-vit-block-stack.windows', [shape.batch * shape.maxWindowCount, shape.maxWindowSize, shape.maxWindowSize, shape.hiddenSize]),
-      q: tensor('sam3.image-vit-block-stack.q', [shape.batch * shape.maxWindowCount, shape.maxWindowTokens, shape.hiddenSize]),
-      k: tensor('sam3.image-vit-block-stack.k', [shape.batch * shape.maxWindowCount, shape.maxWindowTokens, shape.hiddenSize]),
-      v: tensor('sam3.image-vit-block-stack.v', [shape.batch * shape.maxWindowCount, shape.maxWindowTokens, shape.hiddenSize]),
-      qRope: tensor('sam3.image-vit-block-stack.q-rope', [shape.batch * shape.maxWindowCount, shape.maxWindowTokens, shape.hiddenSize]),
-      kRope: tensor('sam3.image-vit-block-stack.k-rope', [shape.batch * shape.maxWindowCount, shape.maxWindowTokens, shape.hiddenSize]),
-      attention: tensor('sam3.image-vit-block-stack.attention', [shape.batch * shape.maxWindowCount, shape.maxWindowTokens, shape.hiddenSize]),
-      projected: tensor('sam3.image-vit-block-stack.projected', [shape.batch * shape.maxWindowCount, shape.maxWindowTokens, shape.hiddenSize]),
+      windows: tensor('sam3.image-vit-block-stack.windows', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+      q: tensor('sam3.image-vit-block-stack.q', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+      k: tensor('sam3.image-vit-block-stack.k', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+      v: tensor('sam3.image-vit-block-stack.v', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+      qRope: tensor('sam3.image-vit-block-stack.q-rope', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+      kRope: tensor('sam3.image-vit-block-stack.k-rope', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+      attention: tensor('sam3.image-vit-block-stack.attention', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
+      projected: tensor('sam3.image-vit-block-stack.projected', [shape.batch, shape.maxWindowTokensPerBatch, shape.hiddenSize]),
       attentionResidual: tensor('sam3.image-vit-block-stack.attention-residual', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
       layerNorm2: tensor('sam3.image-vit-block-stack.layernorm2.out', [shape.batch, shape.height, shape.width, shape.hiddenSize]),
       mlpHidden: tensor('sam3.image-vit-block-stack.mlp-hidden', [shape.batch, shape.height * shape.width, shape.intermediateSize]),
