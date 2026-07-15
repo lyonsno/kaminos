@@ -37,6 +37,8 @@ const expectedRuntimeBuildIdentity = String(args.get('--expected-runtime-build')
 const frontTopologyAblationRequested = new URL(url).searchParams.get('front_topology_ablation') === '1';
 const fixedGateDiscontinuityAssayRequested = new URL(url).searchParams.get('fixed_gate_discontinuity_assay') === '1';
 const candidateHeadBenchmarkRequested = new URL(url).searchParams.get('candidate_head_benchmark') === '1';
+const vivisectorCandidateHeadTrainedRouteRequested = Boolean(new URL(url).searchParams.get('vivisector_candidate_head_package'))
+  || new URL(url).searchParams.get('candidate_head_trained_route') === 'vivisector-width32';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-native-low-selective-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
@@ -122,6 +124,7 @@ try {
   servedSourceBundle = await fetchServedSourceBundle(effectiveUrl, [
     'volume-native-low-selective-live.html',
     'native-low-selective-live-runtime.mjs',
+    'native-low-candidate-head-package.mjs',
     'volume-core.js',
   ]);
   assert.equal(servedSourceBundle.runtimeBuildIdentityPresent, true, 'served runtime source lacks expected runtime build identity');
@@ -135,7 +138,10 @@ try {
   while (performance.now() - settleStarted < timeoutMs) {
     state = await evaluate(socket, 'window.__kaminosNativeLowSelectiveLive?.debugState?.()');
     lastTrustworthyEvidence = { routeSettle: state };
-    if (state?.status === 'failed') throw new Error(state?.lastTrustworthyEvidence?.error || state?.failurePhase || 'native-low live route failed');
+    if (state?.status === 'failed') {
+      failurePhase = state?.failurePhase || failurePhase;
+      throw new Error(state?.lastTrustworthyEvidence?.error || state?.failurePhase || 'native-low live route failed');
+    }
     if (
       state?.routeIdentity === ROUTE
       && state?.runtimeBuildIdentity === expectedRuntimeBuildIdentity
@@ -290,6 +296,20 @@ try {
   assert.equal(state?.nativeLowHeadCostProfile?.identity, 'native-low-head-cost-profile-v0', 'head cost profile missing');
   assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
   assert.equal(state?.runtimeBuildIdentity, expectedRuntimeBuildIdentity, 'runtime build identity mismatch');
+  if (vivisectorCandidateHeadTrainedRouteRequested) {
+    const receiver = state?.nativeLowVivisectorCandidateHeadPackageReceiver;
+    assert.equal(receiver?.identity, 'native-low-vivisector-candidate-head-package-receiver-v0', 'Vivisector package receiver identity mismatch');
+    assert.equal(receiver?.schema, 'kaminos.native-low.vivisector-candidate-head-width32-package.v0', 'Vivisector package schema mismatch');
+    assert.equal(receiver?.trainedRouteRequested, true, 'Vivisector trained route was not recorded as requested');
+    assert.equal(receiver?.syntheticBenchmarkWeightsRejected, true, 'Vivisector receiver did not reject synthetic benchmark weights');
+    assert.equal(receiver?.syntheticBenchmarkLatentRejected, true, 'Vivisector receiver did not reject synthetic benchmark latent');
+    assert.equal(receiver?.candidateListSource, 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0', 'Vivisector receiver candidate list source mismatch');
+    assert.equal(receiver?.dispatchMode, 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0', 'Vivisector receiver dispatch mode mismatch');
+    assert.equal(receiver?.width, 32, 'Vivisector receiver width mismatch');
+    assert.equal(receiver?.outputSchema?.identity, 'compact-renderer-facing-cue-record-v0', 'Vivisector receiver cue schema mismatch');
+    assert.equal(receiver?.visualClaim, false, 'Vivisector package receiver must not claim visual benefit');
+    assert.equal(receiver?.fidelityClaim, false, 'Vivisector package receiver must not claim fidelity');
+  }
   assert.ok(Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0, 'sourceDeltaAdmissionGpuMs missing');
   assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 6, 'head cost profile did not record six timestamp values');
   assert.ok(nativeLowInferenceSumMatches(state?.nativeLowHeadCostProfile), 'inferenceGpuMs is not the exact sum of source-delta/support-front/residual stages');
@@ -491,9 +511,11 @@ try {
     nativeLowSourceHistoryDetailCandidate: endState.nativeLowSourceHistoryDetailCandidate,
     nativeLowFixedSourceDeltaAdmission: endState.nativeLowFixedSourceDeltaAdmission,
     nativeLowCandidateHeadCostMicrobenchmark: endState.nativeLowCandidateHeadCostMicrobenchmark,
+    nativeLowVivisectorCandidateHeadPackageReceiver: endState.nativeLowVivisectorCandidateHeadPackageReceiver,
     nativeLowFixedGateDiscontinuityAssay: endState.nativeLowFixedGateDiscontinuityAssay,
     fixedGateDiscontinuityAssayRequested,
     candidateHeadBenchmarkRequested,
+    vivisectorCandidateHeadTrainedRouteRequested,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
     frontTopologyAblatedTreatment: endState.frontTopologyAblatedTreatment,
@@ -580,6 +602,16 @@ try {
     witnessGitHead,
     servedSourceBundleSha256: servedSourceBundle?.sha256 || null,
     servedSourceBundleAuthority: servedSourceBundle ? 'fresh-http-served-source-bundle-sha256-v0' : null,
+    routeIdentity: lastTrustworthyEvidence?.routeSettle?.routeIdentity || null,
+    runtimeBuildIdentity: lastTrustworthyEvidence?.routeSettle?.runtimeBuildIdentity || null,
+    requestedBackend: lastTrustworthyEvidence?.routeSettle?.requestedBackend || null,
+    effectiveBackend: lastTrustworthyEvidence?.routeSettle?.effectiveBackend || null,
+    requestedComposition: lastTrustworthyEvidence?.routeSettle?.requestedComposition || null,
+    effectiveComposition: lastTrustworthyEvidence?.routeSettle?.effectiveComposition || null,
+    transportMode: lastTrustworthyEvidence?.routeSettle?.transportMode || null,
+    nativeLowVivisectorCandidateHeadPackageReceiver: lastTrustworthyEvidence?.routeSettle?.nativeLowVivisectorCandidateHeadPackageReceiver
+      || lastTrustworthyEvidence?.nativeLowVivisectorCandidateHeadPackageReceiver
+      || null,
     browserProfileDir,
     minimumContinuousSeconds,
     lastTrustworthyEvidence,

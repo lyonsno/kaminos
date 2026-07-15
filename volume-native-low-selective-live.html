@@ -60,6 +60,12 @@
       SELECTIVE_HEAD_LIVE_MODEL,
       SELECTIVE_HEAD_LIVE_MODEL_URL,
     } from './native-low-selective-live-runtime.mjs';
+    import {
+      VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
+      VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
+      sha256HexFromText,
+      validateVivisectorCandidateHeadPackage,
+    } from './native-low-candidate-head-package.mjs';
 
     const REPORT_SCHEMA = 'kaminos.volume.native-low-selective-live-comparison.v0';
     const CONTRACT_MARKERS = Object.freeze({
@@ -145,6 +151,17 @@
         pathExclusions: { noJsCandidateList: true, productionPathCpuReadback: false, dense160ReceiverMaterialization: false, hiddenCandidateCap: false },
         frozenDenseHeadsControl: 'arithmetic-control-only',
       },
+      nativeLowVivisectorCandidateHeadPackageReceiver: {
+        identity: 'native-low-vivisector-candidate-head-package-receiver-v0',
+        schema: 'kaminos.native-low.vivisector-candidate-head-width32-package.v0',
+        trainedRouteRequested: false,
+        syntheticBenchmarkWeightsRejected: true,
+        syntheticBenchmarkLatentRejected: true,
+        candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+        dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        outputSchema: { identity: 'compact-renderer-facing-cue-record-v0', cueRecordStrideBytes: 32 },
+        failurePhase: null,
+      },
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -167,6 +184,9 @@
     const frontTopologyAblationMode = !native64ManifestMode && params.get('front_topology_ablation') === '1';
     const fixedGateDiscontinuityAssayMode = !native64ManifestMode && params.get('fixed_gate_discontinuity_assay') === '1';
     const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
+    const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
+    const vivisectorCandidateHeadTrainedRouteRequested = !native64ManifestMode
+      && (Boolean(vivisectorCandidateHeadPackageUrl) || params.get('candidate_head_trained_route') === 'vivisector-width32');
     const sourceHistoryDetailAdmissionEnabled = !native64ManifestMode && params.get('source_history_detail_candidate') !== '0';
     const sourceHistoryDetailTargetCoverage = Math.max(0.01, Math.min(0.5, Number(params.get('source_history_detail_coverage') || 0.10)));
     const supportProbabilityDetailAdmissionEnabled = params.get('support_detail_admission') === '1';
@@ -188,6 +208,15 @@
     let latestReceipt = null;
     let latestRunnerState = null;
     let latestDiscontinuityAssay = null;
+    let vivisectorCandidateHeadPackageReceipt = {
+      identity: VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
+      schema: VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
+      trainedRouteRequested: vivisectorCandidateHeadTrainedRouteRequested,
+      packageUrl: vivisectorCandidateHeadPackageUrl || null,
+      packageValidationBeforeGpuWork: true,
+      gpuWorkStarted: false,
+      failurePhase: null,
+    };
     let lastControlObjectUrl = null;
     let lastTreatmentObjectUrl = null;
     let lastFrontTopologyAblatedObjectUrl = null;
@@ -252,10 +281,51 @@
       volume_quality_reason: native64ManifestMode ? 'native-low-cross-grid-64-shared-device-manifest' : 'native-low-selective-shared-device-transfer',
     };
 
-    runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
-
     function delay(ms) {
       return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function validateVivisectorCandidateHeadPackageForRoute() {
+      if (!vivisectorCandidateHeadTrainedRouteRequested) return vivisectorCandidateHeadPackageReceipt;
+      failurePhase = 'vivisector-candidate-package-validation';
+      if (!vivisectorCandidateHeadPackageUrl) {
+        const result = validateVivisectorCandidateHeadPackage(null, { requestedUrl: null });
+        vivisectorCandidateHeadPackageReceipt = result.report;
+        lastTrustworthyEvidence = { nativeLowVivisectorCandidateHeadPackageReceiver: result.report };
+        throw new Error(`${result.failurePhase}:${result.error}`);
+      }
+      const response = await fetch(vivisectorCandidateHeadPackageUrl, { cache: 'no-store' });
+      if (!response.ok) {
+        const result = {
+          ok: false,
+          failurePhase: 'vivisector-candidate-package-validation',
+          error: `package fetch failed:${response.status}`,
+          report: {
+            schema: 'kaminos.volume.native-low-vivisector-candidate-head-package-failure.v0',
+            identity: VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
+            status: 'failed',
+            failurePhase: 'vivisector-candidate-package-validation',
+            error: `package fetch failed:${response.status}`,
+            requestedUrl: vivisectorCandidateHeadPackageUrl,
+            trainedRouteRequested: true,
+            gpuWorkStarted: false,
+            durableFailureReportRequired: true,
+          },
+        };
+        vivisectorCandidateHeadPackageReceipt = result.report;
+        lastTrustworthyEvidence = { nativeLowVivisectorCandidateHeadPackageReceiver: result.report };
+        throw new Error(`${result.failurePhase}:${result.error}`);
+      }
+      const packageText = await response.text();
+      const observedPackageSha256 = await sha256HexFromText(packageText);
+      const result = validateVivisectorCandidateHeadPackage(packageText, {
+        requestedUrl: vivisectorCandidateHeadPackageUrl,
+        observedPackageSha256,
+      });
+      vivisectorCandidateHeadPackageReceipt = result.ok ? result.receiver : result.report;
+      lastTrustworthyEvidence = { nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt };
+      if (!result.ok) throw new Error(`${result.failurePhase}:${result.error}`);
+      return result.receiver;
     }
 
     function proto() {
@@ -625,6 +695,7 @@
         nativeLowSourceHistoryDetailCandidate: receipt.nativeLowSourceHistoryDetailCandidate || null,
         nativeLowFixedSourceDeltaAdmission: receipt.nativeLowFixedSourceDeltaAdmission || null,
         nativeLowCandidateHeadCostMicrobenchmark: receipt.nativeLowCandidateHeadCostMicrobenchmark || null,
+        nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt,
         nativeLowFixedGateDiscontinuityAssay: latestDiscontinuityAssay,
         endToEndFrameMs: receipt.endToEndFrameMs ?? null,
         simulationSteppingReceipt: receipt.simulationSteppingReceipt || null,
@@ -643,7 +714,9 @@
     }
 
     async function initialize() {
+      await validateVivisectorCandidateHeadPackageForRoute();
       failurePhase = 'route-initialize';
+      runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
       const prototype = await waitForPrototype();
       prototype.setControls({
         resolution: native64ManifestMode ? 64 : 128,

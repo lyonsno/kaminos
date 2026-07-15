@@ -9,6 +9,7 @@ const witnessPath = join(root, 'volume-native-low-selective-live-witness.mjs');
 const native64WitnessPath = join(root, 'volume-native-low-cross-grid-64-witness.mjs');
 const runtimePath = join(root, 'native-low-selective-live-runtime.mjs');
 const corePath = join(root, 'volume-core.js');
+const candidateHeadPackagePath = join(root, 'native-low-candidate-head-package.mjs');
 const modelManifestPath = join(root, 'models/selective-head-live/exact-basin-160-to-128-v0/manifest.json');
 const modelGeneratedPath = join(root, 'models/selective-head-live/exact-basin-160-to-128-v0/model.generated.js');
 
@@ -31,7 +32,8 @@ const witness = readFileSync(witnessPath, 'utf8');
 const native64Witness = existsSync(native64WitnessPath) ? readFileSync(native64WitnessPath, 'utf8') : '';
 const runtime = readFileSync(runtimePath, 'utf8');
 const core = readFileSync(corePath, 'utf8');
-const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}`;
+const candidateHeadPackage = readFileSync(candidateHeadPackagePath, 'utf8');
+const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}\n${candidateHeadPackage}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
 assert.match(combined, /native-low-candidate-head-cost-microbenchmark-v1/, 'route and witness carry fail-loud runtime build identity');
@@ -154,6 +156,16 @@ assert.match(combined, /compact-renderer-facing-cue-record-v0[\s\S]*cueRecordStr
 assert.match(combined, /noJsCandidateList[\s\S]*true[\s\S]*productionPathCpuReadback[\s\S]*false[\s\S]*dense160ReceiverMaterialization[\s\S]*false[\s\S]*hiddenCandidateCap[\s\S]*false/, 'candidate-head benchmark forbids JS candidate lists, production CPU readback, dense receiver materialization, and hidden caps');
 assert.match(combined, /frozenDenseHeadsControl[\s\S]*arithmetic-control-only/, 'candidate-head benchmark keeps frozen dense heads as arithmetic control only');
 assert.match(combined, /budgetDisposition[\s\S]*profitableTargetMs[\s\S]*10[\s\S]*credibleBreakEvenTargetMs[\s\S]*15[\s\S]*outerKillBoundaryMs[\s\S]*24/, 'candidate-head benchmark records budget disposition against 10/15/24 ms');
+assert.match(combined, /kaminos\.native-low\.vivisector-candidate-head-width32-package\.v0/, 'Vivisector receiver names exact package schema');
+assert.match(combined, /native-low-vivisector-candidate-head-package-receiver-v0/, 'Vivisector receiver names exact runtime identity');
+assert.match(combined, /vivisector_candidate_head_package[\s\S]*candidate_head_trained_route[\s\S]*vivisector-width32/, 'route exposes trained package request parameters');
+assert.match(combined, /vivisector-candidate-package-validation[\s\S]*gpuWorkStarted:\s*false[\s\S]*durableFailureReportRequired:\s*true/, 'Vivisector package validation failures happen before GPU work and require durable reports');
+assert.match(combined, /synthetic benchmark weights are rejected for trained route[\s\S]*synthetic benchmark latent is rejected for trained route/, 'trained receiver rejects benchmark weights and synthetic latent authority');
+assert.match(combined, /sourceLowGrid must be 128[\s\S]*receiverHighGrid must be 160[\s\S]*candidateHeadWidth must be 32/, 'trained receiver rejects wrong width and grid identity');
+assert.match(combined, /currentSourceChannels must be 17[\s\S]*sourceDeltaChannels must be 17[\s\S]*featureOrder must be/, 'trained receiver rejects wrong feature channel count or order');
+assert.match(combined, /candidateListSource must be real uncapped fixed-gate sourceHistoryCandidates[\s\S]*dispatchMode must be dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0/, 'trained receiver preserves real indirect dispatch over uncapped fixed-gate candidates');
+assert.match(combined, /compact-renderer-facing-cue-record-v0[\s\S]*cueRecordStrideBytes must be 32/, 'trained receiver preserves compact renderer-facing cue schema');
+assert.match(witness, /nativeLowVivisectorCandidateHeadPackageReceiver[\s\S]*vivisectorCandidateHeadTrainedRouteRequested/, 'witness preserves Vivisector receiver receipt and request state');
 assert.match(combined, /native-low-front-topology-ablation-v0/, 'route records shared-device learned frontTopology visual ablation');
 assert.match(combined, /fullFrozenTreatmentReference[\s\S]*frontTopologyAblatedTreatment[\s\S]*nativeLowControl/, 'frontTopology ablation keeps native control, full frozen reference, and ablated treatment');
 assert.match(combined, /native-low-nearest-normalized-front-upsampling-no-learned-front-residual-v0/, 'frontTopology ablation labels native-low upsample authority with no learned front residual');
