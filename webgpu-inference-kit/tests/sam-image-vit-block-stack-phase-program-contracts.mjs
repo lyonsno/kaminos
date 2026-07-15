@@ -93,7 +93,7 @@ const dispatchShape = {
   width: 32,
   hiddenSize: 1024,
   numHeads: 16,
-  windowSize: 14,
+  windowSize: 24,
   intermediateSize: 4736,
   ropePretrainGridSize: 72,
   interpolateRope: true,
@@ -110,7 +110,7 @@ const dispatch448 = createSam3ImageVitBlockStackDispatchPlan({
   maxWorkgroupsPerDimension: 65_535,
 });
 assert.deepEqual(dispatch448.layerNorm1, { logicalInvocations: 1_024, dispatch: [16] });
-assert.deepEqual(dispatch448.windowPartition, { logicalInvocations: 1_806_336, dispatch: [28_224] });
+assert.deepEqual(dispatch448.windowPartition, { logicalInvocations: 2_359_296, dispatch: [36_864] });
 assert.deepEqual(dispatch448.mlpFc1, { logicalInvocations: 4_849_664, dispatch: [276, 275] });
 assert.deepEqual(dispatch448.mlpFc2, { logicalInvocations: 1_048_576, dispatch: [16_384] });
 assert.deepEqual(dispatch448.residualMlp, dispatch448.mlpFc2);
@@ -120,7 +120,7 @@ const dispatch1008Local = createSam3ImageVitBlockStackDispatchPlan({
   layerIndex: 0,
   maxWorkgroupsPerDimension: 65_535,
 });
-assert.deepEqual(dispatch1008Local.windowPartition, { logicalInvocations: 7_225_344, dispatch: [336, 336] });
+assert.deepEqual(dispatch1008Local.windowPartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
 assert.deepEqual(dispatch1008Local.qProjection, dispatch1008Local.windowPartition);
 assert.deepEqual(dispatch1008Local.attention, dispatch1008Local.windowPartition);
 assert.deepEqual(dispatch1008Local.mlpFc1, { logicalInvocations: 24_551_424, dispatch: [620, 619] });
