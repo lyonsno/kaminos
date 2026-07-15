@@ -1,0 +1,4728 @@
+{
+  "schema": "kaminos-boundary-splat-phase-support-envelope-witness-v0",
+  "status": "completed",
+  "source": {
+    "trainingManifest": {
+      "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+      "bytes": 90735,
+      "sha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+    },
+    "evaluationManifest": {
+      "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+      "bytes": 421170,
+      "sha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+    },
+    "predictions": {
+      "path": "/private/tmp/kaminos-phase-transport-anchored-online-h12-w1-protected-r1-0715/transport-predictions.json",
+      "bytes": 173793,
+      "sha256": "0399ad81f1e0b33488136de228896d47dfb7287230afb077445e8ec294a89571"
+    },
+    "occupancyModel": {
+      "path": "/private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json",
+      "schema": "kaminos-boundary-splat-phase-transport-model-v0",
+      "sha256": "e51c23d25eb38ec778c65774aae46c78bbcb02808d582539843417b10043c073"
+    },
+    "destinationStateModel": {
+      "evaluationManifest": {
+        "bytes": 421170,
+        "controlledStepDeltaMs": 160,
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "frameCount": 64,
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+        "sha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+      },
+      "path": "/private/tmp/kaminos-phase-destination-state-anchored-online-h12-w1-r1-0715/destination-state-model.json",
+      "schema": "kaminos-boundary-splat-phase-destination-state-model-v0",
+      "sha256": "9216a4536e89e55bbc8c0cf408b96df25ef95f5ae4e7ad5629bda319bfe5dbbd",
+      "trainingManifest": {
+        "bytes": 90735,
+        "controlledStepDeltaMs": 160,
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "frameCount": 13,
+        "path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+        "sha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1"
+      }
+    },
+    "requestedRoute": "http://127.0.0.1:18218/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_density=6&volume_fire=3.5&volume_radiance=0&volume_absorption=1.2&volume_glow=0&volume_smoke=2.8&volume_curl=1.05&volume_microdetail=2.5&volume_interface_shred=4.1&volume_fire_licks=5&volume_projection=1.5&volume_speed=2.7&volume_fire_scale=0.95&volume_detail_scale=2.4&volume_plume_height=1.3&volume_wind_strength=0.9&volume_wind_angle=35&volume_wind_height=-0.3&volume_input_radius=0.48&volume_flow_rate=1.4&volume_fire_render_mode=inspect&volume_shell_inspect=boundary_fire&volume_shell_amount=0&volume_shell_width=0.05&volume_shell_thermal=0.85&volume_shell_reaction=1.1&volume_shell_front=1.25&volume_shell_edge=0.85&volume_shell_core_suppress=0.55&volume_shell_bite=0.8&volume_shell_curl=0.25&volume_shell_heat=1.65&volume_shell_divergence=0&volume_shell_luma=1.35&volume_shell_exposure=1.15&volume_shell_soft_clip=0.2&volume_shell_smoke=2&volume_steps=24&volume_adaptive_rays=1&volume_occupancy_skip=1&volume_majorant_skip=0&volume_majorant_smooth=1&volume_majorant_guard=1&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=0&volume_render_scale=1&volume_resolution=160&volume_majorant_grid=24&volume_flow_debug=0&volume_oracle_activity_cue=1&volume_oracle_activity_display=0&volume_oracle_activity_curl_noise=0&volume_oracle_activity_vorticity=0&volume_oracle_activity_material=0&volume_residual_mode=off&volume_look_freeze=0&volume_pyro_compare=base&volume_pyro_detail=0&volume_pyro_material_gain=0&volume_pressure_mode=global-p2&volume_pressure_tier_overlay=0&volume_pressure_tier_lower_max=0.98&volume_pressure_tier_hero_min=0&volume_pressure_tier_hero_max=0.85&volume_reaction_live_view=boundary_fire&volume_boundary_sidecar_source=baked&volume_boundary_sidecar_view=off&volume_boundary_splat_mode=learned&volume_boundary_splat_feature_capture=1&volume_reaction_boundary_gradient=1.8&volume_reaction_boundary_support_thermal=2&volume_reaction_boundary_support_reaction=0.9&volume_reaction_boundary_support_front=0&volume_reaction_boundary_support_interface=2&volume_reaction_boundary_cut=0.02&volume_reaction_boundary_softness=0.005&volume_reaction_boundary_core_reject=0&volume_reaction_boundary_topology=2.5&volume_reaction_boundary_curl=2&volume_reaction_boundary_divergence=0&volume_reaction_boundary_contrast=0.25&volume_reaction_boundary_gamma=0.35&volume_reaction_boundary_opacity=3&volume_reaction_boundary_fire_ridge=1.76&volume_reaction_boundary_fire_ridge_cut=0.18&volume_reaction_boundary_fire_tip=0&volume_reaction_boundary_fire_erosion=0&volume_reaction_boundary_fire_clean_blue=0&volume_reaction_boundary_fire_soot=1.12&volume_reaction_boundary_fire_yellow=0.88&volume_reaction_boundary_fire_warmth=1.34&volume_reaction_boundary_fire_luma=5&volume_boundary_sidecar_blur=0&volume_boundary_sidecar_width=0&volume_boundary_sidecar_ridge=0.52&volume_reaction_heat_min=0.2&volume_reaction_heat_max=0.04&volume_reaction_fuel_min=0&volume_reaction_fuel_max=0.033&volume_reaction_flame_min=0.03&volume_reaction_flame_max=0.12&volume_reaction_front_min=0&volume_reaction_front_max=0.08&volume_reaction_gradient_min=0.02&volume_reaction_gradient_max=0.18&volume_reaction_core_min=0.18&volume_reaction_core_max=0.95&volume_reaction_core_reject=0.82&volume_reaction_topology_gain=0&volume_reaction_stretch_erode=0&volume_reaction_divergence_min=0&volume_reaction_divergence_max=0.2&volume_reaction_divergence_gain=0&volume_reaction_curl_warp=0&volume_reaction_shell_gamma=1.45&volume_reaction_shell_contrast=0.25&volume_quality_reason=phase-crosswind-long-horizon-0714",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "backend": {
+      "backend": "mlx",
+      "device": "Device(gpu, 0)",
+      "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+      "fallbackReason": null
+    }
+  },
+  "configuration": {
+    "authority": "post-composition-zero-training-support-envelope-falsifier-v0",
+    "requestedFrameCount": 63,
+    "effectiveFrameCount": 63,
+    "frameSelection": "uncapped-complete-heldout-episode-v0",
+    "staticAttenuation": 1,
+    "unmatchedAttenuation": 1,
+    "envelope": {
+      "authority": "training-episode-frame-zero-relative-support-envelope-v0",
+      "frameCount": 13,
+      "frameZeroCount": 59683,
+      "minimumCount": 59683,
+      "maximumCount": 70904,
+      "minimumRatio": 1,
+      "maximumRatio": 1.1880099860931923
+    },
+    "selectors": [
+      "candidateSupport",
+      "physicalSupport",
+      "visibleEnergy"
+    ],
+    "frameZeroEvaluationCount": 60259,
+    "ceilingBudget": 71588,
+    "oneStepMedianRatio": 1.0069738643029396,
+    "counterfactualBudgetAtCeiling": 71588,
+    "retrained": false,
+    "recurrenceRegenerated": false
+  },
+  "playback": {
+    "authority": "finite-complete-heldout-post-composition-support-envelope-sequence-v0",
+    "frameCount": 63,
+    "controlledStepDeltaMs": 160,
+    "effectiveFps": 6.25,
+    "encodedDurationSeconds": 10.08,
+    "loops": false
+  },
+  "roles": {
+    "prediction": "unmodified-learned-recurrent-full-splat-state-v0",
+    "candidateSupport": "training-envelope-top-protected-candidate-support-v0",
+    "physicalSupport": "training-envelope-top-physical-splat-support-v0",
+    "visibleEnergy": "training-envelope-top-physical-visible-energy-v0"
+  },
+  "roleEvidence": {
+    "prediction": [
+      {
+        "step": 1,
+        "sha256": "493e68d2cf3e318b14ffa2fce4468dc5fafed76b5679d173cceb9e67bac25fba",
+        "inputSplatCount": 60679,
+        "projectedSplatCount": 50512,
+        "nonBackgroundPixelCount": 48744
+      },
+      {
+        "step": 2,
+        "sha256": "584a2804995cf08f5752235be7655435b4539ec14c207b6ea75c679e247e823c",
+        "inputSplatCount": 61102,
+        "projectedSplatCount": 50701,
+        "nonBackgroundPixelCount": 43622
+      },
+      {
+        "step": 3,
+        "sha256": "0b7316f7c31be5e344ba3c1cba436d59f0b841ff43e9a57f0e6ad57dc1091105",
+        "inputSplatCount": 61528,
+        "projectedSplatCount": 51033,
+        "nonBackgroundPixelCount": 39831
+      },
+      {
+        "step": 4,
+        "sha256": "1b106ebd38127a4f5c7b3e08417470971a7b2d569714ac04c5a8a0a095464d58",
+        "inputSplatCount": 61957,
+        "projectedSplatCount": 51393,
+        "nonBackgroundPixelCount": 37629
+      },
+      {
+        "step": 5,
+        "sha256": "2cd29f82a73f2cab98e28b70a9a7a419f659dd3616545fbe13f2294e5a1ed0eb",
+        "inputSplatCount": 62389,
+        "projectedSplatCount": 51792,
+        "nonBackgroundPixelCount": 35707
+      },
+      {
+        "step": 6,
+        "sha256": "70840f6ebd0d19ccc3a064416ed835f9bdaf7d2d1d2fba6d6b477504db3356c1",
+        "inputSplatCount": 62824,
+        "projectedSplatCount": 52201,
+        "nonBackgroundPixelCount": 34158
+      },
+      {
+        "step": 7,
+        "sha256": "e7afde485e2073c799761178b331d11b63166ecb7abe1e7405268d00723a201e",
+        "inputSplatCount": 63262,
+        "projectedSplatCount": 52601,
+        "nonBackgroundPixelCount": 33148
+      },
+      {
+        "step": 8,
+        "sha256": "5893e2bedd862a12b31d69251e78e588fabce4385cf067c4e66e3e24d8d47820",
+        "inputSplatCount": 63703,
+        "projectedSplatCount": 53019,
+        "nonBackgroundPixelCount": 32394
+      },
+      {
+        "step": 9,
+        "sha256": "49f463754f8b97a7db1acaeb55680a35594508ae43ed256bfd3fe793ea06bae4",
+        "inputSplatCount": 64147,
+        "projectedSplatCount": 53438,
+        "nonBackgroundPixelCount": 31530
+      },
+      {
+        "step": 10,
+        "sha256": "fab3e4ce57d6552aa243f1817fb1a44d441a31adcdb77b3c25591536229927f3",
+        "inputSplatCount": 64594,
+        "projectedSplatCount": 53870,
+        "nonBackgroundPixelCount": 31205
+      },
+      {
+        "step": 11,
+        "sha256": "a5dd1a72d9e91330ffbff1b277d18051180aeac6b4b71355df724ef352bd44da",
+        "inputSplatCount": 65044,
+        "projectedSplatCount": 54303,
+        "nonBackgroundPixelCount": 31185
+      },
+      {
+        "step": 12,
+        "sha256": "e9dedc03f9d3315cf726b0f9871ed39611ae884b5e0e996b3b801596a16721de",
+        "inputSplatCount": 65498,
+        "projectedSplatCount": 54736,
+        "nonBackgroundPixelCount": 31189
+      },
+      {
+        "step": 13,
+        "sha256": "36bdeafa773a5c6f58fa5bbf44b7364d5f2d8b31e7e9b5dac10816c98c48f34e",
+        "inputSplatCount": 65955,
+        "projectedSplatCount": 55178,
+        "nonBackgroundPixelCount": 31170
+      },
+      {
+        "step": 14,
+        "sha256": "6698fce2fce3f9e4f2df5c4c8d56ac755c0719e007cf6cfa3293755eeda2e612",
+        "inputSplatCount": 66415,
+        "projectedSplatCount": 55629,
+        "nonBackgroundPixelCount": 31165
+      },
+      {
+        "step": 15,
+        "sha256": "9ea2ee4ae852802ccc4bd5d5a7105f74b641f9d1a78c68c7d41268231ddfea99",
+        "inputSplatCount": 66878,
+        "projectedSplatCount": 56074,
+        "nonBackgroundPixelCount": 31089
+      },
+      {
+        "step": 16,
+        "sha256": "743ffd96dbc5629c7d53477cc77d57a86514a2a53a6e63eeba5837f609f8a70a",
+        "inputSplatCount": 67344,
+        "projectedSplatCount": 56522,
+        "nonBackgroundPixelCount": 30985
+      },
+      {
+        "step": 17,
+        "sha256": "fa6c3514e0b272df4b6480c3b6c77d42f75ee5de2e78ba5e09e3586bf56c0b01",
+        "inputSplatCount": 67814,
+        "projectedSplatCount": 56966,
+        "nonBackgroundPixelCount": 30862
+      },
+      {
+        "step": 18,
+        "sha256": "e9bc8dfa522b9c7b1ac135e4cf0f27aca63da168b6416b9f33a651fc96139423",
+        "inputSplatCount": 68287,
+        "projectedSplatCount": 57417,
+        "nonBackgroundPixelCount": 30860
+      },
+      {
+        "step": 19,
+        "sha256": "4ddc9f5a8a47345cfbb60f9a5f03c56ea9f85fa0011ff70b6a030db1d5cc6651",
+        "inputSplatCount": 68763,
+        "projectedSplatCount": 57873,
+        "nonBackgroundPixelCount": 30870
+      },
+      {
+        "step": 20,
+        "sha256": "d4ab828c65818df4ceb1d6af77ec08705dfe747340ee77c91b538253aa665b7e",
+        "inputSplatCount": 69243,
+        "projectedSplatCount": 58336,
+        "nonBackgroundPixelCount": 30869
+      },
+      {
+        "step": 21,
+        "sha256": "3ce9b555252c8b93fee63b27dbdbaa2dc1a80687fbdc797e662e08a248ca79bc",
+        "inputSplatCount": 69726,
+        "projectedSplatCount": 58813,
+        "nonBackgroundPixelCount": 30872
+      },
+      {
+        "step": 22,
+        "sha256": "bae5b20119552e8652b1a5b0371abf233af74a772744cdb635d47d663db47c46",
+        "inputSplatCount": 70212,
+        "projectedSplatCount": 59293,
+        "nonBackgroundPixelCount": 30870
+      },
+      {
+        "step": 23,
+        "sha256": "0c0e552f97bbd536613d623ebec8ee5626fcf61f295ecffc62e5b8b7e572a260",
+        "inputSplatCount": 70702,
+        "projectedSplatCount": 59774,
+        "nonBackgroundPixelCount": 30876
+      },
+      {
+        "step": 24,
+        "sha256": "ea31cfa0e517a6d44a4a3a8681b9ce8bd36af5532e02769e0cd5482ce7440e8c",
+        "inputSplatCount": 71195,
+        "projectedSplatCount": 60262,
+        "nonBackgroundPixelCount": 30883
+      },
+      {
+        "step": 25,
+        "sha256": "5d9ea8f33177975da69a21462853dd555bd466ca87705f4a8db12a1ee4bdb5fc",
+        "inputSplatCount": 71692,
+        "projectedSplatCount": 60754,
+        "nonBackgroundPixelCount": 30881
+      },
+      {
+        "step": 26,
+        "sha256": "1a99dce996948c75ff72e42e734c28290f37d1b5487364a801c60c5d5d2ec206",
+        "inputSplatCount": 72192,
+        "projectedSplatCount": 61251,
+        "nonBackgroundPixelCount": 30885
+      },
+      {
+        "step": 27,
+        "sha256": "dd28afc93486adf8c4b9f8dc2aa803194b30820a44df009a0db90996a1b9867c",
+        "inputSplatCount": 72695,
+        "projectedSplatCount": 61753,
+        "nonBackgroundPixelCount": 30886
+      },
+      {
+        "step": 28,
+        "sha256": "187784549487035da129ac1d8bb14a569e49043f85be488a2fe016e82a1c94ca",
+        "inputSplatCount": 73202,
+        "projectedSplatCount": 62262,
+        "nonBackgroundPixelCount": 30889
+      },
+      {
+        "step": 29,
+        "sha256": "e5ccea90cfaccd241dca40cd1c321bcc669319396924cca2d39718c734cf9d4c",
+        "inputSplatCount": 73713,
+        "projectedSplatCount": 62770,
+        "nonBackgroundPixelCount": 30893
+      },
+      {
+        "step": 30,
+        "sha256": "cfc92cb95998b02b2cca9acd677c9f47199d8c8f6ae17293293d3b779c55f3f2",
+        "inputSplatCount": 74227,
+        "projectedSplatCount": 63285,
+        "nonBackgroundPixelCount": 30896
+      },
+      {
+        "step": 31,
+        "sha256": "4039f41e3faf66d9e9a8a2a0e4f4fb547bd1ae9d71aa84f331ab2e343b3f494f",
+        "inputSplatCount": 74745,
+        "projectedSplatCount": 63801,
+        "nonBackgroundPixelCount": 30899
+      },
+      {
+        "step": 32,
+        "sha256": "9290274740b73146817fcc577bbdc6d486be45040b9f9c9d2d7414779ae4d643",
+        "inputSplatCount": 75266,
+        "projectedSplatCount": 64324,
+        "nonBackgroundPixelCount": 30907
+      },
+      {
+        "step": 33,
+        "sha256": "c6851ad7013ac20e7db71c03e089645ed8126657b6d5b654e2aad444f0a84b1e",
+        "inputSplatCount": 75791,
+        "projectedSplatCount": 64850,
+        "nonBackgroundPixelCount": 30907
+      },
+      {
+        "step": 34,
+        "sha256": "2b1b0ecab12aaab04895575bd01efc3561a1e7d719367e4f0438aa44600cd86c",
+        "inputSplatCount": 76320,
+        "projectedSplatCount": 65378,
+        "nonBackgroundPixelCount": 30906
+      },
+      {
+        "step": 35,
+        "sha256": "dcdc5dae03f9bbf56be6a71c41c020e2bd6a7d63b02fc3fa9df3713dca1e677e",
+        "inputSplatCount": 76852,
+        "projectedSplatCount": 65912,
+        "nonBackgroundPixelCount": 30908
+      },
+      {
+        "step": 36,
+        "sha256": "99f37f03cd7606c02fe576beb3b493ef0c42c5aaa1c475c23e9bc9530fa0281c",
+        "inputSplatCount": 77388,
+        "projectedSplatCount": 66448,
+        "nonBackgroundPixelCount": 30909
+      },
+      {
+        "step": 37,
+        "sha256": "a02633ee20ebda9480d0ea20529854e4c0119c1ad8a6eecc397a9e52bac3b213",
+        "inputSplatCount": 77928,
+        "projectedSplatCount": 66987,
+        "nonBackgroundPixelCount": 30909
+      },
+      {
+        "step": 38,
+        "sha256": "c1df6113ea19e11aa02a9d7858efcc10493aee345dda07dd200e91d6148505cc",
+        "inputSplatCount": 78471,
+        "projectedSplatCount": 67528,
+        "nonBackgroundPixelCount": 30911
+      },
+      {
+        "step": 39,
+        "sha256": "29694779b6a8cc286f747492bf0a10b7478eedf2621058d0d009fde02ffddfc3",
+        "inputSplatCount": 79018,
+        "projectedSplatCount": 68077,
+        "nonBackgroundPixelCount": 30929
+      },
+      {
+        "step": 40,
+        "sha256": "23632911b58d377bd64e6204f199d13a37a68c277e8c1a4de5761cd0c47e59c1",
+        "inputSplatCount": 79569,
+        "projectedSplatCount": 68626,
+        "nonBackgroundPixelCount": 30938
+      },
+      {
+        "step": 41,
+        "sha256": "399797738a43822645004bc0b736244febbb87f3651f21e001a1854457600cd9",
+        "inputSplatCount": 80124,
+        "projectedSplatCount": 69180,
+        "nonBackgroundPixelCount": 30947
+      },
+      {
+        "step": 42,
+        "sha256": "237ccf8239e7c47d9a1222a0177dbf3864c96c8f36eab61533199d04449bf74d",
+        "inputSplatCount": 80683,
+        "projectedSplatCount": 69739,
+        "nonBackgroundPixelCount": 30958
+      },
+      {
+        "step": 43,
+        "sha256": "2a2a32bb8a34a19f55cc42529ae91066fcdb60319c5bb02428bcad4d2c633095",
+        "inputSplatCount": 81246,
+        "projectedSplatCount": 70301,
+        "nonBackgroundPixelCount": 30975
+      },
+      {
+        "step": 44,
+        "sha256": "0dd2b0c9998cbb42fd95cf5d6ccd67567d4cb17d2ceeb1152b1fa7819e9836f7",
+        "inputSplatCount": 81813,
+        "projectedSplatCount": 70867,
+        "nonBackgroundPixelCount": 31003
+      },
+      {
+        "step": 45,
+        "sha256": "e66f1ab5335a6e07fc24170060acaa67aa8467a4068642c5d6d14386042985c0",
+        "inputSplatCount": 82384,
+        "projectedSplatCount": 71432,
+        "nonBackgroundPixelCount": 31037
+      },
+      {
+        "step": 46,
+        "sha256": "3bab6f258bb863d2b090897f29c951f1a979e39e4fa9720cb1fde80e36b3b47c",
+        "inputSplatCount": 82959,
+        "projectedSplatCount": 72008,
+        "nonBackgroundPixelCount": 31124
+      },
+      {
+        "step": 47,
+        "sha256": "065e0861734834711fcbc9f71db2d5419bf8b97a91bfabf2046756995c12da31",
+        "inputSplatCount": 83538,
+        "projectedSplatCount": 72586,
+        "nonBackgroundPixelCount": 31269
+      },
+      {
+        "step": 48,
+        "sha256": "3b049598ac95b7b36d4ea49936dbcb703a9ec5510c1df16a98b26e7142f3cd63",
+        "inputSplatCount": 84121,
+        "projectedSplatCount": 73169,
+        "nonBackgroundPixelCount": 31440
+      },
+      {
+        "step": 49,
+        "sha256": "a19f684fc0fb9928bebb7ac87cdb4d2fb7cf56b4dde3619d226a5999bfa2fd0a",
+        "inputSplatCount": 84708,
+        "projectedSplatCount": 73754,
+        "nonBackgroundPixelCount": 31631
+      },
+      {
+        "step": 50,
+        "sha256": "d426d129ae8c6ae479e8db1987cef2fcf54b9377e9ebd9efac8cb75165f98f17",
+        "inputSplatCount": 85299,
+        "projectedSplatCount": 74346,
+        "nonBackgroundPixelCount": 31824
+      },
+      {
+        "step": 51,
+        "sha256": "7c42f0b21bc8bc8c688f655ee955f53d52285066d23bb19980e68f6647ad1d70",
+        "inputSplatCount": 85894,
+        "projectedSplatCount": 74939,
+        "nonBackgroundPixelCount": 32032
+      },
+      {
+        "step": 52,
+        "sha256": "e823962866df53cb4536c9b1fba94c6c58fb2eabe3166f169596f72c90bf74e1",
+        "inputSplatCount": 86493,
+        "projectedSplatCount": 75536,
+        "nonBackgroundPixelCount": 32223
+      },
+      {
+        "step": 53,
+        "sha256": "e6f8c8d33c3865de0f3d7d73c992b97b9aa9165692e8501ce92af4d81639cb62",
+        "inputSplatCount": 87096,
+        "projectedSplatCount": 76137,
+        "nonBackgroundPixelCount": 32409
+      },
+      {
+        "step": 54,
+        "sha256": "4f40a10883b8cf51a68484d25c74e313bde9a6415026bbcd29fa339d554e009e",
+        "inputSplatCount": 87703,
+        "projectedSplatCount": 76743,
+        "nonBackgroundPixelCount": 32626
+      },
+      {
+        "step": 55,
+        "sha256": "96ccfb27ecb793c3de52eac86bd0d5bd35983866562321d1e09869377790ffa5",
+        "inputSplatCount": 88315,
+        "projectedSplatCount": 77354,
+        "nonBackgroundPixelCount": 32826
+      },
+      {
+        "step": 56,
+        "sha256": "cf6da45a9302cc25cda0a1b8bc2b9139e24dbbedad76680a92e8b40739dcbdd3",
+        "inputSplatCount": 88931,
+        "projectedSplatCount": 77972,
+        "nonBackgroundPixelCount": 33015
+      },
+      {
+        "step": 57,
+        "sha256": "cf54ac38c50540a5945ede49fa7cc8328922fa207c66a60e1d7e5f94bbe62a2c",
+        "inputSplatCount": 89551,
+        "projectedSplatCount": 78591,
+        "nonBackgroundPixelCount": 33219
+      },
+      {
+        "step": 58,
+        "sha256": "de2ee4fc04f057fb4d30bf176ddd2abe158ce91f6ec30b4e08be3cfaea41f225",
+        "inputSplatCount": 90176,
+        "projectedSplatCount": 79214,
+        "nonBackgroundPixelCount": 33403
+      },
+      {
+        "step": 59,
+        "sha256": "e40efd3ea3cb9d807fb733daee501cb9bcaa9721e5c2e31739242c69d23c0665",
+        "inputSplatCount": 90805,
+        "projectedSplatCount": 79844,
+        "nonBackgroundPixelCount": 33589
+      },
+      {
+        "step": 60,
+        "sha256": "e3fa4d59fb1362b461824ddc8c0be953b7dd1c6cc0016dce1c7b73f97f72440c",
+        "inputSplatCount": 91438,
+        "projectedSplatCount": 80478,
+        "nonBackgroundPixelCount": 33800
+      },
+      {
+        "step": 61,
+        "sha256": "ef48915e13ddd539e1ac9841b19903b31431ce08329ce3abba6473ab865c115a",
+        "inputSplatCount": 92076,
+        "projectedSplatCount": 81113,
+        "nonBackgroundPixelCount": 34010
+      },
+      {
+        "step": 62,
+        "sha256": "73f0488ea6766446c954e362b4ca7f75d04c76abd5740dc35d753783c9089a67",
+        "inputSplatCount": 92718,
+        "projectedSplatCount": 81755,
+        "nonBackgroundPixelCount": 34210
+      },
+      {
+        "step": 63,
+        "sha256": "faf7b975178ecd5a11ffb11d27d5c150a6912c80d9de574cbc47fcba6f4b5137",
+        "inputSplatCount": 93365,
+        "projectedSplatCount": 82400,
+        "nonBackgroundPixelCount": 34439
+      }
+    ],
+    "candidateSupport": [
+      {
+        "step": 1,
+        "sha256": "90bf140e0e2f9aedb6b5970ccf4af03a5e1a41422f4469d28c11ba752023a9e2",
+        "inputSplatCount": 60679,
+        "projectedSplatCount": 50512,
+        "nonBackgroundPixelCount": 48744
+      },
+      {
+        "step": 2,
+        "sha256": "ee9662b941ec5b3075783778864b59627b09efd8ded334068d2a8e1c1c1518ee",
+        "inputSplatCount": 61102,
+        "projectedSplatCount": 50701,
+        "nonBackgroundPixelCount": 43622
+      },
+      {
+        "step": 3,
+        "sha256": "f48c3b6299fad042afddbd20d38a08e3b353e7b0ca031422c562806255a2f512",
+        "inputSplatCount": 61528,
+        "projectedSplatCount": 51033,
+        "nonBackgroundPixelCount": 39831
+      },
+      {
+        "step": 4,
+        "sha256": "9fa928a129eaa3854670a92fcd2888459192dab631608a5be4ab1208599b77c6",
+        "inputSplatCount": 61957,
+        "projectedSplatCount": 51393,
+        "nonBackgroundPixelCount": 37629
+      },
+      {
+        "step": 5,
+        "sha256": "1c82fa039096bf1b5be3ca56a41d23a6b86aaef4d93394b3d8f3fd26bd53020a",
+        "inputSplatCount": 62389,
+        "projectedSplatCount": 51792,
+        "nonBackgroundPixelCount": 35707
+      },
+      {
+        "step": 6,
+        "sha256": "2f9e19cae39d2de72b82d217ef085c627a64bbcc95a732ec028ffd2d16658e98",
+        "inputSplatCount": 62824,
+        "projectedSplatCount": 52201,
+        "nonBackgroundPixelCount": 34158
+      },
+      {
+        "step": 7,
+        "sha256": "36e2d30b537974490f94e48490cca1383c31cdb3428ca6aebfb8ffd82e79c9fd",
+        "inputSplatCount": 63262,
+        "projectedSplatCount": 52601,
+        "nonBackgroundPixelCount": 33148
+      },
+      {
+        "step": 8,
+        "sha256": "09b73b7309beb1dd2386e0aa8041274c5f396bb6a231849b005bc6e4471c191e",
+        "inputSplatCount": 63703,
+        "projectedSplatCount": 53019,
+        "nonBackgroundPixelCount": 32394
+      },
+      {
+        "step": 9,
+        "sha256": "382b555fda05768e0ed82e34b6ebd02f987c429b550482459ee005e12f4c80ca",
+        "inputSplatCount": 64147,
+        "projectedSplatCount": 53438,
+        "nonBackgroundPixelCount": 31530
+      },
+      {
+        "step": 10,
+        "sha256": "5e084d67ba511a25ede16c496fcbf4a8261c4dfab17076c6475b15648aeb74c7",
+        "inputSplatCount": 64594,
+        "projectedSplatCount": 53870,
+        "nonBackgroundPixelCount": 31205
+      },
+      {
+        "step": 11,
+        "sha256": "292d25da912d90f508c81d9d70ef163a039b4be332c26e39c2473e40b1dd5ca0",
+        "inputSplatCount": 65044,
+        "projectedSplatCount": 54303,
+        "nonBackgroundPixelCount": 31185
+      },
+      {
+        "step": 12,
+        "sha256": "77c2742e42738e59a60be16a5991154713fe2bddbaffcfb933fb781365d3dbe3",
+        "inputSplatCount": 65498,
+        "projectedSplatCount": 54736,
+        "nonBackgroundPixelCount": 31189
+      },
+      {
+        "step": 13,
+        "sha256": "0bf4463cb5f07ff5f5634ded52f0ba279764dfe523895d640b3685ecabb7030c",
+        "inputSplatCount": 65955,
+        "projectedSplatCount": 55178,
+        "nonBackgroundPixelCount": 31170
+      },
+      {
+        "step": 14,
+        "sha256": "147b9cf9cc48494065477c41cd68a9a46bc17e167690f80b3c4dc4fe1febb5cf",
+        "inputSplatCount": 66415,
+        "projectedSplatCount": 55629,
+        "nonBackgroundPixelCount": 31165
+      },
+      {
+        "step": 15,
+        "sha256": "6650b801a97adaeed246c1dedbe34d06244a40c8abfbf7a15ced446f67630278",
+        "inputSplatCount": 66878,
+        "projectedSplatCount": 56074,
+        "nonBackgroundPixelCount": 31089
+      },
+      {
+        "step": 16,
+        "sha256": "aff30e25a0ec3287fd97b1c984b88373e2336a0f017b8225c6c9162611dfa2ff",
+        "inputSplatCount": 67344,
+        "projectedSplatCount": 56522,
+        "nonBackgroundPixelCount": 30985
+      },
+      {
+        "step": 17,
+        "sha256": "dde758ecf2329e3ee02479e428caee73092e7d68a05e9750d10bef90c883ed2a",
+        "inputSplatCount": 67814,
+        "projectedSplatCount": 56966,
+        "nonBackgroundPixelCount": 30862
+      },
+      {
+        "step": 18,
+        "sha256": "b598981f263a8358bf26b07fb8b8f95d022e35dfa428e611769f343d6308ec9e",
+        "inputSplatCount": 68287,
+        "projectedSplatCount": 57417,
+        "nonBackgroundPixelCount": 30860
+      },
+      {
+        "step": 19,
+        "sha256": "f3ccd2d83a70714c747660167aa6f2eb731cf3f1e8245fa9f663216e7a8622f7",
+        "inputSplatCount": 68763,
+        "projectedSplatCount": 57873,
+        "nonBackgroundPixelCount": 30870
+      },
+      {
+        "step": 20,
+        "sha256": "3479660b3ee21ad8861c2f445cb5e21943ea8c5350af2174302eb81403e31d71",
+        "inputSplatCount": 69243,
+        "projectedSplatCount": 58336,
+        "nonBackgroundPixelCount": 30869
+      },
+      {
+        "step": 21,
+        "sha256": "a016ba58f2524e31e6b165c982416527d12080ac290344d2e6e6b426eabc762d",
+        "inputSplatCount": 69726,
+        "projectedSplatCount": 58813,
+        "nonBackgroundPixelCount": 30872
+      },
+      {
+        "step": 22,
+        "sha256": "1de07734ab30f328e669aa1681a64ced438c8dede1fe32566fb346e74fa225e8",
+        "inputSplatCount": 70212,
+        "projectedSplatCount": 59293,
+        "nonBackgroundPixelCount": 30870
+      },
+      {
+        "step": 23,
+        "sha256": "9c0f2b1036fbee475d26c249bc8484ad18f5ca7b35b24df9f54f67ab1a106d95",
+        "inputSplatCount": 70702,
+        "projectedSplatCount": 59774,
+        "nonBackgroundPixelCount": 30876
+      },
+      {
+        "step": 24,
+        "sha256": "af0eaacc2f688ae3fbbd0da50eb9f03335e04f07c235c73d87952582cfd533ac",
+        "inputSplatCount": 71195,
+        "projectedSplatCount": 60262,
+        "nonBackgroundPixelCount": 30883
+      },
+      {
+        "step": 25,
+        "sha256": "9086f3ca72e7f479a6a47d87966d86ce8d2c637aa48abc17f2e9305c22970d55",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60707,
+        "nonBackgroundPixelCount": 30881
+      },
+      {
+        "step": 26,
+        "sha256": "7d56363ac56db955402cadadc4866ee129ed097697a0f5b0c6a44924d8d6bc77",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60945,
+        "nonBackgroundPixelCount": 30885
+      },
+      {
+        "step": 27,
+        "sha256": "8f4f5093a100b6f71829c93cb958c56752f1ba11f01911e48e8497d1d0579d69",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61146,
+        "nonBackgroundPixelCount": 30886
+      },
+      {
+        "step": 28,
+        "sha256": "e01fcc4dc0d3a432d03ed6247cb247ea6dc86f2251ca721bb92d51c3dbbbabe9",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61381,
+        "nonBackgroundPixelCount": 30889
+      },
+      {
+        "step": 29,
+        "sha256": "48c72d06ebcde9e01aedebc9c7f52e3e1c3c70b9388a720d2cbbbee22ac81209",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61623,
+        "nonBackgroundPixelCount": 30893
+      },
+      {
+        "step": 30,
+        "sha256": "e0b5493dfea2d95d151eaf6a519a8f80d8f7c3f8410cf3cd0c4855c60aee331c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61844,
+        "nonBackgroundPixelCount": 30896
+      },
+      {
+        "step": 31,
+        "sha256": "1e66edae35bee36cf6c74c6a4933ea3cb7004d462b8775b1f14117938d4e9afe",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62040,
+        "nonBackgroundPixelCount": 30899
+      },
+      {
+        "step": 32,
+        "sha256": "0c62ea5746d007fabaf7202c21b2db49095136beb4ff3f4158c5b6186fbc2663",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62230,
+        "nonBackgroundPixelCount": 30899
+      },
+      {
+        "step": 33,
+        "sha256": "77f68d3d916e7978280f2676a42413386cc55a8a3ae252ae3e6ea174167585a5",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62414,
+        "nonBackgroundPixelCount": 30875
+      },
+      {
+        "step": 34,
+        "sha256": "09c921807a40c994fa129f11062676d1dd4fb9855c38fd328eecd633aa958416",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62573,
+        "nonBackgroundPixelCount": 30874
+      },
+      {
+        "step": 35,
+        "sha256": "e77da4299920b215e72709d709ca8a096125203d05e50b3b98bed9da72a40299",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62704,
+        "nonBackgroundPixelCount": 30876
+      },
+      {
+        "step": 36,
+        "sha256": "3e5bd349d3e69202e5e13266949a82a383c550d64eb8ae6c8315590e653f7c9a",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62838,
+        "nonBackgroundPixelCount": 30877
+      },
+      {
+        "step": 37,
+        "sha256": "2aef418e70b7f5327a2568584afd604d0cb297253c74ab3211d26ed96d790c10",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62958,
+        "nonBackgroundPixelCount": 30868
+      },
+      {
+        "step": 38,
+        "sha256": "ccb6fdace1489099f545dd6aa1735f7e157c4b5e1bc987fa97ea9ad6ffa2144e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63068,
+        "nonBackgroundPixelCount": 30868
+      },
+      {
+        "step": 39,
+        "sha256": "dbd10a3509a871d4985e84a7a44a2fcb9931ce8a0a36494da97e90281af59aef",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63182,
+        "nonBackgroundPixelCount": 30883
+      },
+      {
+        "step": 40,
+        "sha256": "eaca9447a3a1c237bddce2e25b847273f5634a3e39d35b0ffa9d0389eb7cbd4e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63272,
+        "nonBackgroundPixelCount": 30877
+      },
+      {
+        "step": 41,
+        "sha256": "a8453fd75153e06e2d7cfb71522bd949b2829309e98d0754609c746ec93590d5",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63358,
+        "nonBackgroundPixelCount": 30876
+      },
+      {
+        "step": 42,
+        "sha256": "eacafd463f7579b6d699834a18745d77de8e9b8a12b4d0b3d5cd607c187a34f3",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63466,
+        "nonBackgroundPixelCount": 30883
+      },
+      {
+        "step": 43,
+        "sha256": "e46c4e27b7b87a9f0e9a50532f2340b5fb3f372660b07a2805062090b22630ac",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63533,
+        "nonBackgroundPixelCount": 30897
+      },
+      {
+        "step": 44,
+        "sha256": "a772235dc0041e45d981395e4baa170656edda04dd4096c82e1b37ff650c07ad",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63610,
+        "nonBackgroundPixelCount": 30918
+      },
+      {
+        "step": 45,
+        "sha256": "42b7c76aa863a1c080cc8e685ffc0131ca0553301019381265c5b20960b8a497",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63764,
+        "nonBackgroundPixelCount": 30945
+      },
+      {
+        "step": 46,
+        "sha256": "7908cd5eb9e92bb4595cd77930c024c99841cbf3b200cdea3e0a6ff5e89e756d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63804,
+        "nonBackgroundPixelCount": 31032
+      },
+      {
+        "step": 47,
+        "sha256": "ec73677f8c6eb8e836201af74060d92951302dda1054045e1baf102c5baff684",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63803,
+        "nonBackgroundPixelCount": 31176
+      },
+      {
+        "step": 48,
+        "sha256": "99789ff35316da1579f301928d4d1f56b4535b15253bcef78dbd0aa61a08f8f7",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63804,
+        "nonBackgroundPixelCount": 31345
+      },
+      {
+        "step": 49,
+        "sha256": "dd929be242733afa147be72cd67a8ee6adfbb2984b53ab67f1399a6abf08f342",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63803,
+        "nonBackgroundPixelCount": 31534
+      },
+      {
+        "step": 50,
+        "sha256": "760b6f61cda1f08ad5a244df52bbb66e520202ea48df632c351736f5c4b7c9ab",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63875,
+        "nonBackgroundPixelCount": 31717
+      },
+      {
+        "step": 51,
+        "sha256": "5a7527b6602b69cf212f291944a5a220c9b6bee243cfd60ae1a155b437f009c0",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63921,
+        "nonBackgroundPixelCount": 31925
+      },
+      {
+        "step": 52,
+        "sha256": "e0c36065b63de1853f2e0016ad56ccd6a2ee5a7bffecd9baee3eddb71c695ae2",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63920,
+        "nonBackgroundPixelCount": 32116
+      },
+      {
+        "step": 53,
+        "sha256": "6265e197d6260faf8163c8f3033a3ecb7728136c0a3a06a01a649156aeb32483",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63919,
+        "nonBackgroundPixelCount": 32303
+      },
+      {
+        "step": 54,
+        "sha256": "2e00d2fda640cc9aedc2b420ad117ee064ce3f69581906543cc70c96730eeef0",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63920,
+        "nonBackgroundPixelCount": 32520
+      },
+      {
+        "step": 55,
+        "sha256": "6ef256d06cd458318f64c3b7617734ab7b4687e7ba47d2ca165541e7a7e51933",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63923,
+        "nonBackgroundPixelCount": 32721
+      },
+      {
+        "step": 56,
+        "sha256": "804a42b406a8c2dc6ef1d20218c7e87f60ea5b7554669a7379f553589677710d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63995,
+        "nonBackgroundPixelCount": 32911
+      },
+      {
+        "step": 57,
+        "sha256": "b70d250768c50f0ed81db232525ed879e23f469083f4c722845d322d27742f1d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63994,
+        "nonBackgroundPixelCount": 33116
+      },
+      {
+        "step": 58,
+        "sha256": "87e9cf0c380340083311a9f5949089d75d40e3ab43e358855eccd54fc783ac27",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64060,
+        "nonBackgroundPixelCount": 33288
+      },
+      {
+        "step": 59,
+        "sha256": "405a8d559aefc9ce5f92141d0eb8c341ebc4a1aa6de99ef32f508cd09c1e7b57",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64125,
+        "nonBackgroundPixelCount": 33476
+      },
+      {
+        "step": 60,
+        "sha256": "5c4b18c79467ed3ef050aab565604082b515535bb38b0521b33cdfbbd74366fc",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64188,
+        "nonBackgroundPixelCount": 33680
+      },
+      {
+        "step": 61,
+        "sha256": "dd231f3873272e48236297973a26d67c2bcc2edb585515f8894a12e89765cf1b",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64260,
+        "nonBackgroundPixelCount": 33825
+      },
+      {
+        "step": 62,
+        "sha256": "19c202cb53b481f5840f07523be72c1f8cf1500981eb12dbef36ef34ab1aab7e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64318,
+        "nonBackgroundPixelCount": 34018
+      },
+      {
+        "step": 63,
+        "sha256": "6fc14461380591a0297b69190f157499830dfa7779d6407a7ac76f9e34dfa84b",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64367,
+        "nonBackgroundPixelCount": 34246
+      }
+    ],
+    "physicalSupport": [
+      {
+        "step": 1,
+        "sha256": "d35084d8d2fc8c0fc775e45774fa9c0ccb718f179186c6bafa1b6f2f0f3ad079",
+        "inputSplatCount": 60679,
+        "projectedSplatCount": 50512,
+        "nonBackgroundPixelCount": 48744
+      },
+      {
+        "step": 2,
+        "sha256": "f98893b83da139e40d4dd70407020055bfc74e2aad4bdc50e17ceec1e260a9c2",
+        "inputSplatCount": 61102,
+        "projectedSplatCount": 50701,
+        "nonBackgroundPixelCount": 43622
+      },
+      {
+        "step": 3,
+        "sha256": "8b7da31b9e2d2b9d9867c6f076688a59b0313ed7dde2c7b408db311641edfe18",
+        "inputSplatCount": 61528,
+        "projectedSplatCount": 51033,
+        "nonBackgroundPixelCount": 39831
+      },
+      {
+        "step": 4,
+        "sha256": "ee16060063ce5eeb67699e3075554437016772186fc07fc0226cf9028eec79bf",
+        "inputSplatCount": 61957,
+        "projectedSplatCount": 51393,
+        "nonBackgroundPixelCount": 37629
+      },
+      {
+        "step": 5,
+        "sha256": "19c6be149d3842d1c43a6ea867c539c089ad432b0e1220d88db64d133bbdc678",
+        "inputSplatCount": 62389,
+        "projectedSplatCount": 51792,
+        "nonBackgroundPixelCount": 35707
+      },
+      {
+        "step": 6,
+        "sha256": "d0b48213815ca2d043f09a952e6d179adf8280f379a2beebcd1cbc57624cf69f",
+        "inputSplatCount": 62824,
+        "projectedSplatCount": 52201,
+        "nonBackgroundPixelCount": 34158
+      },
+      {
+        "step": 7,
+        "sha256": "2efe4d2a2af3d0a7d511b41e8bc139e2451e610bd2b916653336ccb952ab67e8",
+        "inputSplatCount": 63262,
+        "projectedSplatCount": 52601,
+        "nonBackgroundPixelCount": 33148
+      },
+      {
+        "step": 8,
+        "sha256": "04bda40207a2ad2f5dee6b6b8b2b5eafc1a8d1f6d04d0e4cb3d5cf67c3ffe959",
+        "inputSplatCount": 63703,
+        "projectedSplatCount": 53019,
+        "nonBackgroundPixelCount": 32394
+      },
+      {
+        "step": 9,
+        "sha256": "ae10b41b15677ec482e5d48ab70a1375b597531e57bcc6b02e95f0abb6665781",
+        "inputSplatCount": 64147,
+        "projectedSplatCount": 53438,
+        "nonBackgroundPixelCount": 31530
+      },
+      {
+        "step": 10,
+        "sha256": "f120d90b4a593d836e4af2a897969b1232a77601cbeca29d83cc4c636508c9c1",
+        "inputSplatCount": 64594,
+        "projectedSplatCount": 53870,
+        "nonBackgroundPixelCount": 31205
+      },
+      {
+        "step": 11,
+        "sha256": "54de7079ebe3cf737c9b29c98c65d1816cf867b43358acc9a3c4708f8747d858",
+        "inputSplatCount": 65044,
+        "projectedSplatCount": 54303,
+        "nonBackgroundPixelCount": 31185
+      },
+      {
+        "step": 12,
+        "sha256": "bbc66be9bd4e234aae09db952acb886fa66248f716f19252083b8924e0d9574e",
+        "inputSplatCount": 65498,
+        "projectedSplatCount": 54736,
+        "nonBackgroundPixelCount": 31189
+      },
+      {
+        "step": 13,
+        "sha256": "ca30a3b5f6e5c9a87702d2a313b57864ee03573fdc20ededcaf17a26dd159868",
+        "inputSplatCount": 65955,
+        "projectedSplatCount": 55178,
+        "nonBackgroundPixelCount": 31170
+      },
+      {
+        "step": 14,
+        "sha256": "4da3dcd108659375ae3f2dee54751fb632db9cd80fe61e14e8c3abe9f31da1ed",
+        "inputSplatCount": 66415,
+        "projectedSplatCount": 55629,
+        "nonBackgroundPixelCount": 31165
+      },
+      {
+        "step": 15,
+        "sha256": "c7e0a50837d55fa2b383cbcf115be4e8deb7b80bbbf5c603dfbdebd16197d4d3",
+        "inputSplatCount": 66878,
+        "projectedSplatCount": 56074,
+        "nonBackgroundPixelCount": 31089
+      },
+      {
+        "step": 16,
+        "sha256": "799e2a4014bf39b2942b5070eda74a2eca96d3f9a8abe6e424befa530ee9826c",
+        "inputSplatCount": 67344,
+        "projectedSplatCount": 56522,
+        "nonBackgroundPixelCount": 30985
+      },
+      {
+        "step": 17,
+        "sha256": "73e31ab6ef6bcc35f4cb2ef776cecab519959b72a068b1f4e394af6fe69f8dd3",
+        "inputSplatCount": 67814,
+        "projectedSplatCount": 56966,
+        "nonBackgroundPixelCount": 30862
+      },
+      {
+        "step": 18,
+        "sha256": "26c8314735bfa7bbfd304c09d8061ae1be29238a1cf07c2e123b6a2ffb84c872",
+        "inputSplatCount": 68287,
+        "projectedSplatCount": 57417,
+        "nonBackgroundPixelCount": 30860
+      },
+      {
+        "step": 19,
+        "sha256": "c8fa4aafef94f5d24e53b66b5478386f0cb730ced803bfc1ca23a56a1bb0b4ac",
+        "inputSplatCount": 68763,
+        "projectedSplatCount": 57873,
+        "nonBackgroundPixelCount": 30870
+      },
+      {
+        "step": 20,
+        "sha256": "7f8c25b8f37601133462895840ed0666f05998fe8a1323a31e6252ffe9dd44d5",
+        "inputSplatCount": 69243,
+        "projectedSplatCount": 58336,
+        "nonBackgroundPixelCount": 30869
+      },
+      {
+        "step": 21,
+        "sha256": "69a6d1412b1ff04cff05470e7b9a56caa13775367f62e9a001ec475e1ec166f1",
+        "inputSplatCount": 69726,
+        "projectedSplatCount": 58813,
+        "nonBackgroundPixelCount": 30872
+      },
+      {
+        "step": 22,
+        "sha256": "28bf92ad9ae4b49a2da558e7d0e6eedb9d10db61ef5fb72a2473cf2dc7118570",
+        "inputSplatCount": 70212,
+        "projectedSplatCount": 59293,
+        "nonBackgroundPixelCount": 30870
+      },
+      {
+        "step": 23,
+        "sha256": "723f66267cf586a7b04ebc30f9513367b4366d62e911fcfbe74c9a1d60f77f97",
+        "inputSplatCount": 70702,
+        "projectedSplatCount": 59774,
+        "nonBackgroundPixelCount": 30876
+      },
+      {
+        "step": 24,
+        "sha256": "7c52fa79e5e6be9ce171ac84d1e2d31ff880e54cfe197d4ebb8424de1dd56f5e",
+        "inputSplatCount": 71195,
+        "projectedSplatCount": 60262,
+        "nonBackgroundPixelCount": 30883
+      },
+      {
+        "step": 25,
+        "sha256": "180e80229fe22c0d415e633be5ab22b40a479ce25347d31635ae7d560c7d6343",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60703,
+        "nonBackgroundPixelCount": 30877
+      },
+      {
+        "step": 26,
+        "sha256": "1c5b2a0d296c0b0d6d897d8b6674104cac0fccc4460595446babb5b0ee56c89d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60946,
+        "nonBackgroundPixelCount": 30858
+      },
+      {
+        "step": 27,
+        "sha256": "3b17824224e3e916d1eff8732ffc99b4d0a0c5cdfd022b38eca18fa76761d691",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61155,
+        "nonBackgroundPixelCount": 30830
+      },
+      {
+        "step": 28,
+        "sha256": "8c83ce4515bef1c803a9d809a9b815385d320bdb11590f32f856fc284e0889d0",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61348,
+        "nonBackgroundPixelCount": 30781
+      },
+      {
+        "step": 29,
+        "sha256": "5d1fbfbab4cdbd5c6ee207e173d7d499a9e96e774133a2d95be7ab707f6d6ca6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61534,
+        "nonBackgroundPixelCount": 30605
+      },
+      {
+        "step": 30,
+        "sha256": "05bf9ab89f0f89c3e63e3256f1147360614fc4f329ca65ae6eef1a5841e9789b",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61705,
+        "nonBackgroundPixelCount": 30535
+      },
+      {
+        "step": 31,
+        "sha256": "48c06bb8b83af609baad984849c905be66c4f92a77ba8e6d51bc5fd68da789bf",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61856,
+        "nonBackgroundPixelCount": 30430
+      },
+      {
+        "step": 32,
+        "sha256": "756e8cfbdbd76e7682ac479ff42cb6cc9d6b1c0ce71c8900650db50054fffb2e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61994,
+        "nonBackgroundPixelCount": 30394
+      },
+      {
+        "step": 33,
+        "sha256": "22c9bd336102818b7795f9a3ebdd49503ca7fd52d6dd86d8aa385fd38b3ea740",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62135,
+        "nonBackgroundPixelCount": 30188
+      },
+      {
+        "step": 34,
+        "sha256": "722a17cefbe11c9ed82702deb019ffe2020b2149737c9f3f0fcea7c4d5c9789a",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62264,
+        "nonBackgroundPixelCount": 30064
+      },
+      {
+        "step": 35,
+        "sha256": "8ddbef4f5065015c094db06969c172a00e4bf2457835d4aa4e5fb319bad2e85b",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62404,
+        "nonBackgroundPixelCount": 29974
+      },
+      {
+        "step": 36,
+        "sha256": "30fe3d9e682b51e999e747b995b8d519506f61fea091fb928d935380e6e8a380",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62532,
+        "nonBackgroundPixelCount": 29971
+      },
+      {
+        "step": 37,
+        "sha256": "c8c35d983a4dcd309bdc4d48188761ec95e0fba0d45e9cf75553ec66aa34755a",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62671,
+        "nonBackgroundPixelCount": 29687
+      },
+      {
+        "step": 38,
+        "sha256": "4102bf9d422e8d5189ce3551c07d1f64424f147f7d7f8b0523df6f7c57c2ffd5",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62791,
+        "nonBackgroundPixelCount": 29587
+      },
+      {
+        "step": 39,
+        "sha256": "1a1271c6da6715128daa525ea47783a592a1e89bcc29de0e6642496c1c9fe9e5",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62887,
+        "nonBackgroundPixelCount": 29430
+      },
+      {
+        "step": 40,
+        "sha256": "3391e1de2d76002bf17530b3ed60f48259658504077772cdfbbe07ecab4db0f9",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63002,
+        "nonBackgroundPixelCount": 29398
+      },
+      {
+        "step": 41,
+        "sha256": "46a6c53e6d487b8d974f7c9848f7a32655e4fb32a46e89d6f3acb10c41951d93",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63093,
+        "nonBackgroundPixelCount": 29400
+      },
+      {
+        "step": 42,
+        "sha256": "784b964ab44726fc4b4e12e7315a3122b1aee8f9138d9aeaed68b36cd914923d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63195,
+        "nonBackgroundPixelCount": 29202
+      },
+      {
+        "step": 43,
+        "sha256": "f90a3a52cd492350bbbe37000acd2567e5c551a59c18ef27fd67037733b55272",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63315,
+        "nonBackgroundPixelCount": 29154
+      },
+      {
+        "step": 44,
+        "sha256": "c0210944ab361e4aa07605d1d4e7308b50fa1838c34cd65b46c26c5017ef5715",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63408,
+        "nonBackgroundPixelCount": 29096
+      },
+      {
+        "step": 45,
+        "sha256": "dde03bc77d96a0af5722aff3f1165e7f39ed493abbf7808046de05e32c937d7b",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63505,
+        "nonBackgroundPixelCount": 28902
+      },
+      {
+        "step": 46,
+        "sha256": "f42e8fdf5e3409fc7d647ce6ec4d6c057fed5f42426061d0c4c6935cc9535e3b",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63584,
+        "nonBackgroundPixelCount": 28943
+      },
+      {
+        "step": 47,
+        "sha256": "4bc73a1df99fefcb4a4c335761ffc137bfcd1778250a395a547761f84d0f6409",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63681,
+        "nonBackgroundPixelCount": 29028
+      },
+      {
+        "step": 48,
+        "sha256": "bf1d0176696082f89e800d5425563e71da1db9779826d2707b913b058fd1fa5d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63765,
+        "nonBackgroundPixelCount": 29171
+      },
+      {
+        "step": 49,
+        "sha256": "09ed231639f0a845d1393d0afa6b40aeed5d969d6abd9347d67234175e7b14d2",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63832,
+        "nonBackgroundPixelCount": 29316
+      },
+      {
+        "step": 50,
+        "sha256": "44e970f260116e54dc04e5d5fe2dd306a0061ee794a0bbd3d68a0966ecfd3e93",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63916,
+        "nonBackgroundPixelCount": 29501
+      },
+      {
+        "step": 51,
+        "sha256": "eebdb95a5cc19eac4e9c3bc30fdfd79606901690666eadcb3884c08ae68383ce",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63997,
+        "nonBackgroundPixelCount": 29633
+      },
+      {
+        "step": 52,
+        "sha256": "a3cb66b52be4f976d18363173595fef1999bc3ac3a40376bd98f28886717ef19",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64082,
+        "nonBackgroundPixelCount": 29808
+      },
+      {
+        "step": 53,
+        "sha256": "0e753418513e21665ed4d3f9be87cc650fd745924b52eb2e7922b201c939b6df",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64165,
+        "nonBackgroundPixelCount": 29940
+      },
+      {
+        "step": 54,
+        "sha256": "0a95f9d1a001de5c8a8e2a8359c1d0e4f36370e1d58c74e6bdd952acf6c0133e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64225,
+        "nonBackgroundPixelCount": 30051
+      },
+      {
+        "step": 55,
+        "sha256": "7bc7e7b7226d50ba7890622266901a933c7aa21bb192336381f4a6cc5be111e4",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64288,
+        "nonBackgroundPixelCount": 30244
+      },
+      {
+        "step": 56,
+        "sha256": "092bf275daa05017e139b29c4a6a8960b599809334c5172acb59d8b7fdfaedc3",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64323,
+        "nonBackgroundPixelCount": 30297
+      },
+      {
+        "step": 57,
+        "sha256": "b74df053ca290569427de5c19fd1afa06521f77a0bfc2270b948aeec019934d9",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64369,
+        "nonBackgroundPixelCount": 30367
+      },
+      {
+        "step": 58,
+        "sha256": "78ca9d827e0ea1b846f63c97f7e2e66a1469191772fe4d3dce3d0b8b0b47a735",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64418,
+        "nonBackgroundPixelCount": 30512
+      },
+      {
+        "step": 59,
+        "sha256": "1b3871d79457f2edc7bdb4d930d401dc8507373f442f25f67ebda8f8d1745a7a",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64468,
+        "nonBackgroundPixelCount": 30673
+      },
+      {
+        "step": 60,
+        "sha256": "7cc15bce3e2ce9a4b9f4a6b36fed0623fab903185009b13e96774cc032f99ab3",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64519,
+        "nonBackgroundPixelCount": 30677
+      },
+      {
+        "step": 61,
+        "sha256": "7fb7bc10bb1307311c6384412036499653c60f8abb96d8c5b8a8430cac848137",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64559,
+        "nonBackgroundPixelCount": 31013
+      },
+      {
+        "step": 62,
+        "sha256": "0c62336ca6a45adf45f6e787aaa27e8cd10afb0282e92f8245919a9d1b1993ff",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64592,
+        "nonBackgroundPixelCount": 30716
+      },
+      {
+        "step": 63,
+        "sha256": "6022220cd53541358212d51427ebcef63fccfef52107205f820b4fa3e3b3f8ec",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64632,
+        "nonBackgroundPixelCount": 30694
+      }
+    ],
+    "visibleEnergy": [
+      {
+        "step": 1,
+        "sha256": "b04f43c0dff0f052a26045c8f649471123e97062a719c403695b19dfd419ba84",
+        "inputSplatCount": 60679,
+        "projectedSplatCount": 50512,
+        "nonBackgroundPixelCount": 48744
+      },
+      {
+        "step": 2,
+        "sha256": "f699f8500daaeeb8d8a8ef6018eaec62b8b96db5d07d84ca0d5c1626164acc83",
+        "inputSplatCount": 61102,
+        "projectedSplatCount": 50701,
+        "nonBackgroundPixelCount": 43622
+      },
+      {
+        "step": 3,
+        "sha256": "16c9b0c0c15c6b10f17b5d1c925821df50bc21256a5018bd7dd58afcc53e3091",
+        "inputSplatCount": 61528,
+        "projectedSplatCount": 51033,
+        "nonBackgroundPixelCount": 39831
+      },
+      {
+        "step": 4,
+        "sha256": "5518bb891a748040cdba54ed55d82ba7e702872261340830e8ebd00605530087",
+        "inputSplatCount": 61957,
+        "projectedSplatCount": 51393,
+        "nonBackgroundPixelCount": 37629
+      },
+      {
+        "step": 5,
+        "sha256": "1cac6629e1335ed421d0235b9fc69149f1e5d9a393952cc84e9aabe4e61f6d91",
+        "inputSplatCount": 62389,
+        "projectedSplatCount": 51792,
+        "nonBackgroundPixelCount": 35707
+      },
+      {
+        "step": 6,
+        "sha256": "ded4d9014e7b143ef6dca8a0b542ec727274ee6900a3fe1f5357f6cbc321ad53",
+        "inputSplatCount": 62824,
+        "projectedSplatCount": 52201,
+        "nonBackgroundPixelCount": 34158
+      },
+      {
+        "step": 7,
+        "sha256": "34849417570d74fba6d7d264bdb856e7713dbb61f1d3bff5242f3f74a8ca4368",
+        "inputSplatCount": 63262,
+        "projectedSplatCount": 52601,
+        "nonBackgroundPixelCount": 33148
+      },
+      {
+        "step": 8,
+        "sha256": "023c3bc5b05e17ad311af69c26b84c89f560886a17c26252b662b09cd738c5f3",
+        "inputSplatCount": 63703,
+        "projectedSplatCount": 53019,
+        "nonBackgroundPixelCount": 32394
+      },
+      {
+        "step": 9,
+        "sha256": "13c03ed76b87e7fc44def08718468c4ba717209e2f5a68860657c83889aee159",
+        "inputSplatCount": 64147,
+        "projectedSplatCount": 53438,
+        "nonBackgroundPixelCount": 31530
+      },
+      {
+        "step": 10,
+        "sha256": "375ed1da72d950e6a884a942421483873f039d0c2f997817003d3d6c6b1296f6",
+        "inputSplatCount": 64594,
+        "projectedSplatCount": 53870,
+        "nonBackgroundPixelCount": 31205
+      },
+      {
+        "step": 11,
+        "sha256": "66674da255d009ecb1cbc7712c8764bb5539fd7d85f5802d324fba70a14ce44e",
+        "inputSplatCount": 65044,
+        "projectedSplatCount": 54303,
+        "nonBackgroundPixelCount": 31185
+      },
+      {
+        "step": 12,
+        "sha256": "0e88ec51a142b19b19d90a98bd68a0feaa85e2154fefb2a0f70d38a1092807f7",
+        "inputSplatCount": 65498,
+        "projectedSplatCount": 54736,
+        "nonBackgroundPixelCount": 31189
+      },
+      {
+        "step": 13,
+        "sha256": "256d41e333828527cc7202da9226a6842045f21871205c7b9d162800632f1664",
+        "inputSplatCount": 65955,
+        "projectedSplatCount": 55178,
+        "nonBackgroundPixelCount": 31170
+      },
+      {
+        "step": 14,
+        "sha256": "3b50b5e26903e738dd0299d02d34fb8a8428adf213d6513bbefdd6ad3a4f43fc",
+        "inputSplatCount": 66415,
+        "projectedSplatCount": 55629,
+        "nonBackgroundPixelCount": 31165
+      },
+      {
+        "step": 15,
+        "sha256": "b7bf840514f490038ec3bc50de1ec49d4fbe383e71732a933a058136ad04f229",
+        "inputSplatCount": 66878,
+        "projectedSplatCount": 56074,
+        "nonBackgroundPixelCount": 31089
+      },
+      {
+        "step": 16,
+        "sha256": "e3b21ba5947f4b502051051f6abb9c8d6766e6f1a0cda924262935ee5d2600d8",
+        "inputSplatCount": 67344,
+        "projectedSplatCount": 56522,
+        "nonBackgroundPixelCount": 30985
+      },
+      {
+        "step": 17,
+        "sha256": "3f96149687aa477736930c2ad115a807f7a8e09340cbde83eea6387939bb3ce7",
+        "inputSplatCount": 67814,
+        "projectedSplatCount": 56966,
+        "nonBackgroundPixelCount": 30862
+      },
+      {
+        "step": 18,
+        "sha256": "f89c3e3e28141661e5dd198ae14b2891ec750bae3ce7d0965fca7e02eefdff70",
+        "inputSplatCount": 68287,
+        "projectedSplatCount": 57417,
+        "nonBackgroundPixelCount": 30860
+      },
+      {
+        "step": 19,
+        "sha256": "7a0bd2a17b06742dec50761d7a97054c435647a5dd413fed631e0971b1f43980",
+        "inputSplatCount": 68763,
+        "projectedSplatCount": 57873,
+        "nonBackgroundPixelCount": 30870
+      },
+      {
+        "step": 20,
+        "sha256": "0669d048d3dcc58c6ed4e9d26e0057dad6bf5a42e342608543c7f9dbd6b8328d",
+        "inputSplatCount": 69243,
+        "projectedSplatCount": 58336,
+        "nonBackgroundPixelCount": 30869
+      },
+      {
+        "step": 21,
+        "sha256": "69ef57534b6da66a0c10b659f183f5cd930b6587512a1d6e29adceba70b9040b",
+        "inputSplatCount": 69726,
+        "projectedSplatCount": 58813,
+        "nonBackgroundPixelCount": 30872
+      },
+      {
+        "step": 22,
+        "sha256": "07343bb4f9265fb5cdd19b090fff8a8e787a3b328365e87f877f4450fcde70ed",
+        "inputSplatCount": 70212,
+        "projectedSplatCount": 59293,
+        "nonBackgroundPixelCount": 30870
+      },
+      {
+        "step": 23,
+        "sha256": "39292ae9d84d359d22f5c1a24955f37e5328cfc7c7fdf49727a1531f5bbc5cea",
+        "inputSplatCount": 70702,
+        "projectedSplatCount": 59774,
+        "nonBackgroundPixelCount": 30876
+      },
+      {
+        "step": 24,
+        "sha256": "d42ec0b740a9eaa4f2429ac334537a3b4081bf8b5b6860e7379bece41c19dacb",
+        "inputSplatCount": 71195,
+        "projectedSplatCount": 60262,
+        "nonBackgroundPixelCount": 30883
+      },
+      {
+        "step": 25,
+        "sha256": "f91f1d48cacd3165db2a316c850cccb9f44152194b64eaaff06034d2d9d9b5a7",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60695,
+        "nonBackgroundPixelCount": 30881
+      },
+      {
+        "step": 26,
+        "sha256": "6debacb93572f66aa610ae07c9e453d05a65fdcd90025ed95f0ea29c98a3c445",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60937,
+        "nonBackgroundPixelCount": 30883
+      },
+      {
+        "step": 27,
+        "sha256": "bbfdebc7c15410a40c5e86675b7d50e79c6286dda12c508b47e9c940083ccc9c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61163,
+        "nonBackgroundPixelCount": 30884
+      },
+      {
+        "step": 28,
+        "sha256": "0e07816d571eb4b818fb4a7cc3ef1aa9446ea1797e327c416a767fdc7493cb61",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61396,
+        "nonBackgroundPixelCount": 30883
+      },
+      {
+        "step": 29,
+        "sha256": "7f29bf2dd5ecc4a0939cfd14fa7c2a1ce67ad4761ac6531cc9269863f7b93901",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61648,
+        "nonBackgroundPixelCount": 30887
+      },
+      {
+        "step": 30,
+        "sha256": "33c355c86ee67a313fb5de2634153deea92d2d08a99b2f81e990a755d40a87f9",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 61877,
+        "nonBackgroundPixelCount": 30890
+      },
+      {
+        "step": 31,
+        "sha256": "2a4c80ebd26553d7803e7316f44709f63b160eefa592bd893b577b3306b65eec",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62086,
+        "nonBackgroundPixelCount": 30893
+      },
+      {
+        "step": 32,
+        "sha256": "1e65bcb15db607e1255e0d9b5aed268f0b7652722652e3bab0204994881cf68d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62298,
+        "nonBackgroundPixelCount": 30888
+      },
+      {
+        "step": 33,
+        "sha256": "c5e7a713b960991d65b8b03d8790f0c54df4f5c4da8b4d9669a5cdaf251837c2",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62505,
+        "nonBackgroundPixelCount": 30863
+      },
+      {
+        "step": 34,
+        "sha256": "866d25f21961cd122d8bd70eb82f008d426abf6d87e6ab5c54ffed95211782f7",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62686,
+        "nonBackgroundPixelCount": 30842
+      },
+      {
+        "step": 35,
+        "sha256": "dcf32952fcc0ea9bd2352b9efc7ca2f879a4c62f8a7726f66dc4d024a03f17f7",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 62870,
+        "nonBackgroundPixelCount": 30833
+      },
+      {
+        "step": 36,
+        "sha256": "bba2bdde8d790afbc4c6f9d8af5b538120e49336611fed42e205fdb2b5a6be19",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63022,
+        "nonBackgroundPixelCount": 30822
+      },
+      {
+        "step": 37,
+        "sha256": "5e292c926bf9e6bfea248128a8bf8298f7548185fc37ac80e0d51bf474ac3520",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63174,
+        "nonBackgroundPixelCount": 30815
+      },
+      {
+        "step": 38,
+        "sha256": "72e8bb41fb5520c5c964c863534a1e2be951be8e3357e5f79b9af093d0ee27b6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63316,
+        "nonBackgroundPixelCount": 30818
+      },
+      {
+        "step": 39,
+        "sha256": "3f49cb342376851ed1166b4995233c9d61a8ccc49408b3e63c9baa31e25dbf93",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63452,
+        "nonBackgroundPixelCount": 30831
+      },
+      {
+        "step": 40,
+        "sha256": "7e1d11f33c8cf3e0ce299f37d7cfcbbc3bd76e62ef4744eaa146a855ed1c5438",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63613,
+        "nonBackgroundPixelCount": 30824
+      },
+      {
+        "step": 41,
+        "sha256": "b9fd976fb146c50a73f641ac6da5eb04e0dcbbfffb054f607a3646087a499e2e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63761,
+        "nonBackgroundPixelCount": 30802
+      },
+      {
+        "step": 42,
+        "sha256": "04e199d25d98282c4697c5738bd164393af08406ecb6b57bd5626ef98e1fc964",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 63904,
+        "nonBackgroundPixelCount": 30788
+      },
+      {
+        "step": 43,
+        "sha256": "4460e1c1546528239b1d09362583a1dec9b1e8c9a3f37e9e06e62a643c69d5dd",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64031,
+        "nonBackgroundPixelCount": 30769
+      },
+      {
+        "step": 44,
+        "sha256": "25680c7edf4efc646346dfd959d2fc6761632f3bc9e3275d13c883745a941832",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64131,
+        "nonBackgroundPixelCount": 30708
+      },
+      {
+        "step": 45,
+        "sha256": "a440d52f9a992f39b726e5754705c34226795489752509b9c7d31a3c24258766",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64240,
+        "nonBackgroundPixelCount": 30449
+      },
+      {
+        "step": 46,
+        "sha256": "bccfc6cbcbba3fb2b922d35fdaec1a0d62a75bc40d24d96af328e938d7c29602",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64357,
+        "nonBackgroundPixelCount": 30366
+      },
+      {
+        "step": 47,
+        "sha256": "c2f3e56e7b66ffa502ab6f0d8114a1e57973a8ada9bf856ad855df53bace0ce0",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64437,
+        "nonBackgroundPixelCount": 30297
+      },
+      {
+        "step": 48,
+        "sha256": "6f190f2ec0ba4240c06dbede423c501a47a000df8ed2b544465057e26dd51502",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64540,
+        "nonBackgroundPixelCount": 30419
+      },
+      {
+        "step": 49,
+        "sha256": "e98c1b0166470d21f39161206c910c183796e07ffe54e98001faaa8ab81f5d5d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64632,
+        "nonBackgroundPixelCount": 30478
+      },
+      {
+        "step": 50,
+        "sha256": "d13e048b10931f672b2dbc4352b4c01c106c8473e726d13a5fc8f1adbdc95730",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64743,
+        "nonBackgroundPixelCount": 30451
+      },
+      {
+        "step": 51,
+        "sha256": "0c812ca20da33627bb3fd464bc4c51dfcda4f95c1cd5166e55dd02db84403106",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64815,
+        "nonBackgroundPixelCount": 30586
+      },
+      {
+        "step": 52,
+        "sha256": "e788b69e31937cbbcba789f8ab0006e51b5aeec74d4b9c88792bce11b025669f",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64875,
+        "nonBackgroundPixelCount": 30750
+      },
+      {
+        "step": 53,
+        "sha256": "fa33b8f11943dbf3884558bf9736e362f31be3546bf629f04c5cd0da32f5e2e6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 64961,
+        "nonBackgroundPixelCount": 30888
+      },
+      {
+        "step": 54,
+        "sha256": "de6e1b3c446936dee7aeece85f88dd237f268ec3ed4ecc50fce674f88da3e9d1",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65032,
+        "nonBackgroundPixelCount": 30998
+      },
+      {
+        "step": 55,
+        "sha256": "0366f34c5cbda8481cbf9e6ce6b71c0e66d11e14a04cd40aa0ae9bad11d8e16e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65094,
+        "nonBackgroundPixelCount": 30926
+      },
+      {
+        "step": 56,
+        "sha256": "ee0b1c0876c293f178049e7f32060b913656edcd862000f1e91fe1e0cab93468",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65162,
+        "nonBackgroundPixelCount": 31080
+      },
+      {
+        "step": 57,
+        "sha256": "5645cb3feffcfe42f8dd339ecaabd4b8da9879a623abad6864d53bc487efa961",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65221,
+        "nonBackgroundPixelCount": 31226
+      },
+      {
+        "step": 58,
+        "sha256": "ca35eb9c10a203367407169fbea44ccf63e77d3bb4b75f5d2ca27710e909d88c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65285,
+        "nonBackgroundPixelCount": 31347
+      },
+      {
+        "step": 59,
+        "sha256": "93a020f88001e1ebc09d45aad82822c75cda77ec46eb0dec2359f238620effec",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65335,
+        "nonBackgroundPixelCount": 31469
+      },
+      {
+        "step": 60,
+        "sha256": "145e51082665338d482dc628b115aac8a93a35721d066c251784a65e10f6f541",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65372,
+        "nonBackgroundPixelCount": 31635
+      },
+      {
+        "step": 61,
+        "sha256": "a61afb068a027e3fa88c8a91a18b6b165cb94fab802382212d5c124ac50dd77f",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65426,
+        "nonBackgroundPixelCount": 31618
+      },
+      {
+        "step": 62,
+        "sha256": "03a76e28184c8e042e2a46a18d536961355b94ffe3eaeaedb5935a23ab5ce858",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65497,
+        "nonBackgroundPixelCount": 31753
+      },
+      {
+        "step": 63,
+        "sha256": "5350cbabe7e5d68a220c66b5c2736735b50abe8f0d198681c7753c39fc9ca872",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 65542,
+        "nonBackgroundPixelCount": 31722
+      }
+    ]
+  },
+  "frozenControlEvidence": [
+    {
+      "step": 1,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 2,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 3,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 4,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 5,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 6,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 7,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 8,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 9,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 10,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 11,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 12,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 13,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 14,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 15,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 16,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 17,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 18,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 19,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 20,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 21,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 22,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 23,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 24,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 25,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 26,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 27,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 28,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 29,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 30,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 31,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 32,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 33,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 34,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 35,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 36,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 37,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 38,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 39,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 40,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 41,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 42,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 43,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 44,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 45,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 46,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 47,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 48,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 49,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 50,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 51,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 52,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 53,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 54,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 55,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 56,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 57,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 58,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 59,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 60,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 61,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 62,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    },
+    {
+      "step": 63,
+      "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7",
+      "inputSplatCount": 60259,
+      "projectedSplatCount": 50584,
+      "nonBackgroundPixelCount": 55380
+    }
+  ],
+  "frozenControlIdentity": {
+    "authority": "pixel-identical-frozen-control-v0",
+    "frameCount": 63,
+    "uniqueFrameCount": 1,
+    "sha256": "833de4129da9e252feb2f97deaa54b22e002bf55b111222ce884fd9c392fa3d7"
+  },
+  "selectionAccounting": {
+    "candidateSupport": [
+      {
+        "step": 1,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 60679,
+        "budget": 60679,
+        "selectedCount": 60679,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 2,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 61102,
+        "budget": 61102,
+        "selectedCount": 61102,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 3,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 61528,
+        "budget": 61528,
+        "selectedCount": 61528,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 4,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 61957,
+        "budget": 61957,
+        "selectedCount": 61957,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 5,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 62389,
+        "budget": 62389,
+        "selectedCount": 62389,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 6,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 62824,
+        "budget": 62824,
+        "selectedCount": 62824,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 7,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 63262,
+        "budget": 63262,
+        "selectedCount": 63262,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 8,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 63703,
+        "budget": 63703,
+        "selectedCount": 63703,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 9,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 64147,
+        "budget": 64147,
+        "selectedCount": 64147,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 10,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 64594,
+        "budget": 64594,
+        "selectedCount": 64594,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 11,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 65044,
+        "budget": 65044,
+        "selectedCount": 65044,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 12,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 65498,
+        "budget": 65498,
+        "selectedCount": 65498,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 13,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 65955,
+        "budget": 65955,
+        "selectedCount": 65955,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 14,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 66415,
+        "budget": 66415,
+        "selectedCount": 66415,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 15,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 66878,
+        "budget": 66878,
+        "selectedCount": 66878,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 16,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 67344,
+        "budget": 67344,
+        "selectedCount": 67344,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 17,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 67814,
+        "budget": 67814,
+        "selectedCount": 67814,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 18,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 68287,
+        "budget": 68287,
+        "selectedCount": 68287,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 19,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 68763,
+        "budget": 68763,
+        "selectedCount": 68763,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 20,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 69243,
+        "budget": 69243,
+        "selectedCount": 69243,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 21,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 69726,
+        "budget": 69726,
+        "selectedCount": 69726,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 22,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 70212,
+        "budget": 70212,
+        "selectedCount": 70212,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 23,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 70702,
+        "budget": 70702,
+        "selectedCount": 70702,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 24,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 71195,
+        "budget": 71195,
+        "selectedCount": 71195,
+        "droppedCount": 0,
+        "scoreMinimum": 0.0032787183299660683,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 25,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 71692,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 104,
+        "scoreMinimum": 0.010164127685129642,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 26,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 72192,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 604,
+        "scoreMinimum": 0.02001572772860527,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 27,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 72695,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 1107,
+        "scoreMinimum": 0.02973325364291668,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 28,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 73202,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 1614,
+        "scoreMinimum": 0.041002433747053146,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 29,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 73713,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 2125,
+        "scoreMinimum": 0.05655068904161453,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 30,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 74227,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 2639,
+        "scoreMinimum": 0.0724431574344635,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 31,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 74745,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 3157,
+        "scoreMinimum": 0.08820431679487228,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 32,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 75266,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 3678,
+        "scoreMinimum": 0.10128944367170334,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 33,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 75791,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 4203,
+        "scoreMinimum": 0.11584069579839706,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 34,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 76320,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 4732,
+        "scoreMinimum": 0.1284620761871338,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 35,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 76852,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 5264,
+        "scoreMinimum": 0.14129585027694702,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 36,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 77388,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 5800,
+        "scoreMinimum": 0.1526467353105545,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 37,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 77928,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 6340,
+        "scoreMinimum": 0.16550849378108978,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 38,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 78471,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 6883,
+        "scoreMinimum": 0.17654801905155182,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 39,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 79018,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 7430,
+        "scoreMinimum": 0.18693047761917114,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 40,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 79569,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 7981,
+        "scoreMinimum": 0.19826707243919373,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 41,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 80124,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 8536,
+        "scoreMinimum": 0.20787782967090607,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 42,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 80683,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 9095,
+        "scoreMinimum": 0.21962301433086395,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 43,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 81246,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 9658,
+        "scoreMinimum": 0.22855393588542938,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 44,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 81813,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 10225,
+        "scoreMinimum": 0.2407812476158142,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 45,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 82384,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 10796,
+        "scoreMinimum": 0.25008365511894226,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 46,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 82959,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 11371,
+        "scoreMinimum": 0.25008365511894226,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 47,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 83538,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 11950,
+        "scoreMinimum": 0.25008365511894226,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 48,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 84121,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 12533,
+        "scoreMinimum": 0.25008365511894226,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 49,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 84708,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 13120,
+        "scoreMinimum": 0.25008365511894226,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 50,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 85299,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 13711,
+        "scoreMinimum": 0.26153749227523804,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 51,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 85894,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 14306,
+        "scoreMinimum": 0.26874691247940063,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 52,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 86493,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 14905,
+        "scoreMinimum": 0.26874691247940063,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 53,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 87096,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 15508,
+        "scoreMinimum": 0.26874691247940063,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 54,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 87703,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 16115,
+        "scoreMinimum": 0.26874691247940063,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 55,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 88315,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 16727,
+        "scoreMinimum": 0.270222544670105,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 56,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 88931,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 17343,
+        "scoreMinimum": 0.28171855211257935,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 57,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 89551,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 17963,
+        "scoreMinimum": 0.28171855211257935,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 58,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 90176,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 18588,
+        "scoreMinimum": 0.2946420907974243,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 59,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 90805,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 19217,
+        "scoreMinimum": 0.306477427482605,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 60,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 91438,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 19850,
+        "scoreMinimum": 0.3156666159629822,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 61,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 92076,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 20488,
+        "scoreMinimum": 0.32817894220352173,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 62,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 92718,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 21130,
+        "scoreMinimum": 0.3356763422489166,
+        "scoreMaximum": 1
+      },
+      {
+        "step": 63,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "candidateSupport",
+        "inputCount": 93365,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 21777,
+        "scoreMinimum": 0.3463563024997711,
+        "scoreMaximum": 1
+      }
+    ],
+    "physicalSupport": [
+      {
+        "step": 1,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 60679,
+        "budget": 60679,
+        "selectedCount": 60679,
+        "droppedCount": 0,
+        "scoreMinimum": 0.004526868462562561,
+        "scoreMaximum": 1.1835426092147827
+      },
+      {
+        "step": 2,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 61102,
+        "budget": 61102,
+        "selectedCount": 61102,
+        "droppedCount": 0,
+        "scoreMinimum": -0.026959214359521866,
+        "scoreMaximum": 1.2294800281524658
+      },
+      {
+        "step": 3,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 61528,
+        "budget": 61528,
+        "selectedCount": 61528,
+        "droppedCount": 0,
+        "scoreMinimum": -0.03565778583288193,
+        "scoreMaximum": 1.3071351051330566
+      },
+      {
+        "step": 4,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 61957,
+        "budget": 61957,
+        "selectedCount": 61957,
+        "droppedCount": 0,
+        "scoreMinimum": -0.012247273698449135,
+        "scoreMaximum": 1.294796109199524
+      },
+      {
+        "step": 5,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 62389,
+        "budget": 62389,
+        "selectedCount": 62389,
+        "droppedCount": 0,
+        "scoreMinimum": -0.02701735869050026,
+        "scoreMaximum": 1.3275994062423706
+      },
+      {
+        "step": 6,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 62824,
+        "budget": 62824,
+        "selectedCount": 62824,
+        "droppedCount": 0,
+        "scoreMinimum": -0.006852537393569946,
+        "scoreMaximum": 1.3277250528335571
+      },
+      {
+        "step": 7,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 63262,
+        "budget": 63262,
+        "selectedCount": 63262,
+        "droppedCount": 0,
+        "scoreMinimum": -0.02340124361217022,
+        "scoreMaximum": 1.3684884309768677
+      },
+      {
+        "step": 8,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 63703,
+        "budget": 63703,
+        "selectedCount": 63703,
+        "droppedCount": 0,
+        "scoreMinimum": -0.0319804809987545,
+        "scoreMaximum": 1.3819115161895752
+      },
+      {
+        "step": 9,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 64147,
+        "budget": 64147,
+        "selectedCount": 64147,
+        "droppedCount": 0,
+        "scoreMinimum": -0.03768336400389671,
+        "scoreMaximum": 1.438170075416565
+      },
+      {
+        "step": 10,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 64594,
+        "budget": 64594,
+        "selectedCount": 64594,
+        "droppedCount": 0,
+        "scoreMinimum": -0.04259391874074936,
+        "scoreMaximum": 1.4805870056152344
+      },
+      {
+        "step": 11,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 65044,
+        "budget": 65044,
+        "selectedCount": 65044,
+        "droppedCount": 0,
+        "scoreMinimum": -0.047385502606630325,
+        "scoreMaximum": 1.495543360710144
+      },
+      {
+        "step": 12,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 65498,
+        "budget": 65498,
+        "selectedCount": 65498,
+        "droppedCount": 0,
+        "scoreMinimum": -0.05320647731423378,
+        "scoreMaximum": 1.436278223991394
+      },
+      {
+        "step": 13,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 65955,
+        "budget": 65955,
+        "selectedCount": 65955,
+        "droppedCount": 0,
+        "scoreMinimum": -0.059904150664806366,
+        "scoreMaximum": 1.4523406028747559
+      },
+      {
+        "step": 14,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 66415,
+        "budget": 66415,
+        "selectedCount": 66415,
+        "droppedCount": 0,
+        "scoreMinimum": -0.06704335659742355,
+        "scoreMaximum": 1.4665595293045044
+      },
+      {
+        "step": 15,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 66878,
+        "budget": 66878,
+        "selectedCount": 66878,
+        "droppedCount": 0,
+        "scoreMinimum": -0.07446332275867462,
+        "scoreMaximum": 1.4791237115859985
+      },
+      {
+        "step": 16,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 67344,
+        "budget": 67344,
+        "selectedCount": 67344,
+        "droppedCount": 0,
+        "scoreMinimum": -0.08206632733345032,
+        "scoreMaximum": 1.490733027458191
+      },
+      {
+        "step": 17,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 67814,
+        "budget": 67814,
+        "selectedCount": 67814,
+        "droppedCount": 0,
+        "scoreMinimum": -0.08978380262851715,
+        "scoreMaximum": 1.5009664297103882
+      },
+      {
+        "step": 18,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 68287,
+        "budget": 68287,
+        "selectedCount": 68287,
+        "droppedCount": 0,
+        "scoreMinimum": -0.09755019843578339,
+        "scoreMaximum": 1.509796380996704
+      },
+      {
+        "step": 19,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 68763,
+        "budget": 68763,
+        "selectedCount": 68763,
+        "droppedCount": 0,
+        "scoreMinimum": -0.10473360121250153,
+        "scoreMaximum": 1.5231761932373047
+      },
+      {
+        "step": 20,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 69243,
+        "budget": 69243,
+        "selectedCount": 69243,
+        "droppedCount": 0,
+        "scoreMinimum": -0.11158564686775208,
+        "scoreMaximum": 1.5385054349899292
+      },
+      {
+        "step": 21,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 69726,
+        "budget": 69726,
+        "selectedCount": 69726,
+        "droppedCount": 0,
+        "scoreMinimum": -0.11807414144277573,
+        "scoreMaximum": 1.5521687269210815
+      },
+      {
+        "step": 22,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 70212,
+        "budget": 70212,
+        "selectedCount": 70212,
+        "droppedCount": 0,
+        "scoreMinimum": -0.12422755360603333,
+        "scoreMaximum": 1.5642213821411133
+      },
+      {
+        "step": 23,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 70702,
+        "budget": 70702,
+        "selectedCount": 70702,
+        "droppedCount": 0,
+        "scoreMinimum": -0.1301090121269226,
+        "scoreMaximum": 1.5749974250793457
+      },
+      {
+        "step": 24,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 71195,
+        "budget": 71195,
+        "selectedCount": 71195,
+        "droppedCount": 0,
+        "scoreMinimum": -0.13576994836330414,
+        "scoreMaximum": 1.5847015380859375
+      },
+      {
+        "step": 25,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 71692,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 104,
+        "scoreMinimum": 0.1854339987039566,
+        "scoreMaximum": 1.5933984518051147
+      },
+      {
+        "step": 26,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 72192,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 604,
+        "scoreMinimum": 0.2886642813682556,
+        "scoreMaximum": 1.6012042760849
+      },
+      {
+        "step": 27,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 72695,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 1107,
+        "scoreMinimum": 0.3365723490715027,
+        "scoreMaximum": 1.6082289218902588
+      },
+      {
+        "step": 28,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 73202,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 1614,
+        "scoreMinimum": 0.3745898902416229,
+        "scoreMaximum": 1.6145656108856201
+      },
+      {
+        "step": 29,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 73713,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 2125,
+        "scoreMinimum": 0.41049426794052124,
+        "scoreMaximum": 1.6202956438064575
+      },
+      {
+        "step": 30,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 74227,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 2639,
+        "scoreMinimum": 0.4409514367580414,
+        "scoreMaximum": 1.6254897117614746
+      },
+      {
+        "step": 31,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 74745,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 3157,
+        "scoreMinimum": 0.4660903811454773,
+        "scoreMaximum": 1.6302101612091064
+      },
+      {
+        "step": 32,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 75266,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 3678,
+        "scoreMinimum": 0.4871401786804199,
+        "scoreMaximum": 1.6345115900039673
+      },
+      {
+        "step": 33,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 75791,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 4203,
+        "scoreMinimum": 0.5060036778450012,
+        "scoreMaximum": 1.6384425163269043
+      },
+      {
+        "step": 34,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 76320,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 4732,
+        "scoreMinimum": 0.5229697227478027,
+        "scoreMaximum": 1.642045497894287
+      },
+      {
+        "step": 35,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 76852,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 5264,
+        "scoreMinimum": 0.5380481481552124,
+        "scoreMaximum": 1.6453585624694824
+      },
+      {
+        "step": 36,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 77388,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 5800,
+        "scoreMinimum": 0.5534418225288391,
+        "scoreMaximum": 1.6484148502349854
+      },
+      {
+        "step": 37,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 77928,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 6340,
+        "scoreMinimum": 0.5667654871940613,
+        "scoreMaximum": 1.7473468780517578
+      },
+      {
+        "step": 38,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 78471,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 6883,
+        "scoreMinimum": 0.5783485770225525,
+        "scoreMaximum": 1.6538732051849365
+      },
+      {
+        "step": 39,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 79018,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 7430,
+        "scoreMinimum": 0.5891544818878174,
+        "scoreMaximum": 1.6563242673873901
+      },
+      {
+        "step": 40,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 79569,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 7981,
+        "scoreMinimum": 0.5990232825279236,
+        "scoreMaximum": 1.658618450164795
+      },
+      {
+        "step": 41,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 80124,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 8536,
+        "scoreMinimum": 0.6085427403450012,
+        "scoreMaximum": 1.660773754119873
+      },
+      {
+        "step": 42,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 80683,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 9095,
+        "scoreMinimum": 0.6175748705863953,
+        "scoreMaximum": 1.662806510925293
+      },
+      {
+        "step": 43,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 81246,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 9658,
+        "scoreMinimum": 0.6259627938270569,
+        "scoreMaximum": 1.6647307872772217
+      },
+      {
+        "step": 44,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 81813,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 10225,
+        "scoreMinimum": 0.6343222856521606,
+        "scoreMaximum": 1.6665593385696411
+      },
+      {
+        "step": 45,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 82384,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 10796,
+        "scoreMinimum": 0.6416804790496826,
+        "scoreMaximum": 1.668303370475769
+      },
+      {
+        "step": 46,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 82959,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 11371,
+        "scoreMinimum": 0.6492867469787598,
+        "scoreMaximum": 1.6699727773666382
+      },
+      {
+        "step": 47,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 83538,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 11950,
+        "scoreMinimum": 0.6563442945480347,
+        "scoreMaximum": 1.6715762615203857
+      },
+      {
+        "step": 48,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 84121,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 12533,
+        "scoreMinimum": 0.6623884439468384,
+        "scoreMaximum": 1.6731215715408325
+      },
+      {
+        "step": 49,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 84708,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 13120,
+        "scoreMinimum": 0.6690524816513062,
+        "scoreMaximum": 1.6747324466705322
+      },
+      {
+        "step": 50,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 85299,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 13711,
+        "scoreMinimum": 0.6755276322364807,
+        "scoreMaximum": 1.6763962507247925
+      },
+      {
+        "step": 51,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 85894,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 14306,
+        "scoreMinimum": 0.6818606853485107,
+        "scoreMaximum": 1.678110122680664
+      },
+      {
+        "step": 52,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 86493,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 14905,
+        "scoreMinimum": 0.687322735786438,
+        "scoreMaximum": 1.6835298538208008
+      },
+      {
+        "step": 53,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 87096,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 15508,
+        "scoreMinimum": 0.6926673054695129,
+        "scoreMaximum": 1.7812973260879517
+      },
+      {
+        "step": 54,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 87703,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 16115,
+        "scoreMinimum": 0.6973842978477478,
+        "scoreMaximum": 1.7651562690734863
+      },
+      {
+        "step": 55,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 88315,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 16727,
+        "scoreMinimum": 0.7018784880638123,
+        "scoreMaximum": 1.7105339765548706
+      },
+      {
+        "step": 56,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 88931,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 17343,
+        "scoreMinimum": 0.7052915096282959,
+        "scoreMaximum": 1.733612298965454
+      },
+      {
+        "step": 57,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 89551,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 17963,
+        "scoreMinimum": 0.7089036703109741,
+        "scoreMaximum": 1.7537480592727661
+      },
+      {
+        "step": 58,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 90176,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 18588,
+        "scoreMinimum": 0.712449848651886,
+        "scoreMaximum": 1.7721233367919922
+      },
+      {
+        "step": 59,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 90805,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 19217,
+        "scoreMinimum": 0.715804934501648,
+        "scoreMaximum": 1.7857478857040405
+      },
+      {
+        "step": 60,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 91438,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 19850,
+        "scoreMinimum": 0.7192164063453674,
+        "scoreMaximum": 1.7958030700683594
+      },
+      {
+        "step": 61,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 92076,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 20488,
+        "scoreMinimum": 0.7226502299308777,
+        "scoreMaximum": 1.803074598312378
+      },
+      {
+        "step": 62,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 92718,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 21130,
+        "scoreMinimum": 0.7251341938972473,
+        "scoreMaximum": 1.8082387447357178
+      },
+      {
+        "step": 63,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "physicalSupport",
+        "inputCount": 93365,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 21777,
+        "scoreMinimum": 0.7277670502662659,
+        "scoreMaximum": 1.8118846416473389
+      }
+    ],
+    "visibleEnergy": [
+      {
+        "step": 1,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 60679,
+        "budget": 60679,
+        "selectedCount": 60679,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.029333786290515456
+      },
+      {
+        "step": 2,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 61102,
+        "budget": 61102,
+        "selectedCount": 61102,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.035454141530475713
+      },
+      {
+        "step": 3,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 61528,
+        "budget": 61528,
+        "selectedCount": 61528,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03812916695990149
+      },
+      {
+        "step": 4,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 61957,
+        "budget": 61957,
+        "selectedCount": 61957,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.04177632636734472
+      },
+      {
+        "step": 5,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 62389,
+        "budget": 62389,
+        "selectedCount": 62389,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.042116605758125904
+      },
+      {
+        "step": 6,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 62824,
+        "budget": 62824,
+        "selectedCount": 62824,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03619721110028811
+      },
+      {
+        "step": 7,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 63262,
+        "budget": 63262,
+        "selectedCount": 63262,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03531803033586094
+      },
+      {
+        "step": 8,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 63703,
+        "budget": 63703,
+        "selectedCount": 63703,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03497874330309823
+      },
+      {
+        "step": 9,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 64147,
+        "budget": 64147,
+        "selectedCount": 64147,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03471117002833306
+      },
+      {
+        "step": 10,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 64594,
+        "budget": 64594,
+        "selectedCount": 64594,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03452265356898374
+      },
+      {
+        "step": 11,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 65044,
+        "budget": 65044,
+        "selectedCount": 65044,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.034377755483187486
+      },
+      {
+        "step": 12,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 65498,
+        "budget": 65498,
+        "selectedCount": 65498,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.034264030037547744
+      },
+      {
+        "step": 13,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 65955,
+        "budget": 65955,
+        "selectedCount": 65955,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.0341719296683128
+      },
+      {
+        "step": 14,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 66415,
+        "budget": 66415,
+        "selectedCount": 66415,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03409470348518361
+      },
+      {
+        "step": 15,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 66878,
+        "budget": 66878,
+        "selectedCount": 66878,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.0340283240840544
+      },
+      {
+        "step": 16,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 67344,
+        "budget": 67344,
+        "selectedCount": 67344,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03396744133489548
+      },
+      {
+        "step": 17,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 67814,
+        "budget": 67814,
+        "selectedCount": 67814,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03391187895259661
+      },
+      {
+        "step": 18,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 68287,
+        "budget": 68287,
+        "selectedCount": 68287,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03386014031283457
+      },
+      {
+        "step": 19,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 68763,
+        "budget": 68763,
+        "selectedCount": 68763,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03381105535749909
+      },
+      {
+        "step": 20,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 69243,
+        "budget": 69243,
+        "selectedCount": 69243,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03376389673437859
+      },
+      {
+        "step": 21,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 69726,
+        "budget": 69726,
+        "selectedCount": 69726,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03371814461821109
+      },
+      {
+        "step": 22,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 70212,
+        "budget": 70212,
+        "selectedCount": 70212,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03367347426871419
+      },
+      {
+        "step": 23,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 70702,
+        "budget": 70702,
+        "selectedCount": 70702,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03362962532267151
+      },
+      {
+        "step": 24,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 71195,
+        "budget": 71195,
+        "selectedCount": 71195,
+        "droppedCount": 0,
+        "scoreMinimum": 0,
+        "scoreMaximum": 0.03358644430849677
+      },
+      {
+        "step": 25,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 71692,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 104,
+        "scoreMinimum": 0.00021113222146952184,
+        "scoreMaximum": 0.03354380645391762
+      },
+      {
+        "step": 26,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 72192,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 604,
+        "scoreMinimum": 0.0005973462494512679,
+        "scoreMaximum": 0.03350161959571704
+      },
+      {
+        "step": 27,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 72695,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 1107,
+        "scoreMinimum": 0.0007512407287880855,
+        "scoreMaximum": 0.03345982395036087
+      },
+      {
+        "step": 28,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 73202,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 1614,
+        "scoreMinimum": 0.0008965884564313922,
+        "scoreMaximum": 0.03341836763974145
+      },
+      {
+        "step": 29,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 73713,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 2125,
+        "scoreMinimum": 0.0010249441793756052,
+        "scoreMaximum": 0.03337721737757516
+      },
+      {
+        "step": 30,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 74227,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 2639,
+        "scoreMinimum": 0.001179336031770843,
+        "scoreMaximum": 0.03333634728861048
+      },
+      {
+        "step": 31,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 74745,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 3157,
+        "scoreMinimum": 0.0013262869846915586,
+        "scoreMaximum": 0.03329399174623984
+      },
+      {
+        "step": 32,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 75266,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 3678,
+        "scoreMinimum": 0.0014908357246868906,
+        "scoreMaximum": 0.03324664691213853
+      },
+      {
+        "step": 33,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 75791,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 4203,
+        "scoreMinimum": 0.0016383074778439325,
+        "scoreMaximum": 0.03319404361228237
+      },
+      {
+        "step": 34,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 76320,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 4732,
+        "scoreMinimum": 0.0017751821929609924,
+        "scoreMaximum": 0.0331383123574184
+      },
+      {
+        "step": 35,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 76852,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 5264,
+        "scoreMinimum": 0.0019114288629489106,
+        "scoreMaximum": 0.0330810299405377
+      },
+      {
+        "step": 36,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 77388,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 5800,
+        "scoreMinimum": 0.0020458534228763644,
+        "scoreMaximum": 0.0330230602385999
+      },
+      {
+        "step": 37,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 77928,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 6340,
+        "scoreMinimum": 0.0021859148823983364,
+        "scoreMaximum": 0.03296483914766697
+      },
+      {
+        "step": 38,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 78471,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 6883,
+        "scoreMinimum": 0.002314864946433894,
+        "scoreMaximum": 0.032906594503293606
+      },
+      {
+        "step": 39,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 79018,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 7430,
+        "scoreMinimum": 0.0024540765602721446,
+        "scoreMaximum": 0.03683150616154963
+      },
+      {
+        "step": 40,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 79569,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 7981,
+        "scoreMinimum": 0.0025858352800518392,
+        "scoreMaximum": 0.03685468489847954
+      },
+      {
+        "step": 41,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 80124,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 8536,
+        "scoreMinimum": 0.0027244374577499696,
+        "scoreMaximum": 0.03742964242492845
+      },
+      {
+        "step": 42,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 80683,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 9095,
+        "scoreMinimum": 0.002863790765918824,
+        "scoreMaximum": 0.033352456893138614
+      },
+      {
+        "step": 43,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 81246,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 9658,
+        "scoreMinimum": 0.002998605551507674,
+        "scoreMaximum": 0.033928744644005505
+      },
+      {
+        "step": 44,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 81813,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 10225,
+        "scoreMinimum": 0.0031430302390189663,
+        "scoreMaximum": 0.033641034637220214
+      },
+      {
+        "step": 45,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 82384,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 10796,
+        "scoreMinimum": 0.0032739094418902295,
+        "scoreMaximum": 0.03368669021985447
+      },
+      {
+        "step": 46,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 82959,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 11371,
+        "scoreMinimum": 0.0034074801144084975,
+        "scoreMaximum": 0.03440097190374686
+      },
+      {
+        "step": 47,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 83538,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 11950,
+        "scoreMinimum": 0.003544439860005498,
+        "scoreMaximum": 0.03463592040920843
+      },
+      {
+        "step": 48,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 84121,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 12533,
+        "scoreMinimum": 0.0036738416932142123,
+        "scoreMaximum": 0.03472832945863017
+      },
+      {
+        "step": 49,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 84708,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 13120,
+        "scoreMinimum": 0.00381003030683299,
+        "scoreMaximum": 0.032457143258299195
+      },
+      {
+        "step": 50,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 85299,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 13711,
+        "scoreMinimum": 0.003942360353070838,
+        "scoreMaximum": 0.032475569907278984
+      },
+      {
+        "step": 51,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 85894,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 14306,
+        "scoreMinimum": 0.004054708931203877,
+        "scoreMaximum": 0.03249395373847234
+      },
+      {
+        "step": 52,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 86493,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 14905,
+        "scoreMinimum": 0.004171838208194926,
+        "scoreMaximum": 0.032512519038439304
+      },
+      {
+        "step": 53,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 87096,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 15508,
+        "scoreMinimum": 0.004286275523072854,
+        "scoreMaximum": 0.03884557769895148
+      },
+      {
+        "step": 54,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 87703,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 16115,
+        "scoreMinimum": 0.004393354971604275,
+        "scoreMaximum": 0.032931578698216515
+      },
+      {
+        "step": 55,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 88315,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 16727,
+        "scoreMinimum": 0.0044942443952691764,
+        "scoreMaximum": 0.034160463738075623
+      },
+      {
+        "step": 56,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 88931,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 17343,
+        "scoreMinimum": 0.004599072223462826,
+        "scoreMaximum": 0.03438823008991427
+      },
+      {
+        "step": 57,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 89551,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 17963,
+        "scoreMinimum": 0.0046958965396467905,
+        "scoreMaximum": 0.0340939407522518
+      },
+      {
+        "step": 58,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 90176,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 18588,
+        "scoreMinimum": 0.004787986960310367,
+        "scoreMaximum": 0.03399093141929151
+      },
+      {
+        "step": 59,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 90805,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 19217,
+        "scoreMinimum": 0.004876902400729407,
+        "scoreMaximum": 0.03403883588737139
+      },
+      {
+        "step": 60,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 91438,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 19850,
+        "scoreMinimum": 0.004974122522481619,
+        "scoreMaximum": 0.03399184855244223
+      },
+      {
+        "step": 61,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 92076,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 20488,
+        "scoreMinimum": 0.005064443324434689,
+        "scoreMaximum": 0.033308424874975665
+      },
+      {
+        "step": 62,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 92718,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 21130,
+        "scoreMinimum": 0.005160748990858552,
+        "scoreMaximum": 0.033643775245000784
+      },
+      {
+        "step": 63,
+        "ceilingBudget": 71588,
+        "authority": "deterministic-state-local-support-envelope-selection-v0",
+        "selector": "visibleEnergy",
+        "inputCount": 93365,
+        "budget": 71588,
+        "selectedCount": 71588,
+        "droppedCount": 21777,
+        "scoreMinimum": 0.005249730836945822,
+        "scoreMaximum": 0.033706043527433324
+      }
+    ]
+  },
+  "artifact": {
+    "path": "/private/tmp/kaminos-phase-support-envelope-r1-0715/phase-support-envelope.mp4",
+    "bytes": 763557,
+    "sha256": "49ed05e80dd0832ad382de96d9c6465cec4cc888f8e8e5fb6fce725f4b217bea",
+    "probe": {
+      "width": 1920,
+      "height": 240,
+      "fps": 6.25,
+      "frameCount": 63,
+      "duration": 10.08
+    },
+    "command": [
+      "/opt/homebrew/bin/ffmpeg",
+      "-y",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/reference/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/frozen/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/prediction/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/candidateSupport/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/physicalSupport/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-support-envelope-r1-0715/frames/visibleEnergy/frame-%03d.png",
+      "-filter_complex",
+      "[0:v][1:v][2:v][3:v][4:v][5:v]hstack=inputs=6[out]",
+      "-map",
+      "[out]",
+      "-frames:v",
+      "63",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "slow",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      "/private/tmp/kaminos-phase-support-envelope-r1-0715/phase-support-envelope.mp4"
+    ]
+  },
+  "metrics": {
+    "authority": "same-raster-full-frame-error-v0",
+    "lateWindow": {
+      "firstStep": 49,
+      "lastStep": 63
+    },
+    "roles": {
+      "frozen": {
+        "allMse": 1582.545334959215,
+        "lateMse": 1786.4462569444443,
+        "terminalMse": 1552.5731597222223,
+        "allSaturatedPixelFraction": 0.08052083333333326,
+        "lateSaturatedPixelFraction": 0.08052083333333335,
+        "terminalSaturatedPixelFraction": 0.08052083333333333,
+        "allWhitePixelFraction": 0.0032161458333333304,
+        "lateWhitePixelFraction": 0.0032161458333333347,
+        "terminalWhitePixelFraction": 0.0032161458333333334,
+        "lateMseDeltaFromPrediction": -2828.5953174189817,
+        "lateWhitePixelFractionDeltaFromPrediction": -0.09728125
+      },
+      "prediction": {
+        "allMse": 3175.114172522597,
+        "lateMse": 4615.041574363426,
+        "terminalMse": 4514.675282118055,
+        "allSaturatedPixelFraction": 0.17323888062169315,
+        "lateSaturatedPixelFraction": 0.21833506944444445,
+        "terminalSaturatedPixelFraction": 0.2305078125,
+        "allWhitePixelFraction": 0.059536003637566136,
+        "lateWhitePixelFraction": 0.10049739583333334,
+        "terminalWhitePixelFraction": 0.10936197916666666,
+        "lateMseDeltaFromPrediction": 0,
+        "lateWhitePixelFractionDeltaFromPrediction": 0
+      },
+      "candidateSupport": {
+        "allMse": 3082.2466056272046,
+        "lateMse": 4318.087217013888,
+        "terminalMse": 4143.520737847222,
+        "allSaturatedPixelFraction": 0.16594556051587306,
+        "lateSaturatedPixelFraction": 0.19704774305555559,
+        "terminalSaturatedPixelFraction": 0.2008203125,
+        "allWhitePixelFraction": 0.05335606812169312,
+        "lateWhitePixelFraction": 0.08030121527777778,
+        "terminalWhitePixelFraction": 0.07778645833333334,
+        "lateMseDeltaFromPrediction": -296.95435734953753,
+        "lateWhitePixelFractionDeltaFromPrediction": -0.020196180555555554
+      },
+      "physicalSupport": {
+        "allMse": 3028.6575176366837,
+        "lateMse": 4088.2654597800924,
+        "terminalMse": 3649.2672309027776,
+        "allSaturatedPixelFraction": 0.1657440476190477,
+        "lateSaturatedPixelFraction": 0.19461979166666668,
+        "terminalSaturatedPixelFraction": 0.19783854166666667,
+        "allWhitePixelFraction": 0.05491174768518518,
+        "lateWhitePixelFraction": 0.08656336805555556,
+        "terminalWhitePixelFraction": 0.090234375,
+        "lateMseDeltaFromPrediction": -526.7761145833333,
+        "lateWhitePixelFractionDeltaFromPrediction": -0.013934027777777774
+      },
+      "visibleEnergy": {
+        "allMse": 3103.623067198523,
+        "lateMse": 4356.495274594909,
+        "terminalMse": 4074.281740451389,
+        "allSaturatedPixelFraction": 0.16747747189153428,
+        "lateSaturatedPixelFraction": 0.1990598958333333,
+        "terminalSaturatedPixelFraction": 0.201328125,
+        "allWhitePixelFraction": 0.05626818783068783,
+        "lateWhitePixelFraction": 0.08981336805555556,
+        "terminalWhitePixelFraction": 0.09407552083333333,
+        "lateMseDeltaFromPrediction": -258.5462997685172,
+        "lateWhitePixelFractionDeltaFromPrediction": -0.010684027777777771
+      }
+    }
+  },
+  "claimBoundary": "This is a zero-training post-composition falsifier over already-generated recurrent states. It tests whether count-bounded state-local selection can remove the visible sheet, but it does not regenerate recurrence, establish future occupancy stability, prove analytical-raymarch agreement, or authorize runtime composition."
+}
