@@ -144,6 +144,11 @@ try {
       && Number(state?.nativeLowSupportTileProfile?.activeTileCount) >= 0
       && Number(state?.nativeLowSupportTileProfile?.projectedSupportFrontCellCount) >= 0
       && Number(state?.nativeLowSupportTileProfile?.tileProfileReadbackMs) >= 0
+      && state?.nativeLowSourceTileCandidate?.identity === 'native-low-source-proximal-tile-candidate-v0'
+      && Number(state?.nativeLowSourceTileCandidate?.candidateTileCount) >= 0
+      && Number(state?.nativeLowSourceTileCandidate?.projectedCandidateCellCount) >= 0
+      && Number(state?.nativeLowSourceTileCandidate?.supportMissRate) >= 0
+      && state?.nativeLowSourceTileCandidate?.hiddenSupportCap === false
       && state?.nativeLowProductionStageLedger?.identity === 'native-low-production-stage-ledger-v0'
       && state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained === true
       && Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0
@@ -204,6 +209,11 @@ try {
   assert.ok(Number(state?.nativeLowSupportTileProfile?.activeTileCount) >= 0, 'activeTileCount missing');
   assert.ok(Number(state?.nativeLowSupportTileProfile?.projectedSupportFrontCellCount) >= 0, 'projectedSupportFrontCellCount missing');
   assert.ok(Number(state?.nativeLowSupportTileProfile?.tileProfileReadbackMs) >= 0, 'tileProfileReadbackMs missing');
+  assert.equal(state?.nativeLowSourceTileCandidate?.identity, 'native-low-source-proximal-tile-candidate-v0', 'source-proximal tile candidate missing');
+  assert.ok(Number(state?.nativeLowSourceTileCandidate?.candidateTileCount) >= 0, 'candidateTileCount missing');
+  assert.ok(Number(state?.nativeLowSourceTileCandidate?.projectedCandidateCellCount) >= 0, 'projectedCandidateCellCount missing');
+  assert.ok(Number(state?.nativeLowSourceTileCandidate?.supportMissRate) >= 0, 'supportMissRate missing');
+  assert.equal(state?.nativeLowSourceTileCandidate?.hiddenSupportCap, false, 'source-proximal tile candidate hid a support cap');
   assert.equal(state?.nativeLowProductionStageLedger?.identity, 'native-low-production-stage-ledger-v0', 'production stage ledger missing');
   assert.equal(state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained, true, 'frozen dense route control missing');
   assert.ok(Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0, 'dense receiver write bytes missing');
@@ -262,10 +272,18 @@ try {
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
     nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
     nativeLowSupportTileProfile: endState.nativeLowSupportTileProfile,
+    nativeLowSourceTileCandidate: endState.nativeLowSourceTileCandidate,
     supportTileProjection: {
       activeTileCoverage: endState.nativeLowSupportTileProfile?.activeTileCoverage,
       projectedCellReduction: endState.nativeLowSupportTileProfile?.projectedCellReduction,
       projectedSupportFrontCellCount: endState.nativeLowSupportTileProfile?.projectedSupportFrontCellCount,
+    },
+    sourceTileCandidateProjection: {
+      candidateTileCoverage: endState.nativeLowSourceTileCandidate?.candidateTileCoverage,
+      projectedCellReduction: endState.nativeLowSourceTileCandidate?.projectedCellReduction,
+      projectedCandidateCellCount: endState.nativeLowSourceTileCandidate?.projectedCandidateCellCount,
+      supportMissRate: endState.nativeLowSourceTileCandidate?.supportMissRate,
+      candidateCapturesAllDenseSupport: endState.nativeLowSourceTileCandidate?.candidateCapturesAllDenseSupport,
     },
     simulationSteppingReceipt: endState.simulationSteppingReceipt,
     currentSourceFrameConsumption: endState.currentSourceFrameConsumption,

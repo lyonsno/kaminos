@@ -11,6 +11,7 @@ export const NATIVE_LOW_INPUT_AUTHORITY = 'native-low-simulator-state-no-synthet
 export const NATIVE_LOW_FEATURE_AUTHORITY = 'full-low-field-plus-spatial-rbf-features-v0';
 export const NATIVE_LOW_TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
 export const NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH = 'native-low-support-positive-residual-dispatch-v0';
+export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
 
 const LOW_GRID = 128;
 const HIGH_GRID = 160;
@@ -327,7 +328,38 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       droppedInputChannels: false,
     };
   };
+  const makeEmptySourceTileCandidate = (candidateReadbackMs = 0) => {
+    const tileSize = 16;
+    const tileGrid = Math.ceil(HIGH_GRID / tileSize);
+    return {
+      identity: NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE,
+      authority: 'current-source-low-front-tile-prior-compared-to-frozen-dense-support-v0',
+      candidateEvaluationMode: 'diagnostic-dense-route-comparison-not-active-treatment-v0',
+      diagnosticFullDenseSupportPassRequired: true,
+      denseRouteRetained: true,
+      candidateReadbackMs,
+      sourceFrontThreshold: 1e-6,
+      sourceTileDilation: 1,
+      tileSize,
+      tileGrid,
+      lowCellCount: lowCells,
+      highCellCount: highCells,
+      sourceActiveLowCellCount: 0,
+      candidateTileCount: 0,
+      candidateTileCoverage: 0,
+      projectedCandidateCellCount: 0,
+      projectedCellReduction: 1,
+      denseSupportCount: 0,
+      supportCoveredByCandidateCount: 0,
+      supportMissedByCandidateCount: 0,
+      supportMissRate: 0,
+      candidateCapturesAllDenseSupport: true,
+      hiddenSupportCap: false,
+      droppedInputChannels: false,
+    };
+  };
   let lastSupportTileProfile = makeEmptySupportTileProfile();
+  let lastSourceTileCandidate = makeEmptySourceTileCandidate();
   return {
     identity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
     transportMode: NATIVE_LOW_TRANSPORT_MODE,
@@ -476,6 +508,100 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       };
       return { ...lastSupportTileProfile };
     },
+    async sampleSourceProximalTileCandidate(options = {}) {
+      const started = performance.now();
+      const sourceFrontThreshold = Number.isFinite(options.sourceFrontThreshold) ? Math.max(0, options.sourceFrontThreshold) : 1e-6;
+      const sourceTileDilation = Number.isFinite(options.sourceTileDilation) ? Math.max(0, Math.floor(options.sourceTileDilation)) : 1;
+      const tileSize = 16;
+      const tileGrid = Math.ceil(HIGH_GRID / tileSize);
+      const tileCellCount = tileSize ** 3;
+      const candidateTiles = new Set();
+      const addCandidateTile = (tx, ty, tz) => {
+        if (tx < 0 || ty < 0 || tz < 0 || tx >= tileGrid || ty >= tileGrid || tz >= tileGrid) return;
+        candidateTiles.add(tx + ty * tileGrid + tz * tileGrid * tileGrid);
+      };
+      const sourceBits = await readU32BufferRange(
+        device,
+        lowSnapshotFront,
+        0,
+        lowFrontBytes,
+        'native-low shared-device source-proximal tile candidate low-front readback',
+      );
+      const sourceFront = new Float32Array(sourceBits.buffer);
+      let sourceActiveLowCellCount = 0;
+      for (let lowIndex = 0; lowIndex < sourceFront.length; lowIndex += 1) {
+        const value = sourceFront[lowIndex];
+        if (!Number.isFinite(value) || Math.abs(value) <= sourceFrontThreshold) continue;
+        sourceActiveLowCellCount += 1;
+        const z = Math.floor(lowIndex / (LOW_GRID * LOW_GRID));
+        const y = Math.floor((lowIndex - z * LOW_GRID * LOW_GRID) / LOW_GRID);
+        const x = lowIndex - z * LOW_GRID * LOW_GRID - y * LOW_GRID;
+        const hx = Math.min(HIGH_GRID - 1, Math.floor(x * HIGH_GRID / LOW_GRID));
+        const hy = Math.min(HIGH_GRID - 1, Math.floor(y * HIGH_GRID / LOW_GRID));
+        const hz = Math.min(HIGH_GRID - 1, Math.floor(z * HIGH_GRID / LOW_GRID));
+        const tx = Math.floor(hx / tileSize);
+        const ty = Math.floor(hy / tileSize);
+        const tz = Math.floor(hz / tileSize);
+        for (let dz = -sourceTileDilation; dz <= sourceTileDilation; dz += 1) {
+          for (let dy = -sourceTileDilation; dy <= sourceTileDilation; dy += 1) {
+            for (let dx = -sourceTileDilation; dx <= sourceTileDilation; dx += 1) {
+              addCandidateTile(tx + dx, ty + dy, tz + dz);
+            }
+          }
+        }
+      }
+      const denseSupportCount = Number(lastStats.supportPositiveCount || 0);
+      let supportMissedByCandidateCount = 0;
+      if (denseSupportCount > 0) {
+        const supportIndices = await readU32BufferRange(
+          device,
+          lowSnapshotFront,
+          lowFrontBytes,
+          denseSupportCount * Uint32Array.BYTES_PER_ELEMENT,
+          'native-low shared-device source-proximal candidate support comparison readback',
+        );
+        for (const highIndex of supportIndices) {
+          const z = Math.floor(highIndex / (HIGH_GRID * HIGH_GRID));
+          const y = Math.floor((highIndex - z * HIGH_GRID * HIGH_GRID) / HIGH_GRID);
+          const x = highIndex - z * HIGH_GRID * HIGH_GRID - y * HIGH_GRID;
+          const tx = Math.floor(x / tileSize);
+          const ty = Math.floor(y / tileSize);
+          const tz = Math.floor(z / tileSize);
+          const tileId = tx + ty * tileGrid + tz * tileGrid * tileGrid;
+          if (!candidateTiles.has(tileId)) supportMissedByCandidateCount += 1;
+        }
+      }
+      const candidateTileCount = candidateTiles.size;
+      const projectedCandidateCellCount = Math.min(highCells, candidateTileCount * tileCellCount);
+      const supportCoveredByCandidateCount = Math.max(0, denseSupportCount - supportMissedByCandidateCount);
+      lastSourceTileCandidate = {
+        identity: NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE,
+        authority: 'current-source-low-front-tile-prior-compared-to-frozen-dense-support-v0',
+        candidateEvaluationMode: 'diagnostic-dense-route-comparison-not-active-treatment-v0',
+        diagnosticFullDenseSupportPassRequired: true,
+        denseRouteRetained: true,
+        candidateReadbackMs: performance.now() - started,
+        sourceFrontThreshold,
+        sourceTileDilation,
+        tileSize,
+        tileGrid,
+        lowCellCount: lowCells,
+        highCellCount: highCells,
+        sourceActiveLowCellCount,
+        candidateTileCount,
+        candidateTileCoverage: candidateTileCount / (tileGrid ** 3),
+        projectedCandidateCellCount,
+        projectedCellReduction: 1 - projectedCandidateCellCount / highCells,
+        denseSupportCount,
+        supportCoveredByCandidateCount,
+        supportMissedByCandidateCount,
+        supportMissRate: denseSupportCount > 0 ? supportMissedByCandidateCount / denseSupportCount : 0,
+        candidateCapturesAllDenseSupport: supportMissedByCandidateCount === 0,
+        hiddenSupportCap: false,
+        droppedInputChannels: false,
+      };
+      return { ...lastSourceTileCandidate };
+    },
     debugState() {
       const nativeLowInferenceWorkProfile = lastStats.nativeLowInferenceWorkProfile || makeInferenceWorkProfile(lastStats);
       return {
@@ -493,6 +619,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         encodedFrameCount,
         nativeLowInferenceWorkProfile,
         nativeLowSupportTileProfile: lastSupportTileProfile,
+        nativeLowSourceTileCandidate: lastSourceTileCandidate,
         ...lastStats,
       };
     },

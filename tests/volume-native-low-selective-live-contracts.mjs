@@ -85,6 +85,10 @@ assert.match(combined, /native-low-support-proximal-tile-profile-v0/, 'route rec
 assert.match(combined, /supportCentroid[\s\S]*supportExtent[\s\S]*activeTileCount[\s\S]*projectedSupportFrontCellCount/, 'support tile profile preserves centroid, extent, active tiles, and projected cell count');
 assert.match(combined, /diagnosticFullSupportPassRequired[\s\S]*tileProfileReadbackMs/, 'support tile profile admits diagnostic full-pass/readback authority');
 assert.match(witness, /nativeLowSupportTileProfile[\s\S]*activeTileCoverage[\s\S]*projectedCellReduction/, 'witness preserves support-proximal sparse/tiled projection');
+assert.match(combined, /native-low-source-proximal-tile-candidate-v0/, 'route records source-proximal tiled support/front candidate viability');
+assert.match(combined, /sourceFrontThreshold[\s\S]*sourceTileDilation[\s\S]*candidateTileCount[\s\S]*projectedCandidateCellCount/, 'source-proximal candidate records threshold, dilation, tile count, and projected cell count');
+assert.match(combined, /supportMissedByCandidateCount[\s\S]*supportMissRate[\s\S]*candidateCapturesAllDenseSupport/, 'source-proximal candidate records dense support misses instead of hiding a support cap');
+assert.match(witness, /nativeLowSourceTileCandidate[\s\S]*supportMissRate[\s\S]*hiddenSupportCap[\s\S]*false/, 'witness preserves source-proximal candidate miss accounting');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');
