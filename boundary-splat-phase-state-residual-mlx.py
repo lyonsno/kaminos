@@ -23,8 +23,18 @@ REPORT_SCHEMA = "kaminos-boundary-splat-phase-destination-state-training-v0"
 INPUT_AUTHORITY = CORE.DESTINATION_STATE_INPUT_AUTHORITY
 OUTPUT_AUTHORITY = CORE.DESTINATION_STATE_OUTPUT_AUTHORITY
 ARCHITECTURE_AUTHORITY = CORE.DESTINATION_STATE_ARCHITECTURE_AUTHORITY
-TRAINING_MODES = ("teacher-forced", "protected-rollout", "protected-online-rollout")
-ROLLOUT_TRAINING_MODES = ("protected-rollout", "protected-online-rollout")
+TRAINING_MODES = (
+    "teacher-forced",
+    "protected-rollout",
+    "protected-online-rollout",
+    "protected-anchored-online-rollout",
+)
+ROLLOUT_TRAINING_MODES = TRAINING_MODES[1:]
+ONLINE_ROLLOUT_TRAINING_MODES = (
+    "protected-online-rollout",
+    "protected-anchored-online-rollout",
+)
+ANCHORED_ROLLOUT_TRAINING_MODE = "protected-anchored-online-rollout"
 ROLLOUT_STATE_COHORTS = CORE.SUPPORTED_DESTINATION_STATE_COHORTS
 SPLAT_ATTRIBUTE_ORDER = (
     "splat.scale.x", "splat.scale.y", "splat.scale.z",
@@ -46,6 +56,8 @@ def parse_args(argv=None):
     parser.add_argument("--seed", type=int, default=713)
     parser.add_argument("--training-mode", choices=TRAINING_MODES, default="teacher-forced")
     parser.add_argument("--rollout-seed-model")
+    parser.add_argument("--response-anchor-model")
+    parser.add_argument("--response-anchor-weight", type=float, default=0.0)
     parser.add_argument("--rollout-horizon", type=int, default=4)
     parser.add_argument("--predicted-input-fraction", type=float, default=0.625)
     parser.add_argument("--candidate-loss-weight", type=float, default=0.1)
@@ -90,6 +102,8 @@ def validate_rollout_training_config(
     candidate_loss_weight,
     splat_loss_weight,
     energy_loss_weight,
+    response_anchor_model=None,
+    response_anchor_weight=0.0,
 ):
     if training_mode not in TRAINING_MODES:
         raise ValueError("destination-state training mode is unsupported")
@@ -103,29 +117,56 @@ def validate_rollout_training_config(
     if training_mode in ROLLOUT_TRAINING_MODES and not rollout_seed_model:
         raise ValueError("protected rollout training requires an explicit seed model")
     is_rollout = training_mode in ROLLOUT_TRAINING_MODES
-    is_online = training_mode == "protected-online-rollout"
+    is_online = training_mode in ONLINE_ROLLOUT_TRAINING_MODES
+    is_anchored = training_mode == ANCHORED_ROLLOUT_TRAINING_MODE
+    if is_anchored:
+        if not response_anchor_model:
+            raise ValueError("anchored online rollout requires an explicit response anchor model")
+        if not math.isfinite(response_anchor_weight) or response_anchor_weight <= 0:
+            raise ValueError("response anchor weight must be finite and positive")
+    elif response_anchor_model is not None or response_anchor_weight != 0:
+        raise ValueError("response anchor configuration requires anchored online rollout mode")
+    rollout_loss = build_rollout_loss_contract(*weights) if is_rollout else build_teacher_forced_loss_contract()
+    response_anchor = None
+    if is_anchored:
+        response_anchor = {
+            "authority": "frozen-teacher-response-on-current-model-exposed-inputs-v0",
+            "model": str(Path(response_anchor_model).expanduser().resolve()),
+            "weight": float(response_anchor_weight),
+            "scope": "predicted-splat-exposure-rows-only",
+            "sampleCap": None,
+        }
+        rollout_loss = {
+            **rollout_loss,
+            "responseAnchor": {
+                "authority": response_anchor["authority"],
+                "scope": response_anchor["scope"],
+                "weight": response_anchor["weight"],
+            },
+        }
     return {
         "authority": (
-            "protected-splat-online-scheduled-exposure-training-v0"
-            if is_online
+            "protected-splat-anchored-online-scheduled-exposure-training-v0"
+            if is_anchored
             else (
-                "protected-splat-scheduled-exposure-training-v0"
-                if is_rollout
-                else "adjacent-pair-teacher-forcing-v0"
+                "protected-splat-online-scheduled-exposure-training-v0"
+                if is_online
+                else (
+                    "protected-splat-scheduled-exposure-training-v0"
+                    if is_rollout
+                    else "adjacent-pair-teacher-forcing-v0"
+                )
             )
         ),
         "mode": training_mode,
-        "rolloutSeedModel": str(Path(rollout_seed_model).resolve()) if rollout_seed_model else None,
+        "rolloutSeedModel": str(Path(rollout_seed_model).expanduser().resolve()) if rollout_seed_model else None,
         "rolloutHorizon": int(rollout_horizon),
         "rolloutRefreshCadence": "epoch" if is_online else None,
         "predictedInputFraction": float(predicted_input_fraction),
         "candidateStateExposed": False,
         "occupancyFeedbackEnabled": False,
-        "loss": (
-            build_rollout_loss_contract(*weights)
-            if is_rollout
-            else build_teacher_forced_loss_contract()
-        ),
+        "responseAnchor": response_anchor,
+        "loss": rollout_loss,
     }
 
 
@@ -168,6 +209,7 @@ def apply_protected_splat_exposure(inputs, baselines, targets, predicted_splats,
         "stateBaselines": exposed_baselines,
         "stateTargets": targets.copy(),
         "stateResidualTargets": (targets - exposed_baselines).astype(np.float32),
+        "responseAnchorMask": exposure_mask.copy(),
         "predictedExposureCount": int(np.sum(exposure_mask)),
         "candidateStateExposed": False,
         "occupancyFeedbackEnabled": False,
@@ -175,7 +217,7 @@ def apply_protected_splat_exposure(inputs, baselines, targets, predicted_splats,
 
 
 def load_rollout_seed_model(path):
-    model_path = Path(path).resolve()
+    model_path = Path(path).expanduser().resolve()
     data = model_path.read_bytes()
     document = json.loads(data)
     model, normalization = CORE.hydrate_frozen_destination_state_model_document(document)
@@ -387,6 +429,7 @@ def build_protected_rollout_datasets(
             "stateInputs": exposed["stateInputs"],
             "stateBaselines": exposed["stateBaselines"],
             "stateResidualTargets": exposed["stateResidualTargets"],
+            "responseAnchorMask": exposed["responseAnchorMask"],
         }
         result.append(exposed_dataset)
         predicted_residuals = CORE.predict_destination_state_model(
@@ -475,6 +518,93 @@ def build_online_rollout_epoch_datasets(
     }
 
 
+def attach_response_anchor_targets(
+    datasets,
+    anchor_model,
+    anchor_normalization,
+    batch_size,
+    anchor_model_receipt,
+    anchor_weight,
+):
+    model_sha256 = anchor_model_receipt.get("sha256")
+    if not isinstance(model_sha256, str) or len(model_sha256) != 64:
+        raise ValueError("response anchor model receipt requires a SHA-256 identity")
+    if not math.isfinite(anchor_weight) or anchor_weight <= 0:
+        raise ValueError("response anchor weight must be finite and positive")
+    anchored = []
+    total_anchor_samples = 0
+    for dataset in datasets:
+        state_inputs = np.asarray(dataset["stateInputs"], dtype=np.float32)
+        anchor_mask = np.asarray(dataset.get("responseAnchorMask"), dtype=bool)
+        if anchor_mask.shape != (len(state_inputs),):
+            raise ValueError("response anchor mask must align with every exposed dataset row")
+        normalized_anchor_targets = np.zeros(
+            (len(state_inputs), CORE.DESTINATION_STATE_ATTRIBUTE_COUNT),
+            dtype=np.float32,
+        )
+        anchor_count = int(np.sum(anchor_mask))
+        if anchor_count:
+            anchor_residuals = CORE.predict_destination_state_model(
+                anchor_model,
+                state_inputs[anchor_mask],
+                anchor_normalization["inputMean"],
+                anchor_normalization["inputScale"],
+                anchor_normalization["residualMean"],
+                anchor_normalization["residualScale"],
+                batch_size,
+            )
+            normalized_anchor_targets[anchor_mask] = (
+                (anchor_residuals - anchor_normalization["residualMean"])
+                / anchor_normalization["residualScale"]
+            ).astype(np.float32)
+        anchored.append({
+            **dataset,
+            "responseAnchorMask": anchor_mask,
+            "normalizedResponseAnchorTargets": normalized_anchor_targets,
+        })
+        total_anchor_samples += anchor_count
+    return anchored, {
+        "authority": "frozen-teacher-response-on-current-model-exposed-inputs-v0",
+        "modelSha256": model_sha256,
+        "weight": float(anchor_weight),
+        "anchorSampleCount": total_anchor_samples,
+        "sampleCap": None,
+    }
+
+
+def aggregate_response_anchor_receipts(
+    epoch_reports,
+    expected_epochs,
+    expected_model_sha256,
+    expected_weight,
+):
+    if expected_epochs < 1 or len(epoch_reports) != expected_epochs:
+        raise ValueError("response anchor receipt must include every configured epoch")
+    if [report.get("epochIndex") for report in epoch_reports] != list(range(1, expected_epochs + 1)):
+        raise ValueError("response anchor receipt epoch indices are incomplete or unordered")
+    for report in epoch_reports:
+        if report.get("sampleCap") is not None:
+            raise ValueError("response anchor evaluation must remain uncapped")
+        if report.get("anchorSampleCount") != report.get("predictedExposureCount"):
+            raise ValueError("response anchor must cover exactly every exposed row")
+        if (
+            report.get("authority") != "frozen-teacher-response-on-current-model-exposed-inputs-v0"
+            or report.get("modelSha256") != expected_model_sha256
+            or report.get("weight") != expected_weight
+        ):
+            raise ValueError("response anchor receipt changed teacher identity or loss weight")
+    return {
+        "authority": "epoch-refreshed-frozen-teacher-response-anchor-v0",
+        "modelSha256": expected_model_sha256,
+        "weight": float(expected_weight),
+        "scope": "predicted-splat-exposure-rows-only",
+        "epochCount": expected_epochs,
+        "anchorSampleCount": sum(int(report["anchorSampleCount"]) for report in epoch_reports),
+        "sampleCap": None,
+        "epochReports": epoch_reports,
+    }
+
+
 def aggregate_online_rollout_exposure(
     epoch_reports,
     expected_epochs,
@@ -532,7 +662,7 @@ def prepare_training_arrays(datasets, normalization, training_cohorts):
     sampling_pools = build_state_sampling_pools(cohorts, training_cohorts)
     normalized_inputs = ((state_inputs - normalization["inputMean"]) / normalization["inputScale"]).astype(np.float32)
     normalized_targets = ((residual_targets - normalization["residualMean"]) / normalization["residualScale"]).astype(np.float32)
-    return {
+    prepared = {
         "stateInputs": state_inputs,
         "stateBaselines": state_baselines,
         "stateTargets": state_targets,
@@ -542,6 +672,22 @@ def prepare_training_arrays(datasets, normalization, training_cohorts):
         "normalizedInputs": normalized_inputs,
         "normalizedTargets": normalized_targets,
     }
+    anchor_presence = ["normalizedResponseAnchorTargets" in dataset for dataset in datasets]
+    if any(anchor_presence):
+        if not all(anchor_presence):
+            raise ValueError("response anchor targets must cover every epoch dataset")
+        prepared["normalizedResponseAnchorTargets"] = np.concatenate([
+            dataset["normalizedResponseAnchorTargets"] for dataset in datasets
+        ]).astype(np.float32)
+        prepared["responseAnchorMask"] = np.concatenate([
+            dataset["responseAnchorMask"] for dataset in datasets
+        ]).astype(np.float32)
+        if (
+            prepared["normalizedResponseAnchorTargets"].shape != normalized_targets.shape
+            or prepared["responseAnchorMask"].shape != (len(cohorts),)
+        ):
+            raise ValueError("response anchor training arrays violate aligned state shape")
+    return prepared
 
 
 def visible_energy_mlx(states):
@@ -572,6 +718,46 @@ def rollout_destination_state_loss(
     )
     total = candidate_weight * candidate_loss + splat_weight * splat_loss + energy_weight * energy_loss
     return total, (candidate_loss, splat_loss, energy_loss)
+
+
+def anchored_rollout_destination_state_loss(
+    model,
+    inputs,
+    normalized_targets,
+    baselines,
+    residual_mean,
+    residual_scale,
+    energy_scale,
+    candidate_weight,
+    splat_weight,
+    energy_weight,
+    normalized_response_anchor_targets,
+    response_anchor_mask,
+    response_anchor_weight,
+):
+    normalized_predictions = model(inputs)
+    squared = (normalized_predictions - normalized_targets) ** 2
+    candidate_loss = mx.mean(squared[:, :len(CORE.FEATURES)])
+    splat_loss = mx.mean(squared[:, len(CORE.FEATURES):])
+    predicted_states = baselines + normalized_predictions * residual_scale + residual_mean
+    target_states = baselines + normalized_targets * residual_scale + residual_mean
+    energy_loss = mx.mean(
+        ((visible_energy_mlx(predicted_states) - visible_energy_mlx(target_states)) / energy_scale) ** 2,
+    )
+    anchor_squared = (normalized_predictions - normalized_response_anchor_targets) ** 2
+    anchor_numerator = mx.sum(anchor_squared * response_anchor_mask[:, None])
+    anchor_denominator = mx.maximum(
+        mx.sum(response_anchor_mask) * CORE.DESTINATION_STATE_ATTRIBUTE_COUNT,
+        mx.array(1.0),
+    )
+    response_anchor_loss = anchor_numerator / anchor_denominator
+    total = (
+        candidate_weight * candidate_loss
+        + splat_weight * splat_loss
+        + energy_weight * energy_loss
+        + response_anchor_weight * response_anchor_loss
+    )
+    return total, (candidate_loss, splat_loss, energy_loss, response_anchor_loss)
 
 
 def combine_metric_scopes(metric_documents, scope):
@@ -682,6 +868,8 @@ def main(argv=None):
         "requestedTrainingMode": args.training_mode,
         "requestedRolloutHorizon": args.rollout_horizon,
         "requestedPredictedInputFraction": args.predicted_input_fraction,
+        "requestedResponseAnchorModel": args.response_anchor_model,
+        "requestedResponseAnchorWeight": args.response_anchor_weight,
     }
     def checkpoint(phase):
         nonlocal failure_phase
@@ -700,6 +888,8 @@ def main(argv=None):
             args.candidate_loss_weight,
             args.splat_loss_weight,
             args.energy_loss_weight,
+            args.response_anchor_model,
+            args.response_anchor_weight,
         )
         training_cohorts = (
             ROLLOUT_STATE_COHORTS
@@ -738,6 +928,10 @@ def main(argv=None):
         rollout_seed_model = None
         rollout_seed_normalization = None
         rollout_seed_receipt = None
+        response_anchor_model = None
+        response_anchor_normalization = None
+        response_anchor_model_receipt = None
+        response_anchor_receipt = None
         rollout_exposure = None
         rng = np.random.default_rng(args.seed)
         raw_datasets = datasets
@@ -751,6 +945,23 @@ def main(argv=None):
             last_trustworthy["rolloutSeedModelSha256"] = rollout_seed_receipt["sha256"]
             last_trustworthy["rolloutSeedRoute"] = rollout_seed_receipt["route"]
             last_trustworthy["rolloutSeedFallbackReason"] = rollout_seed_receipt["route"]["fallbackReason"]
+        if args.training_mode == ANCHORED_ROLLOUT_TRAINING_MODE:
+            checkpoint("response-anchor-model-validation")
+            (
+                response_anchor_model,
+                response_anchor_normalization,
+                response_anchor_model_receipt,
+            ) = load_rollout_seed_model(args.response_anchor_model)
+            if response_anchor_normalization["hiddenSize"] != args.hidden_size:
+                raise ValueError("response anchor model hidden size must match requested training capacity")
+            for field in ("inputMean", "inputScale", "residualMean", "residualScale"):
+                if not np.array_equal(response_anchor_normalization[field], rollout_seed_normalization[field]):
+                    raise ValueError("response anchor normalization must exactly match the rollout seed")
+            last_trustworthy.update({
+                "responseAnchorModelSha256": response_anchor_model_receipt["sha256"],
+                "responseAnchorRoute": response_anchor_model_receipt["route"],
+                "responseAnchorFallbackReason": response_anchor_model_receipt["route"]["fallbackReason"],
+            })
         if args.training_mode == "protected-rollout":
             checkpoint("protected-rollout-dataset-construction")
             datasets, rollout_exposure = build_protected_rollout_datasets(
@@ -801,17 +1012,21 @@ def main(argv=None):
         model = rollout_seed_model if rollout_seed_model is not None else CORE.DestinationStateModel(args.hidden_size)
         mx.eval(model.parameters())
         optimizer = optim.AdamW(learning_rate=args.learning_rate, weight_decay=args.weight_decay)
-        loss_and_grad = nn.value_and_grad(
-            model,
-            rollout_destination_state_loss if args.training_mode in ROLLOUT_TRAINING_MODES else CORE.destination_state_loss,
-        )
+        if args.training_mode == ANCHORED_ROLLOUT_TRAINING_MODE:
+            loss_function = anchored_rollout_destination_state_loss
+        elif args.training_mode in ROLLOUT_TRAINING_MODES:
+            loss_function = rollout_destination_state_loss
+        else:
+            loss_function = CORE.destination_state_loss
+        loss_and_grad = nn.value_and_grad(model, loss_function)
         steps_per_epoch = math.ceil(len(cohorts) / args.batch_size)
         step_count = steps_per_epoch * args.epochs
         losses = []
         online_epoch_reports = []
+        response_anchor_epoch_reports = []
         completed_optimizer_steps = 0
         for epoch_index in range(1, args.epochs + 1):
-            if args.training_mode == "protected-online-rollout":
+            if args.training_mode in ONLINE_ROLLOUT_TRAINING_MODES:
                 checkpoint(f"online-rollout-epoch-{epoch_index}-dataset-construction")
                 epoch_datasets, epoch_report = build_online_rollout_epoch_datasets(
                     raw_datasets,
@@ -826,6 +1041,22 @@ def main(argv=None):
                     epoch_index=epoch_index,
                     completed_optimizer_steps=completed_optimizer_steps,
                 )
+                if args.training_mode == ANCHORED_ROLLOUT_TRAINING_MODE:
+                    checkpoint(f"anchored-online-rollout-epoch-{epoch_index}-teacher-response")
+                    epoch_datasets, anchor_epoch_report = attach_response_anchor_targets(
+                        epoch_datasets,
+                        response_anchor_model,
+                        response_anchor_normalization,
+                        args.batch_size,
+                        response_anchor_model_receipt,
+                        args.response_anchor_weight,
+                    )
+                    anchor_epoch_report.update({
+                        "epochIndex": epoch_index,
+                        "predictedExposureCount": epoch_report["predictedExposureCount"],
+                    })
+                    response_anchor_epoch_reports.append(anchor_epoch_report)
+                    epoch_report["responseAnchor"] = anchor_epoch_report
                 prepared = prepare_training_arrays(epoch_datasets, normalization, training_cohorts)
                 if len(prepared["stateCohorts"]) != len(cohorts):
                     raise ValueError("online rollout epoch changed the canonical training population")
@@ -845,7 +1076,23 @@ def main(argv=None):
                     training_cohorts,
                     args.batch_size,
                 )
-                if args.training_mode in ROLLOUT_TRAINING_MODES:
+                if args.training_mode == ANCHORED_ROLLOUT_TRAINING_MODE:
+                    (loss, components), gradients = loss_and_grad(
+                        model,
+                        mx.array(prepared["normalizedInputs"][indices]),
+                        mx.array(prepared["normalizedTargets"][indices]),
+                        mx.array(prepared["stateBaselines"][indices]),
+                        mx.array(residual_mean),
+                        mx.array(residual_scale),
+                        mx.array(energy_scale),
+                        args.candidate_loss_weight,
+                        args.splat_loss_weight,
+                        args.energy_loss_weight,
+                        mx.array(prepared["normalizedResponseAnchorTargets"][indices]),
+                        mx.array(prepared["responseAnchorMask"][indices]),
+                        args.response_anchor_weight,
+                    )
+                elif args.training_mode in ROLLOUT_TRAINING_MODES:
                     (loss, components), gradients = loss_and_grad(
                         model,
                         mx.array(prepared["normalizedInputs"][indices]),
@@ -881,8 +1128,10 @@ def main(argv=None):
                             "splat": float(components[1].item()),
                             "visibleEnergy": float(components[2].item()),
                         })
+                        if len(components) == 4:
+                            loss_row["responseAnchor"] = float(components[3].item())
                     losses.append(loss_row)
-        if args.training_mode == "protected-online-rollout":
+        if args.training_mode in ONLINE_ROLLOUT_TRAINING_MODES:
             rollout_exposure = aggregate_online_rollout_exposure(
                 online_epoch_reports,
                 args.epochs,
@@ -894,6 +1143,14 @@ def main(argv=None):
                 "effectivePredictedInputFraction": rollout_exposure["effectivePredictedInputFraction"],
                 "onlineRolloutCompletedOptimizerSteps": completed_optimizer_steps,
             })
+        if args.training_mode == ANCHORED_ROLLOUT_TRAINING_MODE:
+            response_anchor_receipt = aggregate_response_anchor_receipts(
+                response_anchor_epoch_reports,
+                args.epochs,
+                response_anchor_model_receipt["sha256"],
+                args.response_anchor_weight,
+            )
+            last_trustworthy["responseAnchorSampleCount"] = response_anchor_receipt["anchorSampleCount"]
 
         checkpoint("cross-episode-evaluation")
         evaluation_metrics, evaluation_pairs = evaluate_cross_episode(
@@ -945,6 +1202,8 @@ def main(argv=None):
                 "distribution": training_config,
                 "rolloutSeedModel": rollout_seed_receipt,
                 "rolloutExposure": rollout_exposure,
+                "responseAnchorModel": response_anchor_model_receipt,
+                "responseAnchor": response_anchor_receipt,
                 "loss": build_training_loss_receipt(training_config, energy_scale),
                 "normalizationAuthority": normalization["authority"],
                 "sampleCount": len(cohorts),
@@ -967,12 +1226,16 @@ def main(argv=None):
             "claimBoundary": (
                 "offline cross-episode destination-state residual prediction after exact heldout support and donor assignment; "
                 + (
-                    "training rebuilds bounded predicted splat exposure from the current in-memory model before every epoch with canonical candidate state and explicit energy loss; "
-                    if args.training_mode == "protected-online-rollout"
+                    "training rebuilds bounded predicted splat exposure from the current in-memory model before every epoch and anchors frozen-teacher responses on every exposed input with canonical candidate state and explicit energy loss; "
+                    if args.training_mode == ANCHORED_ROLLOUT_TRAINING_MODE
                     else (
-                        "training includes bounded frozen-seed predicted splat exposure with canonical candidate state and explicit energy loss; "
-                        if args.training_mode == "protected-rollout"
-                        else "training uses adjacent-pair teacher forcing; "
+                        "training rebuilds bounded predicted splat exposure from the current in-memory model before every epoch with canonical candidate state and explicit energy loss; "
+                        if args.training_mode == "protected-online-rollout"
+                        else (
+                            "training includes bounded frozen-seed predicted splat exposure with canonical candidate state and explicit energy loss; "
+                            if args.training_mode == "protected-rollout"
+                            else "training uses adjacent-pair teacher forcing; "
+                        )
                     )
                 )
                 + "does not modify the deployed occupancy model or prove long-horizon recurrent stability"

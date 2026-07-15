@@ -79,6 +79,23 @@ class DestinationStateTrainerContracts(unittest.TestCase):
         self.assertEqual(args.rollout_horizon, 12)
         self.assertFalse(hasattr(args, "max_rollout_rows"))
 
+    def test_parser_exposes_anchored_online_rollout_without_hidden_anchor_cap(self):
+        args = MODULE.parse_args([
+            "--training-manifest", "/training/corpus.json",
+            "--evaluation-manifest", "/evaluation/corpus.json",
+            "--out-dir", "/output",
+            "--training-mode", "protected-anchored-online-rollout",
+            "--rollout-seed-model", "/models/generation-two.json",
+            "--response-anchor-model", "/models/generation-two.json",
+            "--response-anchor-weight", "1.0",
+            "--rollout-horizon", "12",
+            "--predicted-input-fraction", "0.625",
+        ])
+        self.assertEqual(args.training_mode, "protected-anchored-online-rollout")
+        self.assertEqual(args.response_anchor_model, "/models/generation-two.json")
+        self.assertEqual(args.response_anchor_weight, 1.0)
+        self.assertFalse(hasattr(args, "max_anchor_samples"))
+
     def test_rollout_configuration_requires_explicit_seed_and_positive_losses(self):
         config = MODULE.validate_rollout_training_config(
             training_mode="protected-rollout",
@@ -109,6 +126,53 @@ class DestinationStateTrainerContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "seed model"):
             MODULE.validate_rollout_training_config(
                 "protected-online-rollout", None, 12, 0.625, 0.1, 1.0, 0.25,
+            )
+
+        anchored = MODULE.validate_rollout_training_config(
+            "protected-anchored-online-rollout",
+            "/models/generation-two.json",
+            12,
+            0.625,
+            0.1,
+            1.0,
+            0.25,
+            response_anchor_model="/models/generation-two.json",
+            response_anchor_weight=1.0,
+        )
+        self.assertEqual(
+            anchored["authority"],
+            "protected-splat-anchored-online-scheduled-exposure-training-v0",
+        )
+        self.assertEqual(anchored["responseAnchor"], {
+            "authority": "frozen-teacher-response-on-current-model-exposed-inputs-v0",
+            "model": str(Path("/models/generation-two.json").resolve()),
+            "weight": 1.0,
+            "scope": "predicted-splat-exposure-rows-only",
+            "sampleCap": None,
+        })
+        with self.assertRaisesRegex(ValueError, "response anchor model"):
+            MODULE.validate_rollout_training_config(
+                "protected-anchored-online-rollout",
+                "/models/generation-two.json",
+                12,
+                0.625,
+                0.1,
+                1.0,
+                0.25,
+                response_anchor_model=None,
+                response_anchor_weight=1.0,
+            )
+        with self.assertRaisesRegex(ValueError, "response anchor weight"):
+            MODULE.validate_rollout_training_config(
+                "protected-anchored-online-rollout",
+                "/models/generation-two.json",
+                12,
+                0.625,
+                0.1,
+                1.0,
+                0.25,
+                response_anchor_model="/models/generation-two.json",
+                response_anchor_weight=0.0,
             )
 
     def test_loss_receipt_matches_executed_training_mode(self):
@@ -157,6 +221,101 @@ class DestinationStateTrainerContracts(unittest.TestCase):
         self.assertEqual(exposed["authority"], "canonical-candidate-splat-only-predicted-exposure-v0")
         self.assertEqual(exposed["predictedExposureCount"], 1)
         self.assertFalse(exposed["candidateStateExposed"])
+        np.testing.assert_array_equal(exposed["responseAnchorMask"], [True, False])
+
+    def test_response_anchor_targets_cover_exactly_exposed_rows_without_cap(self):
+        dataset = {
+            "stateInputs": np.zeros((2, MODULE.CORE.DESTINATION_STATE_INPUT_COUNT), dtype=np.float32),
+            "responseAnchorMask": np.asarray([True, False]),
+        }
+        normalization = {
+            "inputMean": np.zeros(MODULE.CORE.DESTINATION_STATE_INPUT_COUNT, dtype=np.float32),
+            "inputScale": np.ones(MODULE.CORE.DESTINATION_STATE_INPUT_COUNT, dtype=np.float32),
+            "residualMean": np.zeros(MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT, dtype=np.float32),
+            "residualScale": np.full(MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT, 2.0, dtype=np.float32),
+        }
+        with patch.object(
+            MODULE.CORE,
+            "predict_destination_state_model",
+            side_effect=lambda _model, rows, *_args: np.full(
+                (len(rows), MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT),
+                4.0,
+                dtype=np.float32,
+            ),
+        ) as predictor:
+            anchored, receipt = MODULE.attach_response_anchor_targets(
+                [dataset],
+                anchor_model=object(),
+                anchor_normalization=normalization,
+                batch_size=4096,
+                anchor_model_receipt={"sha256": "a" * 64},
+                anchor_weight=1.0,
+            )
+        self.assertEqual(predictor.call_args.args[1].shape[0], 1)
+        np.testing.assert_array_equal(anchored[0]["responseAnchorMask"], [True, False])
+        np.testing.assert_array_equal(
+            anchored[0]["normalizedResponseAnchorTargets"][0],
+            np.full(MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT, 2.0),
+        )
+        np.testing.assert_array_equal(
+            anchored[0]["normalizedResponseAnchorTargets"][1],
+            np.zeros(MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT),
+        )
+        self.assertEqual(receipt["anchorSampleCount"], 1)
+        self.assertEqual(receipt["modelSha256"], "a" * 64)
+        self.assertEqual(receipt["weight"], 1.0)
+        self.assertIsNone(receipt["sampleCap"])
+
+    def test_response_anchor_receipt_rejects_partial_or_capped_epoch_coverage(self):
+        reports = [
+            {"authority": "frozen-teacher-response-on-current-model-exposed-inputs-v0",
+             "epochIndex": 1, "anchorSampleCount": 6, "predictedExposureCount": 6,
+             "modelSha256": "a" * 64, "weight": 1.0, "sampleCap": None},
+            {"authority": "frozen-teacher-response-on-current-model-exposed-inputs-v0",
+             "epochIndex": 2, "anchorSampleCount": 8, "predictedExposureCount": 8,
+             "modelSha256": "a" * 64, "weight": 1.0, "sampleCap": None},
+        ]
+        receipt = MODULE.aggregate_response_anchor_receipts(
+            reports,
+            expected_epochs=2,
+            expected_model_sha256="a" * 64,
+            expected_weight=1.0,
+        )
+        self.assertEqual(receipt["anchorSampleCount"], 14)
+        self.assertEqual(receipt["epochCount"], 2)
+        self.assertIsNone(receipt["sampleCap"])
+
+        partial = [dict(reports[0]), {**reports[1], "anchorSampleCount": 7}]
+        with self.assertRaisesRegex(ValueError, "exactly every exposed row"):
+            MODULE.aggregate_response_anchor_receipts(partial, 2, "a" * 64, 1.0)
+        capped = [dict(reports[0]), {**reports[1], "sampleCap": 7}]
+        with self.assertRaisesRegex(ValueError, "uncapped"):
+            MODULE.aggregate_response_anchor_receipts(capped, 2, "a" * 64, 1.0)
+
+    def test_anchored_loss_penalizes_teacher_response_only_on_masked_rows(self):
+        class ZeroModel:
+            def __call__(self, inputs):
+                return MODULE.mx.zeros((inputs.shape[0], MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT))
+
+        total, components = MODULE.anchored_rollout_destination_state_loss(
+            ZeroModel(),
+            MODULE.mx.zeros((2, MODULE.CORE.DESTINATION_STATE_INPUT_COUNT)),
+            MODULE.mx.zeros((2, MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT)),
+            MODULE.mx.zeros((2, MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT)),
+            MODULE.mx.zeros((MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT,)),
+            MODULE.mx.ones((MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT,)),
+            MODULE.mx.array(1.0),
+            0.1,
+            1.0,
+            0.25,
+            MODULE.mx.ones((2, MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT)),
+            MODULE.mx.array([1.0, 0.0]),
+            2.0,
+        )
+        MODULE.mx.eval(total, *components)
+        self.assertAlmostEqual(float(total.item()), 2.0, places=6)
+        self.assertEqual(len(components), 4)
+        self.assertAlmostEqual(float(components[3].item()), 1.0, places=6)
 
     def test_visible_energy_matches_opacity_weighted_luminance(self):
         states = np.zeros((2, 25), dtype=np.float32)
