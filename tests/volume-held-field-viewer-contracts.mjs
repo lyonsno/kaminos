@@ -30,10 +30,11 @@ assert.match(viewer, /raymarchEncoded[\s\S]*raymarchApplied[\s\S]*splatEncoded[\
 assert.match(viewer, /compositionAuthority:\s*null[\s\S]*raymarchFireAuthority:\s*null/, 'viewer state exposes composition and raymarch fire authority independently from pass application');
 assert.match(viewer, /state\.compositionAuthority\s*=\s*receipt\.compositionAuthority[\s\S]*state\.raymarchFireAuthority\s*=\s*receipt\.raymarchFireAuthority/, 'viewer records effective authority from the submitted frozen-render receipt');
 assert.match(viewer, /window\.__kaminosHeldFieldViewer/, 'viewer exposes an operator-readable requested/effective debug receipt');
-assert.match(viewer, /pointerEvents:\s*'none'/, 'held canvas must leave pointer events available to the iframe OrbitControls target');
+assert.match(viewer, /pointerEvents(?:\s*=|:)\s*'none'/, 'held canvas must leave pointer events available to the iframe OrbitControls target');
 assert.doesNotMatch(viewer, /pointerEvents:\s*'auto'/, 'held canvas must not intercept camera gestures above OrbitControls');
 assert.match(viewer, /kaminosCameraDebugState/, 'viewer observes the effective interactive camera instead of treating the captured pose as permanently frozen');
 assert.match(viewer, /requestAnimationFrame\(pollHeldInteraction\)/, 'viewer polls camera and viewport settlement while simulation remains held');
+assert.match(viewer, /manifest\.defaultPlayback[\s\S]*'held'/, 'legacy held manifests remain held unless the route or manifest explicitly requests live playback');
 assert.match(viewer, /addEventListener\('pointermove',\s*requestInteractiveRender\)/, 'viewer rerenders directly from OrbitControls drag events instead of depending only on animation-frame polling');
 assert.match(viewer, /addEventListener\('wheel',\s*requestInteractiveRender\)/, 'viewer rerenders directly from OrbitControls zoom events');
 assert.match(viewer, /addEventListener\('resize',\s*requestInteractiveRender\)/, 'viewer rerenders directly when the iframe viewport changes');

@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kaminos Held Field Viewer</title>
+  <title>Kaminos Field Replay</title>
   <link rel="icon" href="data:,">
   <style>
     :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #020304; color: #f3f6f7; }
     * { box-sizing: border-box; }
     body { margin: 0; overflow: hidden; background: #020304; }
-    iframe { width: 100vw; height: 100vh; border: 0; display: block; background: #020304; }
+    iframe { width: 100vw; height: calc(100vh - 58px); margin-top: 58px; border: 0; display: block; background: #020304; }
     #receipt-band { position: fixed; z-index: 20; inset: 0 0 auto 0; min-height: 58px; display: flex; align-items: center; gap: 16px; padding: 9px 14px; border-bottom: 1px solid #485257; background: rgba(4, 7, 8, .94); }
     #identity { min-width: 220px; }
     #identity strong { display: block; font-size: 15px; line-height: 1.2; }
@@ -33,7 +33,7 @@
 <body>
   <div id="receipt-band">
     <div id="identity">
-      <strong>Held field replay</strong>
+      <strong id="replay-label">Field replay</strong>
       <span id="source-label">Awaiting manifest identity</span>
     </div>
     <div id="compositions" role="group" aria-label="Renderer composition">
@@ -47,7 +47,7 @@
       <span id="status-detail">No field authority has been accepted yet</span>
     </div>
   </div>
-  <iframe id="basin" title="Checksum-bound held volume field"></iframe>
+  <iframe id="basin" title="Checksum-bound volume field replay"></iframe>
   <div id="failure">
     <div>
       <strong>Held field replay failed</strong>
@@ -68,11 +68,13 @@
     const manifestRequested = params.get('manifest');
     const manifestSha256Requested = String(params.get('manifest_sha256') || '').toLowerCase();
     const compositionParam = params.get('composition');
+    const playbackRouteParam = params.get('playback');
     const basin = document.getElementById('basin');
     const status = document.getElementById('status');
     const statusTitle = document.getElementById('status-title');
     const statusDetail = document.getElementById('status-detail');
     const sourceLabel = document.getElementById('source-label');
+    const replayLabel = document.getElementById('replay-label');
     const failure = document.getElementById('failure');
     const failureDetail = document.getElementById('failure-detail');
     const compositionButtons = Array.from(document.querySelectorAll('[data-composition]'));
@@ -84,7 +86,10 @@
     let advanceReceipt = null;
     let cameraReceipt = null;
     let renderReceipt = null;
+    let controlReceipt = null;
+    let liveReplayReceipt = null;
     let compositionRequested = null;
+    let playbackRequested = null;
     let failurePhase = null;
     let mountedCanvas = null;
     let renderInFlight = null;
@@ -92,6 +97,7 @@
     let interactionRaf = 0;
     let lastCameraSignature = null;
     let lastViewportSignature = null;
+    let liveCompositionSwitchInFlight = false;
 
     const state = {
       routeIdentity: ROUTE_IDENTITY,
@@ -104,10 +110,19 @@
       manifestEffectiveUrl: null,
       manifestSha256Requested,
       manifestSha256Effective: null,
+      innerRouteRequested: null,
+      innerRouteEffective: null,
       source: null,
       importReceipt: null,
       boundaryReceipt: null,
       advanceReceipt: null,
+      controlReceipt: null,
+      controlSubstitutions: [],
+      liveReplayReceipt: null,
+      playbackRequested: null,
+      playbackEffective: null,
+      initialSimStepCount: null,
+      effectiveSimStepCount: null,
       cameraRequested: null,
       cameraEffective: null,
       compositionRequested: null,
@@ -130,13 +145,21 @@
       renderRevision: 0,
       lastRenderReason: null,
       viewportEffective: null,
+      nativeShell: null,
     };
 
     window.__kaminosHeldFieldViewer = {
       debugState: () => structuredClone(state),
-      setComposition: value => requestHeldRender('operator-composition-request', value),
-      rerender: reason => requestHeldRender(reason || 'operator-held-rerender', compositionRequested, { cameraChanged: true }),
+      setComposition: value => requestComposition('operator-composition-request', value),
+      rerender: reason => requestViewerRerender(reason),
     };
+
+    function requestViewerRerender(reason) {
+      if (state.playbackEffective === 'live') {
+        return Promise.reject(new Error('live-native-loop-owns-rerender'));
+      }
+      return requestHeldRender(reason || 'operator-held-rerender', compositionRequested, { cameraChanged: true });
+    }
 
     function setStatus(title, detail, kind = 'loading') {
       status.className = kind;
@@ -211,7 +234,11 @@
 
     async function waitForPrototype() {
       failurePhase = 'renderer-load';
-      basin.src = new URL(manifest.innerRoute, manifestEffectiveUrl).href;
+      const innerRoute = new URL(manifest.innerRoute, manifestEffectiveUrl);
+      innerRoute.searchParams.set('volume_field_replay_manifest_sha256', manifestSha256Requested);
+      state.innerRouteRequested = manifest.innerRoute;
+      state.innerRouteEffective = innerRoute.href;
+      basin.src = innerRoute.href;
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('renderer-load-timeout')), 30000);
         basin.addEventListener('load', () => {
@@ -263,13 +290,41 @@
       return { label, artifactUrl, receivedBytes, chunkCount };
     }
 
-    async function importHeldField() {
-      failurePhase = 'field-import-begin';
-      prototype.setControls({
+    function applyNativeControls(controlOverrides = {}) {
+      const applyControls = basin.contentWindow?.kaminosApplyVolumeControlsSnapshot;
+      if (typeof applyControls !== 'function') throw new Error('native-control-snapshot-api-missing');
+      let receipt = applyControls({
         ...manifest.controls,
+        ...controlOverrides,
         selectiveHeadLiveRole: 'truthHigh',
         selectiveHeadLiveRenderComposition: compositionRequested,
       });
+      if (receipt?.status !== 'applied') {
+        throw new Error(`native-control-snapshot-rejected:${JSON.stringify(receipt)}`);
+      }
+      const roleReceipt = prototype.setSelectiveHeadLiveRole('truthHigh');
+      if (roleReceipt?.requestedRole !== 'truthHigh') {
+        throw new Error(`selective-role-rejected:${JSON.stringify(roleReceipt)}`);
+      }
+      const compositionReceipt = prototype.setSelectiveHeadLiveRenderComposition(compositionRequested);
+      if (compositionReceipt?.requestedComposition !== compositionRequested) {
+        throw new Error(`selective-composition-request-rejected:${JSON.stringify(compositionReceipt)}`);
+      }
+      receipt = { ...receipt, roleReceipt, compositionReceipt };
+      state.controlReceipt = receipt;
+      state.controlSubstitutions = Array.isArray(receipt.substitutions) ? receipt.substitutions : [];
+      return receipt;
+    }
+
+    function controlSubstitutionStatus() {
+      const substitutions = state.controlSubstitutions;
+      if (!substitutions.length) return 'controls exact';
+      return `controls normalized ${substitutions.length}: ${substitutions.map(item => item.key).join(',')}`;
+    }
+
+    async function importHeldField() {
+      failurePhase = 'field-import-begin';
+      controlReceipt = applyNativeControls();
       const begin = prototype.beginDebugFullFieldImport({
         grid: manifest.grid,
         initializationAuthority: manifest.initializationAuthority,
@@ -336,13 +391,32 @@
     function mountCanvas() {
       const canvas = prototype.canvasElement();
       const innerDocument = basin.contentDocument;
-      if (canvas.parentElement !== innerDocument.body) innerDocument.body.appendChild(canvas);
-      Object.assign(canvas.style, {
-        position: 'fixed', inset: '0', zIndex: '2147483647',
-        width: '100vw', height: '100vh', display: 'block',
-        visibility: 'visible', opacity: '1', transform: 'none', pointerEvents: 'none',
-      });
+      if (canvas.parentElement?.id !== 'viewport') throw new Error('native-viewport-canvas-ownership-mismatch');
+      const sidebar = innerDocument.getElementById('sidebar');
+      const sidebarRect = sidebar?.getBoundingClientRect();
+      const sidebarStyle = sidebar ? basin.contentWindow.getComputedStyle(sidebar) : null;
+      if (!sidebar || !sidebarRect || sidebarRect.width < 200 || sidebarRect.height < 200
+        || sidebarStyle?.display === 'none' || sidebarStyle?.visibility === 'hidden') {
+        throw new Error('sidebar-not-visible');
+      }
+      canvas.style.removeProperty('inset');
+      canvas.style.removeProperty('position');
+      canvas.style.removeProperty('width');
+      canvas.style.removeProperty('height');
+      canvas.style.removeProperty('display');
+      canvas.style.removeProperty('visibility');
+      canvas.style.removeProperty('opacity');
+      canvas.style.removeProperty('transform');
+      canvas.style.removeProperty('z-index');
+      canvas.style.pointerEvents = 'none';
+      canvas.classList.add('active');
       mountedCanvas = canvas;
+      state.nativeShell = {
+        canvasParentId: canvas.parentElement.id,
+        sidebarVisible: true,
+        sidebarWidth: Math.round(sidebarRect.width),
+        sidebarHeight: Math.round(sidebarRect.height),
+      };
       return canvas;
     }
 
@@ -488,6 +562,135 @@
       return renderInFlight;
     }
 
+    async function requestLiveComposition(reason, nextComposition) {
+      if (!COMPOSITIONS.has(nextComposition)) throw new Error(`unsupported-composition:${nextComposition}`);
+      liveCompositionSwitchInFlight = true;
+      try {
+        const receipt = prototype.setSelectiveHeadLiveRenderComposition(nextComposition);
+        if (receipt?.requestedComposition !== nextComposition || receipt?.effectiveComposition !== nextComposition) {
+          throw new Error(`composition-substitution:${nextComposition}/${receipt?.effectiveComposition || 'missing'}`);
+        }
+        compositionRequested = nextComposition;
+        state.compositionRequested = nextComposition;
+        state.compositionEffective = receipt.effectiveComposition;
+        state.compositionAuthority = receipt.compositionAuthority;
+        state.lastRenderReason = reason;
+        updateCompositionButtons();
+        await waitForLiveReplayStep(state.effectiveSimStepCount ?? manifest.initialSimStepCount);
+        return window.__kaminosHeldFieldViewer.debugState();
+      } finally {
+        liveCompositionSwitchInFlight = false;
+      }
+    }
+
+    function requestComposition(reason, nextComposition) {
+      return state.playbackEffective === 'live'
+        ? requestLiveComposition(reason, nextComposition)
+        : requestHeldRender(reason, nextComposition);
+    }
+
+    function applyLiveDebugReceipt(debug) {
+      const pass = debug?.selectiveHeadLivePassReceipt || null;
+      state.effectiveSimStepCount = debug?.simStepCount ?? null;
+      state.compositionEffective = debug?.selectiveHeadLiveCompositionEffective || state.compositionEffective;
+      state.compositionAuthority = debug?.selectiveHeadLiveCompositionAuthority || state.compositionAuthority;
+      state.raymarchEncoded = pass?.raymarchEncoded ?? state.raymarchEncoded;
+      state.raymarchApplied = pass?.raymarchApplied ?? state.raymarchApplied;
+      state.splatEncoded = pass?.splatEncoded ?? state.splatEncoded;
+      state.splatApplied = pass?.splatApplied ?? state.splatApplied;
+      state.raymarchFireAuthority = pass?.raymarchFireAuthority ?? state.raymarchFireAuthority;
+      state.boundarySplatCandidateCount = debug?.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
+      state.boundarySplatInstanceCount = debug?.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      state.boundarySplatOverflowCount = debug?.boundarySplatOverflowCount ?? state.boundarySplatOverflowCount;
+      state.boundarySplatPopulationComplete = state.splatApplied ? completeSplatPopulation(state) : null;
+      state.cameraEffective = effectiveCamera();
+      state.viewportEffective = viewportReceipt();
+    }
+
+    function livePassMatchesComposition(debug) {
+      const pass = debug?.selectiveHeadLivePassReceipt;
+      if (debug?.selectiveHeadLiveCompositionEffective !== compositionRequested || !pass) return false;
+      if (compositionRequested === 'splat-only-v0') return pass.splatApplied === true && pass.raymarchApplied === false;
+      if (compositionRequested === 'smoke-raymarch-under-splats-v0') {
+        return pass.splatApplied === true && pass.raymarchApplied === true && pass.raymarchFireAuthority === 0;
+      }
+      if (compositionRequested === 'raymarch-only-v0') {
+        return pass.splatApplied === false && pass.raymarchApplied === true && pass.raymarchFireAuthority === 1;
+      }
+      return pass.splatApplied === true && pass.raymarchApplied === true && pass.raymarchFireAuthority === 1;
+    }
+
+    async function waitForLiveReplayStep(afterSimStepCount) {
+      let visibleWaitMs = 0;
+      let lastPollMs = performance.now();
+      let lastDebug = null;
+      while (visibleWaitMs < 60000) {
+        const pollNowMs = performance.now();
+        const innerVisibility = basin.contentDocument?.visibilityState || 'hidden';
+        if (innerVisibility === 'visible') visibleWaitMs += pollNowMs - lastPollMs;
+        lastPollMs = pollNowMs;
+        const debug = prototype.debugState();
+        lastDebug = debug;
+        if (debug?.active === true
+          && Number(debug.simStepCount) > Number(afterSimStepCount)
+          && debug.selectiveHeadLiveCompositionEffective === compositionRequested
+          && livePassMatchesComposition(debug)) {
+          applyLiveDebugReceipt(debug);
+          state.status = 'running';
+          state.failurePhase = null;
+          state.error = null;
+          setStatus(
+            'Checksum-verified live field',
+            `${state.compositionEffective} | native shell | step ${state.initialSimStepCount} -> ${state.effectiveSimStepCount} | splats ${state.splatApplied ? `${state.boundarySplatInstanceCount}/${state.boundarySplatCandidateCount}` : 'off'} | ${controlSubstitutionStatus()}`,
+            'running',
+          );
+          setButtonsEnabled(true);
+          return debug;
+        }
+        if (innerVisibility !== 'visible') {
+          setStatus('Live replay admitted', 'Waiting for visible tab before requiring native animation progress', 'loading');
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (Number(lastDebug?.simStepCount) > Number(afterSimStepCount)) {
+        throw new Error(`live-composition-substitution:${compositionRequested}/${lastDebug?.selectiveHeadLiveCompositionEffective || 'missing'}`);
+      }
+      throw new Error('live-replay-step-timeout');
+    }
+
+    function pollLiveReceipt() {
+      interactionRaf = requestAnimationFrame(pollLiveReceipt);
+      if (state.status !== 'running' || state.playbackEffective !== 'live') return;
+      if (liveCompositionSwitchInFlight) return;
+      const debug = prototype.debugState();
+      const passMatchesComposition = livePassMatchesComposition(debug);
+      if (debug?.active !== true || !passMatchesComposition) {
+        fail('live-pass-receipt', new Error(`live-pass-substitution:${compositionRequested}/${debug?.selectiveHeadLiveCompositionEffective || 'missing'}`), debug);
+        return;
+      }
+      applyLiveDebugReceipt(debug);
+      setStatus(
+        'Checksum-verified live field',
+        `${state.compositionEffective} | native shell | step ${state.initialSimStepCount} -> ${state.effectiveSimStepCount} | splats ${state.splatApplied ? `${state.boundarySplatInstanceCount}/${state.boundarySplatCandidateCount}` : 'off'} | ${controlSubstitutionStatus()}`,
+        'running',
+      );
+    }
+
+    async function startLiveReplay() {
+      failurePhase = 'live-replay-resume';
+      liveReplayReceipt = prototype.resumeDebugImportedFieldLive({ sessionId: importReceipt.sessionId });
+      if (liveReplayReceipt?.ok !== true || liveReplayReceipt.playbackEffective !== 'live') {
+        throw new Error(`live-replay-resume-rejected:${JSON.stringify(liveReplayReceipt)}`);
+      }
+      state.liveReplayReceipt = liveReplayReceipt;
+      state.playbackRequested = 'live';
+      state.playbackEffective = liveReplayReceipt.playbackEffective;
+      state.cameraInteractionAuthority = 'native-orbit-controls-plus-native-render-loop-v0';
+      await waitForLiveReplayStep(manifest.initialSimStepCount);
+      cancelAnimationFrame(interactionRaf);
+      interactionRaf = requestAnimationFrame(pollLiveReceipt);
+    }
+
     function pollHeldInteraction() {
       interactionRaf = requestAnimationFrame(pollHeldInteraction);
       if (state.status !== 'running' || !mountedCanvas) return;
@@ -534,13 +737,18 @@
 
     for (const button of compositionButtons) {
       button.addEventListener('click', () => {
-        requestHeldRender('composition-switch', button.dataset.composition).catch(error => fail(failurePhase || 'composition-switch', error));
+        requestComposition('composition-switch', button.dataset.composition).catch(error => fail(failurePhase || 'composition-switch', error));
       });
     }
     setButtonsEnabled(false);
 
     try {
       manifest = await loadManifest();
+      playbackRequested = playbackRouteParam || manifest.defaultPlayback || 'held';
+      if (!['live', 'held'].includes(playbackRequested)) throw new Error(`unsupported-playback:${playbackRequested}`);
+      state.playbackRequested = playbackRequested;
+      state.initialSimStepCount = manifest.initialSimStepCount;
+      replayLabel.textContent = playbackRequested === 'live' ? 'Live field replay' : 'Held field replay';
       compositionRequested = COMPOSITIONS.has(compositionParam)
         ? compositionParam
         : COMPOSITIONS.has(manifest.defaultComposition)
@@ -556,14 +764,20 @@
       state.importReceipt = importReceipt;
       boundaryReceipt = await importBoundary();
       state.boundaryReceipt = boundaryReceipt;
-      failurePhase = 'held-state-advance';
-      advanceReceipt = prototype.advanceDebugImportedFieldSteps({ sessionId: importReceipt.sessionId, steps: 0 });
-      if (advanceReceipt?.ok !== true || advanceReceipt.completedSteps !== 0) {
-        throw new Error(`held-state-advance-rejected:${JSON.stringify(advanceReceipt)}`);
-      }
-      state.advanceReceipt = advanceReceipt;
+      controlReceipt = applyNativeControls({ boundarySidecarSource: 'override' });
       await renderComposition(compositionRequested, { applyCapturedCamera: true, reason: 'initial-held-render' });
-      startHeldInteraction();
+      if (playbackRequested === 'live') {
+        await startLiveReplay();
+      } else {
+        failurePhase = 'held-state-advance';
+        advanceReceipt = prototype.advanceDebugImportedFieldSteps({ sessionId: importReceipt.sessionId, steps: 0 });
+        if (advanceReceipt?.ok !== true || advanceReceipt.completedSteps !== 0) {
+          throw new Error(`held-state-advance-rejected:${JSON.stringify(advanceReceipt)}`);
+        }
+        state.advanceReceipt = advanceReceipt;
+        state.playbackEffective = 'held';
+        startHeldInteraction();
+      }
     } catch (error) {
       fail(failurePhase || 'initialization', error);
     }

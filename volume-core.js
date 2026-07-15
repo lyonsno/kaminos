@@ -27,6 +27,8 @@ const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-appli
 const PHASE_ALIGNED_TRUTH_HELD_AUTHORITY = 'offline-high-truth-held-render-only-v0';
 const PHASE_ALIGNED_LOW_HELD_AUTHORITY = 'downsampled-same-high-history-held-control-v0';
 const PHASE_ALIGNED_HELD_APPLICATION_IDENTITY = 'phase-aligned-held-render-application-v0';
+const CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY = 'checksum-addressed-live-replay-resume-v0';
+const EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY = 'exact-field-live-replay-application-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
 const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
@@ -9511,7 +9513,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       payload.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
       || payload.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY
     ) && payload.filterIdentity === PHASE_ALIGNED_HELD_APPLICATION_IDENTITY;
-    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld) {
+    const isLiveReplay = payload.initializationAuthority === CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY
+      && payload.filterIdentity === EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY;
+    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld && !isLiveReplay) {
       return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
         requestedInitializationAuthority: payload.initializationAuthority || null,
         requestedFilterIdentity: payload.filterIdentity || null,
@@ -9742,6 +9746,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!Number.isInteger(requestedSteps) || requestedSteps < 0) {
       return fullFieldImportFailure('imported-advance', 'invalid-step-count', { requestedSteps });
     }
+    if (receipt.initializationAuthority === CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'imported-receiver-advance-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'imported-advance',
+        reason: 'live-replay-requires-native-resume-api',
+        sessionId: receipt.sessionId,
+        requestedSteps,
+        priorAppliedReceipt: receipt,
+      };
+    }
     const phaseAlignedHeld = receipt.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
       || receipt.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY;
     if ((receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY || phaseAlignedHeld) && requestedSteps > 0) {
@@ -9797,6 +9814,85 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     state.fullFieldImportReceipt = { ...receipt, importedAdvance };
     return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, sessionId: receipt.sessionId, ...importedAdvance };
+  }
+
+  function resumeDebugImportedFieldLive(payload = {}) {
+    const receipt = state.fullFieldImportReceipt;
+    if (!receipt || receipt.status !== 'applied' || payload.sessionId !== receipt.sessionId) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'checksum-addressed-live-replay-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'live-replay-resume',
+        reason: 'session-id-mismatch',
+        requestedSessionId: payload.sessionId || null,
+        effectiveSessionId: receipt?.sessionId || null,
+      };
+    }
+    if (receipt.initializationAuthority !== CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'checksum-addressed-live-replay-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'live-replay-resume',
+        reason: 'live-replay-authority-required',
+        requestedInitializationAuthority: receipt.initializationAuthority,
+        requiredInitializationAuthority: CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY,
+        priorAppliedReceipt: receipt,
+      };
+    }
+    if (receipt.importedAdvance) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'checksum-addressed-live-replay-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'live-replay-resume',
+        reason: 'live-replay-import-already-advanced',
+        priorAppliedReceipt: receipt,
+      };
+    }
+    if (receipt.liveReplay) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'checksum-addressed-live-replay-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'live-replay-resume',
+        reason: 'already-resumed',
+        priorAppliedReceipt: receipt,
+      };
+    }
+    const before = { frameCount: state.frameCount, simStepCount: state.simStepCount };
+    selectiveHeadLiveCapturePaused = false;
+    state.selectiveHeadLiveCapturePaused = false;
+    state.active = true;
+    state.error = null;
+    canvas.classList.add('active');
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(render);
+    const liveReplay = {
+      identity: 'checksum-addressed-native-render-loop-replay-v0',
+      status: 'running',
+      failurePhase: null,
+      sessionId: receipt.sessionId,
+      playbackRequested: 'live',
+      playbackEffective: 'live',
+      initializationAuthority: receipt.initializationAuthority,
+      filterIdentity: receipt.filterIdentity,
+      sourceSimStepCount: receipt.receiverInitialSimStepCount,
+      before,
+      renderLoopPaused: false,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      resumedAtMs: performance.now(),
+    };
+    state.fullFieldImportReceipt = { ...receipt, renderLoopPaused: false, liveReplay };
+    emitStatus({ phase: 'full-field-live-replay-running' });
+    return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, ...liveReplay };
   }
 
   async function beginDebugFullFieldExport(options = {}) {
@@ -13018,6 +13114,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     syntheticHandTrailEmitters,
     async setActive(active) {
       if (active) {
+        if (state.fullFieldImportReceipt?.status === 'applied'
+          && state.fullFieldImportReceipt?.renderLoopPaused === true) {
+          throw new Error('full-field-import-live-resume-api-required');
+        }
         try {
           await ensureGpu();
           await ensureBrowserResidualModel();
@@ -13060,6 +13160,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     writeDebugFullFieldImportChunk,
     finishDebugFullFieldImport,
     advanceDebugImportedFieldSteps,
+    resumeDebugImportedFieldLive,
     beginDebugFullFieldExport,
     readDebugFullFieldExportChunk,
     releaseDebugFullFieldExport,

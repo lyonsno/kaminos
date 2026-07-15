@@ -1134,6 +1134,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
           <option value="live">live</option>
           <option value="baked">baked</option>
           <option value="mix">mix</option>
+          <option value="override">imported capture</option>
         </select>
         <span class="slider-val" id="volume-boundary-sidecar-source-val">live</span>
       </div>
@@ -11824,7 +11825,7 @@ const REACTION_FRONT_EXTRACTOR_CONTROL_FIELDS = [
 ];
 
 const REACTION_FRONT_LIVE_VIEW_VALUES = new Set(['off', 'shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence', 'boundary', 'boundary_fire']);
-const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix']);
+const BOUNDARY_SIDECAR_SOURCE_VALUES = new Set(['live', 'baked', 'mix', 'override']);
 const BOUNDARY_SIDECAR_VIEW_VALUES = new Set(['off', 'support', 'coverage', 'ridge', 'proximity', 'footprint']);
 const BOUNDARY_SPLAT_MODE_VALUES = new Set(['off', 'analytic', 'learned']);
 
@@ -12124,6 +12125,33 @@ function applyVolumeControlsSnapshot(controlsSnapshot = {}) {
   activeVolumeRayBudgetPreset = '';
   routedVolumeRayBudgetPreset = '';
 }
+
+window.kaminosApplyVolumeControlsSnapshot = function kaminosApplyVolumeControlsSnapshot(controlsSnapshot = {}) {
+  applyVolumeControlsSnapshot(controlsSnapshot);
+  updateVolumeControlLabels();
+  const effectiveControls = readVolumeControls();
+  volumePrototype?.setControls(effectiveControls);
+  refreshVolumeReadout();
+  const requestedKeys = VOLUME_BASIN_ROUTE_FIELDS
+    .map(([key]) => key)
+    .filter(key => controlsSnapshot[key] !== undefined && controlsSnapshot[key] !== null);
+  const substitutions = requestedKeys.flatMap(key => {
+    const requested = controlsSnapshot[key];
+    const effective = effectiveControls[key];
+    if (typeof requested === 'number' && typeof effective === 'number') {
+      return Math.abs(requested - effective) <= 0.000001 ? [] : [{ key, requested, effective }];
+    }
+    return String(requested) === String(effective) ? [] : [{ key, requested, effective }];
+  });
+  return {
+    identity: 'native-volume-control-snapshot-application-v0',
+    status: 'applied',
+    requestedKeys,
+    requestedControls: { ...controlsSnapshot },
+    effectiveControls,
+    substitutions,
+  };
+};
 
 function restoreVolumeBasinSnapshot() {
   let snapshot = null;
