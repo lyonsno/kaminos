@@ -6,19 +6,21 @@
   <title>Kaminos Native-Low Selective Live Transfer</title>
   <link rel="icon" href="data:,">
   <style>
-    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #060808; color: #edf4f5; }
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #050707; color: #edf4f5; }
     * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; overflow: hidden; background: #060808; }
-    #toolbar { position: fixed; z-index: 20; inset: 10px 10px auto; min-height: 54px; display: grid; grid-template-columns: minmax(230px, 320px) minmax(0, 1fr); gap: 10px; align-items: center; padding: 9px 10px; border: 1px solid rgba(188, 215, 218, .28); background: rgba(7, 10, 10, .92); backdrop-filter: blur(8px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
+    body { margin: 0; min-height: 100vh; overflow: hidden; background: #050707; }
+    #toolbar { position: fixed; z-index: 20; inset: 10px 10px auto; min-height: 58px; display: grid; grid-template-columns: minmax(240px, 340px) minmax(0, 1fr); gap: 10px; align-items: center; padding: 9px 10px; border: 1px solid rgba(188, 215, 218, .28); background: rgba(7, 10, 10, .92); backdrop-filter: blur(8px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
     #title strong { display: block; font-size: 13px; line-height: 1.25; }
     #title span { display: block; color: #91a3a8; font-size: 10px; margin-top: 2px; }
     #status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a8b7bb; font: 10px/1.35 "SF Mono", Menlo, monospace; }
     #status.bad { color: #ff9d8d; }
-    #panes { width: 100vw; height: 100vh; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #1b2426; }
-    .pane { min-width: 0; min-height: 0; position: relative; background: #000; }
+    #panes { width: 100vw; height: 100vh; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #162024; }
+    .pane { min-width: 0; min-height: 0; position: relative; display: grid; place-items: center; background: #000; }
+    .pane img { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
     .pane-label { position: absolute; z-index: 5; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 7px 9px; border: 1px solid rgba(190, 215, 220, .22); background: rgba(5, 8, 8, .78); border-radius: 5px; font-size: 11px; color: #dbe8ea; }
     .pane-label span { display: block; margin-top: 2px; color: #90a1a6; font-size: 10px; }
-    iframe { width: 100%; height: 100%; border: 0; display: block; background: #000; }
+    #runner-wrap { position: fixed; left: -2200px; top: 0; width: 900px; height: 640px; opacity: .01; pointer-events: none; }
+    #runner { width: 100%; height: 100%; border: 0; display: block; background: #000; }
     @media (max-width: 900px) { #toolbar { grid-template-columns: 1fr; } #panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
   </style>
 </head>
@@ -26,26 +28,28 @@
   <div id="toolbar">
     <div id="title">
       <strong>Native 128 control vs frozen 128-to-160 treatment</strong>
-      <span>Same native state, browser WebGPU model application, splat-only-v0</span>
+      <span>Same native state, shared-device WebGPU buffers, splat-only-v0</span>
     </div>
-    <div id="status">Starting native-low live route...</div>
+    <div id="status">Starting shared-device native-low route...</div>
   </div>
   <main id="panes">
     <section class="pane">
-      <iframe id="control" title="nativeLowControl"></iframe>
+      <img id="controlImage" alt="nativeLowControl">
       <div class="pane-label">nativeLowControl<span>Untouched native 128^3 simulator, splat-only-v0</span></div>
     </section>
     <section class="pane">
-      <iframe id="treatment" title="nativeLowSelectivePredicted"></iframe>
-      <div class="pane-label">nativeLowSelectivePredicted<span>Frozen model treatment imported into 160^3 renderer, splat-only-v0</span></div>
+      <img id="treatmentImage" alt="nativeLowSelectivePredicted">
+      <div class="pane-label">nativeLowSelectivePredicted<span>Frozen model 160^3 materialized in the same WebGPU device, splat-only-v0</span></div>
     </section>
   </main>
+  <div id="runner-wrap"><iframe id="runner" title="sharedDeviceNativeLowRenderer"></iframe></div>
   <script type="module">
     import {
-      createNativeLowSelectiveLiveRuntime,
-      NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
       NATIVE_LOW_INPUT_AUTHORITY,
       NATIVE_LOW_FEATURE_AUTHORITY,
+      NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+      NATIVE_LOW_SHARED_DEVICE_ROUTE,
+      NATIVE_LOW_TRANSPORT_MODE,
       SELECTIVE_HEAD_LIVE_MODEL,
       SELECTIVE_HEAD_LIVE_MODEL_URL,
     } from './native-low-selective-live-runtime.mjs';
@@ -53,9 +57,11 @@
     const REPORT_SCHEMA = 'kaminos.volume.native-low-selective-live-comparison.v0';
     const CONTRACT_MARKERS = Object.freeze({
       routeIdentity: 'native-low-live-browser-webgpu-inference-v0',
-      schema: 'kaminos.volume.native-low-selective-live-comparison.v0',
+      sharedDeviceRoute: 'native-low-shared-device-buffer-inference-v0',
+      schema: REPORT_SCHEMA,
       modelIdentity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
       modelSha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
+      modelUrlSymbol: 'SELECTIVE_HEAD_LIVE_MODEL_URL',
       inputAuthority: 'native-low-simulator-state-no-synthetic-downsample-v0',
       runtimeTruthAvailable: false,
       syntheticDownsampleApplied: false,
@@ -76,59 +82,44 @@
       durationSeconds: 0,
       blankFrameRejection: 'blankFrameRejection',
       cachedFrameRejection: 'cachedFrameRejection',
-      frameCacheKey: 'native-step+model-sha+composition+backend',
+      frameCacheKey: 'native-step+model-sha+composition+backend+transport',
       failurePhase: null,
       lastTrustworthyEvidence: null,
+      transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
     });
     const requestedComposition = 'splat-only-v0';
-    const effectiveComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
     const syntheticDownsampleApplied = false;
-    const modelChecksumMismatch = 'modelChecksumMismatch';
     const sourceStepDrift = 'sourceStepDrift';
     const controlTreatmentCausalDivergence = 'controlTreatmentCausalDivergence';
     const compositionMismatch = 'compositionMismatch';
     const fallbackBackend = null;
     const blankFrameRejection = 'blankFrameRejection';
-    const frameCacheKey = 'native-step+model-sha+composition+backend';
     const cachedFrameRejection = 'cachedFrameRejection';
     const noHiddenCaps = true;
     const params = new URLSearchParams(location.search);
     const targetSeconds = Math.max(5, Math.min(30, Number(params.get('seconds') || 8)));
-    const stepIntervalMs = Math.max(100, Number(params.get('step_ms') || 350));
+    const stepIntervalMs = Math.max(100, Number(params.get('step_ms') || 500));
     const status = document.getElementById('status');
-    const controlFrame = document.getElementById('control');
-    const treatmentFrame = document.getElementById('treatment');
+    const runnerFrame = document.getElementById('runner');
+    const controlImage = document.getElementById('controlImage');
+    const treatmentImage = document.getElementById('treatmentImage');
     let routeStatus = 'starting';
     let failurePhase = null;
     let lastTrustworthyEvidence = {};
-    let runtime = null;
     let startedAtMs = performance.now();
     let lastFrameAtMs = 0;
     let frameIndex = 0;
-    let sourceStepIdentity = null;
-    let sameNativeStateIdentity = null;
-    let controlStep = null;
-    let treatmentStep = null;
-    let timings = {
-      nativeStepMs: null,
-      exportReadbackMs: null,
-      inferenceGpuMs: null,
-      uploadDispatchMs: null,
-      descriptorMs: null,
-      importUploadMs: null,
-      controlRenderMs: null,
-      treatmentRenderMs: null,
-      endToEndFrameMs: null,
-    };
-    let lastReport = null;
-    const exportChunkFloats = 8 * 1024 * 1024;
-    const importChunkBytes = 16 * 1024 * 1024;
+    let latestReceipt = null;
+    let latestRunnerState = null;
+    let lastControlObjectUrl = null;
+    let lastTreatmentObjectUrl = null;
 
     const baseControls = {
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
+      volume_resolution: '128',
       volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
@@ -166,244 +157,144 @@
       volume_temporal_accum: '0',
       volume_temporal_jitter: '0',
       volume_history_clamp: '0',
-      volume_quality_reason: 'native-low-selective-live-transfer',
+      volume_quality_reason: 'native-low-selective-shared-device-transfer',
     };
 
-    function routeUrl(grid) {
-      return `./?${new URLSearchParams({ ...baseControls, volume_resolution: String(grid) })}`;
+    runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
+
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    controlFrame.src = routeUrl(128);
-    treatmentFrame.src = routeUrl(160);
-
-    function proto(frame) {
-      return frame.contentWindow?.__kaminosVolumePrototype || null;
+    function proto() {
+      return runnerFrame.contentWindow?.__kaminosVolumePrototype || null;
     }
 
-    async function waitForPrototype(frame, label) {
+    async function waitForPrototype() {
       const started = performance.now();
       while (performance.now() - started < 120000) {
-        const candidate = proto(frame);
+        const candidate = proto();
         if (candidate?.debugState?.()?.active) return candidate;
         await delay(100);
       }
-      throw new Error(`${label} prototype did not activate`);
+      throw new Error('shared-device renderer prototype did not activate');
     }
 
-    function base64ToBytes(base64) {
-      const binary = atob(base64);
-      const bytes = new Uint8Array(binary.length);
-      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-      return bytes;
-    }
-
-    function bytesToBase64(bytes) {
-      let binary = '';
-      const batch = 0x8000;
-      for (let index = 0; index < bytes.length; index += batch) {
-        binary += String.fromCharCode(...bytes.subarray(index, Math.min(bytes.length, index + batch)));
+    function replaceImageUrls(receipt) {
+      if (receipt?.visuals?.controlObjectUrl) {
+        if (lastControlObjectUrl) URL.revokeObjectURL(lastControlObjectUrl);
+        lastControlObjectUrl = receipt.visuals.controlObjectUrl;
+        controlImage.src = lastControlObjectUrl;
       }
-      return btoa(binary);
-    }
-
-    async function readExport(prototype) {
-      const exportReceipt = await prototype.beginDebugFullFieldExport();
-      if (!exportReceipt?.ok) throw new Error(`native export failed:${exportReceipt?.reason || 'unknown'}`);
-      const readKind = async kind => {
-        const descriptor = exportReceipt[kind];
-        const bytes = new Uint8Array(descriptor.byteLength);
-        let byteOffset = 0;
-        while (byteOffset < bytes.byteLength) {
-          const chunk = await prototype.readDebugFullFieldExportChunk({
-            sessionId: exportReceipt.sessionId,
-            kind,
-            startFloat: byteOffset / Float32Array.BYTES_PER_ELEMENT,
-            floatCount: Math.min(exportChunkFloats, (bytes.byteLength - byteOffset) / Float32Array.BYTES_PER_ELEMENT),
-          });
-          if (!chunk?.ok) throw new Error(`native export chunk failed:${kind}:${chunk?.reason || 'unknown'}`);
-          const chunkBytes = base64ToBytes(chunk.base64);
-          bytes.set(chunkBytes, byteOffset);
-          byteOffset += chunkBytes.byteLength;
-        }
-        return new Float32Array(bytes.buffer);
-      };
-      const [fluid, front] = await Promise.all([readKind('fluid'), readKind('front')]);
-      await prototype.releaseDebugFullFieldExport({ sessionId: exportReceipt.sessionId });
-      return { exportReceipt, fluid, front };
-    }
-
-    async function importTreatment(prototype, prediction, descriptors, sourceEvidence) {
-      const begin = prototype.beginDebugFullFieldImport({
-        grid: 160,
-        initializationAuthority: 'frozen-exact-basin-heads-applied-to-native-low-state-v0',
-        filterIdentity: 'native-low-selective-held-render-application-v0',
-        layoutIdentity: 'x-fastest-zyx-c-interleaved-v0',
-        source: sourceEvidence,
-        receiverInitialSimStepCount: 0,
-        fluid: descriptors.fluid,
-        front: descriptors.front,
-      });
-      if (!begin?.ok) throw new Error(`treatment import begin failed:${begin?.reason || 'unknown'}`);
-      const writeKind = async (kind, values) => {
-        const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
-        for (let byteOffset = 0; byteOffset < bytes.byteLength; byteOffset += importChunkBytes) {
-          const chunk = bytes.subarray(byteOffset, Math.min(bytes.byteLength, byteOffset + importChunkBytes));
-          const receipt = prototype.writeDebugFullFieldImportChunk({
-            sessionId: begin.sessionId,
-            kind,
-            byteOffset,
-            base64: bytesToBase64(chunk),
-          });
-          if (!receipt?.ok) throw new Error(`treatment import chunk failed:${kind}:${receipt?.reason || 'unknown'}`);
-        }
-      };
-      await writeKind('fluid', prediction.fluid);
-      await writeKind('front', prediction.front);
-      const finish = await prototype.finishDebugFullFieldImport({ sessionId: begin.sessionId });
-      if (!finish?.ok) throw new Error(`treatment import finish failed:${finish?.reason || 'unknown'}`);
-      return finish;
-    }
-
-    function makeSourceIdentity(exportReceipt) {
-      const step = proto(controlFrame)?.debugState?.()?.simStepCount ?? null;
-      return `native-low-step-${step}-export-${exportReceipt?.sessionId || 'unknown'}`;
+      if (receipt?.visuals?.treatmentObjectUrl) {
+        if (lastTreatmentObjectUrl) URL.revokeObjectURL(lastTreatmentObjectUrl);
+        lastTreatmentObjectUrl = receipt.visuals.treatmentObjectUrl;
+        treatmentImage.src = lastTreatmentObjectUrl;
+      }
     }
 
     async function tick() {
-      const endToEndStart = performance.now();
-      failurePhase = 'native-control-step-export';
-      const control = proto(controlFrame);
-      const treatment = proto(treatmentFrame);
-      control.setSelectiveHeadLiveCapturePaused(true);
-      treatment.setSelectiveHeadLiveCapturePaused(true);
-      const nativeStepStart = performance.now();
-      const controlSample = await control.sampleFrame({ advanceSim: true, includeRgba: false });
-      if (!controlSample?.ok) throw new Error(`native control frame failed:${controlSample?.reason || 'unknown'}`);
-      const nativeStepMs = performance.now() - nativeStepStart;
-      const exportStart = performance.now();
-      const native = await readExport(control);
-      const exportReadbackMs = performance.now() - exportStart;
-      sourceStepIdentity = makeSourceIdentity(native.exportReceipt);
-      const pendingControlStep = controlSample.simStepCount;
-      failurePhase = 'browser-webgpu-inference';
-      const prediction = await runtime.infer({ fluid: native.fluid, front: native.front });
-      const descriptorStart = performance.now();
-      const descriptors = await runtime.descriptors(prediction.fluid, prediction.front);
-      const descriptorMs = performance.now() - descriptorStart;
-      timings = { ...timings, nativeStepMs, exportReadbackMs, descriptorMs, ...prediction.timings, endToEndFrameMs: null };
-      sameNativeStateIdentity = `${sourceStepIdentity}:model-${runtime.modelSha256}:composition-${requestedComposition}`;
-      failurePhase = 'treatment-import-render';
-      const importStart = performance.now();
-      const importReceipt = await importTreatment(treatment, prediction, descriptors, {
-        inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
-        sourceStepIdentity,
-        sameNativeStateIdentity,
-        runtimeTruthAvailable,
-        syntheticDownsampleApplied,
-      });
-      const importUploadMs = performance.now() - importStart;
-      const treatmentRenderStart = performance.now();
-      const render = await treatment.renderFrozenScaleToCanvas({
-        fullFieldImportSessionId: importReceipt.sessionId,
+      failurePhase = 'shared-device-capture';
+      const prototype = proto();
+      if (!prototype?.captureNativeLowSelectiveSharedDeviceFrame) {
+        throw new Error('captureNativeLowSelectiveSharedDeviceFrame missing from renderer prototype');
+      }
+      const receipt = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
         boundarySplatComposition: requestedComposition,
         now: performance.now(),
-        sameStateCaptureId: sameNativeStateIdentity,
-        baseSimStepCount: pendingControlStep,
+        captureVisuals: true,
       });
-      if (!render?.ok) throw new Error(`treatment render failed:${render?.reason || 'unknown'}`);
-      const treatmentRenderMs = performance.now() - treatmentRenderStart;
-      const controlRenderStart = performance.now();
-      const controlRender = await control.renderFrozenScaleToCanvas({
-        boundarySplatComposition: requestedComposition,
-        now: performance.now(),
-        sameStateCaptureId: sameNativeStateIdentity,
-        baseSimStepCount: pendingControlStep,
-      });
-      if (!controlRender?.ok) throw new Error(`control render failed:${controlRender?.reason || 'unknown'}`);
-      const controlRenderMs = performance.now() - controlRenderStart;
-      controlStep = pendingControlStep;
-      treatmentStep = pendingControlStep;
-      timings = {
-        ...timings,
-        importUploadMs,
-        treatmentRenderMs,
-        controlRenderMs,
-        endToEndFrameMs: performance.now() - endToEndStart,
-      };
+      if (!receipt?.ok) throw new Error(`${receipt?.failurePhase || 'shared-device-capture'}:${receipt?.error || receipt?.reason || 'unknown'}`);
+      replaceImageUrls(receipt);
+      latestReceipt = receipt;
+      latestRunnerState = prototype.debugState?.() || null;
       frameIndex += 1;
-      lastTrustworthyEvidence = { sourceStepIdentity, sameNativeStateIdentity, frameIndex, controlStep, treatmentStep, timings, importReceipt, render, controlRender };
-      lastReport = debugState();
+      lastTrustworthyEvidence = { frameIndex, receipt, runner: latestRunnerState };
+      status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount} | ${Math.round(receipt.endToEndFrameMs)} ms | ${receipt.blankTreatmentAttribution}`;
     }
 
     function debugState() {
-      const control = proto(controlFrame)?.debugState?.() || null;
-      const treatment = proto(treatmentFrame)?.debugState?.() || null;
-      const runtimeState = runtime?.debugState?.() || null;
       const durationSeconds = (performance.now() - startedAtMs) / 1000;
-      const requestedBackend = runtimeState?.requestedBackend || 'WebGPU';
-      const effectiveBackend = runtimeState?.effectiveBackend || null;
-      const mismatch = requestedComposition !== effectiveComposition ? compositionMismatch : null;
-      const drift = controlStep !== null && treatmentStep !== null && controlStep !== treatmentStep ? sourceStepDrift : null;
+      const receipt = latestReceipt || {};
+      const runner = latestRunnerState || proto()?.debugState?.() || null;
+      const effectiveComposition = receipt.effectiveComposition || null;
+      const drift = receipt.sourceStepDrift || null;
+      const frameCacheKey = receipt.sameNativeStateIdentity
+        ? `${receipt.sameNativeStateIdentity}:frame-${frameIndex}`
+        : CONTRACT_MARKERS.frameCacheKey;
       return {
         schema: REPORT_SCHEMA,
         identity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
         status: routeStatus,
         failurePhase,
         routeIdentity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+        sharedDeviceRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        transportMode: receipt.transportMode || NATIVE_LOW_TRANSPORT_MODE,
         modelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
         modelSha256: SELECTIVE_HEAD_LIVE_MODEL.packed.sha256,
         modelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
         modelChecksumMismatch: null,
         inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
         featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
-        runtimeTruthAvailable: false,
-        syntheticDownsampleApplied: false,
-        nativeLowControl: { grid: 128, step: controlStep, backend: control?.backend || null },
-        nativeLowSelectivePredicted: { grid: 160, step: treatmentStep, backend: treatment?.backend || null },
-        sameNativeStateIdentity,
-        sourceStepIdentity,
+        runtimeTruthAvailable,
+        syntheticDownsampleApplied,
+        nativeLowControl: { grid: 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
+        nativeLowSelectivePredicted: { grid: 160, step: receipt.treatmentStep ?? null, backend: runner?.backend || null },
+        sameNativeStateIdentity: receipt.sameNativeStateIdentity || null,
+        sourceStepIdentity: receipt.sourceStepIdentity || null,
         sourceStepDrift: drift,
         controlTreatmentCausalDivergence: drift ? controlTreatmentCausalDivergence : null,
         requestedComposition,
         effectiveComposition,
-        compositionMismatch: mismatch,
-        requestedBackend,
-        effectiveBackend,
+        compositionMismatch: effectiveComposition && effectiveComposition !== requestedComposition ? compositionMismatch : null,
+        requestedBackend: receipt.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt.effectiveBackend || null,
         fallbackBackend,
-        effectiveFeatureCount: runtimeState?.effectiveFeatureCount || SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
+        effectiveFeatureCount: receipt.effectiveFeatureCount || SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
         noHiddenCaps,
-        nativeStepMs: timings.nativeStepMs,
-        exportReadbackMs: timings.exportReadbackMs,
-        inferenceGpuMs: timings.inferenceGpuMs,
-        uploadDispatchMs: timings.uploadDispatchMs,
-        descriptorMs: timings.descriptorMs,
-        importUploadMs: timings.importUploadMs,
-        controlRenderMs: timings.controlRenderMs,
-        treatmentRenderMs: timings.treatmentRenderMs,
-        endToEndFrameMs: timings.endToEndFrameMs,
+        supportPositiveCount: receipt.supportPositiveCount ?? null,
+        supportPrevalence: receipt.supportPrevalence ?? null,
+        treatmentSplatCandidateCount: receipt.treatmentSplatCandidateCount ?? null,
+        treatmentSplatInstanceCount: receipt.treatmentSplatInstanceCount ?? null,
+        controlSplatCandidateCount: receipt.controlSplatCandidateCount ?? null,
+        controlSplatInstanceCount: receipt.controlSplatInstanceCount ?? null,
+        calibrationGain: receipt.calibrationGain ?? 1,
+        calibrationAuthority: receipt.calibrationAuthority || 'none-truth-free-calibration-not-applied-v0',
+        blankTreatmentAttribution: receipt.blankTreatmentAttribution || null,
+        nativeStepMs: receipt.nativeStepMs ?? null,
+        inferenceGpuMs: receipt.inferenceGpuMs ?? null,
+        inferenceTimingAuthority: receipt.inferenceTimingAuthority || null,
+        uploadDispatchMs: receipt.uploadDispatchMs ?? null,
+        supportStatsMs: receipt.supportStatsMs ?? null,
+        treatmentMaterializeMs: receipt.treatmentMaterializeMs ?? null,
+        treatmentRenderMs: receipt.treatmentRenderMs ?? null,
+        restoreMaterializeMs: receipt.restoreMaterializeMs ?? null,
+        controlRenderMs: receipt.controlRenderMs ?? null,
+        endToEndFrameMs: receipt.endToEndFrameMs ?? null,
+        stageTiming: receipt.stageTiming || null,
         durationSeconds,
+        targetSeconds,
         frameIndex,
         blankFrameRejection,
         cachedFrameRejection,
         frameCacheKey,
         lastTrustworthyEvidence,
-        control,
-        treatment,
+        runner,
       };
     }
 
     async function initialize() {
       failurePhase = 'route-initialize';
-      const [control, treatment] = await Promise.all([
-        waitForPrototype(controlFrame, 'nativeLowControl'),
-        waitForPrototype(treatmentFrame, 'nativeLowSelectivePredicted'),
-      ]);
-      control.setControls({ resolution: 128, boundarySplatMode: 'learned', selectiveHeadLiveRole: 'off', selectiveHeadLiveRenderComposition: requestedComposition });
-      treatment.setControls({ resolution: 160, boundarySplatMode: 'learned', selectiveHeadLiveRole: 'off', selectiveHeadLiveRenderComposition: requestedComposition });
-      control.setSelectiveHeadLiveCapturePaused(true);
-      treatment.setSelectiveHeadLiveCapturePaused(true);
-      runtime = await createNativeLowSelectiveLiveRuntime();
+      const prototype = await waitForPrototype();
+      prototype.setControls({
+        resolution: 128,
+        boundarySplatMode: 'learned',
+        selectiveHeadLiveRole: 'off',
+        selectiveHeadLiveRenderComposition: requestedComposition,
+      });
+      prototype.setSelectiveHeadLiveCapturePaused?.(true);
       startedAtMs = performance.now();
+      await tick();
       routeStatus = 'running';
       failurePhase = null;
       requestAnimationFrame(loop);
@@ -418,43 +309,22 @@
         }
       } catch (error) {
         routeStatus = 'failed';
-        lastTrustworthyEvidence = { ...lastTrustworthyEvidence, error: error?.stack || error?.message || String(error) };
+        failurePhase = failurePhase || 'route-loop';
+        lastTrustworthyEvidence = { ...lastTrustworthyEvidence, error: error?.message || String(error), state: debugState() };
+        status.textContent = error?.message || String(error);
+        status.classList.add('bad');
+        return;
       }
       requestAnimationFrame(loop);
     }
 
-    function paintStatus() {
-      const state = debugState();
-      status.classList.toggle('bad', state.status === 'failed' || Boolean(state.fallbackBackend || state.compositionMismatch || state.sourceStepDrift));
-      status.textContent = [
-        `status: ${state.status}`,
-        `frames: ${state.frameIndex}`,
-        `duration: ${state.durationSeconds.toFixed(1)}s/${targetSeconds}s`,
-        `model: ${state.modelIdentity}`,
-        `checksum: ${state.modelSha256.slice(0, 12)}`,
-        `backend: ${state.effectiveBackend || 'starting'}`,
-        `composition: ${state.effectiveComposition}`,
-        `step: ${state.controlStep ?? controlStep ?? 'starting'}`,
-        `infer: ${Number(state.inferenceGpuMs || 0).toFixed(1)}ms`,
-        `frame: ${Number(state.endToEndFrameMs || 0).toFixed(1)}ms`,
-        `failure: ${state.failurePhase || 'none'}`,
-      ].join(' | ');
-      requestAnimationFrame(paintStatus);
-    }
-
-    function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-
-    window.__kaminosNativeLowSelectiveLive = {
-      routeIdentity: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
-      debugState,
-      report: () => lastReport || debugState(),
-      targetSeconds,
-    };
-    paintStatus();
+    window.__kaminosNativeLowSelectiveLive = { debugState };
     initialize().catch(error => {
       routeStatus = 'failed';
       failurePhase = failurePhase || 'route-initialize';
-      lastTrustworthyEvidence = { error: error?.stack || error?.message || String(error), modelChecksumMismatch };
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, error: error?.stack || error?.message || String(error) };
+      status.textContent = error?.message || String(error);
+      status.classList.add('bad');
     });
   </script>
 </body>

@@ -15,6 +15,12 @@ import {
   SELECTIVE_HEAD_LIVE_ROUTE,
   createSelectiveHeadLiveRuntime,
 } from './selective-head-live-runtime.mjs';
+import {
+  NATIVE_LOW_INPUT_AUTHORITY,
+  NATIVE_LOW_SHARED_DEVICE_ROUTE,
+  NATIVE_LOW_TRANSPORT_MODE,
+  createNativeLowSelectiveSharedDeviceRuntime,
+} from './native-low-selective-live-runtime.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -5348,6 +5354,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
     scalarActivityReceiver: null,
+    nativeLowSelectiveSharedDevice: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
@@ -5723,6 +5730,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatRenderBindGroup = null;
   let selectiveHeadLiveRuntime = null;
   let selectiveHeadLiveBindGroups = null;
+  let nativeLowSelectiveSharedRuntime = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
@@ -12425,6 +12433,290 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
+  async function ensureNativeLowSelectiveSharedRuntime() {
+    if (!nativeLowSelectiveSharedRuntime) {
+      nativeLowSelectiveSharedRuntime = await createNativeLowSelectiveSharedDeviceRuntime({ device });
+    }
+    state.nativeLowSelectiveSharedDevice = nativeLowSelectiveSharedRuntime.debugState();
+    return nativeLowSelectiveSharedRuntime;
+  }
+
+  function setSharedDeviceCopiedState(step, frame) {
+    currentFluid = 0;
+    currentFront = 0;
+    state.simStepCount = step;
+    state.frameCount = frame;
+    state.frontFieldReadIndex = currentFront;
+    state.frontFieldWriteIndex = 1 - currentFront;
+    state.frontFieldProjectionPassthrough = false;
+    updateSimCostLedger();
+  }
+
+  function captureCanvasObjectUrl() {
+    return new Promise((resolve, reject) => {
+      if (typeof canvas.toBlob !== 'function') {
+        resolve(null);
+        return;
+      }
+      canvas.toBlob(blob => {
+        if (!blob) {
+          reject(new Error('canvas-blob-capture-failed'));
+          return;
+        }
+        resolve(URL.createObjectURL(blob));
+      }, 'image/png');
+    });
+  }
+
+  async function readTimestampPairMs(source, label) {
+    await source.mapAsync(GPUMapMode.READ);
+    const values = new BigUint64Array(source.getMappedRange().slice(0));
+    source.unmap();
+    source.destroy();
+    if (values.length < 2 || values[0] === 0n || values[1] === 0n || values[1] < values[0]) {
+      return { ms: null, authority: 'timestamp-query-invalid', values: Array.from(values, value => value.toString()), label };
+    }
+    return { ms: Number(values[1] - values[0]) / 1_000_000, authority: 'webgpu-timestamp-query', label };
+  }
+
+  async function captureNativeLowSelectiveSharedDeviceFrame(options = {}) {
+    let failurePhase = 'shared-device-preflight';
+    let lastTrustworthyEvidence = {};
+    const requestedComposition = options.boundarySplatComposition ?? 'splat-only-v0';
+    const captureVisuals = options.captureVisuals === true;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const startedAt = performance.now();
+    const sourceMajorantGrid = majorantGridSize;
+    const sourceFrame = state.frameCount;
+    try {
+      if (!state.active || !device) throw new Error('inactive');
+      if (gridSize !== 128) throw new Error(`native-low-shared-device-grid-mismatch:${gridSize}`);
+      if (requestedComposition !== 'splat-only-v0') throw new Error(`unsupported-native-low-shared-device-composition:${requestedComposition}`);
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      const runtime = await ensureNativeLowSelectiveSharedRuntime();
+
+      failurePhase = 'native-low-source-step';
+      updateUniforms(fixedNow);
+      const nativeStepStart = performance.now();
+      const nativeEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native 128 source step` });
+      encodeSim(nativeEncoder);
+      device.queue.submit([nativeEncoder.finish()]);
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      const nativeStepMs = performance.now() - nativeStepStart;
+      const sourceStep = state.simStepCount;
+      const sourceFluid = fluidBuffers[currentFluid];
+      const sourceFront = frontBuffers[currentFront];
+      const sourceStepIdentity = `native-low-shared-device-step-${sourceStep}-frame-${sourceFrame + 1}`;
+      lastTrustworthyEvidence = { sourceStepIdentity, sourceStep, nativeStepMs };
+
+      failurePhase = 'shared-device-model-inference';
+      const timestampSupported = device.features?.has?.('timestamp-query') && typeof device.createQuerySet === 'function';
+      let querySet = null;
+      let timestampReadback = null;
+      let timestampResolveBuffer = null;
+      let timestampWrites = null;
+      if (timestampSupported) {
+        querySet = device.createQuerySet({ type: 'timestamp', count: 2 });
+        timestampResolveBuffer = device.createBuffer({
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} timestamp resolve`,
+          size: 16,
+          usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+        });
+        timestampReadback = device.createBuffer({
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} timestamp readback`,
+          size: 16,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        timestampWrites = { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 };
+      }
+      const inferenceStart = performance.now();
+      device.pushErrorScope('validation');
+      const inferenceEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} inference encoder` });
+      runtime.encodeFromNativeLow(inferenceEncoder, sourceFluid, sourceFront, { timestampWrites });
+      if (querySet && timestampReadback && timestampResolveBuffer) {
+        inferenceEncoder.resolveQuerySet(querySet, 0, 2, timestampResolveBuffer, 0);
+        inferenceEncoder.copyBufferToBuffer(timestampResolveBuffer, 0, timestampReadback, 0, 16);
+      }
+      device.queue.submit([inferenceEncoder.finish()]);
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      const inferenceWallMs = performance.now() - inferenceStart;
+      const validationError = await device.popErrorScope();
+      if (validationError) throw new Error(`native-low-shared-device-validation:${validationError.message || String(validationError)}`);
+      let inferenceTiming = { ms: inferenceWallMs, authority: 'queue-onSubmittedWorkDone-wall-proxy' };
+      if (timestampReadback) {
+        inferenceTiming = await readTimestampPairMs(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE);
+        timestampResolveBuffer?.destroy();
+        querySet.destroy?.();
+        if (!Number.isFinite(inferenceTiming.ms)) inferenceTiming.ms = inferenceWallMs;
+      }
+      const supportStatsStart = performance.now();
+      const supportStats = await runtime.sampleSupportStats();
+      const supportStatsMs = performance.now() - supportStatsStart;
+      const runtimeState = runtime.debugState();
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs };
+
+      failurePhase = 'shared-device-treatment-materialization';
+      const treatmentMaterializeStart = performance.now();
+      rebuildFluidState(160, sourceMajorantGrid, 'native-low-shared-device-treatment-materialize');
+      const treatmentEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted 160 materialization` });
+      for (const target of fluidBuffers) {
+        treatmentEncoder.copyBufferToBuffer(runtime.buffers.predictedFluid, 0, target, 0, fluidBufferBytes(160));
+      }
+      for (const target of frontBuffers) {
+        treatmentEncoder.copyBufferToBuffer(runtime.buffers.predictedFront, 0, target, 0, frontFieldBufferBytes(160));
+      }
+      device.queue.submit([treatmentEncoder.finish()]);
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      setSharedDeviceCopiedState(sourceStep, sourceFrame + 1);
+      const treatmentMaterializeMs = performance.now() - treatmentMaterializeStart;
+
+      failurePhase = 'shared-device-treatment-splat-render';
+      const treatmentRenderStart = performance.now();
+      const treatmentRender = await renderFrozenScaleToCanvas({
+        boundarySplatComposition: requestedComposition,
+        now: fixedNow,
+        sameStateCaptureId: `${sourceStepIdentity}:treatment`,
+        baseFrameCount: sourceFrame + 1,
+        baseSimStepCount: sourceStep,
+        restoreControls: true,
+      });
+      if (!treatmentRender?.ok) throw new Error(`native-low-shared-device-treatment-render:${treatmentRender?.reason || 'unknown'}`);
+      const treatmentVisualUrl = captureVisuals ? await captureCanvasObjectUrl() : null;
+      const treatmentRenderMs = performance.now() - treatmentRenderStart;
+      const treatmentSplatCandidateCount = treatmentRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
+      const treatmentSplatInstanceCount = treatmentRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      lastTrustworthyEvidence = {
+        ...lastTrustworthyEvidence,
+        treatmentMaterializeMs,
+        treatmentRenderMs,
+        treatmentSplatCandidateCount,
+        treatmentSplatInstanceCount,
+      };
+
+      failurePhase = 'shared-device-source-restore';
+      const restoreStart = performance.now();
+      rebuildFluidState(128, sourceMajorantGrid, 'native-low-shared-device-source-restore');
+      const restoreEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} restore 128 source materialization` });
+      for (const target of fluidBuffers) {
+        restoreEncoder.copyBufferToBuffer(runtime.buffers.lowSnapshotFluid, 0, target, 0, fluidBufferBytes(128));
+      }
+      for (const target of frontBuffers) {
+        restoreEncoder.copyBufferToBuffer(runtime.buffers.lowSnapshotFront, 0, target, 0, frontFieldBufferBytes(128));
+      }
+      device.queue.submit([restoreEncoder.finish()]);
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      setSharedDeviceCopiedState(sourceStep, sourceFrame + 1);
+      const restoreMaterializeMs = performance.now() - restoreStart;
+
+      failurePhase = 'shared-device-control-splat-render';
+      const controlRenderStart = performance.now();
+      const controlRender = await renderFrozenScaleToCanvas({
+        boundarySplatComposition: requestedComposition,
+        now: fixedNow,
+        sameStateCaptureId: `${sourceStepIdentity}:control`,
+        baseFrameCount: sourceFrame + 1,
+        baseSimStepCount: sourceStep,
+        restoreControls: true,
+      });
+      if (!controlRender?.ok) throw new Error(`native-low-shared-device-control-render:${controlRender?.reason || 'unknown'}`);
+      const controlVisualUrl = captureVisuals ? await captureCanvasObjectUrl() : null;
+      const controlRenderMs = performance.now() - controlRenderStart;
+      const controlSplatCandidateCount = controlRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
+      const controlSplatInstanceCount = controlRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+
+      const sameNativeStateIdentity = `${sourceStepIdentity}:model-${runtime.modelSha256}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
+      const supportPositiveCount = supportStats.supportPositiveCount ?? runtimeState.supportPositiveCount ?? 0;
+      const supportPrevalence = supportStats.supportPrevalence ?? runtimeState.supportPrevalence ?? 0;
+      const blankTreatmentAttribution = supportPositiveCount <= 0
+        ? 'model-support-zero'
+        : treatmentSplatInstanceCount <= 0
+          ? 'splat-materialization-zero'
+          : 'calibration-or-radiance';
+      const receipt = {
+        ok: true,
+        status: 'captured',
+        identity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        routeIdentity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+        inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
+        sourceStepIdentity,
+        sameNativeStateIdentity,
+        sourceStep,
+        controlStep: sourceStep,
+        treatmentStep: sourceStep,
+        sourceStepDrift: null,
+        controlTreatmentCausalDivergence: null,
+        requestedComposition,
+        effectiveComposition: treatmentRender.boundarySplatCompositionEffective,
+        compositionMismatch: treatmentRender.boundarySplatCompositionEffective !== requestedComposition ? 'compositionMismatch' : null,
+        requestedBackend: runtimeState.requestedBackend,
+        effectiveBackend: runtimeState.effectiveBackend,
+        fallbackBackend: runtimeState.fallbackBackend,
+        modelIdentity: runtimeState.modelIdentity,
+        modelSha256: runtimeState.modelSha256,
+        featureAuthority: runtimeState.featureAuthority,
+        effectiveFeatureCount: runtimeState.effectiveFeatureCount,
+        noHiddenCaps: runtimeState.noHiddenCaps,
+        supportPositiveCount,
+        supportPrevalence,
+        treatmentSplatCandidateCount,
+        treatmentSplatInstanceCount,
+        controlSplatCandidateCount,
+        controlSplatInstanceCount,
+        calibrationGain: 1,
+        calibrationAuthority: 'none-truth-free-calibration-not-applied-v0',
+        blankTreatmentAttribution,
+        inferenceGpuMs: inferenceTiming.ms,
+        inferenceTimingAuthority: inferenceTiming.authority,
+        uploadDispatchMs: inferenceWallMs,
+        nativeStepMs,
+        supportStatsMs,
+        treatmentMaterializeMs,
+        treatmentRenderMs,
+        restoreMaterializeMs,
+        controlRenderMs,
+        endToEndFrameMs: performance.now() - startedAt,
+        stageTiming: {
+          nativeStepMs,
+          inferenceGpuMs: inferenceTiming.ms,
+          inferenceTimingAuthority: inferenceTiming.authority,
+          uploadDispatchMs: inferenceWallMs,
+          supportStatsMs,
+          treatmentMaterializeMs,
+          treatmentRenderMs,
+          restoreMaterializeMs,
+          controlRenderMs,
+        },
+        visuals: {
+          controlObjectUrl: controlVisualUrl,
+          treatmentObjectUrl: treatmentVisualUrl,
+        },
+        treatmentRender,
+        controlRender,
+        runtime: runtimeState,
+        failurePhase: null,
+        lastTrustworthyEvidence,
+      };
+      state.nativeLowSelectiveSharedDevice = receipt;
+      return receipt;
+    } catch (error) {
+      const failed = {
+        ok: false,
+        status: 'failed',
+        identity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        routeIdentity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+        failurePhase,
+        error: error?.message || String(error),
+        lastTrustworthyEvidence,
+      };
+      state.nativeLowSelectiveSharedDevice = failed;
+      return failed;
+    }
+  }
+
   async function sampleDeterministicReplayFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     const requestedSteps = Math.floor(Number(options.steps));
@@ -12929,6 +13221,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     sampleFrame,
     sampleDeterministicReplayFrame,
+    captureNativeLowSelectiveSharedDeviceFrame,
     beginDebugFullFieldImport,
     writeDebugFullFieldImportChunk,
     finishDebugFullFieldImport,
@@ -12943,6 +13236,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
+      nativeLowSelectiveSharedRuntime?.destroy();
+      nativeLowSelectiveSharedRuntime = null;
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();

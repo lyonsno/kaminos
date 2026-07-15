@@ -6,6 +6,8 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const routePath = join(root, 'volume-native-low-selective-live.html');
 const witnessPath = join(root, 'volume-native-low-selective-live-witness.mjs');
+const runtimePath = join(root, 'native-low-selective-live-runtime.mjs');
+const corePath = join(root, 'volume-core.js');
 const modelManifestPath = join(root, 'models/selective-head-live/exact-basin-160-to-128-v0/manifest.json');
 const modelGeneratedPath = join(root, 'models/selective-head-live/exact-basin-160-to-128-v0/model.generated.js');
 
@@ -20,10 +22,13 @@ assert.equal(modelManifest.source?.highGrid, 160);
 
 assert.ok(existsSync(routePath), 'native-low selective live browser route exists');
 assert.ok(existsSync(witnessPath), 'native-low selective live witness exists');
+assert.ok(existsSync(runtimePath), 'native-low selective live runtime exists');
 
 const route = readFileSync(routePath, 'utf8');
 const witness = readFileSync(witnessPath, 'utf8');
-const combined = `${route}\n${witness}`;
+const runtime = readFileSync(runtimePath, 'utf8');
+const core = readFileSync(corePath, 'utf8');
+const combined = `${route}\n${witness}\n${runtime}\n${core}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
 assert.match(route, /kaminos\.volume\.native-low-selective-live-comparison\.v0/, 'route publishes a stable live comparison report schema');
@@ -56,6 +61,19 @@ assert.match(route, /blankFrameRejection/, 'route refuses blank frames as eviden
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');
 assert.match(route, /failurePhase/, 'route writes a failure phase');
 assert.match(route, /lastTrustworthyEvidence/, 'route preserves a durable report even when primary output fails');
+assert.match(combined, /native-low-shared-device-buffer-inference-v0/, 'route names shared-device native-low inference authority');
+assert.match(runtime, /createNativeLowSelectiveSharedDeviceRuntime/, 'runtime exposes a shared-device constructor instead of creating a second WebGPU device');
+assert.doesNotMatch(runtime, /requestAdapter\(\)/, 'native-low runtime must not create a separate WebGPU adapter/device for the production route');
+assert.match(core, /captureNativeLowSelectiveSharedDeviceFrame/, 'renderer exposes a one-device native-low control/treatment capture API');
+assert.match(core, /nativeLowSelectiveSharedDevice/, 'renderer debug state exposes native-low shared-device transfer receipts');
+assert.match(core, /supportPositiveCount/, 'shared-device route reports model support count for blank-treatment attribution');
+assert.match(core, /supportPrevalence/, 'shared-device route reports model support prevalence for blank-treatment attribution');
+assert.match(core, /treatmentSplatCandidateCount/, 'shared-device route reports treatment splat materialization candidate count');
+assert.match(core, /treatmentSplatInstanceCount/, 'shared-device route reports treatment splat materialization instance count');
+assert.match(core, /calibrationGain/, 'shared-device route reports calibration state without silently tuning it');
+assert.match(core, /transportMode:\s*'shared-device-gpu-buffers-no-readback-import-v0'/, 'shared-device route records that per-frame transport avoids readback/import');
+assert.doesNotMatch(route, /beginDebugFullFieldExport|readDebugFullFieldExportChunk|beginDebugFullFieldImport|writeDebugFullFieldImportChunk|finishDebugFullFieldImport/, 'production native-low route cannot use base64 debug export/import per frame');
+assert.match(route, /captureNativeLowSelectiveSharedDeviceFrame/, 'operator route drives the renderer-owned shared-device frame API');
 
 assert.match(witness, /native-low-live-witness-v0/, 'witness names live route evidence authority');
 assert.match(witness, /requestedComposition[\s\S]*effectiveComposition/, 'witness validates requested/effective composition identity');
@@ -63,5 +81,7 @@ assert.match(witness, /requestedBackend[\s\S]*effectiveBackend/, 'witness valida
 assert.match(witness, /blankFrameRejection/, 'witness rejects blank frame evidence');
 assert.match(witness, /cachedFrameRejection/, 'witness rejects cached-frame false closure');
 assert.match(witness, /failurePhase/, 'witness writes a failure-phase report on error');
+assert.match(witness, /supportPositiveCount[\s\S]*treatmentSplatInstanceCount[\s\S]*calibrationGain/, 'witness preserves blank-treatment attribution fields');
+assert.match(witness, /transportMode[\s\S]*shared-device-gpu-buffers-no-readback-import-v0/, 'witness verifies shared-device transport identity');
 
 console.log('native-low selective live route contracts passed');

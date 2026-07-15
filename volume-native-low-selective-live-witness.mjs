@@ -10,6 +10,10 @@ const IDENTITY = 'native-low-live-witness-v0';
 const ROUTE = 'native-low-live-browser-webgpu-inference-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 const MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9';
+const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
+const WITNESS_CONTRACT_MARKERS = Object.freeze({
+  transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+});
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
@@ -102,11 +106,15 @@ try {
       && state?.requestedBackend === 'WebGPU'
       && state?.effectiveBackend === 'WebGPU'
       && state?.fallbackBackend === null
+      && state?.transportMode === TRANSPORT_MODE
       && state?.runtimeTruthAvailable === false
       && state?.syntheticDownsampleApplied === false
       && state?.sameNativeStateIdentity
       && !state?.sourceStepDrift
       && !state?.controlTreatmentCausalDivergence
+      && Number(state?.supportPositiveCount) >= 0
+      && Number(state?.treatmentSplatInstanceCount) >= 0
+      && Number(state?.calibrationGain) >= 0
       && Number(state?.inferenceGpuMs) >= 0
       && Number(state?.uploadDispatchMs) >= 0
       && Number(state?.endToEndFrameMs) >= 0
@@ -122,10 +130,14 @@ try {
   assert.equal(state?.requestedBackend, 'WebGPU', 'wrong requested backend');
   assert.equal(state?.effectiveBackend, 'WebGPU', 'fallback backend used');
   assert.equal(state?.fallbackBackend, null, 'fallback backend evidence is not admissible');
+  assert.equal(state?.transportMode, TRANSPORT_MODE, 'wrong shared-device transport mode');
   assert.equal(state?.runtimeTruthAvailable, false, 'truth authority leaked into runtime');
   assert.equal(state?.syntheticDownsampleApplied, false, 'synthetic downsample leaked into runtime');
   assert.equal(state?.sourceStepDrift, null, 'source-step drift detected');
   assert.equal(state?.controlTreatmentCausalDivergence, null, 'control/treatment causal divergence detected');
+  assert.ok(Number(state?.supportPositiveCount) >= 0, 'supportPositiveCount missing');
+  assert.ok(Number(state?.treatmentSplatInstanceCount) >= 0, 'treatmentSplatInstanceCount missing');
+  assert.ok(Number(state?.calibrationGain) >= 0, 'calibrationGain missing');
 
   const startState = state;
   const observationStartMs = performance.now();
@@ -140,6 +152,7 @@ try {
   assert.equal(endState?.effectiveComposition, startState?.effectiveComposition, 'composition drift during observation');
   assert.equal(endState?.effectiveBackend, 'WebGPU', 'backend drift during observation');
   assert.equal(endState?.fallbackBackend, null, 'fallback backend during observation');
+  assert.equal(endState?.transportMode, TRANSPORT_MODE, 'transport mode drift during observation');
   assert.equal(endState?.sourceStepDrift, null, 'source-step drift during observation');
 
   failurePhase = 'blankFrameRejection';
@@ -162,8 +175,15 @@ try {
     effectiveComposition: endState.effectiveComposition,
     requestedBackend: endState.requestedBackend,
     effectiveBackend: endState.effectiveBackend,
+    transportMode: endState.transportMode,
     modelIdentity: endState.modelIdentity,
     modelSha256: endState.modelSha256,
+    supportPositiveCount: endState.supportPositiveCount,
+    supportPrevalence: endState.supportPrevalence,
+    treatmentSplatCandidateCount: endState.treatmentSplatCandidateCount,
+    treatmentSplatInstanceCount: endState.treatmentSplatInstanceCount,
+    calibrationGain: endState.calibrationGain,
+    blankTreatmentAttribution: endState.blankTreatmentAttribution,
     minimumContinuousSeconds,
     observedSeconds,
     frameDelta,
