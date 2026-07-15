@@ -51,6 +51,16 @@ def write_json(path, payload):
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def write_running_report(path, report, phase, last_trustworthy_evidence):
+    report.update({
+        "status": "running",
+        "phase": phase,
+        "lastTrustworthyEvidence": last_trustworthy_evidence,
+        "updatedAt": time.time(),
+    })
+    write_json(path, report)
+
+
 def sha256_bytes(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -1363,6 +1373,36 @@ def main():
         initial_pixel_loss = mean_metric(initial_evaluation_rows, "pixelLoss")
         initial_edge_loss = mean_metric(initial_evaluation_rows, "edgeLoss")
         initial_loss = mean_metric(initial_evaluation_rows, "loss")
+        initial_evidence = {
+            "initialPreview": str(initial_preview_path),
+            "targetPreview": str(target_preview_path),
+            "frameSplitAuthority": frame_split["authority"],
+            "trainFrameIds": frame_split["trainFrameIds"],
+            "evaluationFrameIds": frame_split["evaluationFrameIds"],
+            "evaluationLossAuthority": (
+                "held-out-frame-mean-v0"
+                if frame_split["authority"] == "explicit-disjoint-frame-holdout-v0"
+                else "train-frame-mean-v0"
+            ),
+            "initialPixelLoss": initial_pixel_loss,
+            "initialEdgeLoss": initial_edge_loss,
+            "initialLoss": initial_loss,
+            "evaluationFrames": [
+                {
+                    "frameIndex": row["frameIndex"],
+                    "frameId": row["frameId"],
+                    "sameStateCaptureId": row["sameStateCaptureId"],
+                    "initialPreview": row["preview"],
+                    "targetPreview": row["targetPreview"],
+                    "initialPixelLoss": row["pixelLoss"],
+                    "initialEdgeLoss": row["edgeLoss"],
+                    "initialLoss": row["loss"],
+                }
+                for row in initial_evaluation_rows
+            ],
+        }
+        phase = "initial-training-loss"
+        write_running_report(report_path, report, phase, initial_evidence)
 
         if optical_decoder is None:
             def loss_fn(active_model):
@@ -1387,6 +1427,10 @@ def main():
         initial_training_loss_value = loss_fn(trainable_model)
         mx.eval(initial_training_loss_value)
         training_losses = [{"step": 0, "loss": float(initial_training_loss_value.item())}]
+        write_running_report(report_path, report, phase, {
+            **initial_evidence,
+            "trainingLossTrace": training_losses,
+        })
         if not args.probe_only and args.steps > 0:
             phase = "training"
             optimizer = optim.Adam(learning_rate=args.learning_rate)
@@ -1398,6 +1442,10 @@ def main():
                 mx.eval(trainable_model.parameters(), optimizer.state, loss)
                 if step == 0 or (step + 1) % 20 == 0 or step + 1 == args.steps:
                     training_losses.append({"step": step + 1, "loss": float(loss.item())})
+                    write_running_report(report_path, report, phase, {
+                        **initial_evidence,
+                        "trainingLossTrace": training_losses,
+                    })
         phase = "trained-preview"
         if optical_decoder is None:
             trained_evaluation_rows = evaluate_frame_set(

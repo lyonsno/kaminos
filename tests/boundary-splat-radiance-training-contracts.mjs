@@ -21,6 +21,31 @@ assert.match(script, /cameraUp/, 'radiance trainer preserves the captured vertic
 assert.match(script, /preview-initial\.png/, 'radiance trainer emits an inspectable warm-start preview');
 assert.match(script, /preview-trained\.png/, 'radiance trainer emits an inspectable trained preview');
 assert.match(script, /failurePhase/, 'radiance trainer writes phase-specific failures');
+assert.match(
+  script,
+  /initial_evidence\s*=\s*\{[\s\S]*"initialPreview"[\s\S]*"targetPreview"[\s\S]*"evaluationFrames"[\s\S]*write_running_report\(report_path,\s*report,\s*phase,\s*initial_evidence\)/,
+  'radiance trainer durably records completed initial previews and held-out metrics before compiling the first training objective',
+);
+assert.match(
+  script,
+  /def\s+write_running_report\([^)]*\):[\s\S]*?report\.update\(\{[\s\S]*?"lastTrustworthyEvidence"[\s\S]*?write_json\(path,\s*report\)/,
+  'running evidence mutates the canonical report object so handled failures cannot overwrite it with an evidence-free snapshot',
+);
+assert.match(
+  script,
+  /initial_evidence\s*=\s*\{[\s\S]*"frameSplitAuthority"[\s\S]*"trainFrameIds"[\s\S]*"evaluationFrameIds"[\s\S]*"evaluationLossAuthority"/,
+  'precompile evidence proves the exact train/evaluation custody behind its held-out metrics',
+);
+assert.match(
+  script,
+  /phase\s*=\s*"initial-training-loss"[\s\S]*?write_running_report\(report_path,\s*report,\s*phase,\s*initial_evidence\)[\s\S]*?initial_training_loss_value\s*=\s*loss_fn\(trainable_model\)[\s\S]*?nn\.value_and_grad/,
+  'radiance trainer writes trustworthy initial evidence before compiling either the first objective or its gradients',
+);
+assert.match(
+  script,
+  /training_losses\s*=\s*\[\{"step":\s*0,[^\]]+\}\][\s\S]*?write_running_report\(report_path,\s*report,\s*phase,\s*\{[\s\S]*?"trainingLossTrace":\s*training_losses[\s\S]*?\}\)[\s\S]*?nn\.value_and_grad/,
+  'radiance trainer serializes the compiled step-zero loss before gradient compilation can stall or be killed',
+);
 assert.match(script, /except\s+BaseException\s+as\s+error/, 'radiance trainer durably records interruption and cancellation before propagating them');
 assert.match(script, /"errorType"\s*:\s*type\(error\)\.__name__/, 'interrupted reports preserve the exact terminating exception class');
 assert.match(script, /compile-boundary-splat-attribute-model\.mjs/, 'radiance trainer compiles a browser-consumable artifact');
