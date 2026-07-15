@@ -859,6 +859,21 @@ async function main() {
         if (renderCompositionExplicit && renderReceipt.boundarySplatCompositionEffective !== renderComposition) {
           throw new Error(`requested render composition was not effective: ${renderComposition} != ${renderReceipt.boundarySplatCompositionEffective || '(missing)'}`);
         }
+        if (
+          renderReceipt.boundarySplatCompositionEffective !== 'raymarch-only-v0'
+          && (
+            renderReceipt.boundarySplatEvidenceComplete !== true
+            || renderReceipt.boundarySplatOverflowCount !== 0
+          )
+        ) {
+          throw new Error(`boundary-splat-evidence-incomplete: ${JSON.stringify({
+            boundarySplatEvidenceComplete: renderReceipt.boundarySplatEvidenceComplete,
+            boundarySplatCapacityPassCount: renderReceipt.boundarySplatCapacityPassCount,
+            boundarySplatCapacity: renderReceipt.boundarySplatCapacity,
+            boundarySplatCandidateCount: renderReceipt.boundarySplatCandidateCount,
+            boundarySplatOverflowCount: renderReceipt.boundarySplatOverflowCount,
+          })}`);
+        }
         if (scalarActivityCue) {
           const requestedFireDetail = Number(renderControlOverrides.oracleActivityFireDetail || 0);
           if (

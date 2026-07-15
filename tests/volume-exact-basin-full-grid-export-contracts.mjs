@@ -77,6 +77,16 @@ assert.match(exporter, /controlOverrides:\s*renderControlOverrides/, 'imported r
 assert.match(exporter, /renderCompositionExplicit[\s\S]*boundarySplatCompositionEffective\s*!==\s*renderComposition/, 'an explicitly requested hybrid composition fails loud when the renderer reports another effective composition');
 assert.match(
   exporter,
+  /boundarySplatEvidenceComplete\s*!==\s*true[\s\S]*boundary-splat-evidence-incomplete/,
+  'the exporter rejects a splat witness unless its final same-state draw is explicitly exhaustive',
+);
+assert.match(
+  exporter,
+  /boundarySplatOverflowCount\s*!==\s*0[\s\S]*boundary-splat-evidence-incomplete/,
+  'the exporter rejects nonzero final splat overflow instead of preserving a truncated image as evidence',
+);
+assert.match(
+  exporter,
   /post-render-canvas-geometry-v0[\s\S]*Page\.captureScreenshot/,
   'the witness recomputes capture geometry from the post-render intrinsic canvas before screenshotting',
 );

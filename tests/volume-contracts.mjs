@@ -2197,6 +2197,21 @@ assert.match(renderFrozenScaleToCanvasBody, /encodeDraw\(encoder,\s*currentTextu
 assert.doesNotMatch(renderFrozenScaleToCanvasBody, /encodeBrowserResidualSourcePass\(encoder,\s*currentTexture\.createView\(\),\s*browserResidualFeatureTexture\.createView\(\)\)/, 'frozen feature source pass must not overwrite the visible canvas texture');
 assert.match(renderFrozenScaleToCanvasBody, /featureCaptureSourcePassApplied/, 'frozen feature captures must report whether the source pass produced the feature texture for this capture');
 assert.match(renderFrozenScaleToCanvasBody, /gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass/, 'frozen feature captures must distinguish source-pass feature readback authority from opportunistic texture readback');
+assert.match(
+  renderFrozenScaleToCanvasBody,
+  /while\s*\(boundarySplatEvidenceNeedsRerender\(\)\)[\s\S]*encodeBoundarySplats\([\s\S]*encodeBoundarySplatTelemetry\([\s\S]*resolveBoundarySplatTelemetry\(\)/,
+  'frozen splat evidence must rerender the same state after telemetry-driven capacity growth until the captured pass is exhaustive',
+);
+assert.match(
+  renderFrozenScaleToCanvasBody,
+  /boundarySplatEvidenceComplete[\s\S]*boundarySplatOverflowCount/,
+  'frozen splat receipts must distinguish exhaustive evidence from an overflowing or unresolved draw',
+);
+assert.match(
+  renderFrozenScaleToCanvasBody,
+  /boundary-splat-capacity-growth-stalled/,
+  'frozen splat evidence must fail loud when an overflowing pass cannot grow toward the observed candidate count',
+);
 assert.match(core, /advanceSim:\s*false/, 'same-state render-scale capture renders without advancing the simulator for each scale');
 assert.match(core, /render-only-frozen-sim-state/, 'same-state render-scale capture labels render-only frozen simulator authority');
 assert.match(core, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'volume core labels canvas-clip screenshot authority for frozen-state scale images');
