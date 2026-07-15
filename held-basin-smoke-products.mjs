@@ -109,6 +109,7 @@ export function buildHeldSmokeHierarchyProduct({ frame, model, config = {} } = {
   return {
     schema: 'kaminos.held-smoke-hierarchy-product.v0',
     status: 'compiled',
+    routeCell: 'B',
     source: {
       sourceSchema: source.sourceSchema,
       captureId: source.captureId,
@@ -128,6 +129,59 @@ export function buildHeldSmokeHierarchyProduct({ frame, model, config = {} } = {
       threshold: selector.threshold,
       thresholdAuthority: selector.thresholdAuthority,
     },
+    product,
+  };
+}
+
+export function buildHeldAnalyticalSmokeHierarchyProduct({ frame, config = {} } = {}) {
+  const source = validateFrame(frame);
+  const allocationAuthority = 'analytical-articulation-score-v0';
+  const product = compileSmokeFieldHierarchy({
+    grid: source.grid,
+    channelOrder: KAMINOS_FLUID_CHANNEL_ORDER,
+    field: source.field,
+    sourceIdentity: source.fluidIdentity,
+    slotIdentity: {
+      historySlot: 0,
+      slotWriteTick: source.simStepCount,
+      simulatorGeneration: 0,
+      modelIdentity: allocationAuthority,
+    },
+    coarseBlockSize: config.coarseBlockSize ?? 8,
+    fineBlockSize: config.fineBlockSize ?? 4,
+    extinctionCoefficient: config.extinctionCoefficient ?? 1.35,
+    fineMassFraction: config.fineMassFraction ?? 0.5,
+    articulationThreshold: config.articulationThreshold ?? 0.5,
+    coarseAnchorMassRatio: config.coarseAnchorMassRatio ?? 0.8,
+    coarseStratumSize: config.coarseStratumSize ?? 4,
+    fineOccupancyMassRatio: config.fineOccupancyMassRatio ?? 0.4,
+    capacity: config.capacity ?? null,
+  });
+  if (product.capacity.overflowCount > 0) {
+    throw new Error(`capacity overflow ${product.capacity.overflowCount}; refusing to truncate or misreport the Route A product`);
+  }
+  return {
+    schema: 'kaminos.held-smoke-hierarchy-product.v0',
+    status: 'compiled',
+    routeCell: 'A',
+    source: {
+      sourceSchema: source.sourceSchema,
+      captureId: source.captureId,
+      simStepCount: source.simStepCount,
+      manifestIdentity: source.manifestIdentity,
+      sourceCaptureIdentity: source.sourceCaptureIdentity,
+      cameraIdentity: source.cameraIdentity,
+      fluidIdentity: source.fluidIdentity,
+      effectiveRoute: source.manifest.effectiveRoute,
+      prototypeIdentity: source.manifest.prototypeIdentity,
+      backend: source.manifest.backend,
+      grid: source.grid,
+    },
+    allocation: {
+      authority: allocationAuthority,
+      learned: false,
+    },
+    model: null,
     product,
   };
 }
@@ -179,17 +233,21 @@ export async function writeHeldSmokeHierarchyArtifacts(built, outDir) {
   }
   requireIdentity(outDir, 'Route B output directory');
   await mkdir(outDir, { recursive: true });
-  const artifactPath = resolve(outDir, 'route-b.splats.f32');
+  const routeCell = built.routeCell === 'A' ? 'A' : 'B';
+  const routeSlug = `route-${routeCell.toLowerCase()}`;
+  const artifactPath = resolve(outDir, `${routeSlug}.splats.f32`);
   const bytes = packSplats(built.product.splats);
   await writeFile(artifactPath, bytes);
   const report = {
     schema: 'kaminos.held-smoke-hierarchy-report.v0',
     status: 'captured',
+    routeCell,
     source: built.source,
     model: built.model,
+    allocation: built.allocation || null,
     product: compactProduct(built.product),
     artifact: {
-      path: artifactPath,
+      path: `${routeSlug}.splats.f32`,
       sha256: sha256(bytes),
       byteLength: bytes.byteLength,
       dtype: 'float32',
@@ -198,13 +256,14 @@ export async function writeHeldSmokeHierarchyArtifacts(built, outDir) {
       channelOrder: PACKED_SPLAT_CHANNELS,
     },
   };
-  const reportPath = resolve(outDir, 'route-b-report.json');
+  const reportPath = resolve(outDir, `${routeSlug}-report.json`);
   await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
   return { ...report, reportPath };
 }
 
 function requestedIdentity(options) {
   return {
+    routeCell: options.routeCell || 'B',
     manifestPath: options.manifestPath || null,
     manifestSha256: options.expectedManifestSha256 || null,
     modelPath: options.modelPath || null,
@@ -214,6 +273,9 @@ function requestedIdentity(options) {
 
 export async function compileHeldSmokeHierarchyProduct(options = {}) {
   const outDir = requireIdentity(options.outDir, 'Route B output directory');
+  const routeCell = options.routeCell || 'B';
+  if (routeCell !== 'A' && routeCell !== 'B') throw new Error(`unsupported held smoke route cell: ${routeCell}`);
+  const routeSlug = `route-${routeCell.toLowerCase()}`;
   await mkdir(outDir, { recursive: true });
   let phase = 'teacher-load';
   let frame = null;
@@ -223,20 +285,26 @@ export async function compileHeldSmokeHierarchyProduct(options = {}) {
   try {
     const manifestPath = resolve(requireIdentity(options.manifestPath, 'held manifest path'));
     frame = await loadChecksumBoundSmokeTeacherFrame(manifestPath, options.expectedManifestSha256);
-    phase = 'model-load';
-    const modelPath = resolve(requireIdentity(options.modelPath, 'Route B model path'));
-    if (typeof options.expectedModelSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(options.expectedModelSha256)) {
-      throw new Error('Route B requires an exact requested model sha256');
+    let built;
+    if (routeCell === 'A') {
+      phase = 'product-build';
+      built = buildHeldAnalyticalSmokeHierarchyProduct({ frame, config: options.config });
+    } else {
+      phase = 'model-load';
+      const modelPath = resolve(requireIdentity(options.modelPath, 'Route B model path'));
+      if (typeof options.expectedModelSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(options.expectedModelSha256)) {
+        throw new Error('Route B requires an exact requested model sha256');
+      }
+      const modelBytes = await readFile(modelPath);
+      const modelSha = sha256(modelBytes);
+      if (modelSha !== options.expectedModelSha256) {
+        throw new Error(`requested model sha256 mismatch: ${modelSha} != ${options.expectedModelSha256}`);
+      }
+      const model = JSON.parse(modelBytes.toString('utf8'));
+      modelIdentity = model.identity || null;
+      phase = 'product-build';
+      built = buildHeldSmokeHierarchyProduct({ frame, model, config: options.config });
     }
-    const modelBytes = await readFile(modelPath);
-    const modelSha = sha256(modelBytes);
-    if (modelSha !== options.expectedModelSha256) {
-      throw new Error(`requested model sha256 mismatch: ${modelSha} != ${options.expectedModelSha256}`);
-    }
-    const model = JSON.parse(modelBytes.toString('utf8'));
-    modelIdentity = model.identity || null;
-    phase = 'product-build';
-    const built = buildHeldSmokeHierarchyProduct({ frame, model, config: options.config });
     phase = 'artifact-write';
     const report = await writeHeldSmokeHierarchyArtifacts(built, outDir);
     primaryArtifactWritten = true;
@@ -260,7 +328,7 @@ export async function compileHeldSmokeHierarchyProduct(options = {}) {
         message: error instanceof Error ? error.message : String(error),
       },
     };
-    await writeFile(join(outDir, 'route-b-report.json'), `${JSON.stringify(failure, null, 2)}\n`);
+    await writeFile(join(outDir, `${routeSlug}-report.json`), `${JSON.stringify(failure, null, 2)}\n`);
     throw error;
   }
 }
@@ -274,6 +342,7 @@ function parseArgs(argv) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = parseArgs(process.argv.slice(2));
   const report = await compileHeldSmokeHierarchyProduct({
+    routeCell: args.get('--route-cell') || 'B',
     manifestPath: args.get('--manifest'),
     expectedManifestSha256: args.get('--manifest-sha256'),
     modelPath: args.get('--model'),

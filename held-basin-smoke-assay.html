@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Held Smoke Assay</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: #0a0c0e;
+      color: #e7e8e9;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { display: grid; grid-template-rows: 42px 1fr; background: #0a0c0e; }
+    header {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      padding: 0 14px;
+      border-bottom: 1px solid #353a3e;
+      background: #111417;
+      font-size: 11px;
+      line-height: 1;
+    }
+    header strong { color: #fff; font-size: 12px; }
+    #source-receipt { overflow: hidden; color: #aeb5ba; text-overflow: ellipsis; white-space: nowrap; }
+    #status { color: #e9b563; }
+    #status[data-kind="running"] { color: #7fd09c; }
+    #status[data-kind="failed"] { color: #ff7777; }
+    main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .route {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background: #11161b;
+    }
+    .route + .route { border-left: 1px solid #353a3e; }
+    iframe { display: block; width: 100%; height: 100%; border: 0; background: #11161b; }
+    .route-label {
+      position: absolute;
+      z-index: 3;
+      top: 10px;
+      padding: 6px 8px;
+      border: 1px solid rgba(255,255,255,.2);
+      background: rgba(9,11,13,.84);
+      color: #f2f3f4;
+      font-size: 11px;
+      pointer-events: none;
+    }
+    .label-a { left: 10px; }
+    .label-b { left: 10px; }
+    .label-d { left: 10px; }
+    .open-route {
+      position: absolute;
+      z-index: 4;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 7px 9px;
+      border: 1px solid rgba(233,181,99,.45);
+      background: rgba(18,15,11,.9);
+      color: #d7c6a9;
+      font-size: 10px;
+      line-height: 1.3;
+      pointer-events: none;
+    }
+    .open-route strong { color: #f0c77c; font-size: 11px; }
+    #failure {
+      display: none;
+      position: absolute;
+      z-index: 10;
+      inset: 0;
+      margin: 0;
+      padding: 18px;
+      overflow: auto;
+      background: rgba(23,5,7,.96);
+      color: #ffb3b3;
+      white-space: pre-wrap;
+      font-size: 12px;
+    }
+    #failure.visible { display: block; }
+    @media (max-width: 840px) {
+      body { grid-template-rows: 50px 1fr; }
+      header { grid-template-columns: auto 1fr; }
+      #status { display: none; }
+      main { grid-template-columns: 1fr; grid-template-rows: repeat(3, 1fr); }
+      .route + .route { border-left: 0; border-top: 1px solid #353a3e; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Held smoke A/B/C/D</strong>
+    <span id="source-receipt">Binding exact source...</span>
+    <span id="status" data-kind="loading">loading</span>
+  </header>
+  <main>
+    <section class="route" aria-label="Analytical and learned splat smoke comparison">
+      <span class="route-label label-a">A Analytical</span>
+      <iframe id="a-frame" title="Route A analytical splat smoke"></iframe>
+    </section>
+    <section class="route" aria-label="Learned splat smoke comparison">
+      <span class="route-label label-b">B Learned</span>
+      <iframe id="b-frame" title="Route B learned splat smoke"></iframe>
+      <div class="open-route"><strong>C Open</strong><span>neural history smoke decoder has no checksum-bound production raster product for this held source</span></div>
+    </section>
+    <section class="route" aria-label="Raymarched smoke control">
+      <span class="route-label label-d">D Raymarch smoke + splat flame</span>
+      <iframe id="d-frame" title="Route D held raymarch control"></iframe>
+    </section>
+  </main>
+  <pre id="failure"></pre>
+  <script type="module">
+    const HELD_SPLAT_ROUTE = 'webgpu-held-smoke-assay-v0';
+    const HELD_VIEWER_ROUTE = 'kaminos.volume.held-field-viewer.v0';
+    const HELD_COMPOSITION = 'smoke-raymarch-under-splats-v0';
+    const params = new URLSearchParams(location.search);
+    const assayManifest = params.get('assay_manifest') || './artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json';
+    const assayManifestSha256Requested = (params.get('assay_manifest_sha256') || 'f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8').toLowerCase();
+    const mountRequested = params.get('held_manifest') || './artifacts/operator-live-basin-0715/viewer-manifest.json';
+    const manifestSha256Requested = (params.get('manifest_sha256') || '553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa').toLowerCase();
+    const aFrame = document.getElementById('a-frame');
+    const bFrame = document.getElementById('b-frame');
+    const dFrame = document.getElementById('d-frame');
+    const sourceReceipt = document.getElementById('source-receipt');
+    const status = document.getElementById('status');
+    const failure = document.getElementById('failure');
+    const requested = {
+      a: { requestedRoute: HELD_SPLAT_ROUTE, manifest: assayManifest, productIndex: 0 },
+      b: { requestedRoute: HELD_SPLAT_ROUTE, manifest: assayManifest, productIndex: 1 },
+      d: { requestedRoute: HELD_VIEWER_ROUTE, composition: HELD_COMPOSITION },
+    };
+    const state = {
+      schema: 'kaminos.held-smoke-assay-cockpit.v0',
+      status: 'initializing',
+      failurePhase: null,
+      error: null,
+      requested,
+      source: {
+        comparisonAuthority: 'same-source-camera-independent-viewports-v0',
+        mountRequested,
+        mountEffective: null,
+        mountRegistered: false,
+        manifestSha256Requested,
+        manifestSha256Effective: null,
+        assayManifestRequested: assayManifest,
+        assayManifestEffective: null,
+        assayManifestSha256Requested,
+        assayManifestSha256Effective: null,
+        cameraIdentity: null,
+      },
+      children: {
+        a: { status: 'loading', requestedRoute: HELD_SPLAT_ROUTE, effectiveRoute: null, requestedProductIndex: 0, effectiveProductIndex: null, frameCount: 0, error: null },
+        b: { status: 'loading', requestedRoute: HELD_SPLAT_ROUTE, effectiveRoute: null, requestedProductIndex: 1, effectiveProductIndex: null, frameCount: 0, error: null },
+        d: { status: 'loading', requestedRoute: HELD_VIEWER_ROUTE, effectiveRoute: null, compositionRequested: HELD_COMPOSITION, compositionEffective: null, manifestSha256Effective: null, error: null },
+      },
+      lastObservedAt: null,
+    };
+    window.__kaminosHeldSmokeAssay = { debugState: () => structuredClone(state) };
+
+    function hex(bytes) {
+      return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    function setStatus(value, kind) {
+      status.textContent = value;
+      status.dataset.kind = kind;
+    }
+
+    function fail(phase, reason) {
+      const error = reason instanceof Error ? reason : new Error(String(reason));
+      state.status = 'failed';
+      state.failurePhase = phase;
+      state.error = error.message;
+      setStatus('failed', 'failed');
+      failure.textContent = JSON.stringify(window.__kaminosHeldSmokeAssay.debugState(), null, 2);
+      failure.classList.add('visible');
+    }
+
+    function observeChildren() {
+      if (state.status === 'failed') return;
+      try {
+        const a = aFrame.contentWindow?.__kaminosSmokeSplatMotion;
+        const b = bFrame.contentWindow?.__kaminosSmokeSplatMotion;
+        const dApi = dFrame.contentWindow?.__kaminosHeldFieldViewer;
+        if (a) {
+          state.children.a = {
+            status: a.status,
+            requestedRoute: a.requestedRoute,
+            effectiveRoute: a.effectiveRoute,
+            requestedProductIndex: a.requestedProductIndex,
+            effectiveProductIndex: a.effectiveProductIndex,
+            frameCount: a.frameCount,
+            error: a.error,
+          };
+        }
+        if (b) {
+          state.children.b = {
+            status: b.status,
+            requestedRoute: b.requestedRoute,
+            effectiveRoute: b.effectiveRoute,
+            requestedProductIndex: b.requestedProductIndex,
+            effectiveProductIndex: b.effectiveProductIndex,
+            frameCount: b.frameCount,
+            error: b.error,
+          };
+        }
+        if (dApi?.debugState) {
+          const d = dApi.debugState();
+          state.children.d = {
+            status: d.status,
+            requestedRoute: d.routeIdentity,
+            effectiveRoute: d.effectiveRoute,
+            compositionRequested: d.compositionRequested,
+            compositionEffective: d.compositionEffective,
+            manifestSha256Effective: d.manifestSha256Effective,
+            error: d.error,
+          };
+        }
+        state.lastObservedAt = new Date().toISOString();
+        if (state.children.a.status === 'failed') throw new Error(`A child failed: ${state.children.a.error || 'unknown'}`);
+        if (state.children.b.status === 'failed') throw new Error(`B child failed: ${state.children.b.error || 'unknown'}`);
+        if (state.children.d.status === 'failed') throw new Error(`D child failed: ${state.children.d.error || 'unknown'}`);
+        const running = state.children.a.status === 'running'
+          && state.children.a.frameCount > 0
+          && state.children.a.effectiveRoute === HELD_SPLAT_ROUTE
+          && state.children.a.effectiveProductIndex === 0
+          && state.children.b.status === 'running'
+          && state.children.b.frameCount > 0
+          && state.children.b.effectiveRoute === HELD_SPLAT_ROUTE
+          && state.children.b.effectiveProductIndex === 1
+          && state.children.d.status === 'running'
+          && state.children.d.requestedRoute === HELD_VIEWER_ROUTE
+          && state.children.d.compositionEffective === HELD_COMPOSITION
+          && state.children.d.manifestSha256Effective === manifestSha256Requested
+          && state.source.mountRegistered;
+        if (running) {
+          state.status = 'running';
+          state.failurePhase = null;
+          state.error = null;
+          setStatus('exact source active', 'running');
+        }
+      } catch (error) {
+        fail('child-observation', error);
+      }
+    }
+
+    async function initialize() {
+      try {
+        state.failurePhase = 'mount-registration';
+        if (!/^[a-f0-9]{64}$/.test(manifestSha256Requested)) throw new Error('manifest-sha256-required');
+        const response = await fetch(new URL(mountRequested, location.href), { cache: 'no-store' });
+        if (!response.ok) throw new Error(`held-source-mount-unavailable:${response.status}`);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const digest = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+        state.source.manifestSha256Effective = digest;
+        if (digest !== manifestSha256Requested) throw new Error(`held-source-mount-sha256-mismatch:${digest}`);
+        state.source.mountEffective = new URL(mountRequested, location.href).href;
+        state.source.mountRegistered = true;
+        const manifest = JSON.parse(new TextDecoder().decode(bytes));
+        state.failurePhase = 'assay-manifest-admission';
+        if (!/^[a-f0-9]{64}$/.test(assayManifestSha256Requested)) throw new Error('assay-manifest-sha256-required');
+        const assayResponse = await fetch(new URL(assayManifest, location.href), { cache: 'no-store' });
+        if (!assayResponse.ok) throw new Error(`assay-manifest-unavailable:${assayResponse.status}`);
+        const assayBytes = new Uint8Array(await assayResponse.arrayBuffer());
+        const assayDigest = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', assayBytes)));
+        state.source.assayManifestSha256Effective = assayDigest;
+        if (assayDigest !== assayManifestSha256Requested) throw new Error(`assay-manifest-sha256-mismatch:${assayDigest}`);
+        const assay = JSON.parse(new TextDecoder().decode(assayBytes));
+        if (assay.schema !== 'kaminos.held-smoke-assay-source.v0' || assay.status !== 'passed') {
+          throw new Error(`assay-manifest-status-mismatch:${assay.schema || 'missing'}/${assay.status || 'missing'}`);
+        }
+        if (assay.source?.manifestIdentity !== `sha256:${digest}`) {
+          throw new Error(`A/B held source substitution:${assay.source?.manifestIdentity || 'missing'}`);
+        }
+        const cameraDigest = hex(new Uint8Array(await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(JSON.stringify(manifest.camera)),
+        )));
+        if (assay.source?.cameraIdentity !== `sha256:${cameraDigest}`) {
+          throw new Error(`A/B camera substitution:${assay.source?.cameraIdentity || 'missing'}`);
+        }
+        state.source.assayManifestEffective = assayResponse.url;
+        state.source.cameraIdentity = `sha256:${cameraDigest}`;
+        sourceReceipt.textContent = `step ${manifest.initialSimStepCount} | ${manifest.grid}^3 | source ${digest.slice(0, 12)} | assay ${assayDigest.slice(0, 12)} | independent viewports`;
+        state.failurePhase = 'child-routing';
+        const splatUrl = productIndex => {
+          const childUrl = new URL('./smoke-splat-motion.html', location.href);
+          childUrl.searchParams.set('route', HELD_SPLAT_ROUTE);
+          childUrl.searchParams.set('manifest', assayManifest);
+          childUrl.searchParams.set('instances', '1');
+          childUrl.searchParams.set('product_index', String(productIndex));
+          childUrl.searchParams.set('fine_lod', '1');
+          childUrl.searchParams.set('footprint', 'axisymmetric-projected-covariance-v1');
+          childUrl.searchParams.set('coarse_coverage', '1');
+          return childUrl;
+        };
+        const dUrl = new URL('./volume-held-field-viewer.html', location.href);
+        dUrl.searchParams.set('manifest', mountRequested);
+        dUrl.searchParams.set('manifest_sha256', manifestSha256Requested);
+        dUrl.searchParams.set('composition', HELD_COMPOSITION);
+        aFrame.src = splatUrl(0).href;
+        bFrame.src = splatUrl(1).href;
+        dFrame.src = dUrl.href;
+        state.status = 'loading';
+        setStatus('loading child routes', 'loading');
+        setInterval(observeChildren, 200);
+      } catch (error) {
+        fail(state.failurePhase || 'initialization', error);
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>

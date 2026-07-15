@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 const moduleUrl = new URL('../held-basin-smoke-products.mjs', import.meta.url);
 const {
+  buildHeldAnalyticalSmokeHierarchyProduct,
   buildHeldSmokeHierarchyProduct,
   compileHeldSmokeHierarchyProduct,
   writeHeldSmokeHierarchyArtifacts,
@@ -85,6 +86,17 @@ assert.ok(built.product.hierarchyCounts.coarse > 0);
 assert.ok(built.product.sourceStatistics.occupiedFineBinCount > 0);
 assert.equal(built.product.accounting.rejectedExtinctionMass, 0);
 
+assert.equal(typeof buildHeldAnalyticalSmokeHierarchyProduct, 'function');
+const analytical = buildHeldAnalyticalSmokeHierarchyProduct({ frame: makeFrame(), config });
+assert.equal(analytical.schema, 'kaminos.held-smoke-hierarchy-product.v0');
+assert.equal(analytical.routeCell, 'A');
+assert.equal(analytical.allocation.authority, 'analytical-articulation-score-v0');
+assert.equal(analytical.product.producerKind, 'real-field-hierarchical-target');
+assert.equal(analytical.product.slotIdentity.modelIdentity, 'analytical-articulation-score-v0');
+assert.equal(analytical.product.accounting.rejectedExtinctionMass, 0);
+assert.equal(analytical.product.capacity.outputWasTruncated, false);
+assert.ok(analytical.product.hierarchyCounts.total > 0);
+
 const wrongRoute = makeFrame();
 wrongRoute.manifest.effectiveRoute = 'cached-smoke-demo-v0';
 assert.throws(
@@ -130,8 +142,18 @@ try {
   assert.equal(written.product.activeCount, built.product.hierarchyCounts.total);
   assert.equal(written.product.outputWasTruncated, false);
   assert.match(written.artifact.sha256, /^[a-f0-9]{64}$/);
-  assert.equal((await stat(written.artifact.path)).size, written.artifact.byteLength);
-  assert.equal(JSON.parse(await readFile(written.reportPath, 'utf8')).status, 'captured');
+  assert.equal(written.artifact.path, 'route-b.splats.f32');
+  assert.equal((await stat(join(outputRoot, 'captured', written.artifact.path))).size, written.artifact.byteLength);
+  const durableB = JSON.parse(await readFile(written.reportPath, 'utf8'));
+  assert.equal(durableB.status, 'captured');
+  assert.equal(durableB.artifact.path, 'route-b.splats.f32');
+  assert.doesNotMatch(JSON.stringify(durableB), new RegExp(outputRoot), 'durable report cannot retain its temporary checkout path');
+
+  const writtenA = await writeHeldSmokeHierarchyArtifacts(analytical, join(outputRoot, 'captured-a'));
+  assert.equal(writtenA.routeCell, 'A');
+  assert.equal(writtenA.allocation.authority, 'analytical-articulation-score-v0');
+  assert.equal(writtenA.model, null);
+  assert.equal(writtenA.artifact.path, 'route-a.splats.f32');
 
   const failedOut = join(outputRoot, 'failed');
   await assert.rejects(
@@ -150,6 +172,21 @@ try {
   assert.equal(failure.requested.manifestSha256, 'a'.repeat(64));
   assert.equal(failure.requested.modelSha256, 'b'.repeat(64));
   assert.equal(failure.lastTrustworthyEvidence.primaryArtifactWritten, false);
+
+  const failedAOut = join(outputRoot, 'failed-a');
+  await assert.rejects(
+    () => compileHeldSmokeHierarchyProduct({
+      routeCell: 'A',
+      manifestPath: join(outputRoot, 'missing-viewer-manifest.json'),
+      expectedManifestSha256: 'a'.repeat(64),
+      outDir: failedAOut,
+    }),
+    /ENOENT/,
+  );
+  const failureA = JSON.parse(await readFile(join(failedAOut, 'route-a-report.json'), 'utf8'));
+  assert.equal(failureA.requested.routeCell, 'A');
+  assert.equal(failureA.requested.modelPath, null);
+  assert.equal(failureA.requested.modelSha256, null);
 } finally {
   await rm(outputRoot, { recursive: true, force: true });
 }
