@@ -70,6 +70,10 @@
       sha256HexFromText,
       validateVivisectorCandidateHeadPackage,
     } from './native-low-candidate-head-package.mjs';
+    import {
+      VIVISECTOR_WIDTH32_RECEIVER_PACKAGE,
+      VIVISECTOR_WIDTH32_RECEIVER_WEIGHTS_URL,
+    } from './models/native-low-vivisector-candidate-head-128-160-v0/weights.generated.js';
 
     const REPORT_SCHEMA = 'kaminos.volume.native-low-selective-live-comparison.v0';
     const CONTRACT_MARKERS = Object.freeze({
@@ -206,6 +210,38 @@
         outputSchema: { identity: 'compact-renderer-facing-cue-record-v0', cueRecordStrideBytes: 32 },
         failurePhase: null,
       },
+      nativeLowVivisectorWidth32LiveReceiver: {
+        identity: 'native-low-vivisector-width32-live-receiver-v0',
+        receiverClaimScope: 'performance-receiver-only-not-fidelity-or-visual-claim-v0',
+        requestedPackageSha256: '15ed4ef7762e89e467bb1fecaba6e270f0b98be9bc06dfd3bd928fbc50d65309',
+        effectivePackageSha256: '15ed4ef7762e89e467bb1fecaba6e270f0b98be9bc06dfd3bd928fbc50d65309',
+        requestedWeightsSha256: 'c648ec41d57e8810a40c30b006c0809ee1707777f75662cfcca69c05d036845f',
+        effectiveWeightsSha256: 'c648ec41d57e8810a40c30b006c0809ee1707777f75662cfcca69c05d036845f',
+        sourceWeightsSha256: 'c648ec41d57e8810a40c30b006c0809ee1707777f75662cfcca69c05d036845f',
+        packageProjectionSha256: 'a4627d2b4212ad32153186bf22e8b164ed92be5f42a21a7a68a97e5e9cd1aa91',
+        vivisectorCandidateHeadReceiverEnabled: true,
+        vivisectorWidth32ReceiverGpuMs: null,
+        trainedWeightsUsed: true,
+        syntheticBenchmarkWeights: false,
+        dispatchIdentity: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        indirectDispatch: true,
+        outputSchema: { identity: 'compact-renderer-facing-cue-record-v0', cueRecordStrideBytes: 32 },
+        candidateCount: null,
+        instanceCount: null,
+        candidateInstanceEquality: null,
+        overflowCount: null,
+        inferenceGpuMs: null,
+        materializationMs: null,
+        renderMs: null,
+        totalFrameMs: null,
+        vivisectorReceiverDecisionBands: {
+          profitableTargetMs: 10,
+          credibleBreakEvenTargetMs: 15,
+          outerKillBoundaryMs: 24,
+          failureDisposition: 'above-24ms-current-architecture-failure',
+        },
+        failurePhase: 'vivisector-width32-live-receiver',
+      },
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -267,6 +303,7 @@
       gpuWorkStarted: false,
       failurePhase: null,
     };
+    let vivisectorWidth32ReceiverProjection = null;
     let lastControlObjectUrl = null;
     let lastTreatmentObjectUrl = null;
     let lastFrontTopologyAblatedObjectUrl = null;
@@ -345,6 +382,11 @@
       return new Promise(resolve => setTimeout(resolve, ms));
     }
 
+    async function sha256HexFromArrayBuffer(buffer) {
+      const digest = await crypto.subtle.digest('SHA-256', buffer);
+      return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
     async function validateVivisectorCandidateHeadPackageForRoute() {
       if (!vivisectorCandidateHeadTrainedRouteRequested) return vivisectorCandidateHeadPackageReceipt;
       failurePhase = 'vivisector-candidate-package-validation';
@@ -385,6 +427,55 @@
       vivisectorCandidateHeadPackageReceipt = result.ok ? result.receiver : result.report;
       lastTrustworthyEvidence = { nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt };
       if (!result.ok) throw new Error(`${result.failurePhase}:${result.error}`);
+      const expectedPackageSha256 = VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.sourcePackageSha256;
+      const expectedWeightsSha256 = VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.sourceWeightsSha256;
+      const expectedProjectionSha256 = VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.projection.sha256;
+      if (observedPackageSha256 !== expectedPackageSha256) {
+        throw new Error(`vivisector-candidate-package-validation:package projection expected ${expectedPackageSha256} got ${observedPackageSha256}`);
+      }
+      if (result.receiver.weightsSha256 !== expectedWeightsSha256) {
+        throw new Error(`vivisector-candidate-package-validation:weights expected ${expectedWeightsSha256} got ${result.receiver.weightsSha256}`);
+      }
+      const weightsResponse = await fetch(VIVISECTOR_WIDTH32_RECEIVER_WEIGHTS_URL, { cache: 'no-store' });
+      if (!weightsResponse.ok) throw new Error(`vivisector-candidate-package-validation:projection fetch failed ${weightsResponse.status}`);
+      const weightsBuffer = await weightsResponse.arrayBuffer();
+      const projectionSha256 = await sha256HexFromArrayBuffer(weightsBuffer);
+      if (projectionSha256 !== expectedProjectionSha256) {
+        throw new Error(`vivisector-candidate-package-validation:projection sha expected ${expectedProjectionSha256} got ${projectionSha256}`);
+      }
+      const weights = new Float32Array(weightsBuffer);
+      if (weights.length !== VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.projection.floatCount) {
+        throw new Error(`vivisector-candidate-package-validation:projection float count ${weights.length}`);
+      }
+      vivisectorWidth32ReceiverProjection = {
+        enabled: true,
+        identity: VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.identity,
+        receiverClaimScope: VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.receiverClaimScope,
+        packageIdentity: VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.packageIdentity,
+        modelIdentity: VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.modelIdentity,
+        requestedPackageSha256: expectedPackageSha256,
+        effectivePackageSha256: observedPackageSha256,
+        requestedWeightsSha256: expectedWeightsSha256,
+        effectiveWeightsSha256: result.receiver.weightsSha256,
+        sourceWeightsSha256: expectedWeightsSha256,
+        packageProjectionSha256: projectionSha256,
+        coarseLatentRuntimeAuthority: VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.coarseLatentRuntimeAuthority,
+        trainedWeightsUsed: true,
+        syntheticBenchmarkWeights: false,
+        weights,
+      };
+      vivisectorCandidateHeadPackageReceipt = {
+        ...vivisectorCandidateHeadPackageReceipt,
+        requestedPackageSha256: expectedPackageSha256,
+        effectivePackageSha256: observedPackageSha256,
+        requestedWeightsSha256: expectedWeightsSha256,
+        effectiveWeightsSha256: result.receiver.weightsSha256,
+        sourceWeightsSha256: expectedWeightsSha256,
+        packageProjectionSha256: projectionSha256,
+        vivisectorCandidateHeadReceiverEnabled: true,
+        liveReceiverIdentity: VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.identity,
+        receiverClaimScope: VIVISECTOR_WIDTH32_RECEIVER_PACKAGE.receiverClaimScope,
+      };
       return result.receiver;
     }
 
@@ -443,6 +534,7 @@
         transferRouteId: requestedTransferRouteId,
         candidateHeadBenchmarkEnabled: candidateHeadBenchmarkEnabled || cueBufferLifecycleStressMode,
         candidateCueBufferLifecycleStressEnabled: cueBufferLifecycleStressMode,
+        vivisectorCandidateHeadReceiver: vivisectorWidth32ReceiverProjection,
       };
       const receipt = native64ManifestMode
         ? await prototype.captureNativeLowCrossGridManifestFrame({
@@ -1063,6 +1155,7 @@
         nativeLowSourceHistoryDetailCandidate: receipt.nativeLowSourceHistoryDetailCandidate || null,
         nativeLowFixedSourceDeltaAdmission: receipt.nativeLowFixedSourceDeltaAdmission || null,
         nativeLowCandidateHeadCostMicrobenchmark: receipt.nativeLowCandidateHeadCostMicrobenchmark || null,
+        nativeLowVivisectorWidth32LiveReceiver: receipt.nativeLowVivisectorWidth32LiveReceiver || runner?.nativeLowVivisectorWidth32LiveReceiver || null,
         nativeLowResidentCueBufferLifecycleStress: latestCueBufferLifecycleStress,
         nativeLowCandidateCueBufferLifecycle: receipt.nativeLowCandidateCueBufferLifecycle || null,
         nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt,

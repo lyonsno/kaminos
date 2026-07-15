@@ -12903,6 +12903,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function readNativeLowVivisectorWidth32ReceiverTiming(source) {
+    await source.mapAsync(GPUMapMode.READ);
+    const values = new BigUint64Array(source.getMappedRange().slice(0));
+    source.unmap();
+    source.destroy();
+    const start = values[0];
+    const end = values[1];
+    return {
+      authority: start > 0n && end >= start ? 'webgpu-timestamp-query-vivisector-width32-receiver-v0' : 'timestamp-query-invalid',
+      values: Array.from(values, value => value.toString()),
+      gpuMs: start > 0n && end >= start ? Number(end - start) / 1_000_000 : null,
+    };
+  }
+
   async function captureNativeLowSelectiveSharedDeviceFrame(options = {}) {
     let failurePhase = 'shared-device-preflight';
     let lastTrustworthyEvidence = {};
@@ -12973,10 +12987,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const timestampQueryCount = 6;
       const candidateCueBufferLifecycleStressEnabled = options.candidateCueBufferLifecycleStressEnabled === true;
       const candidateHeadBenchmarkEnabled = options.candidateHeadBenchmarkEnabled === true || candidateCueBufferLifecycleStressEnabled;
+      const vivisectorCandidateHeadReceiverEnabled = options.vivisectorCandidateHeadReceiver?.enabled === true;
       let candidateQuerySet = null;
       let candidateTimestampReadback = null;
       let candidateTimestampResolveBuffer = null;
       const candidateTimestampQueryCount = 6;
+      let vivisectorReceiverQuerySet = null;
+      let vivisectorReceiverTimestampReadback = null;
+      let vivisectorReceiverTimestampResolveBuffer = null;
+      const vivisectorReceiverTimestampQueryCount = 2;
       if (timestampSupported) {
         querySet = device.createQuerySet({ type: 'timestamp', count: timestampQueryCount });
         timestampResolveBuffer = device.createBuffer({
@@ -13013,6 +13032,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             32: { querySet: candidateQuerySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 },
           };
         }
+        if (vivisectorCandidateHeadReceiverEnabled) {
+          vivisectorReceiverQuerySet = device.createQuerySet({ type: 'timestamp', count: vivisectorReceiverTimestampQueryCount });
+          vivisectorReceiverTimestampResolveBuffer = device.createBuffer({
+            label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 receiver timestamp resolve`,
+            size: vivisectorReceiverTimestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+          });
+          vivisectorReceiverTimestampReadback = device.createBuffer({
+            label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 receiver timestamp readback`,
+            size: vivisectorReceiverTimestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+          });
+          stageTimestampWrites.vivisectorWidth32Receiver = {
+            querySet: vivisectorReceiverQuerySet,
+            beginningOfPassWriteIndex: 0,
+            endOfPassWriteIndex: 1,
+          };
+        }
       }
       const inferenceStart = performance.now();
       device.pushErrorScope('validation');
@@ -13032,6 +13069,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         historyResetReason,
         candidateHeadBenchmarkEnabled,
         candidateCueBufferLifecycleStressEnabled,
+        vivisectorCandidateHeadReceiver: options.vivisectorCandidateHeadReceiver || null,
       });
       if (querySet && timestampReadback && timestampResolveBuffer) {
         inferenceEncoder.resolveQuerySet(querySet, 0, timestampQueryCount, timestampResolveBuffer, 0);
@@ -13045,6 +13083,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           candidateTimestampReadback,
           0,
           candidateTimestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
+        );
+      }
+      if (vivisectorReceiverQuerySet && vivisectorReceiverTimestampReadback && vivisectorReceiverTimestampResolveBuffer) {
+        inferenceEncoder.resolveQuerySet(vivisectorReceiverQuerySet, 0, vivisectorReceiverTimestampQueryCount, vivisectorReceiverTimestampResolveBuffer, 0);
+        inferenceEncoder.copyBufferToBuffer(
+          vivisectorReceiverTimestampResolveBuffer,
+          0,
+          vivisectorReceiverTimestampReadback,
+          0,
+          vivisectorReceiverTimestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
         );
       }
       device.queue.submit([inferenceEncoder.finish()]);
@@ -13079,6 +13127,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ? await runtime.sampleCandidateCueBufferLifecycle()
         : (runtime.debugState().nativeLowCandidateCueBufferLifecycle || null);
       let nativeLowCandidateHeadCostMicrobenchmark = runtime.debugState().nativeLowCandidateHeadCostMicrobenchmark || null;
+      let nativeLowVivisectorWidth32LiveReceiver = runtime.debugState().nativeLowVivisectorWidth32LiveReceiver || null;
       if (candidateHeadBenchmarkEnabled) {
         let candidateTiming = null;
         if (candidateTimestampReadback) {
@@ -13091,6 +13140,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           candidateTiming?.values || [],
         );
         nativeLowCandidateHeadCostMicrobenchmark.sourceDeltaAdmissionGpuMs = nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs;
+      }
+      if (vivisectorCandidateHeadReceiverEnabled) {
+        let vivisectorReceiverTiming = null;
+        if (vivisectorReceiverTimestampReadback) {
+          vivisectorReceiverTiming = await readNativeLowVivisectorWidth32ReceiverTiming(vivisectorReceiverTimestampReadback);
+          vivisectorReceiverTimestampResolveBuffer?.destroy();
+          vivisectorReceiverQuerySet?.destroy?.();
+        }
+        nativeLowVivisectorWidth32LiveReceiver = runtime.makeVivisectorWidth32ReceiverReceipt(
+          options.vivisectorCandidateHeadReceiver,
+          vivisectorReceiverTiming?.gpuMs ?? null,
+          vivisectorReceiverTiming?.values || [],
+        );
       }
       const nativeLowSupportTileProfile = await runtime.sampleSupportTileProfile();
       const nativeLowSourceTileCandidate = await runtime.sampleSourceProximalTileCandidate();
@@ -13327,6 +13389,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const projectedSparseCandidateBytes = Math.max(0, treatmentSplatInstanceCount) * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
       const renderPairMs = treatmentRenderMs + controlRenderMs;
       const endToEndFrameMs = performance.now() - startedAt;
+      if (nativeLowVivisectorWidth32LiveReceiver?.enabled) {
+        nativeLowVivisectorWidth32LiveReceiver = {
+          ...nativeLowVivisectorWidth32LiveReceiver,
+          inferenceGpuMs: nativeLowVivisectorWidth32LiveReceiver.vivisectorWidth32ReceiverGpuMs,
+          materializationMs: 0,
+          materializationStage: 'compact-cue-records-resident-no-dense160-materialization-v0',
+          renderMs: 0,
+          renderStage: 'not-renderer-consumed-in-this-receiver-performance-slice-v0',
+          totalFrameMs: endToEndFrameMs,
+          fullFrameContext: {
+            treatmentMaterializeMs,
+            treatmentRenderMs,
+            controlRenderMs,
+            endToEndFrameMs,
+          },
+          failurePhase: null,
+        };
+      }
       const projectedWithoutDenseReceiverCopyMs = Math.max(0, endToEndFrameMs - treatmentCopyMs);
       const learnedTransferIncrementalDenseMs = Math.max(0, inferenceTiming.ms + supportStatsMs + nativeLowSupportTileProfile.tileProfileReadbackMs + nativeLowSourceTileCandidate.candidateReadbackMs + treatmentMaterializeMs);
       const learnedTransferDenseMinusDiagnosticReadbackMs = Math.max(
@@ -13563,6 +13643,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         coarseFrontSparseDetailBand: nativeLowCoarseFrontSparseDetailBand,
         sourceHistoryDetailCandidate: nativeLowSourceHistoryDetailCandidate,
         candidateHeadCostMicrobenchmark: nativeLowCandidateHeadCostMicrobenchmark,
+        vivisectorWidth32LiveReceiver: nativeLowVivisectorWidth32LiveReceiver,
         candidateCueBufferLifecycle: nativeLowCandidateCueBufferLifecycle,
         simulationSteppingReceipt,
         currentSourceFrameConsumption,
@@ -13689,6 +13770,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeLowCoarseFrontSparseDetailBand,
         nativeLowSourceHistoryDetailCandidate,
         nativeLowCandidateHeadCostMicrobenchmark,
+        nativeLowVivisectorWidth32LiveReceiver,
         nativeLowCandidateCueBufferLifecycle,
         nativeLowFixedSourceDeltaAdmission,
         nativeLowFrontTopologyAblation,
@@ -13701,6 +13783,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         stageTiming: {
           nativeStepMs,
           inferenceGpuMs: inferenceTiming.ms,
+          vivisectorWidth32ReceiverGpuMs: nativeLowVivisectorWidth32LiveReceiver?.vivisectorWidth32ReceiverGpuMs ?? null,
           inferenceTimingAuthority: inferenceTiming.authority,
           supportFrontGpuMs: nativeLowHeadCostProfile.supportFrontGpuMs,
           supportPositiveResidualGpuMs: nativeLowHeadCostProfile.supportPositiveResidualGpuMs,

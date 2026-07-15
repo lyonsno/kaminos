@@ -1,0 +1,927 @@
+{
+  "schema": "kaminos.native-low.vivisector-candidate-head-width32-package.v0",
+  "identity": "native128-matched160-shared-coarse-candidate-head-v0",
+  "authority": "matched-native128-source-to-current160-teacher-trained-weights-v0",
+  "syntheticBenchmarkWeights": false,
+  "trainedWeights": true,
+  "vivisectorTrainedWeights": true,
+  "learnedWeightsUsed": true,
+  "fidelityClaim": false,
+  "visualClaim": false,
+  "grid": {
+    "sourceLowGrid": 128,
+    "receiverHighGrid": 160,
+    "candidateGrid": 160,
+    "sourceChannels": 17,
+    "sourceDeltaChannels": 17
+  },
+  "runtimeShape": {
+    "candidateHeadWidth": 32,
+    "workgroupSize": 64,
+    "inputCount": 48,
+    "candidateListSource": "real-uncapped-fixed-gate-sourceHistoryCandidates-v0",
+    "dispatchMode": "dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0"
+  },
+  "inputSchema": {
+    "identity": "current-delta-position-subcell-coarse-latent48-v0",
+    "currentSourceChannels": 17,
+    "sourceDeltaChannels": 17,
+    "normalizedPositionAndSubcell": true,
+    "coarseLatentChannels": 8,
+    "coarseLatentAuthority": "trained-native128-coarse40-shared-trunk-latent-v0",
+    "featureOrder": [
+      "currentSource[0..16]",
+      "sourceDelta[0..16]",
+      "normalizedPosition[xyz]",
+      "subcell[xyz]",
+      "coarseLatent[0..7]"
+    ]
+  },
+  "outputSchema": {
+    "identity": "compact-renderer-facing-cue-record-v0",
+    "cueRecordStrideBytes": 32,
+    "outputChannels": 8,
+    "cueRecordVec4Count": 2,
+    "channelOrder": [
+      "fineSupport",
+      "frontTopologyResidual",
+      "temporalFrontDetail",
+      "ridgeResidual",
+      "fuelResidual",
+      "visibleFireCarrierResidual",
+      "fireLickResidual",
+      "detailResidual"
+    ]
+  },
+  "model": {
+    "identity": "native128-matched160-shared-coarse-candidate-head-v0",
+    "sourceDiaulos": "pyro-field-residual-vivisector",
+    "sha256": "c648ec41d57e8810a40c30b006c0809ee1707777f75662cfcca69c05d036845f",
+    "weightsPath": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/vivisector-candidate-head-width32-weights.npz",
+    "coarse": {
+      "grid": 40,
+      "inputCount": 185,
+      "hiddenWidth": 32,
+      "latentChannels": 8
+    },
+    "candidate": {
+      "inputCount": 48,
+      "hiddenWidth": 32,
+      "outputCount": 8
+    }
+  },
+  "checksums": {
+    "weightsSha256": "c648ec41d57e8810a40c30b006c0809ee1707777f75662cfcca69c05d036845f"
+  },
+  "admission": {
+    "identity": "fixed-full-source-delta-envelope-trilinear-v2-native128",
+    "authority": "source-manifests-only-fixed-threshold-v0",
+    "sourceOnlyThresholdRule": "first-train-transition-channel-qscale-max-envelope-dense-quantile-v0",
+    "scaleQuantile": 0.995,
+    "coverageCalibrationQuantile": 0.9,
+    "channelScales": [
+      0.2659603953361511,
+      0.1336716264486313,
+      0.26340800523757935,
+      0.22391586005687714,
+      0.0761241540312767,
+      0.1827463060617447,
+      0.018262697383761406,
+      0.28111064434051514,
+      0.3379931151866913,
+      0.21091145277023315,
+      0.25687888264656067,
+      0.0968654453754425,
+      0.063514843583107,
+      0.43588849902153015,
+      0.24944950640201569,
+      0.24793890118598938,
+      0.03142810985445976
+    ],
+    "threshold": 0.5239897429943084,
+    "runtimeTruthUsed": false,
+    "targetArtifactsReadForAdmission": false,
+    "targetErrorRankingUsed": false,
+    "runtimeTopK": false,
+    "dynamicPercentile": false,
+    "hiddenCandidateCap": false,
+    "candidateListSource": "real-uncapped-fixed-gate-sourceHistoryCandidates-v0",
+    "pairs": {
+      "96-97": {
+        "candidateCount": 409601,
+        "coverage": 0.100000244140625,
+        "candidateIndexesSha256": "20da29015b0df0689f7eeec21ded890ed272bfe1dbd297c53b7fd080f136cd72"
+      },
+      "97-98": {
+        "candidateCount": 407809,
+        "coverage": 0.099562744140625,
+        "candidateIndexesSha256": "12d5964e0e9d4fed78426ec5c77b6a8164ad66b57aa3523c7634ca92589a5017"
+      },
+      "98-99": {
+        "candidateCount": 406723,
+        "coverage": 0.099297607421875,
+        "candidateIndexesSha256": "1e8bc894b79965034a80bb036a966e5f43d7579dfd8a96c0c9e6ab863c9ce382"
+      },
+      "99-100": {
+        "candidateCount": 406502,
+        "coverage": 0.09924365234375,
+        "candidateIndexesSha256": "1a56318da68639a617d97627384b44979821ae519909db707d4aa7e2f13773db"
+      },
+      "100-101": {
+        "candidateCount": 409600,
+        "coverage": 0.1,
+        "candidateIndexesSha256": "e7b4745526fee0d421affd01375952dd81458c9a0d911f256eaa367bed71f401"
+      },
+      "101-102": {
+        "candidateCount": 410013,
+        "coverage": 0.100100830078125,
+        "candidateIndexesSha256": "9f6f56f5756c7baa64c2d8f210e19604619a5b7ce9fb74161b373e0b09e71d56"
+      },
+      "102-103": {
+        "candidateCount": 409308,
+        "coverage": 0.0999287109375,
+        "candidateIndexesSha256": "a5e991513114d2fead69d89abfc4bd24a0468ae3f2c2230083b3e822694bfeda"
+      },
+      "103-104": {
+        "candidateCount": 410540,
+        "coverage": 0.1002294921875,
+        "candidateIndexesSha256": "164f0748c3a8d15646e2dcf414dc188c272e3017ecb8c70431ee4645af0a25c2"
+      }
+    }
+  },
+  "splits": {
+    "trainCurrentSteps": [
+      97,
+      98,
+      99
+    ],
+    "validationCurrentStep": 100,
+    "heldCurrentSteps": [
+      101,
+      102,
+      103,
+      104
+    ]
+  },
+  "metrics": {
+    "100": {
+      "role": "validation",
+      "previousStep": 99,
+      "candidateCount": 406502,
+      "coverage": 0.09924365234375,
+      "coarseOutputs": {
+        "support": {
+          "rowCount": 64000,
+          "positiveCount": 35548,
+          "predictedPositiveCount": 34589,
+          "precision": 0.9903148399780277,
+          "recall": 0.9635985146843704,
+          "jaccard": 0.9546024579884625,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.0062765279402949795,
+          "mae": 0.0033042001937326065,
+          "correlation": 0.7780883224133311,
+          "errorReductionVsZeroResidual": 0.6332185264009251,
+          "truthEnergy": 6.87403146707295,
+          "predictionEnergy": 3.835327370512765
+        }
+      },
+      "outputs": {
+        "fineSupport": {
+          "rowCount": 406502,
+          "positiveCount": 386366,
+          "predictedPositiveCount": 387481,
+          "precision": 0.9858831787881213,
+          "recall": 0.988728304250374,
+          "jaccard": 0.9749257342357517,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.017779902607817893,
+          "mae": 0.01174830230666417,
+          "correlation": 0.5789448459720082,
+          "errorReductionVsZeroResidual": 0.36351133856918794,
+          "truthEnergy": 201.897420681815,
+          "predictionEnergy": 75.97866862617364
+        },
+        "temporalFrontDetail": {
+          "rmse": 0.010642583730361432,
+          "mae": 0.005596682041161783,
+          "correlation": 0.6835169914674817,
+          "errorReductionVsZeroResidual": 0.4672334754446227,
+          "truthEnergy": 86.4211237289705,
+          "predictionEnergy": 40.588745602533514
+        },
+        "ridgeResidual": {
+          "rmse": 0.2032031965087985,
+          "mae": 0.10106156460172794,
+          "correlation": 0.5275967717295855,
+          "errorReductionVsZeroResidual": 0.3157337230726788,
+          "truthEnergy": 24530.06056497852,
+          "predictionEnergy": 7744.9908318840935
+        },
+        "fuelResidual": {
+          "rmse": 0.01154320891177001,
+          "mae": 0.007175572988448987,
+          "correlation": 0.755985691982708,
+          "errorReductionVsZeroResidual": 0.6450181327737552,
+          "truthEnergy": 152.58422232875404,
+          "predictionEnergy": 96.3760885553571
+        },
+        "visibleFireCarrierResidual": {
+          "rmse": 0.14439947003906245,
+          "mae": 0.07309445963803912,
+          "correlation": 0.7722669566109198,
+          "errorReductionVsZeroResidual": 0.5982456462926997,
+          "truthEnergy": 21097.61163353354,
+          "predictionEnergy": 12331.77012111753
+        },
+        "fireLickResidual": {
+          "rmse": 0.16923685073362293,
+          "mae": 0.07685111852841729,
+          "correlation": 0.7577969310528062,
+          "errorReductionVsZeroResidual": 0.5858959299737866,
+          "truthEnergy": 28115.321749145438,
+          "predictionEnergy": 15915.99573359261
+        },
+        "detailResidual": {
+          "rmse": 0.17210415987651265,
+          "mae": 0.11359389174855584,
+          "correlation": 0.6038968228484607,
+          "errorReductionVsZeroResidual": 0.37360142393050466,
+          "truthEnergy": 19221.826821445644,
+          "predictionEnergy": 7111.981951790607
+        }
+      }
+    },
+    "101": {
+      "role": "held",
+      "previousStep": 100,
+      "candidateCount": 409600,
+      "coverage": 0.1,
+      "coarseOutputs": {
+        "support": {
+          "rowCount": 64000,
+          "positiveCount": 35552,
+          "predictedPositiveCount": 34556,
+          "precision": 0.9903055909248756,
+          "recall": 0.9625618811881188,
+          "jaccard": 0.9535765040265277,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.006313301437686353,
+          "mae": 0.0033288325625561266,
+          "correlation": 0.7724245963224976,
+          "errorReductionVsZeroResidual": 0.6259029516394614,
+          "truthEnergy": 6.81881242831801,
+          "predictionEnergy": 3.8136967194692577
+        }
+      },
+      "outputs": {
+        "fineSupport": {
+          "rowCount": 409600,
+          "positiveCount": 390622,
+          "predictedPositiveCount": 391467,
+          "precision": 0.986254269197659,
+          "recall": 0.9883877508179263,
+          "jaccard": 0.9749572604247948,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.017808502746991257,
+          "mae": 0.011765438574202954,
+          "correlation": 0.5705623032856717,
+          "errorReductionVsZeroResidual": 0.3557883824835918,
+          "truthEnergy": 201.64442102037933,
+          "predictionEnergy": 76.2904975295366
+        },
+        "temporalFrontDetail": {
+          "rmse": 0.010670585587764167,
+          "mae": 0.005649027131976174,
+          "correlation": 0.6791214307987983,
+          "errorReductionVsZeroResidual": 0.4611412032400004,
+          "truthEnergy": 86.54888516969983,
+          "predictionEnergy": 41.16633705295274
+        },
+        "ridgeResidual": {
+          "rmse": 0.2039695249444525,
+          "mae": 0.10208405644152137,
+          "correlation": 0.5294249888927688,
+          "errorReductionVsZeroResidual": 0.3178602615713708,
+          "truthEnergy": 24981.422612761955,
+          "predictionEnergy": 7827.952910155156
+        },
+        "fuelResidual": {
+          "rmse": 0.011470584963310515,
+          "mae": 0.007150966707855244,
+          "correlation": 0.7567094914875724,
+          "errorReductionVsZeroResidual": 0.6474364736647271,
+          "truthEnergy": 152.85994494848956,
+          "predictionEnergy": 98.3494648468043
+        },
+        "visibleFireCarrierResidual": {
+          "rmse": 0.1451971080589427,
+          "mae": 0.07389880790909929,
+          "correlation": 0.7720380464938644,
+          "errorReductionVsZeroResidual": 0.5983075382585653,
+          "truthEnergy": 21497.214958546763,
+          "predictionEnergy": 12623.3429880361
+        },
+        "fireLickResidual": {
+          "rmse": 0.1706957200553439,
+          "mae": 0.07758129930875768,
+          "correlation": 0.760504087006884,
+          "errorReductionVsZeroResidual": 0.5911107289790691,
+          "truthEnergy": 29187.674661162844,
+          "predictionEnergy": 16646.321363850515
+        },
+        "detailResidual": {
+          "rmse": 0.1740094465715415,
+          "mae": 0.11474124041317736,
+          "correlation": 0.6074580664724338,
+          "errorReductionVsZeroResidual": 0.3789701912657544,
+          "truthEnergy": 19970.693812096626,
+          "predictionEnergy": 7366.925801715903
+        }
+      }
+    },
+    "102": {
+      "role": "held",
+      "previousStep": 101,
+      "candidateCount": 410013,
+      "coverage": 0.100100830078125,
+      "coarseOutputs": {
+        "support": {
+          "rowCount": 64000,
+          "positiveCount": 35548,
+          "predictedPositiveCount": 34537,
+          "precision": 0.9900975765121464,
+          "recall": 0.9619387869922359,
+          "jaccard": 0.9527723599888548,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.006357886998201671,
+          "mae": 0.003363077937440349,
+          "correlation": 0.7650000597351873,
+          "errorReductionVsZeroResidual": 0.6164490136838222,
+          "truthEnergy": 6.745008161989437,
+          "predictionEnergy": 3.7903946844317806
+        }
+      },
+      "outputs": {
+        "fineSupport": {
+          "rowCount": 410013,
+          "positiveCount": 391383,
+          "predictedPositiveCount": 392122,
+          "precision": 0.9858028878767322,
+          "recall": 0.9876642572620681,
+          "jaccard": 0.9738128227736491,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.017834361584569282,
+          "mae": 0.011779751868484952,
+          "correlation": 0.5628443661320595,
+          "errorReductionVsZeroResidual": 0.34896495011354334,
+          "truthEnergy": 200.31265696615054,
+          "predictionEnergy": 76.0605351393427
+        },
+        "temporalFrontDetail": {
+          "rmse": 0.010686879830453085,
+          "mae": 0.005645440754725384,
+          "correlation": 0.6753388086613655,
+          "errorReductionVsZeroResidual": 0.45594822987013206,
+          "truthEnergy": 86.07147610300422,
+          "predictionEnergy": 40.79710347288095
+        },
+        "ridgeResidual": {
+          "rmse": 0.20353027740192725,
+          "mae": 0.10217506893299637,
+          "correlation": 0.5218322090086566,
+          "errorReductionVsZeroResidual": 0.3118444140388491,
+          "truthEnergy": 24681.35714055475,
+          "predictionEnergy": 7827.251649381083
+        },
+        "fuelResidual": {
+          "rmse": 0.011447494864045919,
+          "mae": 0.007142424230115376,
+          "correlation": 0.7568455500775069,
+          "errorReductionVsZeroResidual": 0.6468540813309298,
+          "truthEnergy": 152.14733513236305,
+          "predictionEnergy": 97.71061366862052
+        },
+        "visibleFireCarrierResidual": {
+          "rmse": 0.1446554882958981,
+          "mae": 0.0734873594638474,
+          "correlation": 0.7703306422298176,
+          "errorReductionVsZeroResidual": 0.5954180769648306,
+          "truthEnergy": 21206.10872567124,
+          "predictionEnergy": 12406.735993846336
+        },
+        "fireLickResidual": {
+          "rmse": 0.16892430416799967,
+          "mae": 0.07700127626636281,
+          "correlation": 0.7594947934510372,
+          "errorReductionVsZeroResidual": 0.5896856705005069,
+          "truthEnergy": 28514.464497455563,
+          "predictionEnergy": 16336.045346180648
+        },
+        "detailResidual": {
+          "rmse": 0.17228925080956797,
+          "mae": 0.11428150584687277,
+          "correlation": 0.6036863412627781,
+          "errorReductionVsZeroResidual": 0.3744167084674458,
+          "truthEnergy": 19454.893199042624,
+          "predictionEnergy": 7218.413279877861
+        }
+      }
+    },
+    "103": {
+      "role": "held",
+      "previousStep": 102,
+      "candidateCount": 409308,
+      "coverage": 0.0999287109375,
+      "coarseOutputs": {
+        "support": {
+          "rowCount": 64000,
+          "positiveCount": 35531,
+          "predictedPositiveCount": 34507,
+          "precision": 0.9902338655924885,
+          "recall": 0.9616954209000591,
+          "jaccard": 0.9526597524255603,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.006426218626107659,
+          "mae": 0.0034037129071381607,
+          "correlation": 0.7558009656339248,
+          "errorReductionVsZeroResidual": 0.6046461758434212,
+          "truthEnergy": 6.685055592398607,
+          "predictionEnergy": 3.770448241529162
+        }
+      },
+      "outputs": {
+        "fineSupport": {
+          "rowCount": 409308,
+          "positiveCount": 390547,
+          "predictedPositiveCount": 391361,
+          "precision": 0.9847199899836724,
+          "recall": 0.9867723987125749,
+          "jaccard": 0.9718909431135837,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.017854460843712214,
+          "mae": 0.011803596457390222,
+          "correlation": 0.5594380428970562,
+          "errorReductionVsZeroResidual": 0.3471659751634616,
+          "truthEnergy": 199.86692570824647,
+          "predictionEnergy": 75.07785133076516
+        },
+        "temporalFrontDetail": {
+          "rmse": 0.010681451947515377,
+          "mae": 0.0056482072012855765,
+          "correlation": 0.6745569882071767,
+          "errorReductionVsZeroResidual": 0.4548880023717351,
+          "truthEnergy": 85.66927163485363,
+          "predictionEnergy": 40.682705673433716
+        },
+        "ridgeResidual": {
+          "rmse": 0.20478074956498804,
+          "mae": 0.10254263159722471,
+          "correlation": 0.5226933387010241,
+          "errorReductionVsZeroResidual": 0.31277226492442145,
+          "truthEnergy": 24976.2832716059,
+          "predictionEnergy": 7788.079885659456
+        },
+        "fuelResidual": {
+          "rmse": 0.011486944254009973,
+          "mae": 0.007197191744364457,
+          "correlation": 0.7508929853824559,
+          "errorReductionVsZeroResidual": 0.6394223275038444,
+          "truthEnergy": 149.78227715615503,
+          "predictionEnergy": 94.80444204267134
+        },
+        "visibleFireCarrierResidual": {
+          "rmse": 0.1449466796538529,
+          "mae": 0.07345533974160195,
+          "correlation": 0.769854071866313,
+          "errorReductionVsZeroResidual": 0.5948246702341606,
+          "truthEnergy": 21223.831124730325,
+          "predictionEnergy": 12262.964010407
+        },
+        "fireLickResidual": {
+          "rmse": 0.17089550782174123,
+          "mae": 0.07753496425505457,
+          "correlation": 0.7562445800048684,
+          "errorReductionVsZeroResidual": 0.5847555405813261,
+          "truthEnergy": 28787.747222715734,
+          "predictionEnergy": 15943.995797315747
+        },
+        "detailResidual": {
+          "rmse": 0.17206893478176796,
+          "mae": 0.11469381698519863,
+          "correlation": 0.5983915950246024,
+          "errorReductionVsZeroResidual": 0.3682292037055873,
+          "truthEnergy": 19182.076854371546,
+          "predictionEnergy": 7077.2821543730415
+        }
+      }
+    },
+    "104": {
+      "role": "held",
+      "previousStep": 103,
+      "candidateCount": 410540,
+      "coverage": 0.1002294921875,
+      "coarseOutputs": {
+        "support": {
+          "rowCount": 64000,
+          "positiveCount": 35516,
+          "predictedPositiveCount": 34465,
+          "precision": 0.9898737849992746,
+          "recall": 0.9605811465255096,
+          "jaccard": 0.9512337933918863,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.0064944582398295024,
+          "mae": 0.0034579712472748076,
+          "correlation": 0.7459101609925631,
+          "errorReductionVsZeroResidual": 0.5917989814865903,
+          "truthEnergy": 6.6128968293111665,
+          "predictionEnergy": 3.7431125595772357
+        }
+      },
+      "outputs": {
+        "fineSupport": {
+          "rowCount": 410540,
+          "positiveCount": 391712,
+          "predictedPositiveCount": 392048,
+          "precision": 0.984647288087173,
+          "recall": 0.9854918920022874,
+          "jaccard": 0.9705781042966226,
+          "threshold": 0.5
+        },
+        "frontTopologyResidual": {
+          "rmse": 0.01779753320747168,
+          "mae": 0.011782103195753067,
+          "correlation": 0.5568432767459951,
+          "errorReductionVsZeroResidual": 0.34575566011537906,
+          "truthEnergy": 198.76280992470316,
+          "predictionEnergy": 74.13645891675984
+        },
+        "temporalFrontDetail": {
+          "rmse": 0.010655720070644893,
+          "mae": 0.005637104128896607,
+          "correlation": 0.6761648931555304,
+          "errorReductionVsZeroResidual": 0.4570767225177329,
+          "truthEnergy": 85.8583665226265,
+          "predictionEnergy": 40.457904311070976
+        },
+        "ridgeResidual": {
+          "rmse": 0.20309084594532492,
+          "mae": 0.10189117713051993,
+          "correlation": 0.5288435310020775,
+          "errorReductionVsZeroResidual": 0.3190662218628876,
+          "truthEnergy": 24867.452496819722,
+          "predictionEnergy": 7847.208123786271
+        },
+        "fuelResidual": {
+          "rmse": 0.011450189179871105,
+          "mae": 0.007212361793444529,
+          "correlation": 0.7533566784018974,
+          "errorReductionVsZeroResidual": 0.6419657070336129,
+          "truthEnergy": 150.33364113798473,
+          "predictionEnergy": 95.8238930868862
+        },
+        "visibleFireCarrierResidual": {
+          "rmse": 0.1443249040361542,
+          "mae": 0.07322039439090659,
+          "correlation": 0.7661088203792992,
+          "errorReductionVsZeroResidual": 0.5891841022765191,
+          "truthEnergy": 20815.689029405476,
+          "predictionEnergy": 12109.034411636147
+        },
+        "fireLickResidual": {
+          "rmse": 0.1707866025047764,
+          "mae": 0.07754075186214966,
+          "correlation": 0.7470382875120993,
+          "errorReductionVsZeroResidual": 0.5717866088830192,
+          "truthEnergy": 27964.227828342562,
+          "predictionEnergy": 15552.669765961225
+        },
+        "detailResidual": {
+          "rmse": 0.17239195242120192,
+          "mae": 0.11539685649110591,
+          "correlation": 0.5897023080113136,
+          "errorReductionVsZeroResidual": 0.35762842000823014,
+          "truthEnergy": 18993.418433346655,
+          "predictionEnergy": 6971.0044803095
+        }
+      }
+    }
+  },
+  "crossStepFieldPack": [
+    {
+      "step": 101,
+      "previousStep": 100,
+      "cue": {
+        "path": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/held-step101-compact-cues.f32",
+        "sha256": "63e04c6bd4fd08de7f7db1f1136c67bef7be96d46d03d660b1d83dfb198ea58c",
+        "byteLength": 131072000,
+        "dtype": "float32-le",
+        "shape": [
+          160,
+          160,
+          160,
+          8
+        ],
+        "channelOrder": [
+          "fineSupport",
+          "frontTopologyResidual",
+          "temporalFrontDetail",
+          "ridgeResidual",
+          "fuelResidual",
+          "visibleFireCarrierResidual",
+          "fireLickResidual",
+          "detailResidual"
+        ]
+      },
+      "admissionMask": {
+        "path": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/held-step101-source-gate.u8",
+        "sha256": "dee83581d4c4746c13c5afc1f84422bbe60855324790669873d38c777e387140",
+        "byteLength": 4096000,
+        "dtype": "uint8",
+        "shape": [
+          160,
+          160,
+          160,
+          1
+        ],
+        "channelOrder": [
+          "sourceHistoryCandidate"
+        ]
+      }
+    },
+    {
+      "step": 102,
+      "previousStep": 101,
+      "cue": {
+        "path": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/held-step102-compact-cues.f32",
+        "sha256": "0b489021f5a798eb8096e961c7e9a943007722e038b7e6f38cd05e241ad4dcd1",
+        "byteLength": 131072000,
+        "dtype": "float32-le",
+        "shape": [
+          160,
+          160,
+          160,
+          8
+        ],
+        "channelOrder": [
+          "fineSupport",
+          "frontTopologyResidual",
+          "temporalFrontDetail",
+          "ridgeResidual",
+          "fuelResidual",
+          "visibleFireCarrierResidual",
+          "fireLickResidual",
+          "detailResidual"
+        ]
+      },
+      "admissionMask": {
+        "path": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/held-step102-source-gate.u8",
+        "sha256": "90f57c86ce2b48e3848ecf91e7e2610de3e81fccb6ff5c527709ff18f390083f",
+        "byteLength": 4096000,
+        "dtype": "uint8",
+        "shape": [
+          160,
+          160,
+          160,
+          1
+        ],
+        "channelOrder": [
+          "sourceHistoryCandidate"
+        ]
+      }
+    },
+    {
+      "step": 103,
+      "previousStep": 102,
+      "cue": {
+        "path": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/held-step103-compact-cues.f32",
+        "sha256": "1ce31bd0f0e2bd7ff93d42510679a17250f6c307afd81b1eb12a1ccb8663bb8c",
+        "byteLength": 131072000,
+        "dtype": "float32-le",
+        "shape": [
+          160,
+          160,
+          160,
+          8
+        ],
+        "channelOrder": [
+          "fineSupport",
+          "frontTopologyResidual",
+          "temporalFrontDetail",
+          "ridgeResidual",
+          "fuelResidual",
+          "visibleFireCarrierResidual",
+          "fireLickResidual",
+          "detailResidual"
+        ]
+      },
+      "admissionMask": {
+        "path": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/held-step103-source-gate.u8",
+        "sha256": "76fcef5b39817b92f6dedc286f7d89635b3f17a80a12b298c3d167d70c1ab6ee",
+        "byteLength": 4096000,
+        "dtype": "uint8",
+        "shape": [
+          160,
+          160,
+          160,
+          1
+        ],
+        "channelOrder": [
+          "sourceHistoryCandidate"
+        ]
+      }
+    },
+    {
+      "step": 104,
+      "previousStep": 103,
+      "cue": {
+        "path": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/held-step104-compact-cues.f32",
+        "sha256": "a601a29213679804097d0aa78f367db3063b6cb504f1b1f7cad232a1c5b10e5d",
+        "byteLength": 131072000,
+        "dtype": "float32-le",
+        "shape": [
+          160,
+          160,
+          160,
+          8
+        ],
+        "channelOrder": [
+          "fineSupport",
+          "frontTopologyResidual",
+          "temporalFrontDetail",
+          "ridgeResidual",
+          "fuelResidual",
+          "visibleFireCarrierResidual",
+          "fireLickResidual",
+          "detailResidual"
+        ]
+      },
+      "admissionMask": {
+        "path": "/private/tmp/kaminos-vivisector-candidate-head-package-128-160-v0/held-step104-source-gate.u8",
+        "sha256": "e7f71f41db37afc1df0c114ee375eb2e9482ac6eab60a8c2fa0d8e12a9428454",
+        "byteLength": 4096000,
+        "dtype": "uint8",
+        "shape": [
+          160,
+          160,
+          160,
+          1
+        ],
+        "channelOrder": [
+          "sourceHistoryCandidate"
+        ]
+      }
+    }
+  ],
+  "training": {
+    "coarseLosses": [
+      {
+        "epoch": 1,
+        "supportWeightedBce": 0.35249815446635085,
+        "frontNormalizedMse": 0.838188516596953
+      },
+      {
+        "epoch": 2,
+        "supportWeightedBce": 0.15423092183967432,
+        "frontNormalizedMse": 0.6850571831067404
+      },
+      {
+        "epoch": 3,
+        "supportWeightedBce": 0.11622474684069554,
+        "frontNormalizedMse": 0.607057141760985
+      },
+      {
+        "epoch": 4,
+        "supportWeightedBce": 0.0963999383772413,
+        "frontNormalizedMse": 0.5551327740152677
+      },
+      {
+        "epoch": 5,
+        "supportWeightedBce": 0.08395908648769061,
+        "frontNormalizedMse": 0.514645996193091
+      },
+      {
+        "epoch": 6,
+        "supportWeightedBce": 0.07524271433552106,
+        "frontNormalizedMse": 0.4804169808824857
+      },
+      {
+        "epoch": 7,
+        "supportWeightedBce": 0.06953945041944583,
+        "frontNormalizedMse": 0.4557594855626424
+      },
+      {
+        "epoch": 8,
+        "supportWeightedBce": 0.06517118246604998,
+        "frontNormalizedMse": 0.43478260934352875
+      },
+      {
+        "epoch": 9,
+        "supportWeightedBce": 0.06194340158253908,
+        "frontNormalizedMse": 0.41590357944369316
+      },
+      {
+        "epoch": 10,
+        "supportWeightedBce": 0.05940591047207514,
+        "frontNormalizedMse": 0.40118660901983577
+      }
+    ],
+    "candidateLosses": [
+      {
+        "epoch": 1,
+        "supportBce": 0.47886057555675504,
+        "normalizedRegressionMse": 0.8555571309725444
+      },
+      {
+        "epoch": 2,
+        "supportBce": 0.3057460077603658,
+        "normalizedRegressionMse": 0.6729861855506897
+      },
+      {
+        "epoch": 3,
+        "supportBce": 0.294043989777565,
+        "normalizedRegressionMse": 0.6185108288129171
+      },
+      {
+        "epoch": 4,
+        "supportBce": 0.2912755890687307,
+        "normalizedRegressionMse": 0.5914688527584075
+      },
+      {
+        "epoch": 5,
+        "supportBce": 0.28973903973897297,
+        "normalizedRegressionMse": 0.5744732205073039
+      },
+      {
+        "epoch": 6,
+        "supportBce": 0.28870842218399045,
+        "normalizedRegressionMse": 0.5629906006654104
+      },
+      {
+        "epoch": 7,
+        "supportBce": 0.2880240337053935,
+        "normalizedRegressionMse": 0.5547820595900218
+      },
+      {
+        "epoch": 8,
+        "supportBce": 0.2875330154101054,
+        "normalizedRegressionMse": 0.5490052366256714
+      }
+    ]
+  },
+  "runtimeProjection": {
+    "identity": "arithmetic-mac-throughput-envelope-not-measured-runtime-v0",
+    "measured": false,
+    "omits": [
+      "feature construction",
+      "source admission",
+      "memory traffic",
+      "dispatch overhead",
+      "coarse latent interpolation"
+    ],
+    "coarseMacs": 382976000,
+    "candidateMacsAtMeanHeldCount": 734478080,
+    "combinedMacs": 1117454080,
+    "meanHeldCandidateCount": 409865,
+    "throughputEnvelopeMacPerSecond": [
+      118000000000.0,
+      216000000000.0
+    ],
+    "projectedMilliseconds": [
+      5.1733985185185185,
+      9.469949830508474
+    ]
+  },
+  "producer": {
+    "identity": "volume-vivisector-candidate-head-package.py",
+    "scriptPath": "/private/tmp/kaminos-pyro-field-residual-producer-recovery-0714/volume-vivisector-candidate-head-package.py",
+    "scriptSha256": "68a3ad4d2bd7c0ec72d0f9fe5be218cc931f827e3c659776daed99d7cfb916f9",
+    "invocation": {
+      "coarseEpochs": 10,
+      "candidateEpochs": 8,
+      "batchSize": 8192,
+      "learningRate": 0.002,
+      "weightDecay": 1e-05,
+      "seed": 71532
+    }
+  },
+  "failurePhase": null
+}

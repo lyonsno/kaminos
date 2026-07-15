@@ -6,6 +6,10 @@ import {
   SELECTIVE_HEAD_LIVE_MODEL as SELECTIVE_HEAD_LIVE_MODEL_160_TO_96,
   SELECTIVE_HEAD_LIVE_MODEL_URL as SELECTIVE_HEAD_LIVE_MODEL_URL_160_TO_96,
 } from './models/selective-head-live/exact-basin-160-to-96-v0/model.generated.js';
+import {
+  VIVISECTOR_WIDTH32_RECEIVER_EVAL_EMBEDDING,
+  VIVISECTOR_WIDTH32_RECEIVER_EVAL_WGSL,
+} from './models/native-low-vivisector-candidate-head-128-160-v0/weights.generated.js';
 
 export const SELECTIVE_HEAD_LIVE_MODEL = SELECTIVE_HEAD_LIVE_MODEL_160_TO_128;
 export const SELECTIVE_HEAD_LIVE_MODEL_URL = SELECTIVE_HEAD_LIVE_MODEL_URL_160_TO_128;
@@ -20,6 +24,7 @@ export const NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH = 'native-lo
 export const NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION = 'native-low-fixed-source-delta-admission-v0';
 export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
 export const NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK = 'native-low-candidate-head-cost-microbenchmark-v0';
+export const NATIVE_LOW_VIVISECTOR_WIDTH32_LIVE_RECEIVER = 'native-low-vivisector-width32-live-receiver-v0';
 export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
 export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-resident-cue-buffer-lifecycle-stress-v1';
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
@@ -84,6 +89,16 @@ const CANDIDATE_HEAD_OUTPUT_COUNT = 8;
 const CANDIDATE_CUE_RECORD_STRIDE_BYTES = 32;
 const CANDIDATE_CUE_LIFECYCLE_STATS_BYTES = 8 * Uint32Array.BYTES_PER_ELEMENT;
 const CANDIDATE_CUE_LIFECYCLE_PARAMS_BYTES = 4 * Uint32Array.BYTES_PER_ELEMENT;
+const VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT = 1944;
+const VIVISECTOR_WIDTH32_WEIGHT_BYTES = VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT * Float32Array.BYTES_PER_ELEMENT;
+const VIVISECTOR_FEATURE_MEAN_OFFSET = 0;
+const VIVISECTOR_FEATURE_STD_OFFSET = 48;
+const VIVISECTOR_TARGET_MEAN_OFFSET = 96;
+const VIVISECTOR_TARGET_STD_OFFSET = 104;
+const VIVISECTOR_W1_OFFSET = 112;
+const VIVISECTOR_B1_OFFSET = 1648;
+const VIVISECTOR_W2_OFFSET = 1680;
+const VIVISECTOR_B2_OFFSET = 1936;
 const SOURCE_DELTA_THRESHOLD = 0.5457155704;
 const SOURCE_DELTA_CALIBRATION_SHA256 = 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3';
 const SOURCE_DELTA_SCALES = Object.freeze([
@@ -528,6 +543,77 @@ fn benchmarkCandidateHead(@builtin(global_invocation_id) gid: vec3<u32>) {
 `;
 }
 
+const VIVISECTOR_WIDTH32_RECEIVER_WGSL = `
+const LOW_GRID: u32 = ${LOW_GRID}u;
+const HIGH_GRID: u32 = ${HIGH_GRID}u;
+const SLOTS_PER_CELL: u32 = ${SLOTS_PER_CELL}u;
+const RESIDUAL_WORKGROUP_SIZE: u32 = ${RESIDUAL_WORKGROUP_SIZE}u;
+const INPUT_COUNT: u32 = ${CANDIDATE_HEAD_INPUT_COUNT}u;
+const HIDDEN_WIDTH: u32 = 32u;
+const OUTPUT_COUNT: u32 = ${CANDIDATE_HEAD_OUTPUT_COUNT}u;
+const FEATURE_MEAN_OFFSET: u32 = ${VIVISECTOR_FEATURE_MEAN_OFFSET}u;
+const FEATURE_STD_OFFSET: u32 = ${VIVISECTOR_FEATURE_STD_OFFSET}u;
+const TARGET_MEAN_OFFSET: u32 = ${VIVISECTOR_TARGET_MEAN_OFFSET}u;
+const TARGET_STD_OFFSET: u32 = ${VIVISECTOR_TARGET_STD_OFFSET}u;
+const W1_OFFSET: u32 = ${VIVISECTOR_W1_OFFSET}u;
+const B1_OFFSET: u32 = ${VIVISECTOR_B1_OFFSET}u;
+const W2_OFFSET: u32 = ${VIVISECTOR_W2_OFFSET}u;
+const B2_OFFSET: u32 = ${VIVISECTOR_B2_OFFSET}u;
+
+@group(0) @binding(0) var<storage, read> lowFluid: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> priorLowFluid: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read> sourceHistoryCandidates: array<u32>;
+@group(0) @binding(3) var<storage, read> sourceHistoryDispatchArgs: array<u32>;
+@group(0) @binding(4) var<storage, read_write> candidateCueRecords: array<vec4<f32>>;
+
+fn index3(cell: vec3<u32>, grid: u32) -> u32 {
+  return cell.x + cell.y * grid + cell.z * grid * grid;
+}
+
+@compute @workgroup_size(${RESIDUAL_WORKGROUP_SIZE})
+fn runVivisectorWidth32Receiver(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let compactIndex = gid.x;
+  let candidateCount = sourceHistoryDispatchArgs[3];
+  if (compactIndex >= candidateCount) { return; }
+  let highIndex = sourceHistoryCandidates[compactIndex];
+  let z = highIndex / (HIGH_GRID * HIGH_GRID);
+  let y = (highIndex - z * HIGH_GRID * HIGH_GRID) / HIGH_GRID;
+  let x = highIndex - z * HIGH_GRID * HIGH_GRID - y * HIGH_GRID;
+  let highCell = vec3<u32>(x, y, z);
+  let lowCell = min(vec3<u32>(LOW_GRID - 1u), vec3<u32>(floor(vec3<f32>(highCell) * f32(LOW_GRID) / f32(HIGH_GRID))));
+  let lowIndex = index3(lowCell, LOW_GRID);
+  var inputs: array<f32, ${CANDIDATE_HEAD_INPUT_COUNT}>;
+  for (var slot = 0u; slot < SLOTS_PER_CELL; slot += 1u) {
+    let current = lowFluid[lowIndex * SLOTS_PER_CELL + slot];
+    let prior = priorLowFluid[lowIndex * SLOTS_PER_CELL + slot];
+    inputs[slot * 4u + 0u] = current.x;
+    inputs[slot * 4u + 1u] = current.y;
+    inputs[slot * 4u + 2u] = current.z;
+    inputs[slot * 4u + 3u] = current.w;
+    inputs[17u + slot * 4u + 0u] = current.x - prior.x;
+    inputs[17u + slot * 4u + 1u] = current.y - prior.y;
+    inputs[17u + slot * 4u + 2u] = current.z - prior.z;
+    inputs[17u + slot * 4u + 3u] = current.w - prior.w;
+  }
+  let normalized = vec3<f32>(highCell) / f32(HIGH_GRID - 1u);
+  let lowCellFloat = vec3<f32>(highCell) * f32(LOW_GRID) / f32(HIGH_GRID);
+  let subcell = fract(lowCellFloat);
+  inputs[34u] = normalized.x;
+  inputs[35u] = normalized.y;
+  inputs[36u] = normalized.z;
+  inputs[37u] = subcell.x;
+  inputs[38u] = subcell.y;
+  inputs[39u] = subcell.z;
+  for (var i = 40u; i < INPUT_COUNT; i += 1u) {
+    inputs[i] = 0.0;
+  }
+${VIVISECTOR_WIDTH32_RECEIVER_EVAL_WGSL}
+  let outBase = compactIndex * 2u;
+  candidateCueRecords[outBase] = vec4<f32>(normalized, output0);
+  candidateCueRecords[outBase + 1u] = vec4<f32>(output1, output2, output3, output4);
+}
+`;
+
 const CANDIDATE_CUE_LIFECYCLE_WGSL = `
 const RESIDUAL_WORKGROUP_SIZE: u32 = ${RESIDUAL_WORKGROUP_SIZE}u;
 
@@ -779,6 +865,41 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       compute: { module, entryPoint: 'benchmarkCandidateHead' },
     }));
   }
+  const vivisectorWidth32ReceiverLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 live receiver layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const vivisectorWidth32ReceiverShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 live receiver WGSL`,
+    code: specializeLowGridWgsl(VIVISECTOR_WIDTH32_RECEIVER_WGSL, lowGrid),
+  });
+  vivisectorWidth32ReceiverShader.getCompilationInfo?.().then(info => {
+    if (info?.messages?.length) {
+      console.error('vivisector-width32-live-receiver-wgsl-compilation', info.messages.map(message => ({
+        type: message.type,
+        lineNum: message.lineNum,
+        linePos: message.linePos,
+        message: message.message,
+      })));
+    }
+  });
+  const vivisectorWidth32ReceiverPipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 live receiver`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 live receiver pipeline layout`,
+      bindGroupLayouts: [vivisectorWidth32ReceiverLayout],
+    }),
+    compute: {
+      module: vivisectorWidth32ReceiverShader,
+      entryPoint: 'runVivisectorWidth32Receiver',
+    },
+  });
   const candidateCueLifecycleShader = device.createShaderModule({
     label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate cue lifecycle WGSL`,
     code: CANDIDATE_CUE_LIFECYCLE_WGSL,
@@ -845,6 +966,16 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     fidelityClaim: false,
     visualClaim: false,
   };
+  let vivisectorWidth32WeightsBuffer = null;
+  let vivisectorWidth32WeightsKey = null;
+  let lastVivisectorWidth32Receiver = {
+    identity: NATIVE_LOW_VIVISECTOR_WIDTH32_LIVE_RECEIVER,
+    enabled: false,
+    receiverClaimScope: 'performance-receiver-only-not-fidelity-or-visual-claim-v0',
+    trainedWeightsUsed: false,
+    syntheticBenchmarkWeights: false,
+    failurePhase: null,
+  };
   let candidateCueRecordReuseCount = 0;
   let candidateCueLifecycleToken = 0;
   let lastCandidateCueBufferLifecycle = {
@@ -867,6 +998,102 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     token: 0,
     previousCandidateCount: 0,
     stressEnabled: false,
+  };
+  const ensureVivisectorWidth32WeightsBuffer = (receiver) => {
+    if (!receiver?.enabled) return null;
+    const weights = receiver.weights;
+    if (!ArrayBuffer.isView(weights) || weights.BYTES_PER_ELEMENT !== Float32Array.BYTES_PER_ELEMENT) {
+      throw new Error('vivisector-width32-live-receiver:missing Float32Array weights');
+    }
+    if (weights.length !== VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT) {
+      throw new Error(`vivisector-width32-live-receiver:weight length ${weights.length} != ${VIVISECTOR_WIDTH32_WEIGHT_FLOAT_COUNT}`);
+    }
+    const key = [
+      receiver.packageProjectionSha256 || 'unknown-projection',
+      receiver.sourceWeightsSha256 || receiver.effectiveWeightsSha256 || 'unknown-source',
+      weights.length,
+    ].join(':');
+    if (!vivisectorWidth32WeightsBuffer || vivisectorWidth32WeightsKey !== key) {
+      vivisectorWidth32WeightsBuffer?.destroy?.();
+      vivisectorWidth32WeightsBuffer = device.createBuffer({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 receiver weights`,
+        size: VIVISECTOR_WIDTH32_WEIGHT_BYTES,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(vivisectorWidth32WeightsBuffer, 0, weights);
+      vivisectorWidth32WeightsKey = key;
+    }
+    return vivisectorWidth32WeightsBuffer;
+  };
+  const makeVivisectorWidth32ReceiverReceipt = (receiver, gpuMs = null, timestampValues = []) => {
+    const enabled = Boolean(receiver?.enabled);
+    const candidateCount = Number(lastSourceHistoryAdmission.uncappedCandidateCount || 0);
+    const candidateCoverage = Number(lastSourceHistoryAdmission.uncappedCandidateCoverage || 0);
+    const indirectWorkgroups = Math.ceil(candidateCount / RESIDUAL_WORKGROUP_SIZE);
+    const indirectThreads = indirectWorkgroups * RESIDUAL_WORKGROUP_SIZE;
+    const finiteGpuMs = Number(gpuMs);
+    const timingDisposition = Number.isFinite(finiteGpuMs)
+      ? finiteGpuMs < 10
+        ? 'under-10ms-materially-profitable'
+        : finiteGpuMs < 15
+          ? 'under-15ms-credible-break-even'
+          : finiteGpuMs <= 24
+            ? '15-24ms-only-if-total-native96-frame-beats-native160'
+            : 'above-24ms-current-architecture-failure'
+      : 'not-measured';
+    return {
+      identity: NATIVE_LOW_VIVISECTOR_WIDTH32_LIVE_RECEIVER,
+      enabled,
+      receiverClaimScope: 'performance-receiver-only-not-fidelity-or-visual-claim-v0',
+      packageIdentity: receiver?.packageIdentity || null,
+      modelIdentity: receiver?.modelIdentity || null,
+      requestedPackageSha256: receiver?.requestedPackageSha256 || null,
+      effectivePackageSha256: receiver?.effectivePackageSha256 || null,
+      requestedWeightsSha256: receiver?.requestedWeightsSha256 || null,
+      effectiveWeightsSha256: receiver?.effectiveWeightsSha256 || null,
+      sourceWeightsSha256: receiver?.sourceWeightsSha256 || receiver?.effectiveWeightsSha256 || null,
+      packageProjectionSha256: receiver?.packageProjectionSha256 || null,
+      weightEmbeddingAuthority: VIVISECTOR_WIDTH32_RECEIVER_EVAL_EMBEDDING.authority,
+      weightsEmbeddedInShaderSha256: VIVISECTOR_WIDTH32_RECEIVER_EVAL_EMBEDDING.packageProjectionSha256,
+      trainedWeightsUsed: enabled,
+      syntheticBenchmarkWeights: false,
+      coarseLatentRuntimeAuthority: receiver?.coarseLatentRuntimeAuthority || 'zeroed-coarse-latent-unimplemented-risk-not-fidelity-evidence-v0',
+      fidelityClaim: false,
+      visualClaim: false,
+      activeTreatmentPath: false,
+      candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+      dispatchIdentity: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+      dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+      indirectDispatch: true,
+      candidateCount,
+      instanceCount: candidateCount,
+      candidateInstanceEquality: candidateCount === candidateCount,
+      overflowCount: 0,
+      candidateCoverage,
+      indirectWorkgroups,
+      indirectThreads,
+      outputSchema: {
+        identity: 'compact-renderer-facing-cue-record-v0',
+        cueRecordStrideBytes: CANDIDATE_CUE_RECORD_STRIDE_BYTES,
+        cueRecordVec4Count: 2,
+        outputChannels: CANDIDATE_HEAD_OUTPUT_COUNT,
+      },
+      cueRecordStrideBytes: CANDIDATE_CUE_RECORD_STRIDE_BYTES,
+      vivisectorWidth32ReceiverGpuMs: Number.isFinite(finiteGpuMs) ? finiteGpuMs : null,
+      inferenceGpuMs: Number.isFinite(finiteGpuMs) ? finiteGpuMs : null,
+      materializationMs: null,
+      renderMs: null,
+      totalFrameMs: null,
+      timestampValues,
+      timestampAuthority: timestampValues.length >= 2 ? 'webgpu-timestamp-query-vivisector-width32-receiver-v0' : 'not-measured',
+      vivisectorReceiverDecisionBands: {
+        profitableTargetMs: 10,
+        credibleBreakEvenTargetMs: 15,
+        outerKillBoundaryMs: 24,
+        timingDisposition,
+      },
+      failurePhase: enabled ? null : 'vivisector-width32-live-receiver-disabled',
+    };
   };
   const makeCandidateHeadBenchmarkReceipt = (widthTimings = null, timestampValues = []) => {
     const candidateCount = Number(lastSourceHistoryAdmission.uncappedCandidateCount || 0);
@@ -1154,6 +1381,33 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       finalizeSourceHistoryPass.setBindGroup(0, finalizeSourceHistoryBindGroup);
       finalizeSourceHistoryPass.dispatchWorkgroups(1);
       finalizeSourceHistoryPass.end();
+      const vivisectorReceiver = options.vivisectorCandidateHeadReceiver || null;
+      const vivisectorReceiverEnabled = vivisectorReceiver?.enabled === true;
+      if (vivisectorReceiverEnabled) {
+        const vivisectorBindGroup = device.createBindGroup({
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 live receiver bind group`,
+          layout: vivisectorWidth32ReceiverLayout,
+          entries: [
+            { binding: 0, resource: { buffer: sourceFluid } },
+            { binding: 1, resource: { buffer: lowSnapshotFluid } },
+            { binding: 2, resource: { buffer: sourceHistoryCandidates } },
+            { binding: 3, resource: { buffer: sourceHistoryDispatchArgs } },
+            { binding: 4, resource: { buffer: candidateCueRecords } },
+          ],
+        });
+        const receiverTimestampWrites = options.stageTimestampWrites?.vivisectorWidth32Receiver || null;
+        const vivisectorPass = encoder.beginComputePass({
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} Vivisector width-32 live receiver`,
+          ...(receiverTimestampWrites ? { timestampWrites: receiverTimestampWrites } : {}),
+        });
+        vivisectorPass.setPipeline(vivisectorWidth32ReceiverPipeline);
+        vivisectorPass.setBindGroup(0, vivisectorBindGroup);
+        vivisectorPass.dispatchWorkgroupsIndirect(sourceHistoryDispatchArgs, 0);
+        vivisectorPass.end();
+        lastVivisectorWidth32Receiver = makeVivisectorWidth32ReceiverReceipt(vivisectorReceiver);
+      } else {
+        lastVivisectorWidth32Receiver = makeVivisectorWidth32ReceiverReceipt({ enabled: false });
+      }
       if (options.candidateHeadBenchmarkEnabled === true) {
         const lifecycleStressEnabled = options.candidateCueBufferLifecycleStressEnabled === true;
         candidateCueRecordReuseCount += 1;
@@ -1368,6 +1622,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     makeCandidateHeadCostMicrobenchmarkReceipt(widthTimings = null, timestampValues = []) {
       lastCandidateHeadBenchmark = makeCandidateHeadBenchmarkReceipt(widthTimings, timestampValues);
       return { ...lastCandidateHeadBenchmark };
+    },
+    makeVivisectorWidth32ReceiverReceipt(receiver, gpuMs = null, timestampValues = []) {
+      lastVivisectorWidth32Receiver = makeVivisectorWidth32ReceiverReceipt(receiver, gpuMs, timestampValues);
+      return { ...lastVivisectorWidth32Receiver };
     },
     async sampleCandidateCueBufferLifecycle() {
       const values = await readU32Buffer(
@@ -1638,6 +1896,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         nativeLowSourceTileCandidate: lastSourceTileCandidate,
         nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission,
         nativeLowCandidateHeadCostMicrobenchmark: lastCandidateHeadBenchmark,
+        nativeLowVivisectorWidth32LiveReceiver: lastVivisectorWidth32Receiver,
         nativeLowCandidateCueBufferLifecycle: lastCandidateCueBufferLifecycle,
         ...lastStats,
       };
@@ -1655,6 +1914,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
       candidateCueRecords.destroy();
       candidateCueLifecycleStats.destroy();
       candidateCueLifecycleParams.destroy();
+      vivisectorWidth32WeightsBuffer?.destroy?.();
       stats.destroy();
       model.destroy();
     },

@@ -12,9 +12,13 @@ const corePath = join(root, 'volume-core.js');
 const candidateHeadPackagePath = join(root, 'native-low-candidate-head-package.mjs');
 const modelManifestPath = join(root, 'models/selective-head-live/exact-basin-160-to-128-v0/manifest.json');
 const modelGeneratedPath = join(root, 'models/selective-head-live/exact-basin-160-to-128-v0/model.generated.js');
+const vivisectorWidth32PackagePath = join(root, 'models/native-low-vivisector-candidate-head-128-160-v0/vivisector-candidate-head-package.json');
+const vivisectorWidth32GeneratedPath = join(root, 'models/native-low-vivisector-candidate-head-128-160-v0/weights.generated.js');
 
 assert.ok(existsSync(modelManifestPath), 'frozen selective model manifest exists');
 assert.ok(existsSync(modelGeneratedPath), 'frozen selective model browser manifest exists');
+assert.ok(existsSync(vivisectorWidth32PackagePath), 'Vivisector width-32 exact package JSON is mirrored for browser custody');
+assert.ok(existsSync(vivisectorWidth32GeneratedPath), 'Vivisector width-32 browser weight projection exists');
 const modelManifest = JSON.parse(readFileSync(modelManifestPath, 'utf8'));
 assert.equal(modelManifest.identity, 'exact-basin-selective-carrier-heads-160-to-128-v0');
 assert.equal(modelManifest.packed?.sha256, 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9');
@@ -33,7 +37,9 @@ const native64Witness = existsSync(native64WitnessPath) ? readFileSync(native64W
 const runtime = readFileSync(runtimePath, 'utf8');
 const core = readFileSync(corePath, 'utf8');
 const candidateHeadPackage = readFileSync(candidateHeadPackagePath, 'utf8');
-const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}\n${candidateHeadPackage}`;
+const vivisectorWidth32Package = readFileSync(vivisectorWidth32PackagePath, 'utf8');
+const vivisectorWidth32Generated = readFileSync(vivisectorWidth32GeneratedPath, 'utf8');
+const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}\n${candidateHeadPackage}\n${vivisectorWidth32Package}\n${vivisectorWidth32Generated}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
 assert.match(combined, /native-low-resident-cue-buffer-lifecycle-stress-v1/, 'route and witness carry fail-loud runtime build identity');
@@ -166,6 +172,21 @@ assert.match(combined, /currentSourceChannels must be 17[\s\S]*sourceDeltaChanne
 assert.match(combined, /candidateListSource must be real uncapped fixed-gate sourceHistoryCandidates[\s\S]*dispatchMode must be dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0/, 'trained receiver preserves real indirect dispatch over uncapped fixed-gate candidates');
 assert.match(combined, /compact-renderer-facing-cue-record-v0[\s\S]*cueRecordStrideBytes must be 32/, 'trained receiver preserves compact renderer-facing cue schema');
 assert.match(witness, /nativeLowVivisectorCandidateHeadPackageReceiver[\s\S]*vivisectorCandidateHeadTrainedRouteRequested/, 'witness preserves Vivisector receiver receipt and request state');
+assert.match(combined, /15ed4ef7762e89e467bb1fecaba6e270f0b98be9bc06dfd3bd928fbc50d65309/, 'trained receiver binds the exact Vivisector package JSON checksum');
+assert.match(combined, /c648ec41d57e8810a40c30b006c0809ee1707777f75662cfcca69c05d036845f/, 'trained receiver binds the exact Vivisector NPZ weights checksum');
+assert.match(combined, /native-low-vivisector-width32-live-receiver-v0/, 'route records trained Vivisector width-32 live receiver identity');
+assert.match(combined, /vivisectorCandidateHeadReceiverEnabled[\s\S]*vivisectorWidth32ReceiverGpuMs/, 'core exposes the trained receiver switch and GPU timing');
+assert.match(combined, /requestedPackageSha256[\s\S]*effectivePackageSha256[\s\S]*requestedWeightsSha256[\s\S]*effectiveWeightsSha256/, 'trained receiver preserves requested/effective package and weights checksums');
+assert.match(combined, /packageProjectionSha256[\s\S]*sourceWeightsSha256/, 'trained receiver records browser projection checksum while preserving exact source NPZ checksum');
+assert.match(combined, /dispatchIdentity[\s\S]*dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0[\s\S]*indirectDispatch:\s*true/, 'trained receiver preserves real indirect dispatch identity');
+assert.match(combined, /candidateCount[\s\S]*instanceCount[\s\S]*candidateInstanceEquality[\s\S]*overflowCount/, 'trained receiver receipt preserves uncapped candidate count, instance count, equality, and overflow');
+assert.match(combined, /cueRecordStrideBytes[\s\S]*32[\s\S]*compact-renderer-facing-cue-record-v0/, 'trained receiver receipt preserves compact cue stride and schema');
+assert.match(combined, /inferenceGpuMs[\s\S]*materializationMs[\s\S]*renderMs[\s\S]*totalFrameMs/, 'trained receiver report preserves inference, materialization, render, and total-frame timing');
+assert.match(combined, /vivisectorReceiverDecisionBands[\s\S]*profitableTargetMs[\s\S]*10[\s\S]*credibleBreakEvenTargetMs[\s\S]*15[\s\S]*outerKillBoundaryMs[\s\S]*24/, 'trained receiver applies the current product decision bands');
+assert.match(combined, /above-24ms-current-architecture-failure/, 'trained receiver report can disposition >24ms as current-architecture failure');
+assert.match(combined, /failurePhase[\s\S]*vivisector-width32-live-receiver/, 'trained receiver failure phase is durable and specific');
+assert.match(combined, /trainedWeightsUsed:\s*true[\s\S]*syntheticBenchmarkWeights:\s*false/, 'trained receiver cannot be confused with synthetic benchmark weights');
+assert.match(combined, /receiverClaimScope[\s\S]*performance-receiver-only-not-fidelity-or-visual-claim-v0/, 'trained receiver timing does not imply visual/fidelity evidence');
 assert.match(combined, /native-low-resident-cue-buffer-lifecycle-stress-v0/, 'route records resident cue-buffer lifecycle stress identity');
 assert.match(combined, /cue_buffer_lifecycle_stress[\s\S]*nativeLowResidentCueBufferLifecycleStress/, 'route exposes resident cue-buffer lifecycle stress mode and receipt');
 assert.match(combined, /candidateCueRecordCapacity[\s\S]*candidateCueRecordCapacityBytes[\s\S]*candidateCueRecordAllocationCount[\s\S]*candidateCueRecordReuseCount[\s\S]*candidateCueRecordGrowthCount/, 'cue-buffer lifecycle receipt records capacity, allocation, reuse, and growth counts');
