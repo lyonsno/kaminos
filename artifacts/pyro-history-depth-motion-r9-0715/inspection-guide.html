@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Continuous Truthful-History Depth Motion R9</title>
+  <style>
+    :root { color-scheme: dark; background: #090a0c; color: #f4f5f6; font-family: ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; max-width: 100%; overflow-x: clip; }
+    body { margin: 0; }
+    header, section { width: 100%; max-width: 100%; min-width: 0; padding: 24px clamp(20px, calc((100vw - 1380px) / 2), 52px); border-bottom: 1px solid #30343a; }
+    header { background: #15171a; }
+    h1 { margin: 0 0 10px; font-size: 28px; letter-spacing: 0; }
+    h2 { margin: 0 0 10px; font-size: 20px; letter-spacing: 0; }
+    h3 { margin: 10px 0 6px; font-size: 16px; letter-spacing: 0; }
+    p { width: 100%; max-width: 1180px; color: #c9cdd2; line-height: 1.5; overflow-wrap: anywhere; }
+    strong { color: #fff; }
+    .positive { color: #a7e4ba; }
+    .negative { color: #ffab91; }
+    .caution { color: #f2ce73; }
+    .videos, .anchors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; width: 100%; max-width: 1380px; min-width: 0; }
+    .videos > div, .anchors > figure { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; }
+    video, img { display: block; width: 100%; max-width: 100%; min-width: 0; background: #000; }
+    figure { margin: 0 0 18px; }
+    figcaption { padding: 8px 0 0; color: #d9dde1; line-height: 1.4; }
+    table { width: 100%; max-width: 1180px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { padding: 8px; border-bottom: 1px solid #383d44; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+    code { color: #d9e5ff; overflow-wrap: anywhere; }
+    @media (max-width: 900px) { header, section { padding-inline: 20px; } .videos, .anchors { grid-template-columns: minmax(0, 1fr); } h1 { overflow-wrap: anywhere; } table { display: block; max-width: 100%; overflow-x: auto; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Continuous Truthful-History Depth Motion R9</h1>
+    <p><strong>Question:</strong> How much truthful phase diversity can 100 learned-splat fire instances draw from one live candidate-history ring before coherence or runtime support fails?</p>
+    <p class="positive"><strong>Stable result:</strong> depths 16, 32, and 64 each remain coherent for 63 distinct nonperiodic frames over 10.08 seconds with every physical slot initialized and zero overflow, candidate copy, or fallback.</p>
+    <p class="negative"><strong>Upper result:</strong> depth 543 initializes all 543 slots and remains coherent through frame 29, then the runtime changes effective depth to zero before frame 30 as the live safe-depth bound changes.</p>
+    <p class="caution"><strong>Read this first:</strong> the depth rows run serially in one continuing simulator. They are not same-time comparisons. Use the videos to judge motion coherence and phase diversity; do not attribute cross-row brightness changes to history depth alone.</p>
+  </header>
+
+  <section>
+    <h2>Complete Motion Rows</h2>
+    <p>Each video is one role: a field of 100 instances reading truthful past candidate states from the live GPU archive at the labeled physical history depth. There is no exact/reference/control/prediction strip inside these videos, no copied frame, and no clip loop.</p>
+    <div class="videos">
+      <div><h3>Depth 16</h3><video controls muted playsinline preload="metadata" poster="anchors/depth-16-frame-0001.png" src="depth-16-motion.mp4"></video><p>16 initialized physical slots. Mean adjacent pixel delta 3.8843; changed fraction 0.1010.</p></div>
+      <div><h3>Depth 32</h3><video controls muted playsinline preload="metadata" poster="anchors/depth-32-frame-0001.png" src="depth-32-motion.mp4"></video><p>32 initialized physical slots. Mean adjacent pixel delta 3.9462; changed fraction 0.1045.</p></div>
+      <div><h3>Depth 64</h3><video controls muted playsinline preload="metadata" poster="anchors/depth-64-frame-0001.png" src="depth-64-motion.mp4"></video><p>64 initialized physical slots. Mean adjacent pixel delta 3.5682; changed fraction 0.0935.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Depth 16 Anchors</h2>
+    <p>Early, middle, and terminal frames from the first serial row. These are three times within one 10.08-second depth-16 motion sequence.</p>
+    <div class="anchors">
+      <figure><img src="anchors/depth-16-frame-0001.png" alt="Depth 16 frame 1"><figcaption><strong>Depth 16, frame 1, 0.16 s.</strong> Coherent distributed flame field at the start of this row.</figcaption></figure>
+      <figure><img src="anchors/depth-16-frame-0032.png" alt="Depth 16 frame 32"><figcaption><strong>Depth 16, frame 32, 5.12 s.</strong> Distinct flame shapes and smoke-bearing tails remain visible.</figcaption></figure>
+      <figure><img src="anchors/depth-16-frame-0063.png" alt="Depth 16 frame 63"><figcaption><strong>Depth 16, frame 63, 10.08 s.</strong> Terminal frame remains populated and coherent without wrap or blanking.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Depth 32 Anchors</h2>
+    <p>The simulator continues from the depth-16 row before this in-page depth transition. These frames therefore show one later episode segment at depth 32, not matched simulator times against depth 16.</p>
+    <div class="anchors">
+      <figure><img src="anchors/depth-32-frame-0001.png" alt="Depth 32 frame 1"><figcaption><strong>Depth 32, frame 1, 0.16 s.</strong> Long orange tails and varied phase shapes are present at row entry.</figcaption></figure>
+      <figure><img src="anchors/depth-32-frame-0032.png" alt="Depth 32 frame 32"><figcaption><strong>Depth 32, frame 32, 5.12 s.</strong> Motion remains spatially distributed with no synchronized copied pose.</figcaption></figure>
+      <figure><img src="anchors/depth-32-frame-0063.png" alt="Depth 32 frame 63"><figcaption><strong>Depth 32, frame 63, 10.08 s.</strong> The field is dimmer at this later simulator time but remains coherent; serial timing prevents assigning that change to depth.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Depth 64 Anchors</h2>
+    <p>The simulator continues again before this depth-64 row. This is the deepest row that completes the full 10.08-second acceptance span in R9.</p>
+    <div class="anchors">
+      <figure><img src="anchors/depth-64-frame-0001.png" alt="Depth 64 frame 1"><figcaption><strong>Depth 64, frame 1, 0.16 s.</strong> All 64 physical slots are initialized; the field enters capture coherently.</figcaption></figure>
+      <figure><img src="anchors/depth-64-frame-0032.png" alt="Depth 64 frame 32"><figcaption><strong>Depth 64, frame 32, 5.12 s.</strong> Phase-separated shapes persist without topology explosion or blank instances.</figcaption></figure>
+      <figure><img src="anchors/depth-64-frame-0063.png" alt="Depth 64 frame 63"><figcaption><strong>Depth 64, frame 63, 10.08 s.</strong> Terminal row remains coherent and nonblank with zero recorded overflow/copy/fallback.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Depth 543 Failure Boundary</h2>
+    <p>Depth 543 is the fresh stability-selected upper row for this live phase. The primer advances 4,248 simulator steps, GPU metadata confirms 543 of 543 slots initialized, and measured work reports zero overflow/copy/fallback. Frames 1, 15, and 29 are valid and visually coherent. Before frame 30, runtime telemetry reports effective depth 0 instead of 543, so the witness rejects the row before taking another screenshot.</p>
+    <div class="anchors">
+      <figure><img src="anchors/depth-543-frame-0001.png" alt="Depth 543 valid frame 1"><figcaption><strong>Depth 543, valid frame 1.</strong> Post-prime capture begins coherently.</figcaption></figure>
+      <figure><img src="anchors/depth-543-frame-0015.png" alt="Depth 543 valid frame 15"><figcaption><strong>Depth 543, valid frame 15.</strong> No gradual blur or topology collapse is visible.</figcaption></figure>
+      <figure><img src="anchors/depth-543-frame-0029.png" alt="Depth 543 last valid frame 29"><figcaption><strong>Depth 543, last valid frame 29.</strong> Appearance is still coherent immediately before abrupt effective-depth loss at frame 30.</figcaption></figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>Quantitative Receipt</h2>
+    <table>
+      <thead><tr><th>Depth</th><th>Initialized slots</th><th>Complete frames</th><th>Duration</th><th>Mean adjacent delta</th><th>Changed fraction</th><th>Overflow/copy/fallback</th></tr></thead>
+      <tbody>
+        <tr><td>16</td><td>16 / 16</td><td>63 distinct</td><td>10.08 s</td><td>3.8843</td><td>0.1010</td><td>0 / 0 / null</td></tr>
+        <tr><td>32</td><td>32 / 32</td><td>63 distinct</td><td>10.08 s</td><td>3.9462</td><td>0.1045</td><td>0 / 0 / null</td></tr>
+        <tr><td>64</td><td>64 / 64</td><td>63 distinct</td><td>10.08 s</td><td>3.5682</td><td>0.0935</td><td>0 / 0 / null</td></tr>
+        <tr><td>543</td><td>543 / 543</td><td>29 valid, rejected at 30</td><td>4.64 s valid span</td><td>not accepted</td><td>not accepted</td><td>0 / 0 / null before failure</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Route And Claim Boundary</h2>
+    <p>Greenroom <code>b4d5a75f8ee7</code>; Kaminos <code>cc/pyro-phase-lag-counterfeiter-0713@93731b9</code>; WebGPU Apple backend; learned renderer <code>live-boundary-sidecar-learned-attribute-splats-v0</code>; model <code>sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472</code>; source <code>live-baked-sidecar-plus-fluid-material-v0</code>; one browser/page; null timeout and fallback.</p>
+    <p class="caution">This establishes truthful-history motion coherence through depth 64 and falsifies one fresh measured maximum as a stable ten-second control point. It does not causally isolate depth at matched simulator time, compare against an analytical raymarch, evaluate learned future prediction, prove multi-basin behavior, or authorize runtime uptake.</p>
+  </section>
+</body>
+</html>

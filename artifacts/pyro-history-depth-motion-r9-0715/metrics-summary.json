@@ -1,0 +1,3092 @@
+{
+  "schema": "kaminos.volume.boundary-splat-history-depth-motion-witness.v0",
+  "status": "failed",
+  "failurePhase": "depth-543:frame-30",
+  "error": "Error: requested-effective-depth-disagreement:{\"requestedDepth\":543,\"effectiveDepth\":0}\n    at validateRuntimeState (file:///private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/boundary-splat-history-depth-motion-witness.mjs:554:11)\n    at captureHistoryDepth (file:///private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/boundary-splat-history-depth-motion-witness.mjs:306:5)\n    at async file:///private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/boundary-splat-history-depth-motion-witness.mjs:87:22",
+  "runStartedAt": "2026-07-15T08:39:01.021Z",
+  "failedAt": "2026-07-15T08:44:28.417Z",
+  "requestedRoute": "http://127.0.0.1:8139/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_boundary_sidecar_source=baked&volume_boundary_splat_mode=learned&volume_boundary_splat_instances=100&volume_boundary_splat_composition=field&volume_boundary_splat_pbr_scene=fire-field&volume_boundary_splat_phase_mode=age-sweep&volume_boundary_splat_phase_stride=5&volume_boundary_splat_history_depth=16&volume_boundary_splat_history_frame_stride=8&volume_boundary_splat_radius=1.0&volume_boundary_splat_sharpness=3.4&volume_render_scale=1&history_ring_smoke=16&volume_boundary_splat_lod_mode=projected-area&volume_boundary_splat_candidate_budget=0&buffer_integrity_witness=pyro-history-depth-motion-r9-0715",
+  "browser": {
+    "identity": "boundary-splat-history-depth-single-cdp-browser-v0",
+    "mode": "launched-owned",
+    "browserProcessId": 17720,
+    "pageId": "22A789A427001951A44485FF07798A23",
+    "pageUrl": "http://127.0.0.1:8139/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_boundary_sidecar_source=baked&volume_boundary_splat_mode=learned&volume_boundary_splat_instances=100&volume_boundary_splat_composition=field&volume_boundary_splat_pbr_scene=fire-field&volume_boundary_splat_phase_mode=age-sweep&volume_boundary_splat_phase_stride=5&volume_boundary_splat_history_depth=543&volume_boundary_splat_history_frame_stride=8&volume_boundary_splat_radius=1.0&volume_boundary_splat_sharpness=3.4&volume_render_scale=1&history_ring_smoke=543&volume_boundary_splat_lod_mode=projected-area&volume_boundary_splat_candidate_budget=0&buffer_integrity_witness=pyro-history-depth-motion-r9-0715",
+    "port": 19441,
+    "userDataDir": "/private/tmp/kaminos-history-depth-motion-r9-0715/chrome-profile",
+    "targetReachable": true
+  },
+  "completedRows": [
+    {
+      "requestedDepth": 16,
+      "effectiveDepth": 16,
+      "requestedEffectiveRouteAgreement": true,
+      "depthTransition": {
+        "identity": "boundary-splat-history-depth-transition-v0",
+        "mode": "initial-route-load",
+        "requestedDepth": 16,
+        "effectiveDepth": 16,
+        "simStepCountBefore": null,
+        "simStepCountAfter": 6,
+        "frameCountAfter": 6,
+        "pageId": "22A789A427001951A44485FF07798A23"
+      },
+      "matchedSubstrateIdentity": {
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "backend": "WebGPU:apple",
+        "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "compositionIdentity": "boundary-splat-composed-field-v0",
+        "pbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "phaseModeIdentity": "age-sweep-history",
+        "phaseSourceIdentity": "age-sweep-history",
+        "phaseStride": 5,
+        "historyFrameStride": 8,
+        "requestedInstanceCount": 100,
+        "layoutBounds": {
+          "min": [
+            -3.74,
+            0,
+            -2.5698655580522405
+          ],
+          "max": [
+            4.08,
+            0,
+            2.497128391895847
+          ],
+          "uniformScaleMin": 0.34,
+          "uniformScaleMax": 0.34,
+          "instanceCount": 100
+        },
+        "camera": {
+          "identity": "history-depth-motion-fixed-camera-v0",
+          "position": [
+            0.05000000000000001,
+            1.8500000000000003,
+            4.35
+          ],
+          "target": [
+            0,
+            -0.17999999999999997,
+            0.16
+          ]
+        }
+      },
+      "initialState": {
+        "active": true,
+        "backend": "WebGPU:apple",
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "frameCount": 117,
+        "simStepCount": 117,
+        "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatCompositionIdentity": "boundary-splat-composed-field-v0",
+        "boundarySplatPbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "boundarySplatPhaseSourceIdentity": "age-sweep-history",
+        "boundarySplatHistoryDepth": 16,
+        "boundarySplatHistoryAllocatedSlots": 16,
+        "boundarySplatHistoryMeasuredUpperDepth": 841,
+        "boundarySplatHistoryFrameStride": 8,
+        "boundarySplatEffectiveHistoryWindowFrames": 120,
+        "boundarySplatHistoryWriteSlot": 14,
+        "boundarySplatPhaseSourceCount": 16,
+        "boundarySplatSourceCandidateCount": 6490,
+        "boundarySplatSelectedCandidateCount": 6400,
+        "boundarySplatOverflowCount": 0,
+        "boundarySplatCopyBytesThisFrame": 0,
+        "boundarySplatFallbackReason": null
+      },
+      "finalState": {
+        "active": true,
+        "backend": "WebGPU:apple",
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "frameCount": 1342,
+        "simStepCount": 1342,
+        "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatCompositionIdentity": "boundary-splat-composed-field-v0",
+        "boundarySplatPbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "boundarySplatPhaseSourceIdentity": "age-sweep-history",
+        "boundarySplatHistoryDepth": 16,
+        "boundarySplatHistoryAllocatedSlots": 16,
+        "boundarySplatHistoryMeasuredUpperDepth": 785,
+        "boundarySplatHistoryFrameStride": 8,
+        "boundarySplatEffectiveHistoryWindowFrames": 120,
+        "boundarySplatHistoryWriteSlot": 7,
+        "boundarySplatPhaseSourceCount": 16,
+        "boundarySplatSourceCandidateCount": 6952,
+        "boundarySplatSelectedCandidateCount": 6952,
+        "boundarySplatOverflowCount": 0,
+        "boundarySplatCopyBytesThisFrame": 0,
+        "boundarySplatFallbackReason": null
+      },
+      "boundarySplatHistoryAllocatedSlots": 16,
+      "boundarySplatBufferIntegrity": {
+        "identity": "boundary-splat-buffer-integrity-v0",
+        "ok": true,
+        "authority": "runtime-dimensions-plus-webgpu-device-limits-v0",
+        "candidateCapacity": 131072,
+        "candidateCount": 6952,
+        "sourceCandidateCount": 6952,
+        "historySlotCount": 16,
+        "allocatedHistorySlotCount": 16,
+        "historyWriteSlot": 7,
+        "requestedInstanceCount": 100,
+        "renderedInstanceCount": 677536,
+        "descriptorCapacity": 128,
+        "candidateStrideBytes": 48,
+        "descriptorStrideBytes": 32,
+        "candidateBufferBytes": 6291456,
+        "historyBufferBytes": 100663296,
+        "descriptorBufferBytes": 4096,
+        "maxHistoryIndex": 1973031,
+        "maxBufferSize": 268435456,
+        "maxStorageBufferBindingSize": 262144000,
+        "failureReasons": [],
+        "boundarySplatBufferIntegrityFailureReason": null
+      },
+      "historyPrime": {
+        "identity": "boundary-splat-live-history-prime-v0",
+        "ok": true,
+        "authority": "bounded-continuation-from-one-live-simulator-v0",
+        "simulatorCount": 1,
+        "minimumHistoryFrames": 127,
+        "framesToAdvance": 9,
+        "framesAdvanced": 9,
+        "frameCountBefore": 118,
+        "frameCountAfter": 127,
+        "simStepCountBefore": 118,
+        "simStepCountAfter": 127,
+        "simStepsAdvanced": 9,
+        "sourceCandidateCount": 7588,
+        "renderedInstanceCount": 720784,
+        "requestedInstanceCount": 100,
+        "phaseSourceCount": 16,
+        "historyDepth": 16,
+        "historyFrameStride": 8,
+        "historyWriteSlot": 15,
+        "timestampStatus": "available",
+        "fallbackReason": null,
+        "candidateCopyBytes": 0,
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0"
+      },
+      "slotMetadata": {
+        "identity": "boundary-splat-history-slot-metadata-readback-v0",
+        "authority": "gpu-archive-slot-metadata-post-queue-completion-readback-v0",
+        "historyAllocationGeneration": 1,
+        "historyDepth": 16,
+        "allocatedHistoryDepth": 16,
+        "measuredUpperHistoryDepth": 719,
+        "slotCount": 16,
+        "initializedSlotCount": 16
+      },
+      "cost": {
+        "identity": "boundary-splat-pbr-cost-ladder-v0",
+        "ok": true,
+        "authority": "serial-same-browser-gpu-timestamp-query-frozen-live-simulator-v0",
+        "counts": [
+          100
+        ],
+        "warmupSamples": 3,
+        "steadySamples": 12,
+        "simStepCountBefore": 127,
+        "simStepCountAfter": 127,
+        "frameCountBefore": 127,
+        "frameCountAfter": 127,
+        "simulatorPreserved": true,
+        "addedSimulationPasses": 0,
+        "pbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "depthAuthority": "same-device-depth24plus-less-equal-v0",
+        "cameraAuthority": "three-camera-matrices-native-webgpu-v0",
+        "fixedSubstrateIdentity": "operator-pretty-four-flame-substrate-v0",
+        "selectorPolicyIdentity": "boundary-splat-nested-permutation-prefix-v0",
+        "requestedCandidateBudget": 0,
+        "lodMode": "projected-area",
+        "adaptiveLodIdentity": "boundary-splat-projected-area-nested-tiers-v0",
+        "indirectDrawIdentity": "boundary-splat-single-global-indirect-no-first-instance-v0",
+        "rows": [
+          {
+            "requestedInstanceCount": 100,
+            "effectiveInstanceCount": 100,
+            "selectorPolicyIdentity": "boundary-splat-nested-permutation-prefix-v0",
+            "requestedCandidateBudget": 0,
+            "effectiveCandidateBudget": 7588,
+            "selectedCandidateCount": 7588,
+            "sourceCandidateCount": 7588,
+            "renderedInstanceCount": 720784,
+            "lodMode": "projected-area",
+            "adaptiveLodIdentity": "boundary-splat-projected-area-nested-tiers-v0",
+            "indirectDrawIdentity": "boundary-splat-single-global-indirect-no-first-instance-v0",
+            "indirectCommand": {
+              "vertexCount": 6,
+              "instanceCount": 720784,
+              "firstVertex": 0,
+              "firstInstance": 0
+            },
+            "indirectCommandAgreement": true,
+            "indirectCommandAuthority": "gpu-indirect-command-buffer-post-submit-readback-v0",
+            "tierGroups": [
+              {
+                "groupIndex": 0,
+                "descriptorStart": 0,
+                "descriptorCount": 32,
+                "requestedBudget": 6400,
+                "effectiveCandidateBudget": 6400,
+                "firstInstance": 0,
+                "renderedInstanceCount": 204800,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              },
+              {
+                "groupIndex": 1,
+                "descriptorStart": 32,
+                "descriptorCount": 50,
+                "requestedBudget": 12800,
+                "effectiveCandidateBudget": 7588,
+                "firstInstance": 204800,
+                "renderedInstanceCount": 379400,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              },
+              {
+                "groupIndex": 2,
+                "descriptorStart": 82,
+                "descriptorCount": 18,
+                "requestedBudget": 0,
+                "effectiveCandidateBudget": 7588,
+                "firstInstance": 584200,
+                "renderedInstanceCount": 136584,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              }
+            ],
+            "globalRenderedInstanceCount": 720784,
+            "historyArchiveCandidateCount": 7588,
+            "overflowCount": 0,
+            "phaseSourceCount": 16,
+            "timestampStatus": "available",
+            "pbrSceneRaster": {
+              "samples": [
+                0.589824,
+                1.179648,
+                1.31072,
+                1.507328,
+                1.835008,
+                2.031616,
+                2.490368,
+                2.686976,
+                3.080192,
+                3.866624,
+                4.25984,
+                5.308416
+              ],
+              "medianMs": 2.031616,
+              "p95Ms": 4.25984,
+              "minMs": 0.589824,
+              "maxMs": 5.308416
+            },
+            "splatRaster": {
+              "samples": [
+                6.22592,
+                7.340032,
+                14.024704,
+                14.024704,
+                16.121856,
+                16.121856,
+                16.515072,
+                17.563648,
+                18.35008,
+                18.612224,
+                18.874368,
+                21.168128
+              ],
+              "medianMs": 16.121856,
+              "p95Ms": 18.874368,
+              "minMs": 6.22592,
+              "maxMs": 21.168128
+            },
+            "totalWithoutSimulation": {
+              "samples": [
+                64.421888,
+                64.618496,
+                65.470464,
+                71.303168,
+                73.138176,
+                81.26464,
+                84.606976,
+                88.211456,
+                89.260032,
+                92.40576,
+                92.930048,
+                97.32096
+              ],
+              "medianMs": 81.26464,
+              "p95Ms": 92.930048,
+              "minMs": 64.421888,
+              "maxMs": 97.32096
+            },
+            "candidateCopyBytes": 0,
+            "fallbackReason": null
+          }
+        ],
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "backend": "WebGPU:apple",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "phaseSourceIdentity": "age-sweep-history"
+      },
+      "cadence": {
+        "authority": "browser-wall-plus-runtime-frame-and-sim-step-ledger-v0",
+        "requestedFrameIntervalMs": 160,
+        "actualDurationMs": 43821.55637499999,
+        "wallDeltasMs": [
+          775.1369159999995,
+          738.9183750000011,
+          708.1026669999992,
+          718.324458000001,
+          687.7794589999994,
+          800.6932909999996,
+          864.0200420000001,
+          730.0446250000005,
+          4346.758792000001,
+          847.1699579999986,
+          730.3011670000014,
+          789.6018750000003,
+          844.6394999999975,
+          679.9398330000004,
+          646.525708000001,
+          537.1628339999988,
+          535.3745000000017,
+          626.7047080000011,
+          639.0791249999966,
+          638.8584580000024,
+          553.2837089999994,
+          733.1530410000014,
+          617.637749999998,
+          658.3923340000001,
+          598.7668750000012,
+          618.9359159999985,
+          589.9702920000018,
+          644.1192080000001,
+          595.4188340000001,
+          773.6424159999988,
+          673.2896250000013,
+          637.9361669999998,
+          586.9539169999989,
+          657.9402499999997,
+          729.054041000003,
+          621.5825839999961,
+          607.3139579999988,
+          664.258167,
+          549.2265410000036,
+          510.122209000001,
+          525.1090829999957,
+          603.380333000001,
+          650.4397499999941,
+          645.2035840000026,
+          621.9984160000022,
+          633.554833999995,
+          608.9167080000043,
+          592.1653749999969,
+          559.330750000001,
+          638.0721249999988,
+          616.992167000004,
+          600.0824579999971,
+          570.8886249999996,
+          585.6277499999997,
+          548.080375000005,
+          661.4634579999984,
+          612.7954170000012,
+          593.463917000001,
+          561.9045409999962,
+          615.0513750000027,
+          631.0176250000004,
+          639.8835839999956
+        ],
+        "frameDeltas": [
+          18,
+          20,
+          19,
+          19,
+          20,
+          19,
+          22,
+          17,
+          16,
+          23,
+          21,
+          17,
+          16,
+          18,
+          18,
+          18,
+          16,
+          16,
+          15,
+          15,
+          14,
+          14,
+          18,
+          16,
+          14,
+          17,
+          16,
+          16,
+          15,
+          14,
+          15,
+          15,
+          19,
+          17,
+          18,
+          16,
+          13,
+          16,
+          20,
+          18,
+          17,
+          17,
+          17,
+          17,
+          15,
+          17,
+          16,
+          16,
+          17,
+          15,
+          18,
+          16,
+          15,
+          15,
+          14,
+          14,
+          16,
+          17,
+          17,
+          15,
+          16,
+          17
+        ],
+        "simStepDeltas": [
+          18,
+          20,
+          19,
+          19,
+          20,
+          19,
+          22,
+          17,
+          16,
+          23,
+          21,
+          17,
+          16,
+          18,
+          18,
+          18,
+          16,
+          16,
+          15,
+          15,
+          14,
+          14,
+          18,
+          16,
+          14,
+          17,
+          16,
+          16,
+          15,
+          14,
+          15,
+          15,
+          19,
+          17,
+          18,
+          16,
+          13,
+          16,
+          20,
+          18,
+          17,
+          17,
+          17,
+          17,
+          15,
+          17,
+          16,
+          16,
+          17,
+          15,
+          18,
+          16,
+          15,
+          15,
+          14,
+          14,
+          16,
+          17,
+          17,
+          15,
+          16,
+          17
+        ],
+        "allFrameDeltasPositive": true,
+        "allSimStepDeltasPositive": true
+      },
+      "perSourceReuse": {
+        "authority": "instance-descriptor-history-slot-selection-count-v0",
+        "totalSelections": 6300,
+        "slots": [
+          {
+            "historySlot": 0,
+            "selections": 395
+          },
+          {
+            "historySlot": 1,
+            "selections": 395
+          },
+          {
+            "historySlot": 2,
+            "selections": 393
+          },
+          {
+            "historySlot": 3,
+            "selections": 391
+          },
+          {
+            "historySlot": 4,
+            "selections": 395
+          },
+          {
+            "historySlot": 5,
+            "selections": 394
+          },
+          {
+            "historySlot": 6,
+            "selections": 395
+          },
+          {
+            "historySlot": 7,
+            "selections": 392
+          },
+          {
+            "historySlot": 8,
+            "selections": 393
+          },
+          {
+            "historySlot": 9,
+            "selections": 393
+          },
+          {
+            "historySlot": 10,
+            "selections": 395
+          },
+          {
+            "historySlot": 11,
+            "selections": 396
+          },
+          {
+            "historySlot": 12,
+            "selections": 392
+          },
+          {
+            "historySlot": 13,
+            "selections": 393
+          },
+          {
+            "historySlot": 14,
+            "selections": 392
+          },
+          {
+            "historySlot": 15,
+            "selections": 396
+          }
+        ]
+      },
+      "motion": {
+        "authority": "consecutive-live-canvas-png-delta-v0",
+        "distinctFrameHashCount": 63,
+        "observedExactPeriodFrames": null,
+        "meanAdjacentPixelDelta": 3.8843284188745653,
+        "changedPixelFraction": 0.10095946905779515,
+        "diffs": [
+          {
+            "meanAbsDiff": 4.73944677782042,
+            "changedFraction": 0.10674684994272624
+          },
+          {
+            "meanAbsDiff": 4.186296296296493,
+            "changedFraction": 0.10760977472317679
+          },
+          {
+            "meanAbsDiff": 5.0445322642232195,
+            "changedFraction": 0.1159628356879216
+          },
+          {
+            "meanAbsDiff": 4.184416868185586,
+            "changedFraction": 0.1113720249459081
+          },
+          {
+            "meanAbsDiff": 4.538870646133181,
+            "changedFraction": 0.11811123838615248
+          },
+          {
+            "meanAbsDiff": 3.6652080946927574,
+            "changedFraction": 0.10308514700267278
+          },
+          {
+            "meanAbsDiff": 4.018963132663167,
+            "changedFraction": 0.09614356624665903
+          },
+          {
+            "meanAbsDiff": 3.118148148148178,
+            "changedFraction": 0.08113147511772942
+          },
+          {
+            "meanAbsDiff": 3.4054707055280127,
+            "changedFraction": 0.08721140384370625
+          },
+          {
+            "meanAbsDiff": 4.034086801578387,
+            "changedFraction": 0.09964872088583429
+          },
+          {
+            "meanAbsDiff": 3.515105001909125,
+            "changedFraction": 0.09580374188621611
+          },
+          {
+            "meanAbsDiff": 4.002081795426694,
+            "changedFraction": 0.10421534936998854
+          },
+          {
+            "meanAbsDiff": 3.932072037673508,
+            "changedFraction": 0.10782614229349624
+          },
+          {
+            "meanAbsDiff": 4.632880234186252,
+            "changedFraction": 0.11578465063001145
+          },
+          {
+            "meanAbsDiff": 4.093791099232313,
+            "changedFraction": 0.10500827287768869
+          },
+          {
+            "meanAbsDiff": 2.991663060540301,
+            "changedFraction": 0.09076874124984091
+          },
+          {
+            "meanAbsDiff": 3.9259781086929926,
+            "changedFraction": 0.08928725976835943
+          },
+          {
+            "meanAbsDiff": 3.7220071274023745,
+            "changedFraction": 0.0874392261677485
+          },
+          {
+            "meanAbsDiff": 3.9111467481227904,
+            "changedFraction": 0.08843578974163166
+          },
+          {
+            "meanAbsDiff": 3.828916465147979,
+            "changedFraction": 0.08847651775486827
+          },
+          {
+            "meanAbsDiff": 4.085865258156332,
+            "changedFraction": 0.09027873234058802
+          },
+          {
+            "meanAbsDiff": 3.912158160451484,
+            "changedFraction": 0.08691612574774087
+          },
+          {
+            "meanAbsDiff": 4.063995587798682,
+            "changedFraction": 0.08674557719231259
+          },
+          {
+            "meanAbsDiff": 4.129303381273706,
+            "changedFraction": 0.08953799159984727
+          },
+          {
+            "meanAbsDiff": 4.507165160578811,
+            "changedFraction": 0.09606974672266769
+          },
+          {
+            "meanAbsDiff": 3.872555258580568,
+            "changedFraction": 0.09322387679775995
+          },
+          {
+            "meanAbsDiff": 3.887709473505562,
+            "changedFraction": 0.08720249459081074
+          },
+          {
+            "meanAbsDiff": 3.960820499766746,
+            "changedFraction": 0.08353697339951635
+          },
+          {
+            "meanAbsDiff": 3.789271986763497,
+            "changedFraction": 0.08442153493699886
+          },
+          {
+            "meanAbsDiff": 3.059949089983478,
+            "changedFraction": 0.09288405243731704
+          },
+          {
+            "meanAbsDiff": 4.375155063425411,
+            "changedFraction": 0.11352170039455263
+          },
+          {
+            "meanAbsDiff": 4.363548852403546,
+            "changedFraction": 0.11537227949599084
+          },
+          {
+            "meanAbsDiff": 4.001363539943325,
+            "changedFraction": 0.11813287514318442
+          },
+          {
+            "meanAbsDiff": 3.7748513003266657,
+            "changedFraction": 0.11761232022400407
+          },
+          {
+            "meanAbsDiff": 4.205396461754041,
+            "changedFraction": 0.12246913580246914
+          },
+          {
+            "meanAbsDiff": 4.440386067625554,
+            "changedFraction": 0.12457681048746341
+          },
+          {
+            "meanAbsDiff": 4.695486402783289,
+            "changedFraction": 0.12294641720758559
+          },
+          {
+            "meanAbsDiff": 4.773521276144666,
+            "changedFraction": 0.11768104874634085
+          },
+          {
+            "meanAbsDiff": 3.851831912095529,
+            "changedFraction": 0.09890925289550719
+          },
+          {
+            "meanAbsDiff": 3.272508591065306,
+            "changedFraction": 0.09222858597429044
+          },
+          {
+            "meanAbsDiff": 3.388925374400714,
+            "changedFraction": 0.09274277714140257
+          },
+          {
+            "meanAbsDiff": 4.373624368928042,
+            "changedFraction": 0.0998116329387807
+          },
+          {
+            "meanAbsDiff": 3.8259174409232455,
+            "changedFraction": 0.09412752959144711
+          },
+          {
+            "meanAbsDiff": 3.8157333163634575,
+            "changedFraction": 0.09145729922362225
+          },
+          {
+            "meanAbsDiff": 3.493786432480549,
+            "changedFraction": 0.08671248568155784
+          },
+          {
+            "meanAbsDiff": 3.567848203300662,
+            "changedFraction": 0.09195367188494337
+          },
+          {
+            "meanAbsDiff": 3.3152878537185826,
+            "changedFraction": 0.09366424844088074
+          },
+          {
+            "meanAbsDiff": 3.167016248780295,
+            "changedFraction": 0.0983556064655721
+          },
+          {
+            "meanAbsDiff": 3.4277828687794005,
+            "changedFraction": 0.108137966144839
+          },
+          {
+            "meanAbsDiff": 3.6377340800136726,
+            "changedFraction": 0.11369733995163549
+          },
+          {
+            "meanAbsDiff": 3.31047346315388,
+            "changedFraction": 0.10818633066055747
+          },
+          {
+            "meanAbsDiff": 3.166723940435204,
+            "changedFraction": 0.10000381825124093
+          },
+          {
+            "meanAbsDiff": 3.250298247846906,
+            "changedFraction": 0.09483517882143312
+          },
+          {
+            "meanAbsDiff": 3.5770506130414477,
+            "changedFraction": 0.09709812905689194
+          },
+          {
+            "meanAbsDiff": 3.078912646896523,
+            "changedFraction": 0.09581901489117985
+          },
+          {
+            "meanAbsDiff": 4.117883840312379,
+            "changedFraction": 0.10913962072037674
+          },
+          {
+            "meanAbsDiff": 3.9049683933649266,
+            "changedFraction": 0.10999872724958636
+          },
+          {
+            "meanAbsDiff": 3.4693984133044418,
+            "changedFraction": 0.10262950235458826
+          },
+          {
+            "meanAbsDiff": 4.423616308175569,
+            "changedFraction": 0.10506554664630266
+          },
+          {
+            "meanAbsDiff": 3.0453043994738223,
+            "changedFraction": 0.09644011709303806
+          },
+          {
+            "meanAbsDiff": 4.283907343770052,
+            "changedFraction": 0.1147651775486827
+          },
+          {
+            "meanAbsDiff": 4.672243434729404,
+            "changedFraction": 0.12050910016545756
+          }
+        ]
+      },
+      "video": {
+        "path": "/private/tmp/kaminos-history-depth-motion-r9-0715/depth-16/depth-16-motion.mp4",
+        "sha256": "8dee5c2892010c289640614e1576a206917ec62d05e63f65460856ce04661136",
+        "width": 1800,
+        "height": 1746,
+        "frameRate": "25/4",
+        "nbFrames": 63,
+        "durationSeconds": 10.08,
+        "nonLoopingEncoding": true,
+        "periodicMotionAuthority": "bounded-capture-exact-frame-hash-period-check-v0",
+        "operatorMotionAcceptance": "pending-direct-visual-smoke"
+      },
+      "fallbackReason": null,
+      "maxOverflowCount": 0,
+      "maxCandidateCopyBytes": 0
+    },
+    {
+      "requestedDepth": 32,
+      "effectiveDepth": 32,
+      "requestedEffectiveRouteAgreement": true,
+      "depthTransition": {
+        "identity": "boundary-splat-history-depth-transition-v0",
+        "mode": "live-control-in-place",
+        "requestedDepth": 32,
+        "effectiveDepth": 32,
+        "simStepCountBefore": 1342,
+        "simStepCountAfter": 1342,
+        "frameCountBefore": 1342,
+        "frameCountAfter": 1342,
+        "fallbackReason": null
+      },
+      "matchedSubstrateIdentity": {
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "backend": "WebGPU:apple",
+        "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "compositionIdentity": "boundary-splat-composed-field-v0",
+        "pbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "phaseModeIdentity": "age-sweep-history",
+        "phaseSourceIdentity": "age-sweep-history",
+        "phaseStride": 5,
+        "historyFrameStride": 8,
+        "requestedInstanceCount": 100,
+        "layoutBounds": {
+          "min": [
+            -3.74,
+            0,
+            -2.5698655580522405
+          ],
+          "max": [
+            4.08,
+            0,
+            2.497128391895847
+          ],
+          "uniformScaleMin": 0.34,
+          "uniformScaleMax": 0.34,
+          "instanceCount": 100
+        },
+        "camera": {
+          "identity": "history-depth-motion-fixed-camera-v0",
+          "position": [
+            0.05000000000000001,
+            1.8500000000000003,
+            4.35
+          ],
+          "target": [
+            0,
+            -0.17999999999999997,
+            0.16
+          ]
+        }
+      },
+      "initialState": {
+        "active": true,
+        "backend": "WebGPU:apple",
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "frameCount": 1452,
+        "simStepCount": 1452,
+        "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatCompositionIdentity": "boundary-splat-composed-field-v0",
+        "boundarySplatPbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "boundarySplatPhaseSourceIdentity": "age-sweep-history",
+        "boundarySplatHistoryDepth": 32,
+        "boundarySplatHistoryAllocatedSlots": 32,
+        "boundarySplatHistoryMeasuredUpperDepth": 1226,
+        "boundarySplatHistoryFrameStride": 8,
+        "boundarySplatEffectiveHistoryWindowFrames": 248,
+        "boundarySplatHistoryWriteSlot": 21,
+        "boundarySplatPhaseSourceCount": 32,
+        "boundarySplatSourceCandidateCount": 4452,
+        "boundarySplatSelectedCandidateCount": 4452,
+        "boundarySplatOverflowCount": 0,
+        "boundarySplatCopyBytesThisFrame": 0,
+        "boundarySplatFallbackReason": null
+      },
+      "finalState": {
+        "active": true,
+        "backend": "WebGPU:apple",
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "frameCount": 2768,
+        "simStepCount": 2768,
+        "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatCompositionIdentity": "boundary-splat-composed-field-v0",
+        "boundarySplatPbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "boundarySplatPhaseSourceIdentity": "age-sweep-history",
+        "boundarySplatHistoryDepth": 32,
+        "boundarySplatHistoryAllocatedSlots": 32,
+        "boundarySplatHistoryMeasuredUpperDepth": 1229,
+        "boundarySplatHistoryFrameStride": 8,
+        "boundarySplatEffectiveHistoryWindowFrames": 248,
+        "boundarySplatHistoryWriteSlot": 25,
+        "boundarySplatPhaseSourceCount": 32,
+        "boundarySplatSourceCandidateCount": 4441,
+        "boundarySplatSelectedCandidateCount": 4441,
+        "boundarySplatOverflowCount": 0,
+        "boundarySplatCopyBytesThisFrame": 0,
+        "boundarySplatFallbackReason": null
+      },
+      "boundarySplatHistoryAllocatedSlots": 32,
+      "boundarySplatBufferIntegrity": {
+        "identity": "boundary-splat-buffer-integrity-v0",
+        "ok": true,
+        "authority": "runtime-dimensions-plus-webgpu-device-limits-v0",
+        "candidateCapacity": 131072,
+        "candidateCount": 4441,
+        "sourceCandidateCount": 4441,
+        "historySlotCount": 32,
+        "allocatedHistorySlotCount": 32,
+        "historyWriteSlot": 25,
+        "requestedInstanceCount": 100,
+        "renderedInstanceCount": 444100,
+        "descriptorCapacity": 128,
+        "candidateStrideBytes": 48,
+        "descriptorStrideBytes": 32,
+        "candidateBufferBytes": 6291456,
+        "historyBufferBytes": 201326592,
+        "descriptorBufferBytes": 4096,
+        "maxHistoryIndex": 4067672,
+        "maxBufferSize": 268435456,
+        "maxStorageBufferBindingSize": 262144000,
+        "failureReasons": [],
+        "boundarySplatBufferIntegrityFailureReason": null
+      },
+      "historyPrime": {
+        "identity": "boundary-splat-live-history-prime-v0",
+        "ok": true,
+        "authority": "bounded-continuation-from-one-live-simulator-v0",
+        "simulatorCount": 1,
+        "minimumHistoryFrames": 1591,
+        "framesToAdvance": 138,
+        "framesAdvanced": 138,
+        "frameCountBefore": 1453,
+        "frameCountAfter": 1591,
+        "simStepCountBefore": 1453,
+        "simStepCountAfter": 1591,
+        "simStepsAdvanced": 138,
+        "sourceCandidateCount": 5534,
+        "renderedInstanceCount": 553400,
+        "requestedInstanceCount": 100,
+        "phaseSourceCount": 32,
+        "historyDepth": 32,
+        "historyFrameStride": 8,
+        "historyWriteSlot": 6,
+        "timestampStatus": "available",
+        "fallbackReason": null,
+        "candidateCopyBytes": 0,
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0"
+      },
+      "slotMetadata": {
+        "identity": "boundary-splat-history-slot-metadata-readback-v0",
+        "authority": "gpu-archive-slot-metadata-post-queue-completion-readback-v0",
+        "historyAllocationGeneration": 2,
+        "historyDepth": 32,
+        "allocatedHistoryDepth": 32,
+        "measuredUpperHistoryDepth": 986,
+        "slotCount": 32,
+        "initializedSlotCount": 32
+      },
+      "cost": {
+        "identity": "boundary-splat-pbr-cost-ladder-v0",
+        "ok": true,
+        "authority": "serial-same-browser-gpu-timestamp-query-frozen-live-simulator-v0",
+        "counts": [
+          100
+        ],
+        "warmupSamples": 3,
+        "steadySamples": 12,
+        "simStepCountBefore": 1591,
+        "simStepCountAfter": 1591,
+        "frameCountBefore": 1591,
+        "frameCountAfter": 1591,
+        "simulatorPreserved": true,
+        "addedSimulationPasses": 0,
+        "pbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "depthAuthority": "same-device-depth24plus-less-equal-v0",
+        "cameraAuthority": "three-camera-matrices-native-webgpu-v0",
+        "fixedSubstrateIdentity": "operator-pretty-four-flame-substrate-v0",
+        "selectorPolicyIdentity": "boundary-splat-nested-permutation-prefix-v0",
+        "requestedCandidateBudget": 0,
+        "lodMode": "projected-area",
+        "adaptiveLodIdentity": "boundary-splat-projected-area-nested-tiers-v0",
+        "indirectDrawIdentity": "boundary-splat-single-global-indirect-no-first-instance-v0",
+        "rows": [
+          {
+            "requestedInstanceCount": 100,
+            "effectiveInstanceCount": 100,
+            "selectorPolicyIdentity": "boundary-splat-nested-permutation-prefix-v0",
+            "requestedCandidateBudget": 0,
+            "effectiveCandidateBudget": 5534,
+            "selectedCandidateCount": 5534,
+            "sourceCandidateCount": 5534,
+            "renderedInstanceCount": 553400,
+            "lodMode": "projected-area",
+            "adaptiveLodIdentity": "boundary-splat-projected-area-nested-tiers-v0",
+            "indirectDrawIdentity": "boundary-splat-single-global-indirect-no-first-instance-v0",
+            "indirectCommand": {
+              "vertexCount": 6,
+              "instanceCount": 553400,
+              "firstVertex": 0,
+              "firstInstance": 0
+            },
+            "indirectCommandAgreement": true,
+            "indirectCommandAuthority": "gpu-indirect-command-buffer-post-submit-readback-v0",
+            "tierGroups": [
+              {
+                "groupIndex": 0,
+                "descriptorStart": 0,
+                "descriptorCount": 32,
+                "requestedBudget": 6400,
+                "effectiveCandidateBudget": 5534,
+                "firstInstance": 0,
+                "renderedInstanceCount": 177088,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              },
+              {
+                "groupIndex": 1,
+                "descriptorStart": 32,
+                "descriptorCount": 50,
+                "requestedBudget": 12800,
+                "effectiveCandidateBudget": 5534,
+                "firstInstance": 177088,
+                "renderedInstanceCount": 276700,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              },
+              {
+                "groupIndex": 2,
+                "descriptorStart": 82,
+                "descriptorCount": 18,
+                "requestedBudget": 0,
+                "effectiveCandidateBudget": 5534,
+                "firstInstance": 453788,
+                "renderedInstanceCount": 99612,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              }
+            ],
+            "globalRenderedInstanceCount": 553400,
+            "historyArchiveCandidateCount": 5534,
+            "overflowCount": 0,
+            "phaseSourceCount": 32,
+            "timestampStatus": "available",
+            "pbrSceneRaster": {
+              "samples": [
+                0.458752,
+                0.65536,
+                1.6384,
+                1.769472,
+                1.900544,
+                2.031616,
+                2.62144,
+                2.62144,
+                2.686976,
+                2.94912,
+                6.029312,
+                7.143424
+              ],
+              "medianMs": 2.031616,
+              "p95Ms": 6.029312,
+              "minMs": 0.458752,
+              "maxMs": 7.143424
+            },
+            "splatRaster": {
+              "samples": [
+                4.456448,
+                7.274496,
+                8.126464,
+                10.289152,
+                10.944512,
+                11.272192,
+                12.058624,
+                12.582912,
+                12.77952,
+                12.976128,
+                14.876672,
+                17.170432
+              ],
+              "medianMs": 11.272192,
+              "p95Ms": 14.876672,
+              "minMs": 4.456448,
+              "maxMs": 17.170432
+            },
+            "totalWithoutSimulation": {
+              "samples": [
+                53.018624,
+                57.344,
+                61.014016,
+                67.239936,
+                67.764224,
+                71.958528,
+                73.465856,
+                75.563008,
+                78.053376,
+                81.854464,
+                87.883776,
+                94.830592
+              ],
+              "medianMs": 71.958528,
+              "p95Ms": 87.883776,
+              "minMs": 53.018624,
+              "maxMs": 94.830592
+            },
+            "candidateCopyBytes": 0,
+            "fallbackReason": null
+          }
+        ],
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "backend": "WebGPU:apple",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "phaseSourceIdentity": "age-sweep-history"
+      },
+      "cadence": {
+        "authority": "browser-wall-plus-runtime-frame-and-sim-step-ledger-v0",
+        "requestedFrameIntervalMs": 160,
+        "actualDurationMs": 53256.77712500001,
+        "wallDeltasMs": [
+          566.306792000003,
+          614.4994169999991,
+          585.3378749999974,
+          566.0915000000095,
+          535.7703749999928,
+          633.5112080000108,
+          541.2421249999898,
+          636.8758329999982,
+          662.0907920000027,
+          670.6283330000006,
+          605.278667000006,
+          612.632832999996,
+          634.2189170000056,
+          654.3289169999916,
+          660.452833000003,
+          683.8011249999981,
+          747.7413329999981,
+          705.6392500000075,
+          654.1953749999957,
+          647.2371249999997,
+          674.0352089999942,
+          675.6653330000117,
+          677.533958,
+          645.5727919999918,
+          603.468000000008,
+          751.8582079999906,
+          5922.535459000006,
+          1063.948000000004,
+          707.9466249999969,
+          718.1803329999966,
+          749.1593330000032,
+          703.7213749999937,
+          689.4291250000097,
+          691.0947089999972,
+          587.5430829999968,
+          596.3164580000011,
+          588.0557919999992,
+          923.169167,
+          829.422040999998,
+          912.7860840000067,
+          2459.7493749999994,
+          769.7122079999972,
+          930.7685420000053,
+          885.2221250000002,
+          827.7486249999929,
+          812.4364159999968,
+          865.6534590000083,
+          942.3799579999904,
+          936.5628750000033,
+          748.4855419999949,
+          841.6466660000006,
+          916.9155420000025,
+          960.1875830000063,
+          1038.2998339999904,
+          1018.7704580000136,
+          925.4245419999934,
+          794.8683750000055,
+          756.7566660000011,
+          924.7331669999985,
+          822.8051669999986,
+          912.8485409999994,
+          835.4797499999986
+        ],
+        "frameDeltas": [
+          18,
+          20,
+          16,
+          15,
+          14,
+          15,
+          16,
+          17,
+          18,
+          15,
+          14,
+          16,
+          17,
+          17,
+          14,
+          15,
+          15,
+          19,
+          20,
+          19,
+          15,
+          16,
+          16,
+          15,
+          18,
+          16,
+          19,
+          31,
+          23,
+          20,
+          20,
+          18,
+          19,
+          17,
+          18,
+          18,
+          20,
+          19,
+          20,
+          17,
+          20,
+          28,
+          19,
+          20,
+          15,
+          15,
+          15,
+          14,
+          13,
+          13,
+          12,
+          14,
+          13,
+          13,
+          11,
+          13,
+          14,
+          12,
+          14,
+          15,
+          13,
+          15
+        ],
+        "simStepDeltas": [
+          18,
+          20,
+          16,
+          15,
+          14,
+          15,
+          16,
+          17,
+          18,
+          15,
+          14,
+          16,
+          17,
+          17,
+          14,
+          15,
+          15,
+          19,
+          20,
+          19,
+          15,
+          16,
+          16,
+          15,
+          18,
+          16,
+          19,
+          31,
+          23,
+          20,
+          20,
+          18,
+          19,
+          17,
+          18,
+          18,
+          20,
+          19,
+          20,
+          17,
+          20,
+          28,
+          19,
+          20,
+          15,
+          15,
+          15,
+          14,
+          13,
+          13,
+          12,
+          14,
+          13,
+          13,
+          11,
+          13,
+          14,
+          12,
+          14,
+          15,
+          13,
+          15
+        ],
+        "allFrameDeltasPositive": true,
+        "allSimStepDeltasPositive": true
+      },
+      "perSourceReuse": {
+        "authority": "instance-descriptor-history-slot-selection-count-v0",
+        "totalSelections": 6300,
+        "slots": [
+          {
+            "historySlot": 0,
+            "selections": 194
+          },
+          {
+            "historySlot": 1,
+            "selections": 201
+          },
+          {
+            "historySlot": 2,
+            "selections": 197
+          },
+          {
+            "historySlot": 3,
+            "selections": 195
+          },
+          {
+            "historySlot": 4,
+            "selections": 197
+          },
+          {
+            "historySlot": 5,
+            "selections": 195
+          },
+          {
+            "historySlot": 6,
+            "selections": 202
+          },
+          {
+            "historySlot": 7,
+            "selections": 194
+          },
+          {
+            "historySlot": 8,
+            "selections": 199
+          },
+          {
+            "historySlot": 9,
+            "selections": 195
+          },
+          {
+            "historySlot": 10,
+            "selections": 195
+          },
+          {
+            "historySlot": 11,
+            "selections": 202
+          },
+          {
+            "historySlot": 12,
+            "selections": 193
+          },
+          {
+            "historySlot": 13,
+            "selections": 200
+          },
+          {
+            "historySlot": 14,
+            "selections": 195
+          },
+          {
+            "historySlot": 15,
+            "selections": 196
+          },
+          {
+            "historySlot": 16,
+            "selections": 201
+          },
+          {
+            "historySlot": 17,
+            "selections": 192
+          },
+          {
+            "historySlot": 18,
+            "selections": 200
+          },
+          {
+            "historySlot": 19,
+            "selections": 197
+          },
+          {
+            "historySlot": 20,
+            "selections": 194
+          },
+          {
+            "historySlot": 21,
+            "selections": 200
+          },
+          {
+            "historySlot": 22,
+            "selections": 192
+          },
+          {
+            "historySlot": 23,
+            "selections": 202
+          },
+          {
+            "historySlot": 24,
+            "selections": 196
+          },
+          {
+            "historySlot": 25,
+            "selections": 195
+          },
+          {
+            "historySlot": 26,
+            "selections": 198
+          },
+          {
+            "historySlot": 27,
+            "selections": 193
+          },
+          {
+            "historySlot": 28,
+            "selections": 201
+          },
+          {
+            "historySlot": 29,
+            "selections": 197
+          },
+          {
+            "historySlot": 30,
+            "selections": 196
+          },
+          {
+            "historySlot": 31,
+            "selections": 196
+          }
+        ]
+      },
+      "motion": {
+        "authority": "consecutive-live-canvas-png-delta-v0",
+        "distinctFrameHashCount": 63,
+        "observedExactPeriodFrames": null,
+        "meanAdjacentPixelDelta": 3.9461596535382477,
+        "changedPixelFraction": 0.10452319074423051,
+        "diffs": [
+          {
+            "meanAbsDiff": 3.5800797590259554,
+            "changedFraction": 0.10766195749013618
+          },
+          {
+            "meanAbsDiff": 4.279275380764567,
+            "changedFraction": 0.10566246659030164
+          },
+          {
+            "meanAbsDiff": 2.42691527724738,
+            "changedFraction": 0.0841326205931017
+          },
+          {
+            "meanAbsDiff": 3.359003860676185,
+            "changedFraction": 0.09307878325060456
+          },
+          {
+            "meanAbsDiff": 3.3388638581308054,
+            "changedFraction": 0.0959335624284078
+          },
+          {
+            "meanAbsDiff": 3.289295744771184,
+            "changedFraction": 0.09920453099147257
+          },
+          {
+            "meanAbsDiff": 3.8507254677357983,
+            "changedFraction": 0.10881252386407025
+          },
+          {
+            "meanAbsDiff": 3.173873403758825,
+            "changedFraction": 0.10733231513300241
+          },
+          {
+            "meanAbsDiff": 4.741845912350163,
+            "changedFraction": 0.11791141657121039
+          },
+          {
+            "meanAbsDiff": 2.5435921259173444,
+            "changedFraction": 0.093984981545119
+          },
+          {
+            "meanAbsDiff": 3.9934886088839066,
+            "changedFraction": 0.11155148275423189
+          },
+          {
+            "meanAbsDiff": 3.649762844172888,
+            "changedFraction": 0.10851088201603666
+          },
+          {
+            "meanAbsDiff": 3.6200670315217938,
+            "changedFraction": 0.09934962453862797
+          },
+          {
+            "meanAbsDiff": 3.7502057613169826,
+            "changedFraction": 0.0934338806160112
+          },
+          {
+            "meanAbsDiff": 3.991126808366286,
+            "changedFraction": 0.09562810232913325
+          },
+          {
+            "meanAbsDiff": 4.395996775699088,
+            "changedFraction": 0.10393916253022782
+          },
+          {
+            "meanAbsDiff": 4.144524203470528,
+            "changedFraction": 0.1094692630775105
+          },
+          {
+            "meanAbsDiff": 4.931999066649851,
+            "changedFraction": 0.11654448262695685
+          },
+          {
+            "meanAbsDiff": 3.8180246913580818,
+            "changedFraction": 0.1105014636629757
+          },
+          {
+            "meanAbsDiff": 4.167054007042665,
+            "changedFraction": 0.10522082219676722
+          },
+          {
+            "meanAbsDiff": 3.954231046625195,
+            "changedFraction": 0.10195876288659794
+          },
+          {
+            "meanAbsDiff": 4.440385643375416,
+            "changedFraction": 0.10615883925162276
+          },
+          {
+            "meanAbsDiff": 4.316207628017576,
+            "changedFraction": 0.10731195112638411
+          },
+          {
+            "meanAbsDiff": 4.810304187348981,
+            "changedFraction": 0.1166068473972254
+          },
+          {
+            "meanAbsDiff": 3.9410220185823133,
+            "changedFraction": 0.1098345424462263
+          },
+          {
+            "meanAbsDiff": 4.110020788256871,
+            "changedFraction": 0.10736795214458444
+          },
+          {
+            "meanAbsDiff": 4.336986975520886,
+            "changedFraction": 0.1092694412625684
+          },
+          {
+            "meanAbsDiff": 6.1328615671800115,
+            "changedFraction": 0.13258877434135166
+          },
+          {
+            "meanAbsDiff": 4.935717194858413,
+            "changedFraction": 0.12415298459971999
+          },
+          {
+            "meanAbsDiff": 4.6443931101780125,
+            "changedFraction": 0.11464808451062747
+          },
+          {
+            "meanAbsDiff": 4.032631199355258,
+            "changedFraction": 0.10269823087692503
+          },
+          {
+            "meanAbsDiff": 4.82282847566945,
+            "changedFraction": 0.11228585974290442
+          },
+          {
+            "meanAbsDiff": 4.461676212294951,
+            "changedFraction": 0.11641466208476518
+          },
+          {
+            "meanAbsDiff": 4.573648551185861,
+            "changedFraction": 0.12201476390479826
+          },
+          {
+            "meanAbsDiff": 4.622449620296317,
+            "changedFraction": 0.12795596283568791
+          },
+          {
+            "meanAbsDiff": 5.174567052734675,
+            "changedFraction": 0.12172457681048747
+          },
+          {
+            "meanAbsDiff": 3.121358448941394,
+            "changedFraction": 0.10412625684103348
+          },
+          {
+            "meanAbsDiff": 3.919327139281477,
+            "changedFraction": 0.10486572483136057
+          },
+          {
+            "meanAbsDiff": 4.442686351873108,
+            "changedFraction": 0.11191294387170676
+          },
+          {
+            "meanAbsDiff": 3.779825633193398,
+            "changedFraction": 0.10095201730940563
+          },
+          {
+            "meanAbsDiff": 4.553396546603996,
+            "changedFraction": 0.10651266386661576
+          },
+          {
+            "meanAbsDiff": 4.264069831572837,
+            "changedFraction": 0.10903270968563064
+          },
+          {
+            "meanAbsDiff": 3.7116842730473865,
+            "changedFraction": 0.10619447626320479
+          },
+          {
+            "meanAbsDiff": 4.439570658860595,
+            "changedFraction": 0.11694667175766832
+          },
+          {
+            "meanAbsDiff": 3.72248780280866,
+            "changedFraction": 0.11010563828433244
+          },
+          {
+            "meanAbsDiff": 2.6100178185056575,
+            "changedFraction": 0.09054982817869416
+          },
+          {
+            "meanAbsDiff": 3.259735692164106,
+            "changedFraction": 0.09336387934326079
+          },
+          {
+            "meanAbsDiff": 3.27454414322678,
+            "changedFraction": 0.08459462899325443
+          },
+          {
+            "meanAbsDiff": 3.472277374740081,
+            "changedFraction": 0.08065928471426753
+          },
+          {
+            "meanAbsDiff": 2.545740528615602,
+            "changedFraction": 0.07549191803487336
+          },
+          {
+            "meanAbsDiff": 3.700989351321523,
+            "changedFraction": 0.08619320351279114
+          },
+          {
+            "meanAbsDiff": 3.8251601544270835,
+            "changedFraction": 0.09047600865470282
+          },
+          {
+            "meanAbsDiff": 2.876770607950401,
+            "changedFraction": 0.08604938271604938
+          },
+          {
+            "meanAbsDiff": 4.190507403165031,
+            "changedFraction": 0.10070383097874507
+          },
+          {
+            "meanAbsDiff": 3.421556573755919,
+            "changedFraction": 0.0983352424589538
+          },
+          {
+            "meanAbsDiff": 4.375062152645191,
+            "changedFraction": 0.11054982817869416
+          },
+          {
+            "meanAbsDiff": 4.439200712740321,
+            "changedFraction": 0.11098129056891944
+          },
+          {
+            "meanAbsDiff": 3.084670569767842,
+            "changedFraction": 0.09737686139747996
+          },
+          {
+            "meanAbsDiff": 3.873060116244659,
+            "changedFraction": 0.1037037037037037
+          },
+          {
+            "meanAbsDiff": 4.0909210470494015,
+            "changedFraction": 0.1027898689067074
+          },
+          {
+            "meanAbsDiff": 3.662702473378295,
+            "changedFraction": 0.09939544355351916
+          },
+          {
+            "meanAbsDiff": 3.648923253150084,
+            "changedFraction": 0.09771795850833652
+          }
+        ]
+      },
+      "video": {
+        "path": "/private/tmp/kaminos-history-depth-motion-r9-0715/depth-32/depth-32-motion.mp4",
+        "sha256": "3434da580208103dad869fae82a21fe7eff096cc0f13a7d50413f1999f6fdb1e",
+        "width": 1800,
+        "height": 1746,
+        "frameRate": "25/4",
+        "nbFrames": 63,
+        "durationSeconds": 10.08,
+        "nonLoopingEncoding": true,
+        "periodicMotionAuthority": "bounded-capture-exact-frame-hash-period-check-v0",
+        "operatorMotionAcceptance": "pending-direct-visual-smoke"
+      },
+      "fallbackReason": null,
+      "maxOverflowCount": 0,
+      "maxCandidateCopyBytes": 0
+    },
+    {
+      "requestedDepth": 64,
+      "effectiveDepth": 64,
+      "requestedEffectiveRouteAgreement": true,
+      "depthTransition": {
+        "identity": "boundary-splat-history-depth-transition-v0",
+        "mode": "live-control-in-place",
+        "requestedDepth": 64,
+        "effectiveDepth": 64,
+        "simStepCountBefore": 2768,
+        "simStepCountAfter": 2768,
+        "frameCountBefore": 2768,
+        "frameCountAfter": 2768,
+        "fallbackReason": null
+      },
+      "matchedSubstrateIdentity": {
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "backend": "WebGPU:apple",
+        "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "compositionIdentity": "boundary-splat-composed-field-v0",
+        "pbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "phaseModeIdentity": "age-sweep-history",
+        "phaseSourceIdentity": "age-sweep-history",
+        "phaseStride": 5,
+        "historyFrameStride": 8,
+        "requestedInstanceCount": 100,
+        "layoutBounds": {
+          "min": [
+            -3.74,
+            0,
+            -2.5698655580522405
+          ],
+          "max": [
+            4.08,
+            0,
+            2.497128391895847
+          ],
+          "uniformScaleMin": 0.34,
+          "uniformScaleMax": 0.34,
+          "instanceCount": 100
+        },
+        "camera": {
+          "identity": "history-depth-motion-fixed-camera-v0",
+          "position": [
+            0.05000000000000001,
+            1.8500000000000003,
+            4.35
+          ],
+          "target": [
+            0,
+            -0.17999999999999997,
+            0.16
+          ]
+        }
+      },
+      "initialState": {
+        "active": true,
+        "backend": "WebGPU:apple",
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "frameCount": 2843,
+        "simStepCount": 2843,
+        "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatCompositionIdentity": "boundary-splat-composed-field-v0",
+        "boundarySplatPbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "boundarySplatPhaseSourceIdentity": "age-sweep-history",
+        "boundarySplatHistoryDepth": 64,
+        "boundarySplatHistoryAllocatedSlots": 64,
+        "boundarySplatHistoryMeasuredUpperDepth": 714,
+        "boundarySplatHistoryFrameStride": 8,
+        "boundarySplatEffectiveHistoryWindowFrames": 504,
+        "boundarySplatHistoryWriteSlot": 35,
+        "boundarySplatPhaseSourceCount": 64,
+        "boundarySplatSourceCandidateCount": 7639,
+        "boundarySplatSelectedCandidateCount": 7639,
+        "boundarySplatOverflowCount": 0,
+        "boundarySplatCopyBytesThisFrame": 0,
+        "boundarySplatFallbackReason": null
+      },
+      "finalState": {
+        "active": true,
+        "backend": "WebGPU:apple",
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "frameCount": 4469,
+        "simStepCount": 4469,
+        "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "boundarySplatCompositionIdentity": "boundary-splat-composed-field-v0",
+        "boundarySplatPbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "boundarySplatPhaseSourceIdentity": "age-sweep-history",
+        "boundarySplatHistoryDepth": 64,
+        "boundarySplatHistoryAllocatedSlots": 64,
+        "boundarySplatHistoryMeasuredUpperDepth": 2285,
+        "boundarySplatHistoryFrameStride": 8,
+        "boundarySplatEffectiveHistoryWindowFrames": 504,
+        "boundarySplatHistoryWriteSlot": 46,
+        "boundarySplatPhaseSourceCount": 64,
+        "boundarySplatSourceCandidateCount": 2390,
+        "boundarySplatSelectedCandidateCount": 2390,
+        "boundarySplatOverflowCount": 0,
+        "boundarySplatCopyBytesThisFrame": 0,
+        "boundarySplatFallbackReason": null
+      },
+      "boundarySplatHistoryAllocatedSlots": 64,
+      "boundarySplatBufferIntegrity": {
+        "identity": "boundary-splat-buffer-integrity-v0",
+        "ok": true,
+        "authority": "runtime-dimensions-plus-webgpu-device-limits-v0",
+        "candidateCapacity": 85333,
+        "candidateCount": 2390,
+        "sourceCandidateCount": 2390,
+        "historySlotCount": 64,
+        "allocatedHistorySlotCount": 64,
+        "historyWriteSlot": 46,
+        "requestedInstanceCount": 100,
+        "renderedInstanceCount": 239000,
+        "descriptorCapacity": 128,
+        "candidateStrideBytes": 48,
+        "descriptorStrideBytes": 32,
+        "candidateBufferBytes": 4095984,
+        "historyBufferBytes": 262142976,
+        "descriptorBufferBytes": 4096,
+        "maxHistoryIndex": 5378368,
+        "maxBufferSize": 268435456,
+        "maxStorageBufferBindingSize": 262144000,
+        "failureReasons": [],
+        "boundarySplatBufferIntegrityFailureReason": null
+      },
+      "historyPrime": {
+        "identity": "boundary-splat-live-history-prime-v0",
+        "ok": true,
+        "authority": "bounded-continuation-from-one-live-simulator-v0",
+        "simulatorCount": 1,
+        "minimumHistoryFrames": 3273,
+        "framesToAdvance": 430,
+        "framesAdvanced": 430,
+        "frameCountBefore": 2843,
+        "frameCountAfter": 3273,
+        "simStepCountBefore": 2843,
+        "simStepCountAfter": 3273,
+        "simStepsAdvanced": 430,
+        "sourceCandidateCount": 5835,
+        "renderedInstanceCount": 583500,
+        "requestedInstanceCount": 100,
+        "phaseSourceCount": 64,
+        "historyDepth": 64,
+        "historyFrameStride": 8,
+        "historyWriteSlot": 25,
+        "timestampStatus": "available",
+        "fallbackReason": null,
+        "candidateCopyBytes": 0,
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0"
+      },
+      "slotMetadata": {
+        "identity": "boundary-splat-history-slot-metadata-readback-v0",
+        "authority": "gpu-archive-slot-metadata-post-queue-completion-readback-v0",
+        "historyAllocationGeneration": 3,
+        "historyDepth": 64,
+        "allocatedHistoryDepth": 64,
+        "measuredUpperHistoryDepth": 935,
+        "slotCount": 64,
+        "initializedSlotCount": 64
+      },
+      "cost": {
+        "identity": "boundary-splat-pbr-cost-ladder-v0",
+        "ok": true,
+        "authority": "serial-same-browser-gpu-timestamp-query-frozen-live-simulator-v0",
+        "counts": [
+          100
+        ],
+        "warmupSamples": 3,
+        "steadySamples": 12,
+        "simStepCountBefore": 3273,
+        "simStepCountAfter": 3273,
+        "frameCountBefore": 3273,
+        "frameCountAfter": 3273,
+        "simulatorPreserved": true,
+        "addedSimulationPasses": 0,
+        "pbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+        "depthAuthority": "same-device-depth24plus-less-equal-v0",
+        "cameraAuthority": "three-camera-matrices-native-webgpu-v0",
+        "fixedSubstrateIdentity": "operator-pretty-four-flame-substrate-v0",
+        "selectorPolicyIdentity": "boundary-splat-nested-permutation-prefix-v0",
+        "requestedCandidateBudget": 0,
+        "lodMode": "projected-area",
+        "adaptiveLodIdentity": "boundary-splat-projected-area-nested-tiers-v0",
+        "indirectDrawIdentity": "boundary-splat-single-global-indirect-no-first-instance-v0",
+        "rows": [
+          {
+            "requestedInstanceCount": 100,
+            "effectiveInstanceCount": 100,
+            "selectorPolicyIdentity": "boundary-splat-nested-permutation-prefix-v0",
+            "requestedCandidateBudget": 0,
+            "effectiveCandidateBudget": 5835,
+            "selectedCandidateCount": 5835,
+            "sourceCandidateCount": 5835,
+            "renderedInstanceCount": 583500,
+            "lodMode": "projected-area",
+            "adaptiveLodIdentity": "boundary-splat-projected-area-nested-tiers-v0",
+            "indirectDrawIdentity": "boundary-splat-single-global-indirect-no-first-instance-v0",
+            "indirectCommand": {
+              "vertexCount": 6,
+              "instanceCount": 583500,
+              "firstVertex": 0,
+              "firstInstance": 0
+            },
+            "indirectCommandAgreement": true,
+            "indirectCommandAuthority": "gpu-indirect-command-buffer-post-submit-readback-v0",
+            "tierGroups": [
+              {
+                "groupIndex": 0,
+                "descriptorStart": 0,
+                "descriptorCount": 32,
+                "requestedBudget": 6400,
+                "effectiveCandidateBudget": 5835,
+                "firstInstance": 0,
+                "renderedInstanceCount": 186720,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              },
+              {
+                "groupIndex": 1,
+                "descriptorStart": 32,
+                "descriptorCount": 50,
+                "requestedBudget": 12800,
+                "effectiveCandidateBudget": 5835,
+                "firstInstance": 186720,
+                "renderedInstanceCount": 291750,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              },
+              {
+                "groupIndex": 2,
+                "descriptorStart": 82,
+                "descriptorCount": 18,
+                "requestedBudget": 0,
+                "effectiveCandidateBudget": 5835,
+                "firstInstance": 478470,
+                "renderedInstanceCount": 105030,
+                "countAuthority": "gpu-tier-group-post-submit-readback"
+              }
+            ],
+            "globalRenderedInstanceCount": 583500,
+            "historyArchiveCandidateCount": 5835,
+            "overflowCount": 0,
+            "phaseSourceCount": 64,
+            "timestampStatus": "available",
+            "pbrSceneRaster": {
+              "samples": [
+                0.589824,
+                1.441792,
+                1.507328,
+                1.507328,
+                1.900544,
+                2.097152,
+                2.94912,
+                3.2768,
+                3.801088,
+                3.801088,
+                5.57056,
+                8.51968
+              ],
+              "medianMs": 2.097152,
+              "p95Ms": 5.57056,
+              "minMs": 0.589824,
+              "maxMs": 8.51968
+            },
+            "splatRaster": {
+              "samples": [
+                8.323072,
+                8.323072,
+                13.43488,
+                15.204352,
+                15.532032,
+                15.597568,
+                15.925248,
+                15.925248,
+                17.563648,
+                19.136512,
+                23.26528,
+                26.083328
+              ],
+              "medianMs": 15.597568,
+              "p95Ms": 23.26528,
+              "minMs": 8.323072,
+              "maxMs": 26.083328
+            },
+            "totalWithoutSimulation": {
+              "samples": [
+                72.876032,
+                82.640896,
+                88.14592,
+                94.437376,
+                97.845248,
+                97.845248,
+                101.646336,
+                102.89152,
+                108.396544,
+                112.852992,
+                123.731968,
+                125.239296
+              ],
+              "medianMs": 97.845248,
+              "p95Ms": 123.731968,
+              "minMs": 72.876032,
+              "maxMs": 125.239296
+            },
+            "candidateCopyBytes": 0,
+            "fallbackReason": null
+          }
+        ],
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "backend": "WebGPU:apple",
+        "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+        "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+        "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+        "phaseSourceIdentity": "age-sweep-history"
+      },
+      "cadence": {
+        "authority": "browser-wall-plus-runtime-frame-and-sim-step-ledger-v0",
+        "requestedFrameIntervalMs": 160,
+        "actualDurationMs": 50929.52633299999,
+        "wallDeltasMs": [
+          857.3562500000116,
+          754.3372499999823,
+          753.1905830000178,
+          836.7455419999897,
+          848.3232910000079,
+          860.4939169999852,
+          806.4851250000065,
+          699.8064169999852,
+          856.7926250000019,
+          969.5585830000055,
+          863.4654169999994,
+          870.5526250000112,
+          788.3935409999976,
+          837.1073340000003,
+          841.8676249999844,
+          717.3543330000248,
+          740.6342919999734,
+          848.6136660000193,
+          907.8357090000063,
+          958.1399999999849,
+          960.0916250000009,
+          798.7332499999902,
+          705.0503750000207,
+          792.3306250000023,
+          769.417415999982,
+          708.9854170000181,
+          840.0985419999924,
+          811.9221249999828,
+          922.8767500000249,
+          654.9556250000023,
+          757.9364999999816,
+          853.5288750000182,
+          813.8101659999811,
+          792.4428750000079,
+          849.5535840000084,
+          850.5338749999937,
+          764.6109580000048,
+          842.3921249999839,
+          774.2464170000167,
+          853.2956659999909,
+          820.1495839999989,
+          804.5104580000043,
+          751.9547500000044,
+          818.9953749999986,
+          825.9277500000026,
+          833.3801669999957,
+          775.4005409999809,
+          748.7455420000188,
+          645.0393329999933,
+          613.1955420000013,
+          694.0425830000022,
+          770.1372090000077,
+          784.708707999991,
+          814.833249999996,
+          1199.6159170000174,
+          991.1793329999782,
+          855.030167000019,
+          1142.6631249999919,
+          847.346332999994,
+          816.9687919999997,
+          819.997000000003,
+          821.8379579999892
+        ],
+        "frameDeltas": [
+          18,
+          14,
+          14,
+          14,
+          14,
+          12,
+          13,
+          13,
+          13,
+          14,
+          15,
+          13,
+          13,
+          15,
+          14,
+          14,
+          12,
+          13,
+          12,
+          14,
+          14,
+          14,
+          12,
+          14,
+          15,
+          13,
+          13,
+          13,
+          13,
+          12,
+          12,
+          12,
+          14,
+          13,
+          13,
+          14,
+          13,
+          13,
+          14,
+          14,
+          13,
+          14,
+          15,
+          14,
+          15,
+          12,
+          12,
+          14,
+          15,
+          15,
+          15,
+          14,
+          16,
+          16,
+          16,
+          23,
+          20,
+          20,
+          24,
+          18,
+          18,
+          18
+        ],
+        "simStepDeltas": [
+          18,
+          14,
+          14,
+          14,
+          14,
+          12,
+          13,
+          13,
+          13,
+          14,
+          15,
+          13,
+          13,
+          15,
+          14,
+          14,
+          12,
+          13,
+          12,
+          14,
+          14,
+          14,
+          12,
+          14,
+          15,
+          13,
+          13,
+          13,
+          13,
+          12,
+          12,
+          12,
+          14,
+          13,
+          13,
+          14,
+          13,
+          13,
+          14,
+          14,
+          13,
+          14,
+          15,
+          14,
+          15,
+          12,
+          12,
+          14,
+          15,
+          15,
+          15,
+          14,
+          16,
+          16,
+          16,
+          23,
+          20,
+          20,
+          24,
+          18,
+          18,
+          18
+        ],
+        "allFrameDeltasPositive": true,
+        "allSimStepDeltasPositive": true
+      },
+      "perSourceReuse": {
+        "authority": "instance-descriptor-history-slot-selection-count-v0",
+        "totalSelections": 6300,
+        "slots": [
+          {
+            "historySlot": 0,
+            "selections": 100
+          },
+          {
+            "historySlot": 1,
+            "selections": 98
+          },
+          {
+            "historySlot": 2,
+            "selections": 99
+          },
+          {
+            "historySlot": 3,
+            "selections": 99
+          },
+          {
+            "historySlot": 4,
+            "selections": 96
+          },
+          {
+            "historySlot": 5,
+            "selections": 100
+          },
+          {
+            "historySlot": 6,
+            "selections": 99
+          },
+          {
+            "historySlot": 7,
+            "selections": 98
+          },
+          {
+            "historySlot": 8,
+            "selections": 99
+          },
+          {
+            "historySlot": 9,
+            "selections": 96
+          },
+          {
+            "historySlot": 10,
+            "selections": 100
+          },
+          {
+            "historySlot": 11,
+            "selections": 99
+          },
+          {
+            "historySlot": 12,
+            "selections": 98
+          },
+          {
+            "historySlot": 13,
+            "selections": 98
+          },
+          {
+            "historySlot": 14,
+            "selections": 97
+          },
+          {
+            "historySlot": 15,
+            "selections": 100
+          },
+          {
+            "historySlot": 16,
+            "selections": 100
+          },
+          {
+            "historySlot": 17,
+            "selections": 98
+          },
+          {
+            "historySlot": 18,
+            "selections": 97
+          },
+          {
+            "historySlot": 19,
+            "selections": 99
+          },
+          {
+            "historySlot": 20,
+            "selections": 100
+          },
+          {
+            "historySlot": 21,
+            "selections": 100
+          },
+          {
+            "historySlot": 22,
+            "selections": 99
+          },
+          {
+            "historySlot": 23,
+            "selections": 97
+          },
+          {
+            "historySlot": 24,
+            "selections": 100
+          },
+          {
+            "historySlot": 25,
+            "selections": 101
+          },
+          {
+            "historySlot": 26,
+            "selections": 99
+          },
+          {
+            "historySlot": 27,
+            "selections": 100
+          },
+          {
+            "historySlot": 28,
+            "selections": 96
+          },
+          {
+            "historySlot": 29,
+            "selections": 100
+          },
+          {
+            "historySlot": 30,
+            "selections": 101
+          },
+          {
+            "historySlot": 31,
+            "selections": 98
+          },
+          {
+            "historySlot": 32,
+            "selections": 100
+          },
+          {
+            "historySlot": 33,
+            "selections": 95
+          },
+          {
+            "historySlot": 34,
+            "selections": 100
+          },
+          {
+            "historySlot": 35,
+            "selections": 100
+          },
+          {
+            "historySlot": 36,
+            "selections": 97
+          },
+          {
+            "historySlot": 37,
+            "selections": 100
+          },
+          {
+            "historySlot": 38,
+            "selections": 95
+          },
+          {
+            "historySlot": 39,
+            "selections": 99
+          },
+          {
+            "historySlot": 40,
+            "selections": 99
+          },
+          {
+            "historySlot": 41,
+            "selections": 98
+          },
+          {
+            "historySlot": 42,
+            "selections": 99
+          },
+          {
+            "historySlot": 43,
+            "selections": 95
+          },
+          {
+            "historySlot": 44,
+            "selections": 99
+          },
+          {
+            "historySlot": 45,
+            "selections": 99
+          },
+          {
+            "historySlot": 46,
+            "selections": 98
+          },
+          {
+            "historySlot": 47,
+            "selections": 99
+          },
+          {
+            "historySlot": 48,
+            "selections": 96
+          },
+          {
+            "historySlot": 49,
+            "selections": 98
+          },
+          {
+            "historySlot": 50,
+            "selections": 99
+          },
+          {
+            "historySlot": 51,
+            "selections": 98
+          },
+          {
+            "historySlot": 52,
+            "selections": 99
+          },
+          {
+            "historySlot": 53,
+            "selections": 96
+          },
+          {
+            "historySlot": 54,
+            "selections": 98
+          },
+          {
+            "historySlot": 55,
+            "selections": 100
+          },
+          {
+            "historySlot": 56,
+            "selections": 97
+          },
+          {
+            "historySlot": 57,
+            "selections": 100
+          },
+          {
+            "historySlot": 58,
+            "selections": 95
+          },
+          {
+            "historySlot": 59,
+            "selections": 99
+          },
+          {
+            "historySlot": 60,
+            "selections": 99
+          },
+          {
+            "historySlot": 61,
+            "selections": 98
+          },
+          {
+            "historySlot": 62,
+            "selections": 100
+          },
+          {
+            "historySlot": 63,
+            "selections": 95
+          }
+        ]
+      },
+      "motion": {
+        "authority": "consecutive-live-canvas-png-delta-v0",
+        "distinctFrameHashCount": 63,
+        "observedExactPeriodFrames": null,
+        "meanAdjacentPixelDelta": 3.5682081932281724,
+        "changedPixelFraction": 0.09346440609770616,
+        "diffs": [
+          {
+            "meanAbsDiff": 3.938366212719032,
+            "changedFraction": 0.09516609392898052
+          },
+          {
+            "meanAbsDiff": 3.1277395952652713,
+            "changedFraction": 0.09114038437062492
+          },
+          {
+            "meanAbsDiff": 3.0195910228669645,
+            "changedFraction": 0.0926333206058292
+          },
+          {
+            "meanAbsDiff": 3.4280297823596095,
+            "changedFraction": 0.09478426880488736
+          },
+          {
+            "meanAbsDiff": 2.3283870009756855,
+            "changedFraction": 0.07963853888252513
+          },
+          {
+            "meanAbsDiff": 3.6981591786517365,
+            "changedFraction": 0.09294514445717195
+          },
+          {
+            "meanAbsDiff": 3.0169008527426966,
+            "changedFraction": 0.09074328624156802
+          },
+          {
+            "meanAbsDiff": 4.081999490900039,
+            "changedFraction": 0.10074710449280896
+          },
+          {
+            "meanAbsDiff": 3.299395443553531,
+            "changedFraction": 0.09380679648720885
+          },
+          {
+            "meanAbsDiff": 3.6889796784184017,
+            "changedFraction": 0.09265877561410207
+          },
+          {
+            "meanAbsDiff": 2.608093419880257,
+            "changedFraction": 0.07780832378770523
+          },
+          {
+            "meanAbsDiff": 3.9404556446482277,
+            "changedFraction": 0.09114420262186586
+          },
+          {
+            "meanAbsDiff": 3.6405078274152034,
+            "changedFraction": 0.09489372534046074
+          },
+          {
+            "meanAbsDiff": 2.5928008994101965,
+            "changedFraction": 0.08416571210385643
+          },
+          {
+            "meanAbsDiff": 3.6553697339952804,
+            "changedFraction": 0.09639175257731959
+          },
+          {
+            "meanAbsDiff": 3.7052789444656957,
+            "changedFraction": 0.10030800560010182
+          },
+          {
+            "meanAbsDiff": 3.6008158330151843,
+            "changedFraction": 0.10006872852233677
+          },
+          {
+            "meanAbsDiff": 2.594712994781607,
+            "changedFraction": 0.08816469390352552
+          },
+          {
+            "meanAbsDiff": 3.6510436553392545,
+            "changedFraction": 0.09956344660812015
+          },
+          {
+            "meanAbsDiff": 2.8091400449704533,
+            "changedFraction": 0.09022400407280132
+          },
+          {
+            "meanAbsDiff": 3.747059522294489,
+            "changedFraction": 0.10215858470154003
+          },
+          {
+            "meanAbsDiff": 3.6829396292054923,
+            "changedFraction": 0.10133638793432607
+          },
+          {
+            "meanAbsDiff": 2.9368151542147958,
+            "changedFraction": 0.09423825887743413
+          },
+          {
+            "meanAbsDiff": 3.6576543209878323,
+            "changedFraction": 0.10284968817614866
+          },
+          {
+            "meanAbsDiff": 3.314276017139745,
+            "changedFraction": 0.09919307623774978
+          },
+          {
+            "meanAbsDiff": 3.4563620550676144,
+            "changedFraction": 0.09643884434262441
+          },
+          {
+            "meanAbsDiff": 2.7262021127655633,
+            "changedFraction": 0.08084637902507319
+          },
+          {
+            "meanAbsDiff": 3.601366933944293,
+            "changedFraction": 0.08470790378006873
+          },
+          {
+            "meanAbsDiff": 3.7966866064231426,
+            "changedFraction": 0.08483390607101947
+          },
+          {
+            "meanAbsDiff": 2.733346060837371,
+            "changedFraction": 0.07700140002545501
+          },
+          {
+            "meanAbsDiff": 3.6901951550634196,
+            "changedFraction": 0.08730304187348861
+          },
+          {
+            "meanAbsDiff": 2.7079003860675313,
+            "changedFraction": 0.07850960926562302
+          },
+          {
+            "meanAbsDiff": 3.7102019430657256,
+            "changedFraction": 0.08774468626702303
+          },
+          {
+            "meanAbsDiff": 3.015961562937445,
+            "changedFraction": 0.08554155530100548
+          },
+          {
+            "meanAbsDiff": 3.890271944338542,
+            "changedFraction": 0.09902889143438971
+          },
+          {
+            "meanAbsDiff": 3.954176318357427,
+            "changedFraction": 0.10074710449280896
+          },
+          {
+            "meanAbsDiff": 2.8755631920579052,
+            "changedFraction": 0.09142420771286751
+          },
+          {
+            "meanAbsDiff": 3.9540503160664926,
+            "changedFraction": 0.098938526155021
+          },
+          {
+            "meanAbsDiff": 3.9043791099231777,
+            "changedFraction": 0.09732976963217513
+          },
+          {
+            "meanAbsDiff": 3.869370412795447,
+            "changedFraction": 0.09738577065037546
+          },
+          {
+            "meanAbsDiff": 2.968024267107782,
+            "changedFraction": 0.08946162657502864
+          },
+          {
+            "meanAbsDiff": 4.114057952568928,
+            "changedFraction": 0.0997798141784396
+          },
+          {
+            "meanAbsDiff": 4.094060922319839,
+            "changedFraction": 0.10018073055873743
+          },
+          {
+            "meanAbsDiff": 3.9303644308686168,
+            "changedFraction": 0.09522591319842179
+          },
+          {
+            "meanAbsDiff": 2.9475970472189306,
+            "changedFraction": 0.08430826015018456
+          },
+          {
+            "meanAbsDiff": 3.956659030164312,
+            "changedFraction": 0.09210258368333969
+          },
+          {
+            "meanAbsDiff": 3.0525535615798747,
+            "changedFraction": 0.08642484408807433
+          },
+          {
+            "meanAbsDiff": 4.298824402868042,
+            "changedFraction": 0.09987272495863561
+          },
+          {
+            "meanAbsDiff": 4.0769165499981,
+            "changedFraction": 0.1033498790887107
+          },
+          {
+            "meanAbsDiff": 3.7492953205209982,
+            "changedFraction": 0.09744940817105766
+          },
+          {
+            "meanAbsDiff": 3.6174010436553403,
+            "changedFraction": 0.09297823596792669
+          },
+          {
+            "meanAbsDiff": 3.6445975987442245,
+            "changedFraction": 0.08958381061473845
+          },
+          {
+            "meanAbsDiff": 3.5137054007042217,
+            "changedFraction": 0.08810487463408426
+          },
+          {
+            "meanAbsDiff": 3.7529120529464035,
+            "changedFraction": 0.09152475499554537
+          },
+          {
+            "meanAbsDiff": 3.695835560646591,
+            "changedFraction": 0.09059691994399899
+          },
+          {
+            "meanAbsDiff": 3.714777480802719,
+            "changedFraction": 0.08959908361970217
+          },
+          {
+            "meanAbsDiff": 4.37095965381202,
+            "changedFraction": 0.09483645157184677
+          },
+          {
+            "meanAbsDiff": 3.597925416825806,
+            "changedFraction": 0.08872215858470155
+          },
+          {
+            "meanAbsDiff": 4.499168469729925,
+            "changedFraction": 0.09509227440498919
+          },
+          {
+            "meanAbsDiff": 5.088632641805673,
+            "changedFraction": 0.10571083110602011
+          },
+          {
+            "meanAbsDiff": 4.611750456068979,
+            "changedFraction": 0.11278477790505281
+          },
+          {
+            "meanAbsDiff": 4.282342709261588,
+            "changedFraction": 0.1125493190785287
+          }
+        ]
+      },
+      "video": {
+        "path": "/private/tmp/kaminos-history-depth-motion-r9-0715/depth-64/depth-64-motion.mp4",
+        "sha256": "06c50f4f5d2178d79aa1e8fb5fcfac6574dc287e62cdec60d0e20b7b2cd2f14c",
+        "width": 1800,
+        "height": 1746,
+        "frameRate": "25/4",
+        "nbFrames": 63,
+        "durationSeconds": 10.08,
+        "nonLoopingEncoding": true,
+        "periodicMotionAuthority": "bounded-capture-exact-frame-hash-period-check-v0",
+        "operatorMotionAcceptance": "pending-direct-visual-smoke"
+      },
+      "fallbackReason": null,
+      "maxOverflowCount": 0,
+      "maxCandidateCopyBytes": 0
+    }
+  ],
+  "selectedUpperFailure": {
+    "requestedDepth": 543,
+    "rowRoute": "http://127.0.0.1:8139/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_boundary_sidecar_source=baked&volume_boundary_splat_mode=learned&volume_boundary_splat_instances=100&volume_boundary_splat_composition=field&volume_boundary_splat_pbr_scene=fire-field&volume_boundary_splat_phase_mode=age-sweep&volume_boundary_splat_phase_stride=5&volume_boundary_splat_history_depth=543&volume_boundary_splat_history_frame_stride=8&volume_boundary_splat_radius=1.0&volume_boundary_splat_sharpness=3.4&volume_render_scale=1&history_ring_smoke=543&volume_boundary_splat_lod_mode=projected-area&volume_boundary_splat_candidate_budget=0&buffer_integrity_witness=pyro-history-depth-motion-r9-0715",
+    "pageUrl": "http://127.0.0.1:8139/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_boundary_sidecar_source=baked&volume_boundary_splat_mode=learned&volume_boundary_splat_instances=100&volume_boundary_splat_composition=field&volume_boundary_splat_pbr_scene=fire-field&volume_boundary_splat_phase_mode=age-sweep&volume_boundary_splat_phase_stride=5&volume_boundary_splat_history_depth=543&volume_boundary_splat_history_frame_stride=8&volume_boundary_splat_radius=1.0&volume_boundary_splat_sharpness=3.4&volume_render_scale=1&history_ring_smoke=543&volume_boundary_splat_lod_mode=projected-area&volume_boundary_splat_candidate_budget=0&buffer_integrity_witness=pyro-history-depth-motion-r9-0715",
+    "depthTransition": {
+      "identity": "boundary-splat-history-depth-transition-v0",
+      "mode": "fresh-measured-upper-in-place",
+      "requestedDepth": 543,
+      "effectiveDepth": 543,
+      "simStepCountBefore": 4470,
+      "simStepCountAfter": 4478,
+      "frameCountBefore": 4470,
+      "frameCountAfter": 4478,
+      "fallbackReason": null
+    },
+    "initialState": {
+      "active": true,
+      "backend": "WebGPU:apple",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "frameCount": 4567,
+      "simStepCount": 4567,
+      "boundarySplatRendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "boundarySplatAttributeModelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "boundarySplatSourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "boundarySplatCompositionIdentity": "boundary-splat-composed-field-v0",
+      "boundarySplatPbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+      "boundarySplatPhaseSourceIdentity": "age-sweep-history",
+      "boundarySplatHistoryDepth": 543,
+      "boundarySplatHistoryAllocatedSlots": 543,
+      "boundarySplatHistoryMeasuredUpperDepth": 1469,
+      "boundarySplatHistoryFrameStride": 8,
+      "boundarySplatEffectiveHistoryWindowFrames": 4336,
+      "boundarySplatHistoryWriteSlot": 27,
+      "boundarySplatPhaseSourceCount": 100,
+      "boundarySplatSourceCandidateCount": 3716,
+      "boundarySplatSelectedCandidateCount": 3716,
+      "boundarySplatOverflowCount": 0,
+      "boundarySplatCopyBytesThisFrame": 0,
+      "boundarySplatFallbackReason": null
+    },
+    "historyPrime": {
+      "identity": "boundary-splat-live-history-prime-v0",
+      "ok": true,
+      "authority": "bounded-continuation-from-one-live-simulator-v0",
+      "simulatorCount": 1,
+      "minimumHistoryFrames": 8815,
+      "framesToAdvance": 4248,
+      "framesAdvanced": 4248,
+      "frameCountBefore": 4567,
+      "frameCountAfter": 8815,
+      "simStepCountBefore": 4567,
+      "simStepCountAfter": 8815,
+      "simStepsAdvanced": 4248,
+      "sourceCandidateCount": 7796,
+      "renderedInstanceCount": 734928,
+      "requestedInstanceCount": 100,
+      "phaseSourceCount": 100,
+      "historyDepth": 543,
+      "historyFrameStride": 8,
+      "historyWriteSlot": 15,
+      "timestampStatus": "available",
+      "fallbackReason": null,
+      "candidateCopyBytes": 0,
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0"
+    },
+    "slotMetadata": {
+      "identity": "boundary-splat-history-slot-metadata-readback-v0",
+      "authority": "gpu-archive-slot-metadata-post-queue-completion-readback-v0",
+      "historyDepth": 543,
+      "allocatedHistoryDepth": 543,
+      "measuredUpperHistoryDepth": 700,
+      "slotCount": 543,
+      "initializedSlotCount": 543
+    },
+    "cost": {
+      "identity": "boundary-splat-pbr-cost-ladder-v0",
+      "ok": true,
+      "authority": "serial-same-browser-gpu-timestamp-query-frozen-live-simulator-v0",
+      "counts": [
+        100
+      ],
+      "warmupSamples": 3,
+      "steadySamples": 12,
+      "simStepCountBefore": 8815,
+      "simStepCountAfter": 8815,
+      "frameCountBefore": 8815,
+      "frameCountAfter": 8815,
+      "simulatorPreserved": true,
+      "addedSimulationPasses": 0,
+      "pbrSceneIdentity": "boundary-splat-pbr-fire-field-v0",
+      "depthAuthority": "same-device-depth24plus-less-equal-v0",
+      "cameraAuthority": "three-camera-matrices-native-webgpu-v0",
+      "fixedSubstrateIdentity": "operator-pretty-four-flame-substrate-v0",
+      "selectorPolicyIdentity": "boundary-splat-nested-permutation-prefix-v0",
+      "requestedCandidateBudget": 0,
+      "lodMode": "projected-area",
+      "adaptiveLodIdentity": "boundary-splat-projected-area-nested-tiers-v0",
+      "indirectDrawIdentity": "boundary-splat-single-global-indirect-no-first-instance-v0",
+      "rows": [
+        {
+          "requestedInstanceCount": 100,
+          "effectiveInstanceCount": 100,
+          "selectorPolicyIdentity": "boundary-splat-nested-permutation-prefix-v0",
+          "requestedCandidateBudget": 0,
+          "effectiveCandidateBudget": 7796,
+          "selectedCandidateCount": 7796,
+          "sourceCandidateCount": 7796,
+          "renderedInstanceCount": 734928,
+          "lodMode": "projected-area",
+          "adaptiveLodIdentity": "boundary-splat-projected-area-nested-tiers-v0",
+          "indirectDrawIdentity": "boundary-splat-single-global-indirect-no-first-instance-v0",
+          "indirectCommand": {
+            "vertexCount": 6,
+            "instanceCount": 734928,
+            "firstVertex": 0,
+            "firstInstance": 0
+          },
+          "indirectCommandAgreement": true,
+          "indirectCommandAuthority": "gpu-indirect-command-buffer-post-submit-readback-v0",
+          "tierGroups": [
+            {
+              "groupIndex": 0,
+              "descriptorStart": 0,
+              "descriptorCount": 32,
+              "requestedBudget": 6400,
+              "effectiveCandidateBudget": 6400,
+              "firstInstance": 0,
+              "renderedInstanceCount": 204800,
+              "countAuthority": "gpu-tier-group-post-submit-readback"
+            },
+            {
+              "groupIndex": 1,
+              "descriptorStart": 32,
+              "descriptorCount": 50,
+              "requestedBudget": 12800,
+              "effectiveCandidateBudget": 7796,
+              "firstInstance": 204800,
+              "renderedInstanceCount": 389800,
+              "countAuthority": "gpu-tier-group-post-submit-readback"
+            },
+            {
+              "groupIndex": 2,
+              "descriptorStart": 82,
+              "descriptorCount": 18,
+              "requestedBudget": 0,
+              "effectiveCandidateBudget": 7796,
+              "firstInstance": 594600,
+              "renderedInstanceCount": 140328,
+              "countAuthority": "gpu-tier-group-post-submit-readback"
+            }
+          ],
+          "globalRenderedInstanceCount": 734928,
+          "historyArchiveCandidateCount": 7796,
+          "overflowCount": 0,
+          "phaseSourceCount": 100,
+          "timestampStatus": "available",
+          "pbrSceneRaster": {
+            "samples": [
+              0.32768,
+              0.393216,
+              0.393216,
+              0.393216,
+              0.458752,
+              0.458752,
+              0.458752,
+              0.458752,
+              0.524288,
+              0.65536,
+              0.65536,
+              0.786432
+            ],
+            "medianMs": 0.458752,
+            "p95Ms": 0.65536,
+            "minMs": 0.32768,
+            "maxMs": 0.786432
+          },
+          "splatRaster": {
+            "samples": [
+              3.211264,
+              3.342336,
+              3.342336,
+              3.407872,
+              3.407872,
+              3.407872,
+              3.407872,
+              3.407872,
+              3.407872,
+              3.538944,
+              3.538944,
+              3.866624
+            ],
+            "medianMs": 3.407872,
+            "p95Ms": 3.538944,
+            "minMs": 3.211264,
+            "maxMs": 3.866624
+          },
+          "totalWithoutSimulation": {
+            "samples": [
+              27.918336,
+              29.425664,
+              29.622272,
+              30.408704,
+              30.408704,
+              31.195136,
+              31.653888,
+              31.653888,
+              32.243712,
+              32.964608,
+              35.06176,
+              37.814272
+            ],
+            "medianMs": 31.195136,
+            "p95Ms": 35.06176,
+            "minMs": 27.918336,
+            "maxMs": 37.814272
+          },
+          "candidateCopyBytes": 0,
+          "fallbackReason": null
+        }
+      ],
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "backend": "WebGPU:apple",
+      "sourceAuthority": "live-baked-sidecar-plus-fluid-material-v0",
+      "rendererIdentity": "live-boundary-sidecar-learned-attribute-splats-v0",
+      "modelIdentity": "sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472",
+      "phaseSourceIdentity": "age-sweep-history"
+    },
+    "capturedFrameCount": 29,
+    "failureFrame": 30
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "job_id": "b4d5a75f8ee7",
+  "job_type": "kaminos_boundary_splat_history_depth_motion_witness",
+  "status": "failed",
+  "input_path": "http://127.0.0.1:8139/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_boundary_sidecar_source=baked&volume_boundary_splat_mode=learned&volume_boundary_splat_instances=100&volume_boundary_splat_composition=field&volume_boundary_splat_pbr_scene=fire-field&volume_boundary_splat_phase_mode=age-sweep&volume_boundary_splat_phase_stride=5&volume_boundary_splat_history_depth=16&volume_boundary_splat_history_frame_stride=8&volume_boundary_splat_radius=1.0&volume_boundary_splat_sharpness=3.4&volume_render_scale=1&history_ring_smoke=16&volume_boundary_splat_lod_mode=projected-area&volume_boundary_splat_candidate_budget=0&buffer_integrity_witness=pyro-history-depth-motion-r9-0715",
+  "output_dir": "/private/tmp/kaminos-history-depth-motion-r9-0715",
+  "effective_route": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node boundary-splat-history-depth-motion-witness.mjs --chrome /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --ffmpeg /opt/homebrew/bin/ffmpeg --ffprobe /opt/homebrew/bin/ffprobe --url http://127.0.0.1:8139/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_boundary_sidecar_source=baked&volume_boundary_splat_mode=learned&volume_boundary_splat_instances=100&volume_boundary_splat_composition=field&volume_boundary_splat_pbr_scene=fire-field&volume_boundary_splat_phase_mode=age-sweep&volume_boundary_splat_phase_stride=5&volume_boundary_splat_history_depth=16&volume_boundary_splat_history_frame_stride=8&volume_boundary_splat_radius=1.0&volume_boundary_splat_sharpness=3.4&volume_render_scale=1&history_ring_smoke=16&volume_boundary_splat_lod_mode=projected-area&volume_boundary_splat_candidate_budget=0&buffer_integrity_witness=pyro-history-depth-motion-r9-0715 --out-dir /private/tmp/kaminos-history-depth-motion-r9-0715 --report /private/tmp/kaminos-history-depth-motion-r9-0715/history-depth-motion-report.json --history-depths 16,32,64 --frames 63 --frame-ms 160 --settle-ms 4000 --warmup-samples 3 --steady-samples 12 --chrome-port 19441 --window-size 1280,960 --user-data-dir /private/tmp/kaminos-history-depth-motion-r9-0715/chrome-profile",
+  "effective_cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "effective_env": {},
+  "effective_defaults": {
+    "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "chrome_port": "19441",
+    "ffmpeg": "/opt/homebrew/bin/ffmpeg",
+    "ffprobe": "/opt/homebrew/bin/ffprobe",
+    "frame_ms": "160",
+    "frames": "63",
+    "history_depths": "16,32,64",
+    "settle_ms": "4000",
+    "steady_samples": "12",
+    "warmup_samples": "3",
+    "window_size": "1280,960"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784104740.927348,
+  "finished_at": 1784105068.585577,
+  "exit_code": 1,
+  "failure_phase": "execution",
+  "error_message": "Process exited with code 1",
+  "warnings": [
+    "volatile_output"
+  ]
+}
