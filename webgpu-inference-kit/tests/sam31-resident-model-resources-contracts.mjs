@@ -48,7 +48,12 @@ const packageRuntime = {
   async loadUint8(entry) {
     const bytes = bytesBySha.get(entry.sha256);
     if (!bytes) throw new Error(`unknown fixture artifact ${entry.sha256}`);
-    return new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return bytes.slice();
+  },
+  async loadFloat32(entry) {
+    const bytes = bytesBySha.get(entry.sha256);
+    if (!bytes) throw new Error(`unknown fixture artifact ${entry.sha256}`);
+    return new Float32Array(bytes.slice().buffer);
   },
 };
 
@@ -103,13 +108,19 @@ assert.equal(
 );
 
 const entryA = { ...artifactA, role: 'patch-embed-projection-weight', dtype: 'float32', shape: [4] };
+const persistentBackingReload = await packageRuntime.loadFloat32(entryA);
+assert.throws(
+  () => resident.bind(entryA, persistentBackingReload),
+  /authenticated backing|source custody|source identity/i,
+  'a fresh hash-verified persistent-backing copy must not impersonate the resident authenticated source',
+);
 assert.throws(
   () => resident.bind(entryA, new Float32Array([9, 9, 9, 9])),
   /authenticated backing|source custody|source identity/i,
   'same-length wrong bytes must not acquire an authenticated resident static binding',
 );
-const firstSource = new Float32Array(artifactABytes.buffer, artifactABytes.byteOffset, 4);
-const secondSource = new Float32Array(artifactABytes.buffer, artifactABytes.byteOffset, 4);
+const firstSource = await resident.loadFloat32(entryA);
+const secondSource = await resident.loadFloat32(entryA);
 const firstBinding = resident.bind(entryA, firstSource);
 const secondBinding = resident.bind(entryA, secondSource);
 assert.equal(firstBinding.buffer, secondBinding.buffer, 'distinct invocation views must resolve to the exact same live GPU object');
@@ -119,7 +130,7 @@ assert.equal(resident.residentTensorResolver({ sourceData: firstSource }), first
 assert.equal(resident.residentTensorResolver({ sourceData: secondSource }), secondBinding);
 assert.equal(resident.evidence().bindingCount, 2);
 
-const authenticatedSubview = new Float32Array(artifactABytes.buffer, artifactABytes.byteOffset + 4, 3);
+const authenticatedSubview = firstSource.subarray(1);
 const subviewBinding = resident.residentTensorResolver({
   name: 'sam31.absolute-position.without-cls',
   sourceData: authenticatedSubview,

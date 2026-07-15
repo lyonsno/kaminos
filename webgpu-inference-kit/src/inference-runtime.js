@@ -621,6 +621,15 @@ export async function createWebGpuInferenceRuntime(input = {}) {
         if (!Number.isInteger(tensor.bufferOffset) || tensor.bufferOffset < 0) {
           throw new Error(`resident tensor buffer offset mismatch for ${tensor.name}`);
         }
+        if ((tensor.usage & WEBGPU_BUFFER_USAGE.storage) !== 0 && tensor.bufferOffset > 0) {
+          const alignment = device.limits?.minStorageBufferOffsetAlignment;
+          if (!Number.isInteger(alignment) || alignment <= 0) {
+            throw new Error(`resident storage buffer offset alignment is unavailable for ${tensor.name}`);
+          }
+          if (tensor.bufferOffset % alignment !== 0) {
+            throw new Error(`resident tensor buffer offset ${tensor.bufferOffset} violates minStorageBufferOffsetAlignment ${alignment} for ${tensor.name}`);
+          }
+        }
         residentTensorSources.set(tensor, tensorInput.sourceData);
         return tensor;
       }

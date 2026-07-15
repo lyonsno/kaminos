@@ -39,6 +39,7 @@ const device = {
   limits: {
     maxBufferSize: 1024 * 1024 * 1024,
     maxStorageBufferBindingSize: 512 * 1024 * 1024,
+    minStorageBufferOffsetAlignment: 256,
   },
   queue,
   createShaderModule(descriptor) {
@@ -207,6 +208,38 @@ assert.equal(residentTensor.ownsBuffer, false);
 assert.equal(calls.buffers.length, buffersBeforeResidentTensor, 'resident tensors must not allocate invocation buffers');
 residentRuntime.uploadTensor(residentTensor, residentSource);
 assert.equal(calls.writes.length, writesBeforeResidentTensor, 'resident tensors must not re-upload authenticated bytes');
+const misalignedResidentRuntime = await createWebGpuInferenceRuntime({
+  routeId: 'sam31.misaligned-resident-tensor-contract.webgpu-local.v0',
+  device,
+  queue,
+  adapter,
+  adapterName: 'Test WebGPU Adapter',
+  kernel: { profile: 'sam31-misaligned-resident-tensor-contract-v0' },
+  requiredStages: [],
+  residentTensorResolver(tensorInput) {
+    return {
+      buffer: residentBuffer,
+      bufferOffset: 4,
+      dtype: 'f32',
+      shape: [3],
+      byteLength: 12,
+      usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+      sourceData: tensorInput.sourceData,
+    };
+  },
+});
+assert.throws(
+  () => misalignedResidentRuntime.createTensor({
+    name: 'sam31.absolute-position.without-cls',
+    shape: [3],
+    dtype: 'f32',
+    usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+    sourceData: residentSource.subarray(1),
+  }),
+  /minStorageBufferOffsetAlignment|storage buffer offset alignment/i,
+  'resident subviews must fail before bind-group creation when their offset is illegal on the effective adapter',
+);
+misalignedResidentRuntime.dispose();
 assert.throws(
   () => residentRuntime.uploadTensor(residentTensor, Float32Array.from(residentSource)),
   /resident tensor source identity mismatch/i,

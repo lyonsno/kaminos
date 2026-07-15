@@ -3,7 +3,10 @@ import {
   SAM31_BROWSER_TRACKER_INVOCATION_SCHEMA,
   SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT,
 } from './sam31-browser-tracker-package.js';
-import { createSam31BrowserTrackerDualInvocationEvidence } from './sam31-browser-tracker-package-runtime.js';
+import {
+  createSam31BrowserTrackerDualInvocationEvidence,
+  createSam31BrowserTrackerDualInvocationStructure,
+} from './sam31-browser-tracker-package-runtime.js';
 
 const PACKET_NAMES = Object.freeze(['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer']);
 
@@ -346,6 +349,97 @@ export function createSam31BrowserTrackerCallerDualInvocationEvidence({
     distinctExecutionRealms: base.distinctExecutionRealms,
     betweenInvocationCheckpointPassed: base.betweenInvocationCheckpointPassed,
     noDeviceLoss: base.noDeviceLoss,
+  };
+  evidence.passed = Object.entries(evidence)
+    .filter(([key]) => key !== 'schema')
+    .every(([, value]) => value === true);
+  return evidence;
+}
+
+export function createSam31BrowserTrackerResidentCallerDualInvocationEvidence({
+  invocations,
+  residentSessionEvidence,
+  closeEvidence,
+}) {
+  const structure = createSam31BrowserTrackerDualInvocationStructure(invocations);
+  const [first, second] = invocations;
+  const firstResident = first.residentRuntime;
+  const secondResident = second.residentRuntime;
+  const residentRows = residentSessionEvidence?.invocations;
+  const residentModelIds = residentSessionEvidence?.residentModel?.resources?.map(resource => resource.liveBufferId);
+  const callerInputAuthorityPassed = invocations.every(invocation => {
+    const runtime = invocation.packageRuntime;
+    const input = runtime?.inputEvidence;
+    return input?.source === 'caller-owned-browser-memory'
+      && sameValues(input.encodedSourceImageSha256, runtime.encodedSourceImageSha256)
+      && sameValues(input.rgbaSourceImageSha256, runtime.rgbaSourceImageSha256)
+      && input.initialMaskSha256 === runtime.initialMaskSha256
+      && input.dynamicOriginFetchCount === 0;
+  });
+  const sameLiveModelBuffers = Array.isArray(firstResident?.liveBufferIds)
+    && firstResident.liveBufferIds.length > 0
+    && sameValues(firstResident.liveBufferIds, secondResident?.liveBufferIds)
+    && sameValues(firstResident.liveBufferIds, residentModelIds);
+  const residentSessionId = residentSessionEvidence?.inferenceSession?.sessionId;
+  const evidence = {
+    schema: 'kaminos.sam31-browser-tracker-resident-caller-dual-invocation-evidence.v0',
+    sameModelPackage: structure.sameModelPackage,
+    distinctInvocationIds: structure.distinctInvocationIds,
+    distinctEncodedSourceImages: structure.distinctEncodedSourceImages,
+    distinctRgbaSourceImages: structure.distinctRgbaSourceImages,
+    distinctSourceImages: structure.distinctSourceImages,
+    distinctInitialMasks: structure.distinctInitialMasks,
+    distinctRequestIds: structure.distinctRequestIds,
+    distinctOutputIds: structure.distinctOutputIds,
+    distinctFinalOutputs: structure.distinctFinalOutputs,
+    bothVerificationFree: invocations.every(invocation => invocation.verificationAttached === false
+      && invocation.verificationId == null
+      && invocation.parity === null
+      && invocation.packageRuntime?.packageResolution?.verification?.attached === false),
+    bothRouteChainsReal: structure.bothRouteChainsReal,
+    noSecondStaticNetworkLoads: structure.noSecondStaticNetworkLoads,
+    noSecondStaticOriginNetworkLoads: structure.noSecondStaticOriginNetworkLoads,
+    noDynamicNetworkLoads: invocations.every(invocation => invocation.packageRuntime?.cacheEvidence?.dynamicNetworkLoadCount === 0),
+    noDynamicOriginFetches: invocations.every(invocation => invocation.packageRuntime?.inputEvidence?.dynamicOriginFetchCount === 0),
+    callerArtifactReadsPassed: invocations.every(invocation => invocation.packageRuntime?.inputEvidence?.callerArtifactReadCount === 3),
+    callerInputAuthorityPassed,
+    externalCallerInputAuthorityPassed: invocations.every(invocation => invocation.callerInputAuthority?.passed === true),
+    trackerStateShapePassed: structure.trackerStateShapePassed,
+    distinctCausalTrackerState: structure.distinctCausalTrackerState,
+    deterministicTrackerStateShared: structure.deterministicTrackerStateShared,
+    stateIsolationPassed: structure.stateIsolationPassed,
+    sameExecutionRealm: typeof first.executionRealmId === 'string'
+      && first.executionRealmId.length > 0
+      && first.executionRealmId === second.executionRealmId,
+    sameResidentSession: typeof residentSessionId === 'string'
+      && residentSessionId.length > 0
+      && firstResident?.residentSessionId === residentSessionId
+      && secondResident?.residentSessionId === residentSessionId,
+    sameLiveModelBuffers,
+    zeroModelAllocationDeltas: invocations.every(invocation => invocation.residentRuntime?.modelAllocationDelta === 0),
+    zeroModelUploadDeltas: invocations.every(invocation => invocation.residentRuntime?.modelUploadDelta === 0),
+    residentEvidenceUntruncated: invocations.every(invocation => invocation.residentRuntime?.truncated === false)
+      && residentSessionEvidence?.truncated === false
+      && residentSessionEvidence?.residentModel?.truncated === false,
+    residentModelEvidenceComplete: Number.isInteger(residentSessionEvidence?.residentModel?.resourceCount)
+      && residentSessionEvidence.residentModel.resourceCount > 0
+      && residentSessionEvidence.residentModel.allocationCount === residentSessionEvidence.residentModel.resourceCount
+      && residentSessionEvidence.residentModel.uploadCount === residentSessionEvidence.residentModel.resourceCount,
+    residentSessionAccountingPassed: residentSessionEvidence?.packageId === first.packageRuntime.packageId
+      && residentSessionEvidence?.status === 'open'
+      && residentSessionEvidence?.invocationCount === 2
+      && residentSessionEvidence?.attemptCount === 2
+      && Array.isArray(residentRows)
+      && residentRows.length === 2
+      && residentRows.every((row, index) => row.status === 'completed'
+        && row.invocationIndex === index
+        && row.invocationId === invocations[index].packageRuntime.invocationId),
+    closeEvidencePassed: closeEvidence?.queueDrained === true
+      && closeEvidence?.modelReleased === true
+      && closeEvidence?.ownerRouteDetached === true
+      && closeEvidence?.sessionClosed === true
+      && closeEvidence?.deviceLossAwaited === true,
+    noUnexpectedDeviceLoss: structure.noDeviceLoss && residentSessionEvidence?.inferenceSession?.deviceLoss == null,
   };
   evidence.passed = Object.entries(evidence)
     .filter(([key]) => key !== 'schema')

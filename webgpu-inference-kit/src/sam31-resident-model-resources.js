@@ -161,11 +161,32 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     return bufferIds.get(buffer);
   }
 
+  function authenticatedView(entry, Type) {
+    if (released) throw new Error('SAM 3.1 resident model resources are released');
+    requireObject(entry, 'resident tensor entry');
+    const resident = allocationBySha.get(entry.sha256);
+    if (!resident) throw new Error(`unknown static artifact is not resident: ${entry.sha256 || '<missing>'}`);
+    if (entry.byteLength !== resident.artifact.byteLength) {
+      throw new Error(`resident tensor byte length mismatch for ${entry.role || entry.file || entry.sha256}`);
+    }
+    const { buffer, byteOffset, byteLength } = resident.authenticatedSource;
+    if (byteOffset % Type.BYTES_PER_ELEMENT !== 0 || byteLength % Type.BYTES_PER_ELEMENT !== 0) {
+      throw new Error(`resident tensor source alignment mismatch for ${entry.role || entry.file || entry.sha256}`);
+    }
+    return new Type(buffer, byteOffset, byteLength / Type.BYTES_PER_ELEMENT);
+  }
+
   const api = {
     schema: SAM31_RESIDENT_MODEL_RESOURCES_SCHEMA,
     packageId,
     manifest,
     modelLease,
+    loadUint8(entry) {
+      return authenticatedView(entry, Uint8Array);
+    },
+    loadFloat32(entry) {
+      return authenticatedView(entry, Float32Array);
+    },
     bind(entry, sourceData) {
       if (released) throw new Error('SAM 3.1 resident model resources are released');
       requireObject(entry, 'resident tensor entry');

@@ -17,6 +17,8 @@ const packageDirs = [args.get('--package-dir'), args.get('--second-package-dir')
 const packageMode = packageDirs.length > 0;
 const callerInputs = args.get('--caller-inputs') === '1';
 if (callerInputs && packageDirs.length !== 2) throw new Error('--caller-inputs requires exactly two package directories');
+const residentSession = args.get('--resident-session') === '1';
+if (residentSession && !callerInputs) throw new Error('--resident-session requires --caller-inputs 1');
 const packageRootFiles = [
   args.get('--package-root') || (callerInputs ? 'tracker-model-root.json' : 'tracker-root.json'),
   args.get('--second-package-root') || (callerInputs ? 'tracker-model-root.json' : 'tracker-runtime-root.json'),
@@ -48,7 +50,9 @@ if (requestedDiagnosticVitPhaseLayer !== null
 const episodeMode = packageMode ? 'two-image' : args.get('--episode-mode') || 'propagation-decoder';
 if (!['propagation-decoder', 'mask-conditioning', 'two-image'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
 const isTwoImage = episodeMode === 'two-image';
-const REPORT_SCHEMA = callerInputs
+const REPORT_SCHEMA = residentSession
+  ? 'kaminos.sam31-browser-tracker-resident-session.browser-smoke.v0'
+  : callerInputs
   ? 'kaminos.sam31-browser-tracker-caller-input.browser-smoke.v0'
   : packageMode
   ? 'kaminos.sam31-browser-tracker-package.browser-smoke.v0'
@@ -208,6 +212,7 @@ function writeReport(extra = {}) {
     packageRootFiles: packageMode ? packageRootFiles.slice(0, packageDirs.length) : [],
     userDataDir,
     staticBacking: packageMode ? staticBacking : null,
+    residentSession,
     packetSource: packageMode ? 'browser-package' : reusePacket ? 'caller-provided-existing' : 'generated',
     episodeMode,
     packetTools,
@@ -251,6 +256,8 @@ function writeReport(extra = {}) {
     evidence: lastState?.evidence || null,
     deviceLoss: lastState?.deviceLoss || null,
     dualInvocationEvidence: lastState?.dualInvocationEvidence || null,
+    residentSessionEvidence: lastState?.residentSessionEvidence || null,
+    residentCloseEvidence: lastState?.closeEvidence || null,
     invocations: lastState?.invocations || null,
     reference: lastState?.manifest?.reference || null,
     lastState,
@@ -505,6 +512,7 @@ async function main() {
     if (packageMode) {
       browserParams.set('staticBacking', staticBacking);
       if (callerInputs) browserParams.set('callerInput', '1');
+      if (residentSession) browserParams.set('residentSession', '1');
       packageDirs.forEach((_, index) => browserParams.append('packageRoot', `/package/${index}/${packageRootFiles[index]}`));
     } else {
       for (const name of Object.keys(packetTools)) browserParams.set(`expected-${name}-manifest-sha256`, expectedManifestSha256[name]);

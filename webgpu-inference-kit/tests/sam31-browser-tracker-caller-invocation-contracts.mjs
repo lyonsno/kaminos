@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   createSam31BrowserTrackerCallerDualInvocationEvidence,
   createSam31BrowserTrackerCallerInvocationRuntime,
+  createSam31BrowserTrackerResidentCallerDualInvocationEvidence,
 } from '../src/sam31-browser-tracker-caller-invocation.js';
 import * as callerInvocationModule from '../src/sam31-browser-tracker-caller-invocation.js';
 import { canonicalSam3IdentityJson } from '../src/sam-browser-package-manifest.js';
@@ -353,12 +354,92 @@ assert.equal(callerDual.noDynamicOriginFetches, true);
 assert.equal(callerDual.callerInputAuthorityPassed, true);
 assert.equal(callerDual.callerArtifactReadsPassed, true);
 
+function residentInvocationEvidence(index) {
+  const invocation = invocationEvidence(index);
+  return {
+    ...invocation,
+    executionRealmId: 'resident-realm',
+    residentRuntime: {
+      schema: 'kaminos.sam31-browser-tracker-resident-invocation-evidence.v0',
+      residentSessionId: 'resident-session',
+      invocationIndex: index,
+      modelPackageId: packageId,
+      resourceCount: 2,
+      bindingCountBefore: index * 19,
+      bindingCountAfter: (index + 1) * 19,
+      liveBufferIds: ['resident-buffer:1', 'resident-buffer:2'],
+      modelAllocationDelta: 0,
+      modelUploadDelta: 0,
+      truncated: false,
+    },
+  };
+}
+
+const residentInvocations = [residentInvocationEvidence(0), residentInvocationEvidence(1)];
+const residentSessionEvidence = {
+  schema: 'kaminos.sam31-browser-tracker-resident-session-evidence.v0',
+  packageId,
+  status: 'open',
+  invocationCount: 2,
+  attemptCount: 2,
+  truncated: false,
+  invocations: residentInvocations.map((invocation, invocationIndex) => ({
+    invocationIndex,
+    invocationId: invocation.packageRuntime.invocationId,
+    status: 'completed',
+    requestIds: invocation.requestIds,
+    residentRuntime: invocation.residentRuntime,
+  })),
+  residentModel: {
+    truncated: false,
+    resourceCount: 2,
+    allocationCount: 2,
+    uploadCount: 2,
+    resources: residentInvocations[0].residentRuntime.liveBufferIds.map(liveBufferId => ({ liveBufferId })),
+  },
+  inferenceSession: { sessionId: 'resident-session', status: 'active', deviceLoss: null },
+};
+const residentCloseEvidence = {
+  queueDrained: true,
+  modelReleased: true,
+  ownerRouteDetached: true,
+  sessionClosed: true,
+  deviceLossAwaited: true,
+};
+const residentDual = createSam31BrowserTrackerResidentCallerDualInvocationEvidence({
+  invocations: residentInvocations,
+  residentSessionEvidence,
+  closeEvidence: residentCloseEvidence,
+});
+assert.equal(residentDual.passed, true);
+assert.equal(residentDual.sameExecutionRealm, true);
+assert.equal(residentDual.sameResidentSession, true);
+assert.equal(residentDual.sameLiveModelBuffers, true);
+assert.equal(residentDual.zeroModelAllocationDeltas, true);
+assert.equal(residentDual.zeroModelUploadDeltas, true);
+assert.equal(residentDual.residentSessionAccountingPassed, true);
+assert.equal(residentDual.closeEvidencePassed, true);
+
+const substitutedResidentBuffer = structuredClone(residentInvocations);
+substitutedResidentBuffer[1].residentRuntime.liveBufferIds[1] = 'resident-buffer:substituted';
+const substitutedResidentEvidence = createSam31BrowserTrackerResidentCallerDualInvocationEvidence({
+  invocations: substitutedResidentBuffer,
+  residentSessionEvidence,
+  closeEvidence: residentCloseEvidence,
+});
+assert.equal(substitutedResidentEvidence.sameLiveModelBuffers, false);
+assert.equal(substitutedResidentEvidence.passed, false, 'a substituted model buffer identity must fail the resident witness');
+
 const driverSource = await readFile(new URL('../src/sam31-browser-tracker-session-driver.js', import.meta.url), 'utf8');
 assert.match(driverSource, /inputEvidence:\s*packageRuntime\.inputEvidence/, 'the session result must preserve caller input evidence');
 const orchestratorSource = await readFile(new URL('../smokes/sam31-two-image-tracker-orchestrator.js', import.meta.url), 'utf8');
 assert.match(orchestratorSource, /createSam31BrowserTrackerCallerDualInvocationEvidence/, 'the isolated browser orchestrator must judge caller-mode semantics');
 assert.match(orchestratorSource, /callerInput/, 'the isolated browser orchestrator must propagate caller-input mode');
 assert.match(orchestratorSource, /return \{ \.\.\.invocation, invocationIndex, executionRealmId \}/, 'the parent evidence record must preserve the global invocation index');
+assert.match(orchestratorSource, /createSam31BrowserTrackerResidentSession/, 'the browser orchestrator must execute the public resident session route');
+assert.match(orchestratorSource, /createSam31BrowserTrackerResidentCallerDualInvocationEvidence/, 'the browser orchestrator must judge resident reuse separately from isolated-realm reuse');
+assert.match(orchestratorSource, /residentSession\.run/, 'both resident invocations must execute through one retained session owner');
+assert.match(orchestratorSource, /residentSession\.close/, 'the browser witness must close the resident owner after both invocations');
 const invocationSmokeSource = await readFile(new URL('../smokes/sam31-two-frame-tracker-parity.js', import.meta.url), 'utf8');
 assert.match(invocationSmokeSource, /modelPackageRoot/, 'the invocation smoke must call the public model-only session route');
 assert.match(invocationSmokeSource, /callerMetadata/, 'the invocation smoke must preload caller-owned images, mask, and session metadata');
@@ -369,6 +450,8 @@ const terminalSmokeSource = await readFile(new URL('../tools/sam31-two-frame-tra
 const ingressExporterSource = await readFile(new URL('../tools/sam31-two-image-ingress-meta-packet.py', import.meta.url), 'utf8');
 const metaPreprocessSource = await readFile(new URL('../tools/sam31-meta-image-preprocess.py', import.meta.url), 'utf8');
 assert.match(terminalSmokeSource, /--caller-inputs/, 'the terminal witness must expose caller-input mode');
+assert.match(terminalSmokeSource, /--resident-session/, 'the terminal witness must expose an explicit resident-session mode');
+assert.match(terminalSmokeSource, /browserParams\.set\('residentSession', '1'\)/, 'the terminal witness must propagate resident mode into the browser realm');
 assert.match(terminalSmokeSource, /callerRequestEvidence/, 'the terminal witness must record caller and package request counts');
 assert.match(terminalSmokeSource, /deriveMetaCallerImageAuthority/, 'the caller witness must derive expected RGBA bytes from pinned Meta preprocessing');
 assert.doesNotMatch(terminalSmokeSource, /rgbaSourceImageSha256:\s*invocation\.sourceImages\.map/, 'pregenerated invocation RGBA hashes must not certify browser caller preprocessing');

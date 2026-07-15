@@ -2,6 +2,8 @@ import {
   createSam31BrowserTrackerCallerDualInvocationEvidence,
   createSam31BrowserTrackerDualInvocationEvidence,
   createSam31BrowserTrackerPackageCache,
+  createSam31BrowserTrackerResidentCallerDualInvocationEvidence,
+  createSam31BrowserTrackerResidentSession,
 } from '../src/index.js';
 
 const statusElement = document.querySelector('#status');
@@ -9,6 +11,7 @@ const params = new URLSearchParams(location.search);
 const packageRoots = params.getAll('packageRoot');
 const packageMode = packageRoots.length > 0;
 const callerInput = params.get('callerInput') === '1';
+const residentMode = params.get('residentSession') === '1';
 const staticBacking = params.get('staticBacking') || 'memory';
 const childRoots = packageMode ? packageRoots : [null];
 const delay = milliseconds => new Promise(resolveDelay => setTimeout(resolveDelay, milliseconds));
@@ -78,9 +81,11 @@ function createVisibleState(sourceState) {
     adapter: invocations[0]?.adapterInfo ? `${invocations[0].adapterInfo.vendor}/${invocations[0].adapterInfo.architecture}; fallback=${invocations[0].adapterInfo.isFallbackAdapter}` : null,
     packageId: invocations[0]?.packageRuntime?.packageId || sourceState.packageRuntime?.packageId || null,
     invocationReceipts,
-    realmCheckpointPassed: (sourceState.betweenInvocationCheckpoints || []).every(checkpoint => checkpoint.passed && checkpoint.realmRemoved),
+    realmCheckpointPassed: residentMode
+      ? sourceState.dualInvocationEvidence?.sameExecutionRealm === true
+      : (sourceState.betweenInvocationCheckpoints || []).every(checkpoint => checkpoint.passed && checkpoint.realmRemoved),
     dualInvocationPassed: sourceState.dualInvocationEvidence?.passed || false,
-    dualGate: dual ? `same-package=${dual.sameModelPackage}; distinct-encoded=${dual.distinctEncodedSourceImages}; distinct-rgba=${dual.distinctRgbaSourceImages}; distinct-invocations=${dual.distinctInvocationIds}; caller-mode=${dual.bothVerificationFree ?? false}; real-route-chains=${dual.bothRouteChainsReal}; no-second-static-load=${dual.noSecondStaticNetworkLoads}; no-dynamic-origin=${dual.noDynamicOriginFetches ?? false}; caller-input-authority=${dual.callerInputAuthorityPassed ?? false}; state-shape=${dual.trackerStateShapePassed}; causal-state=${dual.distinctCausalTrackerState}; state-isolated=${dual.stateIsolationPassed}; distinct-realms=${dual.distinctExecutionRealms}; no-device-loss=${dual.noDeviceLoss}` : null,
+    dualGate: dual ? `same-package=${dual.sameModelPackage}; distinct-encoded=${dual.distinctEncodedSourceImages}; distinct-rgba=${dual.distinctRgbaSourceImages}; distinct-invocations=${dual.distinctInvocationIds}; caller-mode=${dual.bothVerificationFree ?? false}; real-route-chains=${dual.bothRouteChainsReal}; no-second-static-load=${dual.noSecondStaticNetworkLoads}; no-dynamic-origin=${dual.noDynamicOriginFetches ?? false}; caller-input-authority=${dual.callerInputAuthorityPassed ?? false}; state-shape=${dual.trackerStateShapePassed}; causal-state=${dual.distinctCausalTrackerState}; state-isolated=${dual.stateIsolationPassed}; same-realm=${dual.sameExecutionRealm ?? false}; same-session=${dual.sameResidentSession ?? false}; same-buffers=${dual.sameLiveModelBuffers ?? false}; zero-alloc=${dual.zeroModelAllocationDeltas ?? false}; zero-upload=${dual.zeroModelUploadDeltas ?? false}; closed=${dual.closeEvidencePassed ?? false}` : null,
     deviceLoss: sourceState.deviceLoss || null,
   };
 }
@@ -108,6 +113,62 @@ function update(status, phase, extra = {}) {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+async function fetchBytes(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+async function fetchJson(url) {
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`fetch ${url} failed ${response.status}`);
+  return response.json();
+}
+
+async function sha256Bytes(bytes) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return `sha256:${Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function loadCallerInput(index) {
+  const metadata = await fetchJson(`/caller/${index}/metadata.json`);
+  const sourceImages = await Promise.all(metadata.frameUrls.map(fetchBytes));
+  const maskBytes = await fetchBytes(metadata.maskUrl);
+  if (maskBytes.byteLength % Float32Array.BYTES_PER_ELEMENT !== 0) {
+    throw new Error(`caller ${index} mask byte length is not Float32 aligned`);
+  }
+  const encodedSourceImageSha256 = await Promise.all(sourceImages.map(sha256Bytes));
+  const initialMaskSha256 = await sha256Bytes(maskBytes);
+  if (JSON.stringify(encodedSourceImageSha256) !== JSON.stringify(metadata.authority.encodedSourceImageSha256)
+      || initialMaskSha256 !== metadata.authority.initialMaskSha256) {
+    throw new Error(`caller ${index} preload bytes do not match terminal authority`);
+  }
+  return {
+    metadata,
+    sourceImages,
+    initialMask: new Float32Array(maskBytes.buffer.slice(maskBytes.byteOffset, maskBytes.byteOffset + maskBytes.byteLength)),
+    encodedSourceImageSha256,
+    initialMaskSha256,
+  };
+}
+
+function attachCallerAuthority(invocation, caller) {
+  const callerInputAuthority = {
+    encodedSourceImagesPassed: JSON.stringify(invocation.packageRuntime.encodedSourceImageSha256) === JSON.stringify(caller.encodedSourceImageSha256),
+    rgbaSourceImagesPassed: JSON.stringify(invocation.packageRuntime.rgbaSourceImageSha256) === JSON.stringify(caller.metadata.authority.rgbaSourceImageSha256),
+    initialMaskPassed: invocation.packageRuntime.initialMaskSha256 === caller.initialMaskSha256,
+    expectedRgbaSourceImageSha256: caller.metadata.authority.rgbaSourceImageSha256,
+    effectiveRgbaSourceImageSha256: invocation.packageRuntime.rgbaSourceImageSha256,
+  };
+  callerInputAuthority.passed = callerInputAuthority.encodedSourceImagesPassed
+    && callerInputAuthority.rgbaSourceImagesPassed
+    && callerInputAuthority.initialMaskPassed;
+  if (!callerInputAuthority.passed) {
+    throw new Error(`caller browser input authority failed: ${JSON.stringify(callerInputAuthority)}`);
+  }
+  return { ...invocation, callerInputAuthority };
 }
 
 function childUrl(packageRoot, invocationIndex) {
@@ -155,6 +216,68 @@ async function runChild(packageRoot, invocationIndex, completedInvocationCount) 
 }
 
 async function run() {
+  if (residentMode) {
+    if (!packageMode || !callerInput || packageRoots.length !== 2) {
+      throw new Error('resident session witness requires caller input mode and exactly two model package roots');
+    }
+    const executionRealmId = `sam31-tracker-resident-realm:${crypto.randomUUID()}`;
+    const invocations = [];
+    const residentSession = await createSam31BrowserTrackerResidentSession({
+      modelPackageRoot: packageRoots[0],
+      pageUrl: location.href,
+      cache: window.sam31SharedTrackerPackageCache,
+      commit: params.get('commit') || null,
+      onProgress: phase => update('running', phase, { completedInvocationCount: invocations.length }),
+    });
+    let closeEvidence = null;
+    try {
+      for (let index = 0; index < packageRoots.length; index += 1) {
+        const caller = await loadCallerInput(index);
+        const result = await residentSession.run({
+          sourceImages: caller.sourceImages,
+          initialMask: caller.initialMask,
+          session: caller.metadata.session,
+          onProgress: phase => update('running', `resident-${index}:${phase}`, {
+            invocationIndex: index,
+            completedInvocationCount: invocations.length,
+          }),
+        });
+        const invocation = attachCallerAuthority(result, caller);
+        invocations.push({ ...invocation, invocationIndex: index, executionRealmId, deviceLoss: null });
+        update('running', `resident-${index}:complete`, {
+          invocationIndex: index,
+          completedInvocationCount: invocations.length,
+          invocations,
+        });
+      }
+      const residentSessionEvidence = residentSession.evidence();
+      closeEvidence = await residentSession.close();
+      const dualInvocationEvidence = createSam31BrowserTrackerResidentCallerDualInvocationEvidence({
+        invocations,
+        residentSessionEvidence,
+        closeEvidence,
+      });
+      if (!dualInvocationEvidence.passed) {
+        throw Object.assign(new Error(`resident dual tracker invocation evidence failed: ${JSON.stringify(dualInvocationEvidence)}`), {
+          evidenceState: { ...invocations.at(-1), invocations, residentSessionEvidence, closeEvidence, dualInvocationEvidence },
+        });
+      }
+      update('passed', 'complete', {
+        ...invocations.at(-1),
+        invocations,
+        residentSessionEvidence,
+        closeEvidence,
+        dualInvocationEvidence,
+        completedInvocationCount: invocations.length,
+        invocationIndex: invocations.length - 1,
+        childStatus: 'passed',
+        deviceLoss: null,
+      });
+      return;
+    } finally {
+      if (!closeEvidence) await residentSession.close().catch(() => {});
+    }
+  }
   const invocations = [];
   const betweenInvocationCheckpoints = [];
   for (let index = 0; index < childRoots.length; index += 1) {

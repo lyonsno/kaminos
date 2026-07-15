@@ -330,10 +330,7 @@ function trackerStateShapePassed(invocation) {
       .every(name => typeof frame.tensorDigests?.[name] === 'string' && frame.tensorDigests[name].length > 0);
 }
 
-export function createSam31BrowserTrackerDualInvocationEvidence({
-  invocations,
-  betweenInvocationCheckpoints = [],
-}) {
+export function createSam31BrowserTrackerDualInvocationStructure(invocations) {
   if (!Array.isArray(invocations) || invocations.length !== 2) {
     throw new Error('dual tracker evidence requires exactly two invocation records');
   }
@@ -353,8 +350,7 @@ export function createSam31BrowserTrackerDualInvocationEvidence({
   const deterministicTrackerStateShared = firstStateShapePassed && secondStateShapePassed
     && DETERMINISTIC_TRACKER_STATE_DIGESTS.every(name => firstStateDigests[name] === secondStateDigests[name]);
   const trackerStateShapeValid = firstStateShapePassed && secondStateShapePassed;
-  const evidence = {
-    schema: 'kaminos.sam31-browser-tracker-dual-invocation-evidence.v0',
+  return {
     causalTrackerStateDigestNames: [...CAUSAL_TRACKER_STATE_DIGESTS],
     deterministicTrackerStateDigestNames: [...DETERMINISTIC_TRACKER_STATE_DIGESTS],
     sameModelPackage: first.packageRuntime.packageId === second.packageRuntime.packageId,
@@ -380,9 +376,21 @@ export function createSam31BrowserTrackerDualInvocationEvidence({
     distinctCausalTrackerState,
     deterministicTrackerStateShared,
     stateIsolationPassed: trackerStateShapeValid && distinctCausalTrackerState && deterministicTrackerStateShared,
+    noDeviceLoss: invocations.every(invocation => invocation.deviceLoss == null),
+  };
+}
+
+export function createSam31BrowserTrackerDualInvocationEvidence({
+  invocations,
+  betweenInvocationCheckpoints = [],
+}) {
+  const structure = createSam31BrowserTrackerDualInvocationStructure(invocations);
+  const [first, second] = invocations;
+  const evidence = {
+    schema: 'kaminos.sam31-browser-tracker-dual-invocation-evidence.v0',
+    ...structure,
     distinctExecutionRealms: typeof first.executionRealmId === 'string' && first.executionRealmId.length > 0 && typeof second.executionRealmId === 'string' && first.executionRealmId !== second.executionRealmId,
     betweenInvocationCheckpointPassed: betweenInvocationCheckpoints.length === 1 && betweenInvocationCheckpoints[0].passed === true && betweenInvocationCheckpoints[0].realmRemoved === true,
-    noDeviceLoss: invocations.every(invocation => invocation.deviceLoss == null),
   };
   evidence.passed = Object.entries(evidence)
     .filter(([key]) => !['schema', 'causalTrackerStateDigestNames', 'deterministicTrackerStateDigestNames'].includes(key))

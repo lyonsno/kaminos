@@ -435,6 +435,7 @@ export {
 export {
   createSam31BrowserTrackerCallerDualInvocationEvidence,
   createSam31BrowserTrackerCallerInvocationRuntime,
+  createSam31BrowserTrackerResidentCallerDualInvocationEvidence,
   decodeSam31BrowserTrackerSourceImage,
 } from './sam31-browser-tracker-caller-invocation.js';
 

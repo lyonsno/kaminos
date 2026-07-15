@@ -141,7 +141,22 @@ function createResidentSession({
   if (typeof createCallerRuntime !== 'function' || typeof driver !== 'function') throw new Error('resident tracker session requires caller and driver functions');
   const adapterInfo = adapterIdentity(inferenceSession.adapter);
   const errors = [];
+  let observedDeviceLoss = null;
   inferenceSession.device.addEventListener?.('uncapturederror', event => errors.push(String(event.error?.message || event.error)));
+  Promise.resolve(inferenceSession.deviceLost).then(info => {
+    observedDeviceLoss = info || { reason: 'unknown', message: '' };
+    errors.push(`WebGPU device lost: ${observedDeviceLoss.reason || 'unknown'}: ${observedDeviceLoss.message || ''}`);
+  });
+  function assertInferenceSessionActive(phase) {
+    const snapshot = inferenceSession.snapshot();
+    const deviceLoss = snapshot.deviceLoss || observedDeviceLoss;
+    if (snapshot.status !== 'active' || deviceLoss) {
+      const error = new Error(`resident tracker WebGPU device lost during ${phase}: ${deviceLoss?.reason || snapshot.status || 'unknown'}`);
+      error.failurePhase = phase;
+      error.deviceLoss = deviceLoss;
+      throw error;
+    }
+  }
   const strictResidentTensorResolver = tensorInput => {
     const binding = residentResources.residentTensorResolver(tensorInput);
     if (!binding) throw new Error(`static tensor ${tensorInput?.name || '<unnamed>'} did not resolve to authenticated model residency`);
@@ -149,6 +164,8 @@ function createResidentSession({
   };
   const residentModelPackageRuntime = Object.freeze({
     ...modelPackageRuntime,
+    loadUint8: residentResources.loadUint8,
+    loadFloat32: residentResources.loadFloat32,
     bindResidentTensor: residentResources.bind,
     residentTensorResolver: strictResidentTensorResolver,
   });
@@ -173,6 +190,7 @@ function createResidentSession({
       attemptCount += 1;
       const before = residentEvidenceSummary(residentResources.evidence());
       try {
+        assertInferenceSessionActive('resident-invocation-preflight');
         const packageRuntime = await createCallerRuntime({
           modelPackageRuntime: residentModelPackageRuntime,
           sourceImages: input.sourceImages,
@@ -190,10 +208,12 @@ function createResidentSession({
           commit,
           onProgress: input.onProgress || onProgress,
         });
+        assertInferenceSessionActive('resident-invocation-postflight');
         if (!completeTrackerRouteEvidence(result)) throw new Error('resident tracker driver did not return complete 19-route evidence');
         const after = residentEvidenceSummary(residentResources.evidence());
         const residentRuntime = Object.freeze({
           schema: 'kaminos.sam31-browser-tracker-resident-invocation-evidence.v0',
+          residentSessionId: inferenceSession.sessionId,
           invocationIndex,
           modelPackageId: modelPackageRuntime.packageId,
           resourceCount: after.resourceCount,
@@ -226,8 +246,9 @@ function createResidentSession({
         invocationEvidence.push(Object.freeze({
           invocationIndex,
           status: 'failed',
-          failurePhase: 'resident-invocation',
+          failurePhase: error.failurePhase || 'resident-invocation',
           error: String(error?.message || error),
+          deviceLoss: error.deviceLoss || observedDeviceLoss,
           lastTrustworthyEvidence: residentEvidenceSummary(residentResources.evidence()),
         }));
         status = 'open';
