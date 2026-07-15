@@ -608,6 +608,10 @@ def build_frozen_seed_eulerian_exposure(training_pairs, frames, grid_step, predi
             supported_exact_target_count = int(np.sum(dataset["occupancyLabels"]))
             if supported_exact_target_count <= 0:
                 raise ValueError("frozen-seed rollout exposure has zero supported exact targets")
+            unsupported_birth_count = int(dataset["unsupportedBirthCount"])
+            if supported_exact_target_count + unsupported_birth_count != len(target["keys"]):
+                raise ValueError("frozen-seed rollout exposure target representability accounting mismatch")
+            negative_destination_count = len(dataset["destinationKeys"]) - supported_exact_target_count
             datasets.append(dataset)
             pair_receipts.append({
                 "sourceAuthority": "frozen-seed-model-induced-eulerian-support-v0",
@@ -619,7 +623,9 @@ def build_frozen_seed_eulerian_exposure(training_pairs, frames, grid_step, predi
                 "targetCount": len(target["keys"]),
                 "destinationSampleCount": len(dataset["destinationKeys"]),
                 "supportedExactTargetCount": supported_exact_target_count,
-                "unsupportedBirthCount": dataset["unsupportedBirthCount"],
+                "negativeDestinationCount": negative_destination_count,
+                "unsupportedBirthCount": unsupported_birth_count,
+                "representableTargetFraction": supported_exact_target_count / len(target["keys"]),
                 "sampleCap": None,
                 "prediction": dict(accounting),
             })

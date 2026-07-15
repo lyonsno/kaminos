@@ -371,6 +371,16 @@ class TransportDatasetContracts(unittest.TestCase):
             for frame_id in (row["sourceReferenceFrameId"], row["targetFrameId"])
         })
         self.assertTrue(all(row["sampleCap"] is None for row in receipt["pairs"]))
+        for row in receipt["pairs"]:
+            self.assertEqual(
+                row["supportedExactTargetCount"] + row["unsupportedBirthCount"],
+                row["targetCount"],
+            )
+            self.assertEqual(
+                row["negativeDestinationCount"],
+                row["destinationSampleCount"] - row["supportedExactTargetCount"],
+            )
+            self.assertEqual(row["representableTargetFraction"], 1.0)
 
     def test_frozen_seed_rollout_exposure_rejects_zero_supported_exact_targets(self):
         docs = [
