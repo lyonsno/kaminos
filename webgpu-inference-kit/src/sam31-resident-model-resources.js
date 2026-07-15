@@ -204,6 +204,34 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     return resident;
   }
 
+  function semanticPartialView(resident, tensorInput) {
+    const name = tensorInput.name || '<unnamed>';
+    const aliases = Array.isArray(resident.artifact.aliases) ? resident.artifact.aliases : [];
+    const positionArtifact = aliases.some(alias => alias?.role === 'vit-position-embeddings');
+    if (name !== 'sam3.image-vit-prefix.position-embeddings' || !positionArtifact) {
+      throw new Error(`resident tensor semantic partial view is not declared for ${name}`);
+    }
+    const dtype = normalizeDtype(tensorInput.dtype, tensorInput.sourceData);
+    if (dtype !== 'f32') throw new Error(`resident position subview dtype must remain f32 for ${name}`);
+    const shape = requireLogicalShape(tensorInput.shape, dtype, tensorInput.sourceData.byteLength, name);
+    if (shape.length !== 3 || shape[0] !== 1) {
+      throw new Error(`resident position subview shape must be [1,N,C] for ${name}`);
+    }
+    const [, spatialCount, hiddenSize] = shape;
+    if (!Number.isInteger(Math.sqrt(spatialCount))) {
+      throw new Error(`resident position subview spatial count must be square for ${name}`);
+    }
+    const expectedParentByteLength = (spatialCount + 1) * hiddenSize * Float32Array.BYTES_PER_ELEMENT;
+    const expectedByteOffset = resident.authenticatedSource.byteOffset + hiddenSize * Float32Array.BYTES_PER_ELEMENT;
+    const expectedByteLength = spatialCount * hiddenSize * Float32Array.BYTES_PER_ELEMENT;
+    if (resident.authenticatedSource.byteLength !== expectedParentByteLength
+        || tensorInput.sourceData.byteOffset !== expectedByteOffset
+        || tensorInput.sourceData.byteLength !== expectedByteLength) {
+      throw new Error(`resident position subview does not match the declaration-bound CLS-stripped window for ${name}`);
+    }
+    return { dtype, shape };
+  }
+
   function authenticatedView(entry, Type) {
     if (released) throw new Error('SAM 3.1 resident model resources are released');
     const resident = declaredResident(entry);
@@ -283,6 +311,9 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
       if (existing) {
         if (!Array.isArray(tensorInput.shape) || tensorInput.shape.length === 0) return existing;
         const dtype = normalizeDtype(tensorInput.dtype || existing.dtype, tensorInput.sourceData);
+        if (dtype !== existing.dtype) {
+          throw new Error(`resident tensor logical reshape cannot reinterpret dtype ${existing.dtype} as ${dtype} for ${tensorInput.name || '<unnamed>'}`);
+        }
         const shape = requireLogicalShape(
           tensorInput.shape,
           dtype,
@@ -325,15 +356,7 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
       if (candidates.length > 1) throw new Error(`resident tensor source range is ambiguous for ${tensorInput.name || '<unnamed>'}`);
       const resident = candidates[0];
       const bufferOffset = tensorInput.sourceData.byteOffset - resident.authenticatedSource.byteOffset;
-      const dtype = normalizeDtype(tensorInput.dtype, tensorInput.sourceData);
-      const shape = requireLogicalShape(
-        Array.isArray(tensorInput.shape) && tensorInput.shape.length > 0
-          ? tensorInput.shape
-          : sourceShape({}, tensorInput.sourceData),
-        dtype,
-        tensorInput.sourceData.byteLength,
-        tensorInput.name || '<unnamed>',
-      );
+      const { dtype, shape } = semanticPartialView(resident, tensorInput);
       const binding = Object.freeze({
         buffer: resident.allocation.buffer,
         bufferOffset,

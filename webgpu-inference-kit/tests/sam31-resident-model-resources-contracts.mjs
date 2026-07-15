@@ -21,13 +21,16 @@ function deferred() {
   return { promise, resolve };
 }
 
-const artifactABytes = new Uint8Array(new Float32Array([1, 2, 3, 4]).buffer);
+const artifactABytes = new Uint8Array(new Float32Array([0, 1, 2, 3, 4]).buffer);
 const artifactBBytes = new Uint8Array(new Float32Array([5, 6]).buffer);
 const artifactA = {
   file: 'static/a.bin',
   sha256: await sha256(artifactABytes),
   byteLength: artifactABytes.byteLength,
-  aliases: [{ packetName: 'ingress', kind: 'weight', role: 'patch-embed-projection-weight' }],
+  aliases: [
+    { packetName: 'ingress', kind: 'weight', role: 'patch-embed-projection-weight' },
+    { packetName: 'ingress', kind: 'weight', role: 'vit-position-embeddings' },
+  ],
 };
 const artifactB = {
   file: 'static/b.bin',
@@ -107,7 +110,7 @@ assert.equal(
   'the assembled full model bundle must transfer custody instead of retaining a second full-size loader copy',
 );
 
-const entryA = { ...artifactA, role: 'patch-embed-projection-weight', dtype: 'float32', shape: [1, 4, 1, 1] };
+const entryA = { ...artifactA, role: 'patch-embed-projection-weight', dtype: 'float32', shape: [1, 5, 1, 1] };
 const fakeFileEntry = { ...entryA, file: 'invocation/fake-equal-bytes.bin' };
 assert.throws(
   () => resident.loadFloat32(fakeFileEntry),
@@ -136,7 +139,7 @@ assert.throws(
   'a fresh hash-verified persistent-backing copy must not impersonate the resident authenticated source',
 );
 assert.throws(
-  () => resident.bind(entryA, new Float32Array([9, 9, 9, 9])),
+  () => resident.bind(entryA, new Float32Array([9, 9, 9, 9, 9])),
   /authenticated backing|source custody|source identity/i,
   'same-length wrong bytes must not acquire an authenticated resident static binding',
 );
@@ -155,31 +158,53 @@ const logicalMatrixBinding = resident.residentTensorResolver({
   name: 'sam31.high-resolution.s0.weight',
   sourceData: firstSource,
   dtype: 'f32',
-  shape: [1, 4],
+  shape: [1, 5],
   usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
 });
 assert.notEqual(logicalMatrixBinding, firstBinding, 'a logical reshape must receive a binding carrying the module-owned shape');
 assert.equal(logicalMatrixBinding.buffer, firstBinding.buffer, 'a logical reshape must preserve the exact resident GPU object');
 assert.equal(logicalMatrixBinding.sourceData, firstSource, 'a logical reshape must preserve authenticated source identity');
-assert.deepEqual(logicalMatrixBinding.shape, [1, 4]);
+assert.deepEqual(logicalMatrixBinding.shape, [1, 5]);
 assert.equal(logicalMatrixBinding.byteLength, firstBinding.byteLength);
 assert.throws(
   () => resident.residentTensorResolver({
     name: 'sam31.high-resolution.s0.weight',
     sourceData: firstSource,
+    dtype: 'u32',
+    shape: [1, 5],
+  }),
+  /dtype|reinterpret/i,
+  'a logical reshape must not reinterpret the authenticated resident dtype',
+);
+assert.throws(
+  () => resident.residentTensorResolver({
+    name: 'sam31.high-resolution.s0.weight',
+    sourceData: firstSource,
     dtype: 'f32',
-    shape: [1, 3],
+    shape: [1, 4],
   }),
   /logical shape|byte length|element count/i,
   'a logical resident view must not claim a shape whose element count disagrees with its authenticated bytes',
 );
 
+const wrongClsSubview = firstSource.subarray(0, 4);
+assert.throws(
+  () => resident.residentTensorResolver({
+    name: 'sam3.image-vit-prefix.position-embeddings',
+    sourceData: wrongClsSubview,
+    dtype: 'f32',
+    shape: [1, 4, 1],
+    usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+  }),
+  /semantic partial view|CLS|position subview/i,
+  'an aligned or in-range window must not include CLS and omit the final spatial position',
+);
 const authenticatedSubview = firstSource.subarray(1);
 const subviewBinding = resident.residentTensorResolver({
-  name: 'sam31.absolute-position.without-cls',
+  name: 'sam3.image-vit-prefix.position-embeddings',
   sourceData: authenticatedSubview,
   dtype: 'f32',
-  shape: [3],
+  shape: [1, 4, 1],
   usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
 });
 assert.equal(subviewBinding.buffer, firstBinding.buffer, 'an authenticated package subview must retain the parent live GPU object');
@@ -193,7 +218,7 @@ assert.throws(
   /not resident|unknown static artifact/i,
 );
 assert.throws(
-  () => resident.bind(entryA, new Float32Array(3)),
+  () => resident.bind(entryA, new Float32Array(4)),
   /byte length mismatch/i,
 );
 
