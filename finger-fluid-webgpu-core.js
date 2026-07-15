@@ -7,6 +7,7 @@ export const KAMINOS_FINGER_FLUID_REST_STATE_CONTRACT = 'wgsl-support-aware-pers
 export const KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT = 'wgsl-support-tangential-transport-v0';
 export const KAMINOS_FINGER_FLUID_TOPOLOGY_CONTRACT = 'wgsl-four-neighbor-topology-retention-v0';
 export const KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_CONTRACT = 'wgsl-opt-in-support-tangential-particle-shift-v0';
+export const KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT = 'wgsl-passive-material-tracer-diffusion-v0';
 export const KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT = 'shared-solver-render-obstacle-v0';
 export const KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT = 'wgsl-shared-multi-regime-toy-playground-v0';
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_SCHEMA = 'kaminos.liquid-interface-carrier.v0';
@@ -44,9 +45,11 @@ const REST_STATE_FLOATS = 4;
 const REST_STATE_BYTES = REST_STATE_FLOATS * 4;
 const NEIGHBOR_TOPOLOGY_WORDS = 8;
 const NEIGHBOR_TOPOLOGY_BYTES = NEIGHBOR_TOPOLOGY_WORDS * 4;
+const MATERIAL_TRACER_FLOATS = 4;
+const MATERIAL_TRACER_BYTES = MATERIAL_TRACER_FLOATS * 4;
 const INVALID_NEIGHBOR_ID = 0xffffffff;
 
-export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention']);
+export const KAMINOS_FINGER_FLUID_COLOR_MODES = Object.freeze(['phase', 'particle_id', 'speed', 'density', 'surface', 'neighbor_retention', 'chemistry']);
 
 export function resolveFingerFluidColorMode(value = 'phase') {
   const mode = String(value || 'phase');
@@ -62,6 +65,38 @@ export function resolveFingerFluidParticleShiftStrength(value = 0) {
     throw new RangeError(`Finger fluid particle shift strength must be in [0, 1], received: ${value}`);
   }
   return strength;
+}
+
+export function resolveFingerFluidChemistryDiffusion(value = 0) {
+  const strength = Number(value);
+  if (!Number.isFinite(strength) || strength < 0 || strength > 1) {
+    throw new RangeError(`Finger fluid chemistry diffusion strength must be in [0, 1], received: ${value}`);
+  }
+  return strength;
+}
+
+export function diffusePassiveScalarStep(values, weightedPairs, coefficient, dt) {
+  const source = Array.from(values || [], Number);
+  const safeCoefficient = resolveFingerFluidChemistryDiffusion(coefficient);
+  const safeDt = Number(dt);
+  if (!Number.isFinite(safeDt) || safeDt < 0) throw new RangeError(`Passive scalar dt must be finite and non-negative, received: ${dt}`);
+  if (safeCoefficient === 0 || safeDt === 0) return { values: source, massDrift: 0 };
+  const delta = new Float64Array(source.length);
+  for (const pair of weightedPairs || []) {
+    const [left, right, weight = 1] = pair;
+    if (!Number.isSafeInteger(left) || !Number.isSafeInteger(right) || left < 0 || right < 0 || left >= source.length || right >= source.length || left === right) {
+      throw new RangeError(`Passive scalar pair is out of range: ${JSON.stringify(pair)}`);
+    }
+    const safeWeight = Number(weight);
+    if (!Number.isFinite(safeWeight) || safeWeight < 0) throw new RangeError(`Passive scalar pair weight must be finite and non-negative: ${JSON.stringify(pair)}`);
+    const exchange = safeCoefficient * safeDt * safeWeight * (source[right] - source[left]);
+    delta[left] += exchange;
+    delta[right] -= exchange;
+  }
+  const next = source.map((value, index) => value + delta[index]);
+  const massBefore = source.reduce((sum, value) => sum + value, 0);
+  const massAfter = next.reduce((sum, value) => sum + value, 0);
+  return { values: next, massDrift: massAfter - massBefore };
 }
 
 export function measureNeighborRetention(previousNeighborIds, currentNeighborIds) {
@@ -116,6 +151,10 @@ struct NeighborTopologyState {
   metrics: vec4<f32>,
 }
 
+struct MaterialTracerState {
+  concentrationDeltaRecipeSource: vec4<f32>,
+}
+
 struct InterfaceRecord {
   positionId: vec4<f32>,
   velocityConfidence: vec4<f32>,
@@ -135,6 +174,7 @@ struct Params {
   fluid: vec4<f32>,
   forces: vec4<f32>,
   particleShift: vec4<f32>,
+  chemistry: vec4<f32>,
 }
 
 @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
@@ -145,6 +185,7 @@ struct Params {
 @group(0) @binding(5) var<storage, read_write> interfaceCounters: array<atomic<u32>>;
 @group(0) @binding(6) var<storage, read_write> restStates: array<vec4<f32>>;
 @group(0) @binding(7) var<storage, read_write> neighborTopology: array<NeighborTopologyState>;
+@group(0) @binding(8) var<storage, read_write> materialTracers: array<MaterialTracerState>;
 
 ${PLAYGROUND_WGSL}
 
@@ -256,6 +297,12 @@ fn predict_positions(@builtin(global_invocation_id) gid: vec3<u32>) {
   if (index >= params.particleCount) { return; }
   var particle = particles[index];
   if (particle.velocity.w < 0.15 && particle.position.z > -0.15) {
+    var state = materialTracers[index];
+    let sourceResetDelta = state.concentrationDeltaRecipeSource.z - state.concentrationDeltaRecipeSource.x;
+    state.concentrationDeltaRecipeSource.x = state.concentrationDeltaRecipeSource.z;
+    state.concentrationDeltaRecipeSource.y = 0.0;
+    state.concentrationDeltaRecipeSource.w = state.concentrationDeltaRecipeSource.w + sourceResetDelta;
+    materialTracers[index] = state;
     let resetPosition = sourceParticleResetPosition(index);
     particle.position = vec4<f32>(resetPosition, 1.0);
     particle.predicted = vec4<f32>(resetPosition, 0.0);
@@ -341,6 +388,50 @@ fn measure_neighbor_topology(@builtin(global_invocation_id) gid: vec3<u32>) {
   let movingLocked = select(0.0, 1.0, retentionAge >= 0.5 && speed >= 0.35);
   neighborTopology[index].neighborIds = nearestIds;
   neighborTopology[index].metrics = vec4<f32>(retention, retentionAge, f32(validNeighborCount), movingLocked);
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn compute_material_tracer_diffusion(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  let position = particles[index].predicted.xyz;
+  let baseCell = gridCoord(position);
+  let concentration = materialTracers[index].concentrationDeltaRecipeSource.x;
+  var concentrationDelta = 0.0;
+
+  for (var z = -1; z <= 1; z = z + 1) {
+    for (var y = -1; y <= 1; y = y + 1) {
+      for (var x = -1; x <= 1; x = x + 1) {
+        let neighborCell = baseCell + vec3<i32>(x, y, z);
+        if (any(neighborCell < vec3<i32>(0)) || any(neighborCell >= vec3<i32>(params.gridDims.xyz))) { continue; }
+        var current = atomicLoad(&cellHeads[cellIndex(neighborCell)]);
+        while (current >= 0) {
+          let neighborIndex = u32(current);
+          if (neighborIndex != index) {
+            let distance = length(position - particles[neighborIndex].predicted.xyz);
+            let chemistryWeight = kernelWeight(distance);
+            if (chemistryWeight > 0.0) {
+              let neighborConcentration = materialTracers[neighborIndex].concentrationDeltaRecipeSource.x;
+              let neighborDelta = chemistryWeight * (neighborConcentration - concentration);
+              concentrationDelta = concentrationDelta + neighborDelta;
+            }
+          }
+          current = particleNext[neighborIndex];
+        }
+      }
+    }
+  }
+  materialTracers[index].concentrationDeltaRecipeSource.y = params.chemistry.x * params.dt * concentrationDelta;
+}
+
+@compute @workgroup_size(${WORKGROUP_SIZE})
+fn apply_material_tracer_diffusion(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  if (index >= params.particleCount) { return; }
+  var state = materialTracers[index];
+  state.concentrationDeltaRecipeSource.x = state.concentrationDeltaRecipeSource.x + state.concentrationDeltaRecipeSource.y;
+  state.concentrationDeltaRecipeSource.y = 0.0;
+  materialTracers[index] = state;
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
@@ -831,6 +922,10 @@ struct NeighborTopologyState {
   metrics: vec4<f32>,
 }
 
+struct MaterialTracerState {
+  concentrationDeltaRecipeSource: vec4<f32>,
+}
+
 struct RenderParams {
   viewProjection: mat4x4<f32>,
   cameraRight: vec4<f32>,
@@ -841,6 +936,7 @@ struct RenderParams {
 @group(0) @binding(0) var<storage, read> particles: array<Particle>;
 @group(0) @binding(1) var<uniform> params: RenderParams;
 @group(0) @binding(2) var<storage, read> neighborTopology: array<NeighborTopologyState>;
+@group(0) @binding(3) var<storage, read> materialTracers: array<MaterialTracerState>;
 
 ${PLAYGROUND_WGSL}
 
@@ -899,6 +995,10 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     } else if (colorMode == 5u) {
       let retention = neighborTopology[instanceIndex].metrics.x;
       base = mix(vec3<f32>(0.03, 0.12, 0.62), vec3<f32>(1.0, 0.12, 0.04), retention);
+      phase = 0.0;
+    } else if (colorMode == 6u) {
+      let concentration = materialTracers[instanceIndex].concentrationDeltaRecipeSource.x;
+      base = 0.52 + 0.46 * cos(vec3<f32>(0.0, 2.094, 4.188) + concentration * 6.28318);
       phase = 0.0;
     }
   } else if (isTerrain && !isSkirt) {
@@ -1201,6 +1301,19 @@ function createInitialParticles(particleCount) {
   return data;
 }
 
+function createInitialMaterialTracers(particleData, particleCount) {
+  const data = new Float32Array(particleCount * MATERIAL_TRACER_FLOATS);
+  for (let index = 0; index < particleCount; index += 1) {
+    const phase = particleData[index * PARTICLE_FLOATS + 11];
+    const offset = index * MATERIAL_TRACER_FLOATS;
+    data[offset] = phase;
+    data[offset + 1] = 0;
+    data[offset + 2] = phase;
+    data[offset + 3] = 0;
+  }
+  return data;
+}
+
 function createUnavailableSolver(reason) {
   return {
     available: false,
@@ -1218,6 +1331,7 @@ export async function createWebGPUFingerFluidSolver({
   substeps = 1,
   colorMode = 'phase',
   particleShiftStrength = 0,
+  chemistryDiffusion = 0,
 } = {}) {
   if (!canvas?.getContext) return createUnavailableSolver('missing canvas');
   if (!globalThis.navigator?.gpu) return createUnavailableSolver('navigator.gpu unavailable');
@@ -1232,7 +1346,10 @@ export async function createWebGPUFingerFluidSolver({
   const safeSubsteps = Math.max(1, Math.floor(finite(substeps, 1)));
   const safeColorMode = resolveFingerFluidColorMode(colorMode);
   const safeParticleShiftStrength = resolveFingerFluidParticleShiftStrength(particleShiftStrength);
+  const safeChemistryDiffusion = resolveFingerFluidChemistryDiffusion(chemistryDiffusion);
   const particleData = createInitialParticles(safeParticleCount);
+  const materialTracerData = createInitialMaterialTracers(particleData, safeParticleCount);
+  const initialChemistryMass = materialTracerData.reduce((sum, value, index) => sum + (index % MATERIAL_TRACER_FLOATS === 0 ? value : 0), 0);
   const particleBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-particles',
     size: particleData.byteLength,
@@ -1250,7 +1367,7 @@ export async function createWebGPUFingerFluidSolver({
   });
   const paramsBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-params',
-    size: 112,
+    size: 128,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
   });
   const diagnosticsBuffer = device.createBuffer({
@@ -1278,6 +1395,11 @@ export async function createWebGPUFingerFluidSolver({
     size: safeParticleCount * NEIGHBOR_TOPOLOGY_BYTES,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
   });
+  const materialTracerBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-material-tracers',
+    size: safeParticleCount * MATERIAL_TRACER_BYTES,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+  });
   const interfaceCountersReadbackBuffer = device.createBuffer({
     label: 'kaminos-finger-fluid-interface-counters-readback',
     size: 12,
@@ -1298,6 +1420,11 @@ export async function createWebGPUFingerFluidSolver({
     size: safeParticleCount * NEIGHBOR_TOPOLOGY_BYTES,
     usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
   });
+  const materialTracerReadbackBuffer = device.createBuffer({
+    label: 'kaminos-finger-fluid-material-tracers-readback',
+    size: safeParticleCount * MATERIAL_TRACER_BYTES,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
   device.queue.writeBuffer(particleBuffer, 0, particleData);
   device.queue.writeBuffer(interfaceCountersBuffer, 0, new Uint32Array(3));
   device.queue.writeBuffer(restStateBuffer, 0, new Float32Array(safeParticleCount * REST_STATE_FLOATS));
@@ -1306,6 +1433,7 @@ export async function createWebGPUFingerFluidSolver({
     initialTopology.fill(INVALID_NEIGHBOR_ID, index * NEIGHBOR_TOPOLOGY_WORDS, index * NEIGHBOR_TOPOLOGY_WORDS + 4);
   }
   device.queue.writeBuffer(neighborTopologyBuffer, 0, initialTopology);
+  device.queue.writeBuffer(materialTracerBuffer, 0, materialTracerData);
 
   const computeModule = device.createShaderModule({ label: KAMINOS_FINGER_FLUID_GPU_SHADER_ROUTE, code: COMPUTE_SHADER });
   const computeLayout = device.createBindGroupLayout({
@@ -1319,6 +1447,7 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
     ],
   });
   const computePipelineLayout = device.createPipelineLayout({ bindGroupLayouts: [computeLayout] });
@@ -1347,6 +1476,8 @@ export async function createWebGPUFingerFluidSolver({
       measureTopology: await pipelineFor('measure_neighbor_topology'),
       computeParticleShift: await pipelineFor('compute_support_particle_shift'),
       applyParticleShift: await pipelineFor('apply_support_particle_shift'),
+      computeChemistry: await pipelineFor('compute_material_tracer_diffusion'),
+      applyChemistry: await pipelineFor('apply_material_tracer_diffusion'),
     };
   } catch (error) {
     return createUnavailableSolver(`WebGPU compute pipeline validation failed: ${error.message || String(error)}`);
@@ -1363,6 +1494,7 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 5, resource: { buffer: interfaceCountersBuffer } },
       { binding: 6, resource: { buffer: restStateBuffer } },
       { binding: 7, resource: { buffer: neighborTopologyBuffer } },
+      { binding: 8, resource: { buffer: materialTracerBuffer } },
     ],
   });
 
@@ -1404,6 +1536,7 @@ export async function createWebGPUFingerFluidSolver({
       { binding: 0, resource: { buffer: particleBuffer } },
       { binding: 1, resource: { buffer: renderParamsBuffer } },
       { binding: 2, resource: { buffer: neighborTopologyBuffer } },
+      { binding: 3, resource: { buffer: materialTracerBuffer } },
     ],
   });
 
@@ -1420,6 +1553,7 @@ export async function createWebGPUFingerFluidSolver({
   let interfaceCompactionPassCount = 0;
   let topologyMeasurementPassCount = 0;
   let particleShiftPassCount = 0;
+  let chemistryDiffusionPassCount = 0;
   let directRenderFrameCount = 0;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
@@ -1446,7 +1580,7 @@ export async function createWebGPUFingerFluidSolver({
   }
 
   function writeSimulationParams(dt) {
-    const buffer = new ArrayBuffer(112);
+    const buffer = new ArrayBuffer(128);
     const view = new DataView(buffer);
     view.setFloat32(0, dt, true);
     view.setUint32(4, safeParticleCount, true);
@@ -1467,6 +1601,7 @@ export async function createWebGPUFingerFluidSolver({
     view.setFloat32(88, 0.07, true);
     view.setFloat32(92, 0.025, true);
     view.setFloat32(96, safeParticleShiftStrength, true);
+    view.setFloat32(112, safeChemistryDiffusion, true);
     device.queue.writeBuffer(paramsBuffer, 0, buffer);
   }
 
@@ -1501,6 +1636,11 @@ export async function createWebGPUFingerFluidSolver({
       postProjectionGridRefreshCount += 1;
       dispatch(pass, pipelines.measureTopology, safeParticleCount);
       topologyMeasurementPassCount += 1;
+      if (safeChemistryDiffusion > 0) {
+        dispatch(pass, pipelines.computeChemistry, safeParticleCount);
+        dispatch(pass, pipelines.applyChemistry, safeParticleCount);
+        chemistryDiffusionPassCount += 2;
+      }
       dispatch(pass, pipelines.classifySurface, safeParticleCount);
       freeSurfaceClassificationPassCount += 1;
       dispatch(pass, pipelines.velocity, safeParticleCount);
@@ -1588,7 +1728,7 @@ export async function createWebGPUFingerFluidSolver({
   async function requestDiagnostics() {
     if (diagnosticsPending || destroyed) return diagnostics;
     diagnosticsPending = true;
-    const readbackBuffers = [diagnosticsBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer];
+    const readbackBuffers = [diagnosticsBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer];
     try {
       const diagnosticsStepCount = stepCount;
       const diagnosticsCapturedAtMs = performance.now();
@@ -1598,6 +1738,7 @@ export async function createWebGPUFingerFluidSolver({
       encoder.copyBufferToBuffer(interfaceRecordsBuffer, 0, interfaceRecordsReadbackBuffer, 0, safeParticleCount * INTERFACE_RECORD_BYTES);
       encoder.copyBufferToBuffer(restStateBuffer, 0, restStateReadbackBuffer, 0, safeParticleCount * REST_STATE_BYTES);
       encoder.copyBufferToBuffer(neighborTopologyBuffer, 0, neighborTopologyReadbackBuffer, 0, safeParticleCount * NEIGHBOR_TOPOLOGY_BYTES);
+      encoder.copyBufferToBuffer(materialTracerBuffer, 0, materialTracerReadbackBuffer, 0, safeParticleCount * MATERIAL_TRACER_BYTES);
       device.queue.submit([encoder.finish()]);
       const mapResults = await Promise.allSettled(readbackBuffers.map(buffer => buffer.mapAsync(GPUMapMode.READ)));
       const failedMap = mapResults.find(result => result.status === 'rejected');
@@ -1608,6 +1749,7 @@ export async function createWebGPUFingerFluidSolver({
       const restStateValues = new Float32Array(restStateReadbackBuffer.getMappedRange());
       const topologyRange = neighborTopologyReadbackBuffer.getMappedRange();
       const topologyValues = new Float32Array(topologyRange);
+      const materialTracerValues = new Float32Array(materialTracerReadbackBuffer.getMappedRange());
       const min = [Infinity, Infinity, Infinity];
       const max = [-Infinity, -Infinity, -Infinity];
       let speedSum = 0;
@@ -1630,10 +1772,17 @@ export async function createWebGPUFingerFluidSolver({
       let neighborRetentionAgeSum = 0;
       let movingLockedParticleCount = 0;
       const neighborRetentionHistogram = [0, 0, 0, 0];
+      const chemistryHistogram = [0, 0, 0, 0, 0, 0, 0, 0];
+      let chemistryMass = 0;
+      let sourceResetMassAdjustment = 0;
+      let chemistryMin = Infinity;
+      let chemistryMax = -Infinity;
+      let chemistryRecipeDeviationSum = 0;
       for (let index = 0; index < safeParticleCount; index += 1) {
         const offset = index * PARTICLE_FLOATS;
         const restOffset = index * REST_STATE_FLOATS;
         const topologyOffset = index * NEIGHBOR_TOPOLOGY_WORDS + 4;
+        const chemistryOffset = index * MATERIAL_TRACER_FLOATS;
         for (let axis = 0; axis < 3; axis += 1) {
           min[axis] = Math.min(min[axis], values[offset + axis]);
           max[axis] = Math.max(max[axis], values[offset + axis]);
@@ -1671,7 +1820,17 @@ export async function createWebGPUFingerFluidSolver({
         neighborRetentionAgeSum += topologyValues[topologyOffset + 1];
         if (topologyValues[topologyOffset + 3] >= 0.5) movingLockedParticleCount += 1;
         neighborRetentionHistogram[Math.min(3, Math.max(0, Math.floor(neighborRetention * 4)))] += 1;
+        const concentration = materialTracerValues[chemistryOffset];
+        const recipe = materialTracerValues[chemistryOffset + 2];
+        chemistryMass += concentration;
+        sourceResetMassAdjustment += materialTracerValues[chemistryOffset + 3];
+        chemistryMin = Math.min(chemistryMin, concentration);
+        chemistryMax = Math.max(chemistryMax, concentration);
+        chemistryRecipeDeviationSum += Math.abs(concentration - recipe);
+        chemistryHistogram[Math.min(7, Math.max(0, Math.floor(concentration * 8)))] += 1;
       }
+      const diffusionMassDrift = chemistryMass - initialChemistryMass - sourceResetMassAdjustment;
+      const chemistryMassTolerance = Math.max(0.02, safeParticleCount * 0.000002);
       const activeInterfaceCount = Math.min(interfaceCounters[0], safeParticleCount);
       const sampleRecordCount = Math.min(activeInterfaceCount, INTERFACE_SAMPLE_COUNT);
       const readInterfaceRecord = recordIndex => {
@@ -1740,6 +1899,22 @@ export async function createWebGPUFingerFluidSolver({
         movingLockedParticleRatio: Number((movingLockedParticleCount / safeParticleCount).toFixed(4)),
         neighborRetentionHistogram,
         neighborRetentionHistogramEdges: [0, 0.25, 0.5, 0.75, 1.001],
+        chemistry: {
+          contract: KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT,
+          mode: 'passive_transported_scalar_not_reactive_chemistry',
+          diffusionStrength: safeChemistryDiffusion,
+          initialMass: Number(initialChemistryMass.toFixed(6)),
+          currentMass: Number(chemistryMass.toFixed(6)),
+          sourceResetMassAdjustment: Number(sourceResetMassAdjustment.toFixed(6)),
+          diffusionMassDrift: Number(diffusionMassDrift.toFixed(6)),
+          massTolerance: Number(chemistryMassTolerance.toFixed(6)),
+          minimum: Number(chemistryMin.toFixed(6)),
+          maximum: Number(chemistryMax.toFixed(6)),
+          averageRecipeDeviation: Number((chemistryRecipeDeviationSum / safeParticleCount).toFixed(6)),
+          chemistryHistogram,
+          chemistryHistogramEdges: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1.001],
+          particleCount: safeParticleCount,
+        },
         interfaceTransitionCount,
         interfaceChurnRatio: Number((interfaceTransitionCount / safeParticleCount).toFixed(5)),
         persistentInterfaceParticleCount,
@@ -1798,8 +1973,10 @@ export async function createWebGPUFingerFluidSolver({
       supportTransportContract: KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_CONTRACT,
       topologyContract: KAMINOS_FINGER_FLUID_TOPOLOGY_CONTRACT,
       particleShiftContract: KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_CONTRACT,
+      chemistryContract: KAMINOS_FINGER_FLUID_CHEMISTRY_CONTRACT,
       colorMode: safeColorMode,
       particleShiftStrength: safeParticleShiftStrength,
+      chemistryDiffusion: safeChemistryDiffusion,
       obstacleContract: KAMINOS_FINGER_FLUID_OBSTACLE_CONTRACT,
       obstacle: { center: [...OBSTACLE_CENTER], radius: OBSTACLE_RADIUS, rendered: directRenderFrameCount > 0 },
       playgroundContract: KAMINOS_FINGER_FLUID_PLAYGROUND_CONTRACT,
@@ -1853,6 +2030,7 @@ export async function createWebGPUFingerFluidSolver({
       interfaceCompactionPassCount,
       topologyMeasurementPassCount,
       particleShiftPassCount,
+      chemistryDiffusionPassCount,
       directRenderFrameCount,
       lastFrameCpuMs: Number(lastFrameCpuMs.toFixed(3)),
       diagnostics: diagnostics ? {
@@ -1879,10 +2057,12 @@ export async function createWebGPUFingerFluidSolver({
     interfaceCountersBuffer.destroy();
     restStateBuffer.destroy();
     neighborTopologyBuffer.destroy();
+    materialTracerBuffer.destroy();
     interfaceCountersReadbackBuffer.destroy();
     interfaceRecordsReadbackBuffer.destroy();
     restStateReadbackBuffer.destroy();
     neighborTopologyReadbackBuffer.destroy();
+    materialTracerReadbackBuffer.destroy();
     renderParamsBuffer.destroy();
     depthTexture?.destroy();
   }

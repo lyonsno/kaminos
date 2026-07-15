@@ -9,6 +9,7 @@ export const KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY = 'wgsl-support-aware-pers
 export const KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY = 'wgsl-support-tangential-transport-v0';
 export const KAMINOS_FINGER_FLUID_TOPOLOGY_IDENTITY = 'wgsl-four-neighbor-topology-retention-v0';
 export const KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_IDENTITY = 'wgsl-opt-in-support-tangential-particle-shift-v0';
+export const KAMINOS_FINGER_FLUID_CHEMISTRY_IDENTITY = 'wgsl-passive-material-tracer-diffusion-v0';
 
 export const KAMINOS_FINGER_FLUID_DOWGRADES = [
   'kaminos_native_synthetic_fluid_not_lerms_source_truth',
@@ -70,6 +71,9 @@ export function createFingerFluidBenchState(options = {}) {
       particleShiftContract: options.particleShiftContract || KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_IDENTITY,
       particleShiftStrength: finite(options.particleShiftStrength, 0),
       particleShiftPassCount: nonNegativeInteger(options.particleShiftPassCount, 0),
+      chemistryContract: options.chemistryContract || KAMINOS_FINGER_FLUID_CHEMISTRY_IDENTITY,
+      chemistryDiffusion: finite(options.chemistryDiffusion, 0),
+      chemistryDiffusionPassCount: nonNegativeInteger(options.chemistryDiffusionPassCount, 0),
       playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
       interfaceCarrierSchema: options.interfaceCarrierSchema || KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY,
       stepCount: nonNegativeInteger(options.stepCount, 0),

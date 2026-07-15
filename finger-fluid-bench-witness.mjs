@@ -229,15 +229,21 @@ async function main() {
     if (lastDebugState.runtime?.supportTransportContract !== 'wgsl-support-tangential-transport-v0') throw new Error(`support-transport contract mismatch: ${lastDebugState.runtime?.supportTransportContract}`);
     if (lastDebugState.runtime?.topologyContract !== 'wgsl-four-neighbor-topology-retention-v0') throw new Error(`topology contract mismatch: ${lastDebugState.runtime?.topologyContract}`);
     if (lastDebugState.runtime?.particleShiftContract !== 'wgsl-opt-in-support-tangential-particle-shift-v0') throw new Error(`particle-shift contract mismatch: ${lastDebugState.runtime?.particleShiftContract}`);
+    if (lastDebugState.runtime?.chemistryContract !== 'wgsl-passive-material-tracer-diffusion-v0') throw new Error(`passive tracer contract mismatch: ${lastDebugState.runtime?.chemistryContract}`);
     const requestedRoute = new URL(url);
     const requestedColorMode = requestedRoute.searchParams.get('finger_fluid_color_mode') || 'phase';
     const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
+    const requestedChemistryDiffusion = Number(requestedRoute.searchParams.get('finger_fluid_chemistry_diffusion') ?? 0);
     const effectiveColorMode = lastDebugState.runtime?.effectiveColorMode;
     const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
+    const effectiveChemistryDiffusion = lastDebugState.runtime?.effectiveChemistryDiffusion;
     if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
     if (requestedParticleShiftStrength !== effectiveParticleShiftStrength) throw new Error(`silent particle-shift fallback rejected: ${JSON.stringify({ requestedParticleShiftStrength, effectiveParticleShiftStrength })}`);
+    if (requestedChemistryDiffusion !== effectiveChemistryDiffusion) throw new Error(`silent chemistry-diffusion fallback rejected: ${JSON.stringify({ requestedChemistryDiffusion, effectiveChemistryDiffusion })}`);
     if (effectiveParticleShiftStrength === 0 && lastDebugState.runtime?.particleShiftPassCount !== 0) throw new Error(`zero-strength route dispatched hidden particle shifting: ${lastDebugState.runtime?.particleShiftPassCount}`);
     if (effectiveParticleShiftStrength > 0 && lastDebugState.runtime?.particleShiftPassCount < lastDebugState.runtime.stepCount * 2) throw new Error(`enabled particle shifting missed required passes: ${JSON.stringify({ particleShiftPassCount: lastDebugState.runtime?.particleShiftPassCount, stepCount: lastDebugState.runtime?.stepCount })}`);
+    if (effectiveChemistryDiffusion === 0 && lastDebugState.runtime?.chemistryDiffusionPassCount !== 0) throw new Error(`zero diffusion dispatched hidden chemistry work: ${lastDebugState.runtime?.chemistryDiffusionPassCount}`);
+    if (effectiveChemistryDiffusion > 0 && lastDebugState.runtime?.chemistryDiffusionPassCount < lastDebugState.runtime.stepCount * 2) throw new Error(`enabled chemistry diffusion missed required passes: ${JSON.stringify({ chemistryDiffusionPassCount: lastDebugState.runtime?.chemistryDiffusionPassCount, stepCount: lastDebugState.runtime?.stepCount })}`);
     if (lastDebugState.runtime?.playgroundContract !== 'wgsl-shared-multi-regime-toy-playground-v0') throw new Error(`playground contract mismatch: ${lastDebugState.runtime?.playgroundContract}`);
     if (!lastDebugState.runtime?.playground?.rendered || lastDebugState.runtime.playground.supportGeometryCount < 300) {
       throw new Error(`shared playground geometry is missing from the operator viewport: ${JSON.stringify(lastDebugState.runtime?.playground)}`);
@@ -285,6 +291,23 @@ async function main() {
     }
     if (!Number.isSafeInteger(movingLockedParticleCount) || movingLockedParticleCount < 32) {
       throw new Error(`moving topology-lock population is not materially observable: ${JSON.stringify({ movingLockedParticleCount })}`);
+    }
+    const chemistry = lastDebugState.runtime?.diagnostics?.chemistry;
+    const chemistryHistogram = chemistry?.chemistryHistogram;
+    if (!Array.isArray(chemistryHistogram) || chemistryHistogram.length !== 8 || chemistryHistogram.reduce((sum, count) => sum + count, 0) !== lastDebugState.runtime.particleCount) {
+      throw new Error(`chemistry histogram does not account for the exact particle population: ${JSON.stringify({ chemistryHistogram, particleCount: lastDebugState.runtime?.particleCount })}`);
+    }
+    if (chemistry?.contract !== 'wgsl-passive-material-tracer-diffusion-v0' || chemistry.particleCount !== lastDebugState.runtime.particleCount) {
+      throw new Error(`passive tracer diagnostics are missing or partial: ${JSON.stringify(chemistry)}`);
+    }
+    if (!Number.isFinite(chemistry.diffusionMassDrift) || !Number.isFinite(chemistry.massTolerance) || Math.abs(chemistry.diffusionMassDrift) > chemistry.massTolerance) {
+      throw new Error(`passive tracer diffusion created unexplained mass: ${JSON.stringify(chemistry)}`);
+    }
+    if (!Number.isFinite(chemistry.minimum) || !Number.isFinite(chemistry.maximum) || chemistry.minimum < -0.001 || chemistry.maximum > 1.001) {
+      throw new Error(`passive tracer escaped its source concentration range: ${JSON.stringify(chemistry)}`);
+    }
+    if (effectiveChemistryDiffusion > 0 && (!Number.isFinite(chemistry.averageRecipeDeviation) || chemistry.averageRecipeDeviation <= 0.0001)) {
+      throw new Error(`enabled passive tracer did not materially depart from immutable source recipes: ${JSON.stringify(chemistry)}`);
     }
     const surfaceParticleRatio = lastDebugState.runtime?.diagnostics?.surfaceParticleRatio;
     const averageSurfaceFactor = lastDebugState.runtime?.diagnostics?.averageSurfaceFactor;
