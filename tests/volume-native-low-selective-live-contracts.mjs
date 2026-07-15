@@ -76,6 +76,11 @@ assert.match(combined, /native-low-head-cost-profile-v0/, 'shared-device route r
 assert.match(core, /nativeLowHeadCostProfile[\s\S]*supportFrontGpuMs[\s\S]*supportPositiveResidualGpuMs/, 'core receipt preserves measured support/front and residual GPU timings');
 assert.match(core, /headCostTimingAuthority:\s*'webgpu-timestamp-query-stage-split-v0'/, 'head cost profile uses explicit timestamp-query authority');
 assert.match(witness, /nativeLowHeadCostProfile[\s\S]*supportFrontGpuMs[\s\S]*supportPositiveResidualGpuMs/, 'witness preserves head-stage cost profile');
+assert.match(combined, /native-low-production-stage-ledger-v0/, 'live route records production-stage ledger instead of conflating debug transport with runtime cost');
+assert.match(combined, /frozenDenseRouteControl[\s\S]*denseReceiverWriteBytes[\s\S]*debugManifestTransportExcluded/, 'production ledger preserves frozen dense route control and separates dense receiver writes from debug manifest transport');
+assert.match(combined, /measuredInteractiveBasinProjection[\s\S]*dense160ReceiverWriteAvoidanceCandidate[\s\S]*projectionAuthority/, 'production ledger emits an honest measured interactive-basin projection');
+assert.match(combined, /simulationSteppingReceipt[\s\S]*simStepDelta[\s\S]*currentSourceFrameConsumption/, 'route rejects repeated static prediction by proving sim step and current-source consumption');
+assert.match(witness, /nativeLowProductionStageLedger[\s\S]*stalePredictionRejection[\s\S]*simulationSteppingReceipt/, 'witness preserves production ledger and stale-prediction checks');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');

@@ -140,6 +140,14 @@ try {
       && state?.headCostTimingAuthority === 'webgpu-timestamp-query-stage-split-v0'
       && Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0
       && Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0
+      && state?.nativeLowProductionStageLedger?.identity === 'native-low-production-stage-ledger-v0'
+      && state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained === true
+      && Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0
+      && state?.nativeLowProductionStageLedger?.debugManifestTransportExcluded?.excluded === true
+      && state?.nativeLowProductionStageLedger?.dense160ReceiverWriteAvoidanceCandidate?.status === 'projection-not-implemented'
+      && state?.simulationSteppingReceipt?.simStepDelta === 1
+      && state?.currentSourceFrameConsumption?.encodedFrameDelta === 1
+      && state?.stalePredictionRejection?.repeatedStaticPrediction === false
       && Number(state?.inferenceGpuMs) >= 0
       && Number(state?.uploadDispatchMs) >= 0
       && Number(state?.endToEndFrameMs) >= 0
@@ -188,6 +196,14 @@ try {
   assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0, 'supportFrontGpuMs missing');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0, 'supportPositiveResidualGpuMs missing');
+  assert.equal(state?.nativeLowProductionStageLedger?.identity, 'native-low-production-stage-ledger-v0', 'production stage ledger missing');
+  assert.equal(state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained, true, 'frozen dense route control missing');
+  assert.ok(Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0, 'dense receiver write bytes missing');
+  assert.equal(state?.nativeLowProductionStageLedger?.debugManifestTransportExcluded?.excluded, true, 'debug manifest transport was not excluded from live ledger');
+  assert.equal(state?.nativeLowProductionStageLedger?.dense160ReceiverWriteAvoidanceCandidate?.status, 'projection-not-implemented', 'sparse receiver candidate projection status missing');
+  assert.equal(state?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator did not step exactly once for this model frame');
+  assert.equal(state?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model did not consume exactly one current source frame');
+  assert.equal(state?.stalePredictionRejection?.repeatedStaticPrediction, false, 'stale prediction was not rejected');
 
   const startState = state;
   const observationStartMs = performance.now();
@@ -206,6 +222,9 @@ try {
   assert.equal(endState?.fallbackBackend, null, 'fallback backend during observation');
   assert.equal(endState?.transportMode, TRANSPORT_MODE, 'transport mode drift during observation');
   assert.equal(endState?.sourceStepDrift, null, 'source-step drift during observation');
+  assert.equal(endState?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator stopped stepping during observation');
+  assert.equal(endState?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model stopped consuming current source frames during observation');
+  assert.equal(endState?.stalePredictionRejection?.repeatedStaticPrediction, false, 'repeated static prediction during observation');
 
   failurePhase = 'blankFrameRejection';
   const capture = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
@@ -233,6 +252,10 @@ try {
     treatmentSplatRadianceGain: endState.treatmentSplatRadianceGain,
     treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
+    nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
+    simulationSteppingReceipt: endState.simulationSteppingReceipt,
+    currentSourceFrameConsumption: endState.currentSourceFrameConsumption,
+    stalePredictionRejection: endState.stalePredictionRejection,
     nativeLowInferenceWorkProfile: endState.nativeLowInferenceWorkProfile,
     supportCompactionIdentity: endState.nativeLowInferenceWorkProfile?.supportCompactionIdentity,
     supportCompactedCount: endState.nativeLowInferenceWorkProfile?.supportCompactedCount,

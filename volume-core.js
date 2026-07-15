@@ -12883,6 +12883,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const startedAt = performance.now();
     const sourceMajorantGrid = majorantGridSize;
     const sourceFrame = state.frameCount;
+    const sourceSimStepBefore = state.simStepCount;
     try {
       if (!state.active || !device) throw new Error('inactive');
       if (gridSize !== 128) throw new Error(`native-low-shared-device-grid-mismatch:${gridSize}`);
@@ -12891,6 +12892,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       raf = 0;
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       const runtime = await ensureNativeLowSelectiveSharedRuntime();
+      const runtimeBeforeInference = runtime.debugState();
 
       failurePhase = 'native-low-source-step';
       updateUniforms(fixedNow);
@@ -12901,10 +12903,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       const nativeStepMs = performance.now() - nativeStepStart;
       const sourceStep = state.simStepCount;
+      const simStepDelta = sourceStep - sourceSimStepBefore;
+      if (simStepDelta !== 1) throw new Error(`simulation-not-stepping:${simStepDelta}`);
       const sourceFluid = fluidBuffers[currentFluid];
       const sourceFront = frontBuffers[currentFront];
       const sourceStepIdentity = `native-low-shared-device-step-${sourceStep}-frame-${sourceFrame + 1}`;
-      lastTrustworthyEvidence = { sourceStepIdentity, sourceStep, nativeStepMs };
+      const simulationSteppingReceipt = {
+        identity: 'native-low-simulation-stepping-receipt-v0',
+        sourceFrameBefore: sourceFrame,
+        sourceFrameAfter: state.frameCount,
+        sourceSimStepBefore,
+        sourceSimStepAfter: sourceStep,
+        simStepDelta,
+        requiredSimStepDelta: 1,
+        authority: 'renderer-owned-native-source-step-before-model-consumption-v0',
+      };
+      lastTrustworthyEvidence = { sourceStepIdentity, sourceStep, nativeStepMs, simulationSteppingReceipt };
 
       failurePhase = 'shared-device-model-inference';
       const timestampSupported = device.features?.has?.('timestamp-query') && typeof device.createQuerySet === 'function';
@@ -12968,6 +12982,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const supportStats = await runtime.sampleSupportStats();
       const supportStatsMs = performance.now() - supportStatsStart;
       const runtimeState = runtime.debugState();
+      const encodedFrameDelta = Number(runtimeState.encodedFrameCount || 0) - Number(runtimeBeforeInference.encodedFrameCount || 0);
+      if (encodedFrameDelta !== 1) throw new Error(`repeated-static-prediction:${encodedFrameDelta}`);
+      const currentSourceFrameConsumption = {
+        identity: 'native-low-current-source-frame-consumption-v0',
+        sourceStepIdentity,
+        sourceSimStep: sourceStep,
+        runtimeEncodedFrameBefore: runtimeBeforeInference.encodedFrameCount || 0,
+        runtimeEncodedFrameAfter: runtimeState.encodedFrameCount || 0,
+        encodedFrameDelta,
+        requiredEncodedFrameDelta: 1,
+        currentSourceConsumed: true,
+      };
+      const stalePredictionRejection = {
+        identity: 'native-low-stale-prediction-rejection-v0',
+        repeatedStaticPrediction: false,
+        stalePrediction: false,
+        sourceStepIdentity,
+        encodedFrameDelta,
+        simulationStepDelta: simStepDelta,
+      };
       const nativeLowInferenceWorkProfile = runtimeState.nativeLowInferenceWorkProfile || supportStats.nativeLowInferenceWorkProfile || null;
       nativeLowHeadCostProfile = {
         ...nativeLowHeadCostProfile,
@@ -12978,7 +13012,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         supportCompactedCount: nativeLowInferenceWorkProfile?.supportCompactedCount ?? null,
         residualHeadEvaluatedCount: nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount ?? null,
       };
-      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs };
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs, currentSourceFrameConsumption, stalePredictionRejection };
 
       failurePhase = 'shared-device-treatment-materialization';
       const treatmentMaterializeStart = performance.now();
@@ -13084,6 +13118,64 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         : treatmentSplatInstanceCount <= 0
           ? 'splat-materialization-zero'
           : 'calibration-or-radiance';
+      const denseReceiverWriteBytes = nativeLowMaterializationProfile.treatmentCopyBytes;
+      const projectedSparseCandidateBytes = Math.max(0, treatmentSplatInstanceCount) * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+      const renderPairMs = treatmentRenderMs + controlRenderMs;
+      const endToEndFrameMs = performance.now() - startedAt;
+      const projectedWithoutDenseReceiverCopyMs = Math.max(0, endToEndFrameMs - treatmentCopyMs);
+      const nativeLowProductionStageLedger = {
+        identity: 'native-low-production-stage-ledger-v0',
+        authority: 'measured-live-shared-device-stage-ledger-with-sparse-output-projection-v0',
+        routeIdentity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        frozenDenseRouteControl: {
+          retained: true,
+          role: 'frozen-dense-route-control',
+          modelIdentity: runtimeState.modelIdentity,
+          modelSha256: runtimeState.modelSha256,
+          denseReceiverMaterialized: true,
+          denseReceiverWriteBytes,
+        },
+        debugManifestTransportExcluded: {
+          excluded: true,
+          manifestFetchMs: 0,
+          authority: 'live-route-no-manifest-fetch-v0',
+        },
+        denseReceiverWriteBytes,
+        measuredInteractiveBasinProjection: {
+          identity: 'native-low-measured-interactive-basin-projection-v0',
+          projectionAuthority: 'measured-current-frame-minus-projected-dense-receiver-copy-v0',
+          currentMeasuredFrameMs: endToEndFrameMs,
+          currentMeasuredFrameHz: endToEndFrameMs > 0 ? 1000 / endToEndFrameMs : null,
+          productionWithoutDebugManifestFetchMs: endToEndFrameMs,
+          denseInferenceRetainedMs: inferenceTiming.ms,
+          denseSupportFrontRetainedMs: nativeLowHeadCostProfile.supportFrontGpuMs,
+          denseResidualRetainedMs: nativeLowHeadCostProfile.supportPositiveResidualGpuMs,
+          denseReceiverMaterializationRetainedMs: treatmentMaterializeMs,
+          denseReceiverCopyRetainedMs: treatmentCopyMs,
+          restoreMaterializationRetainedMs: restoreMaterializeMs,
+          renderPairMs,
+          projectedWithoutDenseReceiverCopyMs,
+          projectedWithoutDenseReceiverCopyHz: projectedWithoutDenseReceiverCopyMs > 0 ? 1000 / projectedWithoutDenseReceiverCopyMs : null,
+          interactiveBasinMs60Hz: 16.67,
+          interactiveBasinMs30Hz: 33.34,
+          conclusion: projectedWithoutDenseReceiverCopyMs <= 33.34
+            ? 'projection-near-interactive-only-after-dense-write-removal-still-unimplemented'
+            : 'not-interactive-even-after-dense-write-removal-projection',
+        },
+        dense160ReceiverWriteAvoidanceCandidate: {
+          identity: 'direct-sparse-learned-splat-substrate-candidate-v0',
+          status: 'projection-not-implemented',
+          supportPositiveCount,
+          treatmentSplatInstanceCount,
+          candidateStrideBytes: BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
+          projectedSparseCandidateBytes,
+          avoidedDenseReceiverWriteBytesLowerBound: Math.max(0, denseReceiverWriteBytes - projectedSparseCandidateBytes),
+          projectionAuthority: 'measured-splat-count-times-current-candidate-stride-v0',
+        },
+        simulationSteppingReceipt,
+        currentSourceFrameConsumption,
+        stalePredictionRejection,
+      };
       const receipt = {
         ok: true,
         status: 'captured',
@@ -13094,8 +13186,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sourceStepIdentity,
         sameNativeStateIdentity,
         sourceStep,
+        sourceSimStepBefore,
         controlStep: sourceStep,
         treatmentStep: sourceStep,
+        simulationSteppingReceipt,
+        currentSourceFrameConsumption,
+        stalePredictionRejection,
         sourceStepDrift: null,
         controlTreatmentCausalDivergence: null,
         requestedComposition,
@@ -13145,7 +13241,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         restoreCopyMs,
         controlRenderMs,
         nativeLowMaterializationProfile,
-        endToEndFrameMs: performance.now() - startedAt,
+        nativeLowProductionStageLedger,
+        endToEndFrameMs,
         stageTiming: {
           nativeStepMs,
           inferenceGpuMs: inferenceTiming.ms,
