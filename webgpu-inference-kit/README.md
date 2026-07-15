@@ -113,6 +113,7 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `createWebGpuInferenceRuntime(input)`: acquire or wrap a browser WebGPU device, preserve backend identity, expose runtime helpers, time named stages, and finish a runtime profile.
 - `createWebGpuResourceCaches(device)`: cache shader modules and compute pipelines by label plus descriptor so repeated stage invocations do not rebuild obvious resources.
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
+- `createForegroundBudgetGovernor(input)`: adapt cooperative yield time or named phase chunk sizes from attributed foreground frame pressure while failing closed when route, host, and GPU duty evidence is incomplete or ambiguous.
 - `runtime.createBuffer(descriptor)`, `runtime.writeBuffer(buffer, data, ...)`, and `runtime.readBuffer(buffer, options)`: small buffer helpers for model weights, activations, and readback paths.
 - `runtime.createTensor(input)`, `runtime.uploadTensor(tensor, data)`, and `runtime.readTensor(tensor)`: create GPU-backed tensors with dtype, shape, strides, byte-length validation, and upload/readback helpers.
 - `packUniforms(schema, values)` and `runtime.createUniformBuffer(input)`: pack small scalar/vector parameter blocks into WGSL-compatible uniform buffers and update them without hand-rolling offsets.
@@ -142,9 +143,48 @@ Long browser WebGPU routes need to say how they behave under contention. The pac
 - `createWebGpuRouteSchedulerProfile(input)` and `validateWebGpuRouteSchedulerProfile(profile)` for requested versus effective scheduling, phase chunk sizes, yield cadence, submitted-work waits, breathability spans, checkpoints, and unsupported fields.
 - `createSchedulerVerificationReceipt(input)` and `classifySchedulerVerificationReceipt(receipt)` for observation-bound scheduler proof. A route is not verified just because a config asked it to yield; observed events and boundary assertions must agree.
 - `createWebGpuRouteBackpressureProfile(input)` and `validateWebGpuRouteBackpressureProfile(profile)` for visible-wait/furnace pressure, warm/cache posture, memory-sharing posture, and frame-tail impact.
+- `createForegroundBudgetGovernor(input)` for a long-lived adaptive control loop. The caller supplies scheduler bounds, attribution policy, hysteresis, and an `episodeEpochId`; each observation carries the same epoch plus a unique episode/firing identity. Exact replays cannot vote twice. `forgetEpisode()` and `clearDecisionHistory()` discard cached decisions while preserving replay protection, and `beginEpisodeEpoch(nextId)` is the explicit boundary that reclaims those identities and resets hysteresis while preserving the tuned scheduler.
 - `validateSharpBreathingRoomComparisonEvidence(comparison)` and `classifySharpBreathingRoomComparisonEvidence(comparison)` for the current SHARP default-vs-cooperative comparison contract.
 
 This is the layer that should help SHARP, SF3D, Kimodo, image generators, and future long routes become breathable enough to coexist with rendering or other inference work in the same browser GPU process.
+
+```js
+const governor = createForegroundBudgetGovernor({
+  episodeEpochId: crypto.randomUUID(),
+  targetFrameGapMs: 50,
+  failureWindowsBeforeAdjust: 2,
+  successWindowsBeforeRelax: 3,
+  scheduler: {
+    mode: "cooperative",
+    yieldMs: 4,
+    waitForSubmittedWorkDone: true,
+    phaseChunkSize: { attentionTiles: 16 },
+  },
+  bounds: {
+    yieldMs: { min: 0, max: 16, step: 2 },
+    phaseChunkSize: {
+      attentionTiles: { min: 1, max: 16, stepFactor: 2 },
+    },
+  },
+  phaseControlMap: { "attention-tile": "attentionTiles" },
+  attributionPolicy: {
+    minimumCoveredFraction: 0.8,
+    maximumSharedFraction: 0.25,
+  },
+});
+
+const decision = governor.observe({
+  episodeEpochId: governor.snapshot().episodeEpochId,
+  episodeId: routeRunId,
+  firingId: routeRunId,
+  frameTail,
+  hostEventCorrelation,
+  sharpDutyCorrelation: gpuDutyCorrelation,
+});
+
+// Apply decision.effectiveScheduler to a subsequent invocation only when
+// your route owns that application boundary.
+```
 
 ## Receipt And Evidence Layer
 
