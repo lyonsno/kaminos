@@ -1,0 +1,505 @@
+{
+  "schema": "kaminos.stage-atoms-witness-report.v0",
+  "status": "passed",
+  "requestedFixture": "ccmixter",
+  "effectiveRoute": "stage-atoms-pulp-shaped-material-spatializer-v0",
+  "witness": {
+    "schema": "kaminos.stage-atoms-witness.v0",
+    "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+    "stage": {
+      "schema": "kaminos.stage-atoms.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "sourceAccess": {
+        "schema": "kaminos.stage-audio-source-access.v0",
+        "sourceKind": "ccmixter",
+        "trackId": "ccmixter:test-vocal-001",
+        "title": "Lawful Test Vocal",
+        "artist": "Example Artist",
+        "license": "CC BY 3.0",
+        "attribution": "Example Artist - Lawful Test Vocal - CC BY 3.0",
+        "downloadUrl": "https://ccmixter.example.test/files/example/lawful-test-vocal.wav",
+        "localPath": "",
+        "receiptWarnings": [],
+        "accessClass": "open_transformable",
+        "analysisAllowed": true,
+        "transformAllowed": true,
+        "syncAllowed": true,
+        "publicDemoAllowed": true,
+        "analysisScope": "public_demo_with_attribution"
+      },
+      "sourceDesign": {
+        "schema": "pulp.design-ir.stage-atoms-fixture.v0",
+        "sourceAdapter": "pulp-design-ir-derived-fixture",
+        "controls": [
+          {
+            "id": "filter.cutoff",
+            "kind": "knob",
+            "label": "Cutoff",
+            "paramKey": "filter.cutoff",
+            "rect": [
+              410,
+              180,
+              64,
+              64
+            ],
+            "confidence": 0.92,
+            "sourceNodeId": "figma-node-cutoff"
+          },
+          {
+            "id": "delay.feedback",
+            "kind": "xy_pad",
+            "label": "Feedback Space",
+            "paramKey": "delay.feedback",
+            "rect": [
+              240,
+              310,
+              140,
+              120
+            ],
+            "confidence": 0.84,
+            "sourceNodeId": "figma-node-feedback"
+          }
+        ],
+        "viewport": [
+          800,
+          600
+        ]
+      },
+      "sourceGraph": {
+        "schema": "pulp.graph-runtime-plan-derived-fixture.v0",
+        "nodes": [
+          {
+            "id": 1,
+            "kind": "AudioInput",
+            "label": "Input",
+            "level": 0,
+            "latencySamples": 0
+          },
+          {
+            "id": 2,
+            "kind": "Processor",
+            "label": "Cutoff",
+            "level": 1,
+            "latencySamples": 64,
+            "paramKey": "filter.cutoff"
+          },
+          {
+            "id": 3,
+            "kind": "Processor",
+            "label": "Feedback Space",
+            "level": 2,
+            "latencySamples": 128,
+            "paramKey": "delay.feedback"
+          },
+          {
+            "id": 4,
+            "kind": "AudioOutput",
+            "label": "Output",
+            "level": 3,
+            "latencySamples": 0
+          }
+        ],
+        "connections": [
+          {
+            "sourceNode": 1,
+            "destNode": 2,
+            "kind": "Audio",
+            "feedback": false
+          },
+          {
+            "sourceNode": 2,
+            "destNode": 3,
+            "kind": "Automation",
+            "feedback": false
+          },
+          {
+            "sourceNode": 3,
+            "destNode": 2,
+            "kind": "Audio",
+            "feedback": true
+          },
+          {
+            "sourceNode": 3,
+            "destNode": 4,
+            "kind": "Audio",
+            "feedback": false
+          }
+        ]
+      },
+      "atoms": [
+        {
+          "id": "1",
+          "label": "Input",
+          "kind": "AudioInput",
+          "sourceNodeId": null,
+          "paramKey": null,
+          "confidence": 1,
+          "stage": {
+            "position": [
+              -1,
+              0,
+              0.35
+            ],
+            "sourceRect": null,
+            "positionAuthority": "pulp-graph-level-layout"
+          },
+          "graph": {
+            "nodeId": 1,
+            "kind": "AudioInput",
+            "level": 0,
+            "latencySamples": 0,
+            "feedbackIncoming": false,
+            "automationIncoming": false
+          },
+          "materialRegion": {
+            "bindingAuthority": "pulp-graph-runtime-node",
+            "coupling": 0.6599999999999999,
+            "propagation": 0.2,
+            "occlusionSeed": 0
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "kind": "knob",
+          "sourceNodeId": "figma-node-cutoff",
+          "paramKey": "filter.cutoff",
+          "confidence": 0.92,
+          "stage": {
+            "position": [
+              0.105,
+              0,
+              0.293333
+            ],
+            "sourceRect": [
+              410,
+              180,
+              64,
+              64
+            ],
+            "positionAuthority": "pulp-design-ir-rect"
+          },
+          "graph": {
+            "nodeId": 2,
+            "kind": "Processor",
+            "level": 1,
+            "latencySamples": 64,
+            "feedbackIncoming": true,
+            "automationIncoming": false
+          },
+          "materialRegion": {
+            "bindingAuthority": "pulp-design-ir-param-key",
+            "coupling": 0.8064,
+            "propagation": 0.42500000000000004,
+            "occlusionSeed": 0.345
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "kind": "xy_pad",
+          "sourceNodeId": "figma-node-feedback",
+          "paramKey": "delay.feedback",
+          "confidence": 0.84,
+          "stage": {
+            "position": [
+              -0.225,
+              0,
+              -0.233333
+            ],
+            "sourceRect": [
+              240,
+              310,
+              140,
+              120
+            ],
+            "positionAuthority": "pulp-design-ir-rect"
+          },
+          "graph": {
+            "nodeId": 3,
+            "kind": "Processor",
+            "level": 2,
+            "latencySamples": 128,
+            "feedbackIncoming": true,
+            "automationIncoming": true
+          },
+          "materialRegion": {
+            "bindingAuthority": "pulp-design-ir-param-key",
+            "coupling": 0.7727999999999999,
+            "propagation": 0.65,
+            "occlusionSeed": 0.47
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "kind": "AudioOutput",
+          "sourceNodeId": null,
+          "paramKey": null,
+          "confidence": 1,
+          "stage": {
+            "position": [
+              1,
+              0,
+              -0.35
+            ],
+            "sourceRect": null,
+            "positionAuthority": "pulp-graph-level-layout"
+          },
+          "graph": {
+            "nodeId": 4,
+            "kind": "AudioOutput",
+            "level": 3,
+            "latencySamples": 0,
+            "feedbackIncoming": false,
+            "automationIncoming": false
+          },
+          "materialRegion": {
+            "bindingAuthority": "pulp-graph-runtime-node",
+            "coupling": 0.6599999999999999,
+            "propagation": 0.5,
+            "occlusionSeed": 0
+          }
+        }
+      ],
+      "stageBounds": {
+        "radius": 1.059481,
+        "atomCount": 4
+      },
+      "falseCloseWarnings": []
+    },
+    "materialFrame": {
+      "schema": "kaminos.material-stage-frame.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "t": 1.25,
+      "materialAuthority": "stage-atoms-plus-lawful-audio-v0",
+      "sourceAccess": {
+        "schema": "kaminos.stage-audio-source-access.v0",
+        "sourceKind": "ccmixter",
+        "trackId": "ccmixter:test-vocal-001",
+        "title": "Lawful Test Vocal",
+        "artist": "Example Artist",
+        "license": "CC BY 3.0",
+        "attribution": "Example Artist - Lawful Test Vocal - CC BY 3.0",
+        "downloadUrl": "https://ccmixter.example.test/files/example/lawful-test-vocal.wav",
+        "localPath": "",
+        "receiptWarnings": [],
+        "accessClass": "open_transformable",
+        "analysisAllowed": true,
+        "transformAllowed": true,
+        "syncAllowed": true,
+        "publicDemoAllowed": true,
+        "analysisScope": "public_demo_with_attribution"
+      },
+      "materialAtoms": [
+        {
+          "id": "1",
+          "label": "Input",
+          "position": [
+            -1,
+            0,
+            0.35
+          ],
+          "field": {
+            "excitation": 0.537628,
+            "feedbackMemory": 0.1056,
+            "occlusion": 0.1056,
+            "heat": 0.448436,
+            "coupling": 0.66
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "position": [
+            0.105,
+            0,
+            0.293333
+          ],
+          "field": {
+            "excitation": 0.586789,
+            "feedbackMemory": 0.628933,
+            "occlusion": 0.4602,
+            "heat": 0.649932,
+            "coupling": 0.8064
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "position": [
+            -0.225,
+            0,
+            -0.233333
+          ],
+          "field": {
+            "excitation": 0.695506,
+            "feedbackMemory": 0.712267,
+            "occlusion": 0.5948,
+            "heat": 0.788708,
+            "coupling": 0.7728
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "position": [
+            1,
+            0,
+            -0.35
+          ],
+          "field": {
+            "excitation": 0.537628,
+            "feedbackMemory": 0.1056,
+            "occlusion": 0.1056,
+            "heat": 0.502436,
+            "coupling": 0.66
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "kind": "audio_source_access",
+          "accessClass": "open_transformable",
+          "analysisAllowed": true,
+          "trackId": "ccmixter:test-vocal-001"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "1",
+          "bindingAuthority": "pulp-graph-runtime-node",
+          "positionAuthority": "pulp-graph-level-layout"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "filter.cutoff",
+          "bindingAuthority": "pulp-design-ir-param-key",
+          "positionAuthority": "pulp-design-ir-rect"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "delay.feedback",
+          "bindingAuthority": "pulp-design-ir-param-key",
+          "positionAuthority": "pulp-design-ir-rect"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "4",
+          "bindingAuthority": "pulp-graph-runtime-node",
+          "positionAuthority": "pulp-graph-level-layout"
+        }
+      ]
+    },
+    "spatialization": {
+      "schema": "kaminos.material-spatialization.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "spatializationAuthority": "material-stage-atoms-v0",
+      "rawAudioFeatureUse": "ignored_after_material_frame",
+      "emitters": [
+        {
+          "id": "1",
+          "label": "Input",
+          "position": [
+            -1,
+            0,
+            0.35
+          ],
+          "send": {
+            "pan": -1,
+            "direct": 0.51208,
+            "reverb": 0.156032,
+            "spread": 0.379974,
+            "lowpassHz": 16775
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "position": [
+            0.105,
+            0,
+            0.293333
+          ],
+          "send": {
+            "pan": 0.105,
+            "direct": 0.465271,
+            "reverb": 0.492336,
+            "spread": 0.603075,
+            "lowpassHz": 12358
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "position": [
+            -0.225,
+            0,
+            -0.233333
+          ],
+          "send": {
+            "pan": -0.225,
+            "direct": 0.509347,
+            "reverb": 0.56464,
+            "spread": 0.679144,
+            "lowpassHz": 10889
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "position": [
+            1,
+            0,
+            -0.35
+          ],
+          "send": {
+            "pan": 1,
+            "direct": 0.51208,
+            "reverb": 0.156032,
+            "spread": 0.400494,
+            "lowpassHz": 16775
+          }
+        }
+      ]
+    },
+    "falseCloseChecks": {
+      "spotifyReferenceRejected": true,
+      "spatializerIgnoresRawAudio": true,
+      "stageHasAtoms": true
+    },
+    "operatorHandle": {
+      "sourcePanel": {
+        "primarySourceKind": "ccmixter",
+        "accessClass": "open_transformable",
+        "publicDemoAllowed": true
+      },
+      "nextVisibleRoute": "stage-atoms-browser-witness-v0"
+    }
+  },
+  "falseCloseChecks": {
+    "spotifyReferenceRejected": true,
+    "spatializerIgnoresRawAudio": true,
+    "stageHasAtoms": true
+  },
+  "lastTrustworthyEvidence": {
+    "sourceAccess": {
+      "schema": "kaminos.stage-audio-source-access.v0",
+      "sourceKind": "ccmixter",
+      "trackId": "ccmixter:test-vocal-001",
+      "title": "Lawful Test Vocal",
+      "artist": "Example Artist",
+      "license": "CC BY 3.0",
+      "attribution": "Example Artist - Lawful Test Vocal - CC BY 3.0",
+      "downloadUrl": "https://ccmixter.example.test/files/example/lawful-test-vocal.wav",
+      "localPath": "",
+      "receiptWarnings": [],
+      "accessClass": "open_transformable",
+      "analysisAllowed": true,
+      "transformAllowed": true,
+      "syncAllowed": true,
+      "publicDemoAllowed": true,
+      "analysisScope": "public_demo_with_attribution"
+    },
+    "fixture": "ccmixter"
+  }
+}

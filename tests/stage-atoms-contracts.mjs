@@ -1,0 +1,189 @@
+import assert from 'node:assert/strict';
+
+import {
+  STAGE_ATOMS_SCHEMA,
+  STAGE_ATOMS_ROUTE_IDENTITY,
+  MATERIAL_STAGE_FRAME_SCHEMA,
+  MATERIAL_SPATIALIZATION_SCHEMA,
+  buildStageAtoms,
+  buildStageAtomsWitness,
+  classifyAudioSourceAccess,
+  simulateStageMaterialFrame,
+  spatializeFromStageMaterial,
+} from '../stage-atoms-core.mjs';
+
+const ccmixterSource = classifyAudioSourceAccess({
+  sourceKind: 'ccmixter',
+  trackId: 'ccmixter:test-vocal-001',
+  title: 'Lawful Test Vocal',
+  artist: 'Example Artist',
+  license: 'CC BY 3.0',
+  attribution: 'Example Artist - Lawful Test Vocal - CC BY 3.0',
+  downloadUrl: 'https://ccmixter.example.test/files/example/lawful-test-vocal.wav',
+});
+
+assert.equal(ccmixterSource.schema, 'kaminos.stage-audio-source-access.v0');
+assert.equal(ccmixterSource.accessClass, 'open_transformable');
+assert.equal(ccmixterSource.analysisAllowed, true);
+assert.equal(ccmixterSource.transformAllowed, true);
+assert.equal(ccmixterSource.syncAllowed, true);
+assert.equal(ccmixterSource.publicDemoAllowed, true);
+assert.deepEqual(ccmixterSource.receiptWarnings, []);
+
+const bandcampSource = classifyAudioSourceAccess({
+  sourceKind: 'bandcamp_purchase',
+  trackId: 'bandcamp:private-taste-001',
+  title: 'Private Taste Track',
+  artist: 'Purchased Artist',
+  license: 'personal_purchase',
+  localPath: 'fixtures/audio/private-taste-track.flac',
+});
+
+assert.equal(bandcampSource.accessClass, 'private_local_taste');
+assert.equal(bandcampSource.analysisAllowed, true);
+assert.equal(bandcampSource.transformAllowed, true);
+assert.equal(bandcampSource.syncAllowed, true);
+assert.equal(bandcampSource.publicDemoAllowed, false);
+assert.ok(bandcampSource.receiptWarnings.includes('public_demo_requires_separate_permission'));
+
+const spotifyReference = classifyAudioSourceAccess({
+  sourceKind: 'spotify_reference',
+  trackId: 'spotify:track:example',
+  title: 'Reference Only',
+  artist: 'Streaming Artist',
+  license: 'streaming_reference',
+});
+
+assert.equal(spotifyReference.accessClass, 'reference_only');
+assert.equal(spotifyReference.analysisAllowed, false);
+assert.equal(spotifyReference.transformAllowed, false);
+assert.equal(spotifyReference.syncAllowed, false);
+assert.equal(spotifyReference.publicDemoAllowed, false);
+assert.ok(spotifyReference.receiptWarnings.includes('no_lawful_pcm_fuel'));
+
+const stage = buildStageAtoms({
+  sourceAccess: ccmixterSource,
+  design: {
+    schema: 'pulp.design-ir.stage-atoms-fixture.v0',
+    sourceAdapter: 'pulp-design-ir-derived-fixture',
+    controls: [
+      {
+        id: 'filter.cutoff',
+        kind: 'knob',
+        label: 'Cutoff',
+        paramKey: 'filter.cutoff',
+        rect: [410, 180, 64, 64],
+        confidence: 0.92,
+        sourceNodeId: 'figma-node-cutoff',
+      },
+      {
+        id: 'delay.feedback',
+        kind: 'xy_pad',
+        label: 'Feedback Space',
+        paramKey: 'delay.feedback',
+        rect: [240, 310, 140, 120],
+        confidence: 0.84,
+        sourceNodeId: 'figma-node-feedback',
+      },
+    ],
+    viewport: [800, 600],
+  },
+  graph: {
+    schema: 'pulp.graph-runtime-plan-derived-fixture.v0',
+    nodes: [
+      { id: 1, kind: 'AudioInput', label: 'Input', level: 0, latencySamples: 0 },
+      { id: 2, kind: 'Processor', label: 'Cutoff', level: 1, latencySamples: 64, paramKey: 'filter.cutoff' },
+      { id: 3, kind: 'Processor', label: 'Feedback Space', level: 2, latencySamples: 128, paramKey: 'delay.feedback' },
+      { id: 4, kind: 'AudioOutput', label: 'Output', level: 3, latencySamples: 0 },
+    ],
+    connections: [
+      { sourceNode: 1, destNode: 2, kind: 'Audio', feedback: false },
+      { sourceNode: 2, destNode: 3, kind: 'Automation', feedback: false },
+      { sourceNode: 3, destNode: 2, kind: 'Audio', feedback: true },
+      { sourceNode: 3, destNode: 4, kind: 'Audio', feedback: false },
+    ],
+  },
+});
+
+assert.equal(stage.schema, STAGE_ATOMS_SCHEMA);
+assert.equal(stage.routeIdentity, STAGE_ATOMS_ROUTE_IDENTITY);
+assert.equal(stage.sourceAccess.accessClass, 'open_transformable');
+assert.equal(stage.atoms.length, 4);
+assert.equal(stage.atoms.find(atom => atom.id === 'filter.cutoff').materialRegion.bindingAuthority, 'pulp-design-ir-param-key');
+assert.equal(stage.atoms.find(atom => atom.id === 'delay.feedback').graph.feedbackIncoming, true);
+assert.ok(stage.atoms.every(atom => atom.stage.position.length === 3), 'every atom has a 3D stage position');
+assert.ok(stage.atoms.every(atom => atom.stage.position.every(Number.isFinite)), 'stage positions are finite');
+assert.ok(stage.stageBounds.radius > 0.5, 'stage bounds expose a nonzero spatial extent');
+assert.deepEqual(stage.falseCloseWarnings, []);
+
+const materialFrame = simulateStageMaterialFrame(stage, {
+  t: 1.25,
+  audioFeatures: {
+    energy: 0.73,
+    onsetStrength: 0.62,
+    recurrenceConfidence: 0.48,
+    spectralCentroid: 0.66,
+  },
+});
+
+assert.equal(materialFrame.schema, MATERIAL_STAGE_FRAME_SCHEMA);
+assert.equal(materialFrame.routeIdentity, STAGE_ATOMS_ROUTE_IDENTITY);
+assert.equal(materialFrame.materialAuthority, 'stage-atoms-plus-lawful-audio-v0');
+assert.ok(materialFrame.materialAtoms.find(atom => atom.id === 'delay.feedback').field.feedbackMemory > 0.3);
+assert.ok(materialFrame.materialAtoms.find(atom => atom.id === 'filter.cutoff').field.excitation > 0.2);
+assert.ok(materialFrame.receipts.some(receipt => receipt.kind === 'audio_source_access'));
+assert.ok(materialFrame.receipts.some(receipt => receipt.kind === 'stage_atom_binding'));
+
+const spatial = spatializeFromStageMaterial(materialFrame, {
+  rawAudioFeatures: { energy: 0.0, onsetStrength: 0.0, spectralCentroid: 0.0 },
+});
+
+assert.equal(spatial.schema, MATERIAL_SPATIALIZATION_SCHEMA);
+assert.equal(spatial.spatializationAuthority, 'material-stage-atoms-v0');
+assert.equal(spatial.rawAudioFeatureUse, 'ignored_after_material_frame');
+assert.ok(spatial.emitters.length >= 2);
+assert.ok(spatial.emitters.some(emitter => emitter.id === 'delay.feedback' && emitter.send.reverb > 0.1));
+assert.ok(spatial.emitters.every(emitter => Number.isFinite(emitter.position[0]) && Number.isFinite(emitter.send.pan)));
+
+const spatialWithDifferentRawAudio = spatializeFromStageMaterial(materialFrame, {
+  rawAudioFeatures: { energy: 1.0, onsetStrength: 1.0, spectralCentroid: 1.0 },
+});
+
+assert.deepEqual(
+  spatialWithDifferentRawAudio.emitters,
+  spatial.emitters,
+  'spatialization must read the material frame, not raw audio features supplied at the final stage',
+);
+
+let rawAudioOnlyFailure;
+assert.throws(
+  () => buildStageAtomsWitness({
+    sourceAccess: spotifyReference,
+    design: { controls: [] },
+    graph: { nodes: [], connections: [] },
+    audioFeatures: { energy: 1 },
+  }),
+  error => {
+    rawAudioOnlyFailure = error;
+    return /analysis_not_allowed/.test(error.message);
+  },
+  /analysis_not_allowed/,
+);
+assert.equal(rawAudioOnlyFailure.code, 'analysis_not_allowed');
+
+const witness = buildStageAtomsWitness({
+  sourceAccess: ccmixterSource,
+  design: stage.sourceDesign,
+  graph: stage.sourceGraph,
+  audioFeatures: { energy: 0.73, onsetStrength: 0.62, recurrenceConfidence: 0.48, spectralCentroid: 0.66 },
+  t: 1.25,
+});
+
+assert.equal(witness.schema, 'kaminos.stage-atoms-witness.v0');
+assert.equal(witness.stage.schema, STAGE_ATOMS_SCHEMA);
+assert.equal(witness.materialFrame.schema, MATERIAL_STAGE_FRAME_SCHEMA);
+assert.equal(witness.spatialization.schema, MATERIAL_SPATIALIZATION_SCHEMA);
+assert.equal(witness.falseCloseChecks.spotifyReferenceRejected, true);
+assert.equal(witness.falseCloseChecks.spatializerIgnoresRawAudio, true);
+assert.equal(witness.operatorHandle.sourcePanel.primarySourceKind, 'ccmixter');
+assert.equal(witness.operatorHandle.nextVisibleRoute, 'stage-atoms-browser-witness-v0');

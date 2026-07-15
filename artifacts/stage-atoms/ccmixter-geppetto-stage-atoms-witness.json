@@ -1,0 +1,514 @@
+{
+  "schema": "kaminos.stage-atoms-witness-report.v0",
+  "status": "passed",
+  "requestedFixture": "ccmixter-geppetto",
+  "effectiveRoute": "stage-atoms-pulp-shaped-material-spatializer-v0",
+  "witness": {
+    "schema": "kaminos.stage-atoms-witness.v0",
+    "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+    "stage": {
+      "schema": "kaminos.stage-atoms.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "sourceAccess": {
+        "schema": "kaminos.stage-audio-source-access.v0",
+        "sourceKind": "ccmixter",
+        "trackId": "ccmixter:70553:file:127740",
+        "title": "Geppetto V4 (Pell + Stems) - Dry Main Acapella",
+        "artist": "Coruscate",
+        "license": "CC BY 2.5",
+        "attribution": "Coruscate - Geppetto V4 (Pell + Stems) - Dry Main Acapella - CC BY 2.5 - https://ccmixter.org/files/Coruscate/70553",
+        "downloadUrl": "https://ccmixter.org/content/Coruscate/Coruscate_-_Geppetto_V4_(Pell_Stems).mp3",
+        "sourcePageUrl": "https://ccmixter.org/files/Coruscate/70553",
+        "localPath": "",
+        "receiptWarnings": [
+          "direct_mp3_probe_returned_403_use_ccmixter_page_or_download_flow"
+        ],
+        "accessClass": "open_transformable",
+        "analysisAllowed": true,
+        "transformAllowed": true,
+        "syncAllowed": true,
+        "publicDemoAllowed": true,
+        "analysisScope": "public_demo_with_attribution"
+      },
+      "sourceDesign": {
+        "schema": "pulp.design-ir.stage-atoms-fixture.v0",
+        "sourceAdapter": "pulp-design-ir-derived-fixture",
+        "controls": [
+          {
+            "id": "filter.cutoff",
+            "kind": "knob",
+            "label": "Cutoff",
+            "paramKey": "filter.cutoff",
+            "rect": [
+              410,
+              180,
+              64,
+              64
+            ],
+            "confidence": 0.92,
+            "sourceNodeId": "figma-node-cutoff"
+          },
+          {
+            "id": "delay.feedback",
+            "kind": "xy_pad",
+            "label": "Feedback Space",
+            "paramKey": "delay.feedback",
+            "rect": [
+              240,
+              310,
+              140,
+              120
+            ],
+            "confidence": 0.84,
+            "sourceNodeId": "figma-node-feedback"
+          }
+        ],
+        "viewport": [
+          800,
+          600
+        ]
+      },
+      "sourceGraph": {
+        "schema": "pulp.graph-runtime-plan-derived-fixture.v0",
+        "nodes": [
+          {
+            "id": 1,
+            "kind": "AudioInput",
+            "label": "Input",
+            "level": 0,
+            "latencySamples": 0
+          },
+          {
+            "id": 2,
+            "kind": "Processor",
+            "label": "Cutoff",
+            "level": 1,
+            "latencySamples": 64,
+            "paramKey": "filter.cutoff"
+          },
+          {
+            "id": 3,
+            "kind": "Processor",
+            "label": "Feedback Space",
+            "level": 2,
+            "latencySamples": 128,
+            "paramKey": "delay.feedback"
+          },
+          {
+            "id": 4,
+            "kind": "AudioOutput",
+            "label": "Output",
+            "level": 3,
+            "latencySamples": 0
+          }
+        ],
+        "connections": [
+          {
+            "sourceNode": 1,
+            "destNode": 2,
+            "kind": "Audio",
+            "feedback": false
+          },
+          {
+            "sourceNode": 2,
+            "destNode": 3,
+            "kind": "Automation",
+            "feedback": false
+          },
+          {
+            "sourceNode": 3,
+            "destNode": 2,
+            "kind": "Audio",
+            "feedback": true
+          },
+          {
+            "sourceNode": 3,
+            "destNode": 4,
+            "kind": "Audio",
+            "feedback": false
+          }
+        ]
+      },
+      "atoms": [
+        {
+          "id": "1",
+          "label": "Input",
+          "kind": "AudioInput",
+          "sourceNodeId": null,
+          "paramKey": null,
+          "confidence": 1,
+          "stage": {
+            "position": [
+              -1,
+              0,
+              0.35
+            ],
+            "sourceRect": null,
+            "positionAuthority": "pulp-graph-level-layout"
+          },
+          "graph": {
+            "nodeId": 1,
+            "kind": "AudioInput",
+            "level": 0,
+            "latencySamples": 0,
+            "feedbackIncoming": false,
+            "automationIncoming": false
+          },
+          "materialRegion": {
+            "bindingAuthority": "pulp-graph-runtime-node",
+            "coupling": 0.6599999999999999,
+            "propagation": 0.2,
+            "occlusionSeed": 0
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "kind": "knob",
+          "sourceNodeId": "figma-node-cutoff",
+          "paramKey": "filter.cutoff",
+          "confidence": 0.92,
+          "stage": {
+            "position": [
+              0.105,
+              0,
+              0.293333
+            ],
+            "sourceRect": [
+              410,
+              180,
+              64,
+              64
+            ],
+            "positionAuthority": "pulp-design-ir-rect"
+          },
+          "graph": {
+            "nodeId": 2,
+            "kind": "Processor",
+            "level": 1,
+            "latencySamples": 64,
+            "feedbackIncoming": true,
+            "automationIncoming": false
+          },
+          "materialRegion": {
+            "bindingAuthority": "pulp-design-ir-param-key",
+            "coupling": 0.8064,
+            "propagation": 0.42500000000000004,
+            "occlusionSeed": 0.345
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "kind": "xy_pad",
+          "sourceNodeId": "figma-node-feedback",
+          "paramKey": "delay.feedback",
+          "confidence": 0.84,
+          "stage": {
+            "position": [
+              -0.225,
+              0,
+              -0.233333
+            ],
+            "sourceRect": [
+              240,
+              310,
+              140,
+              120
+            ],
+            "positionAuthority": "pulp-design-ir-rect"
+          },
+          "graph": {
+            "nodeId": 3,
+            "kind": "Processor",
+            "level": 2,
+            "latencySamples": 128,
+            "feedbackIncoming": true,
+            "automationIncoming": true
+          },
+          "materialRegion": {
+            "bindingAuthority": "pulp-design-ir-param-key",
+            "coupling": 0.7727999999999999,
+            "propagation": 0.65,
+            "occlusionSeed": 0.47
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "kind": "AudioOutput",
+          "sourceNodeId": null,
+          "paramKey": null,
+          "confidence": 1,
+          "stage": {
+            "position": [
+              1,
+              0,
+              -0.35
+            ],
+            "sourceRect": null,
+            "positionAuthority": "pulp-graph-level-layout"
+          },
+          "graph": {
+            "nodeId": 4,
+            "kind": "AudioOutput",
+            "level": 3,
+            "latencySamples": 0,
+            "feedbackIncoming": false,
+            "automationIncoming": false
+          },
+          "materialRegion": {
+            "bindingAuthority": "pulp-graph-runtime-node",
+            "coupling": 0.6599999999999999,
+            "propagation": 0.5,
+            "occlusionSeed": 0
+          }
+        }
+      ],
+      "stageBounds": {
+        "radius": 1.059481,
+        "atomCount": 4
+      },
+      "falseCloseWarnings": []
+    },
+    "materialFrame": {
+      "schema": "kaminos.material-stage-frame.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "t": 1.25,
+      "materialAuthority": "stage-atoms-plus-lawful-audio-v0",
+      "sourceAccess": {
+        "schema": "kaminos.stage-audio-source-access.v0",
+        "sourceKind": "ccmixter",
+        "trackId": "ccmixter:70553:file:127740",
+        "title": "Geppetto V4 (Pell + Stems) - Dry Main Acapella",
+        "artist": "Coruscate",
+        "license": "CC BY 2.5",
+        "attribution": "Coruscate - Geppetto V4 (Pell + Stems) - Dry Main Acapella - CC BY 2.5 - https://ccmixter.org/files/Coruscate/70553",
+        "downloadUrl": "https://ccmixter.org/content/Coruscate/Coruscate_-_Geppetto_V4_(Pell_Stems).mp3",
+        "sourcePageUrl": "https://ccmixter.org/files/Coruscate/70553",
+        "localPath": "",
+        "receiptWarnings": [
+          "direct_mp3_probe_returned_403_use_ccmixter_page_or_download_flow"
+        ],
+        "accessClass": "open_transformable",
+        "analysisAllowed": true,
+        "transformAllowed": true,
+        "syncAllowed": true,
+        "publicDemoAllowed": true,
+        "analysisScope": "public_demo_with_attribution"
+      },
+      "materialAtoms": [
+        {
+          "id": "1",
+          "label": "Input",
+          "position": [
+            -1,
+            0,
+            0.35
+          ],
+          "field": {
+            "excitation": 0.507084,
+            "feedbackMemory": 0.1144,
+            "occlusion": 0.0976,
+            "heat": 0.428556,
+            "coupling": 0.66
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "position": [
+            0.105,
+            0,
+            0.293333
+          ],
+          "field": {
+            "excitation": 0.553551,
+            "feedbackMemory": 0.657733,
+            "occlusion": 0.4522,
+            "heat": 0.632913,
+            "coupling": 0.8064
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "position": [
+            -0.225,
+            0,
+            -0.233333
+          ],
+          "field": {
+            "excitation": 0.662887,
+            "feedbackMemory": 0.741067,
+            "occlusion": 0.5868,
+            "heat": 0.772134,
+            "coupling": 0.7728
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "position": [
+            1,
+            0,
+            -0.35
+          ],
+          "field": {
+            "excitation": 0.507084,
+            "feedbackMemory": 0.1144,
+            "occlusion": 0.0976,
+            "heat": 0.482556,
+            "coupling": 0.66
+          }
+        }
+      ],
+      "receipts": [
+        {
+          "kind": "audio_source_access",
+          "accessClass": "open_transformable",
+          "analysisAllowed": true,
+          "trackId": "ccmixter:70553:file:127740"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "1",
+          "bindingAuthority": "pulp-graph-runtime-node",
+          "positionAuthority": "pulp-graph-level-layout"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "filter.cutoff",
+          "bindingAuthority": "pulp-design-ir-param-key",
+          "positionAuthority": "pulp-design-ir-rect"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "delay.feedback",
+          "bindingAuthority": "pulp-design-ir-param-key",
+          "positionAuthority": "pulp-design-ir-rect"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "4",
+          "bindingAuthority": "pulp-graph-runtime-node",
+          "positionAuthority": "pulp-graph-level-layout"
+        }
+      ]
+    },
+    "spatialization": {
+      "schema": "kaminos.material-spatialization.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "spatializationAuthority": "material-stage-atoms-v0",
+      "rawAudioFeatureUse": "ignored_after_material_frame",
+      "emitters": [
+        {
+          "id": "1",
+          "label": "Input",
+          "position": [
+            -1,
+            0,
+            0.35
+          ],
+          "send": {
+            "pan": -1,
+            "direct": 0.484813,
+            "reverb": 0.158336,
+            "spread": 0.374883,
+            "lowpassHz": 16838
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "position": [
+            0.105,
+            0,
+            0.293333
+          ],
+          "send": {
+            "pan": 0.105,
+            "direct": 0.440909,
+            "reverb": 0.50424,
+            "spread": 0.604672,
+            "lowpassHz": 12385
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "position": [
+            -0.225,
+            0,
+            -0.233333
+          ],
+          "send": {
+            "pan": -0.225,
+            "direct": 0.487845,
+            "reverb": 0.576544,
+            "spread": 0.68091,
+            "lowpassHz": 10915
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "position": [
+            1,
+            0,
+            -0.35
+          ],
+          "send": {
+            "pan": 1,
+            "direct": 0.484813,
+            "reverb": 0.158336,
+            "spread": 0.395403,
+            "lowpassHz": 16838
+          }
+        }
+      ]
+    },
+    "falseCloseChecks": {
+      "spotifyReferenceRejected": true,
+      "spatializerIgnoresRawAudio": true,
+      "stageHasAtoms": true
+    },
+    "operatorHandle": {
+      "sourcePanel": {
+        "primarySourceKind": "ccmixter",
+        "accessClass": "open_transformable",
+        "publicDemoAllowed": true
+      },
+      "nextVisibleRoute": "stage-atoms-browser-witness-v0"
+    }
+  },
+  "falseCloseChecks": {
+    "spotifyReferenceRejected": true,
+    "spatializerIgnoresRawAudio": true,
+    "stageHasAtoms": true
+  },
+  "lastTrustworthyEvidence": {
+    "sourceAccess": {
+      "schema": "kaminos.stage-audio-source-access.v0",
+      "sourceKind": "ccmixter",
+      "trackId": "ccmixter:70553:file:127740",
+      "title": "Geppetto V4 (Pell + Stems) - Dry Main Acapella",
+      "artist": "Coruscate",
+      "license": "CC BY 2.5",
+      "attribution": "Coruscate - Geppetto V4 (Pell + Stems) - Dry Main Acapella - CC BY 2.5 - https://ccmixter.org/files/Coruscate/70553",
+      "downloadUrl": "https://ccmixter.org/content/Coruscate/Coruscate_-_Geppetto_V4_(Pell_Stems).mp3",
+      "sourcePageUrl": "https://ccmixter.org/files/Coruscate/70553",
+      "localPath": "",
+      "receiptWarnings": [
+        "direct_mp3_probe_returned_403_use_ccmixter_page_or_download_flow"
+      ],
+      "accessClass": "open_transformable",
+      "analysisAllowed": true,
+      "transformAllowed": true,
+      "syncAllowed": true,
+      "publicDemoAllowed": true,
+      "analysisScope": "public_demo_with_attribution"
+    },
+    "fixture": "ccmixter-geppetto"
+  }
+}
