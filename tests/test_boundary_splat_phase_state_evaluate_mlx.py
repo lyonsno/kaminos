@@ -1,7 +1,9 @@
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -202,6 +204,72 @@ class DestinationStateEvaluatorContracts(unittest.TestCase):
         self.assertIsNone(args.transport_model)
         self.assertFalse(hasattr(args, "max_pairs"))
         self.assertFalse(hasattr(args, "max_samples"))
+
+    def test_transport_comparison_main_completes_without_legacy_progress_fields(self):
+        frame = MODULE.CORE.index_frame(
+            np.zeros((1, 16), dtype=np.float32),
+            np.asarray([[0, 0, 0] + [1] * 9], dtype=np.float32),
+        )
+        comparison = {
+            "reference": frame,
+            "sourceReuse": frame,
+            "oracleDonor": frame,
+            "oraclePredicted": frame,
+            "learnedDonor": frame,
+            "learnedPredicted": frame,
+            "cohorts": np.asarray(["stable-q3"]),
+            "eligibleCohorts": ["stable-q3"],
+            "supportAccounting": {
+                "exactSupportCount": 1,
+                "learnedDonor": {"destinationCount": 1, "deathWouldHaveWonCount": 0},
+            },
+            "metrics": {
+                "oracleTransport": {"aggregate": {"predictionMse": 0.1}},
+                "learnedTransport": {"aggregate": {"predictionMse": 0.2}},
+            },
+        }
+        state_document = {"evaluationManifest": {"sha256": "a" * 64}}
+        transport_document = {}
+        receipt = {"path": "/model.json", "bytes": 1, "sha256": "b" * 64}
+        manifest_receipt = {
+            "path": "/evaluation.json",
+            "bytes": 1,
+            "sha256": "a" * 64,
+            "controlledStepDeltaMs": 160,
+        }
+        frame_documents = [{"id": "frame-0"}, {"id": "frame-1"}]
+        frames = {"frame-0": frame, "frame-1": frame}
+
+        with tempfile.TemporaryDirectory() as root:
+            with (
+                patch.object(MODULE, "file_identity", side_effect=[
+                    (state_document, receipt),
+                    (transport_document, {**receipt, "sha256": "c" * 64}),
+                ]),
+                patch.object(MODULE.CORE, "hydrate_frozen_destination_state_model_document", return_value=(object(), {})),
+                patch.object(MODULE.CORE, "validate_frozen_model_document", return_value={
+                    "objectiveFamily": MODULE.CORE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+                }),
+                patch.object(MODULE.CORE, "hydrate_frozen_model_document", return_value=(object(), np.zeros(64), np.ones(64))),
+                patch.object(MODULE.TRAINER, "load_corpus_manifest", return_value=(
+                    {}, frame_documents, frames, 1.0, manifest_receipt,
+                )),
+                patch.object(MODULE, "validate_route", return_value={
+                    "backend": "mlx", "device": "Device(gpu, 0)", "effectiveRunner": "/python", "fallbackReason": None,
+                }),
+                patch.object(MODULE, "build_transport_comparison_pair_payload", return_value=comparison),
+            ):
+                MODULE.main([
+                    "--model", "/state-model.json",
+                    "--transport-model", "/transport-model.json",
+                    "--evaluation-manifest", "/evaluation.json",
+                    "--out-dir", root,
+                ])
+                report = json.loads((Path(root) / "destination-state-evaluation.json").read_text())
+
+        self.assertEqual(report["schema"], MODULE.TRANSPORT_COMPARISON_SCHEMA)
+        self.assertEqual(report["status"], "completed")
+        self.assertEqual(report["temporal"]["evaluatedPairCount"], 1)
 
 
 if __name__ == "__main__":

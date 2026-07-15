@@ -671,8 +671,14 @@ def main(argv=None):
                 "lastCompletedPair": step,
                 "lastTargetFrameId": target_document["id"],
                 "lastExactSupportCount": accounting["exactSupportCount"],
-                "lastLearnedUpdatedCount": accounting["learnedUpdatedCount"],
             })
+            if args.transport_model:
+                last_trustworthy.update({
+                    "lastLearnedDonorDestinationCount": accounting["learnedDonor"]["destinationCount"],
+                    "lastDeathWouldHaveWonCount": accounting["learnedDonor"]["deathWouldHaveWonCount"],
+                })
+            else:
+                last_trustworthy["lastLearnedUpdatedCount"] = accounting["learnedUpdatedCount"]
         expected_pairs = len(frame_documents) - 1
         if len(pairs) != expected_pairs:
             raise ValueError(f"destination-state evaluation is partial: {len(pairs)}/{expected_pairs}")
