@@ -383,17 +383,17 @@
         now: manifest.sampleNowMs,
         sameStateCaptureId: `${manifest.captureId}:${compositionRequested}`,
         includePixelEvidence: true,
-        includeFeatureRgba: true,
+        includeFeatureEvidence: true,
       });
       const compositionEffective = receipt?.boundarySplatCompositionEffective;
       if (receipt?.ok !== true) throw new Error(`held-render-rejected:${JSON.stringify(receipt)}`);
       if (compositionEffective !== compositionRequested) {
         throw new Error(`composition-substitution:${compositionRequested}/${compositionEffective || 'missing'}`);
       }
-      if (!receipt.renderTargetPixelEvidence || receipt.renderTargetPixelEvidence.nonBackgroundPixelCount <= 0) {
+      if (receipt.renderTargetPixelEvidence?.materialEvidence !== true) {
         throw new Error(`held-render-target-blank:${JSON.stringify(receipt.renderTargetPixelEvidence || null)}`);
       }
-      if (!receipt.featureCaptureSmokeAuthority || receipt.featureCaptureSmokeAuthority.nonZeroCount <= 0) {
+      if (receipt.featureCaptureSmokeAuthority?.materialEvidence !== true) {
         throw new Error(`held-raymarch-smoke-authority-blank:${JSON.stringify(receipt.featureCaptureSmokeAuthority || null)}`);
       }
       if (receipt.renderBindingIdentity?.fluidSha256 !== importReceipt.fluidSha256) {

@@ -58,8 +58,8 @@ assert.match(witness, /panelEvidence/, 'witness records panel-local visual evide
 assert.match(witness, /dSmokeProbe[\s\S]*edgeMean/, 'witness measures local smoke contribution inside D');
 assert.match(witness, /fluidChannelStatistics[\s\S]*smokeDensity[\s\S]*nonZeroCount/, 'witness requires nonzero smoke in the admitted held source');
 assert.match(witness, /renderBindingIdentity[\s\S]*fluidSha256/, 'witness requires D to consume the checksum-bound imported buffer');
-assert.match(witness, /renderTargetPixelEvidence[\s\S]*nonBackgroundPixelCount/, 'witness requires native D target pixels');
-assert.match(witness, /featureCaptureSmokeAuthority[\s\S]*nonZeroCount/, 'witness requires direct shader smoke-authority evidence');
+assert.match(witness, /renderTargetPixelEvidence[\s\S]*materialEvidence/, 'witness requires a distributed native D target signal');
+assert.match(witness, /featureCaptureSmokeAuthority[\s\S]*materialEvidence/, 'witness requires distributed direct shader smoke authority');
 assert.doesNotMatch(witness, /panelEvidence\.dSmokeProbe\.edgeMean\s*>/, 'smooth smoke cannot fail solely because it lacks a hard screenshot edge');
 assert.match(witness, /mountRegistered/, 'witness rejects an unregistered held-source mount');
 assert.match(witness, /failurePhase/, 'pre-capture failures retain their phase');

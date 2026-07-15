@@ -273,8 +273,8 @@
           && state.children.d.manifestSha256Effective === manifestSha256Requested
           && state.children.d.fluidChannelStatistics?.smokeDensity?.nonZeroCount > 0
           && state.children.d.renderBindingIdentity?.fluidSha256 === state.source.fluidSha256Requested
-          && state.children.d.renderTargetPixelEvidence?.nonBackgroundPixelCount > 0
-          && state.children.d.featureCaptureSmokeAuthority?.nonZeroCount > 0
+          && state.children.d.renderTargetPixelEvidence?.materialEvidence === true
+          && state.children.d.featureCaptureSmokeAuthority?.materialEvidence === true
           && state.source.mountRegistered;
         if (running) {
           state.status = 'running';

@@ -16,6 +16,8 @@ function extractFunction(source, name) {
 const summarizeHeldFluidChannelStatistics = extractFunction(core, 'summarizeHeldFluidChannelStatistics');
 const summarizeHeldRenderPixels = extractFunction(core, 'summarizeHeldRenderPixels');
 const summarizeHeldFeatureSmokeAuthority = extractFunction(core, 'summarizeHeldFeatureSmokeAuthority');
+const heldRenderTargetEvidenceIsMaterial = extractFunction(core, 'heldRenderTargetEvidenceIsMaterial');
+const heldSmokeAuthorityEvidenceIsMaterial = extractFunction(core, 'heldSmokeAuthorityEvidenceIsMaterial');
 
 const fluid = new Float32Array(3 * 16);
 fluid[4] = 0;
@@ -56,6 +58,24 @@ assert.deepEqual(featureStats, {
   sum: 40,
   mean: 40 / 3,
 });
+assert.equal(heldRenderTargetEvidenceIsMaterial({
+  pixelCount: 10000,
+  nonBackgroundPixelCount: 1,
+  luminanceStdDev: 8,
+  luminanceRange: 80,
+}), false, 'one stray target pixel cannot satisfy the render evidence floor');
+assert.equal(heldSmokeAuthorityEvidenceIsMaterial({
+  sampleCount: 10000,
+  nonZeroCount: 1,
+  max: 255,
+  mean: 255 / 10000,
+}), false, 'one stray smoke-authority sample cannot satisfy the shader evidence floor');
+assert.equal(heldSmokeAuthorityEvidenceIsMaterial({
+  sampleCount: 10000,
+  nonZeroCount: 100,
+  max: 32,
+  mean: 0.32,
+}), true, 'distributed shader smoke authority satisfies the material evidence floor');
 
 assert.match(
   core,
@@ -74,8 +94,14 @@ assert.match(
 );
 assert.match(
   core,
-  /featureCaptureSmokeAuthority[\s\S]*summarizeHeldFeatureSmokeAuthority/,
+  /summarizeHeldFeatureSmokeAuthority[\s\S]*featureCaptureSmokeAuthority[\s\S]*featureCapture\?\.summary/,
   'the frozen receipt distinguishes shader-sampled smoke authority from generic scene pixels',
+);
+assert.match(core, /includeFeatureEvidence/, 'frozen capture supports summary-only shader feature evidence');
+assert.match(
+  core,
+  /readTextureRgba8[\s\S]*includeRgba[\s\S]*summary[\s\S]*rgba:\s*includeRgba\s*\?\s*Array\.from\(rgba\)\s*:\s*null/,
+  'summary-only feature capture does not retain a full JS number-array copy',
 );
 assert.match(
   core,
@@ -83,7 +109,8 @@ assert.match(
   'the frozen receipt names the effective imported fluid binding consumed by the raymarch',
 );
 assert.match(viewer, /includePixelEvidence:\s*true/, 'the held viewer requests native render-target evidence');
-assert.match(viewer, /includeFeatureRgba:\s*true/, 'the held viewer requests shader-material feature evidence');
+assert.match(viewer, /includeFeatureEvidence:\s*true/, 'the held viewer requests summary-only shader-material feature evidence');
+assert.doesNotMatch(viewer, /includeFeatureRgba:\s*true/, 'the held viewer does not allocate raw feature RGBA it never consumes');
 assert.match(
   viewer,
   /fluidChannelStatistics\?\.smokeDensity[\s\S]*nonZeroCount[\s\S]*held-import-smoke-density-blank/,
@@ -91,12 +118,12 @@ assert.match(
 );
 assert.match(
   viewer,
-  /renderTargetPixelEvidence[\s\S]*nonBackgroundPixelCount[\s\S]*held-render-target-blank/,
+  /renderTargetPixelEvidence[\s\S]*materialEvidence[\s\S]*held-render-target-blank/,
   'the held viewer rejects an encoded raymarch pass that produced only the clear color',
 );
 assert.match(
   viewer,
-  /featureCaptureSmokeAuthority[\s\S]*nonZeroCount[\s\S]*held-raymarch-smoke-authority-blank/,
+  /featureCaptureSmokeAuthority[\s\S]*materialEvidence[\s\S]*held-raymarch-smoke-authority-blank/,
   'the held viewer rejects scene pixels when the raymarch sampled no smoke authority',
 );
 

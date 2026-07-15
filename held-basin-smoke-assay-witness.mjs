@@ -371,12 +371,14 @@ function validateState(state) {
     state.source.fluidSha256Requested,
     'D raymarch did not consume the checksum-bound imported fluid buffer',
   );
-  assert.ok(
-    state.children.d.renderTargetPixelEvidence?.nonBackgroundPixelCount > 0,
+  assert.equal(
+    state.children.d.renderTargetPixelEvidence?.materialEvidence,
+    true,
     'D submitted render target contains only the clear color',
   );
-  assert.ok(
-    state.children.d.featureCaptureSmokeAuthority?.nonZeroCount > 0,
+  assert.equal(
+    state.children.d.featureCaptureSmokeAuthority?.materialEvidence,
+    true,
     'D scene pixels carry no shader-sampled smoke authority',
   );
 }

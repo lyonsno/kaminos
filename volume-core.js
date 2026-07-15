@@ -9574,6 +9574,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { sampleCount, nonZeroCount, max, sum, mean: sum / Math.max(1, sampleCount) };
   }
 
+  function heldRenderTargetEvidenceIsMaterial(evidence) {
+    const pixelCount = Math.max(0, Number(evidence?.pixelCount) || 0);
+    const nonBackgroundPixelCount = Math.max(0, Number(evidence?.nonBackgroundPixelCount) || 0);
+    const requiredCount = Math.max(64, Math.ceil(pixelCount * 0.001));
+    return pixelCount >= 64
+      && nonBackgroundPixelCount >= requiredCount
+      && Number(evidence?.luminanceStdDev) > 0.25
+      && Number(evidence?.luminanceRange) > 3;
+  }
+
+  function heldSmokeAuthorityEvidenceIsMaterial(evidence) {
+    const sampleCount = Math.max(0, Number(evidence?.sampleCount) || 0);
+    const nonZeroCount = Math.max(0, Number(evidence?.nonZeroCount) || 0);
+    const requiredCount = Math.max(64, Math.ceil(sampleCount * 0.001));
+    return sampleCount >= 64
+      && nonZeroCount >= requiredCount
+      && Number(evidence?.max) >= 2
+      && Number(evidence?.mean) >= 0.001;
+  }
+
   function fullFieldImportFailure(failurePhase, reason, extra = {}) {
     const failed = {
       schema: FULL_FIELD_IMPORT_IDENTITY,
@@ -11245,7 +11265,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
-  async function readTextureRgba8(texture, width, height, label = 'kaminos rgba8 texture readback') {
+  async function readTextureRgba8(texture, width, height, label = 'kaminos rgba8 texture readback', options = {}) {
     const bytesPerPixel = 4;
     const unpaddedBytesPerRow = width * bytesPerPixel;
     const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
@@ -11271,10 +11291,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     buffer.unmap();
     buffer.destroy();
+    const includeRgba = options.includeRgba !== false;
+    const summary = typeof options.summarize === 'function' ? options.summarize(rgba) : null;
     return {
       width,
       height,
-      rgba: Array.from(rgba),
+      rgba: includeRgba ? Array.from(rgba) : null,
+      summary,
       bytesPerRow,
       unpaddedBytesPerRow,
     };
@@ -12459,7 +12482,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
         recordBrowserResidualCost({ applied: false });
       }
-      if (options.includeFeatureRgba === true && !featureCaptureSourcePassApplied) {
+      const includeFeatureEvidence = options.includeFeatureEvidence === true;
+      if ((options.includeFeatureRgba === true || includeFeatureEvidence) && !featureCaptureSourcePassApplied) {
         ensureFrameTexture();
         ensureBrowserResidualFeatureTexture();
         encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
@@ -12497,22 +12521,34 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             const sourceStart = y * renderTargetBytesPerRow;
             rgba.set(mapped.subarray(sourceStart, sourceStart + state.width * 4), y * state.width * 4);
           }
-          renderTargetPixelEvidence = summarizeHeldRenderPixels(rgba, state.width, state.height);
+          const pixelSummary = summarizeHeldRenderPixels(rgba, state.width, state.height);
+          renderTargetPixelEvidence = {
+            ...pixelSummary,
+            materialEvidence: heldRenderTargetEvidenceIsMaterial(pixelSummary),
+          };
           renderTargetReadback.unmap();
         } finally {
           renderTargetReadback.destroy();
         }
       }
-      const featureCapture = featureCaptureSourcePassApplied && browserResidualFeatureTexture
+      const featureCaptureRequested = options.includeFeatureRgba === true || includeFeatureEvidence;
+      const featureCapture = featureCaptureRequested && featureCaptureSourcePassApplied && browserResidualFeatureTexture
         ? await readTextureRgba8(
           browserResidualFeatureTexture,
           state.width,
           state.height,
-          'kaminos residual shader-material-authority feature readback'
+          'kaminos residual shader-material-authority feature readback',
+          {
+            includeRgba: options.includeFeatureRgba === true,
+            summarize: summarizeHeldFeatureSmokeAuthority,
+          },
         )
         : null;
-      const featureCaptureSmokeAuthority = featureCapture
-        ? summarizeHeldFeatureSmokeAuthority(Uint8Array.from(featureCapture.rgba))
+      const featureCaptureSmokeAuthority = featureCapture?.summary
+        ? {
+          ...featureCapture.summary,
+          materialEvidence: heldSmokeAuthorityEvidenceIsMaterial(featureCapture.summary),
+        }
         : null;
       const canvasRect = canvas.getBoundingClientRect();
       const importedFluidReceipt = importedFieldCustody ? state.fullFieldImportReceipt : null;
@@ -12542,6 +12578,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           channelLayout: 'radiance-fire-interface-smoke',
           source: 'browserResidualFeatureTexture',
           sourcePassApplied: featureCaptureSourcePassApplied,
+          rawRgbaIncluded: options.includeFeatureRgba === true,
         } : null,
         featureCaptureSmokeAuthority,
         featureCaptureSourcePassApplied,
