@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   FOREGROUND_KILN_HEARTBEAT_SCHEMA,
   createForegroundKilnHeartbeatEpisode,
+  firePresentationMismatchReasons,
   foregroundKilnStartAllowsPipeline,
 } from '../lib/foreground-kiln-heartbeat.mjs';
 
@@ -198,6 +199,89 @@ const learnedHybridPresentation = {
     },
   },
 };
+
+const boundedHoldoverPresentation = {
+  ...learnedHybridPresentation,
+  flameContinuityRequested: 'bounded-history-holdover',
+  flameContinuityEffective: 'bounded-history-holdover',
+  flameContinuityEffectiveReason: 'same-firing-alternate-hybrid-frames',
+  flameContinuityEvidence: {
+    schema: 'kaminos.single-flame-continuity-runtime.v0',
+    firingId: learnedHybridPresentation.firingId,
+    requested: 'bounded-history-holdover',
+    effective: 'bounded-history-holdover',
+    mode: 'holdover',
+    presentationOrdinal: 8,
+    selectedHistorySlot: {
+      slotIndex: 2,
+      historyAllocationGeneration: 4,
+      archiveWriteSequence: 32,
+      sourceCandidateGeneration: 32,
+    },
+    counts: { live: 4, holdover: 4, fallback: 0 },
+    renderFrameAdvanced: true,
+    sourceRenderFrameAdvanced: false,
+    simulatorStepAdvanced: false,
+  },
+};
+const boundedHoldoverExpectation = {
+  firingId: learnedHybridPresentation.firingId,
+  flameContinuityRequested: 'bounded-history-holdover',
+  requireFlameContinuityEvidence: true,
+};
+assert.deepEqual(
+  firePresentationMismatchReasons(boundedHoldoverExpectation, boundedHoldoverPresentation),
+  [],
+  'a complete same-firing held-frame receipt must survive foreground validation',
+);
+assert.ok(
+  firePresentationMismatchReasons(boundedHoldoverExpectation, {
+    ...boundedHoldoverPresentation,
+    flameContinuityEvidence: {
+      ...boundedHoldoverPresentation.flameContinuityEvidence,
+      sourceRenderFrameAdvanced: true,
+    },
+  }).includes('holdover-evidence-incomplete'),
+  'foreground validation must reject a held frame that advanced the source render clock',
+);
+const boundedFallbackPresentation = {
+  ...boundedHoldoverPresentation,
+  flameContinuityEvidence: {
+    ...boundedHoldoverPresentation.flameContinuityEvidence,
+    mode: 'live',
+    selectedHistorySlot: null,
+    counts: { live: 5, holdover: 4, fallback: 1 },
+    fallbackReason: 'holdover-exhausted',
+    renderFrameAdvanced: true,
+    sourceRenderFrameAdvanced: true,
+    simulatorStepAdvanced: true,
+  },
+};
+assert.deepEqual(
+  firePresentationMismatchReasons(boundedHoldoverExpectation, boundedFallbackPresentation),
+  [],
+  'a fail-closed live frame must remain valid when its fallback and actual clock movement are explicit',
+);
+assert.ok(
+  firePresentationMismatchReasons(boundedHoldoverExpectation, {
+    ...boundedFallbackPresentation,
+    flameContinuityEvidence: {
+      ...boundedFallbackPresentation.flameContinuityEvidence,
+      simulatorStepAdvanced: false,
+    },
+  }).includes('live-continuity-evidence-incomplete'),
+  'foreground validation must reject a purported live simulation frame that did not advance the simulator',
+);
+assert.ok(
+  firePresentationMismatchReasons(boundedHoldoverExpectation, {
+    ...boundedFallbackPresentation,
+    flameContinuityEvidence: {
+      ...boundedFallbackPresentation.flameContinuityEvidence,
+      fallbackReason: null,
+    },
+  }).includes('fallback-evidence-incomplete'),
+  'foreground validation must reject a nonzero fallback count without a named failure reason',
+);
 
 function episodeHarness({
   effectiveBudget = budget,

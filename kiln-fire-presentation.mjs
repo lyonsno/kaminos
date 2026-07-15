@@ -64,6 +64,10 @@ function cloneLayer(value) {
   return clone;
 }
 
+function cloneFlameContinuityEvidence(value) {
+  return value && typeof value === 'object' ? structuredClone(value) : null;
+}
+
 export function createKilnFirePresentation({ firingId, state } = {}) {
   const exactId = exactFiringId(firingId);
   const effectiveHybrid = hybridEffective(state);
@@ -93,6 +97,10 @@ export function createKilnFirePresentation({ firingId, state } = {}) {
     candidateOverflow: finiteOrNull(state?.boundarySplatOverflowCount),
     candidateCopyBytes: finiteOrNull(state?.boundarySplatCopyBytesThisFrame),
     fallbackReason,
+    flameContinuityRequested: state?.flameContinuityRequested || 'live-every-frame',
+    flameContinuityEffective: state?.flameContinuityEffective || 'live-every-frame',
+    flameContinuityEffectiveReason: state?.flameContinuityEffectiveReason || 'unspecified',
+    flameContinuityEvidence: cloneFlameContinuityEvidence(state?.flameContinuityEvidence),
     hybridSplatSmokeCompositorIdentity: state?.hybridSplatSmokeCompositorIdentity || null,
     hybridSplatSmokeApproximation: state?.hybridSplatSmokeApproximation || null,
     splatDepthConditionedSmokeSplit: state?.splatDepthConditionedSmokeSplit || null,
@@ -109,8 +117,8 @@ export function createKilnFirePresentation({ firingId, state } = {}) {
   };
 }
 
-export function createExpectedHybridKilnFirePresentation({ firingId, learnedModelIdentity } = {}) {
-  return {
+export function createExpectedHybridKilnFirePresentation({ firingId, learnedModelIdentity, flameContinuityRequested = null } = {}) {
+  const expected = {
     firingId: exactFiringId(firingId),
     effectiveMode: HYBRID_KILN_FIRE_PRESENTATION_MODE,
     flameRendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
@@ -137,10 +145,46 @@ export function createExpectedHybridKilnFirePresentation({ firingId, learnedMode
     requireNonEmptyCandidateSet: true,
     requireFireEpisodeHooks: true,
   };
+  if (flameContinuityRequested) {
+    expected.flameContinuityRequested = flameContinuityRequested;
+    expected.requireFlameContinuityEvidence = true;
+  }
+  return expected;
+}
+
+function flameContinuityEvidenceReady(presentation, requested) {
+  if (!requested) return true;
+  const continuity = presentation?.flameContinuityEvidence;
+  const counts = continuity?.counts;
+  if (presentation?.flameContinuityRequested !== requested
+    || continuity?.schema !== 'kaminos.single-flame-continuity-runtime.v0'
+    || continuity?.firingId !== presentation?.firingId
+    || continuity?.requested !== requested
+    || continuity?.effective !== presentation?.flameContinuityEffective
+    || !['live', 'holdover'].includes(continuity?.mode)
+    || !Number.isFinite(counts?.live)
+    || !Number.isFinite(counts?.holdover)
+    || !Number.isFinite(counts?.fallback)) {
+    return false;
+  }
+  if (continuity.mode === 'holdover') {
+    return Number.isFinite(continuity.selectedHistorySlot?.slotIndex)
+      && Number.isFinite(continuity.selectedHistorySlot?.historyAllocationGeneration)
+      && Number.isFinite(continuity.selectedHistorySlot?.archiveWriteSequence)
+      && Number.isFinite(continuity.selectedHistorySlot?.sourceCandidateGeneration)
+      && continuity.renderFrameAdvanced === true
+      && continuity.sourceRenderFrameAdvanced === false
+      && continuity.simulatorStepAdvanced === false;
+  }
+  return continuity.renderFrameAdvanced === true
+    && continuity.sourceRenderFrameAdvanced === true
+    && continuity.simulatorStepAdvanced === true
+    && (counts.fallback === 0 || Boolean(continuity.fallbackReason));
 }
 
 export async function waitForHybridKilnFirePresentation({
   firingId,
+  flameContinuityRequested = null,
   readState,
   requestFrame = callback => requestAnimationFrame(callback),
   now = () => performance.now(),
@@ -172,11 +216,14 @@ export async function waitForHybridKilnFirePresentation({
     if (presentation.candidateCopyBytes > 0) {
       throw new Error(`Hybrid flame preview copied ${presentation.candidateCopyBytes} candidate bytes to the CPU`);
     }
-    if (presentation.effectiveMode === HYBRID_KILN_FIRE_PRESENTATION_MODE && candidateEvidencePresent) {
+    const continuityEvidencePresent = flameContinuityEvidenceReady(presentation, flameContinuityRequested);
+    if (presentation.effectiveMode === HYBRID_KILN_FIRE_PRESENTATION_MODE
+      && candidateEvidencePresent
+      && continuityEvidencePresent) {
       return presentation;
     }
     if (Number(now()) - startedAtMs >= timeout) {
-      throw new Error(`Hybrid flame preview timed out waiting for candidate evidence after ${timeout}ms`);
+      throw new Error(`Hybrid flame preview timed out waiting for candidate evidence and continuity evidence after ${timeout}ms`);
     }
     await new Promise(resolve => requestFrame(resolve));
   }

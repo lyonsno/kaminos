@@ -66,6 +66,34 @@ const hybridState = {
   boundarySplatCopyBytesThisFrame: 0,
   boundarySplatRadius: 0.8,
   boundarySplatSharpness: 6.5,
+  flameContinuityRequested: 'bounded-history-holdover',
+  flameContinuityEffective: 'bounded-history-holdover',
+  flameContinuityEffectiveReason: 'same-firing-alternate-hybrid-frames',
+  flameContinuityEvidence: {
+    schema: 'kaminos.single-flame-continuity-runtime.v0',
+    firingId,
+    requested: 'bounded-history-holdover',
+    effective: 'bounded-history-holdover',
+    mode: 'holdover',
+    presentationOrdinal: 6,
+    sourceGeneration: 31,
+    selectedHistorySlot: {
+      slotIndex: 1,
+      historyAllocationGeneration: 4,
+      archiveWriteSequence: 31,
+      sourceCandidateGeneration: 31,
+    },
+    simulatorStep: 33,
+    holdoverOrdinal: 2,
+    repeatedSlotCount: 0,
+    fallbackReason: null,
+    counts: { live: 3, holdover: 2, fallback: 0 },
+    renderFrameCount: 8,
+    renderFrameAdvanced: true,
+    sourceRenderFrameCount: 5,
+    sourceRenderFrameAdvanced: false,
+    simulatorStepAdvanced: false,
+  },
   boundarySplatGpuProfile: {
     identity: 'boundary-splat-stage-gpu-timestamp-profile-v0',
     timestampStatus: 'available',
@@ -101,6 +129,14 @@ assert.equal(presentation.raster.radius, 0.8);
 assert.equal(presentation.raster.sharpness, 6.5);
 assert.equal(presentation.timing.authority, 'boundary-splat-stage-gpu-timestamp-profile-v0');
 assert.deepEqual(presentation.fireEpisodeHooks, recordingHooks);
+assert.equal(presentation.flameContinuityRequested, 'bounded-history-holdover');
+assert.equal(presentation.flameContinuityEffective, 'bounded-history-holdover');
+assert.deepEqual(presentation.flameContinuityEvidence, hybridState.flameContinuityEvidence);
+assert.notEqual(presentation.flameContinuityEvidence, hybridState.flameContinuityEvidence);
+assert.notEqual(
+  presentation.flameContinuityEvidence.selectedHistorySlot,
+  hybridState.flameContinuityEvidence.selectedHistorySlot,
+);
 
 const fallback = createKilnFirePresentation({
   firingId,
@@ -118,6 +154,7 @@ assert.equal(fallback.fallbackReason, 'hybrid-attachments-unavailable');
 const expected = createExpectedHybridKilnFirePresentation({
   firingId,
   learnedModelIdentity: hybridState.boundarySplatAttributeModelIdentity,
+  flameContinuityRequested: 'bounded-history-holdover',
 });
 assert.equal(expected.firingId, firingId);
 assert.equal(expected.effectiveMode, 'learned-splat-flame-raymarched-smoke');
@@ -127,6 +164,8 @@ assert.equal(expected.requireCandidateEvidence, true);
 assert.equal(expected.requireZeroCandidateCopy, true);
 assert.equal(expected.requireNonEmptyCandidateSet, true);
 assert.equal(expected.requireFireEpisodeHooks, true);
+assert.equal(expected.flameContinuityRequested, 'bounded-history-holdover');
+assert.equal(expected.requireFlameContinuityEvidence, true);
 assert.equal(expected.hybridSplatSmokeCompositorIdentity, hybridState.hybridSplatSmokeCompositorIdentity);
 assert.equal(expected.hybridSplatSmokeApproximation, hybridState.hybridSplatSmokeApproximation);
 assert.equal(expected.splatDepthConditionedSmokeSplit, hybridState.splatDepthConditionedSmokeSplit);
@@ -160,6 +199,27 @@ const readyPresentation = await waitForHybridKilnFirePresentation({
 });
 assert.equal(readyPresentation.candidateCount, 1200);
 assert.equal(readinessFrame, 2, 'readiness waits until the effective candidate set is nonempty');
+
+let continuityReadinessFrame = 0;
+const continuityReadyPresentation = await waitForHybridKilnFirePresentation({
+  firingId,
+  flameContinuityRequested: 'bounded-history-holdover',
+  readState: () => continuityReadinessFrame === 0
+    ? { ...hybridState, flameContinuityEvidence: null }
+    : hybridState,
+  requestFrame: callback => {
+    continuityReadinessFrame += 1;
+    callback(continuityReadinessFrame * 16);
+  },
+  now: () => continuityReadinessFrame * 16,
+  timeoutMs: 100,
+});
+assert.equal(continuityReadyPresentation.flameContinuityEvidence?.firingId, firingId);
+assert.equal(
+  continuityReadinessFrame,
+  1,
+  'hybrid startup must wait for same-firing continuity evidence before heartbeat verification starts',
+);
 
 await assert.rejects(
   () => waitForHybridKilnFirePresentation({
@@ -205,7 +265,7 @@ assert.match(
 );
 assert.match(
   ui,
-  /volumePrototype\.beginFireEpisode\(\{\s*firingId\s*\}\)[\s\S]*await waitForHybridKilnFirePresentation\([\s\S]*createForegroundKilnHeartbeatEpisode\(/,
+  /volumePrototype\.beginFireEpisode\(\{\s*firingId\s*\}\)[\s\S]*await waitForHybridKilnFirePresentation\(\{[\s\S]*flameContinuityRequested:\s*flameContinuityMode,[\s\S]*createForegroundKilnHeartbeatEpisode\(/,
   'hybrid readiness must be proven inside the exact firing before foreground verification starts',
 );
 

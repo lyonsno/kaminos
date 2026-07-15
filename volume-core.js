@@ -15,6 +15,7 @@ import {
   HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
 } from './hybrid-splat-smoke-compositor.mjs';
 import { createKilnFirePresentation } from './kiln-fire-presentation.mjs';
+import { createSingleFlameHistoryHoldoverDecision } from './kiln-flame-history-holdover.mjs';
 
 // Hybrid smoke is split during the raymarch around the transformed splat depth.
 
@@ -42,6 +43,8 @@ const BOUNDARY_SPLAT_HISTORY_ARCHIVE_CONTROL_BYTES = 32;
 const BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_U32 = 12;
 const BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_BYTES = BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_U32 * Uint32Array.BYTES_PER_ELEMENT;
 const BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_BYTES = BOUNDARY_SPLAT_HISTORY_SLOTS * BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_BYTES;
+const FLAME_CONTINUITY_BOUNDED_HISTORY = 'bounded-history-holdover';
+const FLAME_CONTINUITY_LIVE_EVERY_FRAME = 'live-every-frame';
 const BOUNDARY_SPLAT_PHASE_LAB_MODES = new Set([
   'shared-current',
   'same-history-slot',
@@ -247,6 +250,12 @@ function normalizeBoundarySplatHistoryFrameStride(value) {
   const requested = Math.round(Number(value));
   if (!Number.isFinite(requested)) return 1;
   return Math.max(1, Math.min(BOUNDARY_SPLAT_MAX_HISTORY_FRAME_STRIDE, requested));
+}
+
+function normalizeFlameContinuityMode(value) {
+  return String(value || '').toLowerCase().replace(/_/g, '-') === FLAME_CONTINUITY_BOUNDED_HISTORY
+    ? FLAME_CONTINUITY_BOUNDED_HISTORY
+    : FLAME_CONTINUITY_LIVE_EVERY_FRAME;
 }
 
 export function nextBoundarySplatHistoryAllocation(previous = {}, options = {}) {
@@ -5589,6 +5598,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     gpuPressure: clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0),
     runtimeQualityReason: String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified',
     runtimeQualityReceipt: runtimeQualityReceipt(controlsSnapshot),
+    flameContinuityRequested: normalizeFlameContinuityMode(controlsSnapshot.flameContinuityMode),
+    flameContinuityEffective: FLAME_CONTINUITY_LIVE_EVERY_FRAME,
+    flameContinuityEffectiveReason: 'no-active-firing',
+    flameContinuityPresentationOrdinal: 0,
+    flameContinuityDecision: null,
+    flameContinuityLastHoldoverDecision: null,
+    flameContinuityEvidence: null,
     tallPlumeReactionCadenceDebug: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive',
     tallPlumeFlameCutoffContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive',
     tallPlumeFlowShelfContract: normalizeVolumeScene(controlsSnapshot.volumeScene) === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive',
@@ -8656,6 +8672,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
     state.runtimeQualityReason = String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified';
     state.runtimeQualityReceipt = runtimeQualityReceipt(controlsSnapshot);
+    state.flameContinuityRequested = normalizeFlameContinuityMode(controlsSnapshot.flameContinuityMode);
     state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
     state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
     state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
@@ -10280,76 +10297,304 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.temporalHistoryFrames += 1;
   }
 
+  function flameContinuityFiringId() {
+    return String(fireEpisodeHooks.snapshot().firingId || '');
+  }
+
+  function singleFlameHistoryHoldoverEligible() {
+    state.flameContinuityRequested = normalizeFlameContinuityMode(controlsSnapshot.flameContinuityMode);
+    if (state.flameContinuityRequested !== FLAME_CONTINUITY_BOUNDED_HISTORY) {
+      state.flameContinuityEffective = FLAME_CONTINUITY_LIVE_EVERY_FRAME;
+      state.flameContinuityEffectiveReason = 'operator-requested-live-every-frame';
+      return false;
+    }
+    if (!flameContinuityFiringId()) {
+      state.flameContinuityEffective = FLAME_CONTINUITY_LIVE_EVERY_FRAME;
+      state.flameContinuityEffectiveReason = 'no-active-firing';
+      return false;
+    }
+    if (!boundarySplatHybridRequested()) {
+      state.flameContinuityEffective = FLAME_CONTINUITY_LIVE_EVERY_FRAME;
+      state.flameContinuityEffectiveReason = 'hybrid-flame-route-not-requested';
+      return false;
+    }
+    state.flameContinuityEffective = FLAME_CONTINUITY_BOUNDED_HISTORY;
+    state.flameContinuityEffectiveReason = 'same-firing-alternate-hybrid-frames';
+    return true;
+  }
+
+  function continuityPreviousDecision() {
+    const current = state.flameContinuityDecision;
+    const lastHoldover = state.flameContinuityLastHoldoverDecision;
+    if (!lastHoldover || lastHoldover.firingId !== flameContinuityFiringId()) return current;
+    return {
+      ...lastHoldover,
+      counts: current?.counts || lastHoldover.counts,
+    };
+  }
+
+  function recordFlameContinuityDecision(decision, evidence = null) {
+    state.flameContinuityDecision = decision;
+    if (decision?.mode === 'holdover') state.flameContinuityLastHoldoverDecision = decision;
+    state.flameContinuityEvidence = {
+      schema: 'kaminos.single-flame-continuity-runtime.v0',
+      firingId: flameContinuityFiringId() || null,
+      requested: state.flameContinuityRequested,
+      effective: state.flameContinuityEffective,
+      effectiveReason: state.flameContinuityEffectiveReason,
+      presentationOrdinal: state.flameContinuityPresentationOrdinal,
+      mode: decision?.mode || 'live',
+      sourceGeneration: decision?.selectedHistorySlot?.sourceCandidateGeneration ?? state.simStepCount,
+      selectedHistorySlot: decision?.selectedHistorySlot || null,
+      simulatorStep: state.simStepCount,
+      holdoverOrdinal: decision?.holdoverOrdinal || 0,
+      repeatedSlotCount: decision?.repeatedSlotCount || 0,
+      fallbackReason: decision?.fallbackReason || null,
+      counts: decision?.counts || { live: 0, holdover: 0, fallback: 0 },
+      ...(evidence || {}),
+    };
+    return decision;
+  }
+
+  function liveFlameContinuityDecision(evidence) {
+    return recordFlameContinuityDecision(createSingleFlameHistoryHoldoverDecision({
+      liveState: {
+        firingId: flameContinuityFiringId(),
+        simulatorStarved: false,
+      },
+      previousDecision: continuityPreviousDecision(),
+    }), evidence);
+  }
+
+  function failClosedFlameContinuityDecision(reason, attemptedDecision = null) {
+    const decision = createSingleFlameHistoryHoldoverDecision({
+      liveState: {
+        firingId: flameContinuityFiringId(),
+        simulatorStarved: true,
+      },
+      historySlots: [],
+      previousDecision: continuityPreviousDecision(),
+    });
+    decision.fallbackReason = String(reason || 'holdover-actuation-failed');
+    return recordFlameContinuityDecision(decision, {
+      attemptedHistorySlot: attemptedDecision?.selectedHistorySlot || null,
+      attemptedHoldoverOrdinal: attemptedDecision?.holdoverOrdinal || 0,
+      renderFrameCount: state.boundarySplatFrameCount,
+      renderFrameAdvanced: null,
+      sourceRenderFrameCount: state.frameCount,
+      sourceRenderFrameAdvanced: null,
+      simulatorStepAdvanced: null,
+    });
+  }
+
+  async function actuateSingleFlameHistoryHoldoverFrame(now) {
+    let metadata;
+    try {
+      metadata = await sampleBoundarySplatHistorySlotMetadata();
+    } catch (error) {
+      const decision = failClosedFlameContinuityDecision(`history-metadata-readback-failed:${error?.message || String(error)}`);
+      return { ok: false, decision, actuation: null };
+    }
+    const previousDecision = continuityPreviousDecision();
+    const decision = createSingleFlameHistoryHoldoverDecision({
+      liveState: {
+        firingId: flameContinuityFiringId(),
+        simulatorStarved: true,
+        sourceCandidateGeneration: metadata.currentSourceCandidateGeneration,
+        sourceSimStepCount: state.simStepCount,
+        renderFrameOrdinal: state.flameContinuityPresentationOrdinal,
+        historyAllocationGeneration: metadata.historyAllocationGeneration,
+        candidateCapacity: metadata.candidateCapacity,
+      },
+      historySlots: metadata.slots.map(slot => ({
+        ...slot,
+        candidateCapacity: metadata.candidateCapacity,
+      })),
+      previousDecision,
+      maxHoldoverAgeGenerations: Math.max(
+        1,
+        (metadata.historyDepth - 1) * normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride) + 1,
+      ),
+    });
+    if (decision.mode !== 'holdover') {
+      recordFlameContinuityDecision(decision, {
+        metadataIdentity: metadata.identity || null,
+        renderFrameCount: state.boundarySplatFrameCount,
+        sourceRenderFrameCount: state.frameCount,
+        simulatorStepAdvanced: true,
+      });
+      return { ok: false, decision, actuation: null };
+    }
+    let actuation;
+    try {
+      actuation = await renderBoundarySplatHistorySlotToCanvas({
+        slotIndex: decision.selectedHistorySlot.slotIndex,
+        historyAllocationGeneration: decision.selectedHistorySlot.historyAllocationGeneration,
+        archiveWriteSequence: decision.selectedHistorySlot.archiveWriteSequence,
+        requestedDrawCount: decision.selectedHistorySlot.effectiveDrawCount,
+        maxAgeGenerations: decision.sourceAgeGenerations,
+        holdoverOrdinal: decision.holdoverOrdinal,
+        repeatedSlotCount: decision.repeatedSlotCount,
+        now,
+        resumeRenderLoop: false,
+      });
+    } catch (error) {
+      const fallback = failClosedFlameContinuityDecision(`holdover-render-failed:${error?.message || String(error)}`, decision);
+      return { ok: false, decision: fallback, actuation: null };
+    }
+    if (
+      actuation?.ok !== true
+      || actuation.renderFrameAdvanced !== true
+      || actuation.sourceRenderFrameAdvanced !== false
+      || actuation.simulatorStepAdvanced !== false
+      || actuation.simulationSubmitted !== false
+      || actuation.sidecarSubmitted !== false
+      || actuation.compactionSubmitted !== false
+      || actuation.archiveSubmitted !== false
+    ) {
+      const reason = actuation?.reason || 'holdover-actuation-receipt-invalid';
+      const fallback = failClosedFlameContinuityDecision(reason, decision);
+      return { ok: false, decision: fallback, actuation };
+    }
+    recordFlameContinuityDecision(decision, {
+      metadataIdentity: metadata.identity || null,
+      rendererIdentity: actuation.identity,
+      flameAuthority: actuation.flameAuthority,
+      smokeAuthority: actuation.smokeAuthority,
+      physicalCommand: actuation.physicalCommand,
+      physicalCommandAgreement: actuation.physicalCommandAgreement,
+      renderFrameCount: actuation.renderFrameCount,
+      renderFrameAdvanced: actuation.renderFrameAdvanced,
+      sourceRenderFrameCount: actuation.sourceRenderFrameCount,
+      sourceRenderFrameAdvanced: actuation.sourceRenderFrameAdvanced,
+      simulatorStep: actuation.simStepCount,
+      simulatorStepAdvanced: actuation.simulatorStepAdvanced,
+      skip: {
+        simulationSubmitted: actuation.simulationSubmitted,
+        sidecarSubmitted: actuation.sidecarSubmitted,
+        majorantSubmitted: false,
+        compactionSubmitted: actuation.compactionSubmitted,
+        archiveSubmitted: actuation.archiveSubmitted,
+      },
+    });
+    return { ok: true, decision, actuation };
+  }
+
+  function renderLiveFrame(now, { preserveContinuityDecision = false } = {}) {
+    const cpuStart = performance.now();
+    const compositorFrameCountBefore = state.boundarySplatFrameCount;
+    const sourceRenderFrameCountBefore = state.frameCount;
+    const simStepCountBefore = state.simStepCount;
+    controls?.update?.();
+    updateUniforms(now);
+    const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
+    const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+    state.lookFreeze = lookFreeze;
+    if (lookFreeze) {
+      if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
+      state.lookFreezeSkippedFrames += 1;
+      state.majorantBuiltThisFrame = false;
+    } else {
+      state.lookFreezeFrame = null;
+      state.lookFreezeSkippedFrames = 0;
+      encodeSim(encoder);
+      encodeMajorant(encoder);
+    }
+    encodeBoundarySidecar(encoder);
+    encodeBoundarySplats(encoder);
+    const currentTexture = context.getCurrentTexture();
+    if (boundarySplatRequested()) {
+      const splatApplied = boundarySplatHybridRequested()
+        ? encodeBoundarySplatSmokeHybrid(encoder, currentTexture.createView())
+        : encodeBoundarySplatDraw(encoder, currentTexture.createView());
+      if (!splatApplied) {
+        encodeDraw(encoder, currentTexture.createView(), 'kaminos boundary splat explicit fallback raymarch');
+        state.volumeReconstructionStyle = 'boundary-splat-fallback-raymarch';
+        state.boundarySplatCompositionEffective = 'raymarch-fallback';
+        state.boundarySplatCompositionFallbackReason = state.boundarySplatCompositionFallbackReason
+          || state.boundarySplatFallbackReason
+          || 'requested-splat-route-unavailable';
+        emitStatus({
+          phase: 'boundary-splat-fallback',
+          reason: state.boundarySplatCompositionFallbackReason,
+        });
+      }
+      recordBrowserResidualCost({ applied: false });
+    } else if (browserResidualCanApply()) {
+      const sourceEncodeStart = performance.now();
+      ensureFrameTexture();
+      ensureBrowserResidualFeatureTexture();
+      encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
+      const sourcePassEncodeMs = performance.now() - sourceEncodeStart;
+      const residualEncodeStart = performance.now();
+      const residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
+      const residualPassEncodeMs = performance.now() - residualEncodeStart;
+      recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
+    } else {
+      encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
+      state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+      recordBrowserResidualCost({ applied: false });
+    }
+    encodeHistoryCopy(encoder, currentTexture);
+    encodeBoundarySplatTelemetry(encoder);
+    device.queue.submit([encoder.finish()]);
+    if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
+    commitPreviousViewProjection();
+    state.frameCount += 1;
+    state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
+    recordVolumeFrameTiming(now, performance.now() - cpuStart);
+    const continuityClockEvidence = {
+      renderFrameCountBefore: compositorFrameCountBefore,
+      renderFrameCount: state.boundarySplatFrameCount,
+      renderFrameAdvanced: state.boundarySplatFrameCount > compositorFrameCountBefore,
+      sourceRenderFrameCountBefore,
+      sourceRenderFrameCount: state.frameCount,
+      sourceRenderFrameAdvanced: state.frameCount !== sourceRenderFrameCountBefore,
+      simulatorStepBefore: simStepCountBefore,
+      simulatorStep: state.simStepCount,
+      simulatorStepAdvanced: state.simStepCount !== simStepCountBefore,
+    };
+    if (preserveContinuityDecision) {
+      state.flameContinuityEvidence = {
+        ...state.flameContinuityEvidence,
+        ...continuityClockEvidence,
+      };
+    } else {
+      liveFlameContinuityDecision(continuityClockEvidence);
+    }
+    if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
+  }
+
+  function stopVolumeRenderOnError(error) {
+    state.active = false;
+    state.error = error?.message || String(error);
+    canvas.classList.remove('active');
+    cancelAnimationFrame(raf);
+    emitStatus({ phase: 'render-error', error: state.error });
+  }
+
   function render(now) {
     if (!state.active) return;
+    state.flameContinuityPresentationOrdinal += 1;
+    const holdoverEligible = singleFlameHistoryHoldoverEligible();
+    const attemptHoldover = state.flameContinuityPresentationOrdinal % 2 === 0;
+    if (holdoverEligible && attemptHoldover) {
+      raf = 0;
+      void actuateSingleFlameHistoryHoldoverFrame(now)
+        .then(result => {
+          if (!result.ok && state.active) renderLiveFrame(now, { preserveContinuityDecision: true });
+        })
+        .then(() => {
+          if (state.active) raf = requestAnimationFrame(render);
+        })
+        .catch(stopVolumeRenderOnError);
+      return;
+    }
     raf = requestAnimationFrame(render);
     try {
-      const cpuStart = performance.now();
-      controls?.update?.();
-      updateUniforms(now);
-      const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
-      const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
-      state.lookFreeze = lookFreeze;
-      if (lookFreeze) {
-        if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
-        state.lookFreezeSkippedFrames += 1;
-        state.majorantBuiltThisFrame = false;
-      } else {
-        state.lookFreezeFrame = null;
-        state.lookFreezeSkippedFrames = 0;
-        encodeSim(encoder);
-        encodeMajorant(encoder);
-      }
-      encodeBoundarySidecar(encoder);
-      encodeBoundarySplats(encoder);
-      const currentTexture = context.getCurrentTexture();
-      if (boundarySplatRequested()) {
-        const splatApplied = boundarySplatHybridRequested()
-          ? encodeBoundarySplatSmokeHybrid(encoder, currentTexture.createView())
-          : encodeBoundarySplatDraw(encoder, currentTexture.createView());
-        if (!splatApplied) {
-          encodeDraw(encoder, currentTexture.createView(), 'kaminos boundary splat explicit fallback raymarch');
-          state.volumeReconstructionStyle = 'boundary-splat-fallback-raymarch';
-          state.boundarySplatCompositionEffective = 'raymarch-fallback';
-          state.boundarySplatCompositionFallbackReason = state.boundarySplatCompositionFallbackReason
-            || state.boundarySplatFallbackReason
-            || 'requested-splat-route-unavailable';
-          emitStatus({
-            phase: 'boundary-splat-fallback',
-            reason: state.boundarySplatCompositionFallbackReason,
-          });
-        }
-        recordBrowserResidualCost({ applied: false });
-      } else if (browserResidualCanApply()) {
-        const sourceEncodeStart = performance.now();
-        ensureFrameTexture();
-        ensureBrowserResidualFeatureTexture();
-        encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
-        const sourcePassEncodeMs = performance.now() - sourceEncodeStart;
-        const residualEncodeStart = performance.now();
-        const residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
-        const residualPassEncodeMs = performance.now() - residualEncodeStart;
-        recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
-      } else {
-        encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
-        state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
-        recordBrowserResidualCost({ applied: false });
-      }
-      encodeHistoryCopy(encoder, currentTexture);
-      encodeBoundarySplatTelemetry(encoder);
-      device.queue.submit([encoder.finish()]);
-      if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
-      commitPreviousViewProjection();
-      state.frameCount += 1;
-      state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
-      recordVolumeFrameTiming(now, performance.now() - cpuStart);
-      if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
-    } catch (err) {
-      state.active = false;
-      state.error = err?.message || String(err);
-      canvas.classList.remove('active');
-      cancelAnimationFrame(raf);
-      emitStatus({ phase: 'render-error', error: state.error });
+      renderLiveFrame(now);
+    } catch (error) {
+      stopVolumeRenderOnError(error);
     }
   }
 
@@ -12861,6 +13106,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
       state.runtimeQualityReason = String(controlsSnapshot.runtimeQualityReason || 'unspecified').slice(0, 96) || 'unspecified';
       state.runtimeQualityReceipt = runtimeQualityReceipt(controlsSnapshot);
+      state.flameContinuityRequested = normalizeFlameContinuityMode(controlsSnapshot.flameContinuityMode);
       state.tallPlumeReactionCadenceDebug = state.volumeScene === 'tall_plume' ? 'source-reaction-cadence-v0' : 'inactive';
       state.tallPlumeFlameCutoffContract = state.volumeScene === 'tall_plume' ? 'tall-plume-speed-cutoff-decoupled-v0' : 'inactive';
       state.tallPlumeFlowShelfContract = state.volumeScene === 'tall_plume' ? 'tall-plume-flow-shelf-mitigated-v0' : 'inactive';
@@ -12999,6 +13245,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     },
     beginFireEpisode(options) {
+      state.flameContinuityPresentationOrdinal = 0;
+      state.flameContinuityDecision = null;
+      state.flameContinuityLastHoldoverDecision = null;
+      state.flameContinuityEvidence = null;
       return fireEpisodeHooks.begin(options);
     },
     endFireEpisode(options) {

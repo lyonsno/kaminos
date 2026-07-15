@@ -59,6 +59,7 @@ const requiredControls = [
   ['crucible-viewport-route-select', 'The firing mouth must expose the intended output route'],
   ['crucible-viewport-profile-select', 'The firing mouth must expose the available firing behavior'],
   ['crucible-viewport-presentation-select', 'The firing mouth must expose the visible fire presentation'],
+  ['crucible-viewport-flame-continuity-select', 'The firing mouth must expose the flame continuity policy'],
   ['crucible-viewport-fire-button', 'The firing mouth must expose one obvious primary command'],
   ['crucible-viewport-cast-button', 'The cast tray must expose the finished cast action'],
   ['crucible-viewport-console-toggle', 'The active caddy must expose one plain-language control for reopening the full bench'],
@@ -86,8 +87,33 @@ assert.match(
 
 assert.match(
   html,
-  /function runCrucibleViewportFiring\([\s\S]*firePresentationMode[\s\S]*runKilnRouteBenchRoute\(route\.id,\s*profileId,\s*\{ firePresentationMode \}\)/,
-  'The central fire command must invoke the existing route runner with the effective route, profile, and visible presentation',
+  /function runCrucibleViewportFiring\([\s\S]*firePresentationMode[\s\S]*flameContinuityMode[\s\S]*runKilnRouteBenchRoute\(route\.id,\s*profileId,\s*\{ firePresentationMode, flameContinuityMode \}\)/,
+  'The central fire command must carry the effective route, profile, presentation, and flame continuity policy',
+);
+assert.match(
+  html,
+  />Keep the flame moving from recent frames</,
+  'bounded holdover must be offered in ordinary operator language',
+);
+assert.match(
+  html,
+  />Run every simulation frame</,
+  'the live-every-frame comparison must be offered in ordinary operator language',
+);
+assert.match(
+  html,
+  /volumePrototype\.setControls\(\{[\s\S]*flameContinuityMode[\s\S]*\}\)/,
+  'the same-firing start must apply the chosen continuity mode to the volume runtime',
+);
+assert.match(
+  html,
+  /function readVolumeControls\(\)[\s\S]*return backOffVolumeLegacyPyroControls\(applyVolumeRuntimeQualityLadder\(\{[\s\S]{0,500}flameContinuityMode:\s*crucibleViewportFlameContinuityMode,/,
+  'ordinary volume control synchronization must preserve the operator-selected continuity policy',
+);
+assert.match(
+  html,
+  /flameContinuityRequested:[\s\S]*flameContinuityEffective:/,
+  'the Crucible debug surface must distinguish requested and effective continuity routes',
 );
 assert.match(
   html,
