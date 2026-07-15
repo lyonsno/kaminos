@@ -14,7 +14,7 @@ const basinSmokePagePath = join(root, 'volume-basin-smoke.html');
 const settingsPresetPagePath = join(root, 'volume-settings-preset.html');
 const settingsPresetWitnessPath = join(root, 'volume-settings-preset-witness.mjs');
 const settingsPresetContractPath = join(root, 'volume-settings-preset-contract.mjs');
-const settingsPresetSchemaPath = join(root, 'volume-settings-preset-schema-v1.json');
+const settingsPresetSchemaPath = join(root, 'volume-settings-preset-schema-v2.json');
 assert.ok(existsSync(sceneOntologyPath), 'Volume scene authority lives in one shared ontology module');
 assert.ok(existsSync(basinSmokePagePath), 'Legacy basin smoke links have a compatibility redirect');
 assert.ok(existsSync(settingsPresetPagePath), 'Volume cockpit has a capture-backed settings-preset loader');
@@ -71,14 +71,14 @@ assert.match(
   /validateVolumeSettingsPresetDocument/,
   'the short preset loader delegates admission to the shared behavioral contract',
 );
-assert.equal(settingsPresetSchema.identity, 'kaminos-volume-settings-preset-schema-v1');
-assert.equal(settingsPresetSchema.controlCount, 191, 'canonical schema fixes the complete control count');
-assert.equal(settingsPresetSchema.controls.length, 191, 'canonical schema enumerates every counted control');
+assert.equal(settingsPresetSchema.identity, 'kaminos-volume-settings-preset-schema-v2');
+assert.equal(settingsPresetSchema.controlCount, 186, 'canonical schema fixes the actual volume-control count');
+assert.equal(settingsPresetSchema.controls.length, 186, 'canonical schema enumerates every actual volume control');
 assert.match(settingsPresetContract, /schema\.forbiddenPresetFields[\s\S]*settings preset contains forbidden runtime or replay state/, 'shared admission rejects forbidden replay/runtime payload fields');
 assert.match(
   settingsPresetContract,
-  /legacy-dom-settings-promoted-v0/,
-  'settings-only promotion is reported rather than impersonating a native prototype capture',
+  /shared-volume-settings-preset-v2/,
+  'shared settings authority is explicit instead of impersonating a replay capture',
 );
 assert.match(
   settingsPresetWitness,
@@ -118,45 +118,48 @@ assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoun
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireCleanBlue:\s*0\.64[\s\S]*reactionBoundaryFireSoot:\s*0\.64[\s\S]*reactionBoundaryFireYellow:\s*1\.02[\s\S]*reactionBoundaryFireWarmth:\s*0\.86/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted fuel color values');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*density:\s*6\.00[\s\S]*fire:\s*3\.50[\s\S]*radiance:\s*0\.00[\s\S]*absorption:\s*0\.30[\s\S]*glow:\s*0\.00[\s\S]*smoke:\s*2\.80/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted transport and smoke gains');
 assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*raySteps:\s*132[\s\S]*adaptiveRays:\s*1\.00[\s\S]*occupancySkip:\s*1\.00[\s\S]*majorantSkip:\s*0\.00[\s\S]*renderScale:\s*0\.65[\s\S]*resolution:\s*128[\s\S]*majorantGrid:\s*24/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted simulation and ray budget');
-assert.match(index, /id="volume-agent-camera-save"/, 'Volume cockpit exposes durable camera capture for agent replay');
-assert.match(index, /id="volume-agent-view-save"/, 'Volume cockpit exposes durable camera-plus-settings capture for agent replay');
-assert.match(index, /Save Agent View \+ Settings/, 'Volume cockpit labels the full replay capture path distinctly from camera-only capture');
-assert.match(index, /id="volume-settings-preset-save"/, 'Volume cockpit exposes one-action durable settings persistence and live loading');
-assert.match(
-  index,
-  /Save Settings Preset \+ Open Live/,
-  'Volume cockpit names settings persistence without implying field or renderer capture',
-);
-assert.doesNotMatch(index, /Save Basin \+ Open Smoke/, 'Settings persistence no longer presents itself as renderer smoke capture');
-assert.match(index, /settingsPresetCommandButton\.dataset\.commandWired = 'true'/, 'Volume cockpit reports when the preset command listener is actually wired');
-assert.match(settingsPresetWitness, /element\.dataset\.commandWired !== 'true'/, 'Settings witness rejects a button that is visible before its command is wired');
-assert.ok(
-  index.indexOf("settingsPresetCommandButton.dataset.commandWired = 'true'") < index.indexOf('function refreshVolumeReadout()'),
-  'Basin command wiring must precede heavyweight volume runtime/readout settlement',
-);
+for (const forbiddenId of [
+  'volume-agent-camera-save', 'volume-agent-view-save', 'volume-basin-copy', 'volume-basin-restore',
+  'volume-basin-slot', 'volume-basin-slot-save', 'volume-basin-slot-load', 'volume-look-library-kind',
+  'volume-look-library-entry', 'volume-look-library-name', 'volume-look-library-json',
+  'volume-look-library-save', 'volume-look-library-load', 'volume-look-library-export', 'volume-look-library-import',
+]) {
+  assert.doesNotMatch(index, new RegExp(`id="${forbiddenId}"`), `dangerous legacy persistence control is absent: ${forbiddenId}`);
+}
+assert.match(index, /id="settings-preset-label"/, 'Shared preset surface accepts a human label outside the canonical volume-control inventory');
+assert.match(index, /id="settings-preset-save"/, 'Shared preset surface exposes an exact Save command');
+assert.match(index, /id="settings-preset-select"/, 'Shared preset surface lists branch-independent presets');
+assert.match(index, /id="settings-preset-load-here"/, 'Shared preset surface exposes fresh-navigation loading in the current tab');
+assert.match(index, /id="settings-preset-open-fresh"/, 'Shared preset surface exposes fresh-navigation loading in a new tab');
+assert.match(index, /dataset\.commandWired = 'true'/, 'Shared preset buttons report when their commands are wired');
 assert.match(index, /id="volume-scene-authority"/, 'Volume cockpit exposes current scene authority beside the scene selector');
 assert.match(index, /Tall plume \(prototype\)/, 'Tall plume is visibly the prototype scene');
 assert.match(index, /Compact plume \(superseded\)/, 'Compact plume remains visibly compatibility-only');
 assert.match(index, /Canonical plume \(superseded\)/, 'Canonical plume remains visibly compatibility-only');
 assert.match(index, /Bonfire plume \(superseded\)/, 'Bonfire plume remains visibly compatibility-only');
-assert.match(index, /saveVolumeSettingsPresetAndOpen/, 'One-action settings persistence uses a named durable orchestration path');
+assert.match(index, /saveVolumeSettingsPreset/, 'Shared settings persistence uses a named durable orchestration path');
+assert.match(index, /refreshVolumeSettingsPresetList/, 'Shared settings persistence refreshes a server-backed index');
+assert.match(index, /navigateToSelectedVolumeSettingsPreset/, 'Shared settings loading uses one fresh-navigation path for current and new tabs');
+assert.match(index, /preset=\$\{encodeURIComponent\(entry\.presetId\)\}/, 'Load Here and Open Fresh navigate by immutable preset id rather than a mutable alias');
+assert.match(index, /validateVolumeSettingsPresetDocument[\s\S]*validateVolumeSettingsPresetTarget/, 'The ordinary live target imports exact preset admission');
+assert.match(index, /async function admitVolumeSettingsPresetRoute[\s\S]*validateVolumeSettingsPresetTarget\(receipt, params\)/, 'The ordinary live target re-reads and validates preset authority instead of trusting route text');
+assert.match(index, /async function initKaminosVolumeRoute\(\) \{[\s\S]*?await admitVolumeSettingsPresetRoute\(params\);[\s\S]*?routedBonfireAblationControls/, 'Preset admission completes before any route settings are applied');
 assert.match(index, /stateExclusions:[\s\S]*fluidField:\s*true[\s\S]*replayState:\s*true/, 'Settings preset records that runtime fields and replay state are excluded');
-assert.match(index, /const runtimeContext = settingsPreset \? \{\} : \{[\s\S]*volumeDebugState:[\s\S]*viewport:/, 'Settings preset omits runtime, camera, and viewport context instead of merely claiming exclusion');
-const settingsSaveBlock = index.match(/async function saveVolumeSettingsPresetAndOpen\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+assert.doesNotMatch(index, /const runtimeContext = settingsPreset/, 'Settings presets no longer share a replay/runtime capture builder');
+const settingsSaveBlock = index.match(/async function saveVolumeSettingsPreset\(\) \{[\s\S]*?\n\}/)?.[0] || '';
 assert.doesNotMatch(settingsSaveBlock, /sceneReceipt|boundarySplatMode|resolution/, 'Settings persistence has no scene, renderer, or grid admission gate');
-assert.match(index, /artifacts\/volume-captures/, 'Volume cockpit names the on-disk capture directory instead of requiring clipboard handoff');
-assert.match(index, /saveVolumeAgentCapture/, 'Volume cockpit has a named capture writer path for agents');
+assert.match(index, /\/api\/volume-settings-presets/, 'Volume cockpit uses the branch-independent settings store API');
 assert.match(index, /readVolumeDomControls/, 'Volume capture reads all live DOM volume controls, not only curated look fields');
 assert.match(index, /buildVolumeAgentCaptureRoute/, 'Volume capture serializes all live DOM controls into the replay route');
-assert.match(serve, /\/api\/volume-capture/, 'Local server exposes a volume capture write endpoint');
-assert.match(serve, /handle_volume_capture/, 'Local server handles durable volume capture writes explicitly');
-assert.match(serve, /volume-captures/, 'Local server writes volume captures under artifacts/volume-captures');
-assert.match(serve, /payload\.get\("kind"\) == "settings-preset"/, 'Server gives settings presets an explicit write contract');
+assert.match(serve, /--volume-settings-store/, 'Server accepts an explicit branch-independent preset-store path');
+assert.match(serve, /KAMINOS_VOLUME_SETTINGS_STORE/, 'Server has a configurable shared-store default');
+assert.match(serve, /\/api\/volume-settings-presets/, 'Local server exposes shared preset list and write endpoints');
+assert.match(serve, /\/api\/volume-settings-preset/, 'Local server exposes exact shared preset reads');
 assert.match(serve, /validate_volume_settings_preset_payload/, 'Server runs one exact settings-preset admission helper before writing');
 assert.match(serve, /volume-settings-preset\.html\?preset=/, 'Saved settings presets receive a short ordinary-live loader route');
 assert.match(serve, /settings preset requires exactly/, 'Server rejects incomplete settings presets');
 assert.match(serve, /settings preset must not contain runtime, renderer, camera, or replay state/, 'Server rejects settings payloads that smuggle runtime context behind exclusion flags');
-assert.match(serve, /volume-settings-preset-witness\.mjs --url/, 'Settings preset writes return the settings witness rather than the replay-capture witness');
+assert.match(serve, /os\.replace/, 'Shared preset writes use atomic replacement');
 assert.match(sceneOntology, /DEFAULT_VOLUME_SCENE\s*=\s*'tall_plume'/, 'Unsupported or missing scene requests default to the sole prototype');
 assert.match(sceneOntology, /tall_plume:[\s\S]*status:\s*'prototype'/, 'Scene ontology grants prototype authority only to tall plume');
 for (const scene of ['compact_plume', 'canonical_plume', 'bonfire_plume']) {
@@ -172,11 +175,11 @@ assert.match(settingsPresetWitness, /failurePhase/, 'Settings witness records it
 assert.match(settingsPresetWitness, /sourcePresetId/, 'Settings witness verifies durable preset identity at the live target');
 assert.match(settingsPresetWitness, /continuousSimStepDelta/, 'Settings witness rejects static live output');
 assert.match(settingsPresetWitness, /visualAuthority:\s*'not-evaluated-settings-persistence-only'/, 'Settings witness does not present ordinary-route screenshots as renderer evidence');
-assert.match(settingsPresetWitness, /window\.__kaminosSaveVolumeSettingsPresetAndOpen\(\)/, 'Settings witness invokes the exact UI command implementation');
+assert.match(settingsPresetWitness, /window\.__kaminosSaveVolumeSettingsPreset\(\)/, 'Settings witness invokes the exact shared-store UI command implementation');
 assert.match(settingsPresetWitness, /awaitPromise:\s*true/, 'Settings witness waits for the persistence receipt before following its popup');
 assert.match(settingsPresetWitness, /commandResult\.presetUrl/, 'Settings witness rejects command completion without a durable live route');
-assert.match(settingsPresetWitness, /commandDiagnostic[\s\S]*volume-agent-capture-state/, 'Settings witness preserves the operator-visible save failure when the command returns no artifact');
-assert.match(settingsPresetWitness, /'volumeDebugState'[\s\S]*Object\.hasOwn\(presetDocument\.capture, field\)/, 'Settings witness verifies runtime debug state is absent from the durable preset');
+assert.match(settingsPresetWitness, /commandDiagnostic[\s\S]*volume-settings-preset-state/, 'Settings witness preserves the operator-visible save failure when the command returns no artifact');
+assert.match(settingsPresetWitness, /'volumeDebugState'[\s\S]*Object\.hasOwn\(presetDocument\.preset, field\)/, 'Settings witness verifies runtime debug state is absent from the durable preset');
 assert.match(settingsPresetWitness, /status:\s*'failed'/, 'Settings witness writes a durable report when it fails before output');
 assert.match(volumeWitness, /--capture/, 'Volume witness accepts a saved capture path for replay');
 assert.match(volumeWitness, /isCaptureReplay/, 'Volume witness reports whether it replayed a saved capture');
@@ -203,7 +206,7 @@ assert.match(captureReplayEvidenceBody, /Buffer\.concat\(nativeRgbaChunks\)/, 'C
 assert.match(captureReplayEvidenceBody, /writeRgbaPng\(out,\s*nativeFrame\.width,\s*nativeFrame\.height,\s*nativeRgba\)/, 'Capture replay writes native renderer RGBA directly to the primary PNG artifact');
 assert.doesNotMatch(captureReplayEvidenceBody, /Page\.captureScreenshot/, 'Capture replay must not substitute a browser screenshot for native renderer pixels');
 assert.match(captureReplayEvidenceBody, /gpu-frame-texture-rgba8-readback/, 'Capture replay report names native GPU frame readback authority');
-assert.match(index, /name:\s*'Bonfire_a_la_ruffles'[\s\S]*TALL_PLUME_OPERATOR_PRESETS\.boundary_fire_bonfire_a_la_ruffles_0709/, 'built-in Bonfire_a_la_ruffles look library entry points at the Boundary Fire basin, not the stale Pyro Flow basin');
+assert.doesNotMatch(index, /BUILT_IN_VOLUME_LOOK_LIBRARY/, 'Retired partial look-library aliases are removed from the operator runtime');
 assert.match(index, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'bare smoke routes apply the current Pyro basin when no explicit scene or preset is routed');
 assert.match(index, /id="volume-boundary-sidecar-source"/, 'Boundary Fire tuning exposes a live/baked sidecar source selector');
 assert.match(index, /volume_boundary_sidecar_source/, 'Basin URLs preserve the boundary sidecar source control');
@@ -244,53 +247,9 @@ assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowCoolColor
 assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowHotColor:\s*'#ff320f'/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned Flow hot color');
 assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pressureMode:\s*'global-p3'/, 'Pyro Flow small-bonfire gamut basin preserves the Full P3 pressure solve for training pickup');
 assert.match(index, /id="volume-basin-bonfire-family"/, 'Volume cockpit exposes a one-click Pyro material bonfire family basin action');
-assert.match(index, /KAMINOS_VOLUME_BASIN_STORAGE_KEY/, 'Volume cockpit has a durable localStorage key for last-basin recovery');
-assert.match(index, /saveVolumeBasinSnapshot/, 'Volume cockpit autosaves current basin controls on slider changes');
-assert.match(index, /restoreVolumeBasinSnapshot/, 'Volume cockpit can restore the last autosaved basin after refresh');
-assert.match(index, /buildVolumeBasinUrl/, 'Volume cockpit can serialize current controls into a copyable basin URL');
-assert.match(index, /id="volume-basin-copy"/, 'Volume cockpit exposes a copy-basin URL action');
-assert.match(index, /id="volume-basin-restore"/, 'Volume cockpit exposes a restore-last-basin action');
-assert.match(index, /id="volume-basin-slot"/, 'Volume cockpit exposes named local basin slots');
-assert.match(index, /KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX/, 'Volume cockpit stores basin slots under a stable localStorage prefix');
-assert.match(index, /VOLUME_LOOK_LIBRARY_IDENTITY/, 'Volume cockpit has a stable JSON look-library identity');
-assert.match(index, /KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY/, 'Volume cockpit stores the editable JSON look library under a stable browser key');
-assert.match(index, /BUILT_IN_VOLUME_LOOK_LIBRARY/, 'Volume cockpit carries source-backed looks so fresh ports are not empty');
-assert.match(index, /exploding-jellow-fireball-motherfucker/, 'Source-backed look library exposes the operator-saved exploding jellow Pyro look');
-assert.match(index, /Bonfire_a_la_ruffles/, 'Source-backed look library exposes the operator-saved Bonfire a la Ruffles Pyro look');
-const bonfireLookBlock = index.match(/name:\s*'Bonfire_a_la_ruffles'[\s\S]*?sourceBacked:\s*true,[\s\S]*?\},\n\s*\],\n\s*firesim:/)?.[0] || '';
-assert.match(bonfireLookBlock, /TALL_PLUME_OPERATOR_PRESETS\.boundary_fire_bonfire_a_la_ruffles_0709/, 'Bonfire a la Ruffles aliases the current Boundary Fire basin instead of the stale Pyro Flow controls');
-assert.match(bonfireLookBlock, /boundaryFireAuthored:\s*true/, 'Bonfire a la Ruffles is marked as a Boundary Fire-authored source-backed look');
-assert.doesNotMatch(bonfireLookBlock, /pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles must not preserve the stale low Flow carrier gain');
-assert.doesNotMatch(bonfireLookBlock, /pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles must not preserve the stale old Radiance carrier gain');
-assert.match(index, /mergeVolumeLookLibraryWithBuiltIns/, 'Volume cockpit merges source-backed looks with browser-local saved looks');
-const mergeVolumeLookLibraryFn = index.match(/function mergeVolumeLookLibraryWithBuiltIns\(library = normalizeVolumeLookLibrary\(\)\) \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(mergeVolumeLookLibraryFn, /existing\?\.sourceBacked[\s\S]*continue/, 'Source-backed looks override stale same-name browser-local look shadows');
-const readVolumeLookLibraryFn = index.match(/function readVolumeLookLibrary\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(readVolumeLookLibraryFn, /mergeVolumeLookLibraryWithBuiltIns/, 'Reading the look library includes source-backed looks before refreshing the dropdown');
-assert.match(index, /PYRO_LOOK_FIELDS/, 'Volume cockpit defines a Pyro-only look field list');
-assert.match(index, /FIRESIM_LOOK_FIELDS/, 'Volume cockpit defines a FireSim look field list separate from render expense');
-assert.match(index, /id="volume-look-library-kind"/, 'Volume cockpit exposes a Pyro/FireSim library selector');
-assert.match(index, /id="volume-look-library-name"/, 'Volume cockpit exposes a named look-library entry field');
-assert.match(index, /id="volume-look-library-entry"/, 'Volume cockpit exposes a saved look-library entry selector');
-assert.match(index, /id="volume-look-library-json"/, 'Volume cockpit exposes an editable JSON import/export buffer');
-assert.match(index, /saveVolumeLookLibraryEntry/, 'Volume cockpit can save named Pyro/FireSim look-library entries');
-assert.match(index, /loadVolumeLookLibraryEntry/, 'Volume cockpit can load named Pyro/FireSim look-library entries');
-assert.match(index, /exportVolumeLookLibraryJson/, 'Volume cockpit can export the page JSON look library');
-assert.match(index, /importVolumeLookLibraryJson/, 'Volume cockpit can import the page JSON look library');
-const saveVolumeLookLibraryEntryFn = index.match(/function saveVolumeLookLibraryEntry\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(saveVolumeLookLibraryEntryFn, /saveVolumeBasinSnapshot\(`look-library-save-\$\{kind\}-\$\{name\}`\)/, 'Saving a named look also refreshes the full current basin snapshot');
-const loadVolumeLookLibraryEntryFn = index.match(/function loadVolumeLookLibraryEntry\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
-assert.match(loadVolumeLookLibraryEntryFn, /saveVolumeBasinSnapshot\(`look-library-load-\$\{kind\}-\$\{entry\.name\}`\)/, 'Loading a named look refreshes the full current basin snapshot after partial look controls apply');
-const applyBudgetControlsFn = index.match(/const applyBudgetControls = \(\) => \{([\s\S]*?)\n  \};/)?.[1] || '';
-assert.match(applyBudgetControlsFn, /saveVolumeBasinSnapshot\('budget-controls'\)/, 'Budget/gamut changes refresh the durable full basin snapshot instead of leaving restore state stale');
-assert.doesNotMatch(index, /LEGACY_BITE_STACK_DEFAULTS/, 'Look-library normalization must not rewrite saved Bite stack layers behind the operator');
-assert.doesNotMatch(index, /matchesLegacyBiteStackDefaults/, 'Look-library normalization must not infer old Bite defaults and zero authored-looking values');
-assert.doesNotMatch(index, /entry\.biteStackAuthored !== true[\s\S]*pyroBiteCore\s*=\s*0/, 'Look-library load/import must preserve explicit Bite core values even when older metadata is absent');
-const fireSimLookFields = index.match(/const FIRESIM_LOOK_FIELDS = \[([\s\S]*?)\];/);
-assert.ok(fireSimLookFields, 'FireSim look library exposes an inspectable field list');
-for (const forbidden of ['raySteps', 'adaptiveRays', 'occupancySkip', 'majorantSkip', 'majorantSmooth', 'majorantGuard', 'temporalAccum', 'temporalJitter', 'historyClamp', 'renderScale', 'resolution', 'majorantGrid', 'pressureMode', 'pressureTierOverlay', 'pressureTierLowerMax', 'pressureTierHeroMin', 'pressureTierHeroMax']) {
-  assert.doesNotMatch(fireSimLookFields[1], new RegExp(`'${forbidden}'`), `FireSim look presets must not save ${forbidden} expense/solve state`);
-}
+assert.doesNotMatch(index, /KAMINOS_VOLUME_BASIN_STORAGE_KEY|KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX/, 'Browser-local basin authority is removed');
+assert.doesNotMatch(index, /saveVolumeBasinSnapshot|restoreVolumeBasinSnapshot|copyVolumeBasinUrl/, 'Legacy basin persistence implementation is removed rather than hidden');
+assert.doesNotMatch(index, /KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY|saveVolumeLookLibraryEntry|loadVolumeLookLibraryEntry/, 'Partial browser-local look persistence is removed');
 assert.match(index, /id="volume-look-freeze"/, 'Volume look lab exposes a freeze control');
 assert.match(index, /pixel-stable pin for sim steps, shader time, temporal jitter, and history blending/i, 'Volume freeze control explains the pixel-stable temporal pinning contract');
 assert.match(index, /id="volume-pyro-compare"/, 'Volume look lab exposes a same-frame Pyro compare selector');
@@ -1360,7 +1319,6 @@ assert.match(core, /pyroBiteCoreEvent/, 'WGSL derives a named inner/current-flam
 assert.match(core, /pyroBiteRimEvent/, 'WGSL derives a named rim/interface Bite layer');
 assert.match(core, /pyroBiteAfterEvent/, 'WGSL derives a named after/wake Bite layer');
 assert.match(core, /pyroStackedBiteEvent/, 'WGSL combines Bite layers before load-bearing alpha/color contribution');
-assert.match(index, /entry\.biteStackAuthored = \['pyroBiteCore', 'pyroBiteRim', 'pyroBiteAfter'\]/, 'Saved Pyro looks mark intentionally authored Bite stack layers');
 for (const id of [
   'volume-pyro-bite-core',
   'volume-pyro-bite-rim',

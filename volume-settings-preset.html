@@ -34,8 +34,8 @@
     async function loadPreset() {
       if (!presetId) throw new Error('settings preset id is required');
       const [response, schemaResponse] = await Promise.all([
-        fetch(`/api/volume-capture?id=${encodeURIComponent(presetId)}`, { cache: 'no-store' }),
-        fetch('/volume-settings-preset-schema-v1.json', { cache: 'no-store' }),
+        fetch(`/api/volume-settings-preset?id=${encodeURIComponent(presetId)}`, { cache: 'no-store' }),
+        fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
       ]);
       const [artifact, schema] = await Promise.all([response.json(), schemaResponse.json()]);
       if (!response.ok) throw new Error(artifact.error || `settings preset lookup failed: ${response.status}`);
@@ -44,7 +44,7 @@
       const target = view
         ? buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view)
         : buildVolumeSettingsPresetTarget(receipt, location.origin);
-      status.textContent = `${presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings | ${view || 'ordinary-live'} view`;
+      status.textContent = `${receipt.label || presetId} | requested ${presetId} | effective ${receipt.presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings | ${view || 'ordinary-live'} view`;
       location.replace(target);
     }
 

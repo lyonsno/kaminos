@@ -602,9 +602,9 @@ def test_volume_settings_preset_server_admission_matches_exact_schema():
     document = json.loads((root / "artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json").read_text())
     legacy = document["capture"]
     payload = {
-        "identity": "kaminos-volume-settings-preset-v1",
+        "identity": "kaminos-volume-settings-preset-v2",
         "kind": "settings-preset",
-        "schemaIdentity": "kaminos-volume-settings-preset-schema-v1",
+        "schemaIdentity": "kaminos-volume-settings-preset-schema-v2",
         "savedAt": legacy["savedAt"],
         "route": legacy["route"],
         "domControls": {
@@ -616,15 +616,30 @@ def test_volume_settings_preset_server_admission_matches_exact_schema():
                 "value": entry["value"],
             }
             for key, entry in legacy["domControls"].items()
+            if key not in {
+                "volume-basin-slot",
+                "volume-look-library-kind",
+                "volume-look-library-entry",
+                "volume-look-library-name",
+                "volume-look-library-json",
+            }
         },
-        "controlCount": legacy["controlCount"],
+        "controlCount": legacy["controlCount"] - 5,
         "stateExclusions": legacy["exclusions"],
         "note": "settings only",
     }
-    textarea = next(entry for entry in payload["domControls"].values() if entry["param"] == "volume_look_library_json")
     parsed = serve.urlparse(payload["route"])
-    route_entries = serve.parse_qsl(parsed.query, keep_blank_values=True)
-    route_entries.append((textarea["param"], str(textarea["value"])))
+    removed_params = {
+        "volume_basin_slot",
+        "volume_look_library_kind",
+        "volume_look_library_entry",
+        "volume_look_library_name",
+        "volume_look_library_json",
+    }
+    route_entries = [
+        entry for entry in serve.parse_qsl(parsed.query, keep_blank_values=True)
+        if entry[0] not in removed_params
+    ]
     payload["route"] = parsed._replace(query=serve.urlencode(route_entries)).geturl()
     assert validate_volume_settings_preset_payload(payload) is True
 

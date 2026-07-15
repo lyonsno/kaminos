@@ -149,8 +149,8 @@
     if (sourceSettingsPresetRequestedId && !warmupError) {
       try {
         const [artifactResponse, schemaResponse] = await Promise.all([
-          fetch(`/artifacts/volume-captures/${encodeURIComponent(sourceSettingsPresetRequestedId)}.json`, { cache: 'no-store' }),
-          fetch('/volume-settings-preset-schema-v1.json', { cache: 'no-store' }),
+          fetch(`/api/volume-settings-preset?id=${encodeURIComponent(sourceSettingsPresetRequestedId)}`, { cache: 'no-store' }),
+          fetch('/volume-settings-preset-schema-v2.json', { cache: 'no-store' }),
         ]);
         if (!artifactResponse.ok) throw new Error(`settings preset artifact load failed (${artifactResponse.status})`);
         if (!schemaResponse.ok) throw new Error(`settings preset schema load failed (${schemaResponse.status})`);
@@ -224,6 +224,10 @@
         sourceSettingsPresetRequestedId,
         sourceSettingsPresetId: sourceSettingsPresetReceipt?.presetId || null,
         sourceSettingsPresetAuthority: sourceSettingsPresetReceipt?.sourcePresetAuthority || null,
+        sourceSettingsPresetAlias: sourceSettingsPresetReceipt?.alias || null,
+        sourceSettingsPresetLabel: sourceSettingsPresetReceipt?.label || null,
+        sourceSettingsPresetContentHash: sourceSettingsPresetReceipt?.contentHash || null,
+        sourceSettingsPresetStorePath: sourceSettingsPresetReceipt?.storePath || null,
         warmupAuthority,
         warmupTarget,
         warmupComplete,

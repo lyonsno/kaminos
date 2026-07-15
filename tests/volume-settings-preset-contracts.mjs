@@ -12,14 +12,34 @@ import {
 const root = new URL('..', import.meta.url).pathname;
 const loader = readFileSync(join(root, 'volume-basin-smoke.html'), 'utf8');
 const settingsLoader = readFileSync(join(root, 'volume-settings-preset.html'), 'utf8');
-const schema = JSON.parse(readFileSync(join(root, 'volume-settings-preset-schema-v1.json'), 'utf8'));
+const schema = JSON.parse(readFileSync(join(root, 'volume-settings-preset-schema-v2.json'), 'utf8'));
 const canonicalLegacyDocument = JSON.parse(readFileSync(
   join(root, 'artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json'),
   'utf8',
 ));
 
-function legacyCapture() {
-  return structuredClone(canonicalLegacyDocument.capture);
+const removedPersistenceControls = new Set([
+  'volume-basin-slot',
+  'volume-look-library-kind',
+  'volume-look-library-entry',
+  'volume-look-library-name',
+  'volume-look-library-json',
+]);
+
+function nativeCapture() {
+  const preset = structuredClone(canonicalLegacyDocument.capture);
+  preset.identity = 'kaminos-volume-settings-preset-v2';
+  preset.kind = 'settings-preset';
+  preset.schemaIdentity = schema.identity;
+  preset.stateExclusions = preset.exclusions;
+  delete preset.exclusions;
+  for (const field of ['status', 'sourceHref', 'discoveredContextCount', 'controlsByParam', 'failurePhase']) delete preset[field];
+  for (const key of removedPersistenceControls) delete preset.domControls[key];
+  preset.controlCount = Object.keys(preset.domControls).length;
+  const route = new URL(preset.route);
+  for (const key of removedPersistenceControls) route.searchParams.delete(key.replaceAll('-', '_'));
+  preset.route = route.toString();
+  return preset;
 }
 
 function controlByParam(capture, param) {
@@ -33,21 +53,28 @@ function setControlValue(capture, param, value) {
 }
 
 function artifact(capture) {
+  const hash = 'a'.repeat(64);
   return {
-    identity: 'kaminos-volume-agent-capture-artifact-v1',
-    captureId: 'legacy-contract-fixture',
-    capture,
+    identity: 'kaminos-volume-settings-preset-artifact-v2',
+    presetId: `vsp-${hash}`,
+    alias: 'legacy-contract-fixture',
+    requestedPresetRef: 'legacy-contract-fixture',
+    label: 'Legacy contract fixture',
+    contentHash: `sha256:${hash}`,
+    schemaIdentity: schema.identity,
+    controlCount: schema.controlCount,
+    preset: capture,
   };
 }
 
-const acceptedReceipt = validateVolumeSettingsPresetDocument(artifact(legacyCapture()), 'legacy-contract-fixture', schema);
+const acceptedReceipt = validateVolumeSettingsPresetDocument(artifact(nativeCapture()), 'legacy-contract-fixture', schema);
 const acceptedUrl = buildVolumeSettingsPresetTarget(acceptedReceipt, 'http://127.0.0.1:18636');
 assert.equal(acceptedUrl.pathname, '/');
-assert.equal(acceptedUrl.searchParams.get('settings_preset'), 'legacy-contract-fixture');
-assert.equal(acceptedUrl.searchParams.get('settings_preset_authority'), 'legacy-dom-settings-promoted-v0');
+assert.equal(acceptedUrl.searchParams.get('settings_preset'), `vsp-${'a'.repeat(64)}`);
+assert.equal(acceptedUrl.searchParams.get('settings_preset_authority'), 'shared-volume-settings-preset-v2');
 assert.equal(validateVolumeSettingsPresetTarget(acceptedReceipt, acceptedUrl.searchParams), true);
 
-const prototypeBasin = legacyCapture();
+const prototypeBasin = nativeCapture();
 prototypeBasin.identity = 'kaminos-volume-agent-capture-v1';
 prototypeBasin.kind = 'prototype-basin';
 prototypeBasin.stateExclusions = prototypeBasin.exclusions;
@@ -62,7 +89,7 @@ assert.throws(
   'renderer-bearing prototype-basin captures cannot be promoted into settings-preset authority',
 );
 
-const fakeControls = legacyCapture();
+const fakeControls = nativeCapture();
 const fakeRoute = new URL('http://127.0.0.1:18632/');
 fakeRoute.searchParams.set('kaminos_volume_smoke', '1');
 for (const [index, entry] of Object.values(fakeControls.domControls).entries()) {
@@ -74,31 +101,15 @@ fakeControls.route = fakeRoute.toString();
 assert.throws(
   () => validateVolumeSettingsPresetDocument(artifact(fakeControls), 'legacy-contract-fixture', schema),
   /schema|canonical|control.*param|inventory/i,
-  'a self-consistent 191-entry fake control inventory cannot default-fill the real UI',
+  'a self-consistent 186-entry fake control inventory cannot default-fill the real UI',
 );
 
-const nativePreset = legacyCapture();
-nativePreset.identity = 'kaminos-volume-settings-preset-v1';
-nativePreset.kind = 'settings-preset';
-nativePreset.schemaIdentity = schema.identity;
-delete nativePreset.status;
-nativePreset.stateExclusions = nativePreset.exclusions;
-delete nativePreset.exclusions;
-for (const field of ['failurePhase', 'sourceHref', 'discoveredContextCount', 'controlsByParam']) {
-  delete nativePreset[field];
+assert.equal(schema.controlCount, 186);
+for (const key of removedPersistenceControls) {
+  assert.equal(schema.controls.some(entry => entry.key === key), false, `schema v2 excludes persistence widget ${key}`);
 }
-setControlValue(nativePreset, 'volume_look_library_json', '{"identity":"operator-library"}');
-const nativeRoute = new URL(nativePreset.route);
-nativeRoute.searchParams.set('volume_look_library_json', controlByParam(nativePreset, 'volume_look_library_json').value);
-nativePreset.route = nativeRoute.toString();
-const nativeReceipt = validateVolumeSettingsPresetDocument(artifact(nativePreset), 'legacy-contract-fixture', schema);
-assert.equal(
-  nativeReceipt.presetRoute.searchParams.get('volume_look_library_json'),
-  controlByParam(nativePreset, 'volume_look_library_json').value,
-  'native presets route every counted control, including the editable look-library textarea',
-);
 
-const rendererIndependentPreset = legacyCapture();
+const rendererIndependentPreset = nativeCapture();
 for (const [param, value] of [
   ['volume_scene', 'compact_plume'],
   ['volume_boundary_splat_mode', 'off'],
@@ -140,8 +151,8 @@ assert.equal(explicitSplatView.pathname, '/volume-selective-head-live.html');
 assert.equal(explicitSplatView.searchParams.get('role'), 'truthHigh');
 assert.equal(explicitSplatView.searchParams.get('composition'), 'splat-only-v0');
 assert.equal(explicitSplatView.searchParams.get('warmup_steps'), '0');
-assert.equal(explicitSplatView.searchParams.get('settings_preset'), 'legacy-contract-fixture');
-assert.equal(explicitSplatView.searchParams.get('settings_preset_authority'), 'legacy-dom-settings-promoted-v0');
+assert.equal(explicitSplatView.searchParams.get('settings_preset'), `vsp-${'a'.repeat(64)}`);
+assert.equal(explicitSplatView.searchParams.get('settings_preset_authority'), 'shared-volume-settings-preset-v2');
 assert.equal(explicitSplatView.searchParams.has('basin_capture'), false);
 assert.equal(explicitSplatView.searchParams.get('volume_density'), '5.05');
 assert.equal(validateVolumeSettingsPresetVisualTarget(acceptedReceipt, explicitSplatView.searchParams), true);
@@ -174,25 +185,25 @@ assert.throws(
   'preset target rejects settings that diverge from the independently validated artifact',
 );
 
-const truncated = legacyCapture();
+const truncated = nativeCapture();
 truncated.controlCount = 1;
 truncated.domControls = { [schema.controls[0].key]: truncated.domControls[schema.controls[0].key] };
 assert.throws(
   () => validateVolumeSettingsPresetDocument(artifact(truncated), 'legacy-contract-fixture', schema),
-  /191|control/i,
-  'loader rejects truncated legacy captures instead of filling omitted settings from defaults',
+  /186|control/i,
+  'loader rejects truncated presets instead of filling omitted settings from defaults',
 );
 
-const mismatchedCount = legacyCapture();
-mismatchedCount.controlCount = 191;
+const mismatchedCount = nativeCapture();
+mismatchedCount.controlCount = 186;
 delete mismatchedCount.domControls[schema.controls[0].key];
 assert.throws(
   () => validateVolumeSettingsPresetDocument(artifact(mismatchedCount), 'legacy-contract-fixture', schema),
-  /191|control/i,
+  /186|control/i,
   'loader rejects a declared count that does not match the saved DOM-control population',
 );
 
-const routeMismatch = legacyCapture();
+const routeMismatch = nativeCapture();
 setControlValue(routeMismatch, 'volume_density', 999);
 assert.throws(
   () => validateVolumeSettingsPresetDocument(artifact(routeMismatch), 'legacy-contract-fixture', schema),
@@ -201,12 +212,12 @@ assert.throws(
 );
 
 for (const field of ['replayState', 'volumeDebugState', 'camera', 'viewport', 'fluidField']) {
-  const forbidden = legacyCapture();
+  const forbidden = nativeCapture();
   forbidden[field] = { forged: true };
   assert.throws(
     () => validateVolumeSettingsPresetDocument(artifact(forbidden), 'legacy-contract-fixture', schema),
     /runtime|replay|forbidden|state/i,
-    `loader rejects legacy capture field ${field} even when exclusion flags claim it is absent`,
+    `loader rejects preset field ${field} even when exclusion flags claim it is absent`,
   );
 }
 

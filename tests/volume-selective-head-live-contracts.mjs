@@ -126,6 +126,8 @@ assert.match(
 assert.match(page, /sourceCaptureId:\s*params\.get\('basin_capture'\)/, 'selective-head wrapper records the durable source-capture id');
 assert.match(page, /validateVolumeSettingsPresetVisualTarget[\s\S]*sourceSettingsPresetId:/, 'preset-backed visual routes independently validate and report settings-preset identity');
 assert.match(page, /sourceSettingsPresetAuthority:/, 'preset-backed visual routes report derived preset authority separately from captures');
+assert.match(page, /sourceSettingsPresetStorePath:/, 'preset-backed visual routes report the effective shared store path');
+assert.match(page, /sourceSettingsPresetContentHash:/, 'preset-backed visual routes report immutable preset content identity');
 assert.match(page, /capture: \$\{state\.sourceCaptureId/, 'operator status names the durable source capture that actually rendered');
 assert.match(page, /effectiveRole === requestedRole[\s\S]*effectiveComposition === requestedComposition[\s\S]*'running'[\s\S]*'settling'/, 'wrapper reports running only after requested renderer role and composition become effective');
 assert.match(page, /function passReceiptMatchesComposition\(/, 'wrapper has a named exact pass-tuple predicate');
@@ -153,6 +155,9 @@ assert.match(witness, /const timer = setTimeout[\s\S]*CDP call timed out/, 'visu
 assert.match(witness, /rejectPending[\s\S]*CDP socket closed/, 'visual witness rejects pending calls when CDP closes');
 assert.match(witness, /sourceSettingsPresetId:\s*endState\.sourceSettingsPresetId/, 'visual witness promotes independently validated settings-preset identity into its report');
 assert.match(witness, /sourceSettingsPresetAuthority:\s*endState\.sourceSettingsPresetAuthority/, 'visual witness promotes derived settings-preset authority into its report');
+assert.match(witness, /sourceSettingsPresetStorePath:\s*endState\.sourceSettingsPresetStorePath/, 'visual witness preserves the effective shared store path');
+assert.match(witness, /sourceSettingsPresetContentHash:\s*endState\.sourceSettingsPresetContentHash/, 'visual witness preserves immutable preset content identity');
+assert.match(witness, /effectiveUrl,\n/, 'visual witness records the final browser target rather than only the requested loader URL');
 
 const sequenceWitness = readFileSync(sequenceWitnessPath, 'utf8');
 assert.match(sequenceWitness, /kaminos\.volume\.selective-head-live-sequence-witness\.v0/);

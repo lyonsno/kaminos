@@ -147,8 +147,15 @@ try {
   if (requestedParams.has('settings_preset')) {
     assert.equal(endState?.sourceSettingsPresetId, requestedParams.get('settings_preset'), 'visual route did not validate its requested settings preset');
     assert.equal(endState?.sourceSettingsPresetAuthority, requestedParams.get('settings_preset_authority'), 'visual route did not derive its requested settings authority');
+    assert.ok(endState?.sourceSettingsPresetStorePath, 'visual route omitted its effective shared preset store path');
+    assert.equal(
+      endState?.sourceSettingsPresetContentHash,
+      `sha256:${endState.sourceSettingsPresetId.slice(4)}`,
+      'visual route reported a content hash that diverges from its immutable preset id',
+    );
   }
   failurePhase = 'capture';
+  const effectiveUrl = await evaluate(socket, 'location.href');
   const capture = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(out, Buffer.from(capture.data, 'base64'));
   const report = {
@@ -157,9 +164,15 @@ try {
     status: 'captured',
     failurePhase: null,
     requestedUrl: url,
+    effectiveUrl,
     effectiveRoute: endState.routeIdentity,
+    sourceSettingsPresetRequestedId: endState.sourceSettingsPresetRequestedId,
     sourceSettingsPresetId: endState.sourceSettingsPresetId,
     sourceSettingsPresetAuthority: endState.sourceSettingsPresetAuthority,
+    sourceSettingsPresetAlias: endState.sourceSettingsPresetAlias,
+    sourceSettingsPresetLabel: endState.sourceSettingsPresetLabel,
+    sourceSettingsPresetContentHash: endState.sourceSettingsPresetContentHash,
+    sourceSettingsPresetStorePath: endState.sourceSettingsPresetStorePath,
     requestedRole: endState.requestedRole,
     effectiveRole: endState.effectiveRole,
     roleAuthority: endState.roleAuthority,

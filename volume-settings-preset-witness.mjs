@@ -12,6 +12,7 @@ const cockpitOut = resolve(String(args.get('--cockpit-out') || out.replace(/(\.p
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-volume-settings-preset.json'));
 const timeoutMs = Number(args.get('--timeout-ms') || 180000);
 const debugPort = Number(args.get('--debug-port') || randomInt(42000, 62000));
+const label = String(args.get('--label') || 'Automated settings witness').trim();
 let failurePhase = 'argument-validation';
 let lastTrustworthyEvidence = {};
 let browser = null;
@@ -94,21 +95,27 @@ try {
     return { frameCount: state.frameCount, simStepCount: state.simStepCount, volumeScene: state.volumeScene };
   })()`, timeoutMs);
   const button = await evaluate(initialSocket, `(() => {
-    const element = document.getElementById('volume-settings-preset-save');
+    const element = document.getElementById('settings-preset-save');
     if (!element || element.disabled || element.dataset.commandWired !== 'true') return null;
     const rect = element.getBoundingClientRect();
     return { width: rect.width, height: rect.height, text: element.textContent };
   })()`);
   assert.ok(button?.width > 0 && button?.height > 0, 'settings preset button was unavailable');
-  assert.equal(button.text.trim(), 'Save Settings Preset + Open Live');
-  const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-  writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
-  lastTrustworthyEvidence = { initialState, button, cockpitScreenshot: cockpitOut };
+  assert.equal(button.text.trim(), 'Save');
+  const labelState = await evaluate(initialSocket, `(() => {
+    const input = document.getElementById('settings-preset-label');
+    if (!input) return null;
+    input.value = ${JSON.stringify(label)};
+    return { value: input.value, width: input.getBoundingClientRect().width };
+  })()`);
+  assert.equal(labelState?.value, label, 'settings preset label input did not accept the requested label');
+  assert.ok(labelState?.width > 0, 'settings preset label input was not visible');
+  lastTrustworthyEvidence = { initialState, button, labelState };
 
   const initialTargetIds = new Set((await targetList()).map(target => target.id));
   failurePhase = 'operator-command';
   const command = await initialSocket.call('Runtime.evaluate', {
-    expression: `(async () => window.__kaminosSaveVolumeSettingsPresetAndOpen())()`,
+    expression: `(async () => window.__kaminosSaveVolumeSettingsPreset())()`,
     returnByValue: true,
     userGesture: true,
     awaitPromise: true,
@@ -116,13 +123,26 @@ try {
   if (command.exceptionDetails) throw new Error(command.exceptionDetails.text || 'settings preset command threw');
   const commandResult = command.result?.value;
   const commandDiagnostic = await evaluate(initialSocket, `(() => ({
-    captureState: document.getElementById('volume-agent-capture-state')?.textContent || null,
+    captureState: document.getElementById('volume-settings-preset-state')?.textContent || null,
     info: document.getElementById('info')?.textContent || null,
   }))()`);
   lastTrustworthyEvidence.commandResult = commandResult ?? null;
   lastTrustworthyEvidence.commandDiagnostic = commandDiagnostic;
-  assert.ok(commandResult?.captureId, 'settings preset command completed without an artifact id');
+  assert.ok(commandResult?.effective?.presetId, 'settings preset command completed without an immutable preset id');
+  assert.ok(commandResult?.effective?.alias, 'settings preset command completed without a human alias');
   assert.ok(commandResult.presetUrl, 'settings preset command completed without a durable live route');
+  await delay(500);
+  const cockpitScreenshot = await initialSocket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  writeFileSync(cockpitOut, Buffer.from(cockpitScreenshot.data, 'base64'));
+  lastTrustworthyEvidence.cockpitScreenshot = cockpitOut;
+
+  const navigation = await initialSocket.call('Runtime.evaluate', {
+    expression: `window.__kaminosNavigateToSelectedVolumeSettingsPreset(true)`,
+    returnByValue: true,
+    userGesture: true,
+  });
+  if (navigation.exceptionDetails) throw new Error(navigation.exceptionDetails.text || 'settings preset navigation threw');
+  assert.ok(navigation.result?.value, 'Open Fresh did not return its requested loader route');
 
   failurePhase = 'effective-live-target';
   const liveTarget = await waitForTarget(target => (
@@ -133,8 +153,8 @@ try {
   const liveUrl = new URL(liveTarget.url);
   const sourcePresetId = liveUrl.searchParams.get('settings_preset');
   const sourcePresetAuthority = liveUrl.searchParams.get('settings_preset_authority');
-  assert.equal(sourcePresetId, commandResult.captureId);
-  assert.equal(sourcePresetAuthority, 'native-volume-settings-preset-v1');
+  assert.equal(sourcePresetId, commandResult.effective.presetId);
+  assert.equal(sourcePresetAuthority, 'shared-volume-settings-preset-v2');
   for (const forbidden of ['role', 'composition', 'warmup_steps', 'basin_capture', 'basin_source_authority']) {
     assert.equal(liveUrl.searchParams.has(forbidden), false, `live settings target invented renderer parameter ${forbidden}`);
   }
@@ -149,17 +169,17 @@ try {
   })()`, timeoutMs);
 
   failurePhase = 'preset-artifact-verification';
-  const presetResponse = await fetch(new URL(`/api/volume-capture?id=${encodeURIComponent(sourcePresetId)}`, url));
+  const presetResponse = await fetch(new URL(`/api/volume-settings-preset?id=${encodeURIComponent(sourcePresetId)}`, url));
   const presetDocument = await presetResponse.json();
   assert.equal(presetResponse.ok, true, 'saved settings preset could not be read back');
-  assert.equal(presetDocument.captureId, sourcePresetId);
-  assert.equal(presetDocument.capture?.identity, 'kaminos-volume-settings-preset-v1');
-  assert.equal(presetDocument.capture?.kind, 'settings-preset');
-  assert.equal(presetDocument.capture?.controlCount, 191);
+  assert.equal(presetDocument.presetId, sourcePresetId);
+  assert.equal(presetDocument.preset?.identity, 'kaminos-volume-settings-preset-v2');
+  assert.equal(presetDocument.preset?.kind, 'settings-preset');
+  assert.equal(presetDocument.preset?.controlCount, 186);
   for (const field of ['fluidField', 'frontField', 'boundarySidecar', 'splatInstances', 'historyBuffers', 'pressureState', 'replayState', 'volumeDebugState', 'camera', 'viewport']) {
-    assert.equal(Object.hasOwn(presetDocument.capture, field), false, `settings preset persisted forbidden state field ${field}`);
+    assert.equal(Object.hasOwn(presetDocument.preset, field), false, `settings preset persisted forbidden state field ${field}`);
   }
-  const savedRoute = new URL(presetDocument.capture.route);
+  const savedRoute = new URL(presetDocument.preset.route);
   for (const [key, value] of savedRoute.searchParams) {
     assert.deepEqual(liveUrl.searchParams.getAll(key), [value], `effective live route changed saved setting ${key}`);
   }
@@ -189,8 +209,10 @@ try {
     effectiveUrl: liveTarget.url,
     sourcePresetId,
     sourcePresetAuthority,
+    writeReceipt: commandResult.effective,
     visualAuthority: 'not-evaluated-settings-persistence-only',
-    controlCount: presetDocument.capture.controlCount,
+    controlCount: presetDocument.preset.controlCount,
+    storePath: commandResult.effective.storePath,
     continuousFrameDelta,
     continuousSimStepDelta,
     cockpitScreenshot: cockpitOut,

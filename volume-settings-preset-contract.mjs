@@ -1,4 +1,4 @@
-export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-preset-schema-v1';
+export const VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY = 'kaminos-volume-settings-preset-schema-v2';
 
 function validatePresetSchema(schema) {
   if (!schema || schema.identity !== VOLUME_SETTINGS_PRESET_SCHEMA_IDENTITY) {
@@ -13,35 +13,44 @@ function validatePresetSchema(schema) {
   return schema;
 }
 
-export function validateVolumeSettingsPresetDocument(document, requestedPresetId = null, rawSchema = null) {
+export function validateVolumeSettingsPresetDocument(document, requestedPresetRef = null, rawSchema = null) {
   const schema = validatePresetSchema(rawSchema);
-  if (!document || document.identity !== 'kaminos-volume-agent-capture-artifact-v1') {
+  if (!document || document.identity !== 'kaminos-volume-settings-preset-artifact-v2') {
     throw new Error('settings preset artifact identity mismatch');
   }
-  if (requestedPresetId && document.captureId !== requestedPresetId) {
-    throw new Error('settings preset artifact id mismatch');
+  if (requestedPresetRef
+    && requestedPresetRef !== document.presetId
+    && requestedPresetRef !== document.alias
+    && requestedPresetRef !== document.requestedPresetRef) {
+    throw new Error('settings preset requested/effective identity mismatch');
   }
-  const preset = document.capture;
+  if (!/^vsp-[0-9a-f]{64}$/.test(String(document.presetId || ''))) {
+    throw new Error('settings preset immutable content identity is invalid');
+  }
+  if (document.contentHash !== `sha256:${document.presetId.slice(4)}`) {
+    throw new Error('settings preset content hash identity mismatch');
+  }
+  if (document.schemaIdentity !== schema.identity || Number(document.controlCount) !== Number(schema.controlCount)) {
+    throw new Error('settings preset artifact schema identity mismatch');
+  }
+  const preset = document.preset;
   if (!preset || typeof preset !== 'object') throw new Error('settings preset payload is missing');
 
-  const nativePreset = preset.identity === 'kaminos-volume-settings-preset-v1'
+  const nativePreset = preset.identity === 'kaminos-volume-settings-preset-v2'
     && preset.kind === 'settings-preset';
-  const legacyDomPreset = preset.identity === 'kaminos-volume-basin-dom-settings-capture-v1'
-    && preset.kind === 'basin-settings'
-    && preset.status === 'captured';
-  if (!nativePreset && !legacyDomPreset) {
+  if (!nativePreset) {
     throw new Error('artifact is not an accepted volume settings preset');
   }
   for (const field of schema.forbiddenPresetFields || []) {
     if (Object.hasOwn(preset, field)) throw new Error(`settings preset contains forbidden runtime or replay state: ${field}`);
   }
-  const allowedFields = nativePreset ? schema.allowedNativePresetFields : schema.allowedLegacyDomPresetFields;
+  const allowedFields = schema.allowedNativePresetFields;
   const unexpectedPresetFields = Object.keys(preset).filter(field => !allowedFields?.includes(field));
   if (unexpectedPresetFields.length > 0) {
     throw new Error(`settings preset contains fields outside its canonical schema: ${unexpectedPresetFields.join(',')}`);
   }
 
-  if (nativePreset && preset.schemaIdentity !== schema.identity) {
+  if (preset.schemaIdentity !== schema.identity) {
     throw new Error('native settings preset schema identity mismatch');
   }
 
@@ -56,7 +65,7 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetId
   }
   if (!preset.route) throw new Error('settings preset route is missing');
 
-  const exclusions = legacyDomPreset ? preset.exclusions : preset.stateExclusions;
+  const exclusions = preset.stateExclusions;
   for (const field of schema.excludedStateFields || []) {
     if (exclusions?.[field] !== true) throw new Error(`settings preset did not exclude ${field}`);
   }
@@ -74,8 +83,8 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetId
 
   const routeVolumeEntries = [...presetRoute.searchParams].filter(([key]) => key.startsWith('volume_'));
   const routeVolumeKeys = new Set(routeVolumeEntries.map(([key]) => key));
-  const legacyUnroutedParams = new Set(legacyDomPreset ? schema.legacyUnroutedParams : []);
-  const expectedRoutedControlCount = schema.controls.length - legacyUnroutedParams.size;
+  const legacyUnroutedParams = new Set();
+  const expectedRoutedControlCount = schema.controls.length;
   const expectedRouteVolumeCount = expectedRoutedControlCount + (schema.routeExtraParams || []).length;
   if (routeVolumeEntries.length !== expectedRouteVolumeCount || routeVolumeKeys.size !== expectedRouteVolumeCount) {
     throw new Error(`settings preset route requires exactly ${expectedRouteVolumeCount} unique volume parameters`);
@@ -114,12 +123,15 @@ export function validateVolumeSettingsPresetDocument(document, requestedPresetId
   }
 
   return Object.freeze({
-    presetId: document.captureId,
+    requestedPresetRef: requestedPresetRef || document.requestedPresetRef || document.presetId,
+    presetId: document.presetId,
+    alias: document.alias || null,
+    label: document.label || document.initialLabel || null,
+    contentHash: document.contentHash,
+    storePath: document.storePath || null,
     preset,
     presetRoute,
-    sourcePresetAuthority: nativePreset
-      ? 'native-volume-settings-preset-v1'
-      : 'legacy-dom-settings-promoted-v0',
+    sourcePresetAuthority: 'shared-volume-settings-preset-v2',
     schemaIdentity: schema.identity,
     routeEntries: Object.freeze([...presetRoute.searchParams].map(entry => Object.freeze([...entry]))),
     routeVolumeEntries: Object.freeze(routeVolumeEntries.map(entry => Object.freeze([...entry]))),
