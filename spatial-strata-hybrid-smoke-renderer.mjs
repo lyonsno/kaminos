@@ -6,6 +6,7 @@ export const SPATIAL_STRATA_HYBRID_SMOKE_RENDERER_IDENTITY = 'phase-matched-spat
 export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_APPEARANCE_IDENTITY = 'temperature-lit-sparse-live-smoke-v0';
 export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_COARSE_COVERAGE = 1.8;
 export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE = 1.7;
+export const SPATIAL_STRATA_HYBRID_SMOKE_OFFLINE_FINE_COVERAGE = 1.22;
 export const SPATIAL_STRATA_HYBRID_SMOKE_LIVE_OPTICAL_GAIN = 12;
 
 const PACKED_SPLAT_FLOATS = 16;
@@ -105,7 +106,11 @@ fn vs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) drawInst
   let footprintRight = u.cameraRight.xyz * cos(angle) + u.cameraUp.xyz * sin(angle);
   let footprintUp = -u.cameraRight.xyz * sin(angle) + u.cameraUp.xyz * cos(angle);
   let liveProduct = 1.0 - clamp(u.counts.w, 0.0, 1.0);
-  let offlineFootprint = mix(u.params.z, 1.22, splat.d.w);
+  let offlineFootprint = mix(
+    u.params.z,
+    ${SPATIAL_STRATA_HYBRID_SMOKE_OFFLINE_FINE_COVERAGE},
+    splat.d.w,
+  );
   let liveCoverage = mix(
     u.params.z,
     ${SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE},
@@ -425,7 +430,9 @@ export function createSpatialStrataHybridSmokeRenderer({
             ? 'live-coarse-uniform-fine-fixed-v0'
             : 'offline-coarse-uniform-fine-fixed-v0',
           coarse: coarseCoverageScale,
-          fine: SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE,
+          fine: productSource
+            ? SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE
+            : SPATIAL_STRATA_HYBRID_SMOKE_OFFLINE_FINE_COVERAGE,
         },
         productWriteTicks: [...productWriteTicks],
         lastUpdateMs,

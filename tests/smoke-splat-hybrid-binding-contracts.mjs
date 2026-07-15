@@ -569,6 +569,11 @@ const repeatedUpdate = {
 };
 fakeRenderer.update(repeatedUpdate);
 fakeRenderer.update({ ...repeatedUpdate, elapsedSeconds: 2 });
+assert.deepEqual(fakeRenderer.debugState().coverage, {
+  authority: 'offline-coarse-uniform-fine-fixed-v0',
+  coarse: 1.8,
+  fine: 1.22,
+}, 'offline debug state reports the fine footprint actually consumed by offline WGSL');
 assert.equal(
   bufferWrites.filter(label => label === 'kaminos phase-matched spatial-strata smoke descriptors').length,
   1,
