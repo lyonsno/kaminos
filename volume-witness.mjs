@@ -174,6 +174,13 @@ const expectsReceiverSupportEvidence = evidenceMode === 'receiver-support';
 const expectsReceiverLightIsolateEvidence = evidenceMode === 'receiver-light-isolate';
 const expectsReceiverLightBrickWallEvidence = evidenceMode === 'receiver-light-brick-wall';
 const expectsRenderedReceiverLightEvidence = expectsReceiverLightIsolateEvidence || expectsReceiverLightBrickWallEvidence;
+
+function expectedReceiverAttachmentPhaseSourceIdentity(instanceCount) {
+  return Number(instanceCount || 0) > 1
+    ? 'shared-current-plus-live-history-offset'
+    : 'shared-current-control';
+}
+
 const FLOW_DEBUG_AUXILIARY_CAPTURE_AUTHORITY = 'flow-debug-interface-canvas-capture-v0';
 const BOUNDARY_SIDECAR_SUPPORT_AUXILIARY_CAPTURE_AUTHORITY = 'boundary-sidecar-support-canvas-capture-v0';
 const visualEvidenceMode = expectsNoFireVolumeEvidence
@@ -2445,6 +2452,9 @@ async function main() {
     });
     receiverLightDebug = receiverLightEval.result.value || null;
     let receiverLightDebugLater = null;
+    const expectedReceiverAttachmentPhaseSource = expectedReceiverAttachmentPhaseSourceIdentity(
+      state?.boundarySplatRequestedInstanceCount,
+    );
     receiverLightEvidence = {
       identity: expectsRenderedReceiverLightEvidence ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate') : null,
       accepted: Boolean(
@@ -2454,19 +2464,23 @@ async function main() {
         receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
         receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
         receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
-        receiverLightDebug.dynamicEnvelopeIdentity === 'tier2-live-debug-receiver-envelope-v1' &&
-        receiverLightDebug.requestedEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
-        receiverLightDebug.effectiveEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
-        receiverLightDebug.splatMomentEnvelopeAccepted === true &&
+        receiverLightDebug.attachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+        receiverLightDebug.effectiveAttachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+        receiverLightDebug.attachmentAuthority === 'native-shared-device-gpu-texture-only-v0' &&
+        receiverLightDebug.attachmentStatus === 'effective' &&
+        receiverLightDebug.attachmentPhaseSourceIdentity === expectedReceiverAttachmentPhaseSource &&
+        Number(receiverLightDebug.attachmentGeneration || 0) > 0 &&
+        Number(receiverLightDebug.attachmentFrameCount || 0) > 0 &&
         receiverLightDebug.cpuReadbackAuthority === false &&
         receiverLightDebug.hiddenThreeLightAuthority === false &&
         receiverLightDebug.canvasBridgeAuthority === false &&
+        receiverLightDebug.fallbackAuthority === false &&
         Number(receiverLightDebug.receiverCount || 0) > 0 &&
         Number(receiverLightDebug.receiverRenderFrameCount || 0) > 0 &&
         Number(receiverLightDebug.lastRenderTargetSize?.width || 0) > 0 &&
         Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
       ),
-      dynamicEnvelopeAccepted: false,
+      nativeAttachmentAccepted: false,
       debug: receiverLightDebug,
       debugLater: null,
     };
@@ -2475,38 +2489,40 @@ async function main() {
         throw new Error(`wrong rendered Tier 2 receiver-light identity: ${JSON.stringify(receiverLightDebug)}`);
       }
       if (
-        receiverLightDebug.requestedEnvelopeSource !== 'gpu-splat-radiance-coverage-depth-moments-v0' ||
-        receiverLightDebug.effectiveEnvelopeSource !== 'gpu-splat-radiance-coverage-depth-moments-v0' ||
-        receiverLightDebug.splatMomentEnvelopeAccepted !== true
+        receiverLightDebug.attachmentIdentity !== 'gpu-splat-radiance-coverage-depth-moments-v0' ||
+        receiverLightDebug.effectiveAttachmentIdentity !== 'gpu-splat-radiance-coverage-depth-moments-v0' ||
+        receiverLightDebug.attachmentAuthority !== 'native-shared-device-gpu-texture-only-v0' ||
+        receiverLightDebug.attachmentStatus !== 'effective' ||
+        receiverLightDebug.fallbackAuthority !== false
       ) {
-        throw new Error(`Tier 2 receiver-light did not consume splat-moment envelope authority: ${JSON.stringify(receiverLightDebug)}`);
+        throw new Error(`Tier 2 receiver-light did not consume native splat attachment authority: ${JSON.stringify(receiverLightDebug)}`);
       }
       const expectedIsolate = expectsReceiverLightIsolateEvidence;
       if (!receiverLightEvidence.accepted || receiverLightDebug.active !== true || receiverLightDebug.isolate !== expectedIsolate) {
         throw new Error(`Tier 2 receiver-light receipt not accepted: ${JSON.stringify(receiverLightEvidence)}`);
       }
-      await delay(420);
-      const receiverLightLaterEval = await wsRequest(ws, 'Runtime.evaluate', {
-        expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
-        returnByValue: true,
-      });
-      receiverLightDebugLater = receiverLightLaterEval.result.value || null;
-      const startCenter = receiverLightDebug.lastEnvelopeCenter || {};
-      const laterCenter = receiverLightDebugLater?.lastEnvelopeCenter || {};
-      const centerDelta = Math.hypot(
-        Number(laterCenter.x || 0) - Number(startCenter.x || 0),
-        Number(laterCenter.y || 0) - Number(startCenter.y || 0)
-      );
-      receiverLightEvidence.dynamicEnvelopeAccepted = Boolean(
+      for (let cadenceProbe = 0; cadenceProbe < 20; cadenceProbe += 1) {
+        await delay(250);
+        const receiverLightLaterEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
+          returnByValue: true,
+        });
+        receiverLightDebugLater = receiverLightLaterEval.result.value || null;
+        if (
+          receiverLightDebugLater?.attachmentGeneration === receiverLightDebug.attachmentGeneration &&
+          Number(receiverLightDebugLater?.attachmentFrameCount || 0) > Number(receiverLightDebug.attachmentFrameCount || 0)
+        ) break;
+      }
+      receiverLightEvidence.nativeAttachmentAccepted = Boolean(
         receiverLightDebugLater &&
-        Number(receiverLightDebugLater.lastEnvelopeRevision || 0) > Number(receiverLightDebug.lastEnvelopeRevision || 0) &&
-        Number(receiverLightDebugLater.dynamicEnvelopeFrameCount || 0) >= Number(receiverLightDebug.dynamicEnvelopeFrameCount || 0) &&
-        (centerDelta > 0.0005 || Number(receiverLightDebugLater.lastEnvelopeMotionMagnitude || 0) > 0.0005)
+        receiverLightDebugLater.attachmentStatus === 'effective' &&
+        receiverLightDebugLater.effectiveAttachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+        receiverLightDebugLater.attachmentGeneration === receiverLightDebug.attachmentGeneration &&
+        Number(receiverLightDebugLater.attachmentFrameCount || 0) > Number(receiverLightDebug.attachmentFrameCount || 0)
       );
       receiverLightEvidence.debugLater = receiverLightDebugLater;
-      receiverLightEvidence.envelopeCenterDelta = centerDelta;
-      if (!receiverLightEvidence.dynamicEnvelopeAccepted) {
-        throw new Error(`stale receiver-light envelope: ${JSON.stringify(receiverLightEvidence)}`);
+      if (!receiverLightEvidence.nativeAttachmentAccepted) {
+        throw new Error(`stale native receiver-light attachments: receiver-light attachment cadence did not advance within 5s: ${JSON.stringify(receiverLightEvidence)}`);
       }
     }
     if ((state.frameCount || 0) <= 5 || (state.displayWidth || 0) <= 0 || (state.displayHeight || 0) <= 0) {
@@ -2576,7 +2592,7 @@ async function main() {
         volumeBridge: refreshedBridgeEval.result.value || bridge,
         receiverLightEvidence: {
           ...receiverLightEvidence,
-          debug: refreshedReceiverLightEval.result.value || receiverLightEvidence.debug,
+          debugAtCapture: refreshedReceiverLightEval.result.value || receiverLightEvidence.debugLater,
         },
         sceneContextEvidence: {
           ...sceneContextEvidence,
@@ -4856,6 +4872,9 @@ async function main() {
           debug: sceneContextDebug,
         } : sceneContextEvidence;
         receiverLightDebug = receiverLightEval.result.value || receiverLightDebug;
+        const expectedReceiverAttachmentPhaseSource = expectedReceiverAttachmentPhaseSourceIdentity(
+          state?.boundarySplatRequestedInstanceCount,
+        );
         receiverLightEvidence = receiverLightDebug ? {
           identity: expectsRenderedReceiverLightEvidence ? (expectsReceiverLightBrickWallEvidence ? 'tier2-receiver-light-brick-wall' : 'tier2-receiver-light-isolate') : null,
           accepted: Boolean(
@@ -4864,21 +4883,24 @@ async function main() {
             receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
             receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
             receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
-            receiverLightDebug.dynamicEnvelopeIdentity === 'tier2-live-debug-receiver-envelope-v1' &&
-            receiverLightDebug.requestedEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
-            receiverLightDebug.effectiveEnvelopeSource === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
-            receiverLightDebug.splatMomentEnvelopeAccepted === true &&
+            receiverLightDebug.attachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+            receiverLightDebug.effectiveAttachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
+            receiverLightDebug.attachmentAuthority === 'native-shared-device-gpu-texture-only-v0' &&
+            receiverLightDebug.attachmentStatus === 'effective' &&
+            receiverLightDebug.attachmentPhaseSourceIdentity === expectedReceiverAttachmentPhaseSource &&
+            Number(receiverLightDebug.attachmentGeneration || 0) > 0 &&
+            Number(receiverLightDebug.attachmentFrameCount || 0) > 0 &&
             receiverLightDebug.cpuReadbackAuthority === false &&
             receiverLightDebug.hiddenThreeLightAuthority === false &&
             receiverLightDebug.canvasBridgeAuthority === false &&
+            receiverLightDebug.fallbackAuthority === false &&
             Number(receiverLightDebug.receiverCount || 0) > 0 &&
             Number(receiverLightDebug.receiverRenderFrameCount || 0) > 0 &&
             Number(receiverLightDebug.lastRenderTargetSize?.width || 0) > 0 &&
             Number(receiverLightDebug.lastRenderTargetSize?.height || 0) > 0
           ),
-          dynamicEnvelopeAccepted: receiverLightEvidence?.dynamicEnvelopeAccepted ?? false,
+          nativeAttachmentAccepted: receiverLightEvidence?.nativeAttachmentAccepted ?? false,
           debugLater: receiverLightEvidence?.debugLater ?? null,
-          envelopeCenterDelta: receiverLightEvidence?.envelopeCenterDelta ?? null,
           debug: receiverLightDebug,
         } : receiverLightEvidence;
         ws.close();

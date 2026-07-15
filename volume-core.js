@@ -30,6 +30,8 @@ const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
 const HYBRID_SMOKE_RENDERER_IDENTITY = 'native-3d-compute-fluid-raymarch-smoke-only-v0';
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
+const NATIVE_SPLAT_RECEIVER_ATTACHMENTS_IDENTITY = 'gpu-splat-radiance-coverage-depth-moments-v0';
+const SHARED_WEBGPU_DEVICE_IDENTITY = 'kaminos-three-volume-shared-webgpu-device-v0';
 const BOUNDARY_SPLAT_FIELD_LAYOUT_IDENTITY = 'boundary-splat-composed-field-v0';
 const BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY = 'boundary-splat-pbr-fire-field-v0';
 const BOUNDARY_SPLAT_PBR_FIXED_SUBSTRATE_IDENTITY = 'operator-pretty-four-flame-substrate-v0';
@@ -81,6 +83,123 @@ const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
 const DEFAULT_VOLUME_SCENE = 'compact_plume';
 const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'bonfire_plume']);
+
+function rejectedReceiverAttachmentAuthority(reason, snapshot = {}) {
+  return {
+    status: 'unavailable',
+    identity: NATIVE_SPLAT_RECEIVER_ATTACHMENTS_IDENTITY,
+    reason,
+    frameCount: Number(snapshot.frameCount || 0),
+    fallbackAuthority: false,
+    cpuReadbackAuthority: false,
+    canvasAuthority: false,
+  };
+}
+
+export function resolveBoundarySplatReceiverAttachmentAuthority(snapshot = {}) {
+  const compositionEffective = snapshot.compositionEffective;
+  if (compositionEffective !== 'splat-only' && compositionEffective !== 'hybrid-smoke') {
+    return rejectedReceiverAttachmentAuthority('native-splat-attachment-composition-not-effective', snapshot);
+  }
+  if (snapshot.splatLayerIdentity !== HYBRID_SPLAT_LAYER_IDENTITY) {
+    return rejectedReceiverAttachmentAuthority('hybrid-splat-layer-identity-mismatch', snapshot);
+  }
+  if (compositionEffective === 'hybrid-smoke' && snapshot.smokeLayerIdentity !== HYBRID_SMOKE_LAYER_IDENTITY) {
+    return rejectedReceiverAttachmentAuthority('hybrid-smoke-layer-identity-mismatch', snapshot);
+  }
+  if (snapshot.textureExtentCurrent !== true) {
+    return rejectedReceiverAttachmentAuthority('native-attachment-extent-stale', snapshot);
+  }
+  if (snapshot.radianceTexturePresent !== true) {
+    return rejectedReceiverAttachmentAuthority('native-radiance-attachment-unavailable', snapshot);
+  }
+  if (snapshot.momentsTexturePresent !== true) {
+    return rejectedReceiverAttachmentAuthority('native-moments-attachment-unavailable', snapshot);
+  }
+  if (snapshot.sameDevice !== true) {
+    return rejectedReceiverAttachmentAuthority('producer-consumer-device-mismatch', snapshot);
+  }
+  if (snapshot.descriptorIdentity !== BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY) {
+    return rejectedReceiverAttachmentAuthority('instance-descriptor-identity-mismatch', snapshot);
+  }
+  const descriptors = Array.isArray(snapshot.descriptors) ? snapshot.descriptors : [];
+  const currentDescriptors = descriptors.filter(descriptor => descriptor?.phaseSourceIdentity === 'shared-current-control');
+  const historyDescriptors = descriptors.filter(descriptor => descriptor?.phaseSourceIdentity === 'live-history-offset');
+  const historyGeneration = Number(snapshot.historyAllocationGeneration || 0);
+  const sameHistoryGeneration = descriptors.every(
+    descriptor => Number(descriptor?.historyAllocationGeneration || 0) === historyGeneration,
+  );
+  if (currentDescriptors.length === 0) {
+    return rejectedReceiverAttachmentAuthority('current-live-instance-selection-required', snapshot);
+  }
+  if (!sameHistoryGeneration) {
+    return rejectedReceiverAttachmentAuthority('history-allocation-generation-mismatch', snapshot);
+  }
+  if (descriptors.length > 1 && historyDescriptors.length === 0) {
+    return rejectedReceiverAttachmentAuthority('history-backed-multi-instance-selection-required', snapshot);
+  }
+  const phaseSourceIdentity = historyDescriptors.length > 0
+    ? 'shared-current-plus-live-history-offset'
+    : 'shared-current-control';
+  return {
+    status: 'effective',
+    identity: NATIVE_SPLAT_RECEIVER_ATTACHMENTS_IDENTITY,
+    reason: null,
+    frameCount: Number(snapshot.frameCount || 0),
+    phaseSourceIdentity,
+    historyBackedInstanceCount: historyDescriptors.length,
+    historyAllocationGeneration: historyGeneration,
+    rendererIdentity: snapshot.rendererIdentity ?? null,
+    attributeModelIdentity: snapshot.attributeModelIdentity ?? null,
+    sourceAuthority: snapshot.sourceAuthority ?? null,
+    selectorPolicyIdentity: snapshot.selectorPolicyIdentity ?? null,
+    historyRingIdentity: snapshot.historyRingIdentity ?? null,
+    historyAllocationIdentity: snapshot.historyAllocationIdentity ?? null,
+    fallbackAuthority: false,
+    cpuReadbackAuthority: false,
+    canvasAuthority: false,
+  };
+}
+
+export async function requestKaminosSharedWebGpuDevice() {
+  if (!navigator.gpu) throw new Error('WebGPU unavailable');
+  const adapter = await navigator.gpu.requestAdapter({
+    powerPreference: 'high-performance',
+    featureLevel: 'core',
+  });
+  if (!adapter) throw new Error('WebGPU adapter unavailable');
+
+  const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+  const requiredLimits = {};
+  if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
+    requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+  }
+  const storageStageRequirements = {
+    maxStorageBuffersInFragmentStage: 5,
+    maxStorageBuffersInVertexStage: 4,
+  };
+  for (const [name, required] of Object.entries(storageStageRequirements)) {
+    const available = Number(adapter.limits?.[name] || 0);
+    if (available < required) {
+      throw new Error(`WebGPU adapter ${name} ${available} is below Kaminos requirement ${required}`);
+    }
+    requiredLimits[name] = required;
+  }
+  const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
+  const descriptor = {
+    requiredLimits,
+    ...(requiredFeatures.length ? { requiredFeatures } : {}),
+  };
+  const device = await adapter.requestDevice(descriptor);
+  return {
+    identity: SHARED_WEBGPU_DEVICE_IDENTITY,
+    adapter,
+    device,
+    requiredLimits,
+    requiredFeatures,
+    authority: 'single-explicit-device-three-and-volume-v0',
+  };
+}
 const CANONICAL_SOURCE_MODE_VALUES = {
   current: 0,
   passive_bottom: 1,
@@ -6213,7 +6332,17 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 }
 `;
 
-export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus }) {
+export function createKaminosVolumePrototype({
+  THREE,
+  viewport,
+  camera,
+  controls,
+  getControls,
+  onStatus,
+  gpuDevice = null,
+  gpuAdapter = null,
+  gpuDeviceContract = null,
+}) {
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
@@ -6396,6 +6525,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatCompositionRequested: normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition),
     boundarySplatCompositionEffective: 'inactive',
     boundarySplatCompositionFallbackReason: null,
+    nativeSplatReceiverAttachmentsRequested: false,
+    nativeSplatReceiverAttachmentsEffective: false,
+    nativeSplatReceiverAttachmentsFallbackReason: null,
+    nativeSplatReceiverAttachmentsFrameCount: 0,
+    raymarchPipelineDisposition: 'uninitialized',
     hybridSplatSmokeCompositorIdentity: HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
     hybridSplatSmokeApproximation: HYBRID_SPLAT_SMOKE_APPROXIMATION,
     splatDepthConditionedSmokeSplit: 'per-pixel-transformed-splat-depth-raymarch-split-v1',
@@ -6822,8 +6956,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.pyroDynamicDetail;
   }
 
-  let adapter = null;
-  let device = null;
+  let adapter = gpuAdapter;
+  let device = gpuDevice;
+  let gpuInitialized = false;
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
@@ -6947,6 +7082,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let frameTextureSize = '';
   let hybridSplatColorTexture = null;
   let hybridSplatMomentsTexture = null;
+  let hybridLayerTextureGeneration = 0;
+  let nativeSplatReceiverTextureSize = '';
   let hybridSmokeFrontColorTexture = null;
   let hybridSmokeFrontIntervalTexture = null;
   let hybridSmokeBackColorTexture = null;
@@ -7998,46 +8135,58 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
     const computePipelineConstants = { GRID: gridSize };
     const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
-    const makePipeline = (targetFormat, label) => device.createRenderPipeline({
-      label,
-      layout: pipelineLayout,
-      vertex: { module: shader, entryPoint: 'vs' },
-      fragment: { module: shader, entryPoint: 'fs', constants: renderPipelineConstants, targets: [{ format: targetFormat }] },
-      primitive: { topology: 'triangle-list' },
-    });
-    pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
-    readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
-    browserResidualSourcePipeline = device.createRenderPipeline({
-      label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
-      layout: pipelineLayout,
-      vertex: { module: shader, entryPoint: 'vs' },
-      fragment: {
-        module: shader,
-        entryPoint: 'fsResidualSource',
-        constants: renderPipelineConstants,
-        targets: [{ format: 'rgba8unorm' }, { format: 'rgba8unorm' }],
-      },
-      primitive: { topology: 'triangle-list' },
-    });
-    hybridSmokePipeline = device.createRenderPipeline({
-      label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} ${gridSize}^3`,
-      layout: hybridSmokePipelineLayout,
-      vertex: { module: shader, entryPoint: 'vs' },
-      fragment: {
-        module: shader,
-        entryPoint: 'fsHybridSmoke',
-        constants: renderPipelineConstants,
-        targets: [0, 1, 2, 3].map(() => ({ format: 'rgba16float' })),
-      },
-      primitive: { topology: 'triangle-list' },
-    });
-    browserResidualPipeline = device.createRenderPipeline({
-      label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
-      layout: browserResidualPipelineLayout,
-      vertex: { module: browserResidualShader, entryPoint: 'vs' },
-      fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
-      primitive: { topology: 'triangle-list' },
-    });
+    const nativeSplatReceiverRoute = boundarySplatNativeReceiverAttachmentsRequested();
+    state.nativeSplatReceiverAttachmentsRequested = nativeSplatReceiverRoute;
+    if (!nativeSplatReceiverRoute) {
+      const makePipeline = (targetFormat, label) => device.createRenderPipeline({
+        label,
+        layout: pipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: { module: shader, entryPoint: 'fs', constants: renderPipelineConstants, targets: [{ format: targetFormat }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+      readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+      browserResidualSourcePipeline = device.createRenderPipeline({
+        label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
+        layout: pipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: {
+          module: shader,
+          entryPoint: 'fsResidualSource',
+          constants: renderPipelineConstants,
+          targets: [{ format: 'rgba8unorm' }, { format: 'rgba8unorm' }],
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+      hybridSmokePipeline = device.createRenderPipeline({
+        label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} ${gridSize}^3`,
+        layout: hybridSmokePipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: {
+          module: shader,
+          entryPoint: 'fsHybridSmoke',
+          constants: renderPipelineConstants,
+          targets: [0, 1, 2, 3].map(() => ({ format: 'rgba16float' })),
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+      browserResidualPipeline = device.createRenderPipeline({
+        label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
+        layout: browserResidualPipelineLayout,
+        vertex: { module: browserResidualShader, entryPoint: 'vs' },
+        fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      state.raymarchPipelineDisposition = 'created';
+    } else {
+      pipeline = null;
+      readbackPipeline = null;
+      browserResidualSourcePipeline = null;
+      hybridSmokePipeline = null;
+      browserResidualPipeline = null;
+      state.raymarchPipelineDisposition = 'skipped-native-splat-receiver-route';
+    }
     computePipeline = device.createComputePipeline({
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
@@ -8294,25 +8443,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function ensureGpu() {
-    if (device) return;
-    if (!navigator.gpu) {
-      throw new Error('WebGPU unavailable');
+    if (gpuInitialized) return;
+    if (!device) {
+      const sharedGpu = await requestKaminosSharedWebGpuDevice();
+      adapter = sharedGpu.adapter;
+      device = sharedGpu.device;
     }
-    adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) throw new Error('WebGPU adapter unavailable');
-    const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
-    const requiredLimits = {};
-    if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
-      requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
-    }
-    const requiredFeatures = [];
-    if (adapter.features?.has?.('timestamp-query')) {
-      requiredFeatures.push('timestamp-query');
-    }
-    const deviceDescriptor = {};
-    if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
-    if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
-    device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
       timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
       reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
@@ -8327,6 +8463,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       alphaMode: 'opaque',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
+    gpuInitialized = true;
     device.addEventListener('uncapturederror', event => {
       state.error = event.error?.message || String(event.error || 'WebGPU uncaptured error');
       emitStatus({ phase: 'gpu-error', error: state.error });
@@ -8769,6 +8906,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
       browserResidualFeatureTextureSize = '';
+      nativeSplatReceiverTextureSize = '';
       hybridLayerTextureSize = '';
       boundarySplatPbrDepthTextureSize = '';
     }
@@ -8789,15 +8927,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     browserResidualTextureKey = '';
   }
 
-  function destroyHybridLayerTextures() {
+  function destroyNativeSplatReceiverTextures() {
     hybridSplatColorTexture?.destroy();
     hybridSplatMomentsTexture?.destroy();
+    hybridSplatColorTexture = null;
+    hybridSplatMomentsTexture = null;
+    nativeSplatReceiverTextureSize = '';
+    hybridSmokeSplitBindGroup = null;
+    hybridCompositorBindGroup = null;
+  }
+
+  function destroyHybridSmokeLayerTextures() {
     hybridSmokeFrontColorTexture?.destroy();
     hybridSmokeFrontIntervalTexture?.destroy();
     hybridSmokeBackColorTexture?.destroy();
     hybridSmokeBackIntervalTexture?.destroy();
-    hybridSplatColorTexture = null;
-    hybridSplatMomentsTexture = null;
     hybridSmokeFrontColorTexture = null;
     hybridSmokeFrontIntervalTexture = null;
     hybridSmokeBackColorTexture = null;
@@ -8807,23 +8951,41 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     hybridCompositorBindGroup = null;
   }
 
-  function ensureHybridLayerTextures() {
-    const key = `${state.width}x${state.height}`;
-    if (hybridCompositorBindGroup && hybridLayerTextureSize === key) return true;
-    if (!hybridSmokeSplitBindGroupLayout || !hybridCompositorBindGroupLayout || !hybridCompositorSampler) return false;
-    destroyHybridLayerTextures();
-    const makeLayerTexture = label => device.createTexture({
+  function destroyHybridLayerTextures() {
+    destroyNativeSplatReceiverTextures();
+    destroyHybridSmokeLayerTextures();
+  }
+
+  function makeNativeReceiverLayerTexture(label) {
+    return device.createTexture({
       label,
       size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
       format: 'rgba16float',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
     });
-    hybridSplatColorTexture = makeLayerTexture(`kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} color-opacity`);
-    hybridSplatMomentsTexture = makeLayerTexture(`kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} moments`);
-    hybridSmokeFrontColorTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} front color-opacity`);
-    hybridSmokeFrontIntervalTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} front depth interval`);
-    hybridSmokeBackColorTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} back color-opacity`);
-    hybridSmokeBackIntervalTexture = makeLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} back depth interval`);
+  }
+
+  function ensureNativeSplatReceiverTextures() {
+    const key = `${state.width}x${state.height}`;
+    if (hybridSplatColorTexture && hybridSplatMomentsTexture && nativeSplatReceiverTextureSize === key) return true;
+    destroyNativeSplatReceiverTextures();
+    hybridSplatColorTexture = makeNativeReceiverLayerTexture(`kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} color-opacity`);
+    hybridSplatMomentsTexture = makeNativeReceiverLayerTexture(`kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} moments`);
+    hybridLayerTextureGeneration += 1;
+    nativeSplatReceiverTextureSize = key;
+    return true;
+  }
+
+  function ensureHybridLayerTextures() {
+    const key = `${state.width}x${state.height}`;
+    if (hybridCompositorBindGroup && hybridLayerTextureSize === key && nativeSplatReceiverTextureSize === key) return true;
+    if (!hybridSmokeSplitBindGroupLayout || !hybridCompositorBindGroupLayout || !hybridCompositorSampler) return false;
+    if (!ensureNativeSplatReceiverTextures()) return false;
+    destroyHybridSmokeLayerTextures();
+    hybridSmokeFrontColorTexture = makeNativeReceiverLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} front color-opacity`);
+    hybridSmokeFrontIntervalTexture = makeNativeReceiverLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} front depth interval`);
+    hybridSmokeBackColorTexture = makeNativeReceiverLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} back color-opacity`);
+    hybridSmokeBackIntervalTexture = makeNativeReceiverLayerTexture(`kaminos ${HYBRID_SMOKE_LAYER_IDENTITY} back depth interval`);
     hybridSmokeSplitBindGroup = device.createBindGroup({
       label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} transformed-splat-depth split bind group`,
       layout: hybridSmokeSplitBindGroupLayout,
@@ -10030,6 +10192,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition) === 'hybrid-smoke';
   }
 
+  function boundarySplatNativeReceiverAttachmentsRequested() {
+    return boundarySplatRequested()
+      && normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition) === 'splat-only'
+      && controlsSnapshot.nativeSplatReceiverAttachments === true;
+  }
+
   function currentBoundarySplatBufferIntegrity(overrides = {}) {
     const integrity = boundarySplatBufferIntegrity({
       candidateCapacity: boundarySplatCapacity,
@@ -10591,6 +10759,39 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatCompositionRequested = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
     state.boundarySplatCompositionEffective = 'splat-only';
     state.boundarySplatCompositionFallbackReason = null;
+    return true;
+  }
+
+  function encodeBoundarySplatReceiverAttachments(encoder) {
+    if (!boundarySplatNativeReceiverAttachmentsRequested()) return false;
+    state.nativeSplatReceiverAttachmentsRequested = true;
+    if (
+      state.boundarySplatFallbackReason
+      || !boundarySplatHybridPipeline
+      || !boundarySplatRenderBindGroup
+      || !ensureNativeSplatReceiverTextures()
+    ) {
+      state.nativeSplatReceiverAttachmentsEffective = false;
+      state.nativeSplatReceiverAttachmentsFallbackReason = state.boundarySplatFallbackReason
+        || 'native-splat-receiver-attachment-gpu-route-unavailable';
+      return false;
+    }
+    const pass = encoder.beginRenderPass({
+      label: `kaminos ${NATIVE_SPLAT_RECEIVER_ATTACHMENTS_IDENTITY} pass`,
+      colorAttachments: [hybridSplatColorTexture, hybridSplatMomentsTexture].map(texture => ({
+        view: texture.createView(),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      })),
+    });
+    pass.setPipeline(boundarySplatHybridPipeline);
+    pass.setBindGroup(0, boundarySplatRenderBindGroup);
+    pass.drawIndirect(boundarySplatIndirectBuffer, 0);
+    pass.end();
+    state.nativeSplatReceiverAttachmentsEffective = true;
+    state.nativeSplatReceiverAttachmentsFallbackReason = null;
+    state.nativeSplatReceiverAttachmentsFrameCount = state.frameCount + 1;
     return true;
   }
 
@@ -11847,7 +12048,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         } else {
           splatApplied = encodeBoundarySplatDraw(encoder, currentTexture.createView());
         }
-        if (!splatApplied) {
+        const receiverAttachmentsApplied = boundarySplatNativeReceiverAttachmentsRequested()
+          ? encodeBoundarySplatReceiverAttachments(encoder)
+          : true;
+        if (!splatApplied || !receiverAttachmentsApplied) {
+          if (boundarySplatNativeReceiverAttachmentsRequested()) {
+            throw new Error(
+              state.nativeSplatReceiverAttachmentsFallbackReason
+              || state.boundarySplatFallbackReason
+              || 'native-splat-receiver-route-has-no-raymarch-fallback',
+            );
+          }
           encodeDraw(encoder, currentTexture.createView(), 'kaminos boundary splat explicit fallback raymarch');
           state.volumeReconstructionStyle = 'boundary-splat-fallback-raymarch';
           state.boundarySplatCompositionEffective = 'raymarch-fallback';
@@ -14397,12 +14608,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastTemporalControlSignature = nextControlSignature;
       const requestedGrid = normalizeGridSize(controlsSnapshot.resolution);
       const requestedMajorantGrid = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
-      const sourceStateResetNeeded = device
+      const sourceStateResetNeeded = gpuInitialized
         && requestedGrid === previousGrid
         && requestedMajorantGrid === previousMajorantGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
-      if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
+      if (gpuInitialized && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid);
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
@@ -14509,7 +14720,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const incoming = Array.isArray(next) ? next : [];
       volumePrimitives = incoming.map(normalizePrimitiveRecord);
       publishVolumePrimitiveState();
-      if (device) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
+      if (gpuInitialized) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
     },
     setExternalEmitters(payload = {}) {
       externalEmitterState = normalizeExternalEmitters(payload);
@@ -14606,6 +14817,50 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fireEpisodeHooks: fireEpisodeHooks.snapshot(),
         firePresentation: firePresentationSnapshot(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
+      };
+    },
+    receiverLightAttachments() {
+      const extent = `${state.width}x${state.height}`;
+      const authority = resolveBoundarySplatReceiverAttachmentAuthority({
+        compositionEffective: state.boundarySplatCompositionEffective,
+        splatLayerIdentity: state.hybridSplatLayer?.identity,
+        smokeLayerIdentity: state.hybridSmokeLayer?.identity,
+        textureExtentCurrent: nativeSplatReceiverTextureSize === extent,
+        radianceTexturePresent: !!hybridSplatColorTexture,
+        momentsTexturePresent: !!hybridSplatMomentsTexture,
+        sameDevice: gpuDeviceContract?.device ? gpuDeviceContract.device === device : gpuDevice === null || gpuDevice === device,
+        descriptorIdentity: state.boundarySplatInstanceDescriptorIdentity,
+        descriptors: state.boundarySplatInstanceDescriptors,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+        attributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+        sourceAuthority: state.boundarySplatSourceAuthority,
+        selectorPolicyIdentity: state.boundarySplatSelectorPolicyIdentity,
+        historyRingIdentity: state.boundarySplatHistoryRingIdentity,
+        historyAllocationIdentity: state.boundarySplatHistoryAllocationIdentity,
+        historyAllocationGeneration: state.boundarySplatHistoryAllocationGeneration,
+        frameCount: state.nativeSplatReceiverAttachmentsFrameCount,
+      });
+      return {
+        ...authority,
+        device,
+        deviceIdentity: gpuDeviceContract?.identity ?? null,
+        textureGeneration: hybridLayerTextureGeneration,
+        width: state.width,
+        height: state.height,
+        format: 'rgba16float',
+        radianceTexture: authority.status === 'effective' ? hybridSplatColorTexture : null,
+        momentsTexture: authority.status === 'effective' ? hybridSplatMomentsTexture : null,
+        descriptorIdentity: state.boundarySplatInstanceDescriptorIdentity,
+        descriptors: state.boundarySplatInstanceDescriptors.map(descriptor => ({ ...descriptor })),
+        compositionEffective: state.boundarySplatCompositionEffective,
+        splatLayerIdentity: state.hybridSplatLayer?.identity ?? null,
+        smokeLayerIdentity: state.hybridSmokeLayer?.identity ?? null,
+        capacity: state.boundarySplatCapacity,
+        overflowCount: state.boundarySplatOverflowCount,
+        fallbackReason: state.boundarySplatFallbackReason || state.boundarySplatCompositionFallbackReason || null,
+        requested: state.nativeSplatReceiverAttachmentsRequested,
+        effective: state.nativeSplatReceiverAttachmentsEffective,
+        attachmentFallbackReason: state.nativeSplatReceiverAttachmentsFallbackReason,
       };
     },
     beginFireEpisode(options) {

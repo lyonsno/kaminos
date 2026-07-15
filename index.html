@@ -2894,10 +2894,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec3, vec4, mix, float, uniform, texture, viewportUV, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, viewportUV, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
-import { createKaminosVolumePrototype } from './volume-core.js?v=residual-source-uv-flip-0706';
+import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=native-splat-receiver-clean-0714b';
 import { createForegroundKilnHeartbeatEpisode, foregroundKilnStartAllowsPipeline } from './lib/foreground-kiln-heartbeat.mjs';
 import {
   HYBRID_KILN_FIRE_PRESENTATION_MODE,
@@ -3012,6 +3012,7 @@ let modelSourceUrl = null; // URL or path used to load the current model
 let modelSourceType = null; // 'glb', 'obj', 'pbr', 'demo'
 let currentSceneFile = null; // filename of last saved/loaded scene (for overwrite)
 let volumePrototype = null;
+let sharedGpu = null;
 let volumeBridge = null;
 let kaminosVolumeRouteInitPromise = null;
 let volumeSceneContext = null;
@@ -8909,13 +8910,14 @@ const envCache = {};
 // --- Three.js Setup ---
 async function initScene() {
   await initializeHybridSplatOverlayModuleUrl();
+  sharedGpu = await requestKaminosSharedWebGpuDevice();
   const vp = document.getElementById('viewport');
   scene = new THREE.Scene();
 
   camera = new THREE.PerspectiveCamera(40, vp.clientWidth / vp.clientHeight, 0.01, 100);
   camera.position.set(0, 0.6, 3);
 
-  renderer = new THREE.WebGPURenderer({ antialias: true });
+  renderer = new THREE.WebGPURenderer({ antialias: true, device: sharedGpu.device });
   renderer.setSize(vp.clientWidth, vp.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -9667,8 +9669,6 @@ const TIER2_RECEIVER_MASK_AUTHORITY = 'opt-in-receiver-buffer-required-v0';
 const TIER2_RECEIVER_BUFFER_SOURCE = 'explicit-opt-in-receiver-proxy-buffer-v0';
 const TIER2_RECEIVER_SUPPORT_IDENTITY = 'combustion-front-receiver-support-v0';
 const TIER2_RECEIVER_SUPPORT_AUTHORITY = 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0';
-const TIER2_RECEIVER_DYNAMIC_ENVELOPE_IDENTITY = 'tier2-live-debug-receiver-envelope-v1';
-const TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE = 'volume-debug-frame-energy-procedural-envelope-no-readback-v1';
 const TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE = 'gpu-splat-radiance-coverage-depth-moments-v0';
 const TIER2_RECEIVER_SPLAT_LAYER_IDENTITY = 'premultiplied-hdr-splat-radiance-alpha-linear-depth-moments-v0';
 const TIER2_RECEIVER_SMOKE_LAYER_IDENTITY = 'raymarched-smoke-front-back-radiance-transmittance-linear-depth-intervals-v1';
@@ -9679,12 +9679,6 @@ function isTier2ReceiverLightRoute(params = new URLSearchParams(window.location.
 
 function isTier2ReceiverLightIsolateRoute(params = new URLSearchParams(window.location.search)) {
   return params.get('volume_receiver_light_isolate') === '1';
-}
-
-function resolveTier2ReceiverEnvelopeSource(params = new URLSearchParams(window.location.search)) {
-  const source = String(params.get('volume_receiver_light_source') || params.get('volume_receiver_envelope_source') || 'splat_moments').toLowerCase();
-  if (source === 'procedural' || source === 'debug' || source === 'debug_envelope') return TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE;
-  return TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE;
 }
 
 function ensureFingerJuiceTabFrameLoaded() {
@@ -18863,6 +18857,7 @@ function readVolumeControls() {
     boundarySplatPhaseMode,
     boundarySplatLodMode,
     boundarySplatComposition,
+    nativeSplatReceiverAttachments: isTier2ReceiverLightRoute(),
     boundarySplatFieldLayout,
     boundarySplatPbrScene,
     boundarySplatFeatureCapture,
@@ -19753,152 +19748,13 @@ function createVolumeMainRendererBridge() {
 
 function createTier2ReceiverBufferLightPass(baseOutputNode) {
   const params = new URLSearchParams(window.location.search);
-  const requestedReceiverEnvelopeSource = resolveTier2ReceiverEnvelopeSource(params);
-  let effectiveReceiverEnvelopeSource = TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE;
-  let lastEnvelopeFallbackReason = null;
-  let lastSplatMomentEnvelope = null;
   const receiverScene = new THREE.Scene();
-  const receiverLightMaskCanvas = document.createElement('canvas');
-  receiverLightMaskCanvas.width = 256;
-  receiverLightMaskCanvas.height = 256;
-  const receiverLightMaskContext = receiverLightMaskCanvas.getContext('2d');
-  let receiverLightMaskTexture = null;
-  const dynamicEnvelope = {
-    revision: 0,
-    frameCount: 0,
-    center: { x: 0.40, y: 0.61 },
-    previousCenter: { x: 0.40, y: 0.61 },
-    motionMagnitude: 0,
-    energy: 0,
-  };
-  const clamp01 = value => Math.max(0, Math.min(1, Number(value) || 0));
-  const resolveReceiverEnvelope = (volumeState = {}, fallbackFrame = 0) => {
-    const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
-    const frameEnergy = Number(volumeState.lastFrameEnergy || 0);
-    const frameIndex = Number(volumeState.frameCount || 0) + fallbackFrame * 0.173;
-    const phase = frameIndex * 0.211;
-    const candidateCount = Math.max(0, Number(volumeState.boundarySplatSourceCandidateCount ?? volumeState.boundarySplatCandidateCount ?? 0) || 0);
-    const hybridMomentLayerEffective = volumeState.boundarySplatCompositionEffective === 'hybrid-smoke'
-      && volumeState.hybridSplatLayer?.identity === TIER2_RECEIVER_SPLAT_LAYER_IDENTITY
-      && volumeState.hybridSmokeLayer?.identity === TIER2_RECEIVER_SMOKE_LAYER_IDENTITY;
-    if (requestedReceiverEnvelopeSource === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE && hybridMomentLayerEffective) {
-      effectiveReceiverEnvelopeSource = TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE;
-      lastEnvelopeFallbackReason = null;
-      const candidateEnergy = clamp01(Math.log1p(candidateCount) / Math.log1p(12000));
-      const visualEnergy = clamp01(frameEnergy * 0.12);
-      const supportScalar = clamp01(0.12 + candidateEnergy * 0.34 + visualEnergy * 0.14);
-      const drift = Math.sin(phase * 0.47) * 0.020 + Math.sin(phase * 0.83 + 1.7) * 0.010;
-      const lift = Math.sin(phase * 0.39 + 0.6) * 0.018 + supportScalar * 0.038;
-      lastSplatMomentEnvelope = {
-        source: TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE,
-        hybridSplatLayer: volumeState.hybridSplatLayer,
-        hybridSmokeLayer: volumeState.hybridSmokeLayer,
-        compositionEffective: volumeState.boundarySplatCompositionEffective,
-        sourceCandidateCount: candidateCount,
-        candidateEnergy,
-        visualEnergy,
-      };
-      return {
-        source: effectiveReceiverEnvelopeSource,
-        supportScalar,
-        frameIndex,
-        phase,
-        pulse: clamp01(0.42 + candidateEnergy * 0.26 + Math.sin(phase * 1.37 + candidateCount * 0.0009) * 0.14),
-        sceneContextScale: sceneContextActive ? 0.48 : 1.0,
-        centerX: Math.max(0.22, Math.min(0.64, 0.40 + drift + (candidateEnergy - 0.45) * 0.038)),
-        centerY: Math.max(0.34, Math.min(0.78, 0.63 - lift - candidateEnergy * 0.032)),
-      };
-    }
-    effectiveReceiverEnvelopeSource = TIER2_RECEIVER_DYNAMIC_ENVELOPE_SOURCE;
-    lastEnvelopeFallbackReason = requestedReceiverEnvelopeSource === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE
-      ? (hybridMomentLayerEffective ? null : 'hybrid-splat-smoke-moments-not-effective')
-      : null;
-    lastSplatMomentEnvelope = {
-      source: TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE,
-      requested: requestedReceiverEnvelopeSource === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE,
-      accepted: false,
-      compositionEffective: volumeState.boundarySplatCompositionEffective ?? null,
-      hybridSplatLayer: volumeState.hybridSplatLayer ?? null,
-      hybridSmokeLayer: volumeState.hybridSmokeLayer ?? null,
-      sourceCandidateCount: candidateCount,
-      fallbackReason: lastEnvelopeFallbackReason,
-    };
-    const supportScalar = clamp01(frameEnergy * 0.15);
-    const pulse = 0.5 + 0.5 * Math.sin(phase * 1.37 + Math.sin(phase * 0.19));
-    const sceneContextScale = sceneContextActive ? 0.58 : 1.0;
-    const drift = Math.sin(phase * 0.47) * 0.035 + Math.sin(phase * 0.83 + 1.7) * 0.018;
-    const lift = Math.sin(phase * 0.39 + 0.6) * 0.030 + pulse * 0.025;
-    return {
-      source: effectiveReceiverEnvelopeSource,
-      supportScalar,
-      frameIndex,
-      phase,
-      pulse,
-      sceneContextScale,
-      centerX: Math.max(0.22, Math.min(0.62, 0.40 + drift + (supportScalar - 0.45) * 0.045)),
-      centerY: Math.max(0.36, Math.min(0.78, 0.62 - lift - supportScalar * 0.10)),
-    };
-  };
-  const drawReceiverEnvelope = (volumeState = {}, fallbackFrame = 0) => {
-    const envelope = resolveReceiverEnvelope(volumeState, fallbackFrame);
-    const { supportScalar, frameIndex, phase, pulse, sceneContextScale, centerX, centerY } = envelope;
-    const width = (48 + supportScalar * 70 + pulse * 14) * sceneContextScale;
-    const height = (126 + supportScalar * 78 + Math.sin(phase * 0.31) * 16) * sceneContextScale;
-    const x = centerX * receiverLightMaskCanvas.width;
-    const y = centerY * receiverLightMaskCanvas.height;
-    dynamicEnvelope.previousCenter = dynamicEnvelope.center;
-    dynamicEnvelope.center = { x: centerX, y: centerY };
-    dynamicEnvelope.motionMagnitude = Math.hypot(
-      dynamicEnvelope.center.x - dynamicEnvelope.previousCenter.x,
-      dynamicEnvelope.center.y - dynamicEnvelope.previousCenter.y
-    );
-    dynamicEnvelope.energy = supportScalar * sceneContextScale;
-    dynamicEnvelope.frameCount = frameIndex;
-    dynamicEnvelope.revision += 1;
-
-    receiverLightMaskContext.setTransform(1, 0, 0, 1, 0, 0);
-    receiverLightMaskContext.globalAlpha = 1;
-    receiverLightMaskContext.globalCompositeOperation = 'source-over';
-    receiverLightMaskContext.fillStyle = 'black';
-    receiverLightMaskContext.fillRect(0, 0, receiverLightMaskCanvas.width, receiverLightMaskCanvas.height);
-
-    const receiverGradient = receiverLightMaskContext.createRadialGradient(x - width * 0.12, y + height * 0.04, 7, x, y, height);
-    receiverGradient.addColorStop(0.0, 'rgb(255, 255, 255)');
-    receiverGradient.addColorStop(0.24, 'rgb(220, 220, 220)');
-    receiverGradient.addColorStop(0.56, 'rgb(92, 92, 92)');
-    receiverGradient.addColorStop(1.0, 'rgb(0, 0, 0)');
-    receiverLightMaskContext.fillStyle = receiverGradient;
-    receiverLightMaskContext.fillRect(0, 0, receiverLightMaskCanvas.width, receiverLightMaskCanvas.height);
-
-    receiverLightMaskContext.globalAlpha = (0.25 + supportScalar * 0.26) * sceneContextScale;
-    receiverLightMaskContext.fillStyle = 'rgb(255, 255, 255)';
-    receiverLightMaskContext.beginPath();
-    receiverLightMaskContext.ellipse(x - width * 0.12, y + height * 0.02, width * 0.32, height * 0.48, -0.10 + Math.sin(phase * 0.29) * 0.08, 0, Math.PI * 2);
-    receiverLightMaskContext.fill();
-    receiverLightMaskContext.globalAlpha = (0.16 + supportScalar * 0.20) * sceneContextScale;
-    receiverLightMaskContext.beginPath();
-    receiverLightMaskContext.ellipse(x + width * 0.18, y + height * 0.17, width * 0.26, height * 0.34, 0.20 + Math.sin(phase * 0.41) * 0.12, 0, Math.PI * 2);
-    receiverLightMaskContext.fill();
-    receiverLightMaskContext.globalAlpha = (0.11 + supportScalar * 0.12) * sceneContextScale;
-    receiverLightMaskContext.beginPath();
-    receiverLightMaskContext.ellipse(x + Math.sin(phase * 0.33) * 26, 222, 92 + supportScalar * 50, 34 + pulse * 12, 0, 0, Math.PI * 2);
-    receiverLightMaskContext.fill();
-    receiverLightMaskContext.globalAlpha = 1;
-    receiverLightMaskContext.globalCompositeOperation = 'source-over';
-    if (receiverLightMaskTexture) receiverLightMaskTexture.needsUpdate = true;
-  };
-  drawReceiverEnvelope({ lastFrameEnergy: 3.0, frameCount: 0 }, 0);
-  receiverLightMaskTexture = new THREE.CanvasTexture(receiverLightMaskCanvas);
-  receiverLightMaskTexture.name = 'tier2-receiver-light-envelope-texture-v0';
-  receiverLightMaskTexture.colorSpace = THREE.NoColorSpace;
   const receiverMaskMaterial = new THREE.MeshBasicMaterial({
     color: 0xffffff,
-    map: receiverLightMaskTexture,
     depthTest: true,
     depthWrite: true,
     side: THREE.DoubleSide,
   });
-  const warmReceiverColor = vec3(1.0, 0.42, 0.08);
   const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
   const receiverMaskRenderTarget = new THREE.RenderTarget(
     Math.max(1, Math.round(drawSize.x)),
@@ -19933,12 +19789,56 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
   floor.position.set(0.12, -0.86, 0.12);
   addReceiverProxy(floor, 'floor');
 
+  const createBlackAttachment = label => sharedGpu.device.createTexture({
+    label,
+    size: { width: 1, height: 1, depthOrArrayLayers: 1 },
+    format: 'rgba16float',
+    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+  });
+  const blackRadianceTexture = createBlackAttachment('kaminos receiver black radiance placeholder');
+  const blackMomentsTexture = createBlackAttachment('kaminos receiver black moments placeholder');
+  const radianceExternalTexture = new THREE.ExternalTexture(blackRadianceTexture);
+  const momentsExternalTexture = new THREE.ExternalTexture(blackMomentsTexture);
+  for (const externalTexture of [radianceExternalTexture, momentsExternalTexture]) {
+    externalTexture.image = { width: 1, height: 1, depth: 1 };
+    externalTexture.format = THREE.RGBAFormat;
+    externalTexture.type = THREE.HalfFloatType;
+    externalTexture.colorSpace = THREE.NoColorSpace;
+    externalTexture.minFilter = THREE.LinearFilter;
+    externalTexture.magFilter = THREE.LinearFilter;
+    externalTexture.generateMipmaps = false;
+  }
+  radianceExternalTexture.name = 'tier2-native-splat-radiance-attachment-v0';
+  momentsExternalTexture.name = 'tier2-native-splat-moments-attachment-v0';
+
+  const attachmentUv = viewportUV;
+  const radianceTextureNode = texture(radianceExternalTexture);
+  const momentsTextureNode = texture(momentsExternalTexture);
+  const receiverTaps = [
+    [0.000, 0.000, 0.16],
+    [-0.022, 0.000, 0.10], [0.022, 0.000, 0.10], [0.000, -0.022, 0.10], [0.000, 0.022, 0.10],
+    [-0.060, 0.000, 0.065], [0.060, 0.000, 0.065], [0.000, -0.060, 0.065], [0.000, 0.060, 0.065],
+    [-0.115, 0.000, 0.032], [0.115, 0.000, 0.032], [0.000, -0.115, 0.032], [0.000, 0.115, 0.032],
+  ];
+  let spreadRadianceNode = vec3(0.0);
+  let spreadCoverageNode = float(0.0);
+  for (const [x, y, weight] of receiverTaps) {
+    const sampleUv = attachmentUv.add(vec2(x, y));
+    const radianceSample = radianceTextureNode.sample(sampleUv);
+    const momentsSample = momentsTextureNode.sample(sampleUv);
+    spreadRadianceNode = spreadRadianceNode.add(radianceSample.rgb.mul(weight));
+    spreadCoverageNode = spreadCoverageNode.add(
+      radianceSample.a.max(momentsSample.g.mul(0.025)).mul(weight)
+    );
+  }
   const receiverMaskNode = texture(receiverMaskRenderTarget.texture).sample(viewportUV).r;
   const receiverStrength = uniform(0.0);
   const isolateMix = uniform(isTier2ReceiverLightIsolateRoute(params) ? 1.0 : 0.0);
-  const receiverLightNode = vec4(warmReceiverColor.mul(receiverMaskNode).mul(receiverStrength), 1.0);
+  const receiverSupportNode = spreadCoverageNode.mul(1.5).clamp(0.18, 1.0);
+  const receiverSignalNode = spreadRadianceNode.mul(receiverSupportNode).mul(receiverMaskNode).mul(receiverStrength);
+  const receiverLightNode = vec4(receiverSignalNode, 1.0);
   const outputNode = mix(
-    baseOutputNode.add(vec4(warmReceiverColor.mul(receiverMaskNode).mul(receiverStrength), 0.0)),
+    baseOutputNode.add(vec4(receiverSignalNode, 0.0)),
     receiverLightNode,
     isolateMix
   );
@@ -19947,32 +19847,93 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
     receiverMaskAuthority: TIER2_RECEIVER_MASK_AUTHORITY,
     supportIdentity: TIER2_RECEIVER_SUPPORT_IDENTITY,
-	    supportAuthority: TIER2_RECEIVER_SUPPORT_AUTHORITY,
-	    receiverBufferSource: TIER2_RECEIVER_BUFFER_SOURCE,
-	    dynamicEnvelopeIdentity: TIER2_RECEIVER_DYNAMIC_ENVELOPE_IDENTITY,
-	    dynamicEnvelopeSource: 'pending-envelope-source-resolution',
-	    requestedEnvelopeSource: requestedReceiverEnvelopeSource,
-	    effectiveEnvelopeSource: effectiveReceiverEnvelopeSource,
-	    supportScalarSource: 'pending-envelope-source-resolution',
-	    splatMomentEnvelopeAccepted: false,
-	    splatMomentEnvelope: null,
-	    envelopeFallbackReason: null,
-	    cpuReadbackAuthority: false,
+    supportAuthority: TIER2_RECEIVER_SUPPORT_AUTHORITY,
+    receiverBufferSource: TIER2_RECEIVER_BUFFER_SOURCE,
+    attachmentIdentity: TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE,
+    effectiveAttachmentIdentity: null,
+    attachmentAuthority: 'native-shared-device-gpu-texture-only-v0',
+    attachmentStatus: 'unavailable',
+    attachmentReason: 'volume-producer-not-initialized',
+    attachmentGeneration: 0,
+    attachmentFrameCount: 0,
+    attachmentPhaseSourceIdentity: null,
+    attachmentRendererIdentity: null,
+    attachmentModelIdentity: null,
+    attachmentSourceAuthority: null,
+    attachmentSelectorPolicyIdentity: null,
+    attachmentHistoryRingIdentity: null,
+    attachmentHistoryAllocationIdentity: null,
+    attachmentHistoryAllocationGeneration: 0,
+    cpuReadbackAuthority: false,
     hiddenThreeLightAuthority: false,
     canvasBridgeAuthority: false,
+    fallbackAuthority: false,
     active: false,
     isolate: isolateMix.value > 0,
     receiverCount: receiverProxies.length,
-    lastSupportScalar: 0,
-    lastFrameCount: 0,
-    dynamicEnvelopeFrameCount: 0,
-    lastEnvelopeRevision: 0,
-    lastEnvelopeCenter: { x: 0, y: 0 },
-    lastEnvelopeMotionMagnitude: 0,
-    lastEnvelopeEnergy: 0,
-    lastSceneContextEnvelopeScale: 1,
     receiverRenderFrameCount: 0,
     lastRenderTargetSize: { width: receiverMaskRenderTarget.width, height: receiverMaskRenderTarget.height },
+  };
+  let boundAttachmentKey = 'black';
+
+  const replaceExternalTextureSource = (externalTexture, sourceTexture, width, height) => {
+    externalTexture.sourceTexture = sourceTexture;
+    externalTexture.image = { width, height, depth: 1 };
+    const backendTextureData = renderer.backend.get(externalTexture);
+    const managedTextureData = renderer._textures.get(externalTexture);
+    if (backendTextureData.initialized === true || managedTextureData.initialized === true) {
+      externalTexture.version += 1;
+      backendTextureData.texture = sourceTexture;
+      managedTextureData.version = externalTexture.version;
+      managedTextureData.generation = externalTexture.version;
+    }
+  };
+
+  const bindBlackAttachments = reason => {
+    if (boundAttachmentKey !== 'black') {
+      replaceExternalTextureSource(radianceExternalTexture, blackRadianceTexture, 1, 1);
+      replaceExternalTextureSource(momentsExternalTexture, blackMomentsTexture, 1, 1);
+      boundAttachmentKey = 'black';
+    }
+    receiverStrength.value = 0;
+    state.effectiveAttachmentIdentity = null;
+    state.attachmentStatus = 'unavailable';
+    state.attachmentReason = reason;
+  };
+
+  const bindNativeAttachments = attachments => {
+    const attachmentKey = `${attachments.textureGeneration}:${attachments.width}x${attachments.height}`;
+    if (boundAttachmentKey !== attachmentKey) {
+      radianceExternalTexture.sourceTexture = attachments.radianceTexture;
+      momentsExternalTexture.sourceTexture = attachments.momentsTexture;
+      replaceExternalTextureSource(
+        radianceExternalTexture,
+        attachments.radianceTexture,
+        attachments.width,
+        attachments.height
+      );
+      replaceExternalTextureSource(
+        momentsExternalTexture,
+        attachments.momentsTexture,
+        attachments.width,
+        attachments.height
+      );
+      boundAttachmentKey = attachmentKey;
+    }
+    receiverStrength.value = state.isolate ? 1.35 : 0.82;
+    state.effectiveAttachmentIdentity = attachments.identity;
+    state.attachmentStatus = attachments.status;
+    state.attachmentReason = null;
+    state.attachmentGeneration = attachments.textureGeneration;
+    state.attachmentFrameCount = attachments.frameCount;
+    state.attachmentPhaseSourceIdentity = attachments.phaseSourceIdentity;
+    state.attachmentRendererIdentity = attachments.rendererIdentity;
+    state.attachmentModelIdentity = attachments.attributeModelIdentity;
+    state.attachmentSourceAuthority = attachments.sourceAuthority;
+    state.attachmentSelectorPolicyIdentity = attachments.selectorPolicyIdentity;
+    state.attachmentHistoryRingIdentity = attachments.historyRingIdentity;
+    state.attachmentHistoryAllocationIdentity = attachments.historyAllocationIdentity;
+    state.attachmentHistoryAllocationGeneration = attachments.historyAllocationGeneration;
   };
 
   const setNativeVolumeVisibility = () => {
@@ -19997,29 +19958,6 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
   };
 
   const routeActive = () => isTier2ReceiverLightRoute();
-	  const updateStrength = () => {
-	    const volumeState = volumePrototype?.debugState?.() || {};
-	    const envelope = resolveReceiverEnvelope(volumeState, state.receiverRenderFrameCount + 1);
-	    const supportScalar = envelope.supportScalar;
-	    const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
-	    const sceneContextStrengthScale = sceneContextActive ? 0.18 : 1.0;
-	    drawReceiverEnvelope(volumeState, state.receiverRenderFrameCount + 1);
-	    receiverStrength.value = supportScalar * (state.isolate ? 1.35 : 1.8 * sceneContextStrengthScale);
-	    state.effectiveEnvelopeSource = effectiveReceiverEnvelopeSource;
-	    state.dynamicEnvelopeSource = effectiveReceiverEnvelopeSource;
-	    state.supportScalarSource = effectiveReceiverEnvelopeSource;
-	    state.splatMomentEnvelopeAccepted = effectiveReceiverEnvelopeSource === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE;
-	    state.splatMomentEnvelope = lastSplatMomentEnvelope ? { ...lastSplatMomentEnvelope } : null;
-	    state.envelopeFallbackReason = lastEnvelopeFallbackReason;
-	    state.lastSupportScalar = supportScalar;
-    state.lastFrameCount = Number(volumeState.frameCount || 0);
-    state.dynamicEnvelopeFrameCount = dynamicEnvelope.frameCount;
-    state.lastEnvelopeRevision = dynamicEnvelope.revision;
-    state.lastEnvelopeCenter = dynamicEnvelope.center;
-    state.lastEnvelopeMotionMagnitude = dynamicEnvelope.motionMagnitude;
-    state.lastEnvelopeEnergy = dynamicEnvelope.energy;
-    state.lastSceneContextEnvelopeScale = sceneContextStrengthScale;
-  };
 
   return {
     identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
@@ -20031,10 +19969,20 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
       isolateMix.value = state.active && state.isolate ? 1.0 : 0.0;
       setNativeVolumeVisibility();
       if (!state.active) {
-        receiverStrength.value = 0;
+        bindBlackAttachments('receiver-route-inactive');
         return false;
       }
-      updateStrength();
+      const attachments = volumePrototype?.receiverLightAttachments?.();
+      const nativeAttachmentsEffective = attachments?.status === 'effective'
+        && attachments.identity === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE
+        && attachments.device === sharedGpu.device
+        && attachments.radianceTexture
+        && attachments.momentsTexture;
+      if (nativeAttachmentsEffective) {
+        bindNativeAttachments(attachments);
+      } else {
+        bindBlackAttachments(attachments?.reason || 'native-receiver-attachments-unavailable');
+      }
       const previousTarget = renderer.getRenderTarget();
       const previousClearColor = renderer.getClearColor(new THREE.Color());
       const previousClearAlpha = renderer.getClearAlpha();
@@ -20066,12 +20014,19 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
       };
     },
     dispose() {
+      state.active = false;
       setNativeVolumeVisibility();
+      bindBlackAttachments('receiver-light-pass-disposed');
+      const radianceWrapperWasInitialized = renderer._textures.get(radianceExternalTexture).initialized === true;
+      const momentsWrapperWasInitialized = renderer._textures.get(momentsExternalTexture).initialized === true;
+      radianceExternalTexture.dispose();
+      momentsExternalTexture.dispose();
       receiverScene.remove(...receiverProxies);
       for (const mesh of receiverProxies) mesh.geometry.dispose();
-      receiverLightMaskTexture.dispose();
       receiverMaskMaterial.dispose();
       receiverMaskRenderTarget.dispose();
+      if (!radianceWrapperWasInitialized) blackRadianceTexture.destroy();
+      if (!momentsWrapperWasInitialized) blackMomentsTexture.destroy();
     },
   };
 }
@@ -20687,6 +20642,9 @@ async function initKaminosVolumeRoute() {
     viewport: document.getElementById('viewport'),
     camera,
     controls,
+    gpuDevice: sharedGpu.device,
+    gpuAdapter: sharedGpu.adapter,
+    gpuDeviceContract: sharedGpu,
     getControls: readVolumeControls,
     onStatus: status => {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
