@@ -17,6 +17,7 @@ const ROLE_AUTHORITIES = Object.freeze({
 });
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
+const expectedComposition = new URL(url).searchParams.get('composition') || 'smoke-raymarch-under-splats-v0';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-selective-head-live-sequence.mp4'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-selective-head-live-sequence.json'));
 const contactPath = resolve(String(args.get('--contact') || out.replace(/\.mp4$/i, '-contact.png')));
@@ -102,9 +103,11 @@ try {
       && state?.warmupComplete === true
       && state?.warmupReceipt?.completedSteps === state?.warmupTarget
       && state?.effectiveRole === state?.requestedRole
+      && state?.effectiveComposition === expectedComposition
       && state?.roleAuthority === expectedRoleAuthority
       && state?.modelIdentity === MODEL
       && !state?.fallbackReason
+      && !state?.compositionFallbackReason
       && !state?.boundarySplatFallbackReason
     ) break;
     await delay(250);
@@ -114,6 +117,7 @@ try {
   assert.equal(state?.warmupComplete, true, 'trained replay warmup was incomplete');
   assert.equal(state?.warmupReceipt?.completedSteps, state?.warmupTarget, 'warmup receipt did not match the requested horizon');
   assert.equal(state?.effectiveRole, state?.requestedRole, 'requested role silently fell back');
+  assert.equal(state?.effectiveComposition, expectedComposition, 'requested composition silently fell back');
   assert.equal(state?.roleAuthority, expectedRoleAuthority, 'requested role used the wrong composition authority');
   assert.equal(state?.modelIdentity, MODEL, 'wrong frozen model identity');
 
@@ -143,6 +147,9 @@ try {
     assert.equal(Number(stepReceipt.simStepCount), previousStep + 1, `simulation step discontinuity before captured frame ${frameIndex}`);
     assert.equal(stepReceipt.effectiveRole, stepReceipt.requestedRole, `renderer-internal step ${frameIndex} changed role`);
     assert.equal(stepReceipt.roleAuthority, expectedRoleAuthority, `renderer-internal step ${frameIndex} changed composition authority`);
+    assert.equal(stepReceipt.selectiveHeadLiveCompositionEffective, expectedComposition, `composition drift during renderer-internal step ${frameIndex}`);
+    assert.equal(stepReceipt.selectiveHeadLiveCompositionFallbackReason, null, `renderer-internal step ${frameIndex} reported composition fallback`);
+    assert.ok(stepReceipt.selectiveHeadLivePassReceipt, `renderer-internal step ${frameIndex} omitted selectiveHeadLivePassReceipt`);
     assert.equal(stepReceipt.fallbackReason, null, `renderer-internal step ${frameIndex} reported model fallback`);
     assert.equal(stepReceipt.boundarySplatFallbackReason, null, `renderer-internal step ${frameIndex} reported splat fallback`);
     const capture = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, clip });
@@ -185,6 +192,12 @@ try {
     requestedRole: state.requestedRole,
     effectiveRole: state.effectiveRole,
     roleAuthority: state.roleAuthority,
+    expectedComposition,
+    requestedComposition: state.requestedComposition,
+    effectiveComposition: state.effectiveComposition,
+    compositionAuthority: state.compositionAuthority,
+    compositionFallbackReason: state.compositionFallbackReason,
+    selectiveHeadLivePassReceipt: state.selectiveHeadLivePassReceipt,
     modelIdentity: state.modelIdentity,
     featureAuthority: state.featureAuthority,
     pairAuthority: state.pairAuthority,
@@ -290,13 +303,18 @@ async function waitForTarget(debugPort, timeout) {
       const response = await fetch(`http://127.0.0.1:${debugPort}/json/list`);
       if (response.ok) {
         const targets = await response.json();
-        const target = targets.find(item => item.type === 'page');
+        const target = targets.find(isInspectablePageTarget);
         if (target?.webSocketDebuggerUrl) return target;
       }
     } catch {}
     await delay(100);
   }
   throw new Error('Chrome debugging target did not appear');
+}
+
+function isInspectablePageTarget(target) {
+  const targetUrl = String(target?.url || '');
+  return target?.type === 'page' && !targetUrl.startsWith('chrome-extension://');
 }
 
 async function evaluate(cdp, expression) {
