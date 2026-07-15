@@ -1,0 +1,138 @@
+{
+  "schema": "kaminos.smoke-oracle-teacher-capture-report.v0",
+  "status": "captured",
+  "requestedRoute": "http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_resolution=64&volume_majorant_grid=32&volume_render_scale=0.35&volume_steps=64",
+  "outDir": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v4-r64-c256k-oneframe",
+  "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v4-r64-c256k-oneframe/teacher-capture-report.json",
+  "frames": [
+    {
+      "frameIndex": 0,
+      "frameId": "sim-step-82",
+      "simStepCount": 82,
+      "frameCount": 82,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "sampleAuthority": "render-only-frozen-sim-state",
+      "sequence": {
+        "sequenceAuthority": "controlled-step-sequence-v0",
+        "sampleSetAuthority": "frame-locked-render-scale-set-v0",
+        "sampleAuthority": "render-only-frozen-sim-state",
+        "sameBrowserSessionId": "same-browser-f82-s82-1268",
+        "sequenceStartNowMs": 1268.3999999985099,
+        "controlledStepFrameIndex": 0,
+        "controlledStepDeltaMs": 220,
+        "controlledStepNowMs": 1268.3999999985099,
+        "controlledStepCapture": {
+          "ok": true,
+          "sampleAuthority": "controlled-step-initial-state",
+          "beforeFrameCount": 82,
+          "beforeSimStepCount": 82,
+          "afterFrameCount": 82,
+          "afterSimStepCount": 82,
+          "controlledStepNowMs": 1268.3999999985099
+        },
+        "sameStateCaptureId": "same-browser-f82-s82-1268-frame-001-s82",
+        "baseFrameCount": 82,
+        "baseSimStepCount": 82,
+        "fixedNowMs": 1268.3999999985099,
+        "renderScales": [
+          0.35
+        ]
+      },
+      "render": {
+        "path": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v4-r64-c256k-oneframe/sim-step-82.raymarch.png",
+        "sha256": "sha256:5d728a45e08434327140eecbd6d7f99713b6b03387c6c3ce6149b617cab3ea08",
+        "width": 203,
+        "height": 251,
+        "meanLuma": 16.352387899159442,
+        "litPixels": 2000,
+        "smokeLikePixels": 1685
+      },
+      "denseField": {
+        "manifestPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v4-r64-c256k-oneframe/sim-step-82.manifest.json",
+        "manifestIdentity": "sha256:689459f05325d4bbd7a1642649aed2a40d645935eec5c7a4703d13e03b245146",
+        "fluidPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v4-r64-c256k-oneframe/sim-step-82.fluid.f32",
+        "fluidIdentity": "sha256:6265d57951010d04971423d3838e721023777cf4fcf076803e5e6dafe3d426bf",
+        "byteLength": 16777216,
+        "grid": 64,
+        "chunkCount": 64
+      },
+      "simReadback": {
+        "grid": 64,
+        "densityMax": 0.6805798959732056,
+        "smokeWeight": 181.84697749669618,
+        "smokeVisualRiseDisplacement": 0.41873758668567584,
+        "liveVoxels": 1666
+      }
+    }
+  ],
+  "failures": [],
+  "chunkBytes": 262144,
+  "cdpRequestTimeoutMs": 120000,
+  "cdpStartupTimeoutMs": 15000,
+  "cdpProbeTimeoutMs": 1000,
+  "controlledStep": true,
+  "teacherRenderScale": 0.35,
+  "port": 9624,
+  "windowSize": "960,720",
+  "userDataDir": "/tmp/kaminos-smoke-oracle-teacher-profile-9624",
+  "keepBrowserOpen": false,
+  "reuseBrowser": false,
+  "createdAt": "2026-07-15T07:44:40.822Z",
+  "phase": "frame-0-dense-export",
+  "updatedAt": "2026-07-15T07:44:43.817Z",
+  "browserSession": {
+    "identity": "smoke-oracle-teacher-per-capture-cdp-browser-v0",
+    "mode": "launched-per-capture",
+    "port": 9624,
+    "userDataDir": "/tmp/kaminos-smoke-oracle-teacher-profile-9624",
+    "windowSize": "960,720",
+    "keepBrowserOpen": false
+  },
+  "browser": {
+    "Browser": "Chrome/150.0.7871.115",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9624/devtools/browser/4744ed0e-7500-4fba-8eba-954b328ca434"
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "frame-0-sample",
+    "frameId": "sim-step-82",
+    "simStepCount": 82,
+    "frameCount": 82,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "image": {
+      "path": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v4-r64-c256k-oneframe/sim-step-82.raymarch.png",
+      "sha256": "sha256:5d728a45e08434327140eecbd6d7f99713b6b03387c6c3ce6149b617cab3ea08",
+      "byteLength": 25286
+    },
+    "sequence": {
+      "sequenceAuthority": "controlled-step-sequence-v0",
+      "sampleSetAuthority": "frame-locked-render-scale-set-v0",
+      "sampleAuthority": "render-only-frozen-sim-state",
+      "sameBrowserSessionId": "same-browser-f82-s82-1268",
+      "sequenceStartNowMs": 1268.3999999985099,
+      "controlledStepFrameIndex": 0,
+      "controlledStepDeltaMs": 220,
+      "controlledStepNowMs": 1268.3999999985099,
+      "controlledStepCapture": {
+        "ok": true,
+        "sampleAuthority": "controlled-step-initial-state",
+        "beforeFrameCount": 82,
+        "beforeSimStepCount": 82,
+        "afterFrameCount": 82,
+        "afterSimStepCount": 82,
+        "controlledStepNowMs": 1268.3999999985099
+      },
+      "sameStateCaptureId": "same-browser-f82-s82-1268-frame-001-s82",
+      "baseFrameCount": 82,
+      "baseSimStepCount": 82,
+      "fixedNowMs": 1268.3999999985099,
+      "renderScales": [
+        0.35
+      ]
+    },
+    "observedAt": "2026-07-15T07:44:42.994Z"
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "schema": "kaminos.smoke-oracle-teacher-capture-report.v0",
+  "status": "failed",
+  "requestedRoute": "http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_resolution=64&volume_majorant_grid=32&volume_render_scale=0.35&volume_steps=64",
+  "outDir": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v3-r64-oneframe",
+  "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v3-r64-oneframe/teacher-capture-report.json",
+  "frames": [],
+  "failures": [
+    {
+      "message": "Runtime.evaluate timed out after 120000ms",
+      "stack": "Error: Runtime.evaluate timed out after 120000ms\n    at Timeout._onTimeout (file:///private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/scripts/capture-smoke-oracle-teacher-sequence.mjs:86:17)\n    at listOnTimeout (node:internal/timers:605:17)\n    at process.processTimers (node:internal/timers:541:7)",
+      "signal": null,
+      "capturedFrameCount": 0,
+      "lastTrustworthyEvidence": {
+        "phase": "frame-0-sample",
+        "frameId": "sim-step-22",
+        "simStepCount": 22,
+        "frameCount": 22,
+        "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+        "prototypeIdentity": "kaminos-volume-prototype-v0",
+        "backend": "WebGPU:apple",
+        "image": {
+          "path": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v3-r64-oneframe/sim-step-22.raymarch.png",
+          "sha256": "sha256:f7a993c1cc9174bd815a1db67b890f6788c9f2e534617adf877a8eeae4e433a8",
+          "byteLength": 13713
+        },
+        "sequence": {
+          "sequenceAuthority": "controlled-step-sequence-v0",
+          "sampleSetAuthority": "frame-locked-render-scale-set-v0",
+          "sampleAuthority": "render-only-frozen-sim-state",
+          "sameBrowserSessionId": "same-browser-f22-s22-4084",
+          "sequenceStartNowMs": 4083.8000000044703,
+          "controlledStepFrameIndex": 0,
+          "controlledStepDeltaMs": 220,
+          "controlledStepNowMs": 4083.8000000044703,
+          "controlledStepCapture": {
+            "ok": true,
+            "sampleAuthority": "controlled-step-initial-state",
+            "beforeFrameCount": 22,
+            "beforeSimStepCount": 22,
+            "afterFrameCount": 22,
+            "afterSimStepCount": 22,
+            "controlledStepNowMs": 4083.8000000044703
+          },
+          "sameStateCaptureId": "same-browser-f22-s22-4084-frame-001-s22",
+          "baseFrameCount": 22,
+          "baseSimStepCount": 22,
+          "fixedNowMs": 4083.8000000044703,
+          "renderScales": [
+            0.35
+          ]
+        },
+        "observedAt": "2026-07-15T07:42:05.374Z"
+      }
+    }
+  ],
+  "chunkBytes": 4194304,
+  "cdpRequestTimeoutMs": 120000,
+  "cdpStartupTimeoutMs": 15000,
+  "cdpProbeTimeoutMs": 1000,
+  "controlledStep": true,
+  "teacherRenderScale": 0.35,
+  "port": 9623,
+  "windowSize": "960,720",
+  "userDataDir": "/tmp/kaminos-smoke-oracle-teacher-profile-9623",
+  "keepBrowserOpen": false,
+  "reuseBrowser": false,
+  "createdAt": "2026-07-15T07:42:00.522Z",
+  "phase": "frame-0-dense-export",
+  "updatedAt": "2026-07-15T07:44:05.377Z",
+  "browserSession": {
+    "identity": "smoke-oracle-teacher-per-capture-cdp-browser-v0",
+    "mode": "launched-per-capture",
+    "port": 9623,
+    "userDataDir": "/tmp/kaminos-smoke-oracle-teacher-profile-9623",
+    "windowSize": "960,720",
+    "keepBrowserOpen": false
+  },
+  "browser": {
+    "Browser": "Chrome/150.0.7871.115",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9623/devtools/browser/01610bfc-5c64-45d5-9787-29f222e97bbd"
+  },
+  "lastTrustworthyEvidence": {
+    "phase": "frame-0-sample",
+    "frameId": "sim-step-22",
+    "simStepCount": 22,
+    "frameCount": 22,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "image": {
+      "path": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v3-r64-oneframe/sim-step-22.raymarch.png",
+      "sha256": "sha256:f7a993c1cc9174bd815a1db67b890f6788c9f2e534617adf877a8eeae4e433a8",
+      "byteLength": 13713
+    },
+    "sequence": {
+      "sequenceAuthority": "controlled-step-sequence-v0",
+      "sampleSetAuthority": "frame-locked-render-scale-set-v0",
+      "sampleAuthority": "render-only-frozen-sim-state",
+      "sameBrowserSessionId": "same-browser-f22-s22-4084",
+      "sequenceStartNowMs": 4083.8000000044703,
+      "controlledStepFrameIndex": 0,
+      "controlledStepDeltaMs": 220,
+      "controlledStepNowMs": 4083.8000000044703,
+      "controlledStepCapture": {
+        "ok": true,
+        "sampleAuthority": "controlled-step-initial-state",
+        "beforeFrameCount": 22,
+        "beforeSimStepCount": 22,
+        "afterFrameCount": 22,
+        "afterSimStepCount": 22,
+        "controlledStepNowMs": 4083.8000000044703
+      },
+      "sameStateCaptureId": "same-browser-f22-s22-4084-frame-001-s22",
+      "baseFrameCount": 22,
+      "baseSimStepCount": 22,
+      "fixedNowMs": 4083.8000000044703,
+      "renderScales": [
+        0.35
+      ]
+    },
+    "observedAt": "2026-07-15T07:42:05.374Z"
+  },
+  "failurePhase": "frame-0-dense-export"
+}

@@ -1,0 +1,32 @@
+{
+  "schema": "kaminos.smoke-oracle-teacher-capture-report.v0",
+  "status": "failed",
+  "requestedRoute": "http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1&volume_resolution=64&volume_majorant_grid=32&volume_render_scale=0.35&volume_steps=64",
+  "outDir": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v2-r64-oneframe",
+  "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v2-r64-oneframe/teacher-capture-report.json",
+  "frames": [],
+  "failures": [
+    {
+      "message": "SIGINT interrupted smoke oracle teacher capture before CDP/report phase advanced; this report was normalized after the pre-signal-handler CLI run",
+      "stack": null,
+      "signal": "SIGINT",
+      "capturedFrameCount": 0,
+      "lastTrustworthyEvidence": null
+    }
+  ],
+  "chunkBytes": 4194304,
+  "cdpTimeoutMs": 120000,
+  "orphanArtifacts": [
+    {
+      "path": "sim-step-103.raymarch.png",
+      "sha256": "sha256:a7df816749a9611759098857d629d81d7c1e47b581dc38de18bb5ea61a4f635d",
+      "width": 203,
+      "height": 251,
+      "authority": "orphaned-pre-signal-handler-output-without-durable-frame-route-record",
+      "useAsTeacher": false
+    }
+  ],
+  "createdAt": "2026-07-15T07:37:13.552Z",
+  "failurePhase": "cdp-startup",
+  "updatedAt": "2026-07-15T07:45:30Z"
+}

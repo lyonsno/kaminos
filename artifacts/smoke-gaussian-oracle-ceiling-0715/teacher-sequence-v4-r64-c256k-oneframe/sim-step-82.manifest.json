@@ -1,0 +1,91 @@
+{
+  "schema": "kaminos.volume.full-grid-field-export.v0",
+  "identity": "full-grid-fluid-front-boundary-sidecars-v0",
+  "status": "captured",
+  "completeFieldCoverage": true,
+  "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+  "prototypeIdentity": "kaminos-volume-prototype-v0",
+  "backend": "WebGPU:apple",
+  "sampleAuthority": "render-only-frozen-sim-state",
+  "grid": 64,
+  "fluidChannelOrder": [
+    "velocityX",
+    "velocityY",
+    "velocityZ",
+    "densityCarrier",
+    "smokeDensity",
+    "heat",
+    "fuel",
+    "detail",
+    "flame",
+    "ember",
+    "visibleFireCarrier",
+    "combustionFront",
+    "microdetail",
+    "interfaceShred",
+    "fireLick",
+    "emberFleck"
+  ],
+  "worldSpace": {
+    "coordinateFrame": "kaminos-volume-world-v0",
+    "transformAuthority": "native-volume-grid-world-transform-v0",
+    "bounds": {
+      "minimum": [
+        -1,
+        -1,
+        -1
+      ],
+      "maximum": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "sidecars": {
+    "fluid": {
+      "kind": "fluid",
+      "dtype": "float32",
+      "byteOrder": "little-endian",
+      "floatCount": 4194304,
+      "byteLength": 16777216,
+      "shape": [
+        64,
+        64,
+        64,
+        16
+      ],
+      "channelOrder": [
+        "velocityX",
+        "velocityY",
+        "velocityZ",
+        "densityCarrier",
+        "smokeDensity",
+        "heat",
+        "fuel",
+        "detail",
+        "flame",
+        "ember",
+        "visibleFireCarrier",
+        "combustionFront",
+        "microdetail",
+        "interfaceShred",
+        "fireLick",
+        "emberFleck"
+      ],
+      "path": "sim-step-82.fluid.f32",
+      "sha256": "6265d57951010d04971423d3838e721023777cf4fcf076803e5e6dafe3d426bf"
+    }
+  },
+  "deterministicReplay": {
+    "identity": "deterministic-replay-same-route-controls-fixed-step-v0",
+    "authority": "same-route-controls-fixed-step-replay",
+    "completedSteps": 82,
+    "simStepCount": 82,
+    "controlsSignature": "{\"absorption\":2,\"adaptiveRays\":0,\"bonfireDepinch\":1,\"bonfireDetailForces\":1,\"bonfireInstabilityProbe\":0,\"bonfireLateralDamping\":1,\"bonfireProjection\":1,\"bonfireRecenter\":1,\"bonfireShear\":1,\"bonfireTemporal\":1,\"boundarySidecarBlur\":0.46,\"boundarySidecarControls\":{},\"boundarySidecarRidge\":1,\"boundarySidecarSource\":\"live\",\"boundarySidecarView\":\"off\",\"boundarySidecarWidth\":0.76,\"boundarySplatComposition\":\"splat-only\",\"boundarySplatFeatureCapture\":false,\"boundarySplatFieldLayout\":\"proof\",\"boundarySplatHistoryDepth\":4,\"boundarySplatHistoryFrameStride\":1,\"boundarySplatInstances\":1,\"boundarySplatMode\":\"off\",\"boundarySplatPhaseMode\":\"offset-history\",\"boundarySplatPhaseStride\":1,\"boundarySplatRadius\":1,\"boundarySplatSharpness\":3.4,\"canonicalBodyBalance\":0,\"canonicalBuoyancy\":1,\"canonicalCenterline\":1,\"canonicalContentMode\":\"smoke\",\"canonicalContentModeValue\":0,\"canonicalMacroPreset\":\"\",\"canonicalMotionMode\":\"animated\",\"canonicalMotionModeValue\":0,\"canonicalRenderMode\":\"default\",\"canonicalRenderModeValue\":0,\"canonicalSourceInjection\":1,\"canonicalSourceMode\":\"current\",\"canonicalSourceModeValue\":0,\"canonicalSourceY\":-0.74,\"canonicalSpread\":1,\"curl\":2.3,\"density\":3.05,\"detailScale\":1,\"fire\":0.1,\"fireLicks\":3.25,\"fireRenderMode\":\"shell\",\"fireScale\":0.42,\"flowDebug\":0,\"flowRate\":0.45,\"glow\":2.5,\"gpuPressure\":0,\"gridOverlay\":0,\"historyClamp\":1,\"hybridSmokeCoarseCoverage\":1.8,\"hybridSmokeFineLod\":1,\"hybridSmokeManifestUrl\":\"\",\"hybridSmokeMotionRate\":0.16,\"hybridSmokeRepresentation\":\"raymarch\",\"hybridSmokeSource\":\"offline-manifest\",\"inputRadius\":0.08,\"interfaceShred\":1.55,\"legacyPyroBackedOff\":true,\"lifecycleEffect\":\"none\",\"lifecycleT\":0,\"lookFreeze\":0,\"majorantCadence\":1,\"majorantGrid\":32,\"majorantGuard\":0.3,\"majorantSkip\":0,\"majorantSmooth\":0.1,\"microdetail\":0,\"occupancySkip\":0,\"oracleActivityCue\":0,\"oracleActivityCurlNoise\":0,\"oracleActivityDisplay\":0,\"oracleActivityMaterial\":0,\"oracleActivityVorticity\":0,\"plumeHeight\":0.7,\"pressureEffectiveLabel\":\"Default P2\",\"pressureMode\":\"auto\",\"pressureStrategy\":\"global\",\"pressureTierHeroMax\":0.22,\"pressureTierHeroMin\":0.05,\"pressureTierLowerMax\":0.5,\"pressureTierOverlay\":0,\"projection\":0.25,\"pyroBiteAfter\":0,\"pyroBiteAfterCut\":1,\"pyroBiteBorder\":0,\"pyroBiteChroma\":0,\"pyroBiteCore\":0,\"pyroBiteCoreCut\":1,\"pyroBiteEmberColor\":\"#e65a1a\",\"pyroBiteFireLock\":1,\"pyroBiteHeat\":0,\"pyroBiteHeight\":0,\"pyroBiteHotColor\":\"#fff4b8\",\"pyroBiteLuma\":1,\"pyroBiteRim\":0,\"pyroBiteRimCut\":1,\"pyroBiteTeeth\":0,\"pyroBiteWake\":0,\"pyroCarrierView\":\"normal\",\"pyroCompareMode\":\"base\",\"pyroDiagnosticPaint\":0,\"pyroDynamicDetail\":0,\"pyroEdgeBite\":0,\"pyroFireMode\":\"stock\",\"pyroFlameCoreColor\":\"#fff4b8\",\"pyroFlameEdgeColor\":\"#ff8a24\",\"pyroFlameLuma\":1,\"pyroFlamePaint\":0,\"pyroFlowBite\":0,\"pyroFlowBorder\":0,\"pyroFlowCoolColor\":\"#2aa7b8\",\"pyroFlowFireLock\":1,\"pyroFlowHotColor\":\"#ff7a36\",\"pyroFlowLuma\":1,\"pyroFlowRadiance\":0,\"pyroFlowRise\":0,\"pyroFlowSpikes\":0,\"pyroFlowTeeth\":0,\"pyroFoldBorder\":0,\"pyroFoldWake\":0,\"pyroInterfaceFocus\":0,\"pyroMaterialGain\":0,\"pyroOverdrive\":1,\"pyroRadiance\":0,\"pyroRadianceBorder\":0,\"pyroRadianceChroma\":0,\"pyroRadianceCoolColor\":\"#7aa8b8\",\"pyroRadianceFireLock\":1,\"pyroRadianceGate\":1,\"pyroRadianceHeight\":0,\"pyroRadianceHue\":0.5,\"pyroRadianceLuma\":1,\"pyroRadianceRise\":0,\"pyroRadianceSource\":\"fire\",\"pyroRadianceSpill\":0,\"pyroRadianceTeeth\":0,\"pyroRadianceWarmColor\":\"#d18438\",\"pyroRadianceWarmth\":0,\"pyroSmokeFold\":0,\"pyroStockMix\":1,\"pyroWakeEmberColor\":\"#b06a2a\",\"pyroWakeLift\":0,\"pyroWakeLuma\":1,\"pyroWakeShadowColor\":\"#384c50\",\"pyroWakeWarmth\":0,\"quenchVapor\":0,\"radiance\":2.9,\"rayBudgetPreset\":\"\",\"raySteps\":64,\"reactionBoundaryContrast\":1.35,\"reactionBoundaryControls\":{},\"reactionBoundaryCoreReject\":0.92,\"reactionBoundaryCurl\":0.7,\"reactionBoundaryCut\":0.3,\"reactionBoundaryDivergence\":0.05,\"reactionBoundaryFireCleanBlue\":0.9,\"reactionBoundaryFireControls\":{},\"reactionBoundaryFireErosion\":0.55,\"reactionBoundaryFireLuma\":1.05,\"reactionBoundaryFireRidge\":1.76,\"reactionBoundaryFireRidgeCut\":0.04,\"reactionBoundaryFireSoot\":0.72,\"reactionBoundaryFireTip\":1.8,\"reactionBoundaryFireWarmth\":0.92,\"reactionBoundaryFireYellow\":0.86,\"reactionBoundaryGamma\":1.05,\"reactionBoundaryGradient\":2.6,\"reactionBoundaryOpacity\":0.7,\"reactionBoundarySoftness\":0.08,\"reactionBoundarySupportFront\":1.6,\"reactionBoundarySupportInterface\":1.46,\"reactionBoundarySupportReaction\":0.26,\"reactionBoundarySupportThermal\":0.1,\"reactionBoundaryTopology\":0.9,\"reactionCoreMax\":0.95,\"reactionCoreMin\":0.18,\"reactionCoreReject\":0.82,\"reactionCurlWarp\":0,\"reactionDivergenceGain\":0,\"reactionDivergenceMax\":0.07,\"reactionDivergenceMin\":0.004,\"reactionFlameMax\":0.12,\"reactionFlameMin\":0.0035,\"reactionFrontMax\":0.076,\"reactionFrontMin\":0.0015,\"reactionFuelMax\":0.055,\"reactionFuelMin\":0.0015,\"reactionFuelScale\":1,\"reactionGradientMax\":0.18,\"reactionGradientMin\":0.018,\"reactionHeatMax\":0.42,\"reactionHeatMin\":0.026,\"reactionLiveView\":\"off\",\"reactionLiveViewIdentity\":\"reaction-live-view-shader-inspect-v0\",\"reactionShellContrast\":1,\"reactionShellGamma\":1,\"reactionStretchErode\":0,\"reactionTopologyGain\":0.44,\"renderScale\":0.35,\"resolution\":64,\"runtimeQualityEffective\":\"live_high\",\"runtimeQualityReason\":\"route-default\",\"runtimeQualityReceipt\":{\"gpuPressure\":0},\"runtimeQualityRequested\":\"live_high\",\"shellAmount\":1.1,\"shellBite\":0.8,\"shellCoreSuppress\":0.55,\"shellCurl\":0.25,\"shellDivergence\":0,\"shellEdge\":0.85,\"shellExposure\":1.15,\"shellFront\":1.25,\"shellHeat\":1.65,\"shellInspectMode\":\"shell\",\"shellLuma\":1.35,\"shellReaction\":1.1,\"shellSmoke\":0.25,\"shellSoftClip\":1.6,\"shellThermal\":0.85,\"shellWidth\":0.9,\"simProfile\":false,\"smoke\":2.8,\"smokeDomainFarGrid\":48,\"smokeDomainMode\":\"single\",\"smokeDomainNearGrid\":64,\"speed\":5,\"temporalAccum\":0,\"temporalJitter\":0,\"volumeResidualFeatureDebug\":0,\"volumeResidualMode\":\"off\",\"volumeResidualModelUrl\":\"\",\"volumeResidualStrength\":1,\"volumeScene\":\"tall_plume\",\"windAngle\":180,\"windHeight\":-0.8,\"windStrength\":0}",
+    "grid": 64,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple"
+  }
+}
