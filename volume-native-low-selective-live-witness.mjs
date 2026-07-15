@@ -136,6 +136,10 @@ try {
       && Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount) >= 0
       && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups) >= 1
       && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount)
+      && state?.nativeLowHeadCostProfile?.identity === 'native-low-head-cost-profile-v0'
+      && state?.headCostTimingAuthority === 'webgpu-timestamp-query-stage-split-v0'
+      && Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0
+      && Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0
       && Number(state?.inferenceGpuMs) >= 0
       && Number(state?.uploadDispatchMs) >= 0
       && Number(state?.endToEndFrameMs) >= 0
@@ -180,6 +184,10 @@ try {
     Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount),
     'residual dispatch thread count does not cover compacted support',
   );
+  assert.equal(state?.nativeLowHeadCostProfile?.identity, 'native-low-head-cost-profile-v0', 'head cost profile missing');
+  assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
+  assert.ok(Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0, 'supportFrontGpuMs missing');
+  assert.ok(Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0, 'supportPositiveResidualGpuMs missing');
 
   const startState = state;
   const observationStartMs = performance.now();
@@ -231,6 +239,8 @@ try {
     residualDispatchMode: endState.nativeLowInferenceWorkProfile?.residualDispatchMode,
     residualDispatchWorkgroups: endState.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups,
     residualDispatchThreadCount: endState.nativeLowInferenceWorkProfile?.residualDispatchThreadCount,
+    nativeLowHeadCostProfile: endState.nativeLowHeadCostProfile,
+    headCostTimingAuthority: endState.headCostTimingAuthority,
     requestedBackend: endState.requestedBackend,
     effectiveBackend: endState.effectiveBackend,
     transportMode: endState.transportMode,

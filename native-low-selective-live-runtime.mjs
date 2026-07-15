@@ -318,10 +318,14 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
           { binding: 7, resource: { buffer: lowSnapshotFront } },
         ],
       });
-      const supportTimestampWrites = options.timestampWrites
+      const supportTimestampWrites = options.stageTimestampWrites?.supportFront
+        ? options.stageTimestampWrites.supportFront
+        : options.timestampWrites
         ? { querySet: options.timestampWrites.querySet, beginningOfPassWriteIndex: options.timestampWrites.beginningOfPassWriteIndex }
         : null;
-      const residualTimestampWrites = options.timestampWrites
+      const residualTimestampWrites = options.stageTimestampWrites?.supportPositiveResidual
+        ? options.stageTimestampWrites.supportPositiveResidual
+        : options.timestampWrites
         ? { querySet: options.timestampWrites.querySet, endOfPassWriteIndex: options.timestampWrites.endOfPassWriteIndex }
         : null;
       const supportPass = encoder.beginComputePass({

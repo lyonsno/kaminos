@@ -12528,6 +12528,39 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ms: Number(values[1] - values[0]) / 1_000_000, authority: 'webgpu-timestamp-query', label };
   }
 
+  async function readNativeLowHeadCostProfile(source, label, fallbackMs = null) {
+    await source.mapAsync(GPUMapMode.READ);
+    const values = new BigUint64Array(source.getMappedRange().slice(0));
+    source.unmap();
+    source.destroy();
+    const invalid = values.length < 4 || values[0] === 0n || values[1] === 0n || values[2] === 0n || values[3] === 0n
+      || values[1] < values[0] || values[3] < values[2];
+    if (invalid) {
+      return {
+        identity: 'native-low-head-cost-profile-v0',
+        label,
+        headCostTimingAuthority: 'timestamp-query-invalid',
+        supportFrontGpuMs: null,
+        supportPositiveResidualGpuMs: null,
+        inferenceGpuMs: fallbackMs,
+        values: Array.from(values, value => value.toString()),
+      };
+    }
+    const supportFrontGpuMs = Number(values[1] - values[0]) / 1_000_000;
+    const supportPositiveResidualGpuMs = Number(values[3] - values[2]) / 1_000_000;
+    return {
+      identity: 'native-low-head-cost-profile-v0',
+      label,
+      headCostTimingAuthority: 'webgpu-timestamp-query-stage-split-v0',
+      supportFrontStage: 'full-grid-support-classifier-plus-frontTopology-v0',
+      supportPositiveResidualStage: 'support-positive-fuel-visibleFireCarrier-fireLick-v0',
+      supportFrontGpuMs,
+      supportPositiveResidualGpuMs,
+      inferenceGpuMs: supportFrontGpuMs + supportPositiveResidualGpuMs,
+      values: Array.from(values, value => value.toString()),
+    };
+  }
+
   async function captureNativeLowSelectiveSharedDeviceFrame(options = {}) {
     let failurePhase = 'shared-device-preflight';
     let lastTrustworthyEvidence = {};
@@ -12570,27 +12603,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let timestampReadback = null;
       let timestampResolveBuffer = null;
       let timestampWrites = null;
+      let stageTimestampWrites = null;
+      const timestampQueryCount = 4;
       if (timestampSupported) {
-        querySet = device.createQuerySet({ type: 'timestamp', count: 2 });
+        querySet = device.createQuerySet({ type: 'timestamp', count: timestampQueryCount });
         timestampResolveBuffer = device.createBuffer({
           label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} timestamp resolve`,
-          size: 16,
+          size: timestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
           usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
         });
         timestampReadback = device.createBuffer({
           label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} timestamp readback`,
-          size: 16,
+          size: timestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
           usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
         });
         timestampWrites = { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 };
+        stageTimestampWrites = {
+          supportFront: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+          supportPositiveResidual: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+        };
       }
       const inferenceStart = performance.now();
       device.pushErrorScope('validation');
       const inferenceEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} inference encoder` });
-      runtime.encodeFromNativeLow(inferenceEncoder, sourceFluid, sourceFront, { timestampWrites });
+      runtime.encodeFromNativeLow(inferenceEncoder, sourceFluid, sourceFront, { timestampWrites, stageTimestampWrites });
       if (querySet && timestampReadback && timestampResolveBuffer) {
-        inferenceEncoder.resolveQuerySet(querySet, 0, 2, timestampResolveBuffer, 0);
-        inferenceEncoder.copyBufferToBuffer(timestampResolveBuffer, 0, timestampReadback, 0, 16);
+        inferenceEncoder.resolveQuerySet(querySet, 0, timestampQueryCount, timestampResolveBuffer, 0);
+        inferenceEncoder.copyBufferToBuffer(timestampResolveBuffer, 0, timestampReadback, 0, timestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT);
       }
       device.queue.submit([inferenceEncoder.finish()]);
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -12598,8 +12637,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const validationError = await device.popErrorScope();
       if (validationError) throw new Error(`native-low-shared-device-validation:${validationError.message || String(validationError)}`);
       let inferenceTiming = { ms: inferenceWallMs, authority: 'queue-onSubmittedWorkDone-wall-proxy' };
+      let nativeLowHeadCostProfile = {
+        identity: 'native-low-head-cost-profile-v0',
+        headCostTimingAuthority: 'queue-onSubmittedWorkDone-wall-proxy-no-stage-split',
+        supportFrontGpuMs: null,
+        supportPositiveResidualGpuMs: null,
+        inferenceGpuMs: inferenceWallMs,
+      };
       if (timestampReadback) {
-        inferenceTiming = await readTimestampPairMs(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE);
+        nativeLowHeadCostProfile = await readNativeLowHeadCostProfile(timestampReadback, NATIVE_LOW_SHARED_DEVICE_ROUTE, inferenceWallMs);
+        inferenceTiming = {
+          ms: Number.isFinite(nativeLowHeadCostProfile.inferenceGpuMs) ? nativeLowHeadCostProfile.inferenceGpuMs : inferenceWallMs,
+          authority: nativeLowHeadCostProfile.headCostTimingAuthority,
+          label: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        };
         timestampResolveBuffer?.destroy();
         querySet.destroy?.();
         if (!Number.isFinite(inferenceTiming.ms)) inferenceTiming.ms = inferenceWallMs;
@@ -12609,6 +12660,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const supportStatsMs = performance.now() - supportStatsStart;
       const runtimeState = runtime.debugState();
       const nativeLowInferenceWorkProfile = runtimeState.nativeLowInferenceWorkProfile || supportStats.nativeLowInferenceWorkProfile || null;
+      nativeLowHeadCostProfile = {
+        ...nativeLowHeadCostProfile,
+        supportCompactionIdentity: nativeLowInferenceWorkProfile?.supportCompactionIdentity || null,
+        residualDispatchMode: nativeLowInferenceWorkProfile?.residualDispatchMode || null,
+        supportClassifierEvaluatedCount: nativeLowInferenceWorkProfile?.supportClassifierEvaluatedCount ?? null,
+        frontTopologyEvaluatedCount: nativeLowInferenceWorkProfile?.frontTopologyEvaluatedCount ?? null,
+        supportCompactedCount: nativeLowInferenceWorkProfile?.supportCompactedCount ?? null,
+        residualHeadEvaluatedCount: nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount ?? null,
+      };
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs };
 
       failurePhase = 'shared-device-treatment-materialization';
@@ -12741,6 +12801,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveFeatureCount: runtimeState.effectiveFeatureCount,
         noHiddenCaps: runtimeState.noHiddenCaps,
         nativeLowInferenceWorkProfile,
+        nativeLowHeadCostProfile,
         supportPositiveCount,
         supportPrevalence,
         treatmentSplatCandidateCount,
@@ -12762,6 +12823,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         blankTreatmentAttribution,
         inferenceGpuMs: inferenceTiming.ms,
         inferenceTimingAuthority: inferenceTiming.authority,
+        headCostTimingAuthority: nativeLowHeadCostProfile.headCostTimingAuthority,
         uploadDispatchMs: inferenceWallMs,
         nativeStepMs,
         supportStatsMs,
@@ -12779,6 +12841,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           nativeStepMs,
           inferenceGpuMs: inferenceTiming.ms,
           inferenceTimingAuthority: inferenceTiming.authority,
+          supportFrontGpuMs: nativeLowHeadCostProfile.supportFrontGpuMs,
+          supportPositiveResidualGpuMs: nativeLowHeadCostProfile.supportPositiveResidualGpuMs,
+          headCostTimingAuthority: nativeLowHeadCostProfile.headCostTimingAuthority,
           uploadDispatchMs: inferenceWallMs,
           supportStatsMs,
           treatmentRebuildMs,

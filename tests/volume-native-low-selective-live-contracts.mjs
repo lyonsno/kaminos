@@ -69,6 +69,10 @@ assert.match(runtime, /supportCompactionActive:\s*true[\s\S]*supportCompactionId
 assert.match(runtime, /residualDispatchMode:\s*'support-positive-direct-covered-dispatch-v0'/, 'residual heads must dispatch over compacted support positives without indirect backend fallback');
 assert.match(runtime, /supportCompactedCount[\s\S]*residualDispatchWorkgroups[\s\S]*residualDispatchThreadCount/, 'inference profile records compacted support count and residual dispatch size');
 assert.match(runtime, /supportClassifierEvaluatedCount:\s*highCells[\s\S]*frontTopologyEvaluatedCount:\s*highCells/, 'support-positive residual dispatch keeps full-grid support and front topology coverage');
+assert.match(combined, /native-low-head-cost-profile-v0/, 'shared-device route records measured head-stage cost profile');
+assert.match(core, /nativeLowHeadCostProfile[\s\S]*supportFrontGpuMs[\s\S]*supportPositiveResidualGpuMs/, 'core receipt preserves measured support/front and residual GPU timings');
+assert.match(core, /headCostTimingAuthority:\s*'webgpu-timestamp-query-stage-split-v0'/, 'head cost profile uses explicit timestamp-query authority');
+assert.match(witness, /nativeLowHeadCostProfile[\s\S]*supportFrontGpuMs[\s\S]*supportPositiveResidualGpuMs/, 'witness preserves head-stage cost profile');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');
@@ -110,5 +114,6 @@ assert.match(witness, /nativeLowInferenceWorkProfile[\s\S]*modelEvaluatedCellCou
 assert.match(witness, /supportCompactionIdentity[\s\S]*native-low-support-positive-residual-dispatch-v0/, 'witness preserves support-positive residual dispatch identity');
 assert.match(witness, /residualDispatchMode[\s\S]*support-positive-direct-covered-dispatch-v0/, 'witness preserves support-positive residual dispatch mode');
 assert.match(witness, /supportCompactedCount[\s\S]*residualDispatchWorkgroups[\s\S]*residualDispatchThreadCount/, 'witness preserves support-positive residual dispatch work size');
+assert.match(witness, /headCostTimingAuthority[\s\S]*webgpu-timestamp-query-stage-split-v0/, 'witness preserves head-cost timing authority');
 
 console.log('native-low selective live route contracts passed');
