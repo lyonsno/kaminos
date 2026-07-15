@@ -8,7 +8,7 @@ import {
   defineWebGpuRoute,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE, createLinearDispatch } from './runtime-primitives.js';
 import {
   createRouteReceiptArtifacts,
   createRouteReceiptInputArtifact,
@@ -479,8 +479,11 @@ struct ConvDims {
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: ConvDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let x = index % dims.output_width;
   let y = (index / dims.output_width) % dims.output_height;
@@ -510,8 +513,11 @@ struct Norm2dDims { batch: u32, channels: u32, height: u32, width: u32, total_sp
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: Norm2dDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let spatial_index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let spatial_index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (spatial_index >= dims.total_spatial) { return; }
   let plane = dims.height * dims.width;
   let batch = spatial_index / plane;
@@ -534,9 +540,13 @@ const GELU_WGSL = `
 @group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
 ${SAM31_EXACT_GELU_FUNCTIONS_WGSL}
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (gid.x >= arrayLength(&output_values)) { return; }
-  output_values[gid.x] = gelu_exact_approx(input_values[gid.x]);
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
+  if (index >= arrayLength(&output_values)) { return; }
+  output_values[index] = gelu_exact_approx(input_values[index]);
 }
 `;
 
@@ -546,8 +556,11 @@ struct ImagePositionDims { batch: u32, height: u32, width: u32, channels: u32, t
 @group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(2) var<uniform> dims: ImagePositionDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total) { return; }
   let channel = index % dims.channels;
   let position = (index / dims.channels) % (dims.height * dims.width);
@@ -568,8 +581,11 @@ const QUERY_SEED_WGSL = `
 @group(0) @binding(4) var<storage, read_write> point_values: array<f32>;
 @group(0) @binding(5) var<storage, read_write> hidden_values: array<f32>;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= arrayLength(&point_values)) { return; }
   let channel = index % 256u;
   let token = (index / 256u) % 8u;
@@ -589,8 +605,11 @@ struct KeySeedDims { batch: u32, image_tokens: u32, channels: u32, total: u32, }
 @group(0) @binding(2) var<storage, read_write> key_values: array<f32>;
 @group(0) @binding(3) var<uniform> dims: KeySeedDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total) { return; }
   let channel = index % dims.channels;
   let position = (index / dims.channels) % dims.image_tokens;
@@ -607,8 +626,11 @@ struct LinearDims { input_channels: u32, output_channels: u32, total_output: u32
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -624,8 +646,11 @@ struct GatherDims { token_offset: u32, batch: u32, query_tokens: u32, channels: 
 @group(0) @binding(1) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(2) var<uniform> dims: GatherDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total) { return; }
   let channel = index % dims.channels;
   let batch = index / dims.channels;
@@ -639,9 +664,13 @@ const SCORE_BLEND_WGSL = `
 @group(0) @binding(2) var<storage, read> absent_values: array<f32>;
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (gid.x >= arrayLength(&output_values)) { return; }
-  output_values[gid.x] = select(absent_values[gid.x], present_values[gid.x], scores[gid.x / 256u] > 0.0);
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
+  if (index >= arrayLength(&output_values)) { return; }
+  output_values[index] = select(absent_values[index], present_values[index], scores[index / 256u] > 0.0);
 }
 `;
 
@@ -653,12 +682,16 @@ struct MaskBlendDims { batch: u32, channels: u32, mask_pixels: u32, total: u32, 
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: MaskBlendDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (gid.x >= dims.total) { return; }
-  let batch = gid.x / dims.channels;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
+  if (index >= dims.total) { return; }
+  let batch = index / dims.channels;
   var appearing = false;
   for (var pixel = 0u; pixel < dims.mask_pixels; pixel = pixel + 1u) { appearing = appearing || masks[batch * dims.mask_pixels + pixel] > 0.0; }
-  output_values[gid.x] = select(absent_values[gid.x], present_values[gid.x], appearing);
+  output_values[index] = select(absent_values[index], present_values[index], appearing);
 }
 `;
 
@@ -680,8 +713,12 @@ function gpuWeightName(key) {
   return `weight_${key.replaceAll('.', '_').replaceAll('-', '_')}`;
 }
 
-function workgroups(total) {
-  return Math.ceil(total / 64);
+export function createSam31InteractivePointerLinearDispatch(totalInvocations, input = {}) {
+  const maxWorkgroupsPerDimension = input.maxWorkgroupsPerDimension ?? 65_535;
+  return {
+    logicalInvocations: totalInvocations,
+    dispatch: createLinearDispatch(totalInvocations, { workgroupSize: 64, maxWorkgroupsPerDimension }),
+  };
 }
 
 async function sha256Hex(buffer) {
@@ -729,6 +766,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
   });
+  const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
   const readonly = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
@@ -842,7 +880,13 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   const normKernel = (name, source, prefix, target, dims) => addKernel(name, MEMORY_ATTENTION_LAYERNORM_WGSL, [tb(source), tb(w(`${prefix}.weight`)), tb(w(`${prefix}.bias`)), tb(target, 'storage'), uniformBinding(dims)]);
   const addOp = (name, left, right, target, dims) => addKernel(name, MEMORY_ATTENTION_ADD_WGSL, [tb(left), tb(right), tb(target, 'storage'), uniformBinding(dims)]);
   const attentionOp = (name, q, k, v, target, dims) => addKernel(name, MEMORY_ATTENTION_ONLINE_SOFTMAX_WGSL, [tb(q), tb(k), tb(v), tb(target, 'storage'), uniformBinding(dims)]);
-  const dispatch = (name, kernel, total) => ({ name, kernel, dispatch: [workgroups(total)] });
+  const dispatch = (name, kernel, total) => ({
+    name,
+    kernel,
+    dispatch: createSam31InteractivePointerLinearDispatch(total, {
+      maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
+    }).dispatch,
+  });
 
   addKernel('outerMaskDownsample', CONV2D_WGSL, [tb('binaryMasks'), tb(w('mask-downsample.weight')), tb(w('mask-downsample.bias')), tb('maskDownsample', 'storage'), uniformBinding('outerConv')]);
   addKernel('promptConv0Kernel', CONV2D_WGSL, [tb('maskDownsample'), tb(w('prompt.mask_downscaling.0.weight')), tb(w('prompt.mask_downscaling.0.bias')), tb('promptConv0', 'storage'), uniformBinding('promptConv0')]);

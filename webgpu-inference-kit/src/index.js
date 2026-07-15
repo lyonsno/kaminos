@@ -386,6 +386,7 @@ export {
 
 export {
   SAM31_INTERACTIVE_POINTER_PHASE_PROGRAM_ROUTE_ID,
+  createSam31InteractivePointerLinearDispatch,
   deriveSam31InteractivePointerGeometry,
   createSam31InteractivePointerPhaseProgramCpuOracle,
   createSam31InteractivePointerPhaseProgramRouteDefinition,

@@ -417,8 +417,11 @@ struct LayerNormDims { total_tokens: u32, channels: u32, };
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: LayerNormDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let token = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let token = gid.x + gid.y * dispatch_grid.x * 64u;
   if (token >= dims.total_tokens) { return; }
   let base = token * dims.channels;
   var mean = 0.0;
@@ -444,8 +447,11 @@ struct AddDims { total: u32, scale: f32, };
 @group(0) @binding(2) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(3) var<uniform> dims: AddDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total) { return; }
   output_values[index] = left_values[index] + dims.scale * right_values[index];
 }
@@ -459,8 +465,11 @@ struct LinearDims { input_channels: u32, output_channels: u32, total_output: u32
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;

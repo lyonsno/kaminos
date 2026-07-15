@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const packageSource = readFileSync(new URL('../package.json', import.meta.url), 'utf8');
 const routeSource = readFileSync(new URL('../src/sam31-interactive-pointer-phase-program.js', import.meta.url), 'utf8');
+const memoryAttentionSource = readFileSync(new URL('../src/sam31-memory-attention-phase-program.js', import.meta.url), 'utf8');
 const indexSource = readFileSync(new URL('../src/index.js', import.meta.url), 'utf8');
 const smokeSource = readFileSync(new URL('../smokes/sam31-interactive-pointer-parity.js', import.meta.url), 'utf8');
 const runnerUrl = new URL('../tools/sam31-interactive-pointer-browser-parity-smoke.mjs', import.meta.url);
@@ -10,6 +11,7 @@ const runnerUrl = new URL('../tools/sam31-interactive-pointer-browser-parity-smo
 for (const token of [
   'SAM31_INTERACTIVE_POINTER_PHASE_PROGRAM_ROUTE_ID',
   'deriveSam31InteractivePointerGeometry',
+  'createSam31InteractivePointerLinearDispatch',
   'createSam31InteractivePointerPhaseProgramCpuOracle',
   'createSam31InteractivePointerPhaseProgramRouteDefinition',
   'createSam31InteractivePointerPhaseProgramRouteReceipt',
@@ -85,10 +87,24 @@ assert.ok(
 
 const {
   SAM31_INTERACTIVE_POINTER_PHASE_PROGRAM_ROUTE_ID,
+  createSam31InteractivePointerLinearDispatch,
   deriveSam31InteractivePointerGeometry,
   createSam31InteractivePointerPhaseProgramRouteDefinition,
   validateRouteDefinition,
 } = await import('../src/index.js');
+assert.deepEqual(
+  createSam31InteractivePointerLinearDispatch(4_194_304, { maxWorkgroupsPerDimension: 65_535 }),
+  { logicalInvocations: 4_194_304, dispatch: [256, 256] },
+  '448 pointer tensors must tile the exact 65,536-workgroup boundary across two legal dimensions',
+);
+assert.deepEqual(
+  createSam31InteractivePointerLinearDispatch(21_233_664, { maxWorkgroupsPerDimension: 65_535 }),
+  { logicalInvocations: 21_233_664, dispatch: [576, 576] },
+  'native 1008 pointer tensors must preserve the full invocation domain without an artificial cap',
+);
+assert.match(routeSource, /createLinearDispatch/, 'interactive pointer phases must use the shared device-limit-aware linear dispatch contract');
+assert.ok((routeSource.match(/@builtin\(num_workgroups\) dispatch_grid: vec3<u32>/g) || []).length >= 9, 'every pointer-local linear WGSL family must reconstruct its tiled dispatch index');
+assert.ok((memoryAttentionSource.match(/@builtin\(num_workgroups\) dispatch_grid: vec3<u32>/g) || []).length >= 3, 'shared pointer linear, add, and LayerNorm WGSL must reconstruct tiled dispatch indices');
 const largerGeometry = deriveSam31InteractivePointerGeometry({
   batch: 16,
   queryTokens: 8,
