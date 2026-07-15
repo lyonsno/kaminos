@@ -1,0 +1,423 @@
+{
+  "schema": "kaminos.lirm-trellis-multisource-sparse-guidance.v1",
+  "sources": [
+    {
+      "id": "0066",
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+      "sha256": "03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba",
+      "bytes": 288739
+    },
+    {
+      "id": "0032",
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+      "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+      "bytes": 262363
+    },
+    {
+      "id": "0087",
+      "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+      "sha256": "993608e914ad107c7cb8f0133974c97f7a1cd4d89e4bc205ff3cc9aea7c734f0",
+      "bytes": 271394
+    }
+  ],
+  "fixed": {
+    "seed": 42,
+    "steps": 6,
+    "resolution": 512,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "cascade": false,
+    "simplifyFirst": true,
+    "downstreamShapeGuidance": {
+      "strength": 7.5,
+      "rescale": 0.5,
+      "interval": [
+        0.6,
+        1
+      ]
+    }
+  },
+  "routeCommit": "ee75fdb",
+  "routeIdentity": {
+    "knownGoodLocalRunnerChecked": true,
+    "runner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py",
+    "effectiveBackend": "MLX on Apple Silicon through gpu-greenroom strict FIFO",
+    "firstReceiptProvesRoute": true,
+    "heavyRunAcceptedBeforeProof": false
+  },
+  "contactSheet": {
+    "path": "multisource-sparse-guidance-contact-sheet.png",
+    "sha256": "901e547247895c99c1f153bc19af6e654c5ed1dc1e4a452fd1f54e60d5230fb4",
+    "bytes": 5432939,
+    "rows": 9,
+    "cells": [
+      {
+        "sourceId": "0066",
+        "pressure": "prior-hybrid-0p0",
+        "view": "left",
+        "sourceJobId": "96548f5a749d",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left/render.png",
+        "sourceSha256": "b6d68372010c861cab4f294c1999ea958fa4a131432435a420f6a5c126a043fd",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "prior-hybrid-0p0",
+        "view": "front",
+        "sourceJobId": "1d044df7d7b7",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front/render.png",
+        "sourceSha256": "ab21eb6c970c5e2ded13ef2a58f8502ccfd4b27c41d7832eca77ef5d3943bf48",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "prior-hybrid-0p0",
+        "view": "right",
+        "sourceJobId": "99a3b7b9d370",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right/render.png",
+        "sourceSha256": "bef97fe375d574ff2b76ad6541e37ebb8a3c9b9ab75a86d4768cec8152a877d0",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "prior-hybrid-0p0",
+        "view": "rear",
+        "sourceJobId": "ba9609316b9f",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear/render.png",
+        "sourceSha256": "1fc14b5a5bffc3ff5ce0bdcb94bcb4080c19629e8a76f5a93bc3a138e18187e9",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "hybrid-0p25",
+        "view": "left",
+        "sourceJobId": "82340abf6cce",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left/render.png",
+        "sourceSha256": "ad25c666c55657a55b9c67e6a16ff684052db475a3e811ad3a4a8551138e3da7",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "hybrid-0p25",
+        "view": "front",
+        "sourceJobId": "4bee2d5e8c7a",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front/render.png",
+        "sourceSha256": "6c7936e3543e39d022cca524882ea5daaa8b1d1d033a78a5110c9fd8310c0bb2",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "hybrid-0p25",
+        "view": "right",
+        "sourceJobId": "d13a6fa81cde",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right/render.png",
+        "sourceSha256": "5d7a2142be66a8bc4a8484fce0486a51800135a6cbe4ffe0f10eef4c6fe65dda",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "hybrid-0p25",
+        "view": "rear",
+        "sourceJobId": "222985a85d52",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear/render.png",
+        "sourceSha256": "215a9aee0bc29b43078b52053ec80ea2801c55687ebaf924c3e1cf85d9afac22",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "hybrid-0p50",
+        "view": "left",
+        "sourceJobId": "5c6a4dfeb4c9",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left/render.png",
+        "sourceSha256": "a1035404c993623a94764110fd362cb608d1a7592e69226df9e89e9223d5ca85",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "hybrid-0p50",
+        "view": "front",
+        "sourceJobId": "127e7454dd31",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front/render.png",
+        "sourceSha256": "f64a754a0d189988767db5f85e200616ecaf19b78c306c680e268565369a91ec",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "hybrid-0p50",
+        "view": "right",
+        "sourceJobId": "f34c42b526c2",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right/render.png",
+        "sourceSha256": "6bab7c8590733986c2767b661d2a10c4e24e78e4891459ce70837848ed2e322c",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0066",
+        "pressure": "hybrid-0p50",
+        "view": "rear",
+        "sourceJobId": "1c1344c06c1c",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear/render.png",
+        "sourceSha256": "020e6f526ea54fef3b71b2467cf95dfac464e5097725932139db2e47088bdae1",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "prior-hybrid-0p0",
+        "view": "left",
+        "sourceJobId": "3c306bb02adc",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/left/render.png",
+        "sourceSha256": "6cb34fe5c60e4e618c0aee88947547337a575b9ebfd4b590b369f6d8b73adb6d",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "prior-hybrid-0p0",
+        "view": "front",
+        "sourceJobId": "63473c5d5c9c",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/front/render.png",
+        "sourceSha256": "5401d8d154f00b5f77164904fed8ebe7a5a868cc557c6087147199a391a06b4a",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "prior-hybrid-0p0",
+        "view": "right",
+        "sourceJobId": "643c8f2d5e12",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/right/render.png",
+        "sourceSha256": "dbf5a7263a6e1418560e5d4696ec2c2058e1aa46ba667ff902f4f6d1a7b59a31",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "prior-hybrid-0p0",
+        "view": "rear",
+        "sourceJobId": "f81c719d1fdd",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/rear/render.png",
+        "sourceSha256": "a4df14d54fbfe232f86eb8cfad90938633d3f39af470eb36d4d343fad0a0e477",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "hybrid-0p25",
+        "view": "left",
+        "sourceJobId": "296d4dcc5600",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/left/render.png",
+        "sourceSha256": "00fc976ad02b44245a697de9d4383bf0db518a6f645a8c471f27f54436a6bd71",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "hybrid-0p25",
+        "view": "front",
+        "sourceJobId": "aebcd1752ae5",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/front/render.png",
+        "sourceSha256": "24dc5a695d14f4bd53cc4235cce694557078cdfcd20f9e8d4f1ec1f9652cbe14",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "hybrid-0p25",
+        "view": "right",
+        "sourceJobId": "24b738cb924b",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/right/render.png",
+        "sourceSha256": "c2fad81192136a2dc11dc42732e4fad5eeb5cf19bb600e93345418dc486b7853",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "hybrid-0p25",
+        "view": "rear",
+        "sourceJobId": "80f4c2520dbd",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/rear/render.png",
+        "sourceSha256": "19a4892b182cc803725aa18824f1b9c330b516bed507610edbdbfea5b1c8ae8f",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "hybrid-0p50",
+        "view": "left",
+        "sourceJobId": "19158857b004",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/left/render.png",
+        "sourceSha256": "22c3d195ff50d4b9f73c99bd8977bf5dec4e26490844eff6a71f5556373f82f6",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "hybrid-0p50",
+        "view": "front",
+        "sourceJobId": "5e8e838b0c2e",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/front/render.png",
+        "sourceSha256": "4e9c18f4b77e841d61e45c8b257c792598e40dc89cb5ff926db227ae3467c56e",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "hybrid-0p50",
+        "view": "right",
+        "sourceJobId": "8eee0755066d",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/right/render.png",
+        "sourceSha256": "23a7592358b0e202e268ea5e8833461ae55d77134e2c7c51c2a7f20c10c2e1da",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0032",
+        "pressure": "hybrid-0p50",
+        "view": "rear",
+        "sourceJobId": "e19cb76112bb",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/rear/render.png",
+        "sourceSha256": "ab3b3d6d0f8b23352a7b97f8a2961094dbe55092a1b259c6c02bd81a1b9e63ec",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "prior-hybrid-0p0",
+        "view": "left",
+        "sourceJobId": "57f08f37f129",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/left/render.png",
+        "sourceSha256": "f4f902fba62f8351daa066b199f2859027cfe1d7fac90a9c911610d30d4b669c",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "prior-hybrid-0p0",
+        "view": "front",
+        "sourceJobId": "686ebd295c7a",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/front/render.png",
+        "sourceSha256": "005d12a8efcd1b1c975ee7675c9977b0d97f3033a75de12b8abe52023eb5b9a7",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "prior-hybrid-0p0",
+        "view": "right",
+        "sourceJobId": "08bebc1607fb",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/right/render.png",
+        "sourceSha256": "c7f01c3f145e9e733aa761c136526183679778257d282d46c3954fbd5d4150f6",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "prior-hybrid-0p0",
+        "view": "rear",
+        "sourceJobId": "1f823ea05110",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/rear/render.png",
+        "sourceSha256": "43159c0bc006c664100698a40d65f918a82c78d39f8182557339dedd0e783998",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "hybrid-0p25",
+        "view": "left",
+        "sourceJobId": "4bc69976622f",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/left/render.png",
+        "sourceSha256": "e7676902082834b48d8551fac9c5cab7efca66a86dbf64146fe6c72b3b873566",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "hybrid-0p25",
+        "view": "front",
+        "sourceJobId": "fab9d2d657dc",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/front/render.png",
+        "sourceSha256": "b40817cf83f09f0a1df33dbb020acb83715cc2418090efc9d8a693e5312de64f",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "hybrid-0p25",
+        "view": "right",
+        "sourceJobId": "482f0b68b211",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/right/render.png",
+        "sourceSha256": "f542edfea09b97a1b838381960b132b1fe83445219f4ac2a9de5bc3bce535983",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "hybrid-0p25",
+        "view": "rear",
+        "sourceJobId": "986e3ff18326",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/rear/render.png",
+        "sourceSha256": "390092698b687eef5ab4af89bef365130e055839cab8786e9d323faeb3735f5a",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "hybrid-0p50",
+        "view": "left",
+        "sourceJobId": "f932b9cd519b",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/left/render.png",
+        "sourceSha256": "f0ab7ac5779bdfc370e17d553d1d81cb09289dd46060a0a9fe8b7f1ca258cacb",
+        "yaw": -0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "hybrid-0p50",
+        "view": "front",
+        "sourceJobId": "fc839ef9259c",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/front/render.png",
+        "sourceSha256": "62c61d7bceec1795bdec4208119a4983ff9f6b31dfb70b2091edaf9eb1734bc5",
+        "yaw": 0,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "hybrid-0p50",
+        "view": "right",
+        "sourceJobId": "54db87033597",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/right/render.png",
+        "sourceSha256": "9563227fc09ffdfa0bcf21efb15cadd8f79a5596728d117241c725322fd43a38",
+        "yaw": 0.85,
+        "pitch": 0.2
+      },
+      {
+        "sourceId": "0087",
+        "pressure": "hybrid-0p50",
+        "view": "rear",
+        "sourceJobId": "e2727a46baf0",
+        "sourcePath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/rear/render.png",
+        "sourceSha256": "53ad08396203ca8746e86c63612efff4e21803d795222f02cc0bf15500e84612",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    ],
+    "assemblySha256": "7ee05f3e76342c2b7e212531e0580d78bc0b1b967e855c36828c38e72d81f8b9",
+    "layout": "three source sections x three sparse CFG rows x left/front/right/rear views"
+  },
+  "routeReceiptManifest": {
+    "path": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/lirm-trellis-multisource-sparse-guidance-v1/route-receipts.json",
+    "sha256": "f2f78c9014438125a122d9f01b548d2a739a01c2b0b90cf6552f3afea0e31214",
+    "bytes": 179780
+  }
+}

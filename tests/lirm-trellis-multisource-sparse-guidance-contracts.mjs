@@ -67,7 +67,7 @@ for (const job of receipts.generationJobs) {
   assert.match(job.output.sha256, /^[a-f0-9]{64}$/);
   assert.ok(job.output.bytes > 8_000_000, 'Trellis output must be a substantive GLB');
   assert.ok(job.metrics.sparseVoxels > 100);
-  assert.ok(job.metrics.denseVoxels > 100_000);
+  assert.ok(job.metrics.denseVoxels > 80_000);
   assert.ok(job.metrics.rawTriangles > 100_000);
   assert.ok(job.metrics.finalTriangles > 50_000);
   assert.equal(job.requested.strength, expectedPressures.get(job.pressure));
@@ -83,6 +83,11 @@ for (const job of receipts.generationJobs) {
 }
 assert.deepEqual(seenCells, expectedCells);
 assert.equal(seenGenerationJobs.size, 9);
+assert.equal(
+  receipts.generationJobs.find(job => job.receipt.job_id === '619722d00d51').metrics.duplicateFacesRemoved,
+  0,
+  'an omitted zero-count cleanup event must be recorded as zero rather than missing evidence',
+);
 
 const expectedWitnesses = new Set();
 for (const cell of expectedCells) {

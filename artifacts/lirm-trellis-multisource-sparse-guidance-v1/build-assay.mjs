@@ -144,7 +144,7 @@ const parseMetrics = log => {
   const duplicates = log.match(/Removed ([\d,]+) duplicate faces/);
   const nonManifold = log.match(/Removed ([\d,]+) non-manifold faces/);
   const holes = log.match(/Filled ([\d,]+) holes \(([\d,]+) too large/);
-  if (![sparse, decoded, raw, final, duplicates, nonManifold, holes].every(Boolean)) {
+  if (![sparse, decoded, raw, final, nonManifold, holes].every(Boolean)) {
     throw new Error('generation log did not contain the expected geometry metrics');
   }
   return {
@@ -153,7 +153,7 @@ const parseMetrics = log => {
     rawVertices: integer(raw[1]),
     rawTriangles: integer(raw[2]),
     finalTriangles: integer(final[1]),
-    duplicateFacesRemoved: integer(duplicates[1]),
+    duplicateFacesRemoved: duplicates ? integer(duplicates[1]) : 0,
     nonManifoldFacesRemoved: integer(nonManifold[1]),
     holesFilled: integer(holes[1]),
     holesTooLarge: integer(holes[2]),

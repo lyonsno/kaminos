@@ -1,0 +1,3215 @@
+{
+  "schema": "kaminos.lirm-trellis-multisource-sparse-guidance-route-receipts.v1",
+  "allDoneExitZero": true,
+  "generationJobs": [
+    {
+      "sourceId": "0066",
+      "pressure": "prior-hybrid-0p0",
+      "receipt": {
+        "job_id": "a17b0b73a3c0",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.0 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784136975.888659,
+        "finished_at": 1784137019.3884852,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0",
+        "params": {
+          "sparse_guidance_strength": "0.0"
+        },
+        "job_id": "a17b0b73a3c0",
+        "submitted_at": 1784136975.621678
+      },
+      "receiptSha256": "fe4a6fcf259c77dff4895dff2387d06b2c1dc5acfaef964a73f16a049219cab9",
+      "requestSha256": "0f171c66cde388929e714901067d85b0f3395a5a55199ae3fd0c42852612cb04",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "sha256": "03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba",
+        "bytes": 288739
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "sha256": "2cac539147695727edd5b952771eba5cee4f3e72be0c8460efe092fcb967bcd1",
+        "bytes": 9526612
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 470,
+        "denseVoxels": 178680,
+        "rawVertices": 178680,
+        "rawTriangles": 369386,
+        "finalTriangles": 193111,
+        "duplicateFacesRemoved": 633,
+        "nonManifoldFacesRemoved": 13878,
+        "holesFilled": 1631,
+        "holesTooLarge": 146
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p25",
+      "receipt": {
+        "job_id": "dbbbe8f6890a",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.25 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784137573.5027359,
+        "finished_at": 1784137629.075603,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25",
+        "params": {
+          "sparse_guidance_strength": "0.25"
+        },
+        "job_id": "dbbbe8f6890a",
+        "submitted_at": 1784137572.803159
+      },
+      "receiptSha256": "4179a12e822d79ef824fe0e2fcf870e35b2f12a830ec0d201929c12a7e2b19d1",
+      "requestSha256": "9dea63c442bebc9dec230589582a4511efeb283cdbfd9760c56a3fe14e18e48d",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "sha256": "03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba",
+        "bytes": 288739
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "sha256": "b2f65fa2aa2ef5c305961f993c0b75924cc6fe2b45971a5db5d0c251508e7b21",
+        "bytes": 9460604
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.25,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.25,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 1374,
+        "denseVoxels": 428981,
+        "rawVertices": 428981,
+        "rawTriangles": 851016,
+        "finalTriangles": 196665,
+        "duplicateFacesRemoved": 1339,
+        "nonManifoldFacesRemoved": 6914,
+        "holesFilled": 1211,
+        "holesTooLarge": 136
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p50",
+      "receipt": {
+        "job_id": "9080f9cfb67c",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.5 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784137629.080607,
+        "finished_at": 1784137690.3026628,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50",
+        "params": {
+          "sparse_guidance_strength": "0.5"
+        },
+        "job_id": "9080f9cfb67c",
+        "submitted_at": 1784137573.059443
+      },
+      "receiptSha256": "4ad73b5f5e4917a969c8f598981a9920492690a4f45c96fed76643f78e6fa908",
+      "requestSha256": "6d761df40a9b2c1c34efd834c13d67c44d97069150b0c32234bfecbdb0e2361c",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "sha256": "03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba",
+        "bytes": 288739
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "sha256": "d25e941abc94aaa2a13748b4a249de22d2c2511f1cea0009b5e7ea63c13f85e3",
+        "bytes": 9662108
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.5,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.5,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 2261,
+        "denseVoxels": 873764,
+        "rawVertices": 873764,
+        "rawTriangles": 1806944,
+        "finalTriangles": 172652,
+        "duplicateFacesRemoved": 7479,
+        "nonManifoldFacesRemoved": 28104,
+        "holesFilled": 2102,
+        "holesTooLarge": 647
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "prior-hybrid-0p0",
+      "receipt": {
+        "job_id": "619722d00d51",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.0 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784148096.299453,
+        "finished_at": 1784148286.333832,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "0.0",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "job_id": "619722d00d51",
+        "submitted_at": 1784146176.650273
+      },
+      "receiptSha256": "e785e1c1bad289d800dd884556481226ad98f5148d9f75cacb1b8daa7a15d1db",
+      "requestSha256": "efc75c33b53a92c13bb09bd156aa5a7d9bc63a115ecedd87835f042422185f89",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+        "bytes": 262363
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "sha256": "7d007988bef66b2004e9de1444ae18d612caec8b0af91064cd940b6733cd1695",
+        "bytes": 8664440
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 261,
+        "denseVoxels": 91775,
+        "rawVertices": 91775,
+        "rawTriangles": 194332,
+        "finalTriangles": 184170,
+        "duplicateFacesRemoved": 0,
+        "nonManifoldFacesRemoved": 13950,
+        "holesFilled": 686,
+        "holesTooLarge": 84
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p25",
+      "receipt": {
+        "job_id": "05501f23a0af",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.25 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784148286.339114,
+        "finished_at": 1784148425.475598,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "0.25",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "job_id": "05501f23a0af",
+        "submitted_at": 1784146176.831063
+      },
+      "receiptSha256": "6758660a0bd2b9836abcdedd80b72dc86ca5c668f942a0815fb98e981cb44c76",
+      "requestSha256": "4d8af3fe17f49567247fc5249642d5f0e38bfa93b722c8b26f66c6dc90b94212",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+        "bytes": 262363
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "sha256": "6ed9bafa80834cd1a28567f4c2bfbbe0177698b0cded012ae7ffd7fe5cfb8be6",
+        "bytes": 8606004
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.25,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.25,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 356,
+        "denseVoxels": 115086,
+        "rawVertices": 115086,
+        "rawTriangles": 234736,
+        "finalTriangles": 198361,
+        "duplicateFacesRemoved": 108,
+        "nonManifoldFacesRemoved": 6966,
+        "holesFilled": 994,
+        "holesTooLarge": 99
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p50",
+      "receipt": {
+        "job_id": "5b3455019187",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.5 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784148425.483996,
+        "finished_at": 1784148513.0155048,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "0.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "job_id": "5b3455019187",
+        "submitted_at": 1784146176.954138
+      },
+      "receiptSha256": "f0e100b15e636c2d7babdd5426a3ba3f0523f64da1055ac672728606203c92ce",
+      "requestSha256": "2749e8830fdbc2386e362513ea49654be1818bb3f6b2fa46fdd374253cbbc4ef",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+        "bytes": 262363
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "sha256": "839bd64f6e55bf690d4ed2763afe5a42fb2ec3c8949bbd9d97a3600cdc2639a4",
+        "bytes": 8684524
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.5,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.5,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 435,
+        "denseVoxels": 119761,
+        "rawVertices": 119761,
+        "rawTriangles": 236208,
+        "finalTriangles": 200016,
+        "duplicateFacesRemoved": 83,
+        "nonManifoldFacesRemoved": 3719,
+        "holesFilled": 711,
+        "holesTooLarge": 41
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "prior-hybrid-0p0",
+      "receipt": {
+        "job_id": "f3df4494fa60",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.0 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784148513.244864,
+        "finished_at": 1784148594.467093,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "0.0",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "job_id": "f3df4494fa60",
+        "submitted_at": 1784146177.0642638
+      },
+      "receiptSha256": "0be6466bb6d73b725aff74c902e44b6f50c21f4ae00d14f4806e666468968be4",
+      "requestSha256": "ece216451b77b7a37342fa78c0a5aa3e80c569210991de5b13c7b9a6e13a8615",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "sha256": "993608e914ad107c7cb8f0133974c97f7a1cd4d89e4bc205ff3cc9aea7c734f0",
+        "bytes": 271394
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "sha256": "6cc87cb36d6b12079b7b787c07d8c489cbf2f5aecf618d2f85b8349d65bd94f7",
+        "bytes": 9311904
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 441,
+        "denseVoxels": 143285,
+        "rawVertices": 143285,
+        "rawTriangles": 287366,
+        "finalTriangles": 200333,
+        "duplicateFacesRemoved": 110,
+        "nonManifoldFacesRemoved": 4718,
+        "holesFilled": 1037,
+        "holesTooLarge": 69
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p25",
+      "receipt": {
+        "job_id": "621ec0ff8e1a",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.25 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784148594.471287,
+        "finished_at": 1784148751.139498,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "0.25",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "job_id": "621ec0ff8e1a",
+        "submitted_at": 1784146177.1927109
+      },
+      "receiptSha256": "81f61ec983eec58052403f8735636b6a34dd637bd58948e1850f295ec5e4da3b",
+      "requestSha256": "5e7ccf1d4cc6a05c8bd0f448a22dc89348491ee642bc36c9ebbfe8d0e448c4d5",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "sha256": "993608e914ad107c7cb8f0133974c97f7a1cd4d89e4bc205ff3cc9aea7c734f0",
+        "bytes": 271394
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "sha256": "640a481eec9395342365ccbcf7af8728879276b0ce4595c2cc53c20346c04c76",
+        "bytes": 9437544
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.25,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.25,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 1675,
+        "denseVoxels": 558702,
+        "rawVertices": 558702,
+        "rawTriangles": 1131228,
+        "finalTriangles": 185935,
+        "duplicateFacesRemoved": 3384,
+        "nonManifoldFacesRemoved": 16330,
+        "holesFilled": 1415,
+        "holesTooLarge": 329
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p50",
+      "receipt": {
+        "job_id": "791f61ee1225",
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first --sparse-guidance-strength 0.5 --sparse-guidance-rescale 0.7 --sparse-guidance-low 0.6 --sparse-guidance-high 1.0 --shape-guidance-strength 7.5 --shape-guidance-rescale 0.5 --shape-guidance-low 0.6 --shape-guidance-high 1.0",
+        "effective_cwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "7.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784148751.143439,
+        "finished_at": 1784148925.7971761,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024",
+          "sparse_guidance_strength": "0.5",
+          "sparse_guidance_rescale": "0.7",
+          "sparse_guidance_low": "0.6",
+          "sparse_guidance_high": "1.0",
+          "shape_guidance_strength": "7.5",
+          "shape_guidance_rescale": "0.5",
+          "shape_guidance_low": "0.6",
+          "shape_guidance_high": "1.0"
+        },
+        "job_id": "791f61ee1225",
+        "submitted_at": 1784146177.392396
+      },
+      "receiptSha256": "9522a9af49da125957cfe87fa92ba4651a740df446a038770525c9980d0e5b13",
+      "requestSha256": "c9eba9179e44faf4ebae8e88460adc439e7cce97089ade5cce5e2c962e99ca8e",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "sha256": "993608e914ad107c7cb8f0133974c97f7a1cd4d89e4bc205ff3cc9aea7c734f0",
+        "bytes": 271394
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "sha256": "4556ae9d60a374591b7a04450463c38ae8d609f5043b663b1b7d39fd9e2ef00f",
+        "bytes": 9578748
+      },
+      "requested": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.5,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "strength": 0.5,
+        "rescale": 0.7,
+        "interval": [
+          0.6,
+          1
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
+      },
+      "metrics": {
+        "sparseVoxels": 2000,
+        "denseVoxels": 759035,
+        "rawVertices": 759035,
+        "rawTriangles": 1592832,
+        "finalTriangles": 168775,
+        "duplicateFacesRemoved": 9482,
+        "nonManifoldFacesRemoved": 29933,
+        "holesFilled": 2122,
+        "holesTooLarge": 688
+      }
+    }
+  ],
+  "witnessJobs": [
+    {
+      "sourceId": "0066",
+      "pressure": "prior-hybrid-0p0",
+      "view": "left",
+      "receipt": {
+        "job_id": "96548f5a749d",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784137340.4090712,
+        "finished_at": 1784137342.304328,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "96548f5a749d",
+        "submitted_at": 1784137340.132101
+      },
+      "receiptSha256": "245a2b0d37f44a9bdb067aab5497880f5d9290d7da2f0e93c2e626fbd7e0cb4e",
+      "requestSha256": "7d85d475d8cc5c2943df85764ab182d33568f0a56c83c5ed9374c7959b466174",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "sha256": "2cac539147695727edd5b952771eba5cee4f3e72be0c8460efe092fcb967bcd1",
+        "bytes": 9526612
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left/render.png",
+        "sha256": "b6d68372010c861cab4f294c1999ea958fa4a131432435a420f6a5c126a043fd",
+        "bytes": 631380
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "prior-hybrid-0p0",
+      "view": "front",
+      "receipt": {
+        "job_id": "1d044df7d7b7",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784137342.306258,
+        "finished_at": 1784137343.307752,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "1d044df7d7b7",
+        "submitted_at": 1784137340.643148
+      },
+      "receiptSha256": "3adc6ff27d19a552d5e99a092e7460fd0d277626a6a9349140acc843aa0b237f",
+      "requestSha256": "d9ece5c276c31174955b7eb57ad5e6f474df4a0e4897203273ea4a0995b8a344",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "sha256": "2cac539147695727edd5b952771eba5cee4f3e72be0c8460efe092fcb967bcd1",
+        "bytes": 9526612
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front/render.png",
+        "sha256": "ab21eb6c970c5e2ded13ef2a58f8502ccfd4b27c41d7832eca77ef5d3943bf48",
+        "bytes": 625770
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "prior-hybrid-0p0",
+      "view": "right",
+      "receipt": {
+        "job_id": "99a3b7b9d370",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784137343.309681,
+        "finished_at": 1784137344.307803,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "99a3b7b9d370",
+        "submitted_at": 1784137340.922826
+      },
+      "receiptSha256": "568aa23a4e25e210dbdae1b1edb03ee32a972c96c67b162777902a655c7c3d8a",
+      "requestSha256": "f39eaf8764bbf6e3b0e9d6ae29530248cf711f4128ad490a5366beff10da225d",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "sha256": "2cac539147695727edd5b952771eba5cee4f3e72be0c8460efe092fcb967bcd1",
+        "bytes": 9526612
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right/render.png",
+        "sha256": "bef97fe375d574ff2b76ad6541e37ebb8a3c9b9ab75a86d4768cec8152a877d0",
+        "bytes": 635754
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "prior-hybrid-0p0",
+      "view": "rear",
+      "receipt": {
+        "job_id": "ba9609316b9f",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784137344.309819,
+        "finished_at": 1784137345.315735,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "ba9609316b9f",
+        "submitted_at": 1784137341.203865
+      },
+      "receiptSha256": "ad63c29b070932b1c52cc3e0b47b273a04f947433b496d706316bce0e5c9c363",
+      "requestSha256": "dbc282ef07ebc900da57297bf9f47cf84c8966cfb030053c274065b5597ae1af",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "sha256": "2cac539147695727edd5b952771eba5cee4f3e72be0c8460efe092fcb967bcd1",
+        "bytes": 9526612
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear/render.png",
+        "sha256": "1fc14b5a5bffc3ff5ce0bdcb94bcb4080c19629e8a76f5a93bc3a138e18187e9",
+        "bytes": 619403
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p25",
+      "view": "left",
+      "receipt": {
+        "job_id": "82340abf6cce",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784138194.7640681,
+        "finished_at": 1784138198.048606,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "82340abf6cce",
+        "submitted_at": 1784138194.6400251
+      },
+      "receiptSha256": "afecfce0bc16241270fe71464536942d6711dd5ca1f0fa1e49caf63233253981",
+      "requestSha256": "104bd21f1275211aa3884c62045b11053e08161b71ba53e873049b0fc79aa1f0",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "sha256": "b2f65fa2aa2ef5c305961f993c0b75924cc6fe2b45971a5db5d0c251508e7b21",
+        "bytes": 9460604
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left/render.png",
+        "sha256": "ad25c666c55657a55b9c67e6a16ff684052db475a3e811ad3a4a8551138e3da7",
+        "bytes": 656809
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p25",
+      "view": "front",
+      "receipt": {
+        "job_id": "4bee2d5e8c7a",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784138198.0676632,
+        "finished_at": 1784138200.131142,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "4bee2d5e8c7a",
+        "submitted_at": 1784138194.960469
+      },
+      "receiptSha256": "7b767113420233948bd0c3acee54b7b776edd4d2411928ecceb4e9c9d2e142ba",
+      "requestSha256": "63b40a38401b787ce61d51b178bb509a281fc7dcc57bea30c09887c0b8d9180d",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "sha256": "b2f65fa2aa2ef5c305961f993c0b75924cc6fe2b45971a5db5d0c251508e7b21",
+        "bytes": 9460604
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front/render.png",
+        "sha256": "6c7936e3543e39d022cca524882ea5daaa8b1d1d033a78a5110c9fd8310c0bb2",
+        "bytes": 669609
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p25",
+      "view": "right",
+      "receipt": {
+        "job_id": "d13a6fa81cde",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784138200.149825,
+        "finished_at": 1784138202.353324,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "d13a6fa81cde",
+        "submitted_at": 1784138195.348295
+      },
+      "receiptSha256": "c124dd7ccc6af10edda27820c5eeca6750b515c68adf18037f58ffd1ede4fb1e",
+      "requestSha256": "8d1d69eca8708b1bb0b819822bf3fa72fc9c7b8246307e8ff62842b649e0bf84",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "sha256": "b2f65fa2aa2ef5c305961f993c0b75924cc6fe2b45971a5db5d0c251508e7b21",
+        "bytes": 9460604
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right/render.png",
+        "sha256": "5d7a2142be66a8bc4a8484fce0486a51800135a6cbe4ffe0f10eef4c6fe65dda",
+        "bytes": 712768
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p25",
+      "view": "rear",
+      "receipt": {
+        "job_id": "222985a85d52",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784138202.361341,
+        "finished_at": 1784138204.934602,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "222985a85d52",
+        "submitted_at": 1784138195.844942
+      },
+      "receiptSha256": "41938217236d8e413ba94a5c04d0986138ec01c9365d853f3fc990c5c9e8b002",
+      "requestSha256": "1693e5344c278f6ad4a97b5f6a30f8a876f276f5369d03c50d5a46857a113775",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "sha256": "b2f65fa2aa2ef5c305961f993c0b75924cc6fe2b45971a5db5d0c251508e7b21",
+        "bytes": 9460604
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear/render.png",
+        "sha256": "215a9aee0bc29b43078b52053ec80ea2801c55687ebaf924c3e1cf85d9afac22",
+        "bytes": 650729
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p50",
+      "view": "left",
+      "receipt": {
+        "job_id": "5c6a4dfeb4c9",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784138204.939314,
+        "finished_at": 1784138206.85471,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "5c6a4dfeb4c9",
+        "submitted_at": 1784138196.42505
+      },
+      "receiptSha256": "c9c00e16a318838bb1803727ab4b7354061e5a7ccbaf50e7747e43aa8eeb8b77",
+      "requestSha256": "258b414a835cccd1ba0d7a84f1054dabfd776b1240fc16b5dcb5eb0ca8bf10b0",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "sha256": "d25e941abc94aaa2a13748b4a249de22d2c2511f1cea0009b5e7ea63c13f85e3",
+        "bytes": 9662108
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left/render.png",
+        "sha256": "a1035404c993623a94764110fd362cb608d1a7592e69226df9e89e9223d5ca85",
+        "bytes": 735145
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p50",
+      "view": "front",
+      "receipt": {
+        "job_id": "127e7454dd31",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784138206.864831,
+        "finished_at": 1784138208.919999,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "127e7454dd31",
+        "submitted_at": 1784138198.245106
+      },
+      "receiptSha256": "cf52be60ce2867984fbad86ae0378012be564917f6316ec5772f5cd304dabc1b",
+      "requestSha256": "c59e673407d14efbf116f02a7a0bf17e55e905b0d9c9f974e3f2c1eb9f8dbf5b",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "sha256": "d25e941abc94aaa2a13748b4a249de22d2c2511f1cea0009b5e7ea63c13f85e3",
+        "bytes": 9662108
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front/render.png",
+        "sha256": "f64a754a0d189988767db5f85e200616ecaf19b78c306c680e268565369a91ec",
+        "bytes": 695562
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p50",
+      "view": "right",
+      "receipt": {
+        "job_id": "f34c42b526c2",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784138208.9242501,
+        "finished_at": 1784138210.766058,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "f34c42b526c2",
+        "submitted_at": 1784138198.916557
+      },
+      "receiptSha256": "299e66bc28f8325b60c036fae3edb986d5dcacee6ed2d8b956eea9da3dcc1341",
+      "requestSha256": "74430b484e4d196b893513135e66facc90a669cdf9cdff249d3ad4663b1f6885",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "sha256": "d25e941abc94aaa2a13748b4a249de22d2c2511f1cea0009b5e7ea63c13f85e3",
+        "bytes": 9662108
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right/render.png",
+        "sha256": "6bab7c8590733986c2767b661d2a10c4e24e78e4891459ce70837848ed2e322c",
+        "bytes": 764661
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0066",
+      "pressure": "hybrid-0p50",
+      "view": "rear",
+      "receipt": {
+        "job_id": "1c1344c06c1c",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784138210.7696772,
+        "finished_at": 1784138212.538626,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "1c1344c06c1c",
+        "submitted_at": 1784138199.525184
+      },
+      "receiptSha256": "f8a485d3479cd40475539f795f609362e2690bb55f995482bb6b029a9e20b9a8",
+      "requestSha256": "c36e7ed1fece80a890d26d9e8e58609c6fc2601a51b7e151eaca19cd6207a838",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "sha256": "d25e941abc94aaa2a13748b4a249de22d2c2511f1cea0009b5e7ea63c13f85e3",
+        "bytes": 9662108
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear/render.png",
+        "sha256": "020e6f526ea54fef3b71b2467cf95dfac464e5097725932139db2e47088bdae1",
+        "bytes": 664177
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "prior-hybrid-0p0",
+      "view": "left",
+      "receipt": {
+        "job_id": "3c306bb02adc",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784151737.49792,
+        "finished_at": 1784151739.765752,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "3c306bb02adc",
+        "submitted_at": 1784148349.6730509
+      },
+      "receiptSha256": "8713bab6cf291f3c6b66e948370dc6cdf1dc4f846aa94d13e9b6ccd3b83a10f1",
+      "requestSha256": "f164f5d4716287d2d8e9a0cc19a933532887ee603bd8ec0dbefe39780edc6e22",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "sha256": "7d007988bef66b2004e9de1444ae18d612caec8b0af91064cd940b6733cd1695",
+        "bytes": 8664440
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/left/render.png",
+        "sha256": "6cb34fe5c60e4e618c0aee88947547337a575b9ebfd4b590b369f6d8b73adb6d",
+        "bytes": 580021
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "prior-hybrid-0p0",
+      "view": "front",
+      "receipt": {
+        "job_id": "63473c5d5c9c",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784151739.7698581,
+        "finished_at": 1784151740.813865,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "63473c5d5c9c",
+        "submitted_at": 1784148349.852483
+      },
+      "receiptSha256": "5f5912fa20b061ae97687d9441df23eb4734f37c83e1c9f2bdc8d6dddf59a90a",
+      "requestSha256": "35efd4f7b363c8f3a811e2d93c6e9e78c491c4b4a41605500acbf33b7bcad449",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "sha256": "7d007988bef66b2004e9de1444ae18d612caec8b0af91064cd940b6733cd1695",
+        "bytes": 8664440
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/front/render.png",
+        "sha256": "5401d8d154f00b5f77164904fed8ebe7a5a868cc557c6087147199a391a06b4a",
+        "bytes": 597727
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "prior-hybrid-0p0",
+      "view": "right",
+      "receipt": {
+        "job_id": "643c8f2d5e12",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784151740.8176188,
+        "finished_at": 1784151741.748197,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "643c8f2d5e12",
+        "submitted_at": 1784148350.127449
+      },
+      "receiptSha256": "17a8ace4102f808585edc250b403d39995ca42a0bb4789c6d749cb92f4435d0b",
+      "requestSha256": "8efcdb114b047c1c80b75687b0ed4f24a061d41b58bbd36711223bdee1dd7414",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "sha256": "7d007988bef66b2004e9de1444ae18d612caec8b0af91064cd940b6733cd1695",
+        "bytes": 8664440
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/right/render.png",
+        "sha256": "dbf5a7263a6e1418560e5d4696ec2c2058e1aa46ba667ff902f4f6d1a7b59a31",
+        "bytes": 591971
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "prior-hybrid-0p0",
+      "view": "rear",
+      "receipt": {
+        "job_id": "f81c719d1fdd",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784151741.751381,
+        "finished_at": 1784151742.6843688,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "f81c719d1fdd",
+        "submitted_at": 1784148350.328637
+      },
+      "receiptSha256": "3cbff3a1f853fc7a2b301d66f1c10628cb33f9e2cb6d46ea955167ee51a248f5",
+      "requestSha256": "96fc2229d1e6d5d923194b1846bee4e3b957c8a8501c93f802629361a4711b9b",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "sha256": "7d007988bef66b2004e9de1444ae18d612caec8b0af91064cd940b6733cd1695",
+        "bytes": 8664440
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/rear/render.png",
+        "sha256": "a4df14d54fbfe232f86eb8cfad90938633d3f39af470eb36d4d343fad0a0e477",
+        "bytes": 587455
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p25",
+      "view": "left",
+      "receipt": {
+        "job_id": "296d4dcc5600",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152293.0507462,
+        "finished_at": 1784152294.832466,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "296d4dcc5600",
+        "submitted_at": 1784148574.432875
+      },
+      "receiptSha256": "6179783531bacf639eedd9fcf3088963a1c08c94c052251673e156273f624a12",
+      "requestSha256": "57e5f3a46e840f1d486f88a863fb8134503519d0dfb04dc5cc58426707e31f5f",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "sha256": "6ed9bafa80834cd1a28567f4c2bfbbe0177698b0cded012ae7ffd7fe5cfb8be6",
+        "bytes": 8606004
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/left/render.png",
+        "sha256": "00fc976ad02b44245a697de9d4383bf0db518a6f645a8c471f27f54436a6bd71",
+        "bytes": 586910
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p25",
+      "view": "front",
+      "receipt": {
+        "job_id": "aebcd1752ae5",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152294.835376,
+        "finished_at": 1784152295.824673,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "aebcd1752ae5",
+        "submitted_at": 1784148574.487627
+      },
+      "receiptSha256": "7bd9406e5f7e80a67e6cd78e9e7c1c7d34a6262629136e690de4973e7b786084",
+      "requestSha256": "30579db72a8fb8f5e1aa187d3e5029d30d19b794ea48d1f2fca73ad21638a5d3",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "sha256": "6ed9bafa80834cd1a28567f4c2bfbbe0177698b0cded012ae7ffd7fe5cfb8be6",
+        "bytes": 8606004
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/front/render.png",
+        "sha256": "24dc5a695d14f4bd53cc4235cce694557078cdfcd20f9e8d4f1ec1f9652cbe14",
+        "bytes": 602555
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p25",
+      "view": "right",
+      "receipt": {
+        "job_id": "24b738cb924b",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152295.826944,
+        "finished_at": 1784152296.804739,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "24b738cb924b",
+        "submitted_at": 1784148574.538919
+      },
+      "receiptSha256": "e6d8987044e4618262668cfe0cb0b12c9ac3d32b371c2b0953b97e437793847c",
+      "requestSha256": "2e62b80b2b8812ff6065f0d295849634dfa4983b0c40d94be63303bf325220e6",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "sha256": "6ed9bafa80834cd1a28567f4c2bfbbe0177698b0cded012ae7ffd7fe5cfb8be6",
+        "bytes": 8606004
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/right/render.png",
+        "sha256": "c2fad81192136a2dc11dc42732e4fad5eeb5cf19bb600e93345418dc486b7853",
+        "bytes": 598245
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p25",
+      "view": "rear",
+      "receipt": {
+        "job_id": "80f4c2520dbd",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152296.807738,
+        "finished_at": 1784152297.789282,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "80f4c2520dbd",
+        "submitted_at": 1784148574.590435
+      },
+      "receiptSha256": "3d1019ef6f6a1e1201c1e40b6b5866a4a1f99d660135c727dd2beb00960688e8",
+      "requestSha256": "db969ae60f0be16994447a2be3421b66adea202344d77b23c29ac7caeff5217f",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "sha256": "6ed9bafa80834cd1a28567f4c2bfbbe0177698b0cded012ae7ffd7fe5cfb8be6",
+        "bytes": 8606004
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/rear/render.png",
+        "sha256": "19a4892b182cc803725aa18824f1b9c330b516bed507610edbdbfea5b1c8ae8f",
+        "bytes": 596506
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p50",
+      "view": "left",
+      "receipt": {
+        "job_id": "19158857b004",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152297.791728,
+        "finished_at": 1784152298.703723,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "19158857b004",
+        "submitted_at": 1784148766.838878
+      },
+      "receiptSha256": "e5c16e085441ce5ae9fe4d28bd55dc4485699dc830bbdad1f30318431f10b96c",
+      "requestSha256": "e3a8fb418cc2e0869f6e61f69fd1f04e3f87db6e4c952bac61601b055a28eb62",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "sha256": "839bd64f6e55bf690d4ed2763afe5a42fb2ec3c8949bbd9d97a3600cdc2639a4",
+        "bytes": 8684524
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/left/render.png",
+        "sha256": "22c3d195ff50d4b9f73c99bd8977bf5dec4e26490844eff6a71f5556373f82f6",
+        "bytes": 568767
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p50",
+      "view": "front",
+      "receipt": {
+        "job_id": "5e8e838b0c2e",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152298.706215,
+        "finished_at": 1784152299.689762,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "5e8e838b0c2e",
+        "submitted_at": 1784148766.888893
+      },
+      "receiptSha256": "7197b30706057756fbed0650161f71babefe43209abdaa53d7923b7f96fcc9a6",
+      "requestSha256": "70968e5fa3d2724efc1b3880b3beb7b3f2f3ddc42a7f74d2e752c4b09034ab73",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "sha256": "839bd64f6e55bf690d4ed2763afe5a42fb2ec3c8949bbd9d97a3600cdc2639a4",
+        "bytes": 8684524
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/front/render.png",
+        "sha256": "4e9c18f4b77e841d61e45c8b257c792598e40dc89cb5ff926db227ae3467c56e",
+        "bytes": 564869
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p50",
+      "view": "right",
+      "receipt": {
+        "job_id": "8eee0755066d",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152299.693428,
+        "finished_at": 1784152300.6286788,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "8eee0755066d",
+        "submitted_at": 1784148766.942098
+      },
+      "receiptSha256": "d915491d9001399dd037e4238087e426a15a6d2474fd40e0babf602bc60e8fc8",
+      "requestSha256": "129cef08c99379a189ee5f0aa453f4b42a506d4bab1ebfdf6280f8509f08a93f",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "sha256": "839bd64f6e55bf690d4ed2763afe5a42fb2ec3c8949bbd9d97a3600cdc2639a4",
+        "bytes": 8684524
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/right/render.png",
+        "sha256": "23a7592358b0e202e268ea5e8833461ae55d77134e2c7c51c2a7f20c10c2e1da",
+        "bytes": 578582
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0032",
+      "pressure": "hybrid-0p50",
+      "view": "rear",
+      "receipt": {
+        "job_id": "e19cb76112bb",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152300.631009,
+        "finished_at": 1784152301.5520508,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "e19cb76112bb",
+        "submitted_at": 1784148766.9955552
+      },
+      "receiptSha256": "daf1cae122075ca0a42ff7c18c9728d7cb5c4b8365ef91073235e787d10f2a01",
+      "requestSha256": "f53169a4aed501743bd59017457dccf28e1e0aa92ccaa04e79e73e4d0b21280d",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "sha256": "839bd64f6e55bf690d4ed2763afe5a42fb2ec3c8949bbd9d97a3600cdc2639a4",
+        "bytes": 8684524
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/rear/render.png",
+        "sha256": "ab3b3d6d0f8b23352a7b97f8a2961094dbe55092a1b259c6c02bd81a1b9e63ec",
+        "bytes": 560438
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "prior-hybrid-0p0",
+      "view": "left",
+      "receipt": {
+        "job_id": "57f08f37f129",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152301.554462,
+        "finished_at": 1784152302.537416,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "57f08f37f129",
+        "submitted_at": 1784148767.04973
+      },
+      "receiptSha256": "ba14a8c74e8c2d7a717b9cf291625c5c3c168f06b05af9df53d8f1d77401aadd",
+      "requestSha256": "52e5e6b0c73c411aa322dc3416654e2793f35725a27eb92ba291c350e9ad3939",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "sha256": "6cc87cb36d6b12079b7b787c07d8c489cbf2f5aecf618d2f85b8349d65bd94f7",
+        "bytes": 9311904
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/left/render.png",
+        "sha256": "f4f902fba62f8351daa066b199f2859027cfe1d7fac90a9c911610d30d4b669c",
+        "bytes": 637227
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "prior-hybrid-0p0",
+      "view": "front",
+      "receipt": {
+        "job_id": "686ebd295c7a",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152302.539949,
+        "finished_at": 1784152303.521334,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "686ebd295c7a",
+        "submitted_at": 1784148767.102327
+      },
+      "receiptSha256": "7cb3f8039b2c3b1dacf1822a4f7997dde8d24bc01096fc6942e0ee6f613079fb",
+      "requestSha256": "f8a9eb18e63b599250e6ea49864de57e4757e29ad2928bd3a0f802110ec5c737",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "sha256": "6cc87cb36d6b12079b7b787c07d8c489cbf2f5aecf618d2f85b8349d65bd94f7",
+        "bytes": 9311904
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/front/render.png",
+        "sha256": "005d12a8efcd1b1c975ee7675c9977b0d97f3033a75de12b8abe52023eb5b9a7",
+        "bytes": 633777
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "prior-hybrid-0p0",
+      "view": "right",
+      "receipt": {
+        "job_id": "08bebc1607fb",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152303.5234969,
+        "finished_at": 1784152304.457607,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "08bebc1607fb",
+        "submitted_at": 1784148767.160612
+      },
+      "receiptSha256": "8f8f7cc84447ad4af6425108fdd8e2f0ae51c993905bb73bbb772fb1a07a4a3e",
+      "requestSha256": "b0a269e890147bf793aa88557b8fe7ecca6c42ee69228d0148164e2397e74943",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "sha256": "6cc87cb36d6b12079b7b787c07d8c489cbf2f5aecf618d2f85b8349d65bd94f7",
+        "bytes": 9311904
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/right/render.png",
+        "sha256": "c7f01c3f145e9e733aa761c136526183679778257d282d46c3954fbd5d4150f6",
+        "bytes": 641617
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "prior-hybrid-0p0",
+      "view": "rear",
+      "receipt": {
+        "job_id": "1f823ea05110",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152304.4616861,
+        "finished_at": 1784152305.437969,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "1f823ea05110",
+        "submitted_at": 1784148767.2144902
+      },
+      "receiptSha256": "f60768a28be2a5a3cbcd90b84dc821ebe9f9a6dd00eca73376f8f9d61e7e8dc8",
+      "requestSha256": "3c0197e30aaee282762b6d109296bf05ff8dc51ffb98f33832666287c1a75c06",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "sha256": "6cc87cb36d6b12079b7b787c07d8c489cbf2f5aecf618d2f85b8349d65bd94f7",
+        "bytes": 9311904
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/rear/render.png",
+        "sha256": "43159c0bc006c664100698a40d65f918a82c78d39f8182557339dedd0e783998",
+        "bytes": 615298
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p25",
+      "view": "left",
+      "receipt": {
+        "job_id": "4bc69976622f",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152305.440662,
+        "finished_at": 1784152306.429754,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "4bc69976622f",
+        "submitted_at": 1784148899.8107588
+      },
+      "receiptSha256": "474e905dbd4a72cf239ba29ec4a0f1abc73e4e59c101164e9b9c3e4e6f6db58b",
+      "requestSha256": "488cb643c79a71826e1abe83dab03d240e8dd712d68e1cabc29231888f688572",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "sha256": "640a481eec9395342365ccbcf7af8728879276b0ce4595c2cc53c20346c04c76",
+        "bytes": 9437544
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/left/render.png",
+        "sha256": "e7676902082834b48d8551fac9c5cab7efca66a86dbf64146fe6c72b3b873566",
+        "bytes": 697869
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p25",
+      "view": "front",
+      "receipt": {
+        "job_id": "fab9d2d657dc",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152306.432298,
+        "finished_at": 1784152307.41655,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "fab9d2d657dc",
+        "submitted_at": 1784148899.855911
+      },
+      "receiptSha256": "ef1b95af7133654a6b1a19ea9df7cfb697860b9e11ffbd9e4faf706624e213b5",
+      "requestSha256": "152313acd87eee78c5cfb569e1a99540f2c186ee11fcfd679e070d1d3bbeb6a0",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "sha256": "640a481eec9395342365ccbcf7af8728879276b0ce4595c2cc53c20346c04c76",
+        "bytes": 9437544
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/front/render.png",
+        "sha256": "b40817cf83f09f0a1df33dbb020acb83715cc2418090efc9d8a693e5312de64f",
+        "bytes": 664248
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p25",
+      "view": "right",
+      "receipt": {
+        "job_id": "482f0b68b211",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152307.419734,
+        "finished_at": 1784152308.41311,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "482f0b68b211",
+        "submitted_at": 1784148899.902163
+      },
+      "receiptSha256": "e03619d9b1a87d3f91de25fb526adbf90a145ce02f5b34671c8c13c9896a69ca",
+      "requestSha256": "0d96d2f61db8339dbfc6f462bf62f90862d64d0c3540e82252496417121a9e66",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "sha256": "640a481eec9395342365ccbcf7af8728879276b0ce4595c2cc53c20346c04c76",
+        "bytes": 9437544
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/right/render.png",
+        "sha256": "f542edfea09b97a1b838381960b132b1fe83445219f4ac2a9de5bc3bce535983",
+        "bytes": 725929
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p25",
+      "view": "rear",
+      "receipt": {
+        "job_id": "986e3ff18326",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152308.415017,
+        "finished_at": 1784152309.3489861,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "986e3ff18326",
+        "submitted_at": 1784148899.9470751
+      },
+      "receiptSha256": "249d30f4f50fec64eff079cdbb9d7f9daf39db13b5e2359a4299c3257820cc8f",
+      "requestSha256": "c066e60fc7c528194c2c05711ed0b327ad6ad4b398edb501ca9513ea98d18ed6",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "sha256": "640a481eec9395342365ccbcf7af8728879276b0ce4595c2cc53c20346c04c76",
+        "bytes": 9437544
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/rear/render.png",
+        "sha256": "390092698b687eef5ab4af89bef365130e055839cab8786e9d323faeb3735f5a",
+        "bytes": 656910
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p50",
+      "view": "left",
+      "receipt": {
+        "job_id": "f932b9cd519b",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152309.351168,
+        "finished_at": 1784152310.334595,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "f932b9cd519b",
+        "submitted_at": 1784149074.62796
+      },
+      "receiptSha256": "0004d1294634df860eed17bb82d5c0f34ac1e47214bd5cedefe1cb702bf2d1f9",
+      "requestSha256": "3cd24ed2c1045113e799c97e49ef00f438db2543e19509a25ae389f96ccfb905",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "sha256": "4556ae9d60a374591b7a04450463c38ae8d609f5043b663b1b7d39fd9e2ef00f",
+        "bytes": 9578748
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/left/render.png",
+        "sha256": "f0ab7ac5779bdfc370e17d553d1d81cb09289dd46060a0a9fe8b7f1ca258cacb",
+        "bytes": 725616
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p50",
+      "view": "front",
+      "receipt": {
+        "job_id": "fc839ef9259c",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152310.336719,
+        "finished_at": 1784152311.3119519,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2"
+        },
+        "job_id": "fc839ef9259c",
+        "submitted_at": 1784149074.6739562
+      },
+      "receiptSha256": "5b16b7921e455a55fc9f2c63bfa48fb860acf8c692fe642f2c96b65541bdef2b",
+      "requestSha256": "967ffad7e9f657e1f998ffea8f291fca99da9c772598c773d35b0dfa6e70053b",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "sha256": "4556ae9d60a374591b7a04450463c38ae8d609f5043b663b1b7d39fd9e2ef00f",
+        "bytes": 9578748
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/front/render.png",
+        "sha256": "62c61d7bceec1795bdec4208119a4983ff9f6b31dfb70b2091edaf9eb1734bc5",
+        "bytes": 681331
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p50",
+      "view": "right",
+      "receipt": {
+        "job_id": "54db87033597",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152311.31395,
+        "finished_at": 1784152312.298966,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2"
+        },
+        "job_id": "54db87033597",
+        "submitted_at": 1784149074.720312
+      },
+      "receiptSha256": "c3a0b6e3b09977df6cecf447950f0cab2170980ca26691132320e03493b578f9",
+      "requestSha256": "5255e70e196f24bf7a5a37103437200ebd28dcd6d3131f7ef51490c9b50a8f44",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "sha256": "4556ae9d60a374591b7a04450463c38ae8d609f5043b663b1b7d39fd9e2ef00f",
+        "bytes": 9578748
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/right/render.png",
+        "sha256": "9563227fc09ffdfa0bcf21efb15cadd8f79a5596728d117241c725322fd43a38",
+        "bytes": 757161
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
+      }
+    },
+    {
+      "sourceId": "0087",
+      "pressure": "hybrid-0p50",
+      "view": "rear",
+      "receipt": {
+        "job_id": "e2727a46baf0",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/rear",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/rear/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784152312.300853,
+        "finished_at": 1784152313.294057,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/rear",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2"
+        },
+        "job_id": "e2727a46baf0",
+        "submitted_at": 1784149074.768048
+      },
+      "receiptSha256": "1203915821308a8d4373b2a747066cace45a048baceffb3565611f5748d30e17",
+      "requestSha256": "ce9e6813d4c612195b76a333468f9413c9ed397151372188fa45e87e3e0514f1",
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "sha256": "4556ae9d60a374591b7a04450463c38ae8d609f5043b663b1b7d39fd9e2ef00f",
+        "bytes": 9578748
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/rear/render.png",
+        "sha256": "53ad08396203ca8746e86c63612efff4e21803d795222f02cc0bf15500e84612",
+        "bytes": 668682
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
+      }
+    }
+  ]
+}
