@@ -42,6 +42,13 @@ assert.deepEqual(selectRuntimeDepth(65, 64), {
   activeDepth: 0,
   refusalReasons: ['requested-history-depth-exceeds-allocated-depth-runtime-reload-required'],
 }, 'a larger runtime request must fail loud rather than index beyond the physical ring');
+assert.deepEqual(selectRuntimeDepth(64, 64, ['observed-source-candidate-count-exceeds-history-capacity']), {
+  ok: false,
+  requestedDepth: 64,
+  allocatedDepth: 64,
+  activeDepth: 0,
+  refusalReasons: ['observed-source-candidate-count-exceeds-history-capacity'],
+}, 'a measured source-capacity refusal must gate live GPU addressing even when requested and allocated depth agree');
 
 const limits = {
   maxBufferSize: 268_435_456,
@@ -146,6 +153,11 @@ assert.match(
   coreSource.match(/function encodeBoundarySplats[\s\S]*?\n  function encodeBoundarySplatPbrScene/)?.[0] || '',
   /currentBoundarySplatHistoryDepthSelection\(\)/,
   'the live archive encoder must refuse mismatched requested and allocated depths before GPU indexing',
+);
+assert.match(
+  coreSource.match(/function publishBoundarySplatHistoryAllocation[\s\S]*?\n  function ensureBoundarySplatBuffers/)?.[0] || '',
+  /observedSourceCandidateCount:\s*state\.boundarySplatCandidateCount/,
+  'measured history capacity must consume the uncapped atomic candidate total, not the capped archived source count',
 );
 assert.match(
   indexSource,
