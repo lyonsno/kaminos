@@ -1209,6 +1209,20 @@
         "sha256": "b6d68372010c861cab4f294c1999ea958fa4a131432435a420f6a5c126a043fd",
         "bytes": 631380
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.864737012976486,
+        "edgeRatio": 0.005606167846309403,
+        "activePixelRatio": 0.05287878787878788,
+        "activeBoundsRatio": 0.2794090909090909,
+        "activeBounds": {
+          "minX": 367,
+          "minY": 108,
+          "maxX": 771,
+          "maxY": 790
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left/render.png",
@@ -1265,6 +1279,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front/render.png",
         "sha256": "ab21eb6c970c5e2ded13ef2a58f8502ccfd4b27c41d7832eca77ef5d3943bf48",
         "bytes": 625770
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 10.165192678051,
+        "edgeRatio": 0.0059919110212335695,
+        "activePixelRatio": 0.052533333333333335,
+        "activeBoundsRatio": 0.22963232323232324,
+        "activeBounds": {
+          "minX": 393,
+          "minY": 86,
+          "maxX": 706,
+          "maxY": 809
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
@@ -1323,6 +1351,20 @@
         "sha256": "bef97fe375d574ff2b76ad6541e37ebb8a3c9b9ab75a86d4768cec8152a877d0",
         "bytes": 635754
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 9.579211227118462,
+        "edgeRatio": 0.005474721941354904,
+        "activePixelRatio": 0.0519,
+        "activeBoundsRatio": 0.2458909090909091,
+        "activeBounds": {
+          "minX": 341,
+          "minY": 78,
+          "maxX": 662,
+          "maxY": 833
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right/render.png",
@@ -1379,6 +1421,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear/render.png",
         "sha256": "1fc14b5a5bffc3ff5ce0bdcb94bcb4080c19629e8a76f5a93bc3a138e18187e9",
         "bytes": 619403
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 6.972357735016751,
+        "edgeRatio": 0.0049908998988877655,
+        "activePixelRatio": 0.052705050505050505,
+        "activeBoundsRatio": 0.22868080808080807,
+        "activeBounds": {
+          "minX": 393,
+          "minY": 91,
+          "maxX": 706,
+          "maxY": 811
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
@@ -1437,6 +1493,20 @@
         "sha256": "ad25c666c55657a55b9c67e6a16ff684052db475a3e811ad3a4a8551138e3da7",
         "bytes": 656809
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 11.817010568976125,
+        "edgeRatio": 0.0070187057633973714,
+        "activePixelRatio": 0.08007979797979797,
+        "activeBoundsRatio": 0.16532525252525251,
+        "activeBounds": {
+          "minX": 334,
+          "minY": 320,
+          "maxX": 832,
+          "maxY": 647
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left/render.png",
@@ -1493,6 +1563,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front/render.png",
         "sha256": "6c7936e3543e39d022cca524882ea5daaa8b1d1d033a78a5110c9fd8310c0bb2",
         "bytes": 669609
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 12.008568886982804,
+        "edgeRatio": 0.008237613751263903,
+        "activePixelRatio": 0.0798989898989899,
+        "activeBoundsRatio": 0.12803030303030302,
+        "activeBounds": {
+          "minX": 355,
+          "minY": 320,
+          "maxX": 744,
+          "maxY": 644
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
@@ -1551,6 +1635,20 @@
         "sha256": "5d7a2142be66a8bc4a8484fce0486a51800135a6cbe4ffe0f10eef4c6fe65dda",
         "bytes": 712768
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 13.247940430344098,
+        "edgeRatio": 0.009499494438827099,
+        "activePixelRatio": 0.11583434343434343,
+        "activeBoundsRatio": 0.2188878787878788,
+        "activeBounds": {
+          "minX": 273,
+          "minY": 298,
+          "maxX": 879,
+          "maxY": 654
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right/render.png",
@@ -1607,6 +1705,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear/render.png",
         "sha256": "215a9aee0bc29b43078b52053ec80ea2801c55687ebaf924c3e1cf85d9afac22",
         "bytes": 650729
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 11.460454663876266,
+        "edgeRatio": 0.00653690596562184,
+        "activePixelRatio": 0.07370505050505051,
+        "activeBoundsRatio": 0.1697878787878788,
+        "activeBounds": {
+          "minX": 355,
+          "minY": 254,
+          "maxX": 744,
+          "maxY": 684
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
@@ -1665,6 +1777,20 @@
         "sha256": "a1035404c993623a94764110fd362cb608d1a7592e69226df9e89e9223d5ca85",
         "bytes": 735145
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 15.729224657311129,
+        "edgeRatio": 0.009344287158746209,
+        "activePixelRatio": 0.13215353535353536,
+        "activeBoundsRatio": 0.24151111111111112,
+        "activeBounds": {
+          "minX": 290,
+          "minY": 274,
+          "maxX": 861,
+          "maxY": 691
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left/render.png",
@@ -1721,6 +1847,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front/render.png",
         "sha256": "f64a754a0d189988767db5f85e200616ecaf19b78c306c680e268565369a91ec",
         "bytes": 695562
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 16.19584851680798,
+        "edgeRatio": 0.008635995955510617,
+        "activePixelRatio": 0.09576767676767677,
+        "activeBoundsRatio": 0.1620939393939394,
+        "activeBounds": {
+          "minX": 371,
+          "minY": 245,
+          "maxX": 729,
+          "maxY": 691
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
@@ -1779,6 +1919,20 @@
         "sha256": "6bab7c8590733986c2767b661d2a10c4e24e78e4891459ce70837848ed2e322c",
         "bytes": 764661
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 19.86946261698261,
+        "edgeRatio": 0.012548028311425683,
+        "activePixelRatio": 0.14635050505050506,
+        "activeBoundsRatio": 0.2649292929292929,
+        "activeBounds": {
+          "minX": 250,
+          "minY": 277,
+          "maxX": 881,
+          "maxY": 691
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right/render.png",
@@ -1835,6 +1989,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear/render.png",
         "sha256": "020e6f526ea54fef3b71b2467cf95dfac464e5097725932139db2e47088bdae1",
         "bytes": 664177
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 13.238028103424174,
+        "edgeRatio": 0.006118806875631952,
+        "activePixelRatio": 0.08304343434343435,
+        "activeBoundsRatio": 0.18602727272727274,
+        "activeBounds": {
+          "minX": 370,
+          "minY": 189,
+          "maxX": 728,
+          "maxY": 701
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
@@ -1893,6 +2061,20 @@
         "sha256": "6cb34fe5c60e4e618c0aee88947547337a575b9ebfd4b590b369f6d8b73adb6d",
         "bytes": 580021
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.128126797273213,
+        "edgeRatio": 0.002492922143579373,
+        "activePixelRatio": 0.03553636363636364,
+        "activeBoundsRatio": 0.22733333333333333,
+        "activeBounds": {
+          "minX": 408,
+          "minY": 87,
+          "maxX": 717,
+          "maxY": 812
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/left/render.png",
@@ -1949,6 +2131,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/front/render.png",
         "sha256": "5401d8d154f00b5f77164904fed8ebe7a5a868cc557c6087147199a391a06b4a",
         "bytes": 597727
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.04626414660389,
+        "edgeRatio": 0.0029580384226491406,
+        "activePixelRatio": 0.044218181818181816,
+        "activeBoundsRatio": 0.2734787878787879,
+        "activeBounds": {
+          "minX": 376,
+          "minY": 61,
+          "maxX": 723,
+          "maxY": 838
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
@@ -2007,6 +2203,20 @@
         "sha256": "dbf5a7263a6e1418560e5d4696ec2c2058e1aa46ba667ff902f4f6d1a7b59a31",
         "bytes": 591971
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.002166346277372,
+        "edgeRatio": 0.002979271991911021,
+        "activePixelRatio": 0.038982828282828286,
+        "activeBoundsRatio": 0.20004545454545455,
+        "activeBounds": {
+          "minX": 378,
+          "minY": 44,
+          "maxX": 620,
+          "maxY": 858
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/right/render.png",
@@ -2063,6 +2273,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/prior-hybrid-0p0/rear/render.png",
         "sha256": "a4df14d54fbfe232f86eb8cfad90938633d3f39af470eb36d4d343fad0a0e477",
         "bytes": 587455
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 10.230524033993166,
+        "edgeRatio": 0.003814964610717897,
+        "activePixelRatio": 0.043426262626262625,
+        "activeBoundsRatio": 0.24992727272727272,
+        "activeBounds": {
+          "minX": 376,
+          "minY": 94,
+          "maxX": 723,
+          "maxY": 804
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p0/output.glb",
@@ -2121,6 +2345,20 @@
         "sha256": "00fc976ad02b44245a697de9d4383bf0db518a6f645a8c471f27f54436a6bd71",
         "bytes": 586910
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 9.777660822688812,
+        "edgeRatio": 0.0033746208291203237,
+        "activePixelRatio": 0.037903030303030306,
+        "activeBoundsRatio": 0.2207838383838384,
+        "activeBounds": {
+          "minX": 405,
+          "minY": 83,
+          "maxX": 708,
+          "maxY": 801
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/left/render.png",
@@ -2177,6 +2415,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/front/render.png",
         "sha256": "24dc5a695d14f4bd53cc4235cce694557078cdfcd20f9e8d4f1ec1f9652cbe14",
         "bytes": 602555
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 9.793394705535023,
+        "edgeRatio": 0.003941354903943377,
+        "activePixelRatio": 0.043125252525252525,
+        "activeBoundsRatio": 0.2665050505050505,
+        "activeBounds": {
+          "minX": 380,
+          "minY": 60,
+          "maxX": 719,
+          "maxY": 835
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
@@ -2235,6 +2487,20 @@
         "sha256": "c2fad81192136a2dc11dc42732e4fad5eeb5cf19bb600e93345418dc486b7853",
         "bytes": 598245
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 9.153184667627674,
+        "edgeRatio": 0.004087462082912032,
+        "activePixelRatio": 0.04063434343434343,
+        "activeBoundsRatio": 0.2094090909090909,
+        "activeBounds": {
+          "minX": 372,
+          "minY": 48,
+          "maxX": 626,
+          "maxY": 860
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/right/render.png",
@@ -2291,6 +2557,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p25/rear/render.png",
         "sha256": "19a4892b182cc803725aa18824f1b9c330b516bed507610edbdbfea5b1c8ae8f",
         "bytes": 596506
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 10.747144345927168,
+        "edgeRatio": 0.004120829120323559,
+        "activePixelRatio": 0.04628080808080808,
+        "activeBoundsRatio": 0.24624242424242423,
+        "activeBounds": {
+          "minX": 380,
+          "minY": 92,
+          "maxX": 719,
+          "maxY": 808
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p25/output.glb",
@@ -2349,6 +2629,20 @@
         "sha256": "22c3d195ff50d4b9f73c99bd8977bf5dec4e26490844eff6a71f5556373f82f6",
         "bytes": 568767
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.941482536101102,
+        "edgeRatio": 0.00310262891809909,
+        "activePixelRatio": 0.03573939393939394,
+        "activeBoundsRatio": 0.11296969696969697,
+        "activeBounds": {
+          "minX": 395,
+          "minY": 430,
+          "maxX": 860,
+          "maxY": 669
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/left/render.png",
@@ -2405,6 +2699,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/front/render.png",
         "sha256": "4e9c18f4b77e841d61e45c8b257c792598e40dc89cb5ff926db227ae3467c56e",
         "bytes": 564869
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 6.864949244925076,
+        "edgeRatio": 0.0029393326592517693,
+        "activePixelRatio": 0.022025252525252524,
+        "activeBoundsRatio": 0.11083333333333334,
+        "activeBounds": {
+          "minX": 358,
+          "minY": 423,
+          "maxX": 742,
+          "maxY": 707
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
@@ -2463,6 +2771,20 @@
         "sha256": "23a7592358b0e202e268ea5e8833461ae55d77134e2c7c51c2a7f20c10c2e1da",
         "bytes": 578582
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.539847187028345,
+        "edgeRatio": 0.0040616784630940345,
+        "activePixelRatio": 0.032827272727272726,
+        "activeBoundsRatio": 0.2550909090909091,
+        "activeBounds": {
+          "minX": 390,
+          "minY": 180,
+          "maxX": 849,
+          "maxY": 728
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/right/render.png",
@@ -2519,6 +2841,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0032/hybrid-0p50/rear/render.png",
         "sha256": "ab3b3d6d0f8b23352a7b97f8a2961094dbe55092a1b259c6c02bd81a1b9e63ec",
         "bytes": 560438
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 7.981783265883107,
+        "edgeRatio": 0.00303943377148635,
+        "activePixelRatio": 0.02554949494949495,
+        "activeBoundsRatio": 0.20859595959595958,
+        "activeBounds": {
+          "minX": 357,
+          "minY": 226,
+          "maxX": 742,
+          "maxY": 760
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0032/cfg-0p5/output.glb",
@@ -2577,6 +2913,20 @@
         "sha256": "f4f902fba62f8351daa066b199f2859027cfe1d7fac90a9c911610d30d4b669c",
         "bytes": 637227
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.608575364018003,
+        "edgeRatio": 0.005356420626895854,
+        "activePixelRatio": 0.05758383838383838,
+        "activeBoundsRatio": 0.276589898989899,
+        "activeBounds": {
+          "minX": 360,
+          "minY": 96,
+          "maxX": 757,
+          "maxY": 783
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/left/render.png",
@@ -2633,6 +2983,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/front/render.png",
         "sha256": "005d12a8efcd1b1c975ee7675c9977b0d97f3033a75de12b8abe52023eb5b9a7",
         "bytes": 633777
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 10.290898550060762,
+        "edgeRatio": 0.006739130434782609,
+        "activePixelRatio": 0.0526979797979798,
+        "activeBoundsRatio": 0.22214949494949496,
+        "activeBounds": {
+          "minX": 402,
+          "minY": 67,
+          "maxX": 697,
+          "maxY": 809
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
@@ -2691,6 +3055,20 @@
         "sha256": "c7f01c3f145e9e733aa761c136526183679778257d282d46c3954fbd5d4150f6",
         "bytes": 641617
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 10.831130011068437,
+        "edgeRatio": 0.006389787664307381,
+        "activePixelRatio": 0.05459090909090909,
+        "activeBoundsRatio": 0.23955555555555555,
+        "activeBounds": {
+          "minX": 351,
+          "minY": 61,
+          "maxX": 658,
+          "maxY": 830
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/right/render.png",
@@ -2747,6 +3125,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/prior-hybrid-0p0/rear/render.png",
         "sha256": "43159c0bc006c664100698a40d65f918a82c78d39f8182557339dedd0e783998",
         "bytes": 615298
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 8.764057638756618,
+        "edgeRatio": 0.004759858442871587,
+        "activePixelRatio": 0.04937272727272727,
+        "activeBoundsRatio": 0.22484040404040403,
+        "activeBounds": {
+          "minX": 402,
+          "minY": 59,
+          "maxX": 697,
+          "maxY": 810
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p0/output.glb",
@@ -2805,6 +3197,20 @@
         "sha256": "e7676902082834b48d8551fac9c5cab7efca66a86dbf64146fe6c72b3b873566",
         "bytes": 697869
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 13.635398932781078,
+        "edgeRatio": 0.008243174924165824,
+        "activePixelRatio": 0.1106040404040404,
+        "activeBoundsRatio": 0.19122424242424244,
+        "activeBounds": {
+          "minX": 304,
+          "minY": 310,
+          "maxX": 847,
+          "maxY": 657
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/left/render.png",
@@ -2861,6 +3267,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/front/render.png",
         "sha256": "b40817cf83f09f0a1df33dbb020acb83715cc2418090efc9d8a693e5312de64f",
         "bytes": 664248
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 14.313822890435647,
+        "edgeRatio": 0.008190596562184025,
+        "activePixelRatio": 0.07422525252525253,
+        "activeBoundsRatio": 0.13217575757575759,
+        "activeBounds": {
+          "minX": 357,
+          "minY": 322,
+          "maxX": 742,
+          "maxY": 660
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
@@ -2919,6 +3339,20 @@
         "sha256": "f542edfea09b97a1b838381960b132b1fe83445219f4ac2a9de5bc3bce535983",
         "bytes": 725929
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 16.74151592994872,
+        "edgeRatio": 0.010296764408493428,
+        "activePixelRatio": 0.12404747474747475,
+        "activeBoundsRatio": 0.21,
+        "activeBounds": {
+          "minX": 263,
+          "minY": 312,
+          "maxX": 892,
+          "maxY": 641
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/right/render.png",
@@ -2975,6 +3409,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p25/rear/render.png",
         "sha256": "390092698b687eef5ab4af89bef365130e055839cab8786e9d323faeb3735f5a",
         "bytes": 656910
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 12.064570127774576,
+        "edgeRatio": 0.005215369059656218,
+        "activePixelRatio": 0.08860909090909092,
+        "activeBoundsRatio": 0.16531717171717172,
+        "activeBounds": {
+          "minX": 357,
+          "minY": 267,
+          "maxX": 742,
+          "maxY": 690
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p25/output.glb",
@@ -3033,6 +3481,20 @@
         "sha256": "f0ab7ac5779bdfc370e17d553d1d81cb09289dd46060a0a9fe8b7f1ca258cacb",
         "bytes": 725616
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 14.104166817586425,
+        "edgeRatio": 0.008051567239635996,
+        "activePixelRatio": 0.12583535353535352,
+        "activeBoundsRatio": 0.2142,
+        "activeBounds": {
+          "minX": 287,
+          "minY": 284,
+          "maxX": 847,
+          "maxY": 661
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/left/render.png",
@@ -3089,6 +3551,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/front/render.png",
         "sha256": "62c61d7bceec1795bdec4208119a4983ff9f6b31dfb70b2091edaf9eb1734bc5",
         "bytes": 681331
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 14.774718575120774,
+        "edgeRatio": 0.008129423660262891,
+        "activePixelRatio": 0.08322727272727273,
+        "activeBoundsRatio": 0.14222222222222222,
+        "activeBounds": {
+          "minX": 374,
+          "minY": 265,
+          "maxX": 725,
+          "maxY": 664
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
@@ -3147,6 +3623,20 @@
         "sha256": "9563227fc09ffdfa0bcf21efb15cadd8f79a5596728d117241c725322fd43a38",
         "bytes": 757161
       },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 18.69795489513548,
+        "edgeRatio": 0.011163801820020223,
+        "activePixelRatio": 0.14307777777777778,
+        "activeBoundsRatio": 0.23195151515151516,
+        "activeBounds": {
+          "minX": 258,
+          "minY": 284,
+          "maxX": 881,
+          "maxY": 651
+        }
+      },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",
         "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/right/render.png",
@@ -3203,6 +3693,20 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/witness/source-0087/hybrid-0p50/rear/render.png",
         "sha256": "53ad08396203ca8746e86c63612efff4e21803d795222f02cc0bf15500e84612",
         "bytes": 668682
+      },
+      "visualEvidence": {
+        "width": 1100,
+        "height": 900,
+        "luminanceStdDev": 14.477077025862911,
+        "edgeRatio": 0.006241152679474216,
+        "activePixelRatio": 0.08148585858585859,
+        "activeBoundsRatio": 0.15182222222222222,
+        "activeBounds": {
+          "minX": 374,
+          "minY": 258,
+          "maxX": 725,
+          "maxY": 684
+        }
       },
       "effectiveCamera": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-multisource-sparse-guidance-20260715/source-0087/cfg-0p5/output.glb",

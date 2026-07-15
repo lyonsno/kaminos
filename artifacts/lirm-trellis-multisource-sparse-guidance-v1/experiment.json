@@ -39,16 +39,31 @@
   },
   "routeCommit": "ee75fdb",
   "routeIdentity": {
-    "knownGoodLocalRunnerChecked": true,
+    "generationJobType": "trellis2mlx_molten_sparse_pressure_ee75fdb",
+    "generationEffectiveCwd": "/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715",
+    "witnessJobType": "kaminos_blender_glb_witness_molten_0715",
+    "witnessEffectiveCwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
     "runner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py",
-    "effectiveBackend": "MLX on Apple Silicon through gpu-greenroom strict FIFO",
-    "firstReceiptProvesRoute": true,
-    "heavyRunAcceptedBeforeProof": false
+    "effectiveBackend": "MLX on Apple Silicon through gpu-greenroom strict FIFO"
   },
   "contactSheet": {
     "path": "multisource-sparse-guidance-contact-sheet.png",
     "sha256": "901e547247895c99c1f153bc19af6e654c5ed1dc1e4a452fd1f54e60d5230fb4",
     "bytes": 5432939,
+    "visualEvidence": {
+      "width": 2048,
+      "height": 5004,
+      "luminanceStdDev": 22.85647623536188,
+      "edgeRatio": 0.01965037220344714,
+      "activePixelRatio": 0.05786123054681255,
+      "activeBoundsRatio": 1,
+      "activeBounds": {
+        "minX": 0,
+        "minY": 0,
+        "maxX": 2047,
+        "maxY": 5003
+      }
+    },
     "rows": 9,
     "cells": [
       {
@@ -417,7 +432,7 @@
   },
   "routeReceiptManifest": {
     "path": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/lirm-trellis-multisource-sparse-guidance-v1/route-receipts.json",
-    "sha256": "f2f78c9014438125a122d9f01b548d2a739a01c2b0b90cf6552f3afea0e31214",
-    "bytes": 179780
+    "sha256": "e42eeb93d371579a4a32e729a8df6ce70a7d85107a4e69821d7944030f2a51c0",
+    "bytes": 193990
   }
 }

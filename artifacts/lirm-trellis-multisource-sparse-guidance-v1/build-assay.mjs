@@ -3,15 +3,30 @@ import { spawnSync } from 'node:child_process';
 import {
   mkdirSync,
   readFileSync,
+  renameSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  assertCleanJob,
+  assertUsefulPngEvidence,
+  inspectPngEvidence,
+} from './evidence-admission.mjs';
 
 const artifactRoot = dirname(fileURLToPath(import.meta.url));
 const greenroomRoot = '/Users/noahlyons/.local/state/gpu-greenroom';
 const runner = '/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py';
+const routeIdentity = {
+  generationJobType: 'trellis2mlx_molten_sparse_pressure_ee75fdb',
+  generationEffectiveCwd: '/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715',
+  witnessJobType: 'kaminos_blender_glb_witness_molten_0715',
+  witnessEffectiveCwd: '/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714',
+  runner,
+  effectiveBackend: 'MLX on Apple Silicon through gpu-greenroom strict FIFO',
+};
 const fixed = {
   seed: 42,
   steps: 6,
@@ -164,6 +179,10 @@ const generationJobs = sources.flatMap(source => pressures.map(pressure => {
   const spec = source.generations[pressure.id];
   const receiptFile = readJobFile(spec.jobId, 'receipt.json');
   const requestFile = readJobFile(spec.jobId, 'request.json');
+  assertCleanJob(receiptFile.value, {
+    jobType: routeIdentity.generationJobType,
+    effectiveCwd: routeIdentity.generationEffectiveCwd,
+  }, spec.jobId);
   const log = readFileSync(join(greenroomRoot, 'done', spec.jobId, 'stdout.log'), 'utf8');
   const requested = {
     inputPath: source.path,
@@ -215,6 +234,10 @@ const witnessJobs = generationJobs.flatMap(generation => {
   return jobIds.map((jobId, index) => {
     const receiptFile = readJobFile(jobId, 'receipt.json');
     const requestFile = readJobFile(jobId, 'request.json');
+    assertCleanJob(receiptFile.value, {
+      jobType: routeIdentity.witnessJobType,
+      effectiveCwd: routeIdentity.witnessEffectiveCwd,
+    }, jobId);
     const effectiveCamera = parseWitnessRoute(receiptFile.value.effective_route);
     assertSame(`${jobId} request id`, requestFile.value.job_id, jobId);
     assertSame(`${jobId} receipt id`, receiptFile.value.job_id, jobId);
@@ -225,6 +248,9 @@ const witnessJobs = generationJobs.flatMap(generation => {
     assertSame(`${jobId} request output`, requestFile.value.output_dir, receiptFile.value.output_dir);
     assertSame(`${jobId} yaw`, effectiveCamera.yaw, Number(requestFile.value.params.yaw));
     assertSame(`${jobId} pitch`, effectiveCamera.pitch, Number(requestFile.value.params.pitch));
+    const output = fileRecord(effectiveCamera.outputPath);
+    const visualEvidence = inspectPngEvidence(readFileSync(effectiveCamera.outputPath));
+    assertUsefulPngEvidence(visualEvidence, {}, jobId);
     return {
       sourceId: generation.sourceId,
       pressure: generation.pressure,
@@ -234,7 +260,8 @@ const witnessJobs = generationJobs.flatMap(generation => {
       receiptSha256: receiptFile.sha256,
       requestSha256: requestFile.sha256,
       input: fileRecord(generation.output.path),
-      output: fileRecord(effectiveCamera.outputPath),
+      output,
+      visualEvidence,
       effectiveCamera,
     };
   });
@@ -251,6 +278,7 @@ const cells = witnessJobs.map(job => ({
   pitch: job.effectiveCamera.pitch,
 }));
 const sheetPath = join(artifactRoot, 'multisource-sparse-guidance-contact-sheet.png');
+const sheetTempPath = `${sheetPath}.tmp-${process.pid}.png`;
 const manifestPath = `${sheetPath}.inputs.json`;
 writeFileSync(manifestPath, `${JSON.stringify({
   width: 2048,
@@ -265,23 +293,27 @@ writeFileSync(manifestPath, `${JSON.stringify({
     viewLabel: `${cell.view.toUpperCase()} yaw ${cell.yaw}`,
   })),
 }, null, 2)}\n`);
+let sheetVisualEvidence;
 try {
   const result = spawnSync('/usr/bin/swift', [
     join(artifactRoot, '..', 'lirm-trellis-guidance-pressure-assay-v1', 'assemble-contact-sheet.swift'),
     manifestPath,
-    sheetPath,
+    sheetTempPath,
   ], { encoding: 'utf8' });
   if (result.status !== 0) {
     throw new Error(`contact sheet assembly failed: ${result.stderr || result.stdout}`);
   }
+  sheetVisualEvidence = inspectPngEvidence(readFileSync(sheetTempPath));
+  assertUsefulPngEvidence(sheetVisualEvidence, { minWidth: 2048, minHeight: 5004 }, 'contact sheet');
+  renameSync(sheetTempPath, sheetPath);
 } finally {
   unlinkSync(manifestPath);
+  rmSync(sheetTempPath, { force: true });
 }
 
 const receipts = {
   schema: 'kaminos.lirm-trellis-multisource-sparse-guidance-route-receipts.v1',
-  allDoneExitZero: [...generationJobs, ...witnessJobs].every(job =>
-    job.receipt.status === 'done' && job.receipt.exit_code === 0 && job.receipt.failure_phase === null),
+  allDoneExitZero: true,
   generationJobs,
   witnessJobs,
 };
@@ -291,6 +323,7 @@ writeFileSync(receiptPath, `${JSON.stringify(receipts, null, 2)}\n`);
 
 const sheet = {
   ...fileRecord(sheetPath),
+  visualEvidence: sheetVisualEvidence,
   path: sheetPath.split('/').at(-1),
   rows: cells.length / 4,
   cells,
@@ -302,13 +335,7 @@ const experiment = {
   sources: sources.map(source => ({ id: source.id, ...fileRecord(source.path) })),
   fixed,
   routeCommit: 'ee75fdb',
-  routeIdentity: {
-    knownGoodLocalRunnerChecked: true,
-    runner,
-    effectiveBackend: 'MLX on Apple Silicon through gpu-greenroom strict FIFO',
-    firstReceiptProvesRoute: true,
-    heavyRunAcceptedBeforeProof: false,
-  },
+  routeIdentity,
   contactSheet: sheet,
   routeReceiptManifest: fileRecord(receiptPath),
 };

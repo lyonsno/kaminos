@@ -33,6 +33,14 @@ assert.deepEqual(experiment.fixed, {
   },
 });
 assert.equal(experiment.routeCommit, 'ee75fdb');
+assert.deepEqual(experiment.routeIdentity, {
+  generationJobType: 'trellis2mlx_molten_sparse_pressure_ee75fdb',
+  generationEffectiveCwd: '/private/tmp/trellis2mlx-molten-shape-guidance-pressure-0715',
+  witnessJobType: 'kaminos_blender_glb_witness_molten_0715',
+  witnessEffectiveCwd: '/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714',
+  runner: '/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py',
+  effectiveBackend: 'MLX on Apple Silicon through gpu-greenroom strict FIFO',
+});
 
 const expectedSources = new Map([
   ['0066', '03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba'],
@@ -61,6 +69,9 @@ for (const job of receipts.generationJobs) {
   assert.equal(job.receipt.exit_code, 0);
   assert.equal(job.receipt.failure_phase, null);
   assert.deepEqual(job.receipt.warnings ?? [], []);
+  assert.equal(job.receipt.ignored_params, null);
+  assert.equal(job.receipt.job_type, experiment.routeIdentity.generationJobType);
+  assert.equal(job.receipt.effective_cwd, experiment.routeIdentity.generationEffectiveCwd);
   assert.equal(job.request.job_id, job.receipt.job_id);
   assert.match(job.receiptSha256, /^[a-f0-9]{64}$/);
   assert.match(job.requestSha256, /^[a-f0-9]{64}$/);
@@ -113,9 +124,15 @@ for (const job of receipts.witnessJobs) {
   assert.equal(job.receipt.exit_code, 0);
   assert.equal(job.receipt.failure_phase, null);
   assert.deepEqual(job.receipt.warnings ?? [], []);
-  assert.equal(job.receipt.job_type, 'kaminos_blender_glb_witness_molten_0715');
+  assert.equal(job.receipt.ignored_params, null);
+  assert.equal(job.receipt.job_type, experiment.routeIdentity.witnessJobType);
+  assert.equal(job.receipt.effective_cwd, experiment.routeIdentity.witnessEffectiveCwd);
   assert.match(job.output.sha256, /^[a-f0-9]{64}$/);
   assert.ok(job.output.bytes > 100_000, 'witness must be a substantive nonblank PNG');
+  assert.ok(job.visualEvidence.luminanceStdDev > 5);
+  assert.ok(job.visualEvidence.edgeRatio > 0.002);
+  assert.ok(job.visualEvidence.activePixelRatio > 0.01);
+  assert.ok(job.visualEvidence.activeBoundsRatio > 0.03);
   assert.equal(job.effectiveCamera.yaw, expectedYaw.get(job.view));
   assert.equal(job.effectiveCamera.pitch, 0.2);
   const generation = receipts.generationJobs.find(
@@ -134,6 +151,10 @@ assert.equal(sheetBytes.readUInt32BE(20), 5004);
 assert.equal(sheet.rows, 9);
 assert.equal(sheet.cells.length, 36);
 assert.equal(sheet.assemblySha256, sha256(Buffer.from(JSON.stringify(sheet.cells))));
+assert.ok(sheet.visualEvidence.luminanceStdDev > 5);
+assert.ok(sheet.visualEvidence.edgeRatio > 0.002);
+assert.ok(sheet.visualEvidence.activePixelRatio > 0.01);
+assert.ok(sheet.visualEvidence.activeBoundsRatio > 0.03);
 for (const cell of sheet.cells) {
   const witness = receipts.witnessJobs.find(job => job.receipt.job_id === cell.sourceJobId);
   assert.ok(witness, `sheet cell must name an admitted witness: ${cell.sourceJobId}`);
