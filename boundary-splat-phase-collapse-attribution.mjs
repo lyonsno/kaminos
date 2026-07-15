@@ -35,6 +35,44 @@ const VARIANT_AUTHORITIES = Object.freeze({
   frozenVisibleOnPredictedSupport: 'predicted-support-with-position-matched-frozen-visible-state-v0',
 });
 
+const SUBSTITUTION_CONTRACTS = Object.freeze({
+  prediction: Object.freeze({
+    authority: 'unmodified-learned-recurrent-state-v0',
+    donorRole: null,
+    channelFamilies: null,
+  }),
+  exactSupportPredictedVisible: Object.freeze({
+    authority: 'world-position-exact-channel-substitution-v0',
+    donorRole: 'prediction',
+    channelFamilies: Object.freeze(['color', 'opacity', 'shape']),
+  }),
+  predictedSupportExactVisible: Object.freeze({
+    authority: 'world-position-exact-channel-substitution-v0',
+    donorRole: 'exact-target',
+    channelFamilies: Object.freeze(['color', 'opacity', 'shape']),
+  }),
+  exactColorOnPredictedSupport: Object.freeze({
+    authority: 'world-position-exact-channel-substitution-v0',
+    donorRole: 'exact-target',
+    channelFamilies: Object.freeze(['color']),
+  }),
+  exactOpacityOnPredictedSupport: Object.freeze({
+    authority: 'world-position-exact-channel-substitution-v0',
+    donorRole: 'exact-target',
+    channelFamilies: Object.freeze(['opacity']),
+  }),
+  exactShapeOnPredictedSupport: Object.freeze({
+    authority: 'world-position-exact-channel-substitution-v0',
+    donorRole: 'exact-target',
+    channelFamilies: Object.freeze(['shape']),
+  }),
+  frozenVisibleOnPredictedSupport: Object.freeze({
+    authority: 'world-position-exact-channel-substitution-v0',
+    donorRole: 'frozen-present',
+    channelFamilies: Object.freeze(['color', 'opacity', 'shape']),
+  }),
+});
+
 function parseArgs(argv) {
   const result = new Map();
   for (let index = 0; index < argv.length; index += 1) {
@@ -345,6 +383,47 @@ export function validateCollapseAttributionReport(report) {
       throw new Error(`collapse attribution blank role evidence for ${role}`);
     }
   }
+  if (JSON.stringify(Object.keys(report.substitutionAccounting ?? {})) !== JSON.stringify(Object.keys(SUBSTITUTION_CONTRACTS))) {
+    throw new Error('collapse attribution substitution accounting roles mismatch');
+  }
+  const exactSupportEvidence = report.roleEvidence.exactSupportPredictedVisible;
+  const predictionEvidence = report.roleEvidence.prediction;
+  const frozenEvidence = report.frozenControlEvidence;
+  for (const [role, contract] of Object.entries(SUBSTITUTION_CONTRACTS)) {
+    const accounting = report.substitutionAccounting[role];
+    const evidence = report.roleEvidence[role];
+    if (!Array.isArray(accounting) || accounting.length !== frameCount) {
+      throw new Error(`collapse attribution substitution accounting length mismatch for ${role}`);
+    }
+    for (let index = 0; index < frameCount; index += 1) {
+      const row = accounting[index];
+      const expectedRecipientCount = evidence[index].inputSplatCount;
+      if (
+        row?.step !== evidence[index].step
+        || row.authority !== contract.authority
+        || !Number.isInteger(row.recipientCount) || row.recipientCount <= 0
+        || row.recipientCount !== expectedRecipientCount
+      ) throw new Error(`collapse attribution substitution accounting recipient count mismatch for ${role} step ${index + 1}`);
+      if (role === 'prediction') continue;
+      const expectedDonorCount = contract.donorRole === 'prediction'
+        ? predictionEvidence[index].inputSplatCount
+        : (contract.donorRole === 'exact-target'
+          ? exactSupportEvidence[index].inputSplatCount
+          : frozenEvidence[index].inputSplatCount);
+      if (
+        row.donorRole !== contract.donorRole
+        || JSON.stringify(row.channelFamilies) !== JSON.stringify(contract.channelFamilies)
+      ) throw new Error(`collapse attribution substitution accounting channel families mismatch for ${role} step ${index + 1}`);
+      if (
+        !Number.isInteger(row.donorCount) || row.donorCount <= 0 || row.donorCount !== expectedDonorCount
+        || !Number.isInteger(row.matchedCount) || row.matchedCount < 0
+        || !Number.isInteger(row.unmatchedRecipientCount) || row.unmatchedRecipientCount < 0
+        || !Number.isInteger(row.unusedDonorCount) || row.unusedDonorCount < 0
+        || row.matchedCount + row.unmatchedRecipientCount !== row.recipientCount
+        || row.matchedCount + row.unusedDonorCount !== row.donorCount
+      ) throw new Error(`collapse attribution substitution accounting mismatch for ${role} step ${index + 1}`);
+    }
+  }
   if (new Set(report.roleEvidence.prediction.map(frame => frame.sha256)).size <= 1) {
     throw new Error('collapse attribution prediction is cached or static');
   }
@@ -370,6 +449,10 @@ export function validateCollapseAttributionReport(report) {
     report.metrics?.authority !== 'same-raster-full-frame-error-v0'
     || Object.keys(VARIANT_AUTHORITIES).some(role => !Number.isFinite(report.metrics.roles?.[role]?.lateMse))
   ) throw new Error('collapse attribution metrics mismatch');
+  if (
+    typeof report.claimBoundary !== 'string'
+    || !/\bnot\b[^.]{0,300}\bdeployable\b[^.]{0,300}\bruntime\b/i.test(report.claimBoundary.trim())
+  ) throw new Error('collapse attribution claim boundary must deny deployable prediction and runtime authorization');
 }
 
 export async function writeCollapseAttribution(manifestPathValue, predictionsPathValue, options = {}) {

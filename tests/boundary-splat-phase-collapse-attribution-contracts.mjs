@@ -93,6 +93,7 @@ const hash = value => createHash('sha256').update(value).digest('hex');
 const frameEvidence = (prefix, count = 2) => Array.from({ length: count }, (_, index) => ({
   step: index + 1,
   sha256: hash(`${prefix}${index + 1}`),
+  inputSplatCount: 2,
   nonBackgroundPixelCount: 10,
   projectedSplatCount: 2,
 }));
@@ -118,13 +119,111 @@ const validReport = {
   playback: { frameCount: 2, effectiveFps: 6.25, encodedDurationSeconds: 0.32, loops: false },
   roles: Object.fromEntries(Object.keys(variants).map(key => [key, variants[key].authority])),
   roleEvidence: Object.fromEntries(Object.keys(variants).map(key => [key, frameEvidence(key)])),
+  substitutionAccounting: {
+    prediction: Array.from({ length: 2 }, (_, index) => ({
+      step: index + 1,
+      authority: 'unmodified-learned-recurrent-state-v0',
+      recipientCount: 2,
+    })),
+    exactSupportPredictedVisible: Array.from({ length: 2 }, (_, index) => ({
+      step: index + 1,
+      authority: 'world-position-exact-channel-substitution-v0',
+      donorRole: 'prediction',
+      channelFamilies: ['color', 'opacity', 'shape'],
+      recipientCount: 2,
+      donorCount: 2,
+      matchedCount: 1,
+      unmatchedRecipientCount: 1,
+      unusedDonorCount: 1,
+    })),
+    predictedSupportExactVisible: Array.from({ length: 2 }, (_, index) => ({
+      step: index + 1,
+      authority: 'world-position-exact-channel-substitution-v0',
+      donorRole: 'exact-target',
+      channelFamilies: ['color', 'opacity', 'shape'],
+      recipientCount: 2,
+      donorCount: 2,
+      matchedCount: 1,
+      unmatchedRecipientCount: 1,
+      unusedDonorCount: 1,
+    })),
+    exactColorOnPredictedSupport: Array.from({ length: 2 }, (_, index) => ({
+      step: index + 1,
+      authority: 'world-position-exact-channel-substitution-v0',
+      donorRole: 'exact-target',
+      channelFamilies: ['color'],
+      recipientCount: 2,
+      donorCount: 2,
+      matchedCount: 1,
+      unmatchedRecipientCount: 1,
+      unusedDonorCount: 1,
+    })),
+    exactOpacityOnPredictedSupport: Array.from({ length: 2 }, (_, index) => ({
+      step: index + 1,
+      authority: 'world-position-exact-channel-substitution-v0',
+      donorRole: 'exact-target',
+      channelFamilies: ['opacity'],
+      recipientCount: 2,
+      donorCount: 2,
+      matchedCount: 1,
+      unmatchedRecipientCount: 1,
+      unusedDonorCount: 1,
+    })),
+    exactShapeOnPredictedSupport: Array.from({ length: 2 }, (_, index) => ({
+      step: index + 1,
+      authority: 'world-position-exact-channel-substitution-v0',
+      donorRole: 'exact-target',
+      channelFamilies: ['shape'],
+      recipientCount: 2,
+      donorCount: 2,
+      matchedCount: 1,
+      unmatchedRecipientCount: 1,
+      unusedDonorCount: 1,
+    })),
+    frozenVisibleOnPredictedSupport: Array.from({ length: 2 }, (_, index) => ({
+      step: index + 1,
+      authority: 'world-position-exact-channel-substitution-v0',
+      donorRole: 'frozen-present',
+      channelFamilies: ['color', 'opacity', 'shape'],
+      recipientCount: 2,
+      donorCount: 2,
+      matchedCount: 1,
+      unmatchedRecipientCount: 1,
+      unusedDonorCount: 1,
+    })),
+  },
   frozenControlEvidence: [{ ...frameEvidence('control')[0] }, { ...frameEvidence('control')[0], step: 2 }],
   frozenControlIdentity: { authority: 'pixel-identical-frozen-control-v0', frameCount: 2, uniqueFrameCount: 1, sha256: frameEvidence('control')[0].sha256 },
   artifact: { sha256: hash('c'), bytes: 100, probe: { frameCount: 2, width: 2240, height: 240, fps: 6.25, duration: 0.32 } },
   metrics: { authority: 'same-raster-full-frame-error-v0', roles: Object.fromEntries(Object.keys(variants).map(key => [key, { lateMse: 1 }])) },
-  claimBoundary: 'causal offline substitutions only',
+  claimBoundary: 'These causal offline substitutions are not deployable predictions and do not authorize runtime composition.',
 };
 assert.doesNotThrow(() => validateCollapseAttributionReport(validReport));
+
+const missingAccounting = structuredClone(validReport);
+delete missingAccounting.substitutionAccounting;
+assert.throws(() => validateCollapseAttributionReport(missingAccounting), /substitution accounting/i);
+const partialAccounting = structuredClone(validReport);
+partialAccounting.substitutionAccounting.exactColorOnPredictedSupport.pop();
+assert.throws(() => validateCollapseAttributionReport(partialAccounting), /substitution accounting/i);
+const wrongAccountingAuthority = structuredClone(validReport);
+wrongAccountingAuthority.substitutionAccounting.exactShapeOnPredictedSupport[0].authority = 'aggregate-only-counterfeit-v0';
+assert.throws(() => validateCollapseAttributionReport(wrongAccountingAuthority), /substitution accounting/i);
+const wrongFamily = structuredClone(validReport);
+wrongFamily.substitutionAccounting.predictedSupportExactVisible[0].channelFamilies = ['support'];
+assert.throws(() => validateCollapseAttributionReport(wrongFamily), /channel families/i);
+const incoherentCounts = structuredClone(validReport);
+incoherentCounts.substitutionAccounting.exactOpacityOnPredictedSupport[0].unmatchedRecipientCount = 0;
+assert.throws(() => validateCollapseAttributionReport(incoherentCounts), /substitution accounting/i);
+const recipientMismatch = structuredClone(validReport);
+recipientMismatch.substitutionAccounting.exactColorOnPredictedSupport[0].recipientCount = 3;
+assert.throws(() => validateCollapseAttributionReport(recipientMismatch), /recipient count/i);
+const blankBoundary = structuredClone(validReport);
+blankBoundary.claimBoundary = '';
+assert.throws(() => validateCollapseAttributionReport(blankBoundary), /claim boundary/i);
+const deployableBoundary = structuredClone(validReport);
+deployableBoundary.claimBoundary = 'This is a deployable prediction and runtime authorization.';
+assert.throws(() => validateCollapseAttributionReport(deployableBoundary), /claim boundary/i);
 
 const movingControl = structuredClone(validReport);
 movingControl.frozenControlEvidence[1].sha256 = hash('z');
