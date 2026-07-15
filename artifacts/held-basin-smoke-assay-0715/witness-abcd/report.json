@@ -2,8 +2,8 @@
   "schema": "kaminos.held-smoke-assay-witness.v0",
   "status": "passed",
   "failurePhase": null,
-  "startedAt": "2026-07-15T11:07:26.737Z",
-  "completedAt": "2026-07-15T11:07:55.065Z",
+  "startedAt": "2026-07-15T11:23:26.226Z",
+  "completedAt": "2026-07-15T11:23:37.513Z",
   "requestedUrl": "http://127.0.0.1:18715/held-basin-smoke-assay.html?assay_manifest_sha256=f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8&manifest_sha256=553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
   "requestedRoute": "held-smoke-a-b-c-d-cockpit-v0",
   "effectiveRoute": "held-smoke-a-b-c-d-cockpit-v0",
@@ -27,7 +27,7 @@
       "effectiveRoute": "webgpu-held-smoke-assay-v0",
       "requestedProductIndex": 0,
       "effectiveProductIndex": 0,
-      "frameCount": 436,
+      "frameCount": 381,
       "error": null
     },
     "b": {
@@ -36,7 +36,7 @@
       "effectiveRoute": "webgpu-held-smoke-assay-v0",
       "requestedProductIndex": 1,
       "effectiveProductIndex": 1,
-      "frameCount": 436,
+      "frameCount": 381,
       "error": null
     },
     "d": {
@@ -53,8 +53,8 @@
     "identity": "kaminos-held-smoke-assay-single-cdp-browser-v0",
     "mode": "launched-owned",
     "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "chromePort": 19422,
-    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-held-smoke-assay-chrome-S4EjyL",
+    "chromePort": 19424,
+    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-held-smoke-assay-chrome-jA47Al",
     "keepBrowserOpen": false,
     "windowSize": "1600,1000"
   },
@@ -105,7 +105,7 @@
           "effectiveRoute": "webgpu-held-smoke-assay-v0",
           "requestedProductIndex": 0,
           "effectiveProductIndex": 0,
-          "frameCount": 171,
+          "frameCount": 116,
           "error": null
         },
         "b": {
@@ -114,7 +114,7 @@
           "effectiveRoute": "webgpu-held-smoke-assay-v0",
           "requestedProductIndex": 1,
           "effectiveProductIndex": 1,
-          "frameCount": 171,
+          "frameCount": 116,
           "error": null
         },
         "d": {
@@ -127,7 +127,7 @@
           "error": null
         }
       },
-      "lastObservedAt": "2026-07-15T11:07:49.501Z"
+      "lastObservedAt": "2026-07-15T11:23:34.946Z"
     },
     "final": {
       "schema": "kaminos.held-smoke-assay-cockpit.v0",
@@ -170,7 +170,7 @@
           "effectiveRoute": "webgpu-held-smoke-assay-v0",
           "requestedProductIndex": 0,
           "effectiveProductIndex": 0,
-          "frameCount": 436,
+          "frameCount": 381,
           "error": null
         },
         "b": {
@@ -179,7 +179,7 @@
           "effectiveRoute": "webgpu-held-smoke-assay-v0",
           "requestedProductIndex": 1,
           "effectiveProductIndex": 1,
-          "frameCount": 436,
+          "frameCount": 381,
           "error": null
         },
         "d": {
@@ -192,19 +192,19 @@
           "error": null
         }
       },
-      "lastObservedAt": "2026-07-15T11:07:51.702Z"
+      "lastObservedAt": "2026-07-15T11:23:37.146Z"
     },
     "runtimeExceptionCount": 0
   },
   "frame": {
     "path": "held-smoke-assay.png",
-    "byteLength": 798580,
-    "sha256": "869e41a0e0ec6440d7e2a653ace025776f0c8db05b0c034b5c9b1656cc5db065",
+    "byteLength": 761607,
+    "sha256": "ddb848ee33d20dc4bd6f824be5595982252929203ce27586f045b085ce854f7d",
     "width": 3200,
     "height": 1826,
-    "luminanceMean": 115.91083287076084,
-    "luminanceStdDev": 72.69553584866455,
-    "nonUniformPixelCount": 5590054
+    "luminanceMean": 115.19597979718483,
+    "luminanceStdDev": 73.23453037045638,
+    "nonUniformPixelCount": 5590289
   },
   "falseClosureChecks": {
     "rejectsWrongOrFallbackChildRoute": true,

@@ -30,5 +30,7 @@ assert.match(viewer, /raymarchEncoded[\s\S]*raymarchApplied[\s\S]*splatEncoded[\
 assert.match(viewer, /compositionAuthority:\s*null[\s\S]*raymarchFireAuthority:\s*null/, 'viewer state exposes composition and raymarch fire authority independently from pass application');
 assert.match(viewer, /state\.compositionAuthority\s*=\s*receipt\.compositionAuthority[\s\S]*state\.raymarchFireAuthority\s*=\s*receipt\.raymarchFireAuthority/, 'viewer records effective authority from the submitted frozen-render receipt');
 assert.match(viewer, /window\.__kaminosHeldFieldViewer/, 'viewer exposes an operator-readable requested/effective debug receipt');
+assert.match(viewer, /params\.get\('embed'\)/, 'viewer accepts an explicit embedded cockpit mode');
+assert.match(viewer, /embedded[\s\S]*receipt-band/, 'embedded mode removes redundant viewer chrome from narrow comparison panels');
 
 console.log('volume held-field viewer contracts: ok');

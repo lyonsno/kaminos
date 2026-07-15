@@ -11,6 +11,7 @@ assert.match(cockpit, /kaminos\.held-smoke-assay-cockpit\.v0/, 'cockpit exposes 
 assert.match(cockpit, /window\.__kaminosHeldSmokeAssay/, 'cockpit exposes a live operator-readable receipt');
 assert.match(cockpit, /webgpu-held-smoke-assay-v0/, 'cockpit requests the exact A\/B raster route');
 assert.match(cockpit, /smoke-raymarch-under-splats-v0/, 'D requests raymarched smoke under splat flame');
+assert.match(cockpit, /searchParams\.set\('embed',\s*'1'\)/, 'D uses the chrome-free embedded viewer mode');
 assert.match(cockpit, /manifest_sha256/, 'D route binds the expected held manifest digest');
 assert.match(cockpit, /assay_manifest_sha256/, 'A/B route binds the expected assay manifest digest');
 assert.match(cockpit, /mountRequested/, 'cockpit records the requested held-source mount');

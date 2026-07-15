@@ -311,6 +311,7 @@
         dUrl.searchParams.set('manifest', mountRequested);
         dUrl.searchParams.set('manifest_sha256', manifestSha256Requested);
         dUrl.searchParams.set('composition', HELD_COMPOSITION);
+        dUrl.searchParams.set('embed', '1');
         aFrame.src = splatUrl(0).href;
         bFrame.src = splatUrl(1).href;
         dFrame.src = dUrl.href;

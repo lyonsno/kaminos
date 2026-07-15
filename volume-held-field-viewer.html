@@ -28,6 +28,8 @@
     #failure.visible { display: grid; }
     #failure strong { display: block; font-size: 24px; }
     #failure pre { max-width: min(900px, 92vw); overflow: auto; color: #d9e1e3; font: 12px/1.5 "SF Mono", Menlo, monospace; white-space: pre-wrap; }
+    body.embedded #receipt-band { display: none; }
+    body.embedded #failure { inset: 0; }
   </style>
 </head>
 <body>
@@ -65,6 +67,8 @@
       'full-raymarch-under-splats-diagnostic-v0',
     ]);
     const params = new URLSearchParams(location.search);
+    const embedded = params.get('embed') === '1';
+    document.body.classList.toggle('embedded', embedded);
     const manifestRequested = params.get('manifest');
     const manifestSha256Requested = String(params.get('manifest_sha256') || '').toLowerCase();
     const compositionParam = params.get('composition');
@@ -89,6 +93,7 @@
 
     const state = {
       routeIdentity: ROUTE_IDENTITY,
+      embedded,
       status: 'loading',
       failurePhase: null,
       error: null,
