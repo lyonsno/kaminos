@@ -1237,12 +1237,12 @@ def main():
             raise ValueError("sparse-grid-residual requires an explicit disjoint frame holdout")
         if args.context_mode == "native-sidecar-pyramid" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
             raise ValueError("native-sidecar-pyramid requires an explicit disjoint frame holdout")
+        if args.partial_flow_debug_gain != 0.0 and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
+            raise ValueError("partial flow-debug witness requires an explicit disjoint frame holdout")
         if args.optical_decoder != "none" and args.candidate_table_oracle:
             raise ValueError("optical decoding cannot be combined with the candidate table oracle")
         if args.optical_decoder != "none" and args.spatial_mixing != "none":
             raise ValueError("optical decoding and pre-raster spatial mixing are separate experimental families")
-        if args.partial_flow_debug_gain != 0.0 and args.optical_decoder != "screen-unet" and args.spatial_mixing != "sparse-grid-residual":
-            raise ValueError("partial flow-debug witness requires an image-bearing optical or sparse-grid decoder")
         if args.partial_flow_debug_gain != 0.0:
             missing_flow_debug = [
                 frame["id"]

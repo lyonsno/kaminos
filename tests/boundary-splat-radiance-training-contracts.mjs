@@ -50,6 +50,16 @@ assert.match(script, /"evaluationFrameIds"/, 'training receipts preserve the exa
 assert.match(script, /"evaluationFrames"/, 'radiance receipts preserve per-frame held-out optical metrics and previews');
 assert.match(script, /"trainingLossTrace"\s*:\s*training_losses/, 'optimization traces contain only the selected training-frame objective');
 assert.match(script, /"evaluationLossAuthority"\s*:\s*"held-out-frame-mean-v0"/, 'explicit holdout receipts label evaluation loss separately from the optimizer trace');
+assert.doesNotMatch(
+  script,
+  /partial flow-debug witness requires an image-bearing optical or sparse-grid decoder/,
+  'display-only partial flow-debug witnessing is not restricted to specific decoder architectures',
+);
+assert.match(
+  script,
+  /args\.partial_flow_debug_gain\s*!=\s*0\.0\s+and\s+frame_split\["authority"\]\s*!=\s*"explicit-disjoint-frame-holdout-v0"/,
+  'partial flow-debug witnessing always requires explicit disjoint held-out frame custody',
+);
 assert.match(script, /--candidate-table-oracle/, 'radiance trainer exposes a non-deployable per-candidate representational oracle');
 assert.match(script, /class\s+CandidateAttributeTable\(nn\.Module\)/, 'candidate oracle owns independently trainable attributes per splat');
 assert.match(script, /per-candidate-free-attribute-oracle-v0/, 'candidate oracle receipts distinguish diagnostic authority from deployable MLP authority');
