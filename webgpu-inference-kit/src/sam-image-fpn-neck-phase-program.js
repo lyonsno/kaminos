@@ -4,7 +4,7 @@ import {
   createRouteWorkerResult,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE, createLinearDispatch } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -110,8 +110,11 @@ struct FpnConvDims {
 @group(0) @binding(4) var<uniform> dims: FpnConvDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let out_c = index % dims.output_channels;
   let out_x = (index / dims.output_channels) % dims.output_width;
@@ -164,8 +167,11 @@ struct FpnConvDims {
 @group(0) @binding(4) var<uniform> dims: FpnConvDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let out_c = index % dims.output_channels;
   let out_x = (index / dims.output_channels) % dims.output_width;
@@ -258,8 +264,11 @@ fn gelu_exact_approx(x: f32) -> f32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= arrayLength(&output_values)) { return; }
   output_values[index] = gelu_exact_approx(input_values[index]);
 }
@@ -270,8 +279,11 @@ struct PositionDims { batch: u32, height: u32, width: u32, channels: u32, total_
 @group(0) @binding(0) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(1) var<uniform> dims: PositionDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.channels;
   let x = (index / dims.channels) % dims.width;
@@ -305,8 +317,11 @@ struct FpnPoolDims {
 @group(0) @binding(2) var<uniform> dims: FpnPoolDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.channels;
   let out_x = (index / dims.channels) % dims.output_width;
@@ -754,10 +769,6 @@ function createSam31ImageTrackingNeckPhaseProgramRouteReceipt(input, descriptor)
   });
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
-}
-
 function convDimsValues(shape, inShape, spec, outShape) {
   return {
     batch: shape.batch,
@@ -819,6 +830,11 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+  });
+  const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
+  const linearDispatch = totalInvocations => createLinearDispatch(totalInvocations, {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
   });
 
   let tensors = null;
@@ -914,7 +930,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor], weight: tensors[weightTensor], bias: tensors[biasTensor] },
       uniforms: { convDims: tensors.convDims },
       kernels,
-      phases: [{ name, kernel, dispatch: [workgroups(shape.batch * outShape.height * outShape.width * outShape.channels)], yieldAfter: true }],
+      phases: [{ name, kernel, dispatch: linearDispatch(shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(single);
@@ -925,7 +941,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor] },
       uniforms: { convDims: tensors.convDims },
       kernels,
-      phases: [{ name, kernel: 'gelu', dispatch: [workgroups(total)], yieldAfter: true }],
+      phases: [{ name, kernel: 'gelu', dispatch: linearDispatch(total), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(single);
@@ -937,7 +953,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor] },
       uniforms: { convDims: tensors.convDims, poolDims: tensors.poolDims },
       kernels,
-      phases: [{ name, kernel: 'maxpool2d', dispatch: [workgroups(shape.batch * outShape.height * outShape.width * outShape.channels)], yieldAfter: true }],
+      phases: [{ name, kernel: 'maxpool2d', dispatch: linearDispatch(shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(single);
@@ -1038,6 +1054,11 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
     yieldMs: 0,
     now: input.now,
   });
+  const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
+  const linearDispatch = totalInvocations => createLinearDispatch(totalInvocations, {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
+  });
 
   const backboneShape = { height: shape.backboneHeight, width: shape.backboneWidth, channels: shape.backboneChannels };
   const scaleShapes = weights.levels.map(level => {
@@ -1127,7 +1148,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       tensors: { input: tensors[inputTensor], output: tensors[outputTensor], weight: tensors[weightTensor], bias: tensors[biasTensor] },
       uniforms: { convDims: tensors.convDims },
       kernels,
-      phases: [{ name, kernel, dispatch: [workgroups(shape.batch * outShape.height * outShape.width * outShape.channels)], yieldAfter: true }],
+      phases: [{ name, kernel, dispatch: linearDispatch(shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(program);
@@ -1138,7 +1159,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       tensors: { input: tensors[inputTensor], output: tensors[outputTensor] },
       uniforms: {},
       kernels,
-      phases: [{ name, kernel: 'gelu', dispatch: [workgroups(total)], yieldAfter: true }],
+      phases: [{ name, kernel: 'gelu', dispatch: linearDispatch(total), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(program);
@@ -1171,7 +1192,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       tensors: { output: tensors.position2 },
       uniforms: { positionDims: tensors.positionDims },
       kernels,
-      phases: [{ name: 'fpn-neck-position-2', kernel: 'positionEncoding', dispatch: [workgroups(total)], yieldAfter: true }],
+      phases: [{ name: 'fpn-neck-position-2', kernel: 'positionEncoding', dispatch: linearDispatch(total), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(program);

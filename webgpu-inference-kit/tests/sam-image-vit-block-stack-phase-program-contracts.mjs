@@ -28,7 +28,16 @@ assert.match(routeSource, /fn mlx_erf\(x: f32\)/, 'ViT MLP GELU shader must port
 assert.match(routeSource, /fn mlx_expm1f\(x: f32\)/, 'ViT MLP GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
 assert.match(routeSource, /0\.927734375/, 'ViT MLP GELU shader must preserve the MLX Metal erf branch boundary');
 assert.doesNotMatch(routeSource, /0\.044715/, 'ViT block-stack GPU and CPU GELU paths must not retain the tanh approximation');
-assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*if \(gid\.x >= dims\.total_values\) \{ return; \}/, 'block-stack residual add must guard rounded-up dispatch tail writes');
+assert.match(routeSource, /const RESIDUAL_ADD_WGSL = `[\s\S]*let index = gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u;[\s\S]*if \(index >= dims\.total_values\) \{ return; \}/, 'block-stack residual add must linearize tiled dispatch and guard rounded-up tail writes');
+assert.match(routeSource, /createLinearDispatch/, 'ViT block-stack must use the shared device-limit-aware linear dispatch contract');
+assert.match(routeSource, /maxComputeWorkgroupsPerDimension/, 'ViT block-stack must route against the effective adapter workgroup-dimension limit');
+assert.match(routeSource, /gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u/, 'ViT block-stack shaders must reconstruct a linear invocation index from a two-dimensional dispatch');
+assert.ok(
+  (routeSource.match(/@builtin\(num_workgroups\) dispatch_grid: vec3<u32>/g) || []).length >= 8,
+  'every ViT linear kernel family must receive the effective two-dimensional dispatch grid',
+);
+assert.doesNotMatch(routeSource, /dispatch:\s*\[workgroups\(/, 'ViT block-stack phases must not wrap a one-dimensional workgroup count');
+assert.match(routeSource, /dispatch:\s*linearDispatch\(/, 'ViT block-stack phases must pass the shared dispatch tuple directly');
 
 assert.match(stackExporter, /--image-vit-block-stack-ingress/, 'detector-stack packet must expose image ViT block-stack ingress CLI flag');
 assert.match(stackExporter, /--image-vit-full-backbone-ingress/, 'detector-stack packet must expose image ViT full-backbone ingress CLI flag');

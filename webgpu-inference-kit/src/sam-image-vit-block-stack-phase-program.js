@@ -4,7 +4,7 @@ import {
   createRouteWorkerResult,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE, createLinearDispatch } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -57,8 +57,11 @@ struct LnDims {
 @group(0) @binding(4) var<uniform> dims: LnDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let token = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let token = gid.x + gid.y * dispatch_grid.x * 64u;
   if (token >= dims.token_count) { return; }
   let base = token * dims.channels;
   var mean = 0.0;
@@ -104,8 +107,11 @@ struct BlockDims {
 @group(0) @binding(2) var<uniform> dims: BlockDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.padded_total_values) { return; }
   let c = index % dims.channels;
   let token = index / dims.channels;
@@ -154,8 +160,11 @@ struct BlockDims {
 @group(0) @binding(3) var<uniform> dims: BlockDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_values) { return; }
   let c = index % dims.channels;
   let token = index / dims.channels;
@@ -188,8 +197,11 @@ struct LinearDims {
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -280,8 +292,11 @@ fn gelu_exact_approx(x: f32) -> f32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -307,9 +322,13 @@ struct BlockDims {
 @group(0) @binding(2) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(3) var<uniform> dims: BlockDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  if (gid.x >= dims.total_values) { return; }
-  output_values[gid.x] = residual[gid.x] + update[gid.x];
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
+  if (index >= dims.total_values) { return; }
+  output_values[index] = residual[index] + update[index];
 }
 `;
 
@@ -362,8 +381,11 @@ fn rope_sin(token: u32, d: u32) -> f32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.padded_total_values) { return; }
   let c = index % dims.channels;
   let token = (index / dims.channels) % dims.window_tokens;
@@ -406,8 +428,11 @@ fn qkv_index(window_index: u32, token: u32, head: u32, dim: u32) -> u32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.padded_total_values) { return; }
   let c = index % dims.channels;
   let dim = c % dims.head_dim;
@@ -847,10 +872,6 @@ export function createSam3ImageVitBlockStackPhaseProgramRouteDefinition(input = 
   });
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
-}
-
 export function summarizeSam3FiniteValues(values) {
   if (!Array.isArray(values) && !ArrayBuffer.isView(values)) {
     throw new Error('finite checkpoint values must be an array or typed array');
@@ -971,6 +992,11 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
     yieldMs: 0,
     now: input.now,
   });
+  const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
+  const linearDispatch = totalInvocations => createLinearDispatch(totalInvocations, {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
+  });
 
   let tensors = null;
   const blockDimsValues = layerShape => ({
@@ -1084,20 +1110,20 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
   const bindUniform = resource => ({ name: resource.replace(/^uniform:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' });
   const createLayerProgram = ({ layerShape, inputTensorName, outputTensorName }) => {
     const phases = [
-      { name: 'vit-block-stack-layernorm1', kernel: 'layerNorm1', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-window-partition', kernel: 'windowPartition', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'qProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'kProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'vProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-rope-attention', kernel: 'qRope', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-rope-attention', kernel: 'kRope', dispatch: [workgroups(layerShape.paddedTotalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: layerShape.isGlobal ? 'vit-block-stack-global-attention' : 'vit-block-stack-rope-attention', kernel: 'attention', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-output-projection', kernel: 'outputProjection', dispatch: [workgroups(layerShape.paddedTotalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-window-unpartition', kernel: 'windowUnpartition', dispatch: [workgroups(shape.totalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-layernorm2', kernel: 'layerNorm2', dispatch: [workgroups(shape.tokenCount)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc1', dispatch: [workgroups(shape.tokenCount * shape.intermediateSize)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: [workgroups(shape.totalValues)], metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: [workgroups(shape.totalValues)], yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-layernorm1', kernel: 'layerNorm1', dispatch: linearDispatch(shape.tokenCount), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-window-partition', kernel: 'windowPartition', dispatch: linearDispatch(layerShape.paddedTotalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'qProjection', dispatch: linearDispatch(layerShape.paddedTotalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'kProjection', dispatch: linearDispatch(layerShape.paddedTotalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'vProjection', dispatch: linearDispatch(layerShape.paddedTotalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-rope-attention', kernel: 'qRope', dispatch: linearDispatch(layerShape.paddedTotalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-rope-attention', kernel: 'kRope', dispatch: linearDispatch(layerShape.paddedTotalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: layerShape.isGlobal ? 'vit-block-stack-global-attention' : 'vit-block-stack-rope-attention', kernel: 'attention', dispatch: linearDispatch(layerShape.paddedTotalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-output-projection', kernel: 'outputProjection', dispatch: linearDispatch(layerShape.paddedTotalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-window-unpartition', kernel: 'windowUnpartition', dispatch: linearDispatch(shape.totalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-layernorm2', kernel: 'layerNorm2', dispatch: linearDispatch(shape.tokenCount), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc1', dispatch: linearDispatch(shape.tokenCount * shape.intermediateSize), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: linearDispatch(shape.totalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: linearDispatch(shape.totalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
     ];
     const phaseTensorNames = {
       layerNorm1: 'layerNorm1',

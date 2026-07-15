@@ -18,6 +18,7 @@ export {
   WEBGPU_UNIFORM_BUFFER_SCHEMA,
   assertTensorDataByteLength,
   createGpuTensor,
+  createLinearDispatch,
   createUniformBuffer,
   defineComputeKernel,
   packUniforms,

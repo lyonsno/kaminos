@@ -21,6 +21,32 @@ export const WEBGPU_SHADER_STAGE = Object.freeze({
   compute: 0x4,
 });
 
+export function createLinearDispatch(totalInvocations, options = {}) {
+  const workgroupSize = options.workgroupSize ?? 64;
+  const maxWorkgroupsPerDimension = options.maxWorkgroupsPerDimension ?? 65_535;
+  if (!Number.isSafeInteger(totalInvocations) || totalInvocations <= 0) {
+    throw new Error('totalInvocations must be a positive integer');
+  }
+  if (!Number.isSafeInteger(workgroupSize) || workgroupSize <= 0) {
+    throw new Error('workgroupSize must be a positive integer');
+  }
+  if (!Number.isSafeInteger(maxWorkgroupsPerDimension) || maxWorkgroupsPerDimension <= 0) {
+    throw new Error('maxWorkgroupsPerDimension must be a positive integer');
+  }
+
+  const totalWorkgroups = Math.ceil(totalInvocations / workgroupSize);
+  if (totalWorkgroups <= maxWorkgroupsPerDimension) return [totalWorkgroups];
+  if (totalWorkgroups > maxWorkgroupsPerDimension ** 2) {
+    throw new Error(
+      `linear dispatch of ${totalWorkgroups} workgroups exceeds two-dimensional device capacity ${maxWorkgroupsPerDimension ** 2}`,
+    );
+  }
+
+  const x = Math.ceil(Math.sqrt(totalWorkgroups));
+  const y = Math.ceil(totalWorkgroups / x);
+  return [x, y];
+}
+
 const DTYPE_BYTES = new Map([
   ['f32', 4],
   ['fp32', 4],

@@ -27,6 +27,15 @@ assert.match(routeSource, /fn mlx_erf\(x: f32\)/, 'FPN GELU shader must port the
 assert.match(routeSource, /fn mlx_expm1f\(x: f32\)/, 'FPN GELU shader must port MLX Metal expm1 rather than substitute a different erf family');
 assert.match(routeSource, /0\.927734375/, 'FPN GELU shader must preserve the MLX Metal erf branch boundary');
 assert.doesNotMatch(routeSource, /0\.044715/, 'FPN GPU and CPU GELU paths must not retain the tanh approximation');
+assert.match(routeSource, /createLinearDispatch/, 'FPN neck must use the shared device-limit-aware linear dispatch contract');
+assert.match(routeSource, /maxComputeWorkgroupsPerDimension/, 'FPN neck must route against the effective adapter workgroup-dimension limit');
+assert.match(routeSource, /gid\.x \+ gid\.y \* dispatch_grid\.x \* 64u/, 'FPN shaders must reconstruct a linear invocation index from a two-dimensional dispatch');
+assert.ok(
+  (routeSource.match(/@builtin\(num_workgroups\) dispatch_grid: vec3<u32>/g) || []).length >= 5,
+  'every FPN linear kernel family must receive the effective two-dimensional dispatch grid',
+);
+assert.doesNotMatch(routeSource, /dispatch:\s*\[workgroups\(/, 'FPN phases must not wrap a one-dimensional workgroup count');
+assert.match(routeSource, /dispatch:\s*linearDispatch\(/, 'FPN phases must pass the shared dispatch tuple directly');
 assert.match(routeSource, /fpn-neck-transpose-conv-0-scale0/, 'image FPN-neck route must expose level-0 first transpose-conv stage metadata');
 assert.match(routeSource, /fpn-neck-transpose-conv-0-scale1/, 'image FPN-neck route must expose level-0 second transpose-conv stage metadata');
 assert.match(routeSource, /fpn-neck-transpose-conv-1/, 'image FPN-neck route must expose level-1 transpose-conv stage metadata');

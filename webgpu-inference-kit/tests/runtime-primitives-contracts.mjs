@@ -4,9 +4,45 @@ import {
   WEBGPU_BUFFER_USAGE,
   WEBGPU_SHADER_STAGE,
   WEBGPU_TENSOR_SCHEMA,
+  createLinearDispatch,
   createWebGpuInferenceRuntime,
   packUniforms,
 } from '../src/index.js';
+
+assert.deepEqual(
+  createLinearDispatch(64 * 65_535, { workgroupSize: 64, maxWorkgroupsPerDimension: 65_535 }),
+  [65_535],
+  'linear dispatch must preserve a legal one-dimensional boundary launch',
+);
+
+const firstTiledDispatch = createLinearDispatch(64 * 65_535 + 1, {
+  workgroupSize: 64,
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.deepEqual(firstTiledDispatch, [256, 256], 'the first oversized launch must tile across two legal dimensions');
+assert.ok(firstTiledDispatch[0] <= 65_535 && firstTiledDispatch[1] <= 65_535);
+assert.ok(firstTiledDispatch[0] * firstTiledDispatch[1] * 64 >= 64 * 65_535 + 1);
+
+for (const [name, totalInvocations] of [
+  ['448px ViT mlpFc1', 1_024 * 4_736],
+  ['1008px ViT mlpFc1', 5_184 * 4_736],
+]) {
+  const dispatch = createLinearDispatch(totalInvocations, {
+    workgroupSize: 64,
+    maxWorkgroupsPerDimension: 65_535,
+  });
+  assert.equal(dispatch.length, 2, `${name} must use a two-dimensional dispatch`);
+  assert.ok(dispatch.every(dimension => dimension <= 65_535), `${name} dispatch dimensions must respect the device limit`);
+  assert.ok(dispatch[0] * dispatch[1] * 64 >= totalInvocations, `${name} dispatch must cover every logical invocation`);
+  assert.ok((dispatch[0] * dispatch[1] - Math.ceil(totalInvocations / 64)) < dispatch[0], `${name} dispatch must add less than one row of tail workgroups`);
+}
+
+assert.throws(() => createLinearDispatch(0), /totalInvocations.*positive integer/);
+assert.throws(() => createLinearDispatch(64, { workgroupSize: 0 }), /workgroupSize.*positive integer/);
+assert.throws(
+  () => createLinearDispatch(65, { workgroupSize: 1, maxWorkgroupsPerDimension: 8 }),
+  /exceeds.*two-dimensional.*capacity/,
+);
 
 const calls = {
   buffers: [],
