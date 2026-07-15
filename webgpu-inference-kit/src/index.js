@@ -127,11 +127,13 @@ export {
 
 export {
   WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
   WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
   WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA,
   WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA,
   defineWebGpuModelResourceManifest,
   loadWebGpuModelResources,
+  prepareWebGpuModelResourceBundle,
   validateWebGpuModelResourceManifest,
   verifyWebGpuModelResourceBundle,
 } from './model-resource-manifest.js';

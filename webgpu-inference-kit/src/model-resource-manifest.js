@@ -2,8 +2,11 @@ import { WEBGPU_BUFFER_USAGE } from './runtime-primitives.js';
 
 export const WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA = 'kaminos.webgpu-model-resource-manifest.v0';
 export const WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA = 'kaminos.webgpu-model-resource-bundle-verification.v0';
+export const WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA = 'kaminos.webgpu-model-resource-bundle-custody.v0';
 export const WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-lease.v0';
 export const WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA = 'kaminos.webgpu-model-resource-tensor.v0';
+
+const bundleCustody = new WeakMap();
 
 const DTYPE_BYTES = new Map([
   ['f32', 4],
@@ -34,6 +37,14 @@ function cloneJson(value, label) {
   } catch {
     throw new Error(`${label} must be JSON-compatible`);
   }
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value != null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function normalizeDtype(dtype) {
@@ -344,14 +355,102 @@ async function verifyBundleSnapshot(manifest, bytes, options = {}) {
     effectiveByteLength: bytes.byteLength,
     expectedSha256: manifest.bundle.sha256,
     effectiveSha256,
-    byteCustody: 'loader-owned-snapshot-before-verification',
+    byteCustody: options.byteCustody || 'loader-owned-snapshot-before-verification',
   });
 }
 
 export async function verifyWebGpuModelResourceBundle(manifest, bundle, options = {}) {
   throwIfAborted(options.signal);
   const bytes = Uint8Array.from(byteView(bundle));
-  return verifyBundleSnapshot(manifest, bytes, options);
+  return verifyBundleSnapshot(manifest, bytes, {
+    ...options,
+    byteCustody: 'loader-owned-snapshot-before-verification',
+  });
+}
+
+async function prepareBundle(manifest, bundle, ownership, options = {}) {
+  const validation = validateWebGpuModelResourceManifest(manifest);
+  if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
+  if (ownership !== 'copy' && ownership !== 'transfer') {
+    throw new Error('model bundle ownership must be copy or transfer');
+  }
+  throwIfAborted(options.signal);
+
+  let bytes;
+  if (ownership === 'transfer') {
+    if (!(bundle instanceof ArrayBuffer)) {
+      throw new Error('transfer ownership requires a full ArrayBuffer');
+    }
+    if (bundle.byteLength !== manifest.bundle.byteLength) {
+      throw new Error(`model bundle byteLength ${bundle.byteLength} does not match expected ${manifest.bundle.byteLength}`);
+    }
+    const transfer = globalThis.structuredClone;
+    if (typeof transfer !== 'function') {
+      throw new Error('structuredClone with ArrayBuffer transfer is required for transfer ownership');
+    }
+    const ownedBuffer = transfer(bundle, { transfer: [bundle] });
+    bytes = new Uint8Array(ownedBuffer);
+  } else {
+    bytes = Uint8Array.from(byteView(bundle));
+  }
+
+  const verification = await verifyBundleSnapshot(manifest, bytes, {
+    signal: options.signal,
+    subtle: options.subtle,
+    byteCustody: options.byteCustody || `loader-owned-${ownership}-before-verification`,
+  });
+  const state = {
+    identity: manifest.identity,
+    manifestFingerprint: canonicalJson(manifest),
+    ownership,
+    bytes,
+    released: false,
+  };
+  let handle;
+  handle = Object.freeze({
+    schema: WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
+    identity: manifest.identity,
+    ownership,
+    byteLength: bytes.byteLength,
+    verification,
+    snapshot() {
+      return deepFreeze({
+        schema: WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
+        identity: manifest.identity,
+        ownership,
+        byteLength: state.bytes?.byteLength ?? 0,
+        status: state.released ? 'released' : 'owned',
+        verification,
+      });
+    },
+    release() {
+      if (state.released) {
+        return deepFreeze({
+          schema: WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
+          identity: manifest.identity,
+          ownership,
+          status: 'already-released',
+          releasedByteLength: 0,
+        });
+      }
+      const releasedByteLength = state.bytes.byteLength;
+      state.bytes = null;
+      state.released = true;
+      return deepFreeze({
+        schema: WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
+        identity: manifest.identity,
+        ownership,
+        status: 'released',
+        releasedByteLength,
+      });
+    },
+  });
+  bundleCustody.set(handle, state);
+  return handle;
+}
+
+export function prepareWebGpuModelResourceBundle(manifest, bundle, options = {}) {
+  return prepareBundle(manifest, bundle, options.ownership || 'copy', options);
 }
 
 function assertRoute(route) {
@@ -390,11 +489,33 @@ export async function loadWebGpuModelResources(input = {}) {
   const { manifest, route, signal } = input;
   assertRoute(route);
   throwIfAborted(signal);
-  const bytes = Uint8Array.from(byteView(input.bundle));
-  const verification = await verifyBundleSnapshot(manifest, bytes, {
-    signal,
-    subtle: input.subtle,
-  });
+  let custody = bundleCustody.get(input.bundle);
+  if (!custody) {
+    if (input.bundle?.schema === WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA) {
+      throw new Error('model bundle custody handle must be authentic and module-issued');
+    }
+    const prepared = await prepareBundle(manifest, input.bundle, 'copy', {
+      signal,
+      subtle: input.subtle,
+      byteCustody: 'loader-owned-snapshot-before-verification',
+    });
+    try {
+      return await loadWebGpuModelResources({ ...input, bundle: prepared });
+    } finally {
+      prepared.release();
+    }
+  }
+  if (custody.released) throw new Error('model bundle custody handle is released');
+  const validation = validateWebGpuModelResourceManifest(manifest);
+  if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
+  if (custody.identity !== manifest?.identity) {
+    throw new Error(`prepared model bundle manifest identity ${custody.identity} does not match ${manifest?.identity || '<missing>'}`);
+  }
+  if (custody.manifestFingerprint !== canonicalJson(manifest)) {
+    throw new Error('prepared model bundle manifest content does not match the manifest used to establish custody');
+  }
+  const bytes = custody.bytes;
+  const verification = input.bundle.verification;
   const leases = [];
   const allocations = [];
   try {

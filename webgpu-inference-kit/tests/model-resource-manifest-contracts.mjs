@@ -6,6 +6,7 @@ assert.equal(typeof kit.defineWebGpuModelResourceManifest, 'function');
 assert.equal(typeof kit.validateWebGpuModelResourceManifest, 'function');
 assert.equal(typeof kit.verifyWebGpuModelResourceBundle, 'function');
 assert.equal(typeof kit.loadWebGpuModelResources, 'function');
+assert.equal(typeof kit.prepareWebGpuModelResourceBundle, 'function');
 
 const {
   WEBGPU_BUFFER_USAGE,
@@ -13,6 +14,7 @@ const {
   createWebGpuResourceResidency,
   defineWebGpuModelResourceManifest,
   loadWebGpuModelResources,
+  prepareWebGpuModelResourceBundle,
   validateWebGpuModelResourceManifest,
   verifyWebGpuModelResourceBundle,
 } = kit;
@@ -124,6 +126,108 @@ assert.deepEqual(verification, {
   byteCustody: 'loader-owned-snapshot-before-verification',
 });
 assert.equal(Object.isFrozen(verification), true);
+
+const copiedSource = Uint8Array.from(bundle);
+const copiedBundle = await prepareWebGpuModelResourceBundle(manifest, copiedSource);
+assert.equal(copiedBundle.schema, 'kaminos.webgpu-model-resource-bundle-custody.v0');
+assert.equal(copiedBundle.identity, manifest.identity);
+assert.equal(copiedBundle.ownership, 'copy');
+assert.equal(copiedBundle.byteLength, bundle.byteLength);
+assert.equal(copiedBundle.verification.byteCustody, 'loader-owned-copy-before-verification');
+assert.equal(Object.isFrozen(copiedBundle), true);
+assert.equal(Object.hasOwn(copiedBundle, 'bytes'), false, 'owned bytes must not be publicly mutable');
+copiedSource.fill(0xff);
+const copiedResidency = createWebGpuResourceResidency({ sessionId: 'copied-custody' });
+const copiedRuntime = runtimeFixture();
+const copiedModel = await loadWebGpuModelResources({
+  manifest,
+  bundle: copiedBundle,
+  route: routeFixture({
+    routeId: 'copied-custody-route',
+    runtime: copiedRuntime,
+    residency: copiedResidency,
+    factory: createWebGpuResourceFactory({ sessionId: 'copied-custody', residency: copiedResidency }),
+  }),
+});
+assert.deepEqual(
+  copiedRuntime.writes.map(write => [...write.bytes]),
+  [[...bundle.subarray(0, 16)], [...bundle.subarray(16, 32)]],
+);
+copiedModel.release();
+
+const transferSource = Uint8Array.from(bundle).buffer;
+const transferredBundle = await prepareWebGpuModelResourceBundle(manifest, transferSource, { ownership: 'transfer' });
+assert.equal(transferSource.byteLength, 0, 'transfer custody must detach caller ArrayBuffer');
+assert.equal(transferredBundle.ownership, 'transfer');
+assert.equal(transferredBundle.verification.byteCustody, 'loader-owned-transfer-before-verification');
+
+const custodyResidency = createWebGpuResourceResidency({ sessionId: 'custody' });
+const custodyRuntime = runtimeFixture();
+const custodyRoute = routeFixture({
+  routeId: 'custody-route',
+  runtime: custodyRuntime,
+  residency: custodyResidency,
+  factory: createWebGpuResourceFactory({ sessionId: 'custody', residency: custodyResidency }),
+});
+const custodyModel = await loadWebGpuModelResources({ manifest, bundle: transferredBundle, route: custodyRoute });
+assert.deepEqual(
+  custodyRuntime.writes.map(write => [...write.bytes]),
+  [[...bundle.subarray(0, 16)], [...bundle.subarray(16, 32)]],
+);
+custodyModel.release();
+assert.equal(transferredBundle.release().status, 'released');
+assert.equal(transferredBundle.release().status, 'already-released');
+await assert.rejects(
+  () => loadWebGpuModelResources({ manifest, bundle: transferredBundle, route: custodyRoute }),
+  /bundle custody.*released/i,
+);
+
+const counterfeitRuntime = runtimeFixture();
+await assert.rejects(
+  () => loadWebGpuModelResources({
+    manifest,
+    bundle: {
+      schema: 'kaminos.webgpu-model-resource-bundle-custody.v0',
+      identity: manifest.identity,
+      ownership: 'transfer',
+      byteLength: bundle.byteLength,
+      verification,
+    },
+    route: { routeId: 'counterfeit', runtime: counterfeitRuntime, residency: { acquireOrCreate() {} } },
+  }),
+  /authentic|module-issued|bundle custody/i,
+);
+assert.equal(counterfeitRuntime.created.length, 0);
+
+const foreignManifest = manifestFor(bundle, { revision: 'foreign-revision' });
+const foreignPrepared = await prepareWebGpuModelResourceBundle(foreignManifest, bundle);
+await assert.rejects(
+  () => loadWebGpuModelResources({ manifest, bundle: foreignPrepared, route: custodyRoute }),
+  /manifest identity|prepared.*identity/i,
+);
+foreignPrepared.release();
+
+const layoutPrepared = await prepareWebGpuModelResourceBundle(manifest, bundle);
+const sameIdentityDifferentLayout = {
+  ...manifest,
+  allocations: [...manifest.allocations].reverse(),
+};
+assert.deepEqual(validateWebGpuModelResourceManifest(sameIdentityDifferentLayout), { ok: true, errors: [] });
+await assert.rejects(
+  () => loadWebGpuModelResources({ manifest: sameIdentityDifferentLayout, bundle: layoutPrepared, route: custodyRoute }),
+  /manifest content|manifest fingerprint|prepared.*manifest/i,
+);
+layoutPrepared.release();
+
+await assert.rejects(
+  () => prepareWebGpuModelResourceBundle(manifest, Uint8Array.from(bundle), { ownership: 'transfer' }),
+  /transfer.*ArrayBuffer/i,
+);
+await assert.rejects(
+  () => prepareWebGpuModelResourceBundle(manifest, Uint8Array.from(bundle).buffer, { ownership: 'borrowed' }),
+  /ownership.*copy or transfer/i,
+);
+copiedBundle.release();
 
 const wrongLengthRuntime = runtimeFixture();
 await assert.rejects(

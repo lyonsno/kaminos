@@ -155,6 +155,7 @@ import {
   WEBGPU_BUFFER_USAGE,
   createWebGpuInferenceSession,
   defineWebGpuModelResourceManifest,
+  prepareWebGpuModelResourceBundle,
 } from "@kaminos/webgpu-inference-kit";
 
 const manifest = defineWebGpuModelResourceManifest({
@@ -194,10 +195,15 @@ const session = await createWebGpuInferenceSession({
 });
 const sharp = await session.registerRoute({ routeId: "sharp.image-to-splat.webgpu-local.v0" });
 const sf3d = await session.registerRoute({ routeId: "sf3d.image-to-mesh.webgpu-local.v0" });
+const preparedWeights = await prepareWebGpuModelResourceBundle(
+  manifest,
+  weightBytes.buffer,
+  { ownership: "transfer" },
+);
 
 const [sharpWeights, sf3dWeights] = await Promise.all([
-  sharp.loadModelResources({ manifest, bundle: weightBytes }),
-  sf3d.loadModelResources({ manifest, bundle: weightBytes }),
+  sharp.loadModelResources({ manifest, bundle: preparedWeights }),
+  sf3d.loadModelResources({ manifest, bundle: preparedWeights }),
 ]);
 
 sharpWeights.tensors["decoder.weight"].buffer ===
@@ -209,9 +215,10 @@ const decoderWeight = sharpWeights.tensors["decoder.weight"];
 
 sharpWeights.release();
 sf3dWeights.release();
+preparedWeights.release();
 ```
 
-The loader first takes an owned byte snapshot, then hashes those exact bytes with Web Crypto before any GPU allocation. Bundle length or digest mismatch fails before upload, and caller mutation cannot change bytes after verification. Concurrent loads single-flight each content-derived allocation, while cancellation and partial failure release every model lease already acquired. Released buffers remain visible in session residency as explicit eviction candidates until caller policy evicts them; they are not reported as an active model.
+Raw bundle input uses an owned byte snapshot, then hashes those exact bytes with Web Crypto before any GPU allocation. `prepareWebGpuModelResourceBundle()` makes ownership explicit: `copy` preserves mutable caller input, while `transfer` accepts a full `ArrayBuffer`, detaches it, and verifies/uploads the transferred storage without the loader allocating its own second full-size byte array. Transfer is ownership-consuming even when digest verification later fails; use `copy` when the caller must retain retry bytes. Prepared handles are module-authenticated, bound to the complete normalized manifest, do not expose mutable bytes, and reject reuse after release. Bundle length or digest mismatch fails before upload. Concurrent loads single-flight each content-derived allocation, while cancellation and partial failure release every model lease already acquired. Released GPU buffers remain visible in session residency as explicit eviction candidates until caller policy evicts them; they are not reported as an active model.
 
 ## What The Kit Gives A Port
 
@@ -236,6 +243,7 @@ The loader first takes an owned byte snapshot, then hashes those exact bytes wit
 - `createWebGpuResourceFactory(input)`: collapse concurrent asynchronous creation or weight-upload requests for one absent resource into a single abortable flight, then issue independent route leases over the one resulting object.
 - `defineWebGpuModelResourceManifest(input)`: freeze an exact model revision, bundle SHA-256, packed allocation ranges, and typed tensor views into a validated loading contract.
 - `verifyWebGpuModelResourceBundle(manifest, bundle)`: hash the effective bytes with Web Crypto and reject length or identity mismatch before GPU work.
+- `prepareWebGpuModelResourceBundle(manifest, bundle, options)`: establish a releasable, manifest-bound verified byte-custody handle using safe-copy or zero-copy `ArrayBuffer` transfer ownership.
 - `loadWebGpuModelResources(input)` and `route.loadModelResources(input)`: upload each content-derived allocation through shared single-flight residency and return one independently releasable model lease whose tensor views plug into kernels and phase programs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.

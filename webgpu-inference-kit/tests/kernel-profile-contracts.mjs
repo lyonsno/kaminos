@@ -9,7 +9,7 @@ import {
   validateRouteTimingMetadata,
 } from '../src/index.js';
 
-assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.22');
+assert.equal(WEBGPU_INFERENCE_KIT_VERSION, '0.1.23');
 
 const kernel = createKernelProfileMetadata({
   profile: 'conv-transpose2d-stride2',
