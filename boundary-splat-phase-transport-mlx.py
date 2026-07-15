@@ -116,7 +116,15 @@ def load_training_support_envelope(identity):
     }
 
 
-def resolve_recurrent_support_budget(mode, inference_initial_count, current_count, one_step_ratio, envelope=None):
+def resolve_recurrent_support_budget(
+    mode,
+    inference_initial_count,
+    current_count,
+    one_step_ratio,
+    envelope=None,
+    training_manifest_sha256=None,
+    inference_frame_zero=None,
+):
     if mode not in SUPPORT_BUDGET_MODES:
         raise ValueError("recurrent support budget mode is unsupported")
     if (
@@ -128,12 +136,21 @@ def resolve_recurrent_support_budget(mode, inference_initial_count, current_coun
         or one_step_ratio <= 0
     ):
         raise ValueError("recurrent support budget inputs are invalid")
+    if (
+        not isinstance(training_manifest_sha256, str)
+        or len(training_manifest_sha256) != 64
+        or any(character not in "0123456789abcdefABCDEF" for character in training_manifest_sha256)
+        or not isinstance(inference_frame_zero, dict)
+        or not isinstance(inference_frame_zero.get("referenceFrameId"), str)
+        or not inference_frame_zero["referenceFrameId"]
+        or inference_frame_zero.get("count") != inference_initial_count
+    ):
+        raise ValueError("recurrent support budget training manifest identity or inference frame-zero anchor is invalid")
     requested_budget = max(1, round(current_count * one_step_ratio))
     minimum_budget = None
     maximum_budget = None
     effective_budget = requested_budget
     envelope_authority = None
-    training_manifest_sha256 = None
     if mode == "training-episode-envelope":
         if (
             not isinstance(envelope, dict)
@@ -146,6 +163,8 @@ def resolve_recurrent_support_budget(mode, inference_initial_count, current_coun
             or not isinstance(envelope["trainingManifest"].get("sha256"), str)
         ):
             raise ValueError("recurrent training support envelope is missing or malformed")
+        if envelope["trainingManifest"]["sha256"] != training_manifest_sha256:
+            raise ValueError("recurrent support budget training manifest identity mismatch")
         minimum_budget = max(1, round(inference_initial_count * envelope["minimumRatio"]))
         maximum_budget = max(minimum_budget, round(inference_initial_count * envelope["maximumRatio"]))
         effective_budget = max(minimum_budget, min(maximum_budget, requested_budget))
@@ -164,6 +183,7 @@ def resolve_recurrent_support_budget(mode, inference_initial_count, current_coun
         "clamped": effective_budget != requested_budget,
         "envelopeAuthority": envelope_authority,
         "trainingManifestSha256": training_manifest_sha256,
+        "inferenceFrameZero": dict(inference_frame_zero),
     }
 
 
@@ -2107,10 +2127,17 @@ def main():
                 if args.support_budget_mode == "training-episode-envelope"
                 else None
             )
+            inference_frame_zero = {
+                "referenceFrameId": inference_docs[0]["id"],
+                "count": len(prediction_frames[0]["keys"]),
+            }
+            training_manifest_sha256 = frozen_model_document["manifest"]["sha256"]
             support_budget_contract = {
                 "authority": "explicit-recurrent-support-budget-mode-v0",
                 "mode": args.support_budget_mode,
                 "inferenceInitialCount": len(prediction_frames[0]["keys"]),
+                "inferenceFrameZero": inference_frame_zero,
+                "trainingManifestSha256": training_manifest_sha256,
                 "trainingEnvelope": training_support_envelope,
                 "legacyBehaviorPreservedByDefault": args.support_budget_mode == "one-step-ratio",
             }
@@ -2132,6 +2159,8 @@ def main():
                     len(canonical_current["keys"] if state_recurrence["mode"] == "protected-splat" else current["keys"]),
                     float(target_support_calibration["medianRatio"]),
                     training_support_envelope,
+                    training_manifest_sha256,
+                    inference_frame_zero,
                 )
                 absolute_support_budget = (
                     support_budget["effectiveBudget"]

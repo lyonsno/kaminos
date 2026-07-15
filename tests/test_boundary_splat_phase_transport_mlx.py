@@ -558,16 +558,22 @@ class TransportDatasetContracts(unittest.TestCase):
         legacy = MODULE.resolve_recurrent_support_budget(
             "one-step-ratio", inference_initial_count=100, current_count=120,
             one_step_ratio=1.1, envelope=None,
+            training_manifest_sha256="a" * 64,
+            inference_frame_zero={"referenceFrameId": "heldout-frame-2", "count": 100},
         )
         self.assertEqual(legacy["requestedBudget"], 132)
         self.assertEqual(legacy["effectiveBudget"], 132)
         self.assertFalse(legacy["clamped"])
         self.assertIsNone(legacy["minimumBudget"])
         self.assertIsNone(legacy["maximumBudget"])
+        self.assertEqual(legacy["trainingManifestSha256"], "a" * 64)
+        self.assertEqual(legacy["inferenceFrameZero"], {"referenceFrameId": "heldout-frame-2", "count": 100})
 
         upper = MODULE.resolve_recurrent_support_budget(
             "training-episode-envelope", inference_initial_count=100, current_count=120,
             one_step_ratio=1.1, envelope=envelope,
+            training_manifest_sha256="0" * 64,
+            inference_frame_zero={"referenceFrameId": "heldout-frame-2", "count": 100},
         )
         self.assertEqual(upper["requestedBudget"], 132)
         self.assertEqual(upper["minimumBudget"], 90)
@@ -578,9 +584,19 @@ class TransportDatasetContracts(unittest.TestCase):
         lower = MODULE.resolve_recurrent_support_budget(
             "training-episode-envelope", inference_initial_count=100, current_count=80,
             one_step_ratio=0.9, envelope=envelope,
+            training_manifest_sha256="0" * 64,
+            inference_frame_zero={"referenceFrameId": "heldout-frame-2", "count": 100},
         )
         self.assertEqual(lower["requestedBudget"], 72)
         self.assertEqual(lower["effectiveBudget"], 90)
+
+        with self.assertRaisesRegex(ValueError, "training manifest identity"):
+            MODULE.resolve_recurrent_support_budget(
+                "training-episode-envelope", inference_initial_count=100, current_count=120,
+                one_step_ratio=1.1, envelope=envelope,
+                training_manifest_sha256="f" * 64,
+                inference_frame_zero={"referenceFrameId": "heldout-frame-2", "count": 100},
+            )
 
     def test_eulerian_composer_honors_absolute_support_budget_before_birth_admission(self):
         source = frame([
