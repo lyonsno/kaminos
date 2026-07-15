@@ -305,6 +305,11 @@ assert.match(
 assert.doesNotMatch(driverSource, /shape:\s*\[16,\s*1,\s*8,\s*8\]/, 'the tracker driver must not stamp reduced mask geometry into route receipts');
 assert.doesNotMatch(driverSource, /shape:\s*\[1,\s*2,\s*2,\s*256\]/, 'the tracker driver must not stamp reduced feature geometry into route receipts');
 assert.doesNotMatch(driverSource, /featureHeight:\s*2,\s*featureWidth:\s*2/, 'the memory encoder must consume authenticated query geometry');
+assert.match(
+  driverSource,
+  /maskHeight:\s*memoryShape\.maskHeight,\s*maskWidth:\s*memoryShape\.maskWidth/,
+  'the memory encoder must consume package-authenticated memory-input mask geometry',
+);
 assert.doesNotMatch(driverSource, /const attentionShape = \{ batch: 1, queryHeight: 2/, 'memory attention must consume authenticated query and bank geometry');
 
 console.log('sam3.1 browser tracker session contracts passed');
