@@ -104,6 +104,23 @@
         trueCompactCarrierDispatch: { required: true, profitableTargetMs: 10, credibleBreakEvenTargetMs: 15, outerKillBoundaryMs: 24 },
         candidatePathScope: { noJsVisibleDenseArrays: true, noCpuReadback: true, noFull160Materialization: true },
       },
+      nativeLowSourceHistoryDetailCandidate: {
+        identity: 'native-low-source-history-detail-candidate-v0',
+        sourceChannelCount: 17,
+        targetCoverage: 0.10,
+        candidateCoverage: 0.10,
+        sourceDeltaEnergyCapture: 0.8286,
+        transition96To97Capture: 0.8302,
+        transition97To98Capture: 0.8271,
+        coarseDeltaGradientCapture: 0.716,
+        supportProbabilityEnergyCapture: 0.205,
+        supportProbabilityAdmission: false,
+        detailAdmissionSwitches: {
+          sourceHistoryDetailAdmissionEnabled: true,
+          supportCarrierDispatchIndependent: true,
+          coarseFrontScaffoldIndependent: true,
+        },
+      },
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -124,6 +141,10 @@
     const native64PredictionManifestUrl = params.get('native64_prediction_manifest') || '';
     const native64ManifestMode = Boolean(native64SourceManifestUrl && native64PredictionManifestUrl);
     const frontTopologyAblationMode = !native64ManifestMode && params.get('front_topology_ablation') === '1';
+    const sourceHistoryDetailAdmissionEnabled = !native64ManifestMode && params.get('source_history_detail_candidate') !== '0';
+    const sourceHistoryDetailTargetCoverage = Math.max(0.01, Math.min(0.5, Number(params.get('source_history_detail_coverage') || 0.10)));
+    const supportProbabilityDetailAdmissionEnabled = params.get('support_detail_admission') === '1';
+    const coarseFrontDetailAdmissionEnabled = params.get('coarse_front_detail_admission') !== '0';
     const requestedCalibration = 'native-low-learned-splat-calibration-v0';
     const status = document.getElementById('status');
     const title = document.getElementById('title');
@@ -256,6 +277,10 @@
         now: performance.now(),
         captureVisuals: true,
         frontTopologyAblation: frontTopologyAblationMode,
+        sourceHistoryDetailAdmissionEnabled,
+        sourceHistoryDetailTargetCoverage,
+        supportProbabilityDetailAdmissionEnabled,
+        coarseFrontDetailAdmissionEnabled,
         treatmentSplatRadianceGain,
         treatmentSplatOpacityGain,
       };
@@ -376,6 +401,7 @@
         nativeLowProductionStageLedger: receipt.nativeLowProductionStageLedger || null,
         nativeLowBreakEvenBudgetLedger: receipt.nativeLowBreakEvenBudgetLedger || null,
         nativeLowCoarseFrontSparseDetailBand: receipt.nativeLowCoarseFrontSparseDetailBand || null,
+        nativeLowSourceHistoryDetailCandidate: receipt.nativeLowSourceHistoryDetailCandidate || null,
         endToEndFrameMs: receipt.endToEndFrameMs ?? null,
         simulationSteppingReceipt: receipt.simulationSteppingReceipt || null,
         currentSourceFrameConsumption: receipt.currentSourceFrameConsumption || null,

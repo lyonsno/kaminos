@@ -17,6 +17,10 @@ const WITNESS_CONTRACT_MARKERS = Object.freeze({
   effectiveCalibration: 'native-low-learned-splat-calibration-v0',
   modelOutputMutation: false,
   nativeLowFrontTopologyAblation: 'native-low-front-topology-ablation-v0',
+  nativeLowSourceHistoryDetailCandidate: 'native-low-source-history-detail-candidate-v0',
+  candidateCompactionRouteMeasured: 'candidateCompactionRouteMeasured',
+  candidateCount: 'candidateCount',
+  sourceHistoryAvailable: 'sourceHistoryAvailable',
   sameSourceStepIdentity: 'same-source-step-required',
   offlineImporterUsed: false,
 });
@@ -170,6 +174,13 @@ try {
       && state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noFull160Materialization === true
       && state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noCpuReadback === true
       && state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noJsVisibleDenseArrays === true
+      && state?.nativeLowSourceHistoryDetailCandidate?.identity === 'native-low-source-history-detail-candidate-v0'
+      && state?.nativeLowSourceHistoryDetailCandidate?.sourceChannelCount === 17
+      && Number(state?.nativeLowSourceHistoryDetailCandidate?.targetCoverage) >= 0.09
+      && Number(state?.nativeLowSourceHistoryDetailCandidate?.candidateCount) > 0
+      && state?.nativeLowSourceHistoryDetailCandidate?.sourceHistoryAvailable === true
+      && state?.nativeLowSourceHistoryDetailCandidate?.supportProbabilityAdmission === false
+      && state?.nativeLowSourceHistoryDetailCandidate?.detailAdmissionSwitches?.supportCarrierDispatchIndependent === true
       && (!frontTopologyAblationRequested
         || (
           state?.nativeLowFrontTopologyAblation?.identity === 'native-low-front-topology-ablation-v0'
@@ -257,6 +268,15 @@ try {
   assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noFull160Materialization, true, 'sparse detail-band path allowed full 160 materialization');
   assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noCpuReadback, true, 'sparse detail-band path allowed CPU readback');
   assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noJsVisibleDenseArrays, true, 'sparse detail-band path allowed JS-visible dense arrays');
+  assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.identity, 'native-low-source-history-detail-candidate-v0', 'source-history detail candidate missing');
+  assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.sourceChannelCount, 17, 'source-history candidate must use all 17 source channels');
+  assert.ok(Number(state?.nativeLowSourceHistoryDetailCandidate?.candidateCoverage) >= 0.09, 'source-history candidate coverage missing');
+  assert.equal(Number(state?.nativeLowSourceHistoryDetailCandidate?.sourceDeltaEnergyCapture), 0.8286, 'source-delta energy capture missing');
+  assert.equal(Number(state?.nativeLowSourceHistoryDetailCandidate?.supportProbabilityEnergyCapture), 0.205, 'support-probability anti-evidence missing');
+  assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.supportProbabilityAdmission, false, 'support probability reused as detail admission');
+  assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.detailAdmissionSwitches?.sourceHistoryDetailAdmissionEnabled, true, 'source-history detail admission switch missing');
+  assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.detailAdmissionSwitches?.supportCarrierDispatchIndependent, true, 'detail admission is not independent of support/carrier dispatch');
+  assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.detailAdmissionSwitches?.coarseFrontScaffoldIndependent, true, 'detail admission is not independent of coarse front');
   if (frontTopologyAblationRequested) {
     assert.equal(state?.nativeLowFrontTopologyAblation?.identity, 'native-low-front-topology-ablation-v0', 'frontTopology ablation missing');
     assert.equal(state?.nativeLowFrontTopologyAblation?.offlineImporterUsed, false, 'offline importer was used for frontTopology ablation');
@@ -323,6 +343,7 @@ try {
     nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
     nativeLowBreakEvenBudgetLedger: endState.nativeLowBreakEvenBudgetLedger,
     nativeLowCoarseFrontSparseDetailBand: endState.nativeLowCoarseFrontSparseDetailBand,
+    nativeLowSourceHistoryDetailCandidate: endState.nativeLowSourceHistoryDetailCandidate,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
     frontTopologyAblatedTreatment: endState.frontTopologyAblatedTreatment,
