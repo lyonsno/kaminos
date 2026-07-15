@@ -55,6 +55,7 @@ def initial_receipt(args, model_run_dir: Path) -> dict:
             "path": str(model_run_dir.resolve()),
             "receiptHash": None,
             "checkpointHash": None,
+            "receiptMaskDecode": None,
         },
         "falseClosureGuards": {
             "sourceCheckpointValidated": False,
@@ -99,13 +100,12 @@ def main():
         receipt["falseClosureGuards"]["sourceCheckpointValidated"] = True
 
         config = source_receipt.get("effectiveConfig", {})
+        receipt["sourceModel"]["receiptMaskDecode"] = config.get("maskDecode")
         dimensions = config.get("inputShape")
         channels = [int(value) for value in config.get("channels", [])]
         latent_dim = int(config.get("latentDim", 0))
         if not isinstance(dimensions, list) or len(dimensions) != 3 or dimensions[2] != 1 or dimensions[0] != dimensions[1]:
             raise ValueError(f"invalid model input shape {dimensions!r}")
-        if config.get("maskDecode") != "normalized_sdf > 0":
-            raise ValueError(f"unsupported mask decode {config.get('maskDecode')!r}")
         height, width, _channels = map(int, dimensions)
         source_requested = source_receipt.get("requestedConfig", {})
         copy_threshold = args.copy_threshold

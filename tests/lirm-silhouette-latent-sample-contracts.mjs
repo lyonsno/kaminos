@@ -11,6 +11,8 @@ assert.ok(existsSync(sampler), 'silhouette checkpoint sampler must exist');
 const root = await mkdtemp(join(tmpdir(), 'kaminos-silhouette-latent-sample-contract-'));
 const sourceRun = join(root, 'source-run');
 const outDir = join(root, 'sample-run');
+const legacySourceRun = join(root, 'legacy-source-run');
+const legacyOutDir = join(root, 'legacy-sample-run');
 await mkdir(sourceRun, { recursive: true });
 await writeFile(join(sourceRun, 'receipt.json'), `${JSON.stringify({
   schema: 'kaminos.lirm-silhouette-latent-model.v0',
@@ -56,3 +58,42 @@ assert.equal(receipt.falseClosureGuards.sourceCheckpointValidated, false);
 assert.equal(receipt.falseClosureGuards.generatedFieldCount, 0);
 assert.equal(receipt.falseClosureGuards.contactSheetRasterWritten, false);
 assert.match(receipt.errorMessage, /model\.safetensors/);
+
+await mkdir(join(legacySourceRun, 'checkpoint'), { recursive: true });
+await writeFile(join(legacySourceRun, 'receipt.json'), `${JSON.stringify({
+  schema: 'kaminos.lirm-silhouette-latent-model.v0',
+  status: 'complete',
+  phase: 'witness_written',
+  routeIdentity: {
+    requestedRoute: 'kaminos/lirm-speciation-armature/silhouette-latent-model-v0',
+    effectiveRoute: 'mlx-convolutional-sdf-vae-v0',
+  },
+  requestedConfig: { seed: 713, validationFraction: 0.1, copyThreshold: 0.94 },
+  effectiveConfig: {
+    schema: 'kaminos.lirm-silhouette-latent-model-config.v0',
+    architecture: 'mlx-convolutional-sdf-vae-v0',
+    inputShape: [128, 128, 1],
+    latentDim: 32,
+    channels: [16, 32, 64],
+    beta: 0.01,
+    maskDecode: 'normalized_sdf < 0',
+  },
+  corpora: [],
+}, null, 2)}\n`);
+await writeFile(join(legacySourceRun, 'checkpoint', 'model.safetensors'), 'legacy-checkpoint-fixture');
+
+const legacyRun = spawnSync('python3', [
+  sampler.pathname,
+  '--model-run-dir', legacySourceRun,
+  '--out-dir', legacyOutDir,
+  '--samples', '3',
+], { encoding: 'utf8' });
+assert.notEqual(legacyRun.status, 0, 'fixture has no source corpus and must fail after checkpoint validation');
+const legacyReceipt = JSON.parse(readFileSync(join(legacyOutDir, 'receipt.json'), 'utf8'));
+assert.equal(legacyReceipt.falseClosureGuards.sourceCheckpointValidated, true);
+assert.equal(legacyReceipt.sourceModel.receiptMaskDecode, 'normalized_sdf < 0');
+assert.doesNotMatch(
+  legacyReceipt.errorMessage,
+  /unsupported mask decode/,
+  'legacy receipt polarity describes the old witness, not incompatible checkpoint weights',
+);
