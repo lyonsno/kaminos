@@ -196,9 +196,28 @@ const validReport = {
   frozenControlIdentity: { authority: 'pixel-identical-frozen-control-v0', frameCount: 2, uniqueFrameCount: 1, sha256: frameEvidence('control')[0].sha256 },
   artifact: { sha256: hash('c'), bytes: 100, probe: { frameCount: 2, width: 2240, height: 240, fps: 6.25, duration: 0.32 } },
   metrics: { authority: 'same-raster-full-frame-error-v0', roles: Object.fromEntries(Object.keys(variants).map(key => [key, { lateMse: 1 }])) },
+  historicalTrainingContractDefect: {
+    authority: 'historical-source-bound-physical-index-mismatch-v0',
+    lastAffectedCommit: 'a1d664efb060de5c0e0c2241ccaa5610822e5041',
+    fixedByCommit: 'ae4750d115dd4e074d651ddeb097df81de6bf465',
+    affectedComputation: 'state[22] * rec709(state[19], state[20], state[21])',
+    correctedComputation: 'state[20] * rec709(state[17], state[18], state[19])',
+    source: 'boundary-splat-phase-state-residual-mlx.py:visible_energy_numpy/visible_energy_mlx',
+  },
   claimBoundary: 'These causal offline substitutions are not deployable predictions and do not authorize runtime composition.',
 };
 assert.doesNotThrow(() => validateCollapseAttributionReport(validReport));
+
+const staleCurrentTrainerClaim = structuredClone(validReport);
+delete staleCurrentTrainerClaim.historicalTrainingContractDefect;
+staleCurrentTrainerClaim.knownTrainingContractMismatch = {
+  authority: 'source-traced-physical-index-mismatch-v0',
+  currentTrainerIndices: 'state[22] * rec709(state[19], state[20], state[21])',
+};
+assert.throws(
+  () => validateCollapseAttributionReport(staleCurrentTrainerClaim),
+  /historical training contract defect/i,
+);
 
 const missingAccounting = structuredClone(validReport);
 delete missingAccounting.substitutionAccounting;

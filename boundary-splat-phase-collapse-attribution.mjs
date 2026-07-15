@@ -15,6 +15,14 @@ const CORPUS_SCHEMA = 'kaminos-boundary-splat-phase-candidate-corpus-v0';
 const PREDICTION_SCHEMA = 'kaminos-boundary-splat-phase-transport-predictions-v0';
 const REFERENCE_AUTHORITY = 'intercepted-live-boundary-splat-buffer-post-compaction-v0';
 const PREDICTION_AUTHORITY = 'learned-local-grid-transport-plus-residual-churn-v0';
+const HISTORICAL_TRAINING_CONTRACT_DEFECT = Object.freeze({
+  authority: 'historical-source-bound-physical-index-mismatch-v0',
+  lastAffectedCommit: 'a1d664efb060de5c0e0c2241ccaa5610822e5041',
+  fixedByCommit: 'ae4750d115dd4e074d651ddeb097df81de6bf465',
+  affectedComputation: 'state[22] * rec709(state[19], state[20], state[21])',
+  correctedComputation: 'state[20] * rec709(state[17], state[18], state[19])',
+  source: 'boundary-splat-phase-state-residual-mlx.py:visible_energy_numpy/visible_energy_mlx',
+});
 
 export const PHYSICAL_SPLAT_CHANNELS = Object.freeze({
   support: Object.freeze([3]),
@@ -450,6 +458,10 @@ export function validateCollapseAttributionReport(report) {
     || Object.keys(VARIANT_AUTHORITIES).some(role => !Number.isFinite(report.metrics.roles?.[role]?.lateMse))
   ) throw new Error('collapse attribution metrics mismatch');
   if (
+    'knownTrainingContractMismatch' in report
+    || JSON.stringify(report.historicalTrainingContractDefect) !== JSON.stringify(HISTORICAL_TRAINING_CONTRACT_DEFECT)
+  ) throw new Error('collapse attribution historical training contract defect identity mismatch');
+  if (
     typeof report.claimBoundary !== 'string'
     || !/\bnot\b[^.]{0,300}\bdeployable\b[^.]{0,300}\bruntime\b/i.test(report.claimBoundary.trim())
   ) throw new Error('collapse attribution claim boundary must deny deployable prediction and runtime authorization');
@@ -612,13 +624,7 @@ export async function writeCollapseAttribution(manifestPathValue, predictionsPat
         lateWindow: { firstStep: Math.max(1, frameCount - 14), lastStep: frameCount },
         roles: metrics,
       },
-      knownTrainingContractMismatch: {
-        authority: 'source-traced-physical-index-mismatch-v0',
-        physicalVisibleEnergy: 'splat[7] * rec709(splat[4], splat[5], splat[6])',
-        currentTrainerIndices: 'state[22] * rec709(state[19], state[20], state[21])',
-        physicalMeaningOfCurrentTrainerIndices: 'shape.y * rec709(color.b, opacity, shape.x)',
-        source: 'boundary-splat-phase-state-residual-mlx.py:visible_energy_numpy/visible_energy_mlx',
-      },
+      historicalTrainingContractDefect: HISTORICAL_TRAINING_CONTRACT_DEFECT,
       claimBoundary: 'These are target-conditioned causal substitutions under the isolated full-splat raster. They can attribute support and visible-state error in this held-out episode, but they are not deployable predictions, analytical-raymarch agreement, multi-basin evidence, or runtime authorization.',
     };
     validateCollapseAttributionReport(report);
