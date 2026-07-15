@@ -1,0 +1,43 @@
+{
+  "schema": "kaminos-pyro-recurrent-envelope-visual-inspection-v0",
+  "status": "completed",
+  "inspectedAt": "2026-07-15",
+  "authority": "decoded-same-video-fixed-panel-luma-and-agent-visual-inspection-v0",
+  "source": {
+    "video": "../recurrent-envelope-comparison.mp4",
+    "sha256": "c3ac516c800ca526807e8d1e39ca716ee14772d4d3997fc43ddf16192432e80f",
+    "width": 1280,
+    "height": 240,
+    "frameCount": 63,
+    "fps": 6.25,
+    "durationSeconds": 10.08,
+    "loops": false
+  },
+  "roles": ["REFERENCE", "FROZEN", "LEGACY", "ENVELOPE"],
+  "contacts": [
+    {
+      "path": "../images/start-middle-terminal.png",
+      "context": "Beauty roles at steps 1, 32, and 63; simulator times 0.16, 5.12, and 10.08 seconds."
+    },
+    {
+      "path": "../images/nine-time-contact.png",
+      "context": "Beauty roles at steps 1, 8, 16, 24, 32, 40, 48, 56, and 63 across the full trajectory."
+    },
+    {
+      "path": "../images/start-middle-terminal-debug.png",
+      "context": "Display-only cohort-debug roles at steps 1, 32, and 63 with effective mix gain 0.625."
+    }
+  ],
+  "whitePixelMeasurement": {
+    "authority": "decoded-panel-grayscale-luma-greater-than-235-v0",
+    "threshold": 235,
+    "lateSteps": [49, 63],
+    "reference": {"middleFraction": 0.026979, "lateMeanFraction": 0.025261, "terminalFraction": 0.033294},
+    "frozen": {"middleFraction": 0.021849, "lateMeanFraction": 0.021849, "terminalFraction": 0.021849},
+    "legacy": {"middleFraction": 0.101497, "lateMeanFraction": 0.133061, "terminalFraction": 0.143034},
+    "envelope": {"middleFraction": 0.081068, "lateMeanFraction": 0.080043, "terminalFraction": 0.079687},
+    "envelopeLateReductionVsLegacy": 0.398515
+  },
+  "visualVerdict": "The envelope materially suppresses the legacy route's broad upper-left saturated diagonal and preserves more orange upper flame-sheet silhouette, but a bright low-frequency central mass remains. This is causal mitigation, not product closure.",
+  "claimBoundary": "Offline same-raster visual diagnosis on one held-out basin; no analytical-raymarch, cross-basin, runtime-authorization, or full-collapse-removal claim."
+}
