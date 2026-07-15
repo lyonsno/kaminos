@@ -328,6 +328,7 @@ export {
   MEMORY_ATTENTION_ONLINE_SOFTMAX_WGSL,
   SAM31_MEMORY_ATTENTION_PHASE_PROGRAM_ROUTE_ID,
   applySam31AxialRope,
+  createSam31MemoryAttentionDispatchPlan,
   createSam31MemoryAttentionPhaseProgramCpuOracle,
   createSam31MemoryAttentionPhaseProgramRouteDefinition,
   createSam31MemoryAttentionPhaseProgramRouteReceipt,

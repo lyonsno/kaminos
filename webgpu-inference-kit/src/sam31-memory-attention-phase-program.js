@@ -4,7 +4,7 @@ import {
   defineWebGpuRoute,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { createLinearDispatch, WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
 import { createKernelProfileMetadata, createRouteKernelProfileMetadata } from './kernel-profile.js';
 import {
   createRouteReceiptArtifacts,
@@ -492,8 +492,13 @@ struct LinearDims { input_channels: u32, output_channels: u32, total_output: u32
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 ${SAM31_EXACT_GELU_FUNCTIONS_WGSL}
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x
+    + gid.y * dispatch_grid.x * 64u
+    + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_output) { return; }
   let output_channel = index % dims.output_channels;
   let token = index / dims.output_channels;
@@ -625,6 +630,20 @@ function workgroups(total) {
   return Math.max(1, Math.ceil(total / 64));
 }
 
+export function createSam31MemoryAttentionDispatchPlan(input = {}) {
+  const shape = normalizeShape(input.shape);
+  const logicalInvocations = shape.batch * shape.queryTokens * shape.mlpHidden;
+  return {
+    mlp1: {
+      logicalInvocations,
+      dispatch: createLinearDispatch(logicalInvocations, {
+        workgroupSize: 64,
+        maxWorkgroupsPerDimension: input.maxWorkgroupsPerDimension ?? 65_535,
+      }),
+    },
+  };
+}
+
 async function sha256Hex(buffer) {
   if (!globalThis.crypto?.subtle?.digest) throw new Error('crypto.subtle.digest is required to hash SAM3.1 memory attention outputs');
   const digest = await globalThis.crypto.subtle.digest('SHA-256', buffer);
@@ -713,6 +732,10 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
   const totalQuery = queryRows * shape.channels;
   const totalMemory = memoryRows * shape.channels;
   const totalMlp = queryRows * shape.mlpHidden;
+  const dispatchPlan = createSam31MemoryAttentionDispatchPlan({
+    shape,
+    maxWorkgroupsPerDimension: input.device?.limits?.maxComputeWorkgroupsPerDimension,
+  });
   const padded = paddedImageMemory(bank, shape);
   const layerValues = layers.map(layerWeightArrays);
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
@@ -873,7 +896,7 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
       { name: `memory-attention-layer-${layerIndex}-cross-output-residual`, kernel: `${prefix}CrossResidual`, dispatch: [workgroups(totalQuery)], yieldAfter: true },
       { name: `memory-attention-layer-${layerIndex}-cross-residual-readback`, readbacks: [{ name: `layer${layerIndex}CrossAttentionResidual`, tensor: currentHidden }] },
       { name: `memory-attention-layer-${layerIndex}-norm3`, kernel: `${prefix}Norm3`, dispatch: [workgroups(queryRows)], yieldAfter: true },
-      { name: `memory-attention-layer-${layerIndex}-mlp-gelu`, kernel: `${prefix}Mlp1`, dispatch: [workgroups(totalMlp)], yieldAfter: true },
+      { name: `memory-attention-layer-${layerIndex}-mlp-gelu`, kernel: `${prefix}Mlp1`, dispatch: dispatchPlan.mlp1.dispatch, yieldAfter: true },
       { name: `memory-attention-layer-${layerIndex}-mlp-output`, kernel: `${prefix}Mlp2`, dispatch: [workgroups(totalQuery)] },
       { name: `memory-attention-layer-${layerIndex}-mlp-output-residual`, kernel: `${prefix}MlpResidual`, dispatch: [workgroups(totalQuery)], yieldAfter: true },
       { name: `memory-attention-layer-${layerIndex}-readback`, readbacks: [{ name: `layer${layerIndex}Memory`, tensor: otherHidden }] },

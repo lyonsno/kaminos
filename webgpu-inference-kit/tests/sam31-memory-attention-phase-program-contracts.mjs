@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   SAM31_MEMORY_ATTENTION_PHASE_PROGRAM_ROUTE_ID,
   applySam31AxialRope,
+  createSam31MemoryAttentionDispatchPlan,
   createSam31MemoryAttentionPhaseProgramCpuOracle,
   createSam31MemoryAttentionPhaseProgramRouteDefinition,
   validateRouteDefinition,
@@ -33,6 +34,29 @@ for (let layer = 0; layer < 4; layer += 1) {
   }
 }
 assert.ok(route.requiredStages.includes('memory-attention-final-layernorm'));
+
+const nativeDispatch = createSam31MemoryAttentionDispatchPlan({
+  shape: {
+    batch: 1,
+    queryHeight: 72,
+    queryWidth: 72,
+    queryTokens: 5_184,
+    memorySpatialTokens: 5_184,
+    numObjPtrTokens: 16,
+    memoryTokens: 5_200,
+    channels: 256,
+    heads: 8,
+    headDim: 32,
+    mlpHidden: 2_048,
+    layerCount: 4,
+  },
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.equal(nativeDispatch.mlp1.logicalInvocations, 10_616_832, 'native memory-attention MLP1 must preserve all 5,184 x 2,048 output values');
+assert.deepEqual(nativeDispatch.mlp1.dispatch, [408, 407], 'native memory-attention MLP1 must tile 165,888 workgroups across legal WebGPU dimensions');
+assert.ok(nativeDispatch.mlp1.dispatch.every(count => count <= 65_535), 'every native memory-attention MLP1 dispatch dimension must respect the effective device limit');
+assert.match(routeSource, /MEMORY_ATTENTION_LINEAR_GELU_WGSL[\s\S]*@builtin\(num_workgroups\)\s+dispatch_grid/, 'memory-attention MLP1 WGSL must receive the multidimensional dispatch grid');
+assert.match(routeSource, /MEMORY_ATTENTION_LINEAR_GELU_WGSL[\s\S]*gid\.x\s*\+\s*gid\.y\s*\*\s*dispatch_grid\.x\s*\*\s*64u/, 'memory-attention MLP1 WGSL must reconstruct the uncapped linear invocation index');
 
 const channels = 8;
 const mlpHidden = 16;
