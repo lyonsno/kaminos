@@ -232,6 +232,14 @@ assert.throws(
   'an open C cell must name its exact blocker rather than acting as a decorative placeholder',
 );
 
+const decorativeCBlocker = structuredClone(openC);
+decorativeCBlocker.cells[2].blocker.detail = '   ';
+assert.throws(
+  () => validateStateBearingSmokeAssay(decorativeCBlocker),
+  /open cell C.*blocker|blocker detail/i,
+  'whitespace-only detail cannot impersonate an exact route-C blocker',
+);
+
 const openCClaimedComplete = structuredClone(openC);
 openCClaimedComplete.status = 'captured';
 assert.throws(

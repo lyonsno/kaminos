@@ -145,7 +145,8 @@ function validateCell(candidate, source) {
     if (!OPEN_BLOCKER_CLASSES.has(blocker.class)) {
       throw new Error('open cell C blocker class must be dataset, owner, compute, or abi');
     }
-    identity(blocker.detail, 'open cell C blocker detail');
+    const blockerDetail = identity(blocker.detail, 'open cell C blocker detail');
+    if (blockerDetail.trim().length === 0) throw new Error('open cell C blocker detail must be nonblank');
     return cell;
   }
   if (cell.status !== 'captured') throw new Error(`cell ${id} is partial or missing`);
