@@ -29,6 +29,7 @@ MOTION_BALANCED_OBJECTIVE_FAMILY = "motion-balanced-static-scaffold-v0"
 EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY = "motion-balanced-eulerian-destination-occupancy-v0"
 STATE_RECURRENCE_MODES = ("coupled", "protected-splat")
 SUPPORT_BUDGET_MODES = ("one-step-ratio", "training-episode-envelope")
+INFERENCE_MODES = ("recurrent", "alternating-anchor")
 FEATURES = (
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.density", "material.heat", "material.fuel", "material.detail",
@@ -1907,6 +1908,86 @@ def support_metrics(source, prediction, exact):
     }
 
 
+def build_alternating_anchor_sequence(frame_docs, exact_frames, predict_from_anchor):
+    if len(frame_docs) < 2:
+        raise ValueError("alternating-anchor inference requires at least two exact frames")
+    indices = [int(document.get("controlledStepFrameIndex", -1)) for document in frame_docs]
+    if indices != list(range(indices[0], indices[0] + len(frame_docs))):
+        raise ValueError("alternating-anchor inference requires contiguous controlled-step frames")
+    cadences = [document.get("controlledStepDeltaMs") for document in frame_docs]
+    if (
+        any(not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0 for value in cadences)
+        or any(not math.isclose(float(value), float(cadences[0]), rel_tol=0, abs_tol=1e-6) for value in cadences[1:])
+    ):
+        raise ValueError("alternating-anchor inference requires uniform positive controlled-step cadence")
+    missing = [document["id"] for document in frame_docs if document.get("id") not in exact_frames]
+    if missing:
+        raise ValueError(f"alternating-anchor inference is missing exact frames: {missing}")
+
+    sequence_frames = []
+    metric_rows = []
+    recurrent_rows = []
+    anchor_document = None
+    anchor_frame = None
+    for display_index, document in enumerate(frame_docs):
+        reference_frame_id = document["id"]
+        if display_index % 2 == 0:
+            anchor_document = document
+            anchor_frame = exact_frames[reference_frame_id]
+            sequence_frames.append({
+                "displayFrameIndex": display_index,
+                "referenceFrameId": reference_frame_id,
+                "sourceFrameId": reference_frame_id,
+                "roleAuthority": "exact-natural-full-rate-anchor-v0",
+                "frame": anchor_frame,
+            })
+            continue
+
+        predicted, accounting = predict_from_anchor(anchor_frame, anchor_document)
+        exact_target = exact_frames[reference_frame_id]
+        metrics = support_metrics(anchor_frame, predicted, exact_target)
+        metric_rows.append({
+            "step": display_index,
+            "displayFrameIndex": display_index,
+            "sourceFrameId": anchor_document["id"],
+            "referenceFrameId": reference_frame_id,
+            "targetConsultedAfterPrediction": True,
+            **metrics,
+        })
+        recurrent_rows.append({
+            "step": display_index,
+            "displayFrameIndex": display_index,
+            "sourceFrameId": anchor_document["id"],
+            "referenceFrameId": reference_frame_id,
+            **accounting,
+        })
+        sequence_frames.append({
+            "displayFrameIndex": display_index,
+            "referenceFrameId": reference_frame_id,
+            "sourceFrameId": anchor_document["id"],
+            "roleAuthority": "causal-one-step-prediction-from-prior-exact-anchor-v0",
+            "frame": predicted,
+        })
+
+    return {
+        "authority": "alternating-exact-anchor-causal-odd-projection-v0",
+        "controlledStepDeltaMs": float(cadences[0]),
+        "exactAnchorParity": "even",
+        "heldoutTargetParity": "odd",
+        "targetFramesAvailableToPredictor": False,
+        "visibleRoles": [
+            "natural-full-rate",
+            "hold-half-rate",
+            "causal-predicted",
+            "oracle-scaffold",
+            "interpolated",
+        ],
+        "frames": sequence_frames,
+        "recurrent": recurrent_rows,
+        "supportMetrics": metric_rows,
+    }
+
+
 def apply_destination_state_residuals(carried, residuals):
     residuals = np.asarray(residuals, dtype=np.float32)
     if residuals.shape != (len(carried["keys"]), DESTINATION_STATE_ATTRIBUTE_COUNT):
@@ -2246,6 +2327,7 @@ def parse_args():
     parser.add_argument("--state-model", default="")
     parser.add_argument("--state-recurrence-mode", choices=STATE_RECURRENCE_MODES, default="coupled")
     parser.add_argument("--support-budget-mode", choices=SUPPORT_BUDGET_MODES, default="one-step-ratio")
+    parser.add_argument("--inference-mode", choices=INFERENCE_MODES, default="recurrent")
     parser.add_argument("--inference-start", type=int, default=0)
     parser.add_argument("--inference-steps", type=int, default=0)
     parser.add_argument("--holdout-start", type=int, default=6)
@@ -2290,6 +2372,10 @@ def main():
             raise ValueError("destination-state model is valid only during frozen transport inference")
         if args.support_budget_mode != "one-step-ratio" and not args.model:
             raise ValueError("training-episode support envelope is valid only during frozen model inference")
+        if args.inference_mode != "recurrent" and not args.model:
+            raise ValueError("alternating-anchor inference is valid only with a frozen model")
+        if args.inference_mode == "alternating-anchor" and args.support_budget_mode != "one-step-ratio":
+            raise ValueError("alternating-anchor inference requires one-step-ratio support budgeting")
         failure_phase = "manifest-validation"
         manifest_path = Path(args.manifest).resolve()
         manifest_bytes = manifest_path.read_bytes()
@@ -2439,7 +2525,8 @@ def main():
                 "referenceFrameId": inference_docs[0]["id"],
                 "count": len(prediction_frames[0]["keys"]),
             }
-            training_manifest_sha256 = frozen_model_document["manifest"]["sha256"]
+            training_manifest = frozen_model_document["manifest"]
+            training_manifest_sha256 = training_manifest["sha256"]
             support_budget_contract = {
                 "authority": "explicit-recurrent-support-budget-mode-v0",
                 "mode": args.support_budget_mode,
@@ -2460,6 +2547,149 @@ def main():
                 if objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
                 else None
             )
+            if args.inference_mode == "alternating-anchor":
+                def predict_from_exact_anchor(source, source_document):
+                    source_frame_zero = {
+                        "referenceFrameId": source_document["id"],
+                        "count": len(source["keys"]),
+                    }
+                    source_support_budget = resolve_recurrent_support_budget(
+                        args.support_budget_mode,
+                        len(source["keys"]),
+                        len(source["keys"]),
+                        float(target_support_calibration["medianRatio"]),
+                        training_support_envelope,
+                        training_manifest_sha256,
+                        source_frame_zero,
+                    )
+                    if state_recurrence["mode"] == "protected-splat":
+                        _, predicted, accounting = protected_splat_recurrent_predict(
+                            frozen_model,
+                            source,
+                            source,
+                            grid_step,
+                            input_mean,
+                            input_scale,
+                            birth_calibration,
+                            target_support_calibration,
+                            args.batch_size,
+                            destination_death_calibration,
+                            destination_state_bundle,
+                        )
+                    else:
+                        predicted, accounting = recurrent_predict(
+                            frozen_model,
+                            source,
+                            grid_step,
+                            input_mean,
+                            input_scale,
+                            birth_calibration,
+                            target_support_calibration,
+                            args.batch_size,
+                            action_calibration,
+                            destination_death_calibration,
+                            destination_state_bundle,
+                        )
+                    return predicted, {**accounting, "supportBudget": source_support_budget}
+
+                alternating = build_alternating_anchor_sequence(
+                    inference_docs,
+                    frames,
+                    predict_from_exact_anchor,
+                )
+                failure_phase = "prediction-write"
+                prediction_docs = []
+                for row in alternating["frames"]:
+                    artifacts = write_frame_artifacts(
+                        out_dir,
+                        f"alternating-display-{row['displayFrameIndex']:04d}",
+                        row["frame"],
+                    )
+                    artifacts["splats"]["authority"] = row["roleAuthority"]
+                    prediction_docs.append({
+                        key: value
+                        for key, value in row.items()
+                        if key != "frame"
+                    } | artifacts)
+                natural_control = {
+                    "authority": "exact-controlled-step-corpus-all-display-frames-v0",
+                    "visible": True,
+                    "frameIds": [document["id"] for document in inference_docs],
+                    "frameCount": len(inference_docs),
+                    "sourceManifest": manifest_receipt,
+                    "simulatorAdvancedEveryDisplayFrame": True,
+                }
+                temporal = {
+                    key: value
+                    for key, value in alternating.items()
+                    if key not in ("frames", "recurrent", "supportMetrics")
+                } | {
+                    "sourceFrameId": inference_docs[0]["id"],
+                    "heldoutReferenceFrameIds": [
+                        document["id"]
+                        for index, document in enumerate(inference_docs)
+                        if index % 2 == 1
+                    ],
+                    "naturalFullRateControl": natural_control,
+                    "holdControlAuthority": "prior-exact-even-anchor-byte-repeated-on-odd-display-frames-v0",
+                    "interpolationAuthority": "noncausal-exact-neighbor-interpolation-v0",
+                    "oracleScaffoldAuthority": "exact-target-support-world-position-offline-upper-bound-v0",
+                    "trainingFrameIdsExcluded": [document["id"] for document in inference_docs],
+                    "inferenceCorpusSeenDuringTraining": training_manifest.get("sha256") == manifest_receipt["sha256"],
+                }
+                prediction_artifact = build_prediction_document(
+                    inference_manifest=manifest_receipt,
+                    training_manifest=training_manifest,
+                    model=model_receipt,
+                    route=route,
+                    temporal=temporal,
+                    frames=prediction_docs,
+                    recurrent=alternating["recurrent"],
+                    support_metrics=alternating["supportMetrics"],
+                    state_model=state_model_receipt,
+                    state_recurrence=state_recurrence,
+                    support_budget=support_budget_contract,
+                )
+                prediction_artifact["rolloutGate"] = {
+                    "authority": "every-independent-causal-odd-step-support-advantage-gate-v0",
+                    "evaluatedStepCount": len(alternating["supportMetrics"]),
+                    "beatStepCount": sum(
+                        row["beatsIdentity"] for row in alternating["supportMetrics"]
+                    ),
+                    "allStepsBeatIdentity": all(
+                        row["beatsIdentity"] for row in alternating["supportMetrics"]
+                    ),
+                    "recurrentClosureClaimAllowed": False,
+                }
+                prediction_artifact["claimBoundary"] = (
+                    "isolated one-step causal odd-frame projection reset from each exact even anchor; "
+                    "exact odd targets are post-prediction metrics only; natural full-rate control remains exact corpus output; "
+                    "no recurrent multi-step or live renderer claim"
+                )
+                prediction_path = out_dir / "transport-predictions.json"
+                write_json(prediction_path, prediction_artifact)
+                failure_phase = "report-write"
+                report = {
+                    "schema": SCHEMA,
+                    "status": "completed",
+                    "mode": "frozen-model-alternating-anchor-inference",
+                    "startedAt": started_at,
+                    "completedAt": time.time(),
+                    "route": route,
+                    "manifest": manifest_receipt,
+                    "modelTrainingManifest": training_manifest,
+                    "model": model_receipt,
+                    **({"destinationStateModel": state_model_receipt} if state_model_receipt is not None else {}),
+                    "predictions": {"path": str(prediction_path), "sha256": sha256_bytes(prediction_path.read_bytes())},
+                    "temporal": temporal,
+                    "holdoutMetrics": alternating["supportMetrics"],
+                    "supportGate": prediction_artifact["rolloutGate"],
+                    "supportBudget": support_budget_contract,
+                    "recurrent": alternating["recurrent"],
+                }
+                write_json(report_path, report)
+                print(json.dumps(report, indent=2))
+                return
             for step_index in range(1, len(inference_docs)):
                 support_budget = resolve_recurrent_support_budget(
                     args.support_budget_mode,
@@ -2521,7 +2751,6 @@ def main():
                     "controlFrameId": inference_docs[0]["id"],
                     **artifacts,
                 })
-            training_manifest = frozen_model_document["manifest"]
             count_drift_gate = summarize_count_drift_gate(
                 len(prediction_frames[0]["keys"]),
                 [row["exactCount"] for row in inference_metrics],

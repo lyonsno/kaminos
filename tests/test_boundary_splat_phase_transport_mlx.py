@@ -1027,6 +1027,88 @@ class TransportDatasetContracts(unittest.TestCase):
                     model_document["manifest"]["sha256"],
                 )
 
+    def test_frozen_inference_main_writes_explicit_alternating_anchor_roles(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def write_artifact(name, values, stride):
+                path = root / name
+                data = np.asarray(values, dtype="<f4").reshape(-1, stride).tobytes()
+                path.write_bytes(data)
+                return {
+                    "path": str(path), "bytes": len(data), "sha256": MODULE.sha256_bytes(data),
+                    "count": len(values), "strideFloats": stride, "dtype": "float32-le",
+                }
+
+            frames = []
+            for index in range(5):
+                candidate = [[0.2 + index + channel * 0.01 for channel in range(16)]]
+                splat = [[index * 0.0125, 0.0, 0.0, 1.0, 1.0, 0.5, 0.2, 0.8, 0.03, 0.03, 0.0, 1.0]]
+                frames.append({
+                    "id": f"frame-{index}",
+                    "controlledStepFrameIndex": index,
+                    "controlledStepDeltaMs": 16.667,
+                    "candidates": write_artifact(f"frame-{index}.candidates.f32", candidate, 16),
+                    "splats": write_artifact(f"frame-{index}.splats.f32", splat, 12),
+                })
+            manifest = {
+                "schema": "kaminos-boundary-splat-phase-candidate-corpus-v0",
+                "featureOrder": list(MODULE.FEATURES),
+                "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+                "requestedRoute": "http://127.0.0.1/?volume_resolution=160",
+                "frames": frames,
+            }
+            manifest_path = root / "phase-corpus.json"
+            manifest_bytes = (json.dumps(manifest, sort_keys=True) + "\n").encode("utf8")
+            manifest_path.write_bytes(manifest_bytes)
+
+            model_document = frozen_model_document()
+            model_document["manifest"] = {
+                "path": str(manifest_path),
+                "bytes": len(manifest_bytes),
+                "sha256": MODULE.sha256_bytes(manifest_bytes),
+            }
+            model_path = root / "transport-model.json"
+            model_path.write_text(json.dumps(model_document), encoding="utf8")
+            out_dir = root / "alternating"
+            argv = [
+                str(MODULE_PATH), "--manifest", str(manifest_path), "--model", str(model_path),
+                "--out-dir", str(out_dir), "--inference-start", "0", "--inference-steps", "4",
+                "--inference-mode", "alternating-anchor", "--grid-size", "160", "--batch-size", "1",
+            ]
+            with (
+                patch.object(sys, "argv", argv),
+                patch("builtins.print"),
+                patch.object(MODULE, "recurrent_predict", side_effect=lambda _model, source, *_args, **_kwargs: (source, {})),
+            ):
+                MODULE.main()
+
+            report = json.loads((out_dir / "training-report.json").read_text(encoding="utf8"))
+            prediction = json.loads((out_dir / "transport-predictions.json").read_text(encoding="utf8"))
+            self.assertEqual(report["mode"], "frozen-model-alternating-anchor-inference")
+            self.assertEqual(
+                prediction["temporal"]["authority"],
+                "alternating-exact-anchor-causal-odd-projection-v0",
+            )
+            self.assertEqual(prediction["temporal"]["controlledStepDeltaMs"], 16.667)
+            self.assertEqual(prediction["temporal"]["exactAnchorParity"], "even")
+            self.assertEqual(prediction["temporal"]["heldoutTargetParity"], "odd")
+            self.assertFalse(prediction["temporal"]["targetFramesAvailableToPredictor"])
+            self.assertEqual(len(prediction["frames"]), 5)
+            self.assertEqual(
+                [row["roleAuthority"] for row in prediction["frames"]],
+                [
+                    "exact-natural-full-rate-anchor-v0",
+                    "causal-one-step-prediction-from-prior-exact-anchor-v0",
+                    "exact-natural-full-rate-anchor-v0",
+                    "causal-one-step-prediction-from-prior-exact-anchor-v0",
+                    "exact-natural-full-rate-anchor-v0",
+                ],
+            )
+            self.assertEqual(len(prediction["supportMetrics"]), 2)
+            self.assertTrue(all(row["targetConsultedAfterPrediction"] for row in prediction["supportMetrics"]))
+            self.assertEqual(len(report["recurrent"]), 2)
+
     def test_eulerian_composer_honors_absolute_support_budget_before_birth_admission(self):
         source = frame([
             ((0.0, 0.0, 0.0), 1.0),
@@ -1423,6 +1505,92 @@ class TransportDatasetContracts(unittest.TestCase):
         )
         self.assertEqual(prediction["manifest"]["sha256"], "1" * 64)
         self.assertEqual(prediction["modelTrainingManifest"]["sha256"], "0" * 64)
+
+    def test_alternating_anchor_sequence_resets_from_exact_even_frames_and_seals_odd_targets(self):
+        frame_docs = [
+            {
+                "id": f"frame-{index}",
+                "controlledStepFrameIndex": index,
+                "controlledStepDeltaMs": 16.667,
+            }
+            for index in range(5)
+        ]
+        exact_frames = {
+            document["id"]: frame([((float(index), 0.0, 0.0), float(index + 1))])
+            for index, document in enumerate(frame_docs)
+        }
+        prediction_sources = []
+
+        def predict_from_anchor(source, source_document):
+            prediction_sources.append((source_document["id"], source))
+            predicted = frame([((source["splats"][0, 0] + 1.0, 0.0, 0.0), 99.0)])
+            return predicted, {"sourceFrameId": source_document["id"]}
+
+        sequence = MODULE.build_alternating_anchor_sequence(
+            frame_docs,
+            exact_frames,
+            predict_from_anchor,
+        )
+
+        self.assertEqual(
+            sequence["visibleRoles"],
+            [
+                "natural-full-rate",
+                "hold-half-rate",
+                "causal-predicted",
+                "oracle-scaffold",
+                "interpolated",
+            ],
+        )
+        self.assertEqual(sequence["controlledStepDeltaMs"], 16.667)
+        self.assertEqual(sequence["exactAnchorParity"], "even")
+        self.assertEqual(sequence["heldoutTargetParity"], "odd")
+        self.assertEqual(
+            [row["roleAuthority"] for row in sequence["frames"]],
+            [
+                "exact-natural-full-rate-anchor-v0",
+                "causal-one-step-prediction-from-prior-exact-anchor-v0",
+                "exact-natural-full-rate-anchor-v0",
+                "causal-one-step-prediction-from-prior-exact-anchor-v0",
+                "exact-natural-full-rate-anchor-v0",
+            ],
+        )
+        self.assertIs(sequence["frames"][0]["frame"], exact_frames["frame-0"])
+        self.assertIsNot(sequence["frames"][1]["frame"], exact_frames["frame-1"])
+        self.assertIs(sequence["frames"][2]["frame"], exact_frames["frame-2"])
+        self.assertEqual(
+            [row["sourceFrameId"] for row in sequence["frames"]],
+            ["frame-0", "frame-0", "frame-2", "frame-2", "frame-4"],
+        )
+        self.assertEqual(
+            [source_id for source_id, _ in prediction_sources],
+            ["frame-0", "frame-2"],
+        )
+        self.assertIs(prediction_sources[0][1], exact_frames["frame-0"])
+        self.assertIs(prediction_sources[1][1], exact_frames["frame-2"])
+        self.assertEqual(
+            [row["referenceFrameId"] for row in sequence["supportMetrics"]],
+            ["frame-1", "frame-3"],
+        )
+        self.assertTrue(all(row["targetConsultedAfterPrediction"] for row in sequence["supportMetrics"]))
+        self.assertFalse(sequence["targetFramesAvailableToPredictor"])
+
+    def test_alternating_anchor_sequence_rejects_nonuniform_or_nonpositive_cadence(self):
+        exact_frames = {
+            f"frame-{index}": frame([((float(index), 0.0, 0.0), 1.0)])
+            for index in range(3)
+        }
+        frame_docs = [
+            {"id": "frame-0", "controlledStepFrameIndex": 0, "controlledStepDeltaMs": 16.667},
+            {"id": "frame-1", "controlledStepFrameIndex": 1, "controlledStepDeltaMs": 16.667},
+            {"id": "frame-2", "controlledStepFrameIndex": 2, "controlledStepDeltaMs": 20.0},
+        ]
+        with self.assertRaisesRegex(ValueError, "uniform positive controlled-step cadence"):
+            MODULE.build_alternating_anchor_sequence(
+                frame_docs,
+                exact_frames,
+                lambda source, document: (source, {}),
+            )
 
     def test_rollout_gate_cannot_close_on_early_step_advantage(self):
         gate = MODULE.summarize_rollout_gate([
