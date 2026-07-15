@@ -3,4 +3,6 @@ scratch/*
 !scratch/.gitkeep
 scenes/*
 !scenes/.gitkeep
+local-assets/*
+!local-assets/.gitkeep
 artifacts/volume-captures/
