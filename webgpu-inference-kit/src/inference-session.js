@@ -8,6 +8,9 @@ import {
 import {
   createWebGpuInferenceRuntime,
 } from './inference-runtime.js';
+import {
+  createWebGpuResourceResidency,
+} from './resource-residency.js';
 
 export const WEBGPU_INFERENCE_SESSION_SCHEMA = 'kaminos.webgpu-inference-session.v0';
 export const WEBGPU_INFERENCE_SESSION_DEVICE_LOSS_SCHEMA = 'kaminos.webgpu-inference-session-device-loss.v0';
@@ -51,6 +54,7 @@ function assertNoReservedOptions(options, reserved, label) {
 
 export async function createWebGpuInferenceSession(input = {}) {
   if (!isNonEmptyString(input.sessionId)) throw new Error('sessionId must be a non-empty string');
+  if (input.residency != null) throw new Error('session owns resource residency; callers cannot override it');
   if (input.maxRoutes != null || input.routeLimit != null || input.retentionLimit != null) {
     throw new Error('the inference session does not impose a hidden route cap; retention is uncapped until explicit unregister');
   }
@@ -113,6 +117,19 @@ export async function createWebGpuInferenceSession(input = {}) {
   ) {
     throw new Error('admissionCoordinator must expose requestAdmission, snapshot, and drain');
   }
+  const residency = createWebGpuResourceResidency({
+    sessionId: input.sessionId,
+    now,
+  });
+  if (
+    typeof residency.acquire !== 'function'
+    || typeof residency.snapshot !== 'function'
+    || typeof residency.invalidateAll !== 'function'
+    || typeof residency.hasActiveLeases !== 'function'
+    || typeof residency.routeSnapshot !== 'function'
+  ) {
+    throw new Error('residency must expose acquire, snapshot, invalidateAll, hasActiveLeases, and routeSnapshot');
+  }
 
   const state = {
     status: 'active',
@@ -142,6 +159,7 @@ export async function createWebGpuInferenceSession(input = {}) {
       routeId: route.routeId,
       status: route.attached ? 'registered' : 'detached',
       queue: route.queue.snapshot(),
+      residency: residency.routeSnapshot(route.routeId),
     };
   }
 
@@ -156,6 +174,7 @@ export async function createWebGpuInferenceSession(input = {}) {
       backendIdentity: clone(context.backendIdentity),
       deviceLoss: clone(state.deviceLoss),
       coordinator: admissionCoordinator.snapshot(),
+      residency: residency.snapshot(),
       registeringRouteIds: [...state.registeringRoutes],
       routes: [...state.routes.values()].map(routeSnapshot),
     };
@@ -174,6 +193,7 @@ export async function createWebGpuInferenceSession(input = {}) {
       cancellationAuthority: 'pending-route-jobs-only-no-active-work-preemption',
     });
     if (state.status !== 'closed') state.status = 'device-lost';
+    residency.invalidateAll({ reason: `device-lost:${reason}`, message: state.deviceLoss.message });
     for (const route of state.routes.values()) {
       for (const handle of route.jobHandles.values()) {
         handle.cancel(`device-lost:${reason}`);
@@ -224,6 +244,15 @@ export async function createWebGpuInferenceSession(input = {}) {
       route.handle = Object.freeze({
         routeId: route.routeId,
         runtime,
+        residency,
+        acquireResource(resourceInput = {}) {
+          assertAttached(route);
+          assertActive();
+          if (Object.hasOwn(resourceInput, 'routeId')) {
+            throw new Error('session route owns routeId; acquireResource cannot override it');
+          }
+          return residency.acquire({ ...resourceInput, routeId: route.routeId });
+        },
         enqueue(jobInput = {}) {
           assertAttached(route);
           assertActive();
@@ -264,6 +293,9 @@ export async function createWebGpuInferenceSession(input = {}) {
     if (queueSnapshot.status !== 'idle') {
       throw new Error(`route ${routeId} must drain before unregister; active work is not preempted`);
     }
+    if (residency.hasActiveLeases(routeId)) {
+      throw new Error(`route ${routeId} must release every resource lease before unregister`);
+    }
     route.attached = false;
     state.routes.delete(routeId);
     return deepFreeze(routeSnapshot(route));
@@ -290,8 +322,12 @@ export async function createWebGpuInferenceSession(input = {}) {
         throw new Error('all routes must drain before close; active work is not preempted');
       }
     }
+    if (residency.hasActiveLeases()) {
+      throw new Error('all routes must release every resource lease before close');
+    }
     state.status = 'closed';
     for (const route of state.routes.values()) route.attached = false;
+    residency.invalidateAll({ reason: 'session-closed', disposeManaged: true });
     if (deviceOwnership === 'owned' && typeof context.device.destroy === 'function') {
       context.device.destroy();
     }
@@ -305,6 +341,7 @@ export async function createWebGpuInferenceSession(input = {}) {
     queue: context.queue,
     backendIdentity: deepFreeze(clone(context.backendIdentity)),
     admissionCoordinator,
+    residency,
     deviceLost,
     registerRoute,
     unregisterRoute,

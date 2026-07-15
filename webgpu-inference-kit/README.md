@@ -1,8 +1,8 @@
 # @kaminos/webgpu-inference-kit
 
-Runtime helpers for browser WebGPU inference ports, with route receipts and scheduler profiles.
+A composable browser-native WebGPU inference runtime for model ports that need direct control over execution, scheduling, tensors, buffers, shared devices, and memory residency.
 
-Use this package when you are porting a model to browser WebGPU and you do not want to rebuild the same boring runtime shell again: device acquisition, adapter/feature identity, shader and pipeline caching, buffer upload/readback helpers, stage timing, cooperative yield hooks, scheduler/backpressure metadata, route envelopes, and receipt validation.
+Use this package when you are porting a model to browser WebGPU and you do not want to rebuild the same runtime shell again: device acquisition, shader and pipeline caching, typed tensors, buffer upload and readback, phase programs, background queues, multi-route scheduling, shared resource residency, progress, cancellation, and device-loss recovery boundaries.
 
 Strict route and run identity travels with the runtime so composed pipelines can distinguish live model output from stale, partial, cached, or fallback results.
 
@@ -165,6 +165,7 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `runtime.createInferenceQueue(options)`: retain an uncapped FIFO of background jobs, run one immutable route invocation at a time, record uncapped progress and terminal outcomes, cancel pending work, and place adaptive decisions between jobs.
 - `createWebGpuInferenceCoordinator(input)`: admit eligible heads from multiple route queues through one uncapped global FIFO, preserving route-local barriers, pending cancellation, and honest non-preemption boundaries.
 - `createWebGpuInferenceSession(input)`: own one browser WebGPU device, backend identity, and coordinator across explicitly registered route runtimes, with device-loss and idle-close lifecycle truth.
+- `createWebGpuResourceResidency(input)`: account for caller-declared GPU allocations once across routes, issue explicit route leases, retain released allocations as eviction candidates, and invalidate the whole ledger on device loss without claiming access to browser-global VRAM.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
 - `defineTensorManifest(input)`: normalize model tensor metadata, dtype sizes, byte lengths, offsets, and shapes for browser-loaded weight bundles.
@@ -409,13 +410,45 @@ const sf3d = await session.registerRoute({
   routeId: SF3D_IMAGE_TO_MESH_ROUTE_ID,
 });
 
+const sharpWeightLease = sharp.acquireResource({
+  resourceId: "dinov2.vitl14.weights.f16",
+  declaredBytes: sharpWeightBuffer.size,
+  kind: "model-weight",
+  metadata: { precision: "f16" },
+  resource: sharpWeightBuffer,
+});
+const sf3dWeightLease = sf3d.acquireResource({
+  resourceId: "dinov2.vitl14.weights.f16",
+  declaredBytes: sharpWeightBuffer.size,
+  kind: "model-weight",
+  metadata: { precision: "f16" },
+});
+
 const sharpJob = sharp.enqueue({
   jobId: crypto.randomUUID(),
   execute: invocation => runSharpInference(sharp.runtime, invocation),
 });
+
+await sharpJob.completion;
+sharpWeightLease.release();
+sf3dWeightLease.release();
+
+const candidate = session.residency.snapshot().evictionCandidates.find(
+  resource => resource.resourceId === "dinov2.vitl14.weights.f16",
+);
+if (candidate) {
+  session.residency.evict(candidate.resourceId);
+  sharpWeightBuffer.destroy();
+}
 ```
 
-The session retains route registrations until `unregisterRoute(routeId)`. Its managed route handles gate enqueue and scheduler changes after device loss while still exposing each runtime for adapter kernels and buffers. If `device.lost` resolves, the session preserves the opaque browser reason/message, cancels pending jobs, rejects new managed work, and leaves active work to complete or fail without claiming preemption. Recovery requires a new session and rebuilt device resources.
+The session retains route registrations until `unregisterRoute(routeId)`. Route handles share one residency runtime and acquire resources under their own route identity. The first acquisition supplies the live WebGPU object; later routes acquiring a matching descriptor receive that identical object from their lease. One global declared-byte allocation then serves every active route lease. Conflicting descriptors or different live objects for the same identity fail loud.
+
+Releasing the last lease makes an allocation eligible for eviction. Borrowed resources remain caller-owned, so the caller explicitly evicts the record and disposes the WebGPU object. A resource acquired with `ownership: "managed"` and `dispose(resource)` instead transfers disposal to the residency runtime; explicit eviction or orderly session close invokes its disposer exactly once. Device loss clears references without claiming a redundant destroy of already-invalid GPU objects.
+
+Residency snapshots expose exact caller-declared bytes, not browser-global VRAM usage. They retain every resource until explicit `forget(resourceId)`, preserve zero-byte route participation after release, and never impose a hidden memory cap. `unregisterRoute()` and `close()` reject active resource leases so ownership cannot disappear silently.
+
+Managed route handles also gate enqueue and scheduler changes after device loss while still exposing each runtime for adapter kernels and buffers. If `device.lost` resolves, the session preserves the opaque browser reason/message, cancels pending jobs, rejects new managed work, invalidates all residency accounting, and leaves active work to complete or fail without claiming preemption. Recovery requires a new session and rebuilt device resources.
 
 `close()` requires every route queue to be idle. It destroys a device requested by the session and leaves a borrowed device untouched. `session.deviceLost` remains the exact asynchronous loss record, including intentional `destroyed` loss after an owned session closes.
 
