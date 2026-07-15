@@ -12608,6 +12608,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const supportStats = await runtime.sampleSupportStats();
       const supportStatsMs = performance.now() - supportStatsStart;
       const runtimeState = runtime.debugState();
+      const nativeLowInferenceWorkProfile = runtimeState.nativeLowInferenceWorkProfile || supportStats.nativeLowInferenceWorkProfile || null;
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs };
 
       failurePhase = 'shared-device-treatment-materialization';
@@ -12739,6 +12740,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         featureAuthority: runtimeState.featureAuthority,
         effectiveFeatureCount: runtimeState.effectiveFeatureCount,
         noHiddenCaps: runtimeState.noHiddenCaps,
+        nativeLowInferenceWorkProfile,
         supportPositiveCount,
         supportPrevalence,
         treatmentSplatCandidateCount,

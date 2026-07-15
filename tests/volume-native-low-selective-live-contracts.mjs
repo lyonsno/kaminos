@@ -60,6 +60,11 @@ assert.match(core, /nativeLowMaterializationProfile/, 'shared-device route recor
 assert.match(core, /treatmentRebuildMs[\s\S]*treatmentCopyMs[\s\S]*restoreRebuildMs[\s\S]*restoreCopyMs/, 'materialization profile splits rebuild and copy costs');
 assert.match(core, /skipInitialFluid:\s*true/, 'treatment/restore materialization avoids wasted initial-field uploads before copying shared-device buffers');
 assert.match(core, /hiddenSupportCap:\s*false/, 'cost attack must not hide support caps while reducing work');
+assert.match(combined, /native-low-shared-device-inference-work-profile-v0/, 'shared-device route records inference work-shape profile');
+assert.match(runtime, /supportClassifierCoverage:\s*'full-grid-160\^3'/, 'inference profile preserves full-grid support classifier coverage');
+assert.match(runtime, /modelEvaluatedCellCount[\s\S]*dispatchWorkgroups[\s\S]*featureCount[\s\S]*outputHeadCount/, 'inference profile records evaluated cells, dispatch workgroups, feature count, and output heads');
+assert.match(runtime, /supportPositiveCount[\s\S]*residualHeadEvaluatedCount/, 'inference profile records support count and residual-head work');
+assert.match(runtime, /supportCompactionActive:\s*false[\s\S]*hiddenSupportCap:\s*false/, 'inference profile forbids hidden support compaction/caps by default');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');
@@ -97,5 +102,6 @@ assert.match(witness, /nativeLowControl[\s\S]*nativeLowSelectivePredicted/, 'wit
 assert.match(witness, /requestedCalibration[\s\S]*effectiveCalibration[\s\S]*modelOutputMutation/, 'witness preserves calibration identity and model-output non-mutation');
 assert.match(witness, /treatmentSplatRadianceGain[\s\S]*treatmentSplatOpacityGain/, 'witness preserves learned splat radiance/opacity gains');
 assert.match(witness, /nativeLowMaterializationProfile[\s\S]*treatmentRebuildMs[\s\S]*restoreCopyMs/, 'witness preserves split materialization timing profile');
+assert.match(witness, /nativeLowInferenceWorkProfile[\s\S]*modelEvaluatedCellCount[\s\S]*residualHeadEvaluatedCount/, 'witness preserves inference work-shape profile');
 
 console.log('native-low selective live route contracts passed');

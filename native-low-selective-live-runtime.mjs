@@ -222,6 +222,25 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     supportPrevalence: 0,
     highCellCount: highCells,
   };
+  const makeInferenceWorkProfile = stats => {
+    const supportPositiveCount = Number(stats?.supportPositiveCount || 0);
+    return {
+      identity: 'native-low-shared-device-inference-work-profile-v0',
+      supportClassifierCoverage: 'full-grid-160^3',
+      modelEvaluatedCellCount: highCells,
+      supportClassifierEvaluatedCount: highCells,
+      supportPositiveCount,
+      supportPrevalence: supportPositiveCount / highCells,
+      residualHeadEvaluatedCount: highCells + supportPositiveCount * 3,
+      residualHeadPolicy: 'frontTopology-full-grid+fuel-visibleFireCarrier-fireLick-support-positive-v0',
+      dispatchWorkgroups: [Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4)],
+      featureCount: SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
+      outputHeadCount: SELECTIVE_HEAD_LIVE_MODEL.outputs.length,
+      supportCompactionActive: false,
+      hiddenSupportCap: false,
+      droppedInputChannels: false,
+    };
+  };
   return {
     identity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
     transportMode: NATIVE_LOW_TRANSPORT_MODE,
@@ -268,9 +287,11 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         supportPrevalence: Number(values[0] || 0) / highCells,
         highCellCount: highCells,
       };
+      lastStats.nativeLowInferenceWorkProfile = makeInferenceWorkProfile(lastStats);
       return { ...lastStats };
     },
     debugState() {
+      const nativeLowInferenceWorkProfile = lastStats.nativeLowInferenceWorkProfile || makeInferenceWorkProfile(lastStats);
       return {
         routeIdentity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
         transportMode: NATIVE_LOW_TRANSPORT_MODE,
@@ -284,6 +305,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         effectiveFeatureCount: SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
         noHiddenCaps: true,
         encodedFrameCount,
+        nativeLowInferenceWorkProfile,
         ...lastStats,
       };
     },

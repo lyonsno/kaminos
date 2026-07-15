@@ -126,6 +126,10 @@ try {
       && state?.nativeLowMaterializationProfile?.hiddenSupportCap === false
       && Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0
       && Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0
+      && state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage === 'full-grid-160^3'
+      && state?.nativeLowInferenceWorkProfile?.hiddenSupportCap === false
+      && Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0
+      && Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0
       && Number(state?.inferenceGpuMs) >= 0
       && Number(state?.uploadDispatchMs) >= 0
       && Number(state?.endToEndFrameMs) >= 0
@@ -157,6 +161,10 @@ try {
   assert.equal(state?.nativeLowMaterializationProfile?.hiddenSupportCap, false, 'hidden support cap used in materialization profile');
   assert.ok(Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0, 'treatmentRebuildMs missing');
   assert.ok(Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0, 'restoreCopyMs missing');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage, 'full-grid-160^3', 'support classifier coverage is not full grid');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.hiddenSupportCap, false, 'hidden support cap used in inference profile');
+  assert.ok(Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0, 'modelEvaluatedCellCount missing');
+  assert.ok(Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0, 'residualHeadEvaluatedCount missing');
 
   const startState = state;
   const observationStartMs = performance.now();
@@ -202,6 +210,7 @@ try {
     treatmentSplatRadianceGain: endState.treatmentSplatRadianceGain,
     treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
+    nativeLowInferenceWorkProfile: endState.nativeLowInferenceWorkProfile,
     requestedBackend: endState.requestedBackend,
     effectiveBackend: endState.effectiveBackend,
     transportMode: endState.transportMode,
