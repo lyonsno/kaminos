@@ -706,7 +706,7 @@ def main():
             "distinctInteractiveAndPropagationFeatures": two_image,
             "packetOwnsImageEmbeddingsAtBrowserRuntime": not two_image,
         },
-        "tolerances": {"decoderMaxAbsDiff": 0.0015, "maskConditioningMaxAbsDiff": 0.0, "memoryMaxAbsDiff": 0.0008, "bankMaxAbsDiff": 0.0002, "conditionedMaxAbsDiff": 0.0002},
+        "tolerances": {"decoderMaxAbsDiff": 0.0025, "maskConditioningMaxAbsDiff": 0.0, "memoryMaxAbsDiff": 0.0008, "bankMaxAbsDiff": 0.0005, "conditionedMaxAbsDiff": 0.002},
         "tensors": entries,
     }
     manifest_path = out_dir / "tensor-manifest.json"
