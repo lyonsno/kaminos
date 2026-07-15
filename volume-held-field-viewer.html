@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Held Field Viewer</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #020304; color: #f3f6f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #020304; }
+    iframe { width: 100vw; height: 100vh; border: 0; display: block; background: #020304; }
+    #receipt-band { position: fixed; z-index: 20; inset: 0 0 auto 0; min-height: 58px; display: flex; align-items: center; gap: 16px; padding: 9px 14px; border-bottom: 1px solid #485257; background: rgba(4, 7, 8, .94); }
+    #identity { min-width: 220px; }
+    #identity strong { display: block; font-size: 15px; line-height: 1.2; }
+    #identity span { display: block; margin-top: 3px; color: #a7b2b6; font: 11px/1.3 "SF Mono", Menlo, monospace; }
+    #compositions { display: flex; gap: 4px; }
+    button { min-height: 34px; padding: 0 12px; border: 1px solid #435057; border-radius: 4px; background: #11181b; color: #e5ecee; font: 600 12px/1 system-ui, sans-serif; cursor: pointer; }
+    button:hover { border-color: #89a8b3; }
+    button[aria-pressed="true"] { border-color: #76bdd3; background: #25596a; color: #fff; }
+    button:disabled { cursor: wait; opacity: .55; }
+    #status { margin-left: auto; min-width: 280px; text-align: right; }
+    #status strong { display: block; color: #79d79c; font-size: 13px; }
+    #status span { display: block; max-width: 620px; margin-top: 3px; overflow: hidden; color: #aeb9bd; font: 10px/1.3 "SF Mono", Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    #status.loading strong { color: #f0c56b; }
+    #status.failed strong { color: #ff8d7e; }
+    #failure { position: fixed; z-index: 30; inset: 58px 0 0; display: none; place-items: center; padding: 32px; background: #050708; color: #ffb4aa; text-align: center; }
+    #failure.visible { display: grid; }
+    #failure strong { display: block; font-size: 24px; }
+    #failure pre { max-width: min(900px, 92vw); overflow: auto; color: #d9e1e3; font: 12px/1.5 "SF Mono", Menlo, monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="receipt-band">
+    <div id="identity">
+      <strong>Held field replay</strong>
+      <span id="source-label">Awaiting manifest identity</span>
+    </div>
+    <div id="compositions" role="group" aria-label="Renderer composition">
+      <button type="button" data-composition="splat-only-v0">Splat only</button>
+      <button type="button" data-composition="smoke-raymarch-under-splats-v0">Smoke hybrid</button>
+      <button type="button" data-composition="raymarch-only-v0">Raymarch only</button>
+      <button type="button" data-composition="full-raymarch-under-splats-diagnostic-v0">Full hybrid diagnostic</button>
+    </div>
+    <div id="status" class="loading">
+      <strong id="status-title">Loading manifest</strong>
+      <span id="status-detail">No field authority has been accepted yet</span>
+    </div>
+  </div>
+  <iframe id="basin" title="Checksum-bound held volume field"></iframe>
+  <div id="failure">
+    <div>
+      <strong>Held field replay failed</strong>
+      <pre id="failure-detail"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    const ROUTE_IDENTITY = 'kaminos.volume.held-field-viewer.v0';
+    const MANIFEST_SCHEMA = 'kaminos.volume.operator-basin-replay.v0';
+    const COMPOSITIONS = new Set([
+      'splat-only-v0',
+      'smoke-raymarch-under-splats-v0',
+      'raymarch-only-v0',
+      'full-raymarch-under-splats-diagnostic-v0',
+    ]);
+    const params = new URLSearchParams(location.search);
+    const manifestRequested = params.get('manifest');
+    const manifestSha256Requested = String(params.get('manifest_sha256') || '').toLowerCase();
+    const compositionParam = params.get('composition');
+    const basin = document.getElementById('basin');
+    const status = document.getElementById('status');
+    const statusTitle = document.getElementById('status-title');
+    const statusDetail = document.getElementById('status-detail');
+    const sourceLabel = document.getElementById('source-label');
+    const failure = document.getElementById('failure');
+    const failureDetail = document.getElementById('failure-detail');
+    const compositionButtons = Array.from(document.querySelectorAll('[data-composition]'));
+    let manifest = null;
+    let manifestEffectiveUrl = null;
+    let prototype = null;
+    let importReceipt = null;
+    let boundaryReceipt = null;
+    let advanceReceipt = null;
+    let cameraReceipt = null;
+    let renderReceipt = null;
+    let compositionRequested = null;
+    let failurePhase = null;
+
+    const state = {
+      routeIdentity: ROUTE_IDENTITY,
+      status: 'loading',
+      failurePhase: null,
+      error: null,
+      requestedRoute: location.href,
+      effectiveRoute: null,
+      manifestRequested,
+      manifestEffectiveUrl: null,
+      manifestSha256Requested,
+      manifestSha256Effective: null,
+      source: null,
+      importReceipt: null,
+      boundaryReceipt: null,
+      advanceReceipt: null,
+      cameraRequested: null,
+      cameraEffective: null,
+      compositionRequested: null,
+      compositionEffective: null,
+      compositionAuthority: null,
+      raymarchFireAuthority: null,
+      raymarchEncoded: null,
+      raymarchApplied: null,
+      splatEncoded: null,
+      splatApplied: null,
+      residualApplied: null,
+    };
+
+    window.__kaminosHeldFieldViewer = {
+      debugState: () => structuredClone(state),
+      setComposition: value => renderComposition(value),
+    };
+
+    function setStatus(title, detail, kind = 'loading') {
+      status.className = kind;
+      statusTitle.textContent = title;
+      statusDetail.textContent = detail;
+    }
+
+    function setButtonsEnabled(enabled) {
+      for (const button of compositionButtons) button.disabled = !enabled;
+    }
+
+    function updateCompositionButtons() {
+      for (const button of compositionButtons) {
+        button.setAttribute('aria-pressed', String(button.dataset.composition === compositionRequested));
+      }
+    }
+
+    function fail(phase, reason, extra = null) {
+      failurePhase = phase;
+      const error = reason instanceof Error ? reason : new Error(String(reason));
+      state.status = 'failed';
+      state.failurePhase = phase;
+      state.error = error.message;
+      setButtonsEnabled(false);
+      setStatus('Replay failed', `${phase}: ${error.message}`, 'failed');
+      failureDetail.textContent = JSON.stringify({
+        routeIdentity: ROUTE_IDENTITY,
+        failurePhase: phase,
+        reason: error.message,
+        manifestRequested,
+        manifestEffectiveUrl,
+        manifestSha256Requested,
+        extra,
+      }, null, 2);
+      failure.classList.add('visible');
+      console.error('Kaminos held field replay failed', window.__kaminosHeldFieldViewer.debugState(), extra);
+      return error;
+    }
+
+    function hex(bytes) {
+      return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    function bytesToBase64(bytes) {
+      let binary = '';
+      const batch = 0x8000;
+      for (let index = 0; index < bytes.length; index += batch) {
+        binary += String.fromCharCode(...bytes.subarray(index, Math.min(bytes.length, index + batch)));
+      }
+      return btoa(binary);
+    }
+
+    async function loadManifest() {
+      failurePhase = 'manifest-request';
+      if (!manifestRequested) throw new Error('manifest-required');
+      if (!/^[a-f0-9]{64}$/.test(manifestSha256Requested)) throw new Error('manifest-sha256-required');
+      manifestEffectiveUrl = new URL(manifestRequested, location.href).href;
+      const response = await fetch(manifestEffectiveUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`manifest-http-${response.status}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const actualSha256 = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+      state.manifestEffectiveUrl = manifestEffectiveUrl;
+      state.manifestSha256Effective = actualSha256;
+      if (actualSha256 !== manifestSha256Requested) throw new Error('manifest-sha256-mismatch');
+      const parsed = JSON.parse(new TextDecoder().decode(bytes));
+      if (parsed.schema !== MANIFEST_SCHEMA) throw new Error(`manifest-schema-mismatch:${parsed.schema || 'missing'}`);
+      if (parsed.status !== 'captured') throw new Error(`manifest-status-mismatch:${parsed.status || 'missing'}`);
+      if (parsed.failurePhase !== null) throw new Error(`manifest-failure-phase:${parsed.failurePhase}`);
+      if (!parsed.fluid || !parsed.front || !parsed.boundary) throw new Error('manifest-artifacts-incomplete');
+      return parsed;
+    }
+
+    async function waitForPrototype() {
+      failurePhase = 'renderer-load';
+      basin.src = new URL(manifest.innerRoute, manifestEffectiveUrl).href;
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('renderer-load-timeout')), 30000);
+        basin.addEventListener('load', () => {
+          clearTimeout(timeout);
+          resolve();
+        }, { once: true });
+      });
+      const deadline = performance.now() + 30000;
+      while (performance.now() < deadline) {
+        const candidate = basin.contentWindow?.__kaminosVolumePrototype;
+        const debug = candidate?.debugState?.();
+        if (candidate && debug?.active === true && debug?.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0') {
+          return candidate;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      throw new Error('renderer-prototype-unavailable');
+    }
+
+    async function streamArtifact(artifact, writeChunk, label) {
+      failurePhase = `upload-${label}`;
+      const artifactUrl = new URL(artifact.url, manifestEffectiveUrl).href;
+      const response = await fetch(artifactUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`${label}-http-${response.status}`);
+      const declaredLength = Number(response.headers.get('content-length'));
+      if (Number.isFinite(declaredLength) && declaredLength !== Number(artifact.byteLength)) {
+        throw new Error(`${label}-content-length-mismatch:${declaredLength}/${artifact.byteLength}`);
+      }
+      if (!response.body) throw new Error(`${label}-stream-missing`);
+      const reader = response.body.getReader();
+      let receivedBytes = 0;
+      let chunkCount = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+        const receipt = writeChunk(receivedBytes, bytesToBase64(bytes));
+        if (receipt?.ok !== true || Number(receipt.byteOffset ?? receivedBytes) !== receivedBytes) {
+          throw new Error(`${label}-chunk-rejected:${JSON.stringify(receipt)}`);
+        }
+        receivedBytes += bytes.byteLength;
+        chunkCount += 1;
+        const percent = Math.min(100, Math.floor(100 * receivedBytes / Number(artifact.byteLength)));
+        setStatus(`Loading ${label}`, `${percent}% | ${receivedBytes}/${artifact.byteLength} bytes`, 'loading');
+      }
+      if (receivedBytes !== Number(artifact.byteLength)) {
+        throw new Error(`${label}-partial-transfer:${receivedBytes}/${artifact.byteLength}`);
+      }
+      return { label, artifactUrl, receivedBytes, chunkCount };
+    }
+
+    async function importHeldField() {
+      failurePhase = 'field-import-begin';
+      prototype.setControls({
+        ...manifest.controls,
+        selectiveHeadLiveRole: 'truthHigh',
+        selectiveHeadLiveRenderComposition: compositionRequested,
+      });
+      const begin = prototype.beginDebugFullFieldImport({
+        grid: manifest.grid,
+        initializationAuthority: manifest.initializationAuthority,
+        filterIdentity: manifest.filterIdentity,
+        layoutIdentity: manifest.layoutIdentity,
+        sourceManifestPath: manifestEffectiveUrl,
+        sourceManifestSha256: manifestSha256Requested,
+        source: manifest.source,
+        receiverInitialSimStepCount: manifest.initialSimStepCount,
+        fluid: manifest.fluid,
+        front: manifest.front,
+      });
+      if (begin?.ok !== true) throw new Error(`field-import-begin-rejected:${JSON.stringify(begin)}`);
+      const fluidTransfer = await streamArtifact(
+        manifest.fluid,
+        (byteOffset, base64) => prototype.writeDebugFullFieldImportChunk({
+          sessionId: begin.sessionId, kind: 'fluid', byteOffset, base64,
+        }),
+        'fluid',
+      );
+      const frontTransfer = await streamArtifact(
+        manifest.front,
+        (byteOffset, base64) => prototype.writeDebugFullFieldImportChunk({
+          sessionId: begin.sessionId, kind: 'front', byteOffset, base64,
+        }),
+        'front',
+      );
+      failurePhase = 'field-import-finish';
+      const finish = await prototype.finishDebugFullFieldImport({ sessionId: begin.sessionId });
+      if (finish?.ok !== true || finish.status !== 'applied') {
+        throw new Error(`field-import-finish-rejected:${JSON.stringify(finish)}`);
+      }
+      return { ...finish, transfers: { fluid: fluidTransfer, front: frontTransfer } };
+    }
+
+    async function importBoundary() {
+      failurePhase = 'boundary-import-begin';
+      const begin = prototype.beginDebugBoundarySidecarOverride({
+        role: 'truthHigh',
+        grid: manifest.grid,
+        byteLength: manifest.boundary.byteLength,
+        boundarySidecarSha256: manifest.boundary.sha256,
+        sourceManifestPath: manifestEffectiveUrl,
+        sourceManifestSha256: manifestSha256Requested,
+        sourceKind: 'operator-live-evolved-basin',
+        packIdentity: manifest.source?.identity || null,
+      });
+      if (begin?.ok !== true) throw new Error(`boundary-import-begin-rejected:${JSON.stringify(begin)}`);
+      const transfer = await streamArtifact(
+        manifest.boundary,
+        (byteOffset, base64) => prototype.writeDebugBoundarySidecarOverrideChunk({
+          sessionId: begin.sessionId, byteOffset, base64,
+        }),
+        'boundary',
+      );
+      failurePhase = 'boundary-import-finish';
+      const finish = await prototype.finishDebugBoundarySidecarOverride({ sessionId: begin.sessionId });
+      if (finish?.ok !== true || finish.status !== 'applied') {
+        throw new Error(`boundary-import-finish-rejected:${JSON.stringify(finish)}`);
+      }
+      return { ...finish, transfer };
+    }
+
+    function mountCanvas() {
+      const canvas = prototype.canvasElement();
+      const innerDocument = basin.contentDocument;
+      innerDocument.body.appendChild(canvas);
+      Object.assign(canvas.style, {
+        position: 'fixed', inset: '0', zIndex: '2147483647',
+        width: '100vw', height: '100vh', display: 'block',
+        visibility: 'visible', opacity: '1', transform: 'none', pointerEvents: 'auto',
+      });
+      return canvas;
+    }
+
+    async function renderComposition(nextComposition) {
+      if (!manifest || !prototype || !importReceipt) throw new Error('held-field-not-imported');
+      if (!COMPOSITIONS.has(nextComposition)) throw new Error(`unsupported-composition:${nextComposition}`);
+      compositionRequested = nextComposition;
+      state.compositionRequested = compositionRequested;
+      updateCompositionButtons();
+      setButtonsEnabled(false);
+      failurePhase = 'held-render';
+      failure.classList.remove('visible');
+      mountCanvas();
+      cameraReceipt = basin.contentWindow.kaminosSetCameraDebugPose(manifest.camera);
+      const receipt = await prototype.renderFrozenScaleToCanvas({
+        fullFieldImportSessionId: importReceipt.sessionId,
+        renderScale: 1,
+        boundarySplatComposition: compositionRequested,
+        controlOverrides: {
+          ...manifest.controls,
+          boundarySidecarSource: 'override',
+          selectiveHeadLiveRole: 'truthHigh',
+          selectiveHeadLiveRenderComposition: compositionRequested,
+        },
+        now: manifest.sampleNowMs,
+        sameStateCaptureId: `${manifest.captureId}:${compositionRequested}`,
+      });
+      const compositionEffective = receipt?.boundarySplatCompositionEffective;
+      if (receipt?.ok !== true) throw new Error(`held-render-rejected:${JSON.stringify(receipt)}`);
+      if (compositionEffective !== compositionRequested) {
+        throw new Error(`composition-substitution:${compositionRequested}/${compositionEffective || 'missing'}`);
+      }
+      renderReceipt = receipt;
+      state.status = 'running';
+      state.failurePhase = null;
+      state.error = null;
+      state.effectiveRoute = receipt.effectiveRoute;
+      state.cameraRequested = manifest.camera;
+      state.cameraEffective = cameraReceipt;
+      state.compositionEffective = compositionEffective;
+      state.compositionAuthority = receipt.compositionAuthority;
+      state.raymarchFireAuthority = receipt.raymarchFireAuthority;
+      state.raymarchEncoded = receipt.raymarchEncoded;
+      state.raymarchApplied = receipt.raymarchApplied;
+      state.splatEncoded = receipt.splatEncoded;
+      state.splatApplied = receipt.splatApplied;
+      state.residualApplied = receipt.residualApplied;
+      setStatus(
+        'Checksum-verified held field',
+        `${compositionEffective} | raymarch ${receipt.raymarchApplied ? receipt.raymarchFireAuthority > 0 ? 'full-fire applied' : 'smoke-only applied' : 'off'} | splats ${receipt.splatApplied ? 'fire-sheet applied' : 'off'} | step ${manifest.initialSimStepCount}`,
+        'running',
+      );
+      setButtonsEnabled(true);
+      return window.__kaminosHeldFieldViewer.debugState();
+    }
+
+    for (const button of compositionButtons) {
+      button.addEventListener('click', () => {
+        renderComposition(button.dataset.composition).catch(error => fail(failurePhase || 'composition-switch', error));
+      });
+    }
+    setButtonsEnabled(false);
+
+    try {
+      manifest = await loadManifest();
+      compositionRequested = COMPOSITIONS.has(compositionParam)
+        ? compositionParam
+        : COMPOSITIONS.has(manifest.defaultComposition)
+          ? manifest.defaultComposition
+          : 'splat-only-v0';
+      state.source = manifest.source;
+      state.compositionRequested = compositionRequested;
+      sourceLabel.textContent = `${manifest.captureId} | ${manifest.grid}^3 | step ${manifest.initialSimStepCount}`;
+      updateCompositionButtons();
+      setStatus('Starting WebGPU receiver', manifest.source?.identity || manifest.captureId, 'loading');
+      prototype = await waitForPrototype();
+      importReceipt = await importHeldField();
+      state.importReceipt = importReceipt;
+      boundaryReceipt = await importBoundary();
+      state.boundaryReceipt = boundaryReceipt;
+      failurePhase = 'held-state-advance';
+      advanceReceipt = prototype.advanceDebugImportedFieldSteps({ sessionId: importReceipt.sessionId, steps: 0 });
+      if (advanceReceipt?.ok !== true || advanceReceipt.completedSteps !== 0) {
+        throw new Error(`held-state-advance-rejected:${JSON.stringify(advanceReceipt)}`);
+      }
+      state.advanceReceipt = advanceReceipt;
+      await renderComposition(compositionRequested);
+    } catch (error) {
+      fail(failurePhase || 'initialization', error);
+    }
+  </script>
+</body>
+</html>
