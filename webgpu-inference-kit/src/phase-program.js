@@ -9,6 +9,19 @@ function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+function publicSchedulerInvocation(invocation) {
+  if (invocation == null) return null;
+  return {
+    schema: invocation.schema,
+    routeId: invocation.routeId,
+    invocationId: invocation.invocationId,
+    schedulerRevision: invocation.schedulerRevision,
+    scheduler: clone(invocation.scheduler),
+    bounds: clone(invocation.bounds),
+    applicationAuthority: invocation.applicationAuthority,
+  };
+}
+
 function normalizeDispatch(dispatch) {
   if (!Array.isArray(dispatch) || dispatch.length < 1 || dispatch.length > 3) {
     throw new Error('phase dispatch must be an array with 1 to 3 dimensions');
@@ -154,6 +167,7 @@ export function defineWebGpuPhaseProgram(input = {}, options = {}) {
         dispatch: normalizeDispatch(phase.dispatch ?? phase.kernel?.dispatch),
         yieldAfter: phase.yieldAfter ?? input.yieldPolicy?.afterEachKernel ?? false,
         yieldReason: phase.yieldReason || `${input.name}.${phase.name}.post-submit`,
+        commandDuty: clone(phase.commandDuty || {}),
         metadata: clone(phase.metadata || {}),
       };
     }
@@ -195,6 +209,7 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
 
   const outputs = {};
   const phaseResults = [];
+  const schedulerInvocation = options.schedulerInvocation || null;
   for (const phase of program.phases) {
     if (phase.kind === 'kernel') {
       const commandBuffer = await runtime.runKernel(phase.kernel, {
@@ -202,6 +217,8 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
         dispatch: phase.dispatch,
         yieldAfter: phase.yieldAfter,
         yieldReason: phase.yieldReason,
+        commandDuty: clone(phase.commandDuty),
+        schedulerInvocation,
         metadata: {
           ...phase.metadata,
           phaseMetadata: clone(phase.metadata || {}),
@@ -218,7 +235,9 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
       const phaseOutputs = await runtime.runStage(phase.name, async stage => {
         const readbackOutputs = {};
         for (const readback of phase.readbacks) {
-          readbackOutputs[readback.name] = await stage.readTensor(readback.tensor, readback.options);
+          const readbackOptions = clone(readback.options);
+          readbackOptions.schedulerInvocation = schedulerInvocation;
+          readbackOutputs[readback.name] = await stage.readTensor(readback.tensor, readbackOptions);
         }
         return readbackOutputs;
       }, {
@@ -243,5 +262,6 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
     phaseNames: phaseResults.map(phase => phase.name),
     phases: phaseResults,
     outputs,
+    schedulerInvocation: publicSchedulerInvocation(schedulerInvocation),
   };
 }

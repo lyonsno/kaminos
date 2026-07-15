@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Selective Head Live Assay</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #050607; color: #edf4f5; }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #050607; }
+    iframe { width: 100vw; height: 100vh; border: 0; display: block; }
+    #toolbar { position: fixed; z-index: 10; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid rgba(190, 215, 220, .28); background: rgba(6, 9, 10, .90); backdrop-filter: blur(8px); border-radius: 6px; box-shadow: 0 8px 26px rgba(0, 0, 0, .32); }
+    #title { min-width: 210px; }
+    #title strong { display: block; font-size: 13px; line-height: 1.25; }
+    #title span { display: block; color: #91a3a8; font-size: 10px; margin-top: 2px; }
+    #roles, #compositions { display: flex; gap: 4px; }
+    button { min-height: 32px; padding: 0 11px; border: 1px solid #35454b; border-radius: 4px; background: #12191c; color: #dce7e9; font: inherit; font-size: 12px; cursor: pointer; }
+    button[aria-pressed="true"] { background: #275768; border-color: #6db1c3; color: #fff; }
+    #status { margin-left: auto; max-width: min(52vw, 660px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9eafb4; font: 10px/1.35 "SF Mono", Menlo, monospace; }
+    #status.bad { color: #ff9d8d; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <div id="title">
+      <strong>Continuous same-history live assay</strong>
+      <span>Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render</span>
+    </div>
+    <div id="roles" role="group" aria-label="Live reconstruction role">
+      <button type="button" data-role="truthHigh">Truth high</button>
+      <button type="button" data-role="lowPhaseAligned">Low phase-aligned control</button>
+      <button type="button" data-role="selectiveFullResidual">Selective full residual</button>
+    </div>
+    <div id="compositions" role="group" aria-label="Renderer composition">
+      <button type="button" data-composition="splat-only-v0">Splat only</button>
+      <button type="button" data-composition="smoke-raymarch-under-splats-v0">Smoke hybrid</button>
+      <button type="button" data-composition="raymarch-only-v0">Raymarch only</button>
+      <button type="button" data-composition="full-raymarch-under-splats-diagnostic-v0">Full hybrid diagnostic</button>
+    </div>
+    <div id="status">Starting exact basin...</div>
+  </div>
+  <iframe id="basin" title="Kaminos exact selective-head live basin"></iframe>
+  <script type="module">
+    const ROUTE_IDENTITY = 'exact-basin-selective-head-live-v0';
+    const WARMUP_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
+    const ANCHOR_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
+    const ANCHOR_FRONT_SHA256 = '1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8';
+    const roles = ['truthHigh', 'lowPhaseAligned', 'selectiveFullResidual'];
+    const compositions = [
+      'splat-only-v0',
+      'smoke-raymarch-under-splats-v0',
+      'raymarch-only-v0',
+      'full-raymarch-under-splats-diagnostic-v0',
+    ];
+    const roleAuthorities = Object.freeze({
+      truthHigh: 'current-high-field-reference-no-learned-composition-v0',
+      lowPhaseAligned: 'phase-aligned-low-field-control-v0',
+      selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
+    });
+    const params = new URLSearchParams(location.search);
+    let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
+    let requestedComposition = compositions.includes(params.get('composition')) ? params.get('composition') : 'smoke-raymarch-under-splats-v0';
+    const warmupTarget = Math.max(0, Math.floor(Number(params.get('warmup_steps') ?? 96) || 0));
+    const anchorBase = String(params.get('anchor_base') || 'http://127.0.0.1:18537').replace(/\/$/, '');
+    let warmupStarted = false;
+    let warmupComplete = warmupTarget === 0;
+    let warmupReceipt = null;
+    let warmupError = null;
+    const basin = document.getElementById('basin');
+    const status = document.getElementById('status');
+    const buttons = Array.from(document.querySelectorAll('[data-role]'));
+    const compositionButtons = Array.from(document.querySelectorAll('[data-composition]'));
+    const basinQuery = new URLSearchParams({
+      kaminos_volume_smoke: '1',
+      volume_scene: 'tall_plume',
+      volume_tall_preset: 'rgb_upscale_basin_0711',
+      volume_resolution: '160',
+      volume_majorant_grid: '24',
+      volume_boundary_sidecar_source: 'baked',
+      volume_boundary_sidecar_view: 'off',
+      volume_boundary_splat_mode: 'learned',
+      volume_boundary_sidecar_blur: '0',
+      volume_boundary_sidecar_width: '0',
+      volume_boundary_sidecar_ridge: '0.46',
+      volume_render_scale: '1',
+      volume_density: '6',
+      volume_fire: '1.9',
+      volume_radiance: '0',
+      volume_absorption: '1.6',
+      volume_glow: '0',
+      volume_smoke: '2.8',
+      volume_curl: '3.2',
+      volume_microdetail: '2.5',
+      volume_interface_shred: '5',
+      volume_fire_licks: '5',
+      volume_projection: '1.5',
+      volume_speed: '3.35',
+      volume_fire_scale: '1.3',
+      volume_detail_scale: '0.45',
+      volume_plume_height: '2.2',
+      volume_wind_strength: '1.25',
+      volume_wind_angle: '-65',
+      volume_wind_height: '-0.8',
+      volume_input_radius: '0.53',
+      volume_flow_rate: '1',
+      volume_steps: '88',
+      volume_adaptive_rays: '1',
+      volume_occupancy_skip: '1',
+      volume_majorant_skip: '0',
+      volume_majorant_smooth: '1',
+      volume_majorant_guard: '1',
+      volume_temporal_accum: '0',
+      volume_temporal_jitter: '0',
+      volume_history_clamp: '0',
+      volume_residual_mode: 'webgpu-direct-residual',
+      volume_residual_strength: '0',
+      volume_residual_feature_debug: '0',
+      volume_quality_reason: 'selective-head-continuous-live-assay',
+    });
+    basin.src = `./?${basinQuery}`;
+
+    function prototype() {
+      return basin.contentWindow?.__kaminosVolumePrototype || null;
+    }
+
+    function setRole(role) {
+      if (!roles.includes(role)) return;
+      requestedRole = role;
+      for (const button of buttons) button.setAttribute('aria-pressed', String(button.dataset.role === role));
+      const next = new URL(location.href);
+      next.searchParams.set('role', role);
+      history.replaceState(null, '', next);
+      prototype()?.setSelectiveHeadLiveRole?.(warmupComplete ? role : 'off');
+    }
+
+    function setComposition(composition) {
+      if (!compositions.includes(composition)) return;
+      requestedComposition = composition;
+      for (const button of compositionButtons) button.setAttribute('aria-pressed', String(button.dataset.composition === composition));
+      const next = new URL(location.href);
+      next.searchParams.set('composition', composition);
+      history.replaceState(null, '', next);
+      prototype()?.setSelectiveHeadLiveRenderComposition?.(composition);
+    }
+
+    function debugState() {
+      const state = prototype()?.debugState?.() || null;
+      return {
+        routeIdentity: ROUTE_IDENTITY,
+        status: warmupError || state?.error ? 'failed' : warmupComplete && state?.active ? 'running' : 'warming',
+        requestedRole,
+        requestedComposition,
+        warmupAuthority: WARMUP_AUTHORITY,
+        warmupTarget,
+        warmupComplete,
+        warmupStarted,
+        warmupReceipt,
+        effectiveRole: state?.selectiveHeadLiveEffectiveRole || null,
+        roleAuthority: state?.selectiveHeadLiveRoleAuthority || null,
+        compositionAuthority: state?.selectiveHeadLiveCompositionAuthority || null,
+        effectiveComposition: state?.selectiveHeadLiveCompositionEffective || null,
+        compositionFallbackReason: state?.selectiveHeadLiveCompositionFallbackReason || null,
+        selectiveHeadLivePassReceipt: state?.selectiveHeadLivePassReceipt || null,
+        fallbackReason: state?.selectiveHeadLiveFallbackReason || null,
+        modelIdentity: state?.selectiveHeadLiveModelIdentity || null,
+        featureAuthority: state?.selectiveHeadLiveFeatureAuthority || null,
+        pairAuthority: state?.selectiveHeadLivePairAuthority || null,
+        backend: state?.backend || null,
+        simGrid: state?.simGrid || null,
+        frameCount: state?.frameCount || 0,
+        simStepCount: state?.simStepCount || 0,
+        encodedFrameCount: state?.selectiveHeadLive?.encodedFrameCount || 0,
+        timing: state?.timing || null,
+        boundarySplatFallbackReason: state?.boundarySplatFallbackReason || null,
+        error: warmupError || state?.error || null,
+      };
+    }
+
+    async function initializeWarmup() {
+      if (warmupStarted) return;
+      const started = performance.now();
+      while (!prototype()?.debugState?.()?.active) {
+        if (performance.now() - started > 120000) throw new Error('exact basin did not activate before replay warmup');
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      warmupStarted = true;
+      prototype().setSelectiveHeadLiveRole('off');
+      if (warmupTarget > 0) {
+        warmupReceipt = await prototype().loadSelectiveHeadLiveReplayAnchor({
+          fluidUrl: `${anchorBase}/fluid.f32`,
+          frontUrl: `${anchorBase}/front.f32`,
+          fluidSha256: ANCHOR_FLUID_SHA256,
+          frontSha256: ANCHOR_FRONT_SHA256,
+          completedSteps: warmupTarget,
+        });
+        if (!warmupReceipt?.ok || warmupReceipt.completedSteps !== warmupTarget || warmupReceipt.authority !== WARMUP_AUTHORITY) {
+          throw new Error(`checksum-bound replay anchor failed at ${warmupReceipt?.completedSteps ?? 'unknown'} steps`);
+        }
+      }
+      warmupComplete = true;
+      prototype().setSelectiveHeadLiveRole(requestedRole);
+      prototype().setSelectiveHeadLiveRenderComposition(requestedComposition);
+      await prototype().setActive(true);
+    }
+
+    async function captureFrame(options = {}) {
+      if (!warmupComplete) throw new Error('frame capture requested before trained replay horizon');
+      return prototype().captureSelectiveHeadLiveFrame(options);
+    }
+
+    function setCapturePaused(paused) {
+      return prototype()?.setSelectiveHeadLiveCapturePaused?.(paused) || null;
+    }
+
+    async function stepCaptureFrame() {
+      return prototype()?.stepSelectiveHeadLiveCaptureFrame?.() || null;
+    }
+
+    for (const button of buttons) button.addEventListener('click', () => setRole(button.dataset.role));
+    for (const button of compositionButtons) button.addEventListener('click', () => setComposition(button.dataset.composition));
+    setRole(requestedRole);
+    setComposition(requestedComposition);
+    const loop = () => {
+      const state = debugState();
+      const targetRole = state.warmupComplete ? requestedRole : 'off';
+      if (prototype()?.setSelectiveHeadLiveRole && targetRole !== state.effectiveRole && state.status !== 'failed') {
+        prototype().setSelectiveHeadLiveRole(targetRole);
+      }
+      const fallback = state.fallbackReason || state.compositionFallbackReason || state.boundarySplatFallbackReason;
+      const pass = state.selectiveHeadLivePassReceipt || {};
+      status.classList.toggle('bad', Boolean(fallback || state.error));
+      status.textContent = [
+        state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`,
+        `effective role: ${state.effectiveRole || 'starting'}`,
+        `role authority: ${state.roleAuthority || roleAuthorities[requestedRole]}`,
+        `effective composition: ${state.effectiveComposition || 'starting'}`,
+        `composition authority: ${state.compositionAuthority || 'loading'}`,
+        `pass receipt: raymarch ${pass.raymarchApplied ? 'applied' : 'off'} / splat ${pass.splatApplied ? 'applied' : 'off'}`,
+        `model identity: ${state.modelIdentity || 'loading'}`,
+        `step: ${state.simStepCount}`,
+        `fps: ${Number(state.timing?.rafFps || 0).toFixed(1)}`,
+        `fallback: ${fallback || 'none'}`,
+        state.error ? `error: ${state.error}` : '',
+      ].filter(Boolean).join(' | ');
+      requestAnimationFrame(loop);
+    };
+    window.__kaminosSelectiveHeadLive = { routeIdentity: ROUTE_IDENTITY, debugState, setRole, setComposition, captureFrame, setCapturePaused, stepCaptureFrame };
+    loop();
+    initializeWarmup().catch(error => { warmupError = error?.message || String(error); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "schema": "kaminos.boundary-splat-attribute-job.v0",
+  "routeIdentity": "analytic-boundary-splat-teacher-parity-v0",
+  "purpose": "Verify MLX train/export/compiler parity against the exact analytic sidecar-splat attribute formulas before raymarch-supervised candidate training.",
+  "claimBoundary": "Wiring and approximation evidence only; this job cannot establish visual improvement over analytic splats or raymarch.",
+  "features": 16,
+  "outputs": 6,
+  "hiddenSize": 32,
+  "sampleCount": 65536,
+  "steps": 1200,
+  "seed": 712
+}

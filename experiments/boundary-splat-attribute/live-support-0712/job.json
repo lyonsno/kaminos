@@ -1,0 +1,24 @@
+{
+  "schema": "kaminos.boundary-splat-attribute-job.v0",
+  "routeIdentity": "live-support-analytic-boundary-splat-radius-multiplier-teacher-v1",
+  "purpose": "Test whether unchanged tiny-head architecture recovers the analytic splat hook outputs when trained on exact live selected-candidate support with radius multipliers rather than pre-multiplied absolute radii.",
+  "claimBoundary": "One-frame live-support analytic-teacher approximation and export evidence only; visual improvement requires frozen-state browser A/B and this corpus does not establish cross-basin generalization.",
+  "featureInput": {
+    "path": "selected-candidate-features.f32",
+    "encoding": "float32-le",
+    "shape": [13015, 16],
+    "sha256": "cc445710d64e7e20f3a660b2c62199745a27750838cac9181b0959a755bb7911",
+    "authority": "captured-live-selected-candidates-v0",
+    "sourceRoute": "live-boundary-sidecar-analytic-splats-v0",
+    "sourcePreset": "rgb_upscale_basin_0711",
+    "sourceGrid": 160
+  },
+  "features": 16,
+  "outputs": 6,
+  "hiddenSize": 64,
+  "sampleCount": 13015,
+  "steps": 5000,
+  "batchSize": 1024,
+  "learningRate": 0.002,
+  "seed": 714
+}

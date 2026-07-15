@@ -1,0 +1,110 @@
+{
+  "schema": "kaminos.residual.sameeval-model-comparison.v0",
+  "createdAt": "2026-07-09T05:47:00Z",
+  "controlRun": "artifacts/residual-latest-fire-0709/support-scaling-greenroom/support-050-sameeval-fire-rs010",
+  "expandedModelEvalOnlyRun": "artifacts/residual-latest-fire-0709/support-scaling-greenroom/support-165-on050-sameeval-evalonly-rs010",
+  "controlJobId": "329f215ad54a",
+  "expandedEvalOnlyJobId": "7b9b767f0d2f",
+  "controlTrainPairCount": 50,
+  "expandedOriginalTrainPairCount": 145,
+  "evalPairCount": 20,
+  "evalPairsMatch": true,
+  "metrics": [
+    {
+      "metric": "baselinePsnr",
+      "support050": 35.58486229930135,
+      "support165_evalonly": 35.58486229930135,
+      "delta_165_minus_050": 0.0
+    },
+    {
+      "metric": "modelPsnr",
+      "support050": 34.98790655622203,
+      "support165_evalonly": 35.154309350745876,
+      "delta_165_minus_050": 0.16640279452384732
+    },
+    {
+      "metric": "deltaPsnr",
+      "support050": -0.5969557430793202,
+      "support165_evalonly": -0.4305529485554729,
+      "delta_165_minus_050": 0.16640279452384732
+    },
+    {
+      "metric": "weightedBaselinePsnr",
+      "support050": 35.30908432581599,
+      "support165_evalonly": 35.30908432581599,
+      "delta_165_minus_050": 0.0
+    },
+    {
+      "metric": "weightedModelPsnr",
+      "support050": 34.772544604499174,
+      "support165_evalonly": 34.936206345992915,
+      "delta_165_minus_050": 0.16366174149374046
+    },
+    {
+      "metric": "weightedDeltaPsnr",
+      "support050": -0.5365397213168137,
+      "support165_evalonly": -0.37287797982307325,
+      "delta_165_minus_050": 0.16366174149374046
+    },
+    {
+      "metric": "edgeBandBaselinePsnr",
+      "support050": 27.426636501747673,
+      "support165_evalonly": 27.426636501747673,
+      "delta_165_minus_050": 0.0
+    },
+    {
+      "metric": "edgeBandModelPsnr",
+      "support050": 27.588500711206105,
+      "support165_evalonly": 27.701151145586124,
+      "delta_165_minus_050": 0.11265043438001854
+    },
+    {
+      "metric": "edgeBandDeltaPsnr",
+      "support050": 0.16186420945843238,
+      "support165_evalonly": 0.2745146438384509,
+      "delta_165_minus_050": 0.11265043438001854
+    },
+    {
+      "metric": "temporalBaselinePsnr",
+      "support050": null,
+      "support165_evalonly": null,
+      "delta_165_minus_050": null
+    },
+    {
+      "metric": "temporalModelPsnr",
+      "support050": null,
+      "support165_evalonly": null,
+      "delta_165_minus_050": null
+    },
+    {
+      "metric": "temporalDeltaPsnr",
+      "support050": -0.018052240126074537,
+      "support165_evalonly": -0.07096500046981191,
+      "delta_165_minus_050": -0.052912760343737375
+    },
+    {
+      "metric": "improvedPatchFraction",
+      "support050": 0.25,
+      "support165_evalonly": 0.25,
+      "delta_165_minus_050": 0.0
+    },
+    {
+      "metric": "durationSeconds",
+      "support050": 19.97501492500305,
+      "support165_evalonly": 3.0994415283203125e-06,
+      "delta_165_minus_050": -19.975011825561523
+    }
+  ],
+  "metricSummary": {
+    "deltaPsnr_050": -0.5969557430793202,
+    "deltaPsnr_165_evalonly": -0.4305529485554729,
+    "weightedDeltaPsnr_050": -0.5365397213168137,
+    "weightedDeltaPsnr_165_evalonly": -0.37287797982307325,
+    "edgeBandDeltaPsnr_050": 0.16186420945843238,
+    "edgeBandDeltaPsnr_165_evalonly": 0.2745146438384509,
+    "temporalDeltaPsnr_050": -0.018052240126074537,
+    "temporalDeltaPsnr_165_evalonly": -0.07096500046981191,
+    "improvedPatchFraction_050": 0.25,
+    "improvedPatchFraction_165_evalonly": 0.25
+  }
+}

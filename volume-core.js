@@ -8,22 +8,127 @@ import {
   liquidFireContactConsumerParams,
   validateLiquidFireContactSourceDescriptor,
 } from './liquid-fire-contact-consumer.mjs';
+import {
+  BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY,
+  BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL,
+} from './models/boundary-splat-attribute/live-support-h64-v0/boundary-splat-attribute-model.generated.js';
+import {
+  BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
+  BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS,
+  packBoundarySplatFeatureCapture,
+} from './boundary-splat-feature-capture.mjs';
+import {
+  SELECTIVE_HEAD_LIVE_FEATURE_AUTHORITY,
+  SELECTIVE_HEAD_LIVE_MODEL,
+  SELECTIVE_HEAD_LIVE_MODEL_URL,
+  SELECTIVE_HEAD_LIVE_PAIR_AUTHORITY,
+  SELECTIVE_HEAD_LIVE_ROUTE,
+  createSelectiveHeadLiveRuntime,
+} from './selective-head-live-runtime.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
+const FULL_FIELD_EXPORT_IDENTITY = 'kaminos.volume.full-field-export.v0';
+const FULL_FIELD_IMPORT_IDENTITY = 'kaminos.volume.full-field-import.v0';
+const COARSE_RECEIVER_INITIALIZATION_AUTHORITY = 'receiver-initialized-from-filtered-high-t-v0';
+const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-filtered-high-truth-v0';
+const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-application-v0';
+const PHASE_ALIGNED_TRUTH_HELD_AUTHORITY = 'offline-high-truth-held-render-only-v0';
+const PHASE_ALIGNED_LOW_HELD_AUTHORITY = 'downsampled-same-high-history-held-control-v0';
+const PHASE_ALIGNED_HELD_APPLICATION_IDENTITY = 'phase-aligned-held-render-application-v0';
+const CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY = 'checksum-addressed-live-replay-resume-v0';
+const EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY = 'exact-field-live-replay-application-v0';
 const BOUNDARY_SIDECAR_IDENTITY = 'baked-boundary-sidecar-v0';
 const BOUNDARY_SIDECAR_BAKE_AUTHORITY = 'band-limited-support-coverage-ridge-proximity-footprint-v1';
+const BOUNDARY_SPLAT_RENDERER_IDENTITY = 'live-boundary-sidecar-analytic-splats-v0';
+const BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY = 'live-boundary-sidecar-learned-attribute-splats-v0';
+const BOUNDARY_SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
+const EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY = 'externally-uploaded-boundary-sidecar-plus-live-fluid-material-v0';
+const EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY = 'chunked-external-boundary-sidecar-upload-v0';
+const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
+const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
+const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
+const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
+const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
+const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
+const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
+const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
+  off: 'off',
+  truthHigh: 'current-high-field-reference-no-learned-composition-v0',
+  lowPhaseAligned: 'phase-aligned-low-field-control-v0',
+  selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
+});
+const SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION = 'smoke-raymarch-under-splats-v0';
+const SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS = Object.freeze({
+  'splat-only-v0': {
+    raymarch: false,
+    splat: true,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'splat-fire-authority-learned-boundary-sheets-v0',
+  },
+  'raymarch-only-v0': {
+    raymarch: true,
+    splat: false,
+    raymarchFireAuthority: 1,
+    compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
+  },
+  'smoke-raymarch-under-splats-v0': {
+    raymarch: true,
+    splat: true,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0',
+  },
+  'full-raymarch-under-splats-diagnostic-v0': {
+    raymarch: true,
+    splat: true,
+    raymarchFireAuthority: 1,
+    compositionAuthority: 'diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0',
+  },
+});
+const SELECTIVE_HEAD_LIVE_REPLAY_ANCHOR_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
+const FULL_FIELD_CHANNELS = [
+  'velocityX',
+  'velocityY',
+  'velocityZ',
+  'densityCarrier',
+  'smokeDensity',
+  'heat',
+  'fuel',
+  'detail',
+  'flame',
+  'ember',
+  'visibleFireCarrier',
+  'combustionFront',
+  'microdetail',
+  'interfaceShred',
+  'fireLick',
+  'emberFleck',
+];
+const BOUNDARY_SPLAT_CHANNELS = [
+  'positionX',
+  'positionY',
+  'positionZ',
+  'support',
+  'colorR',
+  'colorG',
+  'colorB',
+  'opacity',
+  'radiusX',
+  'radiusY',
+  'ridge',
+  'fireSignal',
+];
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
@@ -56,6 +161,77 @@ function normalizeGridSize(value) {
   return DEFAULT_GRID_SIZE;
 }
 
+function normalizeSelectiveHeadLiveRole(value) {
+  const role = String(value || 'off');
+  return SELECTIVE_HEAD_LIVE_ROLES.has(role) ? role : 'off';
+}
+
+function selectiveHeadLiveRoleAuthority(role) {
+  return SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES[normalizeSelectiveHeadLiveRole(role)];
+}
+
+function normalizeSelectiveHeadLiveRenderComposition(value) {
+  const normalized = String(value || SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION).trim();
+  if (Object.hasOwn(SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS, normalized)) return normalized;
+  if (normalized === 'raymarch-under-splats-v0' || normalized === 'hybrid') return 'full-raymarch-under-splats-diagnostic-v0';
+  if (normalized === 'smoke-hybrid') return 'smoke-raymarch-under-splats-v0';
+  if (normalized === 'splat-only') return 'splat-only-v0';
+  if (normalized === 'raymarch-only') return 'raymarch-only-v0';
+  return SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION;
+}
+
+function selectiveHeadLiveRenderCompositionRequest(rawValue) {
+  const raw = rawValue == null || rawValue === ''
+    ? SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION
+    : String(rawValue);
+  const requested = normalizeSelectiveHeadLiveRenderComposition(raw);
+  const canonicalOrAlias = raw === requested
+    || raw === 'raymarch-under-splats-v0'
+    || raw === 'hybrid'
+    || raw === 'smoke-hybrid'
+    || raw === 'splat-only'
+    || raw === 'raymarch-only';
+  return {
+    raw,
+    requested,
+    fallbackReason: canonicalOrAlias ? null : `unsupported-selective-head-live-composition:${raw}`,
+    definition: SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS[requested],
+  };
+}
+
+function selectiveHeadLiveRenderCompositionAuthority(composition) {
+  return SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS[normalizeSelectiveHeadLiveRenderComposition(composition)]?.compositionAuthority || 'unavailable';
+}
+
+function makeSelectiveHeadLivePassReceipt({
+  composition,
+  raymarchEncoded = false,
+  raymarchApplied = false,
+  splatEncoded = false,
+  splatApplied = false,
+  fallbackReason = null,
+} = {}) {
+  const effectiveComposition = normalizeSelectiveHeadLiveRenderComposition(composition);
+  const definition = SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS[effectiveComposition];
+  return {
+    identity: 'selective-head-live-render-pass-receipt-v0',
+    composition: effectiveComposition,
+    compositionAuthority: definition.compositionAuthority,
+    raymarchAuthority: definition.raymarchFireAuthority > 0
+      ? 'diagnostic-raymarch-selected-fields-fire-smoke-v0'
+      : 'smoke-raymarch-authority-broad-smoke-only-v0',
+    splatAuthority: definition.splat
+      ? 'splat-fire-authority-learned-boundary-sheets-v0'
+      : 'off',
+    raymarchFireAuthority: definition.raymarchFireAuthority,
+    raymarchEncoded,
+    raymarchApplied,
+    splatEncoded,
+    splatApplied,
+    fallbackReason,
+  };
+}
+
 function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE) {
   const requested = Math.round(Number(value));
   if (Number.isFinite(requested) && requested > 0) return requested;
@@ -72,6 +248,23 @@ function normalizeRenderScale(value) {
   const requested = Number(value);
   if (!Number.isFinite(requested)) return 0.85;
   return Math.max(0.1, Math.min(1, requested));
+}
+
+function normalizeBrowserResidualMode(value) {
+  const mode = String(value || 'off').toLowerCase().replace(/_/g, '-');
+  if (['direct', 'direct-residual', 'webgpu-direct-residual', 'on', '1', 'true'].includes(mode)) return 'webgpu-direct-residual';
+  return 'off';
+}
+
+function normalizeBrowserResidualStrength(value) {
+  const requested = Number(value);
+  if (!Number.isFinite(requested)) return 1;
+  return Math.max(0, Math.min(2, requested));
+}
+
+function normalizeBrowserResidualFeatureDebug(value) {
+  const normalized = String(value ?? '0').toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'debug' ? 1 : 0;
 }
 
 function normalizeVolumeScene(value) {
@@ -112,13 +305,13 @@ function canonicalContentModeValue(value) {
 
 function normalizeBoundarySidecarSource(value) {
   const normalized = String(value || 'live').toLowerCase().replace(/-/g, '_');
-  if (normalized === 'baked' || normalized === 'mix') return normalized;
+  if (normalized === 'baked' || normalized === 'mix' || normalized === 'override') return normalized;
   return 'live';
 }
 
 function boundarySidecarSourceValue(value) {
   const normalized = normalizeBoundarySidecarSource(value);
-  if (normalized === 'baked') return 1;
+  if (normalized === 'baked' || normalized === 'override') return 1;
   if (normalized === 'mix') return 2;
   return 0;
 }
@@ -137,6 +330,36 @@ function boundarySidecarViewValue(value) {
   if (normalized === 'proximity') return 4;
   if (normalized === 'footprint') return 5;
   return 0;
+}
+
+function normalizeBoundarySplatMode(value) {
+  const normalized = String(value || 'off').toLowerCase().replace(/-/g, '_');
+  return normalized === 'analytic' || normalized === 'learned' ? normalized : 'off';
+}
+
+function normalizeBoundarySplatFeatureCapture(value) {
+  if (value === true || value === 1) return true;
+  return ['1', 'true', 'on'].includes(String(value || '').toLowerCase());
+}
+
+function normalizeBoundarySplatRadius(value) {
+  return clampFinite(value, 0.35, 1.5, 1);
+}
+
+function normalizeBoundarySplatSharpness(value) {
+  return clampFinite(value, 1, 12, 3.4);
+}
+
+function boundarySplatEffectiveRendererIdentity(mode) {
+  return normalizeBoundarySplatMode(mode) === 'learned'
+    ? BOUNDARY_SPLAT_LEARNED_RENDERER_IDENTITY
+    : BOUNDARY_SPLAT_RENDERER_IDENTITY;
+}
+
+function boundarySplatEffectiveAttributeModelIdentity(mode) {
+  return normalizeBoundarySplatMode(mode) === 'learned'
+    ? BOUNDARY_SPLAT_ATTRIBUTE_MODEL_IDENTITY
+    : null;
 }
 
 function normalizeWindStrength(value) {
@@ -324,6 +547,16 @@ function gridCellCount(gridSize) {
   return gridSize * gridSize * gridSize;
 }
 
+function nextPowerOfTwo(value) {
+  const finiteValue = Math.max(1, Math.ceil(Number(value) || 1));
+  return 2 ** Math.ceil(Math.log2(finiteValue));
+}
+
+function nextBoundarySplatCapacity(currentCapacity, candidateCount, gridSize) {
+  if (candidateCount <= currentCapacity) return currentCapacity;
+  return Math.min(gridCellCount(gridSize), Math.max(currentCapacity, nextPowerOfTwo(candidateCount)));
+}
+
 function fluidBufferBytes(gridSize) {
   return gridCellCount(gridSize) * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
 }
@@ -498,6 +731,25 @@ function normalizePyroCompareMode(value) {
 
 function lookFreezeCanPin(state) {
   return (state?.simStepCount || 0) > 0;
+}
+
+function updateRenderPhaseState(now, state, lookFreeze) {
+  const liveTimeMs = Number.isFinite(Number(now)) ? Number(now) : performance.now();
+  const liveFrame = Number.isFinite(Number(state?.frameCount)) ? Number(state.frameCount) : 0;
+  if (lookFreeze) {
+    if (typeof state.lookFreezeRenderTimeMs !== 'number' || !Number.isFinite(state.lookFreezeRenderTimeMs)) state.lookFreezeRenderTimeMs = liveTimeMs;
+    if (typeof state.lookFreezeRenderFrame !== 'number' || !Number.isFinite(state.lookFreezeRenderFrame)) state.lookFreezeRenderFrame = liveFrame;
+  } else {
+    state.lookFreezeRenderTimeMs = null;
+    state.lookFreezeRenderFrame = null;
+  }
+  const renderPhaseTimeMs = lookFreeze ? state.lookFreezeRenderTimeMs : liveTimeMs;
+  const renderPhaseFrame = lookFreeze ? state.lookFreezeRenderFrame : liveFrame;
+  const renderPhaseAuthority = lookFreeze ? 'look-freeze-pinned-render-phase' : 'live-render-phase';
+  state.renderPhaseTimeMs = renderPhaseTimeMs;
+  state.renderPhaseFrame = renderPhaseFrame;
+  state.renderPhaseAuthority = renderPhaseAuthority;
+  return { renderPhaseTimeMs, renderPhaseFrame, renderPhaseAuthority };
 }
 
 function pyroCarrierViewModeValue(value) {
@@ -831,6 +1083,7 @@ struct Uniforms {
   boundary_fire_display: vec4<f32>,
   boundary_sidecar_controls: vec4<f32>,
   boundary_sidecar_display: vec4<f32>,
+  selective_live_render_controls: vec4<f32>,
   oracle_activity_controls: vec4<f32>,
   oracle_activity_controls2: vec4<f32>,
   previousViewProj: mat4x4<f32>,
@@ -3521,8 +3774,24 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   frontDst[idx] = clamp(combustionFrontTopology, 0.0, 2.0);
 }
 
-@fragment
-fn fs(in: VSOut) -> @location(0) vec4<f32> {
+struct RaymarchResult {
+  color: vec4<f32>,
+  residualFeature: vec4<f32>,
+};
+
+struct ResidualSourceOutput {
+  @location(0) color: vec4<f32>,
+  @location(1) residualFeature: vec4<f32>,
+};
+
+fn makeRaymarchResult(color: vec4<f32>, residualFeature: vec4<f32>) -> RaymarchResult {
+  var result: RaymarchResult;
+  result.color = color;
+  result.residualFeature = residualFeature;
+  return result;
+}
+
+fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let ndc = vec2<f32>(in.uv.x * 2.0 - 1.0, in.uv.y * 2.0 - 1.0);
   let nearClip = vec4<f32>(ndc, -1.0, 1.0);
   let farClip = vec4<f32>(ndc, 1.0, 1.0);
@@ -3535,7 +3804,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
   if (hit.y <= max(hit.x, 0.0)) {
     let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
-    return vec4<f32>(vec3<f32>(0.004, 0.005, 0.006) * missAlpha, missAlpha);
+    return makeRaymarchResult(vec4<f32>(vec3<f32>(0.004, 0.005, 0.006) * missAlpha, missAlpha), vec4<f32>(0.0));
   }
 
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
@@ -3651,6 +3920,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let boundaryFireSootYellowing = clamp(u.boundary_fire_color.z, 0.0, 2.0);
   let boundaryFireThermalWarmth = clamp(u.boundary_fire_color.w, 0.0, 2.0);
   let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 5.0);
+  let selectiveRaymarchSmokeOnlyPartition = clamp(u.selective_live_render_controls.x, 0.0, 1.0);
+  let selectiveRaymarchFireAuthority = 1.0 - selectiveRaymarchSmokeOnlyPartition;
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -3663,6 +3934,10 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   var t = startT + jitter + bonfireSpatialRayDephase;
   var trans = 1.0;
   var color = vec3<f32>(0.004, 0.005, 0.006);
+  var residualRadianceAuthority = 0.0;
+  var residualFireAuthority = 0.0;
+  var residualInterfaceAuthority = 0.0;
+  var residualSmokeAuthority = 0.0;
   let entryP = ro + rd * startT;
   let exitP = ro + rd * endT;
   var gridAccum = max(gridLine(entryP), gridLine(exitP));
@@ -4031,7 +4306,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
       + boundaryCandidate * inspectBoundaryMask
       + boundaryCandidate * inspectBoundaryFireMask;
     let inspectAlpha = clamp(inspectSignal * rayStepOpacity * 0.55, 0.0, 0.28);
-    let fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
+    var fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
+    fireAlpha = fireAlpha * selectiveRaymarchFireAuthority;
     var alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
     let materialSignals = materialTemporalSignals(alpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, trans);
     let materialTemporal = materialTemporalClassificationFromSignals(materialSignals);
@@ -4422,14 +4698,14 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         * (0.22 + pyroRadianceFreshFireGate * 0.72 + pyroRadianceFireEdgeEvent * 0.36 + pyroRawFireMix * 0.18),
       0.0,
       4.0
-    );
+    ) * selectiveRaymarchFireAuthority;
     let pyroFlowAlphaBoost = clamp(
       pyroFlowSignal * (0.18 + pyroFlowShear * 0.32 + pyroRawFireMix * 0.14 + fireMix * 0.08)
         + pyroFlowSpikeSignal * (0.10 + pyroFlowTeeth * 0.12),
       0.0,
       2.8
-    );
-    let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4);
+    ) * selectiveRaymarchFireAuthority;
+    let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4) * selectiveRaymarchFireAuthority;
     let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8);
     let pyroWakeAlphaBoost = clamp(pyroWakeSignal * (0.22 + smoke * 0.62 + rawExtinction * 0.36), 0.0, 2.1);
     let pyroOwnedFireAlphaBoost = clamp(
@@ -4437,7 +4713,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         * (0.32 + pyroSpatialEnergy * 0.44 + flameDetail * 0.18 + fireLick * 0.14),
       0.0,
       2.4
-    );
+    ) * selectiveRaymarchFireAuthority;
     alpha = clamp(
       alpha
         + pyroBiteAlphaBoost * rayStepOpacity * 0.080
@@ -4446,7 +4722,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
         + pyroOwnedFireAlphaBoost * rayStepOpacity * 0.070
         + pyroRadianceAlphaBoost * rayStepOpacity * 0.130
         + pyroFlowAlphaBoost * rayStepOpacity * 0.075
-        + pyroFlowRadianceBoost * rayStepOpacity * 0.045,
+        + pyroFlowRadianceBoost * selectiveRaymarchFireAuthority * rayStepOpacity * 0.045,
       0.0,
       0.28
     );
@@ -4475,7 +4751,7 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     local = mix(
       local,
       pyroFlamePaintColor,
-      clamp(pyroFlamePaintSignal * mix(0.28, 0.92, 1.0 - pyroStockMix), 0.0, 0.95)
+      clamp(pyroFlamePaintSignal * selectiveRaymarchFireAuthority * mix(0.28, 0.92, 1.0 - pyroStockMix), 0.0, 0.95)
     );
     let pyroFlowHeat = clamp(pyroFlowTopology + pyroRawFireMix * 0.28 + pyroFlowShear * 0.22, 0.0, 1.0);
     let pyroFlowColor = mix(
@@ -4563,7 +4839,13 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + shellSmokeBacklight + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
+    color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority + shellSmokeBacklight * selectiveRaymarchFireAuthority + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
+    let residualFeatureWeight = trans * rayStepOpacity;
+    let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
+    residualRadianceAuthority = residualRadianceAuthority + residualFeatureWeight * clamp(residualRadianceLuma * 0.30 + pyroRadianceBoost * 0.75 + pyroFireRadianceEvent * 0.40, 0.0, 4.0);
+    residualFireAuthority = residualFireAuthority + residualFeatureWeight * clamp(pyroRawCurrentFire * 1.05 + fireMix * 0.90 + pyroFireEventCarrier * 0.55, 0.0, 3.5);
+    residualInterfaceAuthority = residualInterfaceAuthority + residualFeatureWeight * clamp(pyroInterfaceSignal * 0.85 + pyroBiteAlphaBoost * 0.36 + flameDetail * 0.18 + fireLick * 0.16, 0.0, 3.5);
+    residualSmokeAuthority = residualSmokeAuthority + residualFeatureWeight * clamp(smoke * 0.55 + rawExtinction * 0.38 + microSmoke * 0.32 + pyroFoldExtinctionBoost * 0.18, 0.0, 3.0);
     let extinctionStep = clamp(alpha * (0.46 + extinction * 0.16) + fireAlpha * 0.08, 0.0, 0.34);
     trans = trans * exp(-extinctionStep);
     t = t + localDt;
@@ -4585,7 +4867,330 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let composedAlpha = clamp(1.0 - trans + max(max(resolvedColor.r, resolvedColor.g), resolvedColor.b) * 0.08, 0.0, 1.0);
   let outputAlpha = mix(1.0, composedAlpha, TRANSPARENT_CANVAS);
   let outputColor = mix(resolvedColor, resolvedColor * outputAlpha, TRANSPARENT_CANVAS);
-  return vec4<f32>(outputColor, outputAlpha);
+  let residualFeature = vec4<f32>(
+    clamp(1.0 - exp(-residualRadianceAuthority * 0.72), 0.0, 1.0),
+    clamp(1.0 - exp(-residualFireAuthority * 0.82), 0.0, 1.0),
+    clamp(1.0 - exp(-residualInterfaceAuthority * 0.90), 0.0, 1.0),
+    clamp(1.0 - exp(-residualSmokeAuthority * 0.56), 0.0, 1.0)
+  );
+  return makeRaymarchResult(vec4<f32>(outputColor, outputAlpha), residualFeature);
+}
+
+@fragment
+fn fs(in: VSOut) -> @location(0) vec4<f32> {
+  let result = raymarchVolume(in);
+  return result.color;
+}
+
+@fragment
+fn fsResidualSource(in: VSOut) -> ResidualSourceOutput {
+  let result = raymarchVolume(in);
+  var out: ResidualSourceOutput;
+  out.color = result.color;
+  out.residualFeature = result.residualFeature;
+  return out;
+}
+`;
+
+const BROWSER_RESIDUAL_WGSL = `
+struct VertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) uv: vec2<f32>,
+};
+
+@vertex
+fn vs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0)
+  );
+  let position = positions[vertexIndex];
+  var out: VertexOut;
+  out.position = vec4<f32>(position, 0.0, 1.0);
+  out.uv = position * 0.5 + vec2<f32>(0.5, 0.5);
+  return out;
+}
+
+@group(0) @binding(0) var sourceFrame: texture_2d<f32>;
+@group(0) @binding(1) var sourceSampler: sampler;
+@group(0) @binding(2) var<storage, read> residualData: array<f32>;
+@group(0) @binding(3) var sourceFeature: texture_2d<f32>;
+
+fn residualDataHeaderFloats() -> u32 {
+  return 16u;
+}
+
+fn browserResidualInputChannels() -> u32 {
+  return u32(clamp(residualData[0u], 3.0, 7.0));
+}
+
+fn residualWeight(outputChannel: u32, offsetY: u32, offsetX: u32, inputChannel: u32, inputChannels: u32) -> f32 {
+  return residualData[residualDataHeaderFloats() + (((outputChannel * 3u + offsetY) * 3u + offsetX) * inputChannels + inputChannel)];
+}
+
+fn residualBias(outputChannel: u32, inputChannels: u32) -> f32 {
+  return residualData[residualDataHeaderFloats() + 27u * inputChannels + outputChannel];
+}
+
+fn lumaMax(color: vec3<f32>) -> f32 {
+  return max(color.r, max(color.g, color.b));
+}
+
+fn edgeSignal(uv: vec2<f32>, texel: vec2<f32>, center: vec3<f32>) -> f32 {
+  let c = lumaMax(center);
+  let left = lumaMax(textureSampleLevel(sourceFrame, sourceSampler, uv + vec2<f32>(-texel.x, 0.0), 0.0).rgb);
+  let right = lumaMax(textureSampleLevel(sourceFrame, sourceSampler, uv + vec2<f32>(texel.x, 0.0), 0.0).rgb);
+  let down = lumaMax(textureSampleLevel(sourceFrame, sourceSampler, uv + vec2<f32>(0.0, -texel.y), 0.0).rgb);
+  let up = lumaMax(textureSampleLevel(sourceFrame, sourceSampler, uv + vec2<f32>(0.0, texel.y), 0.0).rgb);
+  return max(max(abs(c - left), abs(c - right)), max(abs(c - down), abs(c - up)));
+}
+
+fn debugFeatureView(feature: vec4<f32>) -> vec3<f32> {
+  let radiance = feature.r;
+  let fire = feature.g;
+  let interfaceAuthority = feature.b;
+  let smoke = feature.a;
+  let fireColor = vec3<f32>(1.0, 0.38, 0.02) * max(radiance, fire);
+  let interfaceColor = vec3<f32>(0.05, 0.52, 1.0) * interfaceAuthority;
+  let smokeColor = vec3<f32>(0.05, 0.20, 0.34) * smoke;
+  return clamp(fireColor + interfaceColor + smokeColor, vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+@fragment
+fn fs(in: VertexOut) -> @location(0) vec4<f32> {
+  let dims = vec2<f32>(textureDimensions(sourceFrame));
+  let texel = 1.0 / max(dims, vec2<f32>(1.0));
+  let sourceUv = vec2<f32>(in.uv.x, 1.0 - in.uv.y);
+  let uv = clamp(sourceUv, vec2<f32>(0.0), vec2<f32>(1.0));
+  let center = textureSampleLevel(sourceFrame, sourceSampler, uv, 0.0).rgb;
+  let feature = textureSampleLevel(sourceFeature, sourceSampler, uv, 0.0);
+  let inputChannels = browserResidualInputChannels();
+  var residual = vec3<f32>(residualBias(0u, inputChannels), residualBias(1u, inputChannels), residualBias(2u, inputChannels));
+  for (var oy: u32 = 0u; oy < 3u; oy = oy + 1u) {
+    for (var ox: u32 = 0u; ox < 3u; ox = ox + 1u) {
+      let offset = vec2<f32>(f32(i32(ox) - 1), f32(i32(oy) - 1)) * texel;
+      let sampleColor = textureSampleLevel(sourceFrame, sourceSampler, uv + offset, 0.0).rgb;
+      let sampleFeature = textureSampleLevel(sourceFeature, sourceSampler, uv + offset, 0.0);
+      let sampleInputs = array<f32, 7>(
+        sampleColor.r,
+        sampleColor.g,
+        sampleColor.b,
+        sampleFeature.r,
+        sampleFeature.g,
+        sampleFeature.b,
+        sampleFeature.a
+      );
+      for (var inputChannel: u32 = 0u; inputChannel < inputChannels; inputChannel = inputChannel + 1u) {
+        let value = sampleInputs[inputChannel];
+        residual.x = residual.x + value * residualWeight(0u, oy, ox, inputChannel, inputChannels);
+        residual.y = residual.y + value * residualWeight(1u, oy, ox, inputChannel, inputChannels);
+        residual.z = residual.z + value * residualWeight(2u, oy, ox, inputChannel, inputChannels);
+      }
+    }
+  }
+  let residualParamsOffset = residualDataHeaderFloats() + 27u * inputChannels + 3u;
+  let residualLimit = residualData[residualParamsOffset + 0u];
+  let edgeThreshold = residualData[residualParamsOffset + 1u];
+  let strength = residualData[residualParamsOffset + 2u];
+  let residualApplyScale = residualData[residualParamsOffset + 3u];
+  let signal = edgeSignal(uv, texel, center);
+  let mask = smoothstep(edgeThreshold * 0.35, max(edgeThreshold * 1.85, edgeThreshold + 0.0001), signal);
+  if (residualData[residualParamsOffset + 4u] > 0.5) {
+    return vec4<f32>(debugFeatureView(feature), 1.0);
+  }
+  let fireAuthority = max(feature.r, max(feature.g * 0.88, feature.b * 0.72));
+  let smokeCrunchGuard = 1.0 - smoothstep(0.30, 0.82, feature.a) * (1.0 - smoothstep(0.08, 0.34, fireAuthority));
+  let shaderAuthorityMask = clamp(mix(0.18, 1.0, fireAuthority) * smokeCrunchGuard, 0.0, 1.0);
+  let limitedResidual = clamp(residual, vec3<f32>(-residualLimit), vec3<f32>(residualLimit));
+  return vec4<f32>(clamp(center + limitedResidual * residualApplyScale * mask * shaderAuthorityMask * strength, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+}
+`;
+
+const BOUNDARY_SPLAT_WGSL = `
+override GRID: u32 = 64u;
+const SLOTS_PER_CELL: u32 = 4u;
+
+struct BoundarySplat {
+  positionSupport: vec4<f32>,
+  colorOpacity: vec4<f32>,
+  shape: vec4<f32>,
+};
+
+struct BoundarySplatDraw {
+  vertexCount: u32,
+  instanceCount: atomic<u32>,
+  firstVertex: u32,
+  firstInstance: u32,
+  candidateCount: atomic<u32>,
+  overflowCount: atomic<u32>,
+  capacity: u32,
+  _pad1: u32,
+};
+
+struct BoundarySplatCamera {
+  viewProj: mat4x4<f32>,
+  cameraRight: vec4<f32>,
+  cameraUp: vec4<f32>,
+  controls: vec4<f32>,
+};
+
+struct BoundarySplatVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) colorOpacity: vec4<f32>,
+  @location(1) local: vec2<f32>,
+};
+
+struct BoundarySplatAttributeHookOutput {
+  colorOpacity: vec4<f32>,
+  radiusScale: vec2<f32>,
+};
+
+struct BoundarySplatFeatureRow {
+  sidecar: vec4<f32>,
+  material: vec4<f32>,
+  fire: vec4<f32>,
+  micro: vec4<f32>,
+};
+
+${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
+
+@group(0) @binding(0) var<storage, read> boundarySidecar: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> fluid: array<vec4<f32>>;
+@group(0) @binding(2) var<storage, read_write> boundarySplats: array<BoundarySplat>;
+@group(0) @binding(3) var<storage, read_write> boundarySplatDraw: BoundarySplatDraw;
+@group(0) @binding(4) var<uniform> boundarySplatCamera: BoundarySplatCamera;
+@group(0) @binding(5) var<storage, read> boundarySplatsForRender: array<BoundarySplat>;
+@group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;
+
+fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
+  return cell.x + cell.y * GRID + cell.z * GRID * GRID;
+}
+
+fn boundarySplatAttributeFeatures(
+  sidecar: vec4<f32>,
+  material: vec4<f32>,
+  fire: vec4<f32>,
+  micro: vec4<f32>,
+) -> array<f32, 16> {
+  var features: array<f32, 16>;
+  features[0] = sidecar.x;  // sidecar.support
+  features[1] = sidecar.y;  // sidecar.coverage
+  features[2] = sidecar.z;  // sidecar.ridge
+  features[3] = sidecar.w;  // sidecar.footprint
+  features[4] = material.x; // material.density
+  features[5] = material.y; // material.heat
+  features[6] = material.z; // material.fuel
+  features[7] = material.w; // material.detail
+  features[8] = fire.x;     // fire.energy
+  features[9] = fire.y;     // fire.temperature
+  features[10] = fire.z;    // fire.emission
+  features[11] = fire.w;    // fire.detail
+  features[12] = micro.x;   // micro.x
+  features[13] = micro.y;   // micro.y
+  features[14] = micro.z;   // micro.z
+  features[15] = micro.w;   // micro.w
+  return features;
+}
+
+fn applyBoundarySplatAttributeHook(
+  analyticColorOpacity: vec4<f32>,
+  analyticRadiusScale: vec2<f32>,
+  features: array<f32, 16>,
+) -> BoundarySplatAttributeHookOutput {
+  var result: BoundarySplatAttributeHookOutput;
+  if (boundarySplatCamera.controls.y > 0.5) {
+    let learned = inferBoundarySplatAttributes(features);
+    result.colorOpacity = learned.colorOpacity;
+    result.radiusScale = learned.radiusScale;
+    return result;
+  }
+  result.colorOpacity = analyticColorOpacity;
+  result.radiusScale = analyticRadiusScale;
+  return result;
+}
+
+@compute @workgroup_size(4, 4, 4)
+fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
+  if (any(gid >= vec3<u32>(GRID))) { return; }
+  let cellIndex = boundarySplatCellIndex(gid);
+  let sidecar = boundarySidecar[cellIndex];
+  let material = fluid[cellIndex * SLOTS_PER_CELL + 1u];
+  let fire = fluid[cellIndex * SLOTS_PER_CELL + 2u];
+  let micro = fluid[cellIndex * SLOTS_PER_CELL + 3u];
+  let fireSignal = fire.x * 1.25 + fire.z * 0.52 + fire.w * 0.86 + micro.z * 0.72 + material.y * 0.24;
+  let structuralSignal = sidecar.z * smoothstep(0.055, 0.32, sidecar.y) * smoothstep(0.018, 0.16, fireSignal);
+  if (structuralSignal < 0.11) { return; }
+  let candidateIndex = atomicAdd(&boundarySplatDraw.candidateCount, 1u);
+  if (candidateIndex >= boundarySplatDraw.capacity) {
+    atomicAdd(&boundarySplatDraw.overflowCount, 1u);
+    return;
+  }
+  let world = ((vec3<f32>(gid) + vec3<f32>(0.5)) / f32(GRID)) * 2.0 - vec3<f32>(1.0);
+  let thermal = smoothstep(0.025, 0.78, material.y + fire.x * 0.28);
+  let whiteHot = smoothstep(0.42, 1.25, fireSignal);
+  let cool = vec3<f32>(0.05, 0.16, 0.72);
+  let warm = vec3<f32>(0.86, 0.38, 0.07);
+  let color = mix(mix(cool, warm, thermal), vec3<f32>(0.82, 0.72, 0.48), whiteHot * 0.52);
+  let opacity = clamp(structuralSignal * (0.008 + fireSignal * 0.055), 0.002, 0.038);
+  let cellWidth = 2.0 / f32(GRID);
+  let radius = cellWidth * (0.60 + sidecar.w * 2.65 + sidecar.z * 0.48);
+  let attributeFeatures = boundarySplatAttributeFeatures(sidecar, material, fire, micro);
+  let attributeOutput = applyBoundarySplatAttributeHook(
+    vec4<f32>(color, opacity),
+    vec2<f32>(0.72 + sidecar.z * 0.36, 1.0 + sidecar.w * 0.42),
+    attributeFeatures,
+  );
+  if (boundarySplatCamera.controls.z > 0.5) {
+    boundarySplatFeatureRows[candidateIndex].sidecar = sidecar;
+    boundarySplatFeatureRows[candidateIndex].material = material;
+    boundarySplatFeatureRows[candidateIndex].fire = fire;
+    boundarySplatFeatureRows[candidateIndex].micro = micro;
+  }
+  boundarySplats[candidateIndex].positionSupport = vec4<f32>(world, structuralSignal);
+  boundarySplats[candidateIndex].colorOpacity = attributeOutput.colorOpacity;
+  boundarySplats[candidateIndex].shape = vec4<f32>(radius * attributeOutput.radiusScale.x, radius * attributeOutput.radiusScale.y, sidecar.z, fireSignal);
+}
+
+@compute @workgroup_size(1)
+fn finalizeBoundarySplats() {
+  atomicStore(&boundarySplatDraw.instanceCount, min(atomicLoad(&boundarySplatDraw.candidateCount), boundarySplatDraw.capacity));
+}
+
+fn boundarySplatQuadCorner(vertexIndex: u32) -> vec2<f32> {
+  let corner = vertexIndex % 6u;
+  if (corner == 0u) { return vec2<f32>(-1.0, -1.0); }
+  if (corner == 1u) { return vec2<f32>(1.0, -1.0); }
+  if (corner == 2u) { return vec2<f32>(-1.0, 1.0); }
+  if (corner == 3u) { return vec2<f32>(-1.0, 1.0); }
+  if (corner == 4u) { return vec2<f32>(1.0, -1.0); }
+  return vec2<f32>(1.0, 1.0);
+}
+
+@vertex
+fn boundarySplatVs(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> BoundarySplatVertexOut {
+  let splat = boundarySplatsForRender[instanceIndex];
+  let corner = boundarySplatQuadCorner(vertexIndex);
+  let offset = boundarySplatCamera.cameraRight.xyz * corner.x * splat.shape.x * boundarySplatCamera.controls.x
+    + boundarySplatCamera.cameraUp.xyz * corner.y * splat.shape.y * boundarySplatCamera.controls.x;
+  var out: BoundarySplatVertexOut;
+  out.position = boundarySplatCamera.viewProj * vec4<f32>(splat.positionSupport.xyz + offset, 1.0);
+  out.colorOpacity = splat.colorOpacity;
+  out.local = corner;
+  return out;
+}
+
+@fragment
+fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
+  let radius2 = dot(in.local, in.local);
+  if (radius2 > 1.0) { discard; }
+  let footprintRadius = clamp(boundarySplatCamera.controls.x, 0.35, 1.5);
+  let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
+  let gaussian = exp(-radius2 * kernelSharpness);
+  let energyRatio = (kernelSharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
+  let energyCompensation = clamp(sqrt(energyRatio), 0.5, 2.5);
+  let alpha = in.colorOpacity.a * gaussian * energyCompensation;
+  return vec4<f32>(in.colorOpacity.rgb, alpha);
 }
 `;
 
@@ -4599,10 +5204,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(340);
+  const uniforms = new Float32Array(344);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
+  let boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
   let oracleActivityCueBuffer = null;
   let oracleActivityCueSourceValues = null;
   let oracleActivityCueSourceGrid = null;
@@ -4620,25 +5226,90 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     routeIdentity: ROUTE_IDENTITY,
     requestedRoute: 'kaminos_volume_smoke=1',
     effectiveRoute: ROUTE_IDENTITY,
+    selectiveHeadLiveRole: normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole),
+    selectiveHeadLiveEffectiveRole: 'off',
+    selectiveHeadLiveRoleAuthority: SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES.off,
+    selectiveHeadLiveCompositionRequestedRaw: controlsSnapshot.selectiveHeadLiveRenderComposition || SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+    selectiveHeadLiveCompositionRequested: SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+    selectiveHeadLiveCompositionEffective: 'off',
+    selectiveHeadLiveCompositionAuthority: 'off',
+    selectiveHeadLiveCompositionFallbackReason: null,
+    selectiveHeadLivePassReceipt: makeSelectiveHeadLivePassReceipt({
+      composition: SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+    }),
+    selectiveHeadLiveRouteIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+    selectiveHeadLiveModelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
+    selectiveHeadLiveModelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
+    selectiveHeadLiveFeatureAuthority: SELECTIVE_HEAD_LIVE_FEATURE_AUTHORITY,
+    selectiveHeadLivePairAuthority: SELECTIVE_HEAD_LIVE_PAIR_AUTHORITY,
+    selectiveHeadLiveFallbackReason: null,
+    selectiveHeadLiveReplayAnchor: null,
+    selectiveHeadLiveCapturePaused: false,
+    selectiveHeadLive: null,
     backend: 'inactive',
     active: false,
     width: 0,
     height: 0,
+    cssWidth: 0,
+    cssHeight: 0,
     displayWidth: 0,
     displayHeight: 0,
+    nativeDevicePixelRatio: 1,
+    canvasDevicePixelRatio: 1,
     viewportSizeFallback: false,
     renderWidth: 0,
     renderHeight: 0,
     renderScale: normalizeRenderScale(controlsSnapshot.renderScale),
     renderPixelRatio: 1,
     volumeReconstructionStyle: 'linear-css-upscale',
+    volumeResidualMode: normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode),
+    volumeResidualModelUrl: String(controlsSnapshot.volumeResidualModelUrl || ''),
+    volumeResidualStatus: 'off',
+    volumeResidualAuthority: 'off',
+    volumeResidualFeatureAuthority: 'off',
+    volumeResidualFeatureDebug: normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug),
+    volumeResidualFeatureDebugMode: normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug) ? 'residual-feature-debug-false-color-v0' : 'off',
+    volumeResidualModelSchema: null,
+    volumeResidualModelError: null,
+    volumeResidualStrength: normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength),
+    volumeResidualCost: {
+      identity: 'browser-direct-residual-cost-v0',
+      applied: false,
+      evidenceSource: 'cpu-encode-proxy-not-gpu-exclusive',
+      disclaimer: 'CPU render-pass encode timing plus deterministic work counts; not isolated GPU execution time.',
+      outputPixels: 0,
+      renderWidth: 0,
+      renderHeight: 0,
+      sourcePassEncodeMs: null,
+      residualPassEncodeMs: null,
+      totalEncodeMs: null,
+      sourcePassEncodeP95Ms: null,
+      residualPassEncodeP95Ms: null,
+      totalEncodeP95Ms: null,
+      renderPassesAdded: 0,
+      estimatedTextureSamplesPerPixel: 0,
+      estimatedTextureSamplesPerFrame: 0,
+      featureSamplesPerFrame: 0,
+      estimatedKernelSamplesPerPixel: 0,
+      estimatedKernelSamplesPerFrame: 0,
+      estimatedMultiplyAddsPerPixel: 0,
+      estimatedMultiplyAddsPerFrame: 0,
+      modelArch: null,
+      modelUrl: null,
+      authority: 'off',
+    },
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
     lookFreeze: normalizeLookFreeze(controlsSnapshot.lookFreeze),
     lookFreezeFrame: null,
     lookFreezeTimeSeconds: null,
+    lookFreezeRenderTimeMs: null,
+    lookFreezeRenderFrame: null,
     lookFreezeSkippedFrames: 0,
+    renderPhaseTimeMs: null,
+    renderPhaseFrame: 0,
+    renderPhaseAuthority: 'live-render-phase',
     pyroCompareMode: normalizePyroCompareMode(controlsSnapshot.pyroCompareMode),
     pyroCompareMuted: false,
     simGrid: gridSize,
@@ -4729,6 +5400,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundaryStructureSource: normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource),
     boundarySidecarView: normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view),
     boundarySidecarDebug: null,
+    boundarySidecarOverrideReceipt: null,
+    boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
+    boundarySplatRadius: normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius),
+    boundarySplatSharpness: normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness),
+    boundarySplatRendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
+    boundarySplatAttributeModelIdentity: boundarySplatEffectiveAttributeModelIdentity(controlsSnapshot.boundarySplatMode),
+    boundarySplatFeatureCaptureRequested: normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture),
+    boundarySplatFeatureCaptureEffective: false,
+    boundarySplatFeatureCaptureIdentity: BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
+    boundarySplatFeatureCapture: null,
+    boundarySplatSourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
+    boundarySplatCapacity: boundarySplatCapacity,
+    boundarySplatCapacityGrowthCount: 0,
+    boundarySplatCapacityGrowth: null,
+    boundarySplatCandidateCount: null,
+    boundarySplatOverflowCount: null,
+    boundarySplatCountAuthority: 'gpu-indirect-async-readback',
+    boundarySplatInstanceCount: null,
+    boundarySplatFallbackReason: null,
+    boundarySplatFrameCount: 0,
+    boundarySplatTimestampStatus: 'unsupported',
+    boundarySplatGpuProfile: makeBoundarySplatGpuProfile({
+      timestampStatus: 'unsupported',
+      reason: 'timestamp-query-not-requested-yet',
+      candidateCopyBytes: 0,
+      rendererIdentity: boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode),
+    }),
+    boundarySplatCopyBytesThisFrame: 0,
+    boundarySplatCopyDisposition: makeBoundarySplatCopyDisposition(0, boundarySplatEffectiveRendererIdentity(controlsSnapshot.boundarySplatMode)),
     simProfile: normalizeSimProfileFlag(controlsSnapshot.simProfile),
     simCostLedger: null,
     pressureSourceStrategy: PRESSURE_SOURCE_STRATEGY_DISABLED,
@@ -4774,6 +5474,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pressureDivergencePasses: 0,
     pressureJacobiInlineDivergencePasses: 0,
     fullGridPassBreakdown: null,
+    fullFieldExportSession: null,
+    fullFieldImportReceipt: null,
     frontFieldIdentity: FRONT_FIELD_IDENTITY,
     frontFieldBytes: frontFieldBufferBytes(gridSize),
     frontFieldReadIndex: 0,
@@ -5005,6 +5707,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
+  let browserResidualPipeline = null;
+  let browserResidualSourcePipeline = null;
+  let browserResidualBindGroupLayout = null;
+  let browserResidualPipelineLayout = null;
+  let browserResidualShader = null;
+  let browserResidualSampler = null;
+  let browserResidualBuffer = null;
+  let browserResidualBufferSize = 0;
+  let browserResidualBindGroup = null;
+  let browserResidualTextureKey = '';
+  let browserResidualModel = null;
+  let browserResidualModelUrl = '';
+  let browserResidualLoadPromise = null;
   let computePipeline = null;
   let pressureDivergencePipeline = null;
   let pressureJacobiPipeline = null;
@@ -5014,6 +5729,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureProjectTieredPipeline = null;
   let majorantComputePipeline = null;
   let boundarySidecarBuildPipeline = null;
+  let boundarySplatCompactPipeline = null;
+  let boundarySplatFinalizePipeline = null;
+  let boundarySplatRenderPipeline = null;
+  let boundarySplatReadbackPipeline = null;
   let bindGroups = [];
   let majorantFrontBindGroups = [];
   let boundarySidecarReadBindGroups = [];
@@ -5022,11 +5741,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pressureReadBindGroups = [];
   let majorantWriteBindGroup = null;
   let boundarySidecarWriteBindGroup = null;
+  let boundarySplatComputeBindGroups = [];
+  let boundarySplatRenderBindGroup = null;
+  let selectiveHeadLiveRuntime = null;
+  let selectiveHeadLiveBindGroups = null;
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
   let boundarySidecarReadBindGroupLayout = null;
   let boundarySidecarWriteBindGroupLayout = null;
+  let boundarySplatComputeBindGroupLayout = null;
+  let boundarySplatRenderBindGroupLayout = null;
   let pressureWriteBindGroupLayout = null;
   let pressureJacobiBindGroupLayout = null;
   let pressureReadBindGroupLayout = null;
@@ -5034,12 +5759,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let pipelineLayout = null;
   let majorantPipelineLayout = null;
   let boundarySidecarPipelineLayout = null;
+  let boundarySplatComputePipelineLayout = null;
+  let boundarySplatRenderPipelineLayout = null;
   let pressureWritePipelineLayout = null;
   let pressureJacobiPipelineLayout = null;
   let pressureJacobiTieredPipelineLayout = null;
   let pressureProjectPipelineLayout = null;
   let pressureProjectTieredPipelineLayout = null;
   let shader = null;
+  let boundarySplatShader = null;
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
@@ -5058,6 +5786,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let volumePrimitives = [];
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
+  let boundarySidecarOverrideUpload = null;
+  let debugFullFieldImportUpload = null;
+  let boundarySplatBuffer = null;
+  let boundarySplatDrawBuffer = null;
+  let boundarySplatIndirectBuffer = null;
+  let boundarySplatCameraBuffer = null;
+  let boundarySplatReadbackBuffer = null;
+  let boundarySplatFeatureBuffer = null;
+  let boundarySplatFeatureBufferCapacity = 0;
+  let boundarySplatTelemetryCopyPending = false;
+  let boundarySplatTelemetryMapPending = false;
   let fluidBuffers = [];
   let frontBuffers = [];
   let pressureBuffers = [];
@@ -5065,6 +5804,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let currentFront = 0;
   let frameTexture = null;
   let frameTextureSize = '';
+  let browserResidualFeatureTexture = null;
+  let browserResidualFeatureTextureSize = '';
   let historyTexture = null;
   let historyTextureSize = '';
   let historySampler = null;
@@ -5074,10 +5815,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let lastTemporalControlSignature = '';
   let format = null;
   let raf = 0;
+  let selectiveHeadLiveCapturePaused = false;
   const timingSamples = {
     rafDelta: [],
     cpuFrame: [],
     queueDone: [],
+    residualSourceEncode: [],
+    residualEncode: [],
+    residualTotalEncode: [],
   };
   let lastRafNow = 0;
   let queueProbePending = false;
@@ -5128,6 +5873,56 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       queueProbePending: queueProbePending,
       queueSamples: timingSamples.queueDone.length,
       queueTimingAvailable: true,
+    };
+  }
+
+  function residualWorkEstimate(applied) {
+    const outputPixels = applied ? Math.max(0, Math.floor(state.width || 0) * Math.floor(state.height || 0)) : 0;
+    const inputChannels = applied ? Math.max(3, Math.min(7, Number(browserResidualModel?.inputChannels) || 3)) : 0;
+    const featureInputChannels = Math.max(0, inputChannels - 3);
+    const textureSamplesPerPixel = applied ? 9 * (1 + (featureInputChannels > 0 ? 1 : 0)) + 6 : 0;
+    const kernelSamplesPerPixel = applied ? 9 : 0;
+    const multiplyAddsPerPixel = applied ? 27 * inputChannels : 0;
+    return {
+      outputPixels,
+      renderWidth: applied ? state.width : 0,
+      renderHeight: applied ? state.height : 0,
+      browserResidualInputChannels: inputChannels,
+      featureInputChannels,
+      renderPassesAdded: applied ? 2 : 0,
+      estimatedTextureSamplesPerPixel: textureSamplesPerPixel,
+      estimatedTextureSamplesPerFrame: outputPixels * textureSamplesPerPixel,
+      featureSamplesPerFrame: applied ? outputPixels : 0,
+      estimatedKernelSamplesPerPixel: kernelSamplesPerPixel,
+      estimatedKernelSamplesPerFrame: outputPixels * kernelSamplesPerPixel,
+      estimatedMultiplyAddsPerPixel: multiplyAddsPerPixel,
+      estimatedMultiplyAddsPerFrame: outputPixels * multiplyAddsPerPixel,
+    };
+  }
+
+  function recordBrowserResidualCost({ applied, sourcePassEncodeMs = null, residualPassEncodeMs = null } = {}) {
+    const totalEncodeMs = applied ? (sourcePassEncodeMs || 0) + (residualPassEncodeMs || 0) : null;
+    if (applied) {
+      pushTimingSample('residualSourceEncode', sourcePassEncodeMs, 120);
+      pushTimingSample('residualEncode', residualPassEncodeMs, 120);
+      pushTimingSample('residualTotalEncode', totalEncodeMs, 120);
+    }
+    state.volumeResidualCost = {
+      identity: 'browser-direct-residual-cost-v0',
+      applied: Boolean(applied),
+      evidenceSource: 'cpu-encode-proxy-not-gpu-exclusive',
+      disclaimer: 'CPU render-pass encode timing plus deterministic work counts; not isolated GPU execution time.',
+      ...residualWorkEstimate(Boolean(applied)),
+      sourcePassEncodeMs: applied ? sourcePassEncodeMs : null,
+      residualPassEncodeMs: applied ? residualPassEncodeMs : null,
+      totalEncodeMs,
+      sourcePassEncodeP95Ms: applied ? percentileTiming(timingSamples.residualSourceEncode, 0.95) : null,
+      residualPassEncodeP95Ms: applied ? percentileTiming(timingSamples.residualEncode, 0.95) : null,
+      totalEncodeP95Ms: applied ? percentileTiming(timingSamples.residualTotalEncode, 0.95) : null,
+      modelArch: applied ? browserResidualModel?.modelArch || null : null,
+      featureInputMode: applied ? browserResidualModel?.featureInputMode || 'rgb' : null,
+      modelUrl: applied ? browserResidualModel?.url || state.volumeResidualModelUrl || null : null,
+      authority: applied ? state.volumeResidualAuthority : 'off',
     };
   }
 
@@ -5232,9 +6027,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function boundarySidecarDebug(boundarySidecarSourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource)) {
     const controls = controlsSnapshot.boundarySidecarControls || {};
     const view = normalizeBoundarySidecarView(controls.view ?? controlsSnapshot.boundarySidecarView);
+    const overrideReceipt = boundarySidecarSourceName === 'override' ? state.boundarySidecarOverrideReceipt : null;
     return {
       identity: BOUNDARY_SIDECAR_IDENTITY,
-      authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+      authority: overrideReceipt?.status === 'applied' ? EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY : BOUNDARY_SIDECAR_BAKE_AUTHORITY,
       source: boundarySidecarSourceName,
       view,
       channels: ['support', 'coverage', 'ridge', 'proximity', 'footprint'],
@@ -5250,6 +6046,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       builtThisFrame: state.boundarySidecarBuiltThisFrame,
       frameCount: state.boundarySidecarFrameCount,
       lastBuiltFrame: state.boundarySidecarLastBuiltFrame,
+      overrideReceipt,
     };
   }
 
@@ -5458,12 +6255,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function destroyFluidState() {
+    selectiveHeadLiveRuntime?.destroy();
+    selectiveHeadLiveRuntime = null;
+    selectiveHeadLiveBindGroups = null;
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
     boundarySidecarBuffer?.destroy();
+    boundarySplatBuffer?.destroy();
+    boundarySplatDrawBuffer?.destroy();
+    boundarySplatIndirectBuffer?.destroy();
+    boundarySplatReadbackBuffer?.destroy();
+    boundarySplatFeatureBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
     boundarySidecarBuffer = null;
+    boundarySplatBuffer = null;
+    boundarySplatDrawBuffer = null;
+    boundarySplatIndirectBuffer = null;
+    boundarySplatReadbackBuffer = null;
+    boundarySplatFeatureBuffer = null;
+    boundarySplatFeatureBufferCapacity = 0;
+    boundarySplatTelemetryCopyPending = false;
     oracleActivityCueBuffer = null;
     fluidBuffers = [];
     frontBuffers = [];
@@ -5472,6 +6284,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     majorantFrontBindGroups = [];
     boundarySidecarReadBindGroups = [];
     boundarySidecarWriteBindGroup = null;
+    boundarySplatComputeBindGroups = [];
+    boundarySplatRenderBindGroup = null;
     pressureWriteBindGroup = null;
     pressureJacobiBindGroups = [];
     pressureReadBindGroups = [];
@@ -5527,6 +6341,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     historyTextureSize = key;
     resetTemporalHistory('history-resized');
     rebuildFluidBindGroups();
+    rebuildSelectiveHeadLiveBindGroups();
   }
 
   function temporalCameraSignature() {
@@ -5662,6 +6477,203 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ],
       }),
     ];
+  }
+
+  function rebuildSelectiveHeadLiveBindGroups() {
+    if (
+      !selectiveHeadLiveRuntime
+      || !bindGroupLayout
+      || !majorantFluidBindGroupLayout
+      || !boundarySidecarReadBindGroupLayout
+      || !boundarySplatComputeBindGroupLayout
+      || !uniformBuffer
+      || !majorantBuffer
+      || !historyTexture
+      || !historySampler
+      || !externalEmitterBuffer
+      || !oracleActivityCueBuffer
+      || !boundarySidecarBuffer
+      || !boundarySplatBuffer
+      || !boundarySplatDrawBuffer
+      || !boundarySplatCameraBuffer
+      || !boundarySplatFeatureBuffer
+    ) {
+      selectiveHeadLiveBindGroups = null;
+      return;
+    }
+    const makeRole = (role, fluid, front) => ({
+      render: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} render`,
+        layout: bindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluid } },
+          { binding: 2, resource: { buffer: fluidBuffers[0] } },
+          { binding: 3, resource: { buffer: majorantBuffer } },
+          { binding: 4, resource: historyTexture.createView() },
+          { binding: 5, resource: historySampler },
+          { binding: 6, resource: { buffer: externalEmitterBuffer } },
+          { binding: 7, resource: { buffer: front } },
+          { binding: 8, resource: { buffer: frontBuffers[0] } },
+          { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
+          { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+        ],
+      }),
+      majorant: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} majorant`,
+        layout: majorantFluidBindGroupLayout,
+        entries: [
+          { binding: 1, resource: { buffer: fluid } },
+          { binding: 7, resource: { buffer: front } },
+        ],
+      }),
+      sidecar: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} sidecar`,
+        layout: boundarySidecarReadBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: uniformBuffer } },
+          { binding: 1, resource: { buffer: fluid } },
+          { binding: 7, resource: { buffer: front } },
+        ],
+      }),
+      splat: device.createBindGroup({
+        label: `kaminos ${SELECTIVE_HEAD_LIVE_ROUTE} ${role} splat`,
+        layout: boundarySplatComputeBindGroupLayout,
+        entries: [
+          { binding: 0, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 1, resource: { buffer: fluid } },
+          { binding: 2, resource: { buffer: boundarySplatBuffer } },
+          { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
+          { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
+          { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
+        ],
+      }),
+    });
+    selectiveHeadLiveBindGroups = {
+      lowPhaseAligned: makeRole(
+        'lowPhaseAligned',
+        selectiveHeadLiveRuntime.buffers.lowUpsampledFluid,
+        selectiveHeadLiveRuntime.buffers.lowUpsampledFront,
+      ),
+      selectiveFullResidual: makeRole(
+        'selectiveFullResidual',
+        selectiveHeadLiveRuntime.buffers.predictedFluid,
+        selectiveHeadLiveRuntime.buffers.predictedFront,
+      ),
+    };
+  }
+
+  function selectiveHeadLiveRequestedRole() {
+    return normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole);
+  }
+
+  function selectiveHeadLiveRoleGroups(kind) {
+    const role = state.selectiveHeadLiveEffectiveRole;
+    return selectiveHeadLiveBindGroups?.[role]?.[kind] || null;
+  }
+
+  function encodeSelectiveHeadLiveFields(encoder) {
+    const requestedRole = selectiveHeadLiveRequestedRole();
+    state.selectiveHeadLiveRole = requestedRole;
+    state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority(requestedRole);
+    state.selectiveHeadLiveFallbackReason = null;
+    if (requestedRole === 'off') {
+      state.selectiveHeadLiveEffectiveRole = 'off';
+      state.selectiveHeadLive = null;
+      return false;
+    }
+    if (gridSize !== 160) {
+      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
+      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
+      state.selectiveHeadLiveFallbackReason = `unsupported-grid-${gridSize}-requires-160`;
+      return false;
+    }
+    if (requestedRole === 'truthHigh') {
+      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
+      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
+      state.selectiveHeadLive = null;
+      return false;
+    }
+    if (!selectiveHeadLiveRuntime || !selectiveHeadLiveBindGroups) {
+      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
+      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
+      state.selectiveHeadLiveFallbackReason = 'frozen-model-runtime-unavailable';
+      return false;
+    }
+    selectiveHeadLiveRuntime.encode(encoder, currentFluid);
+    state.selectiveHeadLiveEffectiveRole = requestedRole;
+    state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
+    return true;
+  }
+
+  async function loadSelectiveHeadLiveReplayAnchor(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const fluidUrl = String(options.fluidUrl || '');
+    const frontUrl = String(options.frontUrl || '');
+    const fluidSha256 = String(options.fluidSha256 || '').toLowerCase();
+    const frontSha256 = String(options.frontSha256 || '').toLowerCase();
+    const completedSteps = Math.max(0, Math.floor(Number(options.completedSteps) || 0));
+    if (!fluidUrl || !frontUrl || !/^[a-f0-9]{64}$/.test(fluidSha256) || !/^[a-f0-9]{64}$/.test(frontSha256)) {
+      throw new Error('selective-head replay anchor requires URLs and SHA-256 identities for both fields');
+    }
+    if (gridSize !== 160 || completedSteps !== 96) {
+      throw new Error(`selective-head replay anchor requires grid 160 at step 96, got grid ${gridSize} step ${completedSteps}`);
+    }
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const [fluidResponse, frontResponse] = await Promise.all([
+      fetch(fluidUrl, { cache: 'no-store' }),
+      fetch(frontUrl, { cache: 'no-store' }),
+    ]);
+    if (!fluidResponse.ok || !frontResponse.ok) {
+      throw new Error(`selective-head replay anchor fetch failed: fluid=${fluidResponse.status} front=${frontResponse.status}`);
+    }
+    const [fluidBytes, frontBytes] = await Promise.all([fluidResponse.arrayBuffer(), frontResponse.arrayBuffer()]);
+    const expectedFluidBytes = 160 ** 3 * FLUID_COMPONENTS * Float32Array.BYTES_PER_ELEMENT;
+    const expectedFrontBytes = 160 ** 3 * Float32Array.BYTES_PER_ELEMENT;
+    if (fluidBytes.byteLength !== expectedFluidBytes || frontBytes.byteLength !== expectedFrontBytes) {
+      throw new Error(`selective-head replay anchor shape mismatch: fluid=${fluidBytes.byteLength}/${expectedFluidBytes} front=${frontBytes.byteLength}/${expectedFrontBytes}`);
+    }
+    const digestHex = async bytes => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)), value => value.toString(16).padStart(2, '0')).join('');
+    const [effectiveFluidSha256, effectiveFrontSha256] = await Promise.all([digestHex(fluidBytes), digestHex(frontBytes)]);
+    if (effectiveFluidSha256 !== fluidSha256 || effectiveFrontSha256 !== frontSha256) {
+      throw new Error(`selective-head replay anchor checksum mismatch: fluid=${effectiveFluidSha256} front=${effectiveFrontSha256}`);
+    }
+    rebuildFluidState(gridSize, majorantGridSize, 'selective-head-live-replay-anchor');
+    const uploadInChunks = (buffer, bytes) => {
+      const source = new Uint8Array(bytes);
+      const chunkBytes = 8 * 1024 * 1024;
+      for (let offset = 0; offset < source.byteLength; offset += chunkBytes) {
+        const length = Math.min(chunkBytes, source.byteLength - offset);
+        device.queue.writeBuffer(buffer, offset, source, offset, length);
+      }
+    };
+    for (const buffer of fluidBuffers) uploadInChunks(buffer, fluidBytes);
+    for (const buffer of frontBuffers) uploadInChunks(buffer, frontBytes);
+    state.frameCount = completedSteps;
+    state.simStepCount = completedSteps;
+    selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
+      device,
+      sourceFluidBuffers: fluidBuffers,
+      sourceFrontBuffers: frontBuffers,
+    });
+    rebuildSelectiveHeadLiveBindGroups();
+    state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    state.selectiveHeadLiveReplayAnchor = {
+      ok: true,
+      authority: SELECTIVE_HEAD_LIVE_REPLAY_ANCHOR_AUTHORITY,
+      completedSteps,
+      grid: gridSize,
+      fluidUrl,
+      frontUrl,
+      fluidSha256: effectiveFluidSha256,
+      frontSha256: effectiveFrontSha256,
+      fluidByteLength: fluidBytes.byteLength,
+      frontByteLength: frontBytes.byteLength,
+      modelIdentity: selectiveHeadLiveRuntime.modelIdentity,
+    };
+    return { ...state.selectiveHeadLiveReplayAnchor };
   }
 
   function ensureMajorantBuffer() {
@@ -5874,10 +6886,123 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function ensureBoundarySplatBuffers() {
+    if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer) return;
+    boundarySplatBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates`,
+      size: boundarySplatCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    boundarySplatDrawBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} indirect draw state`,
+      size: 32,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatIndirectBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} indirect arguments`,
+      size: 16,
+      usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatCameraBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
+      size: 112,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    boundarySplatReadbackBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} asynchronous count readback`,
+      size: 32,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const featureCaptureRequested = normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
+    boundarySplatFeatureBufferCapacity = featureCaptureRequested ? boundarySplatCapacity : 1;
+    boundarySplatFeatureBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY} ${featureCaptureRequested ? 'full' : 'dummy'}`,
+      size: boundarySplatFeatureBufferCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    state.boundarySplatFeatureCaptureRequested = featureCaptureRequested;
+    state.boundarySplatFeatureCaptureEffective = featureCaptureRequested && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
+    state.boundarySplatCapacity = boundarySplatCapacity;
+  }
+
+  function rebuildBoundarySplatBindGroups() {
+    if (
+      !boundarySplatComputeBindGroupLayout
+      || !boundarySplatRenderBindGroupLayout
+      || !boundarySidecarBuffer
+      || !boundarySplatBuffer
+      || !boundarySplatDrawBuffer
+      || !boundarySplatCameraBuffer
+      || !boundarySplatFeatureBuffer
+      || fluidBuffers.length !== 2
+    ) return;
+    boundarySplatComputeBindGroups = fluidBuffers.map((fluidBuffer, index) => device.createBindGroup({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compute bind group ${gridSize}^3 ${index}`,
+      layout: boundarySplatComputeBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: boundarySidecarBuffer } },
+        { binding: 1, resource: { buffer: fluidBuffer } },
+        { binding: 2, resource: { buffer: boundarySplatBuffer } },
+        { binding: 3, resource: { buffer: boundarySplatDrawBuffer } },
+        { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
+        { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
+      ],
+    }));
+    boundarySplatRenderBindGroup = device.createBindGroup({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} render bind group ${gridSize}^3`,
+      layout: boundarySplatRenderBindGroupLayout,
+      entries: [
+        { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
+        { binding: 5, resource: { buffer: boundarySplatBuffer } },
+      ],
+    });
+    rebuildSelectiveHeadLiveBindGroups();
+  }
+
+  function growBoundarySplatCapacity(candidateCount) {
+    const nextCapacity = nextBoundarySplatCapacity(boundarySplatCapacity, candidateCount, gridSize);
+    if (nextCapacity <= boundarySplatCapacity) return false;
+    const previousCapacity = boundarySplatCapacity;
+    const previousSplatBuffer = boundarySplatBuffer;
+    const previousFeatureBuffer = boundarySplatFeatureBuffer;
+    const featureCaptureRequested = boundarySplatFeatureCaptureRequested();
+    boundarySplatCapacity = nextCapacity;
+    boundarySplatBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} candidates capacity ${nextCapacity}`,
+      size: nextCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    boundarySplatFeatureBufferCapacity = featureCaptureRequested ? nextCapacity : 1;
+    boundarySplatFeatureBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY} ${featureCaptureRequested ? `capacity ${nextCapacity}` : 'dummy'}`,
+      size: boundarySplatFeatureBufferCapacity * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+    });
+    rebuildBoundarySplatBindGroups();
+    previousSplatBuffer?.destroy();
+    previousFeatureBuffer?.destroy();
+    state.boundarySplatCapacity = nextCapacity;
+    state.boundarySplatCapacityGrowthCount += 1;
+    state.boundarySplatCapacityGrowth = {
+      identity: 'boundary-splat-capacity-growth-v0',
+      from: previousCapacity,
+      to: nextCapacity,
+      observedCandidateCount: candidateCount,
+      physicalGridCellLimit: gridCellCount(gridSize),
+      reason: 'gpu-overflow-readback',
+    };
+    state.boundarySplatFeatureCaptureEffective = featureCaptureRequested
+      && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
+    return true;
+  }
+
   function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
     destroyFluidState();
+    boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
+    state.boundarySplatCapacity = boundarySplatCapacity;
+    state.boundarySplatCapacityGrowth = null;
     destroyMajorantState();
     ensureMajorantBuffer();
     ensureBoundarySidecarBuffer();
@@ -5937,6 +7062,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
     readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+    browserResidualSourcePipeline = device.createRenderPipeline({
+      label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
+      layout: pipelineLayout,
+      vertex: { module: shader, entryPoint: 'vs' },
+      fragment: {
+        module: shader,
+        entryPoint: 'fsResidualSource',
+        constants: renderPipelineConstants,
+        targets: [{ format: 'rgba8unorm' }, { format: 'rgba8unorm' }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    browserResidualPipeline = device.createRenderPipeline({
+      label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
+      layout: browserResidualPipelineLayout,
+      vertex: { module: browserResidualShader, entryPoint: 'vs' },
+      fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
+      primitive: { topology: 'triangle-list' },
+    });
     computePipeline = device.createComputePipeline({
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
@@ -5982,6 +7126,36 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       layout: boundarySidecarPipelineLayout,
       compute: { module: shader, entryPoint: 'csBoundarySidecar', constants: computePipelineConstants },
     });
+    boundarySplatCompactPipeline = device.createComputePipeline({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact ${gridSize}^3`,
+      layout: boundarySplatComputePipelineLayout,
+      compute: { module: boundarySplatShader, entryPoint: 'compactBoundarySplats', constants: computePipelineConstants },
+    });
+    boundarySplatFinalizePipeline = device.createComputePipeline({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize ${gridSize}^3`,
+      layout: boundarySplatComputePipelineLayout,
+      compute: { module: boundarySplatShader, entryPoint: 'finalizeBoundarySplats', constants: computePipelineConstants },
+    });
+    const makeBoundarySplatRenderPipeline = (targetFormat, label) => device.createRenderPipeline({
+      label,
+      layout: boundarySplatRenderPipelineLayout,
+      vertex: { module: boundarySplatShader, entryPoint: 'boundarySplatVs' },
+      fragment: {
+        module: boundarySplatShader,
+        entryPoint: 'boundarySplatFs',
+        targets: [{
+          format: targetFormat,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          },
+        }],
+      },
+      primitive: { topology: 'triangle-list' },
+    });
+    boundarySplatRenderPipeline = makeBoundarySplatRenderPipeline(format, `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} raster ${gridSize}^3`);
+    boundarySplatReadbackPipeline = makeBoundarySplatRenderPipeline('rgba8unorm', `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness readback ${gridSize}^3`);
+    ensureBoundarySplatBuffers();
     ensureTemporalHistoryTexture();
     rebuildFluidBindGroups();
     majorantFrontBindGroups = [
@@ -6022,6 +7196,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ],
       }),
     ];
+    rebuildBoundarySplatBindGroups();
     pressureWriteBindGroup = device.createBindGroup({
       label: `kaminos pressure divergence write bind group ${gridSize}^3`,
       layout: pressureWriteBindGroupLayout,
@@ -6089,6 +7264,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarBuiltThisFrame = false;
     state.boundarySidecarFrameCount = 0;
     state.boundarySidecarLastBuiltFrame = -1;
+    state.boundarySidecarOverrideReceipt = null;
+    boundarySidecarOverrideUpload = null;
     state.boundaryStructureSource = state.boundarySidecarSource;
     state.boundarySidecarView = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     state.boundarySidecarDebug = boundarySidecarDebug(state.boundarySidecarSource);
@@ -6122,8 +7299,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
         requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
       }
-      device = await adapter.requestDevice(Object.keys(requiredLimits).length ? { requiredLimits } : undefined);
+      if ((adapter.limits?.maxStorageBuffersPerShaderStage ?? 0) >= 9) {
+        requiredLimits.maxStorageBuffersPerShaderStage = 9;
+      }
+      const requiredFeatures = adapter.features?.has?.('timestamp-query') ? ['timestamp-query'] : [];
+      const deviceDescriptor = {};
+      if (Object.keys(requiredLimits).length) deviceDescriptor.requiredLimits = requiredLimits;
+      if (requiredFeatures.length) deviceDescriptor.requiredFeatures = requiredFeatures;
+      device = await adapter.requestDevice(Object.keys(deviceDescriptor).length ? deviceDescriptor : undefined);
     }
+    setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
+      timestampStatus: device.features?.has?.('timestamp-query') ? 'available' : 'unsupported',
+      reason: device.features?.has?.('timestamp-query') ? 'not-sampled-yet' : 'timestamp-query-not-supported',
+      candidateCopyBytes: 0,
+      rendererIdentity: state.boundarySplatRendererIdentity,
+    }));
     context = canvas.getContext('webgpu');
     format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({
@@ -6150,6 +7340,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       addressModeU: 'clamp-to-edge',
       addressModeV: 'clamp-to-edge',
     });
+    browserResidualSampler = device.createSampler({
+      label: 'kaminos browser direct residual source sampler',
+      magFilter: 'linear',
+      minFilter: 'linear',
+      addressModeU: 'clamp-to-edge',
+      addressModeV: 'clamp-to-edge',
+    });
     shader = device.createShaderModule({ label: 'kaminos compute fluid raymarch wgsl', code: WGSL });
     const compilationInfo = await shader.getCompilationInfo();
     const compilationErrors = compilationInfo.messages.filter(message => message.type === 'error');
@@ -6158,6 +7355,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
         .join('\n');
       throw new Error(`WGSL compilation failed:\n${detail}`);
+    }
+    browserResidualShader = device.createShaderModule({ label: 'kaminos browser direct residual wgsl', code: BROWSER_RESIDUAL_WGSL });
+    const residualCompilationInfo = await browserResidualShader.getCompilationInfo();
+    const residualCompilationErrors = residualCompilationInfo.messages.filter(message => message.type === 'error');
+    if (residualCompilationErrors.length > 0) {
+      const detail = residualCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Browser residual WGSL compilation failed:\n${detail}`);
+    }
+    boundarySplatShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} wgsl`, code: BOUNDARY_SPLAT_WGSL });
+    const boundarySplatCompilationInfo = await boundarySplatShader.getCompilationInfo();
+    const boundarySplatCompilationErrors = boundarySplatCompilationInfo.messages.filter(message => message.type === 'error');
+    if (boundarySplatCompilationErrors.length > 0) {
+      const detail = boundarySplatCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Boundary splat WGSL compilation failed:\n${detail}`);
     }
     bindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos fluid bind group layout',
@@ -6274,6 +7489,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    boundarySplatComputeBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compute bind group layout`,
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+        { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      ],
+    });
+    boundarySplatRenderBindGroupLayout = device.createBindGroupLayout({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} render bind group layout`,
+      entries: [
+        { binding: 4, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
+        { binding: 5, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } },
+      ],
+    });
     pressureWriteBindGroupLayout = device.createBindGroupLayout({
       label: 'kaminos pressure write bind group layout',
       entries: [
@@ -6313,9 +7546,38 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos empty bind group layout',
       entries: [],
     });
+    browserResidualBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos browser direct residual bind group layout',
+      entries: [
+        {
+          binding: 0,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+        {
+          binding: 1,
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: { type: 'filtering' },
+        },
+        {
+          binding: 2,
+          visibility: GPUShaderStage.FRAGMENT,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 3,
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: { sampleType: 'float' },
+        },
+      ],
+    });
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
+    });
+    browserResidualPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos browser direct residual pipeline layout',
+      bindGroupLayouts: [browserResidualBindGroupLayout],
     });
     majorantPipelineLayout = device.createPipelineLayout({
       label: 'kaminos coarse majorant pipeline layout',
@@ -6324,6 +7586,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySidecarPipelineLayout = device.createPipelineLayout({
       label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} pipeline layout`,
       bindGroupLayouts: [boundarySidecarReadBindGroupLayout, emptyBindGroupLayout, emptyBindGroupLayout, boundarySidecarWriteBindGroupLayout],
+    });
+    boundarySplatComputePipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compute pipeline layout`,
+      bindGroupLayouts: [boundarySplatComputeBindGroupLayout],
+    });
+    boundarySplatRenderPipelineLayout = device.createPipelineLayout({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} render pipeline layout`,
+      bindGroupLayouts: [boundarySplatRenderBindGroupLayout],
     });
     pressureWritePipelineLayout = device.createPipelineLayout({
       label: 'kaminos divergence pressure pipeline layout',
@@ -6347,6 +7617,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     device.pushErrorScope('validation');
     rebuildFluidState(controlsSnapshot.resolution, controlsSnapshot.majorantGrid);
+    if (gridSize === 160) {
+      selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
+        device,
+        sourceFluidBuffers: fluidBuffers,
+        sourceFrontBuffers: frontBuffers,
+      });
+      rebuildSelectiveHeadLiveBindGroups();
+      state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
+    }
     const pipelineError = await device.popErrorScope();
     if (pipelineError) {
       throw new Error(`fluid pipeline validation: ${pipelineError.message || String(pipelineError)}`);
@@ -6364,7 +7643,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const useFallbackSize = !(rect.width > 0 && rect.height > 0);
     const cssWidth = useFallbackSize ? fallbackWidth : rect.width;
     const cssHeight = useFallbackSize ? fallbackHeight : rect.height;
-    const dpr = 1;
+    const nativeDevicePixelRatio = Math.max(1, Number(win?.devicePixelRatio) || 1);
+    const canvasDevicePixelRatio = boundarySplatRequested() ? nativeDevicePixelRatio : 1;
+    const dpr = canvasDevicePixelRatio;
     const displayWidth = Math.max(1, Math.floor(cssWidth * dpr));
     const displayHeight = Math.max(1, Math.floor(cssHeight * dpr));
     const renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
@@ -6380,16 +7661,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       canvas.style.height = '100%';
       state.width = renderWidth;
       state.height = renderHeight;
+      state.cssWidth = cssWidth;
+      state.cssHeight = cssHeight;
       state.displayWidth = displayWidth;
       state.displayHeight = displayHeight;
+      state.nativeDevicePixelRatio = nativeDevicePixelRatio;
+      state.canvasDevicePixelRatio = canvasDevicePixelRatio;
       state.viewportSizeFallback = useFallbackSize;
       state.renderWidth = renderWidth;
       state.renderHeight = renderHeight;
       state.renderScale = renderScale;
       state.renderPixelRatio = renderWidth / Math.max(1, displayWidth);
-      state.volumeReconstructionStyle = renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+      state.volumeReconstructionStyle = browserResidualCanApply()
+        ? 'webgpu-direct-residual'
+        : (renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution');
       canvas.style.imageRendering = 'auto';
       frameTextureSize = '';
+      browserResidualFeatureTextureSize = '';
     }
   }
 
@@ -6401,9 +7689,182 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label: 'kaminos volume witness frame texture',
       size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
       format: 'rgba8unorm',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING,
     });
     frameTextureSize = key;
+    browserResidualBindGroup = null;
+    browserResidualTextureKey = '';
+  }
+
+  function ensureBrowserResidualFeatureTexture() {
+    const key = `${state.width}x${state.height}`;
+    if (browserResidualFeatureTexture && browserResidualFeatureTextureSize === key) return;
+    browserResidualFeatureTexture?.destroy();
+    browserResidualFeatureTexture = device.createTexture({
+      label: 'kaminos browser residual shader-material-authority feature texture',
+      size: { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      format: 'rgba8unorm',
+      usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
+    });
+    browserResidualFeatureTextureSize = key;
+    browserResidualBindGroup = null;
+    browserResidualTextureKey = '';
+  }
+
+  function browserResidualRequested() {
+    return normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode) === 'webgpu-direct-residual';
+  }
+
+  function validateBrowserResidualModel(model, url) {
+    if (!model || typeof model !== 'object') throw new Error('browser residual model is not an object');
+    if (model.schema !== 'kaminos.volume.browser-residual-model.v0') throw new Error(`unsupported browser residual model schema: ${model.schema || 'missing'}`);
+    if (model.authority !== 'browser-webgpu-direct-residual-v0') throw new Error(`unsupported browser residual authority: ${model.authority || 'missing'}`);
+    if (model.modelArch !== 'direct-residual') throw new Error(`browser residual one-pass route requires direct-residual, got ${model.modelArch || 'missing'}`);
+    const kernel = model.weights?.['output.weight'];
+    const bias = model.weights?.['output.bias'];
+    const inputChannels = Math.max(3, Math.min(7, Math.floor(Number(model.inputChannels) || 3)));
+    if (![3, 7].includes(inputChannels)) throw new Error(`browser residual inputChannels must be 3 or 7, got ${model.inputChannels || 'missing'}`);
+    if (!Array.isArray(kernel?.data) || kernel.data.length !== 27 * inputChannels) throw new Error(`browser residual output.weight must contain ${27 * inputChannels} floats for ${inputChannels} input channels`);
+    if (!Array.isArray(bias?.data) || bias.data.length !== 3) throw new Error('browser residual output.bias must contain 3 floats');
+    const featureInputMode = model.featureInputMode || 'rgb';
+    if (inputChannels === 7 && featureInputMode !== 'feature-rgba') throw new Error(`browser residual 7-channel model must declare feature-rgba, got ${featureInputMode}`);
+    if (inputChannels === 3 && featureInputMode === 'feature-rgba') throw new Error('browser residual feature-rgba model must carry 7 input channels');
+    const residualLimit = Number(model.residualOutputLimit);
+    if (!(residualLimit > 0)) throw new Error('browser residual residualOutputLimit must be positive');
+    const residualApplyScale = Number.isFinite(Number(model.residualApplyScale))
+      ? Math.max(0, Number(model.residualApplyScale))
+      : 1.0;
+    return {
+      ...model,
+      url,
+      inputChannels,
+      featureInputMode,
+      browserResidualInputChannels: inputChannels,
+      residualOutputLimit: residualLimit,
+      residualApplyScale,
+      edgeBandThreshold: Math.max(0.0001, Number(model.edgeBandThreshold) || 0.015),
+      residualWeights: [...kernel.data.map(Number), ...bias.data.map(Number)],
+    };
+  }
+
+  async function ensureBrowserResidualModel() {
+    state.volumeResidualMode = normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode);
+    state.volumeResidualModelUrl = String(controlsSnapshot.volumeResidualModelUrl || '');
+    state.volumeResidualStrength = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
+    if (!browserResidualRequested()) {
+      state.volumeResidualStatus = 'off';
+      state.volumeResidualAuthority = 'off';
+      state.volumeResidualFeatureAuthority = 'off';
+      state.volumeResidualModelSchema = null;
+      state.volumeResidualModelError = null;
+      return;
+    }
+    if (!state.volumeResidualModelUrl) {
+      browserResidualModel = null;
+      browserResidualModelUrl = '';
+      state.volumeResidualStatus = 'missing-model-url';
+      state.volumeResidualAuthority = 'off';
+      state.volumeResidualFeatureAuthority = 'off';
+      state.volumeResidualModelSchema = null;
+      state.volumeResidualModelError = 'volume_residual_model_url is required for webgpu-direct-residual';
+      return;
+    }
+    if (browserResidualModel && browserResidualModelUrl === state.volumeResidualModelUrl) {
+      state.volumeResidualStatus = 'loaded';
+      state.volumeResidualAuthority = browserResidualModel.authority;
+      state.volumeResidualFeatureAuthority = BROWSER_RESIDUAL_FEATURE_AUTHORITY;
+      state.volumeResidualModelSchema = browserResidualModel.schema;
+      state.volumeResidualModelError = null;
+      return;
+    }
+    if (!browserResidualLoadPromise || browserResidualModelUrl !== state.volumeResidualModelUrl) {
+      const url = state.volumeResidualModelUrl;
+      browserResidualModelUrl = url;
+      state.volumeResidualStatus = 'loading';
+      browserResidualLoadPromise = fetch(url, { cache: 'no-store' })
+        .then(response => {
+          if (!response.ok) throw new Error(`browser residual model fetch failed ${response.status} ${response.statusText}`);
+          return response.json();
+        })
+        .then(json => validateBrowserResidualModel(json, url));
+    }
+    try {
+      browserResidualModel = await browserResidualLoadPromise;
+      state.volumeResidualStatus = 'loaded';
+      state.volumeResidualAuthority = browserResidualModel.authority;
+      state.volumeResidualFeatureAuthority = BROWSER_RESIDUAL_FEATURE_AUTHORITY;
+      state.volumeResidualModelSchema = browserResidualModel.schema;
+      state.volumeResidualModelError = null;
+      writeBrowserResidualBuffer();
+    } catch (err) {
+      browserResidualModel = null;
+      browserResidualBindGroup = null;
+      state.volumeResidualStatus = 'error';
+      state.volumeResidualAuthority = 'off';
+      state.volumeResidualFeatureAuthority = 'off';
+      state.volumeResidualModelSchema = null;
+      state.volumeResidualModelError = err?.message || String(err);
+      emitStatus({ phase: 'browser-residual-error', error: state.volumeResidualModelError });
+    }
+  }
+
+  function writeBrowserResidualBuffer() {
+    if (!device || !browserResidualModel) return;
+    const residualDataHeaderFloats = 16;
+    const inputChannels = browserResidualModel.inputChannels || 3;
+    const weightCount = 27 * inputChannels;
+    const biasCount = 3;
+    const paramCount = 5;
+    const data = new Float32Array(residualDataHeaderFloats + weightCount + biasCount + paramCount);
+    data[0] = inputChannels;
+    data.set(browserResidualModel.residualWeights.slice(0, weightCount + biasCount), residualDataHeaderFloats);
+    const paramsOffset = residualDataHeaderFloats + weightCount + biasCount;
+    data[paramsOffset + 0] = browserResidualModel.residualOutputLimit;
+    data[paramsOffset + 1] = browserResidualModel.edgeBandThreshold;
+    data[paramsOffset + 2] = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
+    data[paramsOffset + 3] = browserResidualModel.residualApplyScale;
+    data[paramsOffset + 4] = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
+    if (!browserResidualBuffer || browserResidualBufferSize !== data.byteLength) {
+      browserResidualBuffer?.destroy();
+      browserResidualBuffer = device.createBuffer({
+        label: 'kaminos browser direct residual weights',
+        size: data.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      });
+      browserResidualBufferSize = data.byteLength;
+      browserResidualBindGroup = null;
+      browserResidualTextureKey = '';
+    }
+    device.queue.writeBuffer(browserResidualBuffer, 0, data);
+  }
+
+  function browserResidualCanApply() {
+    return browserResidualRequested()
+      && browserResidualModel
+      && browserResidualPipeline
+      && browserResidualSourcePipeline
+      && browserResidualSampler
+      && browserResidualBuffer
+      && state.volumeResidualStatus === 'loaded';
+  }
+
+  function ensureBrowserResidualBindGroup() {
+    if (!browserResidualCanApply()) return null;
+    const key = `${state.width}x${state.height}:${browserResidualModel.url}:${state.volumeResidualStrength}:${state.volumeResidualFeatureDebug}`;
+    if (browserResidualBindGroup && browserResidualTextureKey === key) return browserResidualBindGroup;
+    writeBrowserResidualBuffer();
+    browserResidualBindGroup = device.createBindGroup({
+      label: 'kaminos browser direct residual bind group',
+      layout: browserResidualBindGroupLayout,
+      entries: [
+        { binding: 0, resource: frameTexture.createView() },
+        { binding: 1, resource: browserResidualSampler },
+        { binding: 2, resource: { buffer: browserResidualBuffer } },
+        { binding: 3, resource: browserResidualFeatureTexture.createView() },
+      ],
+    });
+    browserResidualTextureKey = key;
+    return browserResidualBindGroup;
   }
 
   function updateUniforms(now) {
@@ -6414,7 +7875,6 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const lookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (lookFreeze) {
       if (state.lookFreezeFrame === null) state.lookFreezeFrame = state.frameCount;
-      if (state.lookFreezeTimeSeconds === null) state.lookFreezeTimeSeconds = now * 0.001;
     } else {
       state.lookFreezeTimeSeconds = null;
     }
@@ -6424,11 +7884,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       previousViewProj.copy(viewProj);
       previousViewProjReady = true;
     }
+    if (boundarySplatCameraBuffer) {
+      const cameraMatrix = camera.matrixWorld.elements;
+      const splatCamera = new Float32Array(28);
+      splatCamera.set(viewProj.elements, 0);
+      splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
+      splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
+      splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
+      device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
+    }
+    const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
     uniforms.set(invViewProj.elements, 0);
     uniforms[16] = camera.position.x;
     uniforms[17] = camera.position.y;
     uniforms[18] = camera.position.z;
-    uniforms[19] = lookFreeze ? (state.lookFreezeTimeSeconds ?? now * 0.001) : now * 0.001;
+    uniforms[19] = renderPhaseTimeMs * 0.001;
     uniforms[20] = state.width;
     uniforms[21] = state.height;
     uniforms[22] = controlsSnapshot.raySteps;
@@ -6460,8 +7930,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[44] = lookFreeze ? 0 : (historyValid ? requestedTemporalAccum : 0);
     uniforms[45] = lookFreeze ? 0 : (controlsSnapshot.temporalJitter ?? 0.85);
     uniforms[46] = controlsSnapshot.historyClamp ?? 0.70;
-    const temporalFrameIndex = lookFreeze ? (state.lookFreezeFrame ?? state.frameCount) : state.frameCount;
-    uniforms[47] = temporalFrameIndex % 4096;
+    uniforms[47] = renderPhaseFrame % 4096;
     uniforms[48] = controlsSnapshot.fireScale ?? 0.86;
     uniforms[49] = controlsSnapshot.detailScale ?? 1.75;
     uniforms[50] = controlsSnapshot.plumeHeight ?? 1.45;
@@ -6724,20 +8193,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[310] = clampFinite(boundarySidecarControls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75);
     uniforms[311] = clampFinite(boundarySidecarControls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1);
     uniforms[312] = boundarySidecarViewValue(boundarySidecarViewName);
+    const selectiveCompositionRequest = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
+    const selectiveCompositionDefinition = selectiveCompositionRequest.definition;
     uniforms[313] = 0;
     uniforms[314] = 0;
     uniforms[315] = 0;
+    uniforms[316] = 1 - selectiveCompositionDefinition.raymarchFireAuthority;
+    uniforms[317] = selectiveCompositionDefinition.raymarch ? 1 : 0;
+    uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;
+    uniforms[319] = 0;
     const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
     const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
-    uniforms[316] = scalarActivityReceiver.enabled;
-    uniforms[317] = scalarActivityReceiver.curlNoiseGain;
-    uniforms[318] = scalarActivityReceiver.vorticityGain;
-    uniforms[319] = scalarActivityReceiver.materialGain;
-    uniforms[320] = scalarActivityReceiver.display;
-    uniforms[321] = externalCueActive ? 1 : 0;
-    uniforms[322] = oracleActivityCueUpload.grid || 0;
-    uniforms[323] = oracleActivityCueUpload.externalCueCellCount || 0;
-    uniforms.set(previousViewProj.elements, 324);
+    uniforms[320] = scalarActivityReceiver.enabled;
+    uniforms[321] = scalarActivityReceiver.curlNoiseGain;
+    uniforms[322] = scalarActivityReceiver.vorticityGain;
+    uniforms[323] = scalarActivityReceiver.materialGain;
+    uniforms[324] = scalarActivityReceiver.display;
+    uniforms[325] = externalCueActive ? 1 : 0;
+    uniforms[326] = oracleActivityCueUpload.grid || 0;
+    uniforms[327] = oracleActivityCueUpload.externalCueCellCount || 0;
+    uniforms.set(previousViewProj.elements, 328);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -7196,8 +8671,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return state.simCostLedger;
   }
 
-  function encodeSim(encoder) {
-    const pass = encoder.beginComputePass({ label: 'kaminos fluid sim pass' });
+  function encodeSim(encoder, options = {}) {
+    const pass = encoder.beginComputePass({
+      label: 'kaminos fluid sim pass',
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+    });
     pass.setPipeline(computePipeline);
     pass.setBindGroup(0, bindGroups[currentFluid]);
     const workgroups = Math.ceil(gridSize / 4);
@@ -7329,7 +8807,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     const pass = encoder.beginComputePass({ label: 'kaminos coarse majorant build pass' });
     pass.setPipeline(majorantComputePipeline);
-    pass.setBindGroup(0, majorantFrontBindGroups[currentFluid]);
+    pass.setBindGroup(0, options.readBindGroup || majorantFrontBindGroups[currentFluid]);
     pass.setBindGroup(1, majorantWriteBindGroup);
     const workgroups = Math.ceil(majorantGridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
@@ -7341,13 +8819,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateSimCostLedger({ majorantBuiltThisFrame: true });
   }
 
-  function encodeBoundarySidecar(encoder) {
+  function encodeBoundarySidecar(encoder, options = {}) {
     const sourceName = normalizeBoundarySidecarSource(controlsSnapshot.boundarySidecarSource);
     const sidecarViewName = normalizeBoundarySidecarView(controlsSnapshot.boundarySidecarView ?? controlsSnapshot.boundarySidecarControls?.view);
     state.boundarySidecarSource = sourceName;
     state.boundarySidecarView = sidecarViewName;
     state.boundaryStructureSource = sourceName;
-    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off';
+    if (sourceName === 'override') {
+      const overrideApplied = state.boundarySidecarOverrideReceipt?.status === 'applied'
+        && state.boundarySidecarOverrideReceipt.grid === gridSize
+        && state.boundarySidecarOverrideReceipt.byteLength === boundarySidecarBufferBytes(gridSize);
+      state.boundarySidecarBuilt = overrideApplied;
+      state.boundarySidecarBuiltThisFrame = overrideApplied;
+      state.boundarySidecarAuthority = overrideApplied ? EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY : BOUNDARY_SIDECAR_BAKE_AUTHORITY;
+      state.boundarySidecarDebug = boundarySidecarDebug(sourceName);
+      updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
+      return;
+    }
+    state.boundarySidecarAuthority = BOUNDARY_SIDECAR_BAKE_AUTHORITY;
+    const shouldBakeBoundarySidecar = sourceName !== 'live' || sidecarViewName !== 'off' || boundarySplatRequested();
     if (
       !shouldBakeBoundarySidecar ||
       !boundarySidecarBuildPipeline ||
@@ -7359,9 +8849,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       updateSimCostLedger({ boundarySidecarBuiltThisFrame: false });
       return;
     }
-    const pass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} bake pass` });
+    const pass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} bake pass`,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+    });
     pass.setPipeline(boundarySidecarBuildPipeline);
-    pass.setBindGroup(0, boundarySidecarReadBindGroups[currentFluid]);
+    pass.setBindGroup(0, options.readBindGroup || boundarySidecarReadBindGroups[currentFluid]);
     pass.setBindGroup(3, boundarySidecarWriteBindGroup);
     const workgroups = Math.ceil(gridSize / 4);
     pass.dispatchWorkgroups(workgroups, workgroups, workgroups);
@@ -7374,9 +8867,418 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     updateSimCostLedger({ boundarySidecarBuiltThisFrame: true });
   }
 
-  function encodeDraw(encoder, view, label, targetPipeline = pipeline) {
+  function boundarySplatRequested() {
+    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) !== 'off';
+  }
+
+  function boundarySplatLearnedAttributesRequested() {
+    return normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode) === 'learned';
+  }
+
+  function boundarySplatFeatureCaptureRequested() {
+    return normalizeBoundarySplatFeatureCapture(controlsSnapshot.boundarySplatFeatureCapture);
+  }
+
+  function makeBoundarySplatCopyDisposition(candidateCopyBytes = 0, rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY) {
+    return {
+      identity: 'boundary-splat-candidate-copy-disposition-v0',
+      status: 'removed-full-capacity-copy',
+      rendererIdentity,
+      sourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
+      candidateStrideBytes: BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
+      priorFullCapacityCopyBytes: boundarySplatCapacity * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES,
+      effectiveCandidateCopyBytes: candidateCopyBytes,
+      renderStorageStrategy: 'single-candidate-storage-buffer-read-after-compute-pass',
+    };
+  }
+
+  function makeBoundarySplatStage(status, ms = null, extra = {}) {
+    return { status, ms, ...extra };
+  }
+
+  function makeBoundarySplatGpuProfile({
+    timestampStatus = 'unsupported',
+    reason = null,
+    stages = null,
+    candidateCopyBytes = 0,
+    rendererIdentity = BOUNDARY_SPLAT_RENDERER_IDENTITY,
+  } = {}) {
+    const stageStatus = timestampStatus === 'available' ? 'not-sampled' : timestampStatus;
+    const stageMap = stages ?? {
+      simulation: makeBoundarySplatStage(stageStatus),
+      sidecar: makeBoundarySplatStage(stageStatus),
+      compaction: makeBoundarySplatStage(stageStatus),
+      candidateCopy: makeBoundarySplatStage(stageStatus, null, {
+        disposition: 'removed-full-capacity-copy',
+        candidateCopyBytes,
+      }),
+      indirectSetup: makeBoundarySplatStage(stageStatus),
+      splatRaster: makeBoundarySplatStage(stageStatus),
+      matchedRaymarchRaster: makeBoundarySplatStage(stageStatus),
+      total: makeBoundarySplatStage(stageStatus),
+    };
+    return {
+      identity: BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY,
+      rendererIdentity,
+      sourceAuthority: BOUNDARY_SPLAT_SOURCE_AUTHORITY,
+      timestampFeature: 'timestamp-query',
+      timestampStatus,
+      reason,
+      timeUnit: 'ms',
+      candidateCopyBytes,
+      boundarySplatCopyBytesThisFrame: candidateCopyBytes,
+      stages: stageMap,
+    };
+  }
+
+  function setBoundarySplatGpuProfile(profile) {
+    state.boundarySplatTimestampStatus = profile.timestampStatus;
+    state.boundarySplatGpuProfile = profile;
+    state.boundarySplatCopyBytesThisFrame = profile.candidateCopyBytes ?? state.boundarySplatCopyBytesThisFrame ?? 0;
+    state.boundarySplatCopyDisposition = makeBoundarySplatCopyDisposition(state.boundarySplatCopyBytesThisFrame, state.boundarySplatRendererIdentity);
+    return profile;
+  }
+
+  function encodeBoundarySplats(encoder, hooks = {}) {
+    state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+    state.boundarySplatRendererIdentity = boundarySplatEffectiveRendererIdentity(state.boundarySplatMode);
+    state.boundarySplatAttributeModelIdentity = boundarySplatEffectiveAttributeModelIdentity(state.boundarySplatMode);
+    state.boundarySplatFeatureCaptureRequested = boundarySplatFeatureCaptureRequested();
+    state.boundarySplatSourceAuthority = state.boundarySidecarSource === 'override'
+      && state.boundarySidecarOverrideReceipt?.status === 'applied'
+      ? EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY
+      : BOUNDARY_SPLAT_SOURCE_AUTHORITY;
+    state.boundarySplatFeatureCaptureEffective = state.boundarySplatFeatureCaptureRequested
+      && boundarySplatFeatureBufferCapacity === boundarySplatCapacity;
+    if (!boundarySplatRequested()) {
+      state.boundarySplatFallbackReason = null;
+      return false;
+    }
+    if (
+      !state.boundarySidecarBuiltThisFrame
+      || !boundarySplatCompactPipeline
+      || !boundarySplatFinalizePipeline
+      || !boundarySplatRenderPipeline
+      || !boundarySplatDrawBuffer
+      || !boundarySplatIndirectBuffer
+      || boundarySplatComputeBindGroups.length !== 2
+      || !boundarySplatRenderBindGroup
+    ) {
+      state.boundarySplatFallbackReason = !state.boundarySidecarBuiltThisFrame
+        ? 'sidecar-not-built-this-frame'
+        : 'boundary-splat-gpu-route-unavailable';
+      return false;
+    }
+    device.queue.writeBuffer(boundarySplatDrawBuffer, 0, new Uint32Array([6, 0, 0, 0, 0, 0, boundarySplatCapacity, 0]));
+    const compactPass = encoder.beginComputePass({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} compact pass` });
+    compactPass.setPipeline(boundarySplatCompactPipeline);
+    const computeBindGroup = hooks.computeBindGroup || boundarySplatComputeBindGroups[currentFluid];
+    compactPass.setBindGroup(0, computeBindGroup);
+    const workgroups = Math.ceil(gridSize / 4);
+    compactPass.dispatchWorkgroups(workgroups, workgroups, workgroups);
+    compactPass.end();
+    const finalizePass = encoder.beginComputePass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} finalize pass`,
+      ...(hooks.finalizeTimestampWrites ? { timestampWrites: hooks.finalizeTimestampWrites } : {}),
+    });
+    finalizePass.setPipeline(boundarySplatFinalizePipeline);
+    finalizePass.setBindGroup(0, computeBindGroup);
+    finalizePass.dispatchWorkgroups(1);
+    finalizePass.end();
+    hooks.afterCompaction?.();
+    state.boundarySplatCopyBytesThisFrame = 0;
+    state.boundarySplatCopyDisposition = makeBoundarySplatCopyDisposition(0, state.boundarySplatRendererIdentity);
+    hooks.afterCandidateCopy?.();
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatIndirectBuffer, 0, 16);
+    hooks.afterIndirectSetup?.();
+    state.boundarySplatFallbackReason = null;
+    return true;
+  }
+
+  function encodeBoundarySplatDraw(encoder, view, targetPipeline = boundarySplatRenderPipeline, options = {}) {
+    if (!boundarySplatRequested() || state.boundarySplatFallbackReason || !targetPipeline) return false;
+    const loadOp = options.loadOp === 'load' ? 'load' : 'clear';
+    const pass = encoder.beginRenderPass({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} canvas pass`,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
+      colorAttachments: [{
+        view,
+        clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+        loadOp,
+        storeOp: 'store',
+      }],
+    });
+    pass.setPipeline(targetPipeline);
+    pass.setBindGroup(0, boundarySplatRenderBindGroup);
+    pass.drawIndirect(boundarySplatIndirectBuffer, 0);
+    pass.end();
+    state.boundarySplatFrameCount += 1;
+    state.volumeReconstructionStyle = state.boundarySplatRendererIdentity;
+    return true;
+  }
+
+  function encodeBoundarySplatTelemetry(encoder, force = false) {
+    if (
+      !boundarySplatRequested()
+      || state.boundarySplatFallbackReason
+      || (!force && state.frameCount % 12 !== 0)
+      || boundarySplatTelemetryCopyPending
+      || boundarySplatTelemetryMapPending
+      || !boundarySplatDrawBuffer
+      || !boundarySplatReadbackBuffer
+    ) return;
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatReadbackBuffer, 0, 32);
+    boundarySplatTelemetryCopyPending = true;
+  }
+
+  function timestampQueriesAvailable() {
+    if (!device?.features?.has?.('timestamp-query')) return false;
+    if (typeof device.createQuerySet !== 'function') return false;
+    const probeEncoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp availability probe` });
+    return typeof probeEncoder.beginComputePass === 'function' && typeof probeEncoder.resolveQuerySet === 'function';
+  }
+
+  function encodeBoundarySplatTimestampMarker(encoder, querySet, index, label) {
+    const pass = encoder.beginComputePass({
+      label,
+      timestampWrites: {
+        querySet,
+        endOfPassWriteIndex: index,
+      },
+    });
+    pass.end();
+  }
+
+  async function sampleBoundarySplatGpuProfile() {
+    if (!boundarySplatRequested()) {
+      return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
+        timestampStatus: 'unsupported',
+        reason: 'boundary-splat-route-not-requested',
+        candidateCopyBytes: 0,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+      }));
+    }
+    if (!timestampQueriesAvailable()) {
+      return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
+        timestampStatus: 'unsupported',
+        reason: device?.features?.has?.('timestamp-query') ? 'timestamp-query-write-api-unavailable' : 'timestamp-query-not-supported',
+        candidateCopyBytes: state.boundarySplatCopyBytesThisFrame ?? 0,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+      }));
+    }
+
+    const queryCount = 7;
+    const querySet = device.createQuerySet({
+      type: 'timestamp',
+      count: queryCount,
+    });
+    const resolveBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp resolve`,
+      size: queryCount * 8,
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    });
+    const readbackBuffer = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp readback`,
+      size: queryCount * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+
+    try {
+      ensureFrameTexture();
+      device.pushErrorScope('validation');
+      const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} timestamp profile encoder` });
+      const writeTimestamp = (index, label) => encodeBoundarySplatTimestampMarker(encoder, querySet, index, label);
+      encodeSim(encoder, {
+        timestampWrites: {
+          querySet,
+          beginningOfPassWriteIndex: 0,
+        },
+      });
+      writeTimestamp(1, 'kaminos boundary splat timestamp after simulation');
+      encodeBoundarySidecar(encoder, {
+        timestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 2,
+        },
+      });
+      const splatsEncoded = encodeBoundarySplats(encoder, {
+        finalizeTimestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 3,
+        },
+      });
+      if (!splatsEncoded) {
+        throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-route-unavailable');
+      }
+      const splatApplied = encodeBoundarySplatDraw(encoder, frameTexture.createView(), boundarySplatReadbackPipeline, {
+        timestampWrites: {
+          querySet,
+          beginningOfPassWriteIndex: 4,
+          endOfPassWriteIndex: 5,
+        },
+      });
+      if (!splatApplied) {
+        throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-profile-raster-unavailable');
+      }
+      encodeDraw(encoder, frameTexture.createView(), 'kaminos boundary splat matched raymarch timestamp pass', readbackPipeline, {
+        timestampWrites: {
+          querySet,
+          endOfPassWriteIndex: 6,
+        },
+      });
+      encoder.resolveQuerySet(querySet, 0, queryCount, resolveBuffer, 0);
+      encoder.copyBufferToBuffer(resolveBuffer, 0, readbackBuffer, 0, queryCount * 8);
+      device.queue.submit([encoder.finish()]);
+      await readbackBuffer.mapAsync(GPUMapMode.READ);
+      const timestamps = new BigUint64Array(readbackBuffer.getMappedRange().slice(0));
+      readbackBuffer.unmap();
+      const validationError = await device.popErrorScope();
+      if (validationError) {
+        throw new Error(validationError.message || String(validationError));
+      }
+      if (timestamps.some(value => value === 0n)) {
+        throw new Error(`timestamp-query-incomplete:${Array.from(timestamps, value => value.toString()).join(',')}`);
+      }
+      for (let index = 1; index < timestamps.length; index += 1) {
+        if (timestamps[index] < timestamps[index - 1]) {
+          throw new Error(`timestamp-query-nonmonotonic:${Array.from(timestamps, value => value.toString()).join(',')}`);
+        }
+      }
+      const nsToMs = (endIndex, startIndex) => Number(timestamps[endIndex] - timestamps[startIndex]) / 1_000_000;
+      const candidateCopyBytes = state.boundarySplatCopyBytesThisFrame ?? 0;
+      return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
+        timestampStatus: 'available',
+        reason: 'timestamp-query-sampled',
+        candidateCopyBytes,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+        stages: {
+          simulation: makeBoundarySplatStage('sampled', nsToMs(1, 0)),
+          sidecar: makeBoundarySplatStage('sampled', nsToMs(2, 1)),
+          compaction: makeBoundarySplatStage('sampled', nsToMs(3, 2)),
+          candidateCopy: makeBoundarySplatStage('sampled', 0, {
+            disposition: 'removed-full-capacity-copy',
+            candidateCopyBytes,
+          }),
+          indirectSetup: makeBoundarySplatStage('sampled', nsToMs(4, 3)),
+          splatRaster: makeBoundarySplatStage('sampled', nsToMs(5, 4)),
+          matchedRaymarchRaster: makeBoundarySplatStage('sampled', nsToMs(6, 5)),
+          total: makeBoundarySplatStage('sampled', nsToMs(6, 0)),
+        },
+      }));
+    } catch (error) {
+      try {
+        const validationError = await device.popErrorScope();
+        if (validationError && !String(error?.message || error).includes(validationError.message)) {
+          error = new Error(`${error?.message || String(error)}; validation:${validationError.message || String(validationError)}`);
+        }
+      } catch {
+        // The validation scope may already have been popped; the original failure stays reportable.
+      }
+      return setBoundarySplatGpuProfile(makeBoundarySplatGpuProfile({
+        timestampStatus: 'unsupported',
+        reason: `timestamp-query-profile-failed:${error?.message || String(error)}`,
+        candidateCopyBytes: state.boundarySplatCopyBytesThisFrame ?? 0,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+      }));
+    } finally {
+      resolveBuffer.destroy();
+      readbackBuffer.destroy();
+      querySet.destroy?.();
+    }
+  }
+
+  async function resolveBoundarySplatTelemetry() {
+    if (!boundarySplatTelemetryCopyPending || boundarySplatTelemetryMapPending || !boundarySplatReadbackBuffer) return;
+    boundarySplatTelemetryCopyPending = false;
+    boundarySplatTelemetryMapPending = true;
+    try {
+      await boundarySplatReadbackBuffer.mapAsync(GPUMapMode.READ);
+      const drawState = new Uint32Array(boundarySplatReadbackBuffer.getMappedRange());
+      state.boundarySplatInstanceCount = drawState[1];
+      const candidateCount = drawState[4];
+      const overflowCount = drawState[5];
+      state.boundarySplatCandidateCount = candidateCount;
+      state.boundarySplatOverflowCount = overflowCount;
+      boundarySplatReadbackBuffer.unmap();
+      if (overflowCount > 0) growBoundarySplatCapacity(candidateCount);
+    } catch (error) {
+      state.boundarySplatCandidateCount = null;
+      state.boundarySplatOverflowCount = null;
+      state.boundarySplatFallbackReason = `count-readback-failed:${error?.message || String(error)}`;
+    } finally {
+      boundarySplatTelemetryMapPending = false;
+    }
+  }
+
+  async function sampleBoundarySplatDrawState() {
+    if (!boundarySplatRequested() || !boundarySplatDrawBuffer) return null;
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    const readback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness draw-state readback`,
+      size: 32,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} witness draw-state encoder` });
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, readback, 0, 32);
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const drawState = new Uint32Array(readback.getMappedRange());
+    const result = {
+      instanceCount: drawState[1],
+      candidateCount: drawState[4],
+      overflowCount: drawState[5],
+      authority: 'gpu-indirect-post-submit-witness-readback',
+    };
+    readback.unmap();
+    readback.destroy();
+    state.boundarySplatInstanceCount = result.instanceCount;
+    state.boundarySplatCandidateCount = result.candidateCount;
+    state.boundarySplatOverflowCount = result.overflowCount;
+    return result;
+  }
+
+  async function sampleBoundarySplatFeatureCapture(instanceCount) {
+    if (!state.boundarySplatFeatureCaptureRequested) return null;
+    if (!state.boundarySplatFeatureCaptureEffective || !boundarySplatFeatureBuffer) {
+      throw new Error('boundary-splat-feature-capture-requested-but-unavailable');
+    }
+    if (!Number.isInteger(instanceCount) || instanceCount <= 0) {
+      throw new Error(`boundary-splat-feature-capture-blank-instance-count:${instanceCount}`);
+    }
+    if (instanceCount > boundarySplatCapacity) {
+      throw new Error(`boundary-splat-feature-capture-instance-count-exceeds-capacity:${instanceCount}`);
+    }
+    const captureBytes = instanceCount * BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES;
+    const readback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY} witness readback`,
+      size: captureBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    try {
+      const encoder = device.createCommandEncoder({ label: `kaminos ${BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY} witness encoder` });
+      encoder.copyBufferToBuffer(boundarySplatFeatureBuffer, 0, readback, 0, captureBytes);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const values = new Float32Array(readback.getMappedRange()).slice();
+      readback.unmap();
+      return {
+        ...packBoundarySplatFeatureCapture(values, instanceCount, boundarySplatCapacity),
+        status: 'captured',
+        requested: true,
+        effective: true,
+        rendererIdentity: state.boundarySplatRendererIdentity,
+        modelIdentity: state.boundarySplatAttributeModelIdentity,
+        countAuthority: 'gpu-indirect-post-submit-witness-readback',
+      };
+    } finally {
+      readback.destroy();
+    }
+  }
+
+  function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
     const pass = encoder.beginRenderPass({
       label,
+      ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
       colorAttachments: [{
         view,
         clearValue: transparentCanvas
@@ -7387,9 +9289,80 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }],
     });
     pass.setPipeline(targetPipeline);
+    pass.setBindGroup(0, options.bindGroup || bindGroups[currentFluid]);
+    pass.draw(3);
+    pass.end();
+  }
+
+  function encodeBrowserResidualSourcePass(encoder, colorView, featureView) {
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos volume browser residual shader-material-authority source pass',
+      colorAttachments: [
+        {
+          view: colorView,
+          clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+        {
+          view: featureView,
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          loadOp: 'clear',
+          storeOp: 'store',
+        },
+      ],
+    });
+    pass.setPipeline(browserResidualSourcePipeline);
     pass.setBindGroup(0, bindGroups[currentFluid]);
     pass.draw(3);
     pass.end();
+  }
+
+  function encodeBrowserResidualPass(encoder, view) {
+    const bindGroup = ensureBrowserResidualBindGroup();
+    if (!bindGroup) return false;
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos browser webgpu-direct-residual pass',
+      colorAttachments: [{
+        view,
+        clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    pass.setPipeline(browserResidualPipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3);
+    pass.end();
+    state.volumeReconstructionStyle = 'webgpu-direct-residual';
+    return true;
+  }
+
+  function updateSelectiveHeadLiveCompositionState() {
+    const request = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
+    const effective = state.selectiveHeadLiveEffectiveRole === 'off' ? 'off' : request.requested;
+    state.selectiveHeadLiveCompositionRequestedRaw = request.raw;
+    state.selectiveHeadLiveCompositionRequested = request.requested;
+    state.selectiveHeadLiveCompositionEffective = effective;
+    state.selectiveHeadLiveCompositionAuthority = effective === 'off'
+      ? 'off'
+      : selectiveHeadLiveRenderCompositionAuthority(request.requested);
+    state.selectiveHeadLiveCompositionFallbackReason = request.fallbackReason;
+    return {
+      ...request,
+      effective,
+      definition: effective === 'off'
+        ? { raymarch: false, splat: false, raymarchFireAuthority: 0, compositionAuthority: 'off' }
+        : request.definition,
+    };
+  }
+
+  function recordSelectiveHeadLivePassReceipt(receipt) {
+    state.selectiveHeadLivePassReceipt = makeSelectiveHeadLivePassReceipt(receipt);
+    if (state.selectiveHeadLiveCompositionEffective !== 'off') {
+      state.volumeReconstructionStyle = state.selectiveHeadLiveCompositionEffective;
+    }
+    return state.selectiveHeadLivePassReceipt;
   }
 
   function encodeHistoryCopy(encoder, sourceTexture) {
@@ -7406,6 +9379,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function render(now) {
     if (!state.active) return;
+    if (selectiveHeadLiveCapturePaused) {
+      raf = 0;
+      return;
+    }
     raf = requestAnimationFrame(render);
     try {
       const cpuStart = performance.now();
@@ -7423,13 +9400,87 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.lookFreezeSkippedFrames = 0;
         encodeSim(encoder);
         encodeLiquidFireContactTransfer(encoder);
-        encodeMajorant(encoder);
+        encodeSelectiveHeadLiveFields(encoder);
+        const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
+        encodeMajorant(encoder, {
+          readBindGroup: selectiveMajorant,
+          force: state.selectiveHeadLiveEffectiveRole !== 'off',
+        });
       }
-      encodeBoundarySidecar(encoder);
+      const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
+      const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
+      const selectiveRender = selectiveHeadLiveRoleGroups('render');
+      encodeBoundarySidecar(encoder, { readBindGroup: selectiveSidecar });
+      encodeBoundarySplats(encoder, { computeBindGroup: selectiveSplat });
       const currentTexture = context.getCurrentTexture();
-      encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
+      if (boundarySplatRequested()) {
+        const composition = updateSelectiveHeadLiveCompositionState();
+        let raymarchEncoded = false;
+        let raymarchApplied = false;
+        let splatEncoded = false;
+        let splatApplied = false;
+        if (composition.definition.raymarch) {
+          encodeDraw(
+            encoder,
+            currentTexture.createView(),
+            `kaminos selective-head live ${composition.effective} raymarch pass`,
+            pipeline,
+            { bindGroup: selectiveRender },
+          );
+          raymarchEncoded = true;
+          raymarchApplied = true;
+        }
+        if (composition.definition.splat) {
+          splatEncoded = encodeBoundarySplatDraw(
+            encoder,
+            currentTexture.createView(),
+            boundarySplatRenderPipeline,
+            { loadOp: raymarchApplied ? 'load' : 'clear' },
+          );
+          splatApplied = splatEncoded;
+        }
+        if (composition.definition.splat && !splatApplied) {
+          encodeDraw(
+            encoder,
+            currentTexture.createView(),
+            'kaminos selective-head live explicit fallback raymarch',
+            pipeline,
+            { bindGroup: selectiveRender },
+          );
+          raymarchEncoded = true;
+          raymarchApplied = true;
+          state.selectiveHeadLiveCompositionFallbackReason = state.boundarySplatFallbackReason || 'boundary-splat-route-unavailable';
+          state.volumeReconstructionStyle = 'selective-head-live-fallback-raymarch';
+          emitStatus({ phase: 'selective-head-live-composition-fallback', reason: state.selectiveHeadLiveCompositionFallbackReason });
+        }
+        recordSelectiveHeadLivePassReceipt({
+          composition: composition.effective === 'off' ? composition.requested : composition.effective,
+          raymarchEncoded,
+          raymarchApplied,
+          splatEncoded,
+          splatApplied,
+          fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+        });
+        recordBrowserResidualCost({ applied: false });
+      } else if (browserResidualCanApply()) {
+        const sourceEncodeStart = performance.now();
+        ensureFrameTexture();
+        ensureBrowserResidualFeatureTexture();
+        encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
+        const sourcePassEncodeMs = performance.now() - sourceEncodeStart;
+        const residualEncodeStart = performance.now();
+        const residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
+        const residualPassEncodeMs = performance.now() - residualEncodeStart;
+        recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
+      } else {
+        encodeDraw(encoder, currentTexture.createView(), 'kaminos volume canvas pass');
+        state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+        recordBrowserResidualCost({ applied: false });
+      }
       encodeHistoryCopy(encoder, currentTexture);
+      encodeBoundarySplatTelemetry(encoder);
       device.queue.submit([encoder.finish()]);
+      if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
       commitPreviousViewProjection();
       state.frameCount += 1;
       state.lastFrameEnergy = Math.min(9.999, state.simStepCount * 0.001 + 0.55 * controlsSnapshot.density + 0.35 * controlsSnapshot.fire + 0.18 * (controlsSnapshot.radiance ?? 1.65));
@@ -7450,6 +9501,819 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     cancelAnimationFrame(raf);
     raf = 0;
     render(performance.now());
+  }
+
+  let debugFullFieldExportSession = null;
+
+  async function materializeFullFieldDerivedBuffersForDebugExport(nowMs = performance.now()) {
+    updateUniforms(nowMs);
+    const encoder = device.createCommandEncoder({ label: 'kaminos full-field derived-buffer materialization' });
+    encodeBoundarySidecar(encoder);
+    const boundarySplatsEncoded = encodeBoundarySplats(encoder);
+    device.queue.submit([encoder.finish()]);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    return {
+      identity: 'frozen-field-derived-buffer-materialization-v0',
+      nowMs,
+      boundarySidecarBuilt: state.boundarySidecarBuiltThisFrame,
+      boundarySidecarAuthority: state.boundarySidecarAuthority,
+      boundarySplatsEncoded,
+      boundarySplatMode: state.boundarySplatMode,
+      boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+      boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+      boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+    };
+  }
+
+  async function copyFullFieldBuffersForDebugExport(derivedBuffers) {
+    const fluidBytes = fluidBufferBytes(gridSize);
+    const frontBytes = frontFieldBufferBytes(gridSize);
+    const boundaryBytes = boundarySidecarBufferBytes(gridSize);
+    const fluidReadback = device.createBuffer({
+      label: 'kaminos full-field fluid export readback',
+      size: fluidBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const frontReadback = device.createBuffer({
+      label: `kaminos ${FRONT_FIELD_IDENTITY} full-field export readback`,
+      size: frontBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const boundaryReadback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SIDECAR_IDENTITY} full-field export readback`,
+      size: boundaryBytes,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const boundarySplatDrawReadback = device.createBuffer({
+      label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} full-field draw-state readback`,
+      size: 32,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos full-field export readback encoder' });
+    encoder.copyBufferToBuffer(fluidBuffers[currentFluid], 0, fluidReadback, 0, fluidBytes);
+    encoder.copyBufferToBuffer(frontBuffers[currentFront], 0, frontReadback, 0, frontBytes);
+    encoder.copyBufferToBuffer(boundarySidecarBuffer, 0, boundaryReadback, 0, boundaryBytes);
+    encoder.copyBufferToBuffer(boundarySplatDrawBuffer, 0, boundarySplatDrawReadback, 0, 32);
+    device.queue.submit([encoder.finish()]);
+    await Promise.all([
+      fluidReadback.mapAsync(GPUMapMode.READ),
+      frontReadback.mapAsync(GPUMapMode.READ),
+      boundaryReadback.mapAsync(GPUMapMode.READ),
+      boundarySplatDrawReadback.mapAsync(GPUMapMode.READ),
+    ]);
+    const fluid = new Float32Array(fluidReadback.getMappedRange()).slice();
+    const front = new Float32Array(frontReadback.getMappedRange()).slice();
+    const boundary = new Float32Array(boundaryReadback.getMappedRange()).slice();
+    const boundarySplatDraw = new Uint32Array(boundarySplatDrawReadback.getMappedRange()).slice();
+    fluidReadback.unmap();
+    fluidReadback.destroy();
+    frontReadback.unmap();
+    frontReadback.destroy();
+    boundaryReadback.unmap();
+    boundaryReadback.destroy();
+    boundarySplatDrawReadback.unmap();
+    boundarySplatDrawReadback.destroy();
+
+    const instanceCount = derivedBuffers?.boundarySplatsEncoded === true ? boundarySplatDraw[1] : 0;
+    const candidateCount = derivedBuffers?.boundarySplatsEncoded === true ? boundarySplatDraw[4] : 0;
+    const overflowCount = derivedBuffers?.boundarySplatsEncoded === true ? boundarySplatDraw[5] : 0;
+    const capacity = boundarySplatDraw[6] || boundarySplatCapacity;
+    const boundarySplatBytes = instanceCount * BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES;
+    let boundarySplats = new Float32Array(0);
+    if (boundarySplatBytes > 0) {
+      const boundarySplatReadback = device.createBuffer({
+        label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} effective-output readback`,
+        size: boundarySplatBytes,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      });
+      const splatEncoder = device.createCommandEncoder({ label: 'kaminos effective boundary-splat export readback encoder' });
+      splatEncoder.copyBufferToBuffer(boundarySplatBuffer, 0, boundarySplatReadback, 0, boundarySplatBytes);
+      device.queue.submit([splatEncoder.finish()]);
+      await boundarySplatReadback.mapAsync(GPUMapMode.READ);
+      boundarySplats = new Float32Array(boundarySplatReadback.getMappedRange()).slice();
+      boundarySplatReadback.unmap();
+      boundarySplatReadback.destroy();
+    }
+    return {
+      fluid,
+      front,
+      boundary,
+      boundarySplats,
+      fluidBytes,
+      frontBytes,
+      boundaryBytes,
+      boundarySplatBytes,
+      boundarySplatDraw: { instanceCount, candidateCount, overflowCount, capacity },
+    };
+  }
+
+  function fullFieldExportDescriptorFor(values, kind, byteLength) {
+    const isBoundary = kind === 'boundary';
+    const isBoundarySplat = kind === 'boundarySplat';
+    return {
+      kind,
+      dtype: 'float32',
+      byteOrder: 'little-endian',
+      floatCount: values.length,
+      byteLength,
+      shape: isBoundarySplat
+        ? [values.length / BOUNDARY_SPLAT_CHANNELS.length, BOUNDARY_SPLAT_CHANNELS.length]
+        : kind === 'fluid'
+        ? [gridSize, gridSize, gridSize, FLUID_COMPONENTS]
+        : isBoundary
+          ? [gridSize, gridSize, gridSize, 4]
+          : [gridSize, gridSize, gridSize, 1],
+      channelOrder: isBoundarySplat
+        ? BOUNDARY_SPLAT_CHANNELS
+        : kind === 'fluid'
+        ? FULL_FIELD_CHANNELS
+        : isBoundary
+          ? ['support', 'coverage', 'ridge', 'footprint']
+          : ['frontTopology'],
+    };
+  }
+
+  function fullFieldExportPublicSession(session) {
+    if (!session) return null;
+    return {
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+      authority: 'debug-full-grid-webgpu-copy-buffer-readback',
+      status: session.status,
+      sessionId: session.sessionId,
+      createdAtMs: session.createdAtMs,
+      grid: session.grid,
+      cellCount: session.cellCount,
+      completeFieldCoverage: true,
+      routeIdentity: ROUTE_IDENTITY,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      simGridLabel: state.simGridLabel,
+      frontFieldIdentity: state.frontFieldIdentity,
+      deterministicReplay: session.deterministicReplay,
+      fluidComponents: FLUID_COMPONENTS,
+      fluidChannelOrder: FULL_FIELD_CHANNELS,
+      frontChannelOrder: ['frontTopology'],
+      fluid: session.fluidDescriptor,
+      front: session.frontDescriptor,
+      boundarySidecar: {
+        schema: 'kaminos.volume.boundary-sidecar-export.v0',
+        identity: BOUNDARY_SIDECAR_IDENTITY,
+        authority: BOUNDARY_SIDECAR_BAKE_AUTHORITY,
+        routeIdentity: ROUTE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        backend: state.backend,
+        grid: session.grid,
+        cellCount: session.cellCount,
+        channelOrder: ['support', 'coverage', 'ridge', 'footprint'],
+        boundarySidecarDebug: boundarySidecarDebug('baked'),
+        sidecars: {
+          boundary: session.boundaryDescriptor,
+        },
+      },
+      boundarySplats: {
+        schema: 'kaminos.volume.boundary-splat-effective-output.v0',
+        identity: session.derivedBuffers.boundarySplatRendererIdentity,
+        attributeModelIdentity: session.derivedBuffers.boundarySplatAttributeModelIdentity,
+        sourceAuthority: session.derivedBuffers.boundarySplatSourceAuthority,
+        materialization: session.derivedBuffers,
+        draw: session.boundarySplatDraw,
+        sidecars: {
+          boundarySplats: session.boundarySplatDescriptor,
+        },
+      },
+    };
+  }
+
+  function encodeFloat32ChunkBase64(values, startFloat, floatCount) {
+    const byteStart = startFloat * Float32Array.BYTES_PER_ELEMENT;
+    const byteLength = floatCount * Float32Array.BYTES_PER_ELEMENT;
+    const bytes = new Uint8Array(values.buffer, values.byteOffset + byteStart, byteLength);
+    let binary = '';
+    const batch = 0x8000;
+    for (let i = 0; i < bytes.length; i += batch) {
+      binary += String.fromCharCode(...bytes.subarray(i, Math.min(bytes.length, i + batch)));
+    }
+    return btoa(binary);
+  }
+
+  function decodeFullFieldImportChunk(base64) {
+    const binary = atob(String(base64 || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  function fullFieldImportFailure(failurePhase, reason, extra = {}) {
+    const failed = {
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      identity: 'checksum-addressed-fluid-front-import-v0',
+      status: 'failed',
+      failurePhase,
+      reason,
+      initializationAuthority: COARSE_RECEIVER_INITIALIZATION_AUTHORITY,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+      ...extra,
+    };
+    state.fullFieldImportReceipt = failed;
+    return { ok: false, ...failed };
+  }
+
+  function beginDebugFullFieldImport(payload = {}) {
+    if (!device) return fullFieldImportFailure('begin', 'inactive');
+    const isCoarseReceiver = payload.initializationAuthority === COARSE_RECEIVER_INITIALIZATION_AUTHORITY
+      && payload.filterIdentity === 'volume-overlap-box-filter-high-to-receiver-v0';
+    const isSelectiveComposition = payload.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
+      && payload.filterIdentity === SELECTIVE_COMPOSITION_APPLICATION_IDENTITY;
+    const isPhaseAlignedHeld = (
+      payload.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
+      || payload.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY
+    ) && payload.filterIdentity === PHASE_ALIGNED_HELD_APPLICATION_IDENTITY;
+    const isLiveReplay = payload.initializationAuthority === CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY
+      && payload.filterIdentity === EXACT_FIELD_LIVE_REPLAY_APPLICATION_IDENTITY;
+    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld && !isLiveReplay) {
+      return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
+        requestedInitializationAuthority: payload.initializationAuthority || null,
+        requestedFilterIdentity: payload.filterIdentity || null,
+      });
+    }
+    const requestedGrid = Math.floor(Number(payload.grid));
+    if (!SUPPORTED_GRID_SIZES.includes(requestedGrid)) {
+      return fullFieldImportFailure('begin', 'unsupported-grid', { requestedGrid });
+    }
+    const expectedFluidBytes = fluidBufferBytes(requestedGrid);
+    const expectedFrontBytes = frontFieldBufferBytes(requestedGrid);
+    const fluid = payload.fluid || {};
+    const front = payload.front || {};
+    const validSha256 = value => typeof value === 'string' && /^[a-f0-9]{64}$/i.test(value);
+    if (Number(fluid.byteLength) !== expectedFluidBytes || Number(front.byteLength) !== expectedFrontBytes) {
+      return fullFieldImportFailure('begin', 'byte-length-mismatch', {
+        expectedFluidBytes,
+        requestedFluidBytes: Number(fluid.byteLength),
+        expectedFrontBytes,
+        requestedFrontBytes: Number(front.byteLength),
+      });
+    }
+    if (!validSha256(fluid.sha256) || !validSha256(front.sha256)) {
+      return fullFieldImportFailure('begin', 'sha256-missing');
+    }
+    if (JSON.stringify(fluid.channelOrder) !== JSON.stringify(FULL_FIELD_CHANNELS)
+      || JSON.stringify(front.channelOrder) !== JSON.stringify(['frontTopology'])) {
+      return fullFieldImportFailure('begin', 'channel-order-mismatch');
+    }
+    const wasActive = state.active;
+    state.active = false;
+    canvas.classList.remove('active');
+    cancelAnimationFrame(raf);
+    if (gridSize !== requestedGrid) rebuildFluidState(requestedGrid, majorantGridSize, 'full-field-import-grid-rebuild');
+    debugFullFieldImportUpload = {
+      sessionId: `full-field-import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      status: 'receiving',
+      wasActive,
+      grid: requestedGrid,
+      initializationAuthority: payload.initializationAuthority,
+      filterIdentity: String(payload.filterIdentity || ''),
+      layoutIdentity: String(payload.layoutIdentity || ''),
+      source: payload.source || null,
+      sourceManifestPath: payload.sourceManifestPath || null,
+      sourceManifestSha256: payload.sourceManifestSha256 || null,
+      receiverInitialSimStepCount: Math.max(0, Math.floor(Number(payload.receiverInitialSimStepCount) || 0)),
+      fluid: {
+        expectedSha256: fluid.sha256.toLowerCase(),
+        byteLength: expectedFluidBytes,
+        bytes: new Uint8Array(expectedFluidBytes),
+        receivedBytes: 0,
+        chunkCount: 0,
+      },
+      front: {
+        expectedSha256: front.sha256.toLowerCase(),
+        byteLength: expectedFrontBytes,
+        bytes: new Uint8Array(expectedFrontBytes),
+        receivedBytes: 0,
+        chunkCount: 0,
+      },
+    };
+    state.fullFieldImportReceipt = {
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      identity: 'checksum-addressed-fluid-front-import-v0',
+      status: 'receiving',
+      failurePhase: null,
+      sessionId: debugFullFieldImportUpload.sessionId,
+      initializationAuthority: payload.initializationAuthority,
+      filterIdentity: debugFullFieldImportUpload.filterIdentity,
+      layoutIdentity: debugFullFieldImportUpload.layoutIdentity,
+      grid: requestedGrid,
+      receiverInitialSimStepCount: debugFullFieldImportUpload.receiverInitialSimStepCount,
+      expectedFluidSha256: debugFullFieldImportUpload.fluid.expectedSha256,
+      expectedFrontSha256: debugFullFieldImportUpload.front.expectedSha256,
+      expectedFluidBytes,
+      expectedFrontBytes,
+      renderLoopPaused: true,
+    };
+    return { ok: true, ...state.fullFieldImportReceipt };
+  }
+
+  function writeDebugFullFieldImportChunk(payload = {}) {
+    const upload = debugFullFieldImportUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) {
+      return fullFieldImportFailure('chunk-write', 'session-id-mismatch');
+    }
+    const kind = payload.kind === 'front' ? 'front' : payload.kind === 'fluid' ? 'fluid' : null;
+    if (!kind) return fullFieldImportFailure('chunk-write', 'unsupported-kind');
+    const target = upload[kind];
+    const byteOffset = Math.floor(Number(payload.byteOffset));
+    if (byteOffset !== target.receivedBytes) {
+      return fullFieldImportFailure('chunk-write', 'non-sequential-byte-offset', {
+        kind,
+        expectedByteOffset: target.receivedBytes,
+        requestedByteOffset: byteOffset,
+      });
+    }
+    const chunk = decodeFullFieldImportChunk(payload.base64);
+    if (byteOffset + chunk.byteLength > target.byteLength) {
+      return fullFieldImportFailure('chunk-write', 'chunk-overflow', { kind, byteOffset, chunkByteLength: chunk.byteLength });
+    }
+    target.bytes.set(chunk, byteOffset);
+    target.receivedBytes += chunk.byteLength;
+    target.chunkCount += 1;
+    return {
+      ok: true,
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      sessionId: upload.sessionId,
+      kind,
+      byteOffset,
+      byteLength: chunk.byteLength,
+      receivedBytes: target.receivedBytes,
+      expectedBytes: target.byteLength,
+      chunkCount: target.chunkCount,
+      isFinal: target.receivedBytes === target.byteLength,
+    };
+  }
+
+  async function finishDebugFullFieldImport(payload = {}) {
+    const upload = debugFullFieldImportUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) {
+      return fullFieldImportFailure('finish', 'session-id-mismatch');
+    }
+    for (const kind of ['fluid', 'front']) {
+      if (upload[kind].receivedBytes !== upload[kind].byteLength) {
+        return fullFieldImportFailure('finish', 'incomplete-upload', {
+          kind,
+          receivedBytes: upload[kind].receivedBytes,
+          expectedBytes: upload[kind].byteLength,
+        });
+      }
+    }
+    const digestHex = async bytes => Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes)))
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+    const actualFluidSha256 = await digestHex(upload.fluid.bytes);
+    const actualFrontSha256 = await digestHex(upload.front.bytes);
+    if (actualFluidSha256 !== upload.fluid.expectedSha256 || actualFrontSha256 !== upload.front.expectedSha256) {
+      debugFullFieldImportUpload = null;
+      return fullFieldImportFailure('sha256-validation', 'sha256-mismatch', {
+        expectedFluidSha256: upload.fluid.expectedSha256,
+        actualFluidSha256,
+        expectedFrontSha256: upload.front.expectedSha256,
+        actualFrontSha256,
+      });
+    }
+    device.queue.writeBuffer(fluidBuffers[0], 0, upload.fluid.bytes);
+    device.queue.writeBuffer(fluidBuffers[1], 0, upload.fluid.bytes);
+    device.queue.writeBuffer(frontBuffers[0], 0, upload.front.bytes);
+    device.queue.writeBuffer(frontBuffers[1], 0, upload.front.bytes);
+    const zeroPressure = new Float32Array(gridCellCount(gridSize) * 4);
+    device.queue.writeBuffer(pressureBuffers[0], 0, zeroPressure);
+    device.queue.writeBuffer(pressureBuffers[1], 0, zeroPressure);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    currentFluid = 0;
+    currentFront = 0;
+    state.frameCount = upload.receiverInitialSimStepCount;
+    state.simStepCount = upload.receiverInitialSimStepCount;
+    state.frontFieldReadIndex = currentFront;
+    state.frontFieldWriteIndex = 1 - currentFront;
+    state.majorantBuilt = false;
+    state.majorantBuiltThisFrame = false;
+    state.majorantLastBuiltFrame = -1;
+    state.boundarySidecarBuilt = false;
+    state.boundarySidecarBuiltThisFrame = false;
+    state.boundarySidecarLastBuiltFrame = -1;
+    state.boundarySidecarOverrideReceipt = null;
+    boundarySidecarOverrideUpload = null;
+    state.deterministicReplay = null;
+    resetTemporalHistory('full-field-import');
+    const receipt = {
+      schema: FULL_FIELD_IMPORT_IDENTITY,
+      identity: 'checksum-addressed-fluid-front-import-v0',
+      status: 'applied',
+      failurePhase: null,
+      sessionId: upload.sessionId,
+      initializationAuthority: upload.initializationAuthority,
+      filterIdentity: upload.filterIdentity,
+      layoutIdentity: upload.layoutIdentity,
+      grid: upload.grid,
+      source: upload.source,
+      sourceManifestPath: upload.sourceManifestPath,
+      sourceManifestSha256: upload.sourceManifestSha256,
+      receiverInitialSimStepCount: upload.receiverInitialSimStepCount,
+      fluidSha256: actualFluidSha256,
+      frontSha256: actualFrontSha256,
+      fluidByteLength: upload.fluid.byteLength,
+      frontByteLength: upload.front.byteLength,
+      fluidChunkCount: upload.fluid.chunkCount,
+      frontChunkCount: upload.front.chunkCount,
+      pressureState: 'zeroed-before-first-receiver-step',
+      pingPongState: 'both-read-write-buffers-identical',
+      temporalHistory: 'reset',
+      renderLoopPaused: true,
+      activeBeforeImport: upload.wasActive,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+    };
+    state.active = false;
+    canvas.classList.remove('active');
+    cancelAnimationFrame(raf);
+    state.fullFieldImportReceipt = receipt;
+    debugFullFieldImportUpload = null;
+    emitStatus({ phase: 'full-field-import-applied' });
+    return { ok: true, ...receipt };
+  }
+
+  function advanceDebugImportedFieldSteps(payload = {}) {
+    const receipt = state.fullFieldImportReceipt;
+    if (!receipt || receipt.status !== 'applied' || payload.sessionId !== receipt.sessionId) {
+      return fullFieldImportFailure('imported-advance', 'session-id-mismatch');
+    }
+    if (receipt.importedAdvance) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'imported-receiver-advance-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'imported-advance',
+        reason: 'already-advanced',
+        sessionId: receipt.sessionId,
+        priorAdvance: receipt.importedAdvance,
+        priorAppliedReceipt: receipt,
+      };
+    }
+    const requestedSteps = Number(payload.steps);
+    if (!Number.isInteger(requestedSteps) || requestedSteps < 0) {
+      return fullFieldImportFailure('imported-advance', 'invalid-step-count', { requestedSteps });
+    }
+    if (receipt.initializationAuthority === CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'imported-receiver-advance-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'imported-advance',
+        reason: 'live-replay-requires-native-resume-api',
+        sessionId: receipt.sessionId,
+        requestedSteps,
+        priorAppliedReceipt: receipt,
+      };
+    }
+    const phaseAlignedHeld = receipt.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
+      || receipt.initializationAuthority === PHASE_ALIGNED_LOW_HELD_AUTHORITY;
+    if ((receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY || phaseAlignedHeld) && requestedSteps > 0) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'imported-receiver-advance-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'imported-advance',
+        reason: phaseAlignedHeld ? 'phase-aligned-held-render-only' : 'selective-composition-held-only',
+        sessionId: receipt.sessionId,
+        requestedSteps,
+        priorAppliedReceipt: receipt,
+      };
+    }
+    const timeStepMs = Number.isFinite(Number(payload.timeStepMs)) ? Number(payload.timeStepMs) : 1000 / 60;
+    const startTimeMs = Number.isFinite(Number(payload.startTimeMs)) ? Number(payload.startTimeMs) : 1000;
+    state.active = false;
+    canvas.classList.remove('active');
+    cancelAnimationFrame(raf);
+    const before = { frameCount: state.frameCount, simStepCount: state.simStepCount };
+    for (let step = 0; step < requestedSteps; step += 1) {
+      updateUniforms(startTimeMs + step * timeStepMs);
+      const encoder = device.createCommandEncoder({ label: `kaminos imported receiver step ${step + 1}/${requestedSteps}` });
+      encodeSim(encoder);
+      if (step === requestedSteps - 1) encodeMajorant(encoder, { force: true });
+      device.queue.submit([encoder.finish()]);
+      state.frameCount += 1;
+    }
+    const importedAdvance = {
+      identity: requestedSteps === 0
+        ? receipt.initializationAuthority === SELECTIVE_COMPOSITION_AUTHORITY
+          ? 'learned-selective-composition-held-render-v0'
+          : phaseAlignedHeld
+            ? receipt.initializationAuthority === PHASE_ALIGNED_TRUTH_HELD_AUTHORITY
+              ? 'offline-high-truth-held-render-v0'
+              : 'downsampled-phase-aligned-held-control-v0'
+          : 'imported-receiver-held-state-v0'
+        : requestedSteps === 1
+          ? 'ordinary-receiver-single-simulation-step-v0'
+          : 'imported-receiver-multi-step-sequence-v0',
+      authority: 'session-bound-imported-state-ordinary-sim-step',
+      requestedSteps,
+      completedSteps: state.simStepCount - before.simStepCount,
+      timeStepMs,
+      startTimeMs,
+      before,
+      after: { frameCount: state.frameCount, simStepCount: state.simStepCount },
+      renderLoopPaused: true,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+    };
+    state.fullFieldImportReceipt = { ...receipt, importedAdvance };
+    return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, sessionId: receipt.sessionId, ...importedAdvance };
+  }
+
+  function resumeDebugImportedFieldLive(payload = {}) {
+    const receipt = state.fullFieldImportReceipt;
+    if (!receipt || receipt.status !== 'applied' || payload.sessionId !== receipt.sessionId) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'checksum-addressed-live-replay-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'live-replay-resume',
+        reason: 'session-id-mismatch',
+        requestedSessionId: payload.sessionId || null,
+        effectiveSessionId: receipt?.sessionId || null,
+      };
+    }
+    if (receipt.initializationAuthority !== CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'checksum-addressed-live-replay-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'live-replay-resume',
+        reason: 'live-replay-authority-required',
+        requestedInitializationAuthority: receipt.initializationAuthority,
+        requiredInitializationAuthority: CHECKSUM_ADDRESSED_LIVE_REPLAY_AUTHORITY,
+        priorAppliedReceipt: receipt,
+      };
+    }
+    if (receipt.importedAdvance) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'checksum-addressed-live-replay-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'live-replay-resume',
+        reason: 'live-replay-import-already-advanced',
+        priorAppliedReceipt: receipt,
+      };
+    }
+    if (receipt.liveReplay) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_IMPORT_IDENTITY,
+        identity: 'checksum-addressed-live-replay-rejected-v0',
+        status: 'rejected',
+        failurePhase: 'live-replay-resume',
+        reason: 'already-resumed',
+        priorAppliedReceipt: receipt,
+      };
+    }
+    const before = { frameCount: state.frameCount, simStepCount: state.simStepCount };
+    selectiveHeadLiveCapturePaused = false;
+    state.selectiveHeadLiveCapturePaused = false;
+    state.active = true;
+    state.error = null;
+    canvas.classList.add('active');
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(render);
+    const liveReplay = {
+      identity: 'checksum-addressed-native-render-loop-replay-v0',
+      status: 'running',
+      failurePhase: null,
+      sessionId: receipt.sessionId,
+      playbackRequested: 'live',
+      playbackEffective: 'live',
+      initializationAuthority: receipt.initializationAuthority,
+      filterIdentity: receipt.filterIdentity,
+      sourceSimStepCount: receipt.receiverInitialSimStepCount,
+      before,
+      renderLoopPaused: false,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      resumedAtMs: performance.now(),
+    };
+    state.fullFieldImportReceipt = { ...receipt, renderLoopPaused: false, liveReplay };
+    emitStatus({ phase: 'full-field-live-replay-running' });
+    return { ok: true, schema: FULL_FIELD_IMPORT_IDENTITY, ...liveReplay };
+  }
+
+  async function beginDebugFullFieldExport(options = {}) {
+    if (!device) {
+      const failed = {
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+        status: 'failed',
+        failurePhase: 'inactive',
+        reason: 'inactive',
+        routeIdentity: ROUTE_IDENTITY,
+        prototypeIdentity: PROTOTYPE_IDENTITY,
+        effectiveRoute: state.effectiveRoute,
+        backend: state.backend,
+      };
+      state.fullFieldExportSession = failed;
+      return { ok: false, ...failed };
+    }
+    const wasActiveBeforeExport = state.active;
+    if (debugFullFieldExportSession) {
+      debugFullFieldExportSession.status = 'released';
+      debugFullFieldExportSession = null;
+    }
+    const deterministicOptions = options.deterministicReplay || (
+      Number.isFinite(Number(options.steps)) || Number.isFinite(Number(options.replaySteps))
+        ? options
+        : null
+    );
+    let replaySample = null;
+    const controlsBeforeReplay = controlsSnapshot;
+    if (deterministicOptions) {
+      replaySample = await sampleDeterministicReplayFrame({
+        ...deterministicOptions,
+        fieldTileExport: null,
+      });
+      controlsSnapshot = controlsBeforeReplay;
+      if (replaySample?.ok !== true) {
+        const failed = {
+          schema: FULL_FIELD_EXPORT_IDENTITY,
+          identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+          status: 'failed',
+          failurePhase: 'deterministic-replay',
+          reason: replaySample?.reason || 'sample-failed',
+          deterministicReplay: replaySample?.deterministicReplay || null,
+          routeIdentity: ROUTE_IDENTITY,
+          prototypeIdentity: PROTOTYPE_IDENTITY,
+          effectiveRoute: state.effectiveRoute,
+          backend: state.backend,
+        };
+        state.fullFieldExportSession = failed;
+        return { ok: false, ...failed };
+      }
+    }
+    const deterministicReplay = replaySample ? {
+      identity: replaySample.identity,
+      authority: replaySample.authority,
+      resetReason: replaySample.resetReason,
+      requestedSteps: replaySample.requestedSteps,
+      completedSteps: replaySample.completedSteps,
+      timeStepMs: replaySample.timeStepMs,
+      startTimeMs: replaySample.startTimeMs,
+      finalTimeMs: replaySample.finalTimeMs,
+      controlsSignature: replaySample.controlsSignature,
+      frameCount: replaySample.frameCount,
+      simStepCount: replaySample.simStepCount,
+      grid: replaySample.grid,
+      majorantGrid: replaySample.majorantGrid,
+      effectiveRoute: replaySample.effectiveRoute,
+      prototypeIdentity: replaySample.prototypeIdentity,
+      backend: replaySample.backend,
+    } : null;
+    const derivedBuffers = await materializeFullFieldDerivedBuffersForDebugExport(
+      deterministicReplay?.finalTimeMs ?? performance.now(),
+    );
+    if (state.active) {
+      state.active = false;
+      canvas.classList.remove('active');
+      cancelAnimationFrame(raf);
+    }
+    let captured = null;
+    try {
+      captured = await copyFullFieldBuffersForDebugExport(derivedBuffers);
+    } finally {
+      if (wasActiveBeforeExport) {
+        state.active = true;
+        canvas.classList.add('active');
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+    const session = {
+      status: 'captured',
+      sessionId: `full-field-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      createdAtMs: performance.now(),
+      grid: gridSize,
+      cellCount: gridCellCount(gridSize),
+      deterministicReplay: replaySample ? {
+        identity: replaySample.identity,
+        completedSteps: replaySample.completedSteps,
+        ...deterministicReplay,
+      } : (state.deterministicReplay ? { ...state.deterministicReplay } : null),
+      derivedBuffers,
+      fluid: captured.fluid,
+      front: captured.front,
+      boundary: captured.boundary,
+      boundarySplats: captured.boundarySplats,
+      boundarySplatDraw: captured.boundarySplatDraw,
+      fluidDescriptor: fullFieldExportDescriptorFor(captured.fluid, 'fluid', captured.fluidBytes),
+      frontDescriptor: fullFieldExportDescriptorFor(captured.front, 'front', captured.frontBytes),
+      boundaryDescriptor: fullFieldExportDescriptorFor(captured.boundary, 'boundary', captured.boundaryBytes),
+      boundarySplatDescriptor: fullFieldExportDescriptorFor(captured.boundarySplats, 'boundarySplat', captured.boundarySplatBytes),
+    };
+    debugFullFieldExportSession = session;
+    state.fullFieldExportSession = fullFieldExportPublicSession(session);
+    return { ok: true, ...state.fullFieldExportSession };
+  }
+
+  function readDebugFullFieldExportChunk(options = {}) {
+    const session = debugFullFieldExportSession;
+    if (!session || session.status !== 'captured') {
+      return {
+        ok: false,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'no-active-full-field-export-session',
+      };
+    }
+    const requestedSessionId = String(options.sessionId || '');
+    if (requestedSessionId && requestedSessionId !== session.sessionId) {
+      return {
+        ok: false,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        status: 'failed',
+        failurePhase: 'chunk-read',
+        reason: 'session-id-mismatch',
+        sessionId: session.sessionId,
+        requestedSessionId,
+      };
+    }
+    const requestedKind = String(options.kind || 'fluid');
+    const kind = requestedKind === 'front'
+      ? 'front'
+      : requestedKind === 'boundary'
+        ? 'boundary'
+        : requestedKind === 'boundarySplat'
+          ? 'boundarySplat'
+          : 'fluid';
+    const values = kind === 'front'
+      ? session.front
+      : kind === 'boundary'
+        ? session.boundary
+        : kind === 'boundarySplat'
+          ? session.boundarySplats
+          : session.fluid;
+    const startFloat = Math.max(0, Math.min(values.length, Math.floor(Number(options.startFloat) || 0)));
+    const requestedFloatCount = Math.floor(Number(options.floatCount) || Math.min(262144, values.length - startFloat));
+    const floatCount = Math.max(0, Math.min(values.length - startFloat, requestedFloatCount));
+    return {
+      ok: true,
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+      sessionId: session.sessionId,
+      kind,
+      dtype: 'float32',
+      startFloat,
+      floatCount,
+      byteOffset: startFloat * Float32Array.BYTES_PER_ELEMENT,
+      byteLength: floatCount * Float32Array.BYTES_PER_ELEMENT,
+      isFinal: startFloat + floatCount >= values.length,
+      base64: encodeFloat32ChunkBase64(values, startFloat, floatCount),
+    };
+  }
+
+  function releaseDebugFullFieldExport(options = {}) {
+    const session = debugFullFieldExportSession;
+    const requestedSessionId = String(options.sessionId || '');
+    if (session && (!requestedSessionId || requestedSessionId === session.sessionId)) {
+      session.status = 'released';
+      state.fullFieldExportSession = {
+        ...fullFieldExportPublicSession(session),
+        status: 'released',
+      };
+      debugFullFieldExportSession = null;
+      return {
+        ok: true,
+        schema: FULL_FIELD_EXPORT_IDENTITY,
+        identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+        status: 'released',
+        sessionId: requestedSessionId || session.sessionId,
+      };
+    }
+    return {
+      ok: true,
+      schema: FULL_FIELD_EXPORT_IDENTITY,
+      identity: 'full-grid-fluid-front-boundary-sidecars-v0',
+      status: 'already-released',
+      sessionId: requestedSessionId || null,
+    };
   }
 
   async function sampleSimReadback() {
@@ -8600,9 +11464,50 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
-  async function sampleFrame() {
+  async function readTextureRgba8(texture, width, height, label = 'kaminos rgba8 texture readback') {
+    const bytesPerPixel = 4;
+    const unpaddedBytesPerRow = width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const buffer = device.createBuffer({
+      label,
+      size: bytesPerRow * height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: `${label} encoder` });
+    encoder.copyTextureToBuffer(
+      { texture },
+      { buffer, bytesPerRow, rowsPerImage: height },
+      { width, height, depthOrArrayLayers: 1 }
+    );
+    device.queue.submit([encoder.finish()]);
+    await buffer.mapAsync(GPUMapMode.READ);
+    const data = new Uint8Array(buffer.getMappedRange());
+    const rgba = new Uint8Array(width * height * bytesPerPixel);
+    for (let y = 0; y < height; y += 1) {
+      const src = y * bytesPerRow;
+      const dst = y * width * bytesPerPixel;
+      rgba.set(data.slice(src, src + width * bytesPerPixel), dst);
+    }
+    buffer.unmap();
+    buffer.destroy();
+    return {
+      width,
+      height,
+      rgba: Array.from(rgba),
+      bytesPerRow,
+      unpaddedBytesPerRow,
+    };
+  }
+
+  async function sampleFrame(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
-    updateUniforms(performance.now());
+    const advanceSim = options.advanceSim !== false;
+    const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const includeRgba = options.includeRgba === true;
+    const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
+    const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
+    const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
+    updateUniforms(sampleNow);
     ensureFrameTexture();
     const bytesPerPixel = 4;
     const unpaddedBytesPerRow = state.width * bytesPerPixel;
@@ -8615,21 +11520,106 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: 'kaminos volume witness readback encoder' });
     const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
-    if (!sampleLookFreeze) {
+    let sampleSelectiveHeadLiveFields = null;
+    if (advanceSim && !sampleLookFreeze) {
       encodeSim(encoder);
       encodeLiquidFireContactTransfer(encoder);
-      encodeMajorant(encoder, { force: true });
+      encodeSelectiveHeadLiveFields(encoder);
+      sampleSelectiveHeadLiveFields = {
+        majorant: selectiveHeadLiveRoleGroups('majorant'),
+        sidecar: selectiveHeadLiveRoleGroups('sidecar'),
+        splat: selectiveHeadLiveRoleGroups('splat'),
+        render: selectiveHeadLiveRoleGroups('render'),
+      };
+      encodeMajorant(encoder, { readBindGroup: sampleSelectiveHeadLiveFields.majorant, force: true });
+    } else if (!sampleLookFreeze) {
+      encodeSelectiveHeadLiveFields(encoder);
+      sampleSelectiveHeadLiveFields = {
+        majorant: selectiveHeadLiveRoleGroups('majorant'),
+        sidecar: selectiveHeadLiveRoleGroups('sidecar'),
+        splat: selectiveHeadLiveRoleGroups('splat'),
+        render: selectiveHeadLiveRoleGroups('render'),
+      };
+      encodeMajorant(encoder, { readBindGroup: sampleSelectiveHeadLiveFields.majorant, force: true });
     } else {
       state.majorantBuiltThisFrame = false;
     }
-    encodeBoundarySidecar(encoder);
-    encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
+    encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
+    encodeBoundarySplats(encoder, { computeBindGroup: sampleSelectiveHeadLiveFields?.splat || null });
+    if (boundarySplatRequested()) {
+      const composition = updateSelectiveHeadLiveCompositionState();
+      let raymarchEncoded = false;
+      let raymarchApplied = false;
+      let splatEncoded = false;
+      let splatApplied = false;
+      if (composition.definition.raymarch) {
+        encodeDraw(
+          encoder,
+          frameTexture.createView(),
+          `kaminos selective-head controlled readback ${composition.effective} raymarch`,
+          readbackPipeline,
+          { bindGroup: sampleSelectiveHeadLiveFields?.render || null },
+        );
+        raymarchEncoded = true;
+        raymarchApplied = true;
+      }
+      if (composition.definition.splat) {
+        splatEncoded = encodeBoundarySplatDraw(
+          encoder,
+          frameTexture.createView(),
+          boundarySplatReadbackPipeline,
+          { loadOp: raymarchApplied ? 'load' : 'clear' },
+        );
+        splatApplied = splatEncoded;
+      }
+      if (composition.definition.splat && !splatApplied) {
+        buffer.destroy();
+        const validationError = await device.popErrorScope();
+        return {
+          ok: false,
+          reason: 'boundary-splat-readback-route-unavailable',
+          validationError: validationError?.message || null,
+          selectiveHeadLiveCompositionRequestedRaw: state.selectiveHeadLiveCompositionRequestedRaw,
+          selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+          selectiveHeadLiveCompositionEffective: 'unavailable',
+          selectiveHeadLiveCompositionFallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-readback-route-unavailable',
+          selectiveHeadLivePassReceipt: makeSelectiveHeadLivePassReceipt({
+            composition: composition.requested,
+            raymarchEncoded,
+            raymarchApplied,
+            splatEncoded,
+            splatApplied: false,
+            fallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-readback-route-unavailable',
+          }),
+          boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+          boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+          boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+          boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+          boundarySplatTimestampStatus: state.boundarySplatTimestampStatus,
+          boundarySplatGpuProfile: state.boundarySplatGpuProfile,
+          boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
+          boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
+        };
+      }
+      recordSelectiveHeadLivePassReceipt({
+        composition: composition.effective === 'off' ? composition.requested : composition.effective,
+        raymarchEncoded,
+        raymarchApplied,
+        splatEncoded,
+        splatApplied,
+        fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+      });
+      encodeBoundarySplatTelemetry(encoder, true);
+    } else {
+      encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
+    }
     encoder.copyTextureToBuffer(
       { texture: frameTexture },
       { buffer, bytesPerRow, rowsPerImage: state.height },
       { width: state.width, height: state.height, depthOrArrayLayers: 1 }
     );
     device.queue.submit([encoder.finish()]);
+    if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
     const validationError = await device.popErrorScope();
     if (validationError) {
       buffer.destroy();
@@ -8758,8 +11748,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveRoute: state.effectiveRoute,
         prototypeIdentity: state.prototypeIdentity,
         backend: state.backend,
+        boundarySidecarIdentity: state.boundarySidecarIdentity,
+        boundarySidecarAuthority: state.boundarySidecarAuthority,
+        boundarySidecarSource: state.boundarySidecarSource,
+        boundarySplatMode: state.boundarySplatMode,
+        boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+        boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+        boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
+        boundarySplatFeatureCaptureEffective: state.boundarySplatFeatureCaptureEffective,
+        boundarySplatFeatureCapture: state.boundarySplatFeatureCapture,
+        boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+        boundarySplatCapacity: state.boundarySplatCapacity,
+        boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+        boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+        boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+        boundarySplatCountAuthority: state.boundarySplatCountAuthority,
+        boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+        boundarySplatFrameCount: state.boundarySplatFrameCount,
+        boundarySplatTimestampStatus: state.boundarySplatTimestampStatus,
+        boundarySplatGpuProfile: state.boundarySplatGpuProfile,
+        boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
+        boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
       };
     }
+    const boundarySplatSample = boundarySplatRequested() ? await sampleBoundarySplatDrawState() : null;
+    const boundarySplatFeatureCapture = state.boundarySplatFeatureCaptureRequested && boundarySplatSample
+      ? await sampleBoundarySplatFeatureCapture(boundarySplatSample.instanceCount)
+      : null;
+    state.boundarySplatFeatureCapture = boundarySplatFeatureCapture;
+    const boundarySplatGpuProfile = boundarySplatRequested() ? await sampleBoundarySplatGpuProfile() : state.boundarySplatGpuProfile;
     await buffer.mapAsync(GPUMapMode.READ);
     const data = new Uint8Array(buffer.getMappedRange());
     let litPixels = 0;
@@ -8846,6 +11863,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const previewWidth = 256;
     const previewHeight = Math.max(1, Math.round(previewWidth * state.height / state.width));
     const preview = new Uint8Array(previewWidth * previewHeight * 4);
+    const rgba = includeRgba ? new Uint8Array(state.width * state.height * 4) : null;
+    if (rgba) {
+      for (let y = 0; y < state.height; y += 1) {
+        const src = y * bytesPerRow;
+        const dst = y * state.width * bytesPerPixel;
+        rgba.set(data.slice(src, src + state.width * bytesPerPixel), dst);
+      }
+    }
     for (let y = Math.floor(state.height * 0.08); y < Math.floor(state.height * 0.92); y += 2) {
       const row = y * bytesPerRow;
       for (let x = Math.floor(state.width * 0.08); x < Math.floor(state.width * 0.92); x += 2) {
@@ -8932,8 +11957,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ok: true,
       width: state.width,
       height: state.height,
+      cssWidth: state.cssWidth,
+      cssHeight: state.cssHeight,
       displayWidth: state.displayWidth,
       displayHeight: state.displayHeight,
+      nativeDevicePixelRatio: state.nativeDevicePixelRatio,
+      canvasDevicePixelRatio: state.canvasDevicePixelRatio,
       renderWidth: state.renderWidth,
       renderHeight: state.renderHeight,
       renderScale: state.renderScale,
@@ -8955,6 +11984,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       smokeBounds,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
+      renderPhaseTimeMs: state.renderPhaseTimeMs,
+      renderPhaseFrame: state.renderPhaseFrame,
+      renderPhaseAuthority: state.renderPhaseAuthority,
+      lookFreezeRenderTimeMs: state.lookFreezeRenderTimeMs,
+      lookFreezeRenderFrame: state.lookFreezeRenderFrame,
       simGrid: state.simGrid,
       simGridLabel: state.simGridLabel,
       frontFieldIdentity: state.frontFieldIdentity,
@@ -9081,17 +12115,968 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       simProfile: state.simProfile,
       simCostLedger: state.simCostLedger ? { ...state.simCostLedger } : null,
       timing: { ...state.timing },
+      boundarySplatMode: state.boundarySplatMode,
+      boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+      boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+      boundarySplatFeatureCaptureRequested: state.boundarySplatFeatureCaptureRequested,
+      boundarySplatFeatureCaptureEffective: state.boundarySplatFeatureCaptureEffective,
+      boundarySplatFeatureCapture,
+      boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+      boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
+      boundarySplatCapacity: state.boundarySplatCapacity,
+      boundarySplatInstanceCount: boundarySplatSample?.instanceCount ?? state.boundarySplatInstanceCount,
+      boundarySplatCandidateCount: boundarySplatSample?.candidateCount ?? state.boundarySplatCandidateCount,
+      boundarySplatOverflowCount: boundarySplatSample?.overflowCount ?? state.boundarySplatOverflowCount,
+      boundarySplatCountAuthority: boundarySplatSample?.authority ?? state.boundarySplatCountAuthority,
+      boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+      boundarySplatFrameCount: state.boundarySplatFrameCount,
+      boundarySplatTimestampStatus: boundarySplatGpuProfile?.timestampStatus ?? state.boundarySplatTimestampStatus,
+      boundarySplatGpuProfile,
+      boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
+      boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
       simReadback,
       majorantReadback,
       effectiveRoute: state.effectiveRoute,
       prototypeIdentity: state.prototypeIdentity,
       backend: state.backend,
+      sampleAuthority: advanceSim ? 'sim-advanced-frame-readback' : 'render-only-frozen-sim-state',
+      simAdvanced: advanceSim,
+      sameStateCaptureId,
+      baseFrameCount,
+      baseSimStepCount,
+      sampleNowMs: sampleNow,
+      renderPhaseTimeMs: state.renderPhaseTimeMs,
+      renderPhaseFrame: state.renderPhaseFrame,
+      renderPhaseAuthority: state.renderPhaseAuthority,
+      lookFreezeRenderTimeMs: state.lookFreezeRenderTimeMs,
+      lookFreezeRenderFrame: state.lookFreezeRenderFrame,
       preview: {
         width: previewWidth,
         height: previewHeight,
         rgba: Array.from(preview),
       },
+      image: rgba ? {
+        width: state.width,
+        height: state.height,
+        rgba: Array.from(rgba),
+      } : null,
     };
+  }
+
+  function compactRenderScaleSample(sample) {
+    if (!sample || typeof sample !== 'object') return sample;
+    const simReadback = sample.simReadback ? { ...sample.simReadback } : null;
+    if (simReadback?.reactionFrontAtlas) {
+      simReadback.reactionFrontAtlas = {
+        ...simReadback.reactionFrontAtlas,
+        rgba: null,
+      };
+    }
+    if (simReadback?.canonicalSmokeFieldSlice) {
+      simReadback.canonicalSmokeFieldSlice = {
+        ...simReadback.canonicalSmokeFieldSlice,
+        rgba: null,
+      };
+    }
+    return {
+      ...sample,
+      preview: sample.preview ? {
+        width: sample.preview.width,
+        height: sample.preview.height,
+        rgba: null,
+      } : null,
+      image: null,
+      simReadback,
+    };
+  }
+
+  async function sampleRenderScaleSet(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedScales = Array.isArray(options.renderScales) ? options.renderScales : [];
+    const renderScales = requestedScales
+      .map(scale => normalizeRenderScale(scale))
+      .filter(scale => Number.isFinite(scale));
+    if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) {
+      await device.queue.onSubmittedWorkDone();
+    }
+    const controlsBefore = { ...controlsSnapshot };
+    const baseFrameCount = state.frameCount;
+    const baseSimStepCount = state.simStepCount;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId
+      ? String(options.sameStateCaptureId)
+      : `same-state-f${baseFrameCount}-s${baseSimStepCount}-${Math.round(fixedNow)}`;
+    const samples = [];
+    try {
+      for (let index = 0; index < renderScales.length; index += 1) {
+        const renderScale = renderScales[index];
+        controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, renderScale });
+        resetTemporalHistory('same-state-render-scale-capture');
+        const sample = await sampleFrame({
+          advanceSim: false,
+          includeRgba: options.includeRgba === true,
+          now: fixedNow,
+          sameStateCaptureId,
+          baseFrameCount,
+          baseSimStepCount,
+          renderScaleSetIndex: index,
+        });
+        samples.push({
+          role: index === renderScales.length - 1 ? 'high' : `low-${index + 1}`,
+          requestedRenderScale: renderScale,
+          ...sample,
+        });
+      }
+    } finally {
+      controlsSnapshot = controlsBefore;
+      resetTemporalHistory('same-state-render-scale-restore');
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+    const returnedSamples = options.compactSamples === true
+      ? samples.map(sample => compactRenderScaleSample(sample))
+      : samples;
+    return {
+      ok: samples.every(sample => sample.ok === true),
+      sampleSetAuthority: 'frame-locked-render-scale-set-v0',
+      sampleAuthority: 'render-only-frozen-sim-state',
+      sameStateCaptureId,
+      baseFrameCount,
+      baseSimStepCount,
+      fixedNowMs: fixedNow,
+      renderScales,
+      samples: returnedSamples,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+    };
+  }
+
+  async function controlledStepFrame(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedScales = Array.isArray(options.renderScales) ? options.renderScales : [];
+    const renderScales = requestedScales
+      .map(scale => normalizeRenderScale(scale))
+      .filter(scale => Number.isFinite(scale));
+    if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) {
+      await device.queue.onSubmittedWorkDone();
+    }
+    const controlledStepFrameIndex = Math.max(0, Math.floor(Number(options.controlledStepFrameIndex) || 0));
+    const sequenceStartNowMs = options.startNow !== null && options.startNow !== undefined && Number.isFinite(Number(options.startNow))
+      ? Number(options.startNow)
+      : performance.now();
+    const controlledStepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 220);
+    const controlledStepNowMs = sequenceStartNowMs + controlledStepFrameIndex * controlledStepDeltaMs;
+    const sameBrowserSessionId = options.sameBrowserSessionId
+      ? String(options.sameBrowserSessionId)
+      : `same-browser-f${state.frameCount}-s${state.simStepCount}-${Math.round(sequenceStartNowMs)}`;
+    let controlledStepCapture = null;
+    if (options.advanceSim === true) {
+      const beforeFrameCount = state.frameCount;
+      const beforeSimStepCount = state.simStepCount;
+      const stepSample = await sampleFrame({
+        advanceSim: true,
+        includeRgba: false,
+        now: controlledStepNowMs,
+        sameStateCaptureId: `${sameBrowserSessionId}-advance-${controlledStepFrameIndex}`,
+        baseFrameCount: beforeFrameCount,
+        baseSimStepCount: beforeSimStepCount,
+      });
+      controlledStepCapture = {
+        ok: stepSample.ok,
+        sampleAuthority: 'controlled-step-sim-advance',
+        sourceSampleAuthority: stepSample.sampleAuthority,
+        beforeFrameCount,
+        beforeSimStepCount,
+        afterFrameCount: state.frameCount,
+        afterSimStepCount: state.simStepCount,
+        controlledStepNowMs,
+      };
+    } else {
+      controlledStepCapture = {
+        ok: true,
+        sampleAuthority: 'controlled-step-initial-state',
+        beforeFrameCount: state.frameCount,
+        beforeSimStepCount: state.simStepCount,
+        afterFrameCount: state.frameCount,
+        afterSimStepCount: state.simStepCount,
+        controlledStepNowMs,
+      };
+    }
+    const sameStateCaptureId = `${sameBrowserSessionId}-frame-${String(controlledStepFrameIndex + 1).padStart(3, '0')}-s${state.simStepCount}`;
+    const scaleSet = await sampleRenderScaleSet({
+      renderScales,
+      includeRgba: options.includeRgba === true,
+      includeFeatureRgba: options.includeFeatureRgba === true,
+      compactSamples: options.compactSamples === true,
+      now: controlledStepNowMs,
+      sameStateCaptureId,
+      resumeRenderLoop: false,
+    });
+    return {
+      ok: scaleSet.ok === true && controlledStepCapture.ok !== false,
+      sequenceAuthority: 'controlled-step-sequence-v0',
+      controlledStepFrameIndex,
+      controlledStepDeltaMs,
+      controlledStepNowMs,
+      sequenceStartNowMs,
+      sameBrowserSessionId,
+      controlledStepCapture,
+      scaleSet,
+    };
+  }
+
+  async function captureSelectiveHeadLiveFrame(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    cancelAnimationFrame(raf);
+    const frameIndex = Math.max(0, Math.floor(Number(options.frameIndex) || 0));
+    const advanceSim = options.advanceSim !== false;
+    const presentToCanvas = options.presentToCanvas === true;
+    const startNow = Number.isFinite(Number(options.startNow)) ? Number(options.startNow) : performance.now();
+    const stepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 1000 / 30);
+    const sampleNow = startNow + frameIndex * stepDeltaMs;
+    updateUniforms(sampleNow);
+    if (!presentToCanvas) ensureFrameTexture();
+    const bytesPerPixel = 4;
+    const unpaddedBytesPerRow = state.width * bytesPerPixel;
+    const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+    const readback = presentToCanvas ? null : device.createBuffer({
+      label: 'kaminos selective-head-live-lean-frame-readback-v0',
+      size: bytesPerRow * state.height,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const targetView = presentToCanvas ? context.getCurrentTexture().createView() : frameTexture.createView();
+    const targetRaymarchPipeline = presentToCanvas ? pipeline : readbackPipeline;
+    const targetSplatPipeline = presentToCanvas ? boundarySplatRenderPipeline : boundarySplatReadbackPipeline;
+    device.pushErrorScope('validation');
+    const encoder = device.createCommandEncoder({ label: `kaminos selective-head live frame ${frameIndex}` });
+    const beforeSimStepCount = state.simStepCount;
+    if (advanceSim) encodeSim(encoder);
+    encodeSelectiveHeadLiveFields(encoder);
+    const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
+    const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
+    const selectiveSplat = selectiveHeadLiveRoleGroups('splat');
+    const selectiveRender = selectiveHeadLiveRoleGroups('render');
+    encodeMajorant(encoder, { readBindGroup: selectiveMajorant, force: true });
+    encodeBoundarySidecar(encoder, { readBindGroup: selectiveSidecar });
+    encodeBoundarySplats(encoder, { computeBindGroup: selectiveSplat });
+    const composition = updateSelectiveHeadLiveCompositionState();
+    let raymarchEncoded = false;
+    let raymarchApplied = false;
+    let splatEncoded = false;
+    let splatApplied = false;
+    if (composition.definition.raymarch) {
+      encodeDraw(
+        encoder,
+        targetView,
+        `kaminos selective-head controlled ${presentToCanvas ? 'canvas' : 'readback'} ${composition.effective} raymarch`,
+        targetRaymarchPipeline,
+        { bindGroup: selectiveRender },
+      );
+      raymarchEncoded = true;
+      raymarchApplied = true;
+    }
+    if (composition.definition.splat) {
+      splatEncoded = encodeBoundarySplatDraw(
+        encoder,
+        targetView,
+        targetSplatPipeline,
+        { loadOp: raymarchApplied ? 'load' : 'clear' },
+      );
+      splatApplied = splatEncoded;
+    }
+    if (composition.definition.splat && !splatApplied) {
+      readback?.destroy();
+      await device.popErrorScope();
+      return {
+        ok: false,
+        reason: 'boundary-splat-readback-route-unavailable',
+        selectiveHeadLiveCompositionRequestedRaw: state.selectiveHeadLiveCompositionRequestedRaw,
+        selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+        selectiveHeadLiveCompositionEffective: 'unavailable',
+        selectiveHeadLiveCompositionFallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-readback-route-unavailable',
+        selectiveHeadLivePassReceipt: makeSelectiveHeadLivePassReceipt({
+          composition: composition.requested,
+          raymarchEncoded,
+          raymarchApplied,
+          splatEncoded,
+          splatApplied: false,
+          fallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-readback-route-unavailable',
+        }),
+      };
+    }
+    const selectiveHeadLivePassReceipt = recordSelectiveHeadLivePassReceipt({
+      composition: composition.effective === 'off' ? composition.requested : composition.effective,
+      raymarchEncoded,
+      raymarchApplied,
+      splatEncoded,
+      splatApplied,
+      fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+    });
+    if (!presentToCanvas) {
+      encoder.copyTextureToBuffer(
+        { texture: frameTexture },
+        { buffer: readback, bytesPerRow, rowsPerImage: state.height },
+        { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      );
+    }
+    device.queue.submit([encoder.finish()]);
+    const validationError = await device.popErrorScope();
+    if (validationError) {
+      readback?.destroy();
+      return { ok: false, reason: `lean-frame-readback-validation:${validationError.message || String(validationError)}` };
+    }
+    let rgba = null;
+    if (!presentToCanvas) {
+      await readback.mapAsync(GPUMapMode.READ);
+      const padded = new Uint8Array(readback.getMappedRange());
+      rgba = new Uint8Array(unpaddedBytesPerRow * state.height);
+      for (let row = 0; row < state.height; row += 1) {
+        rgba.set(padded.subarray(row * bytesPerRow, row * bytesPerRow + unpaddedBytesPerRow), row * unpaddedBytesPerRow);
+      }
+      readback.unmap();
+      readback.destroy();
+    }
+    state.frameCount += 1;
+    return {
+      ok: true,
+      sequenceAuthority: advanceSim ? 'frame-locked-consecutive-simulation-steps-v0' : 'same-state-selective-render-composition-v0',
+      imageAuthority: presentToCanvas ? 'selective-head-live-presented-canvas-composition-v0' : 'selective-head-live-lean-frame-readback-v0',
+      advanceSim,
+      presentToCanvas,
+      frameIndex,
+      width: state.width,
+      height: state.height,
+      rgba: rgba ? Array.from(rgba) : null,
+      simStepCount: state.simStepCount,
+      beforeSimStepCount,
+      frameCount: state.frameCount,
+      effectiveRole: state.selectiveHeadLiveEffectiveRole,
+      requestedRole: state.selectiveHeadLiveRole,
+      roleAuthority: state.selectiveHeadLiveRoleAuthority,
+      selectiveHeadLiveCompositionRequestedRaw: state.selectiveHeadLiveCompositionRequestedRaw,
+      selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+      selectiveHeadLiveCompositionEffective: state.selectiveHeadLiveCompositionEffective,
+      selectiveHeadLiveCompositionAuthority: state.selectiveHeadLiveCompositionAuthority,
+      selectiveHeadLiveCompositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+      selectiveHeadLivePassReceipt,
+      modelIdentity: state.selectiveHeadLiveModelIdentity,
+      routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+      fallbackReason: state.selectiveHeadLiveFallbackReason,
+      boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+      backend: state.backend,
+      reason: null,
+    };
+  }
+
+  async function controlledStepSequence(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedFrameCount = Math.max(1, Math.floor(Number(options.frameCount) || 1));
+    const requestedScales = Array.isArray(options.renderScales) ? options.renderScales : [];
+    const renderScales = requestedScales
+      .map(scale => normalizeRenderScale(scale))
+      .filter(scale => Number.isFinite(scale));
+    if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
+    const startNow = options.startNow !== null && options.startNow !== undefined && Number.isFinite(Number(options.startNow))
+      ? Number(options.startNow)
+      : performance.now();
+    const controlledStepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 220);
+    const startFrameCount = state.frameCount;
+    const startSimStepCount = state.simStepCount;
+    const sameBrowserSessionId = options.sameBrowserSessionId
+      ? String(options.sameBrowserSessionId)
+      : `same-browser-f${startFrameCount}-s${startSimStepCount}-${Math.round(startNow)}`;
+    const frames = [];
+    const controlsBefore = { ...controlsSnapshot };
+    try {
+      for (let frameIndex = 0; frameIndex < requestedFrameCount; frameIndex += 1) {
+        const frame = await controlledStepFrame({
+          controlledStepFrameIndex: frameIndex,
+          frameCount: requestedFrameCount,
+          advanceSim: frameIndex > 0,
+          sameBrowserSessionId,
+          startNow,
+          stepDeltaMs: controlledStepDeltaMs,
+          renderScales,
+          includeRgba: options.includeRgba === true,
+          includeFeatureRgba: options.includeFeatureRgba === true,
+          resumeRenderLoop: false,
+        });
+        frames.push(frame);
+      }
+    } finally {
+      controlsSnapshot = controlsBefore;
+      resetTemporalHistory('controlled-step-sequence-restore');
+      if (options.resumeRenderLoop !== false && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+    return {
+      ok: frames.every(frame => frame.ok === true),
+      sequenceAuthority: 'controlled-step-sequence-v0',
+      sampleAuthority: 'controlled-step-sim-advance',
+      sameBrowserSessionId,
+      controlledStepDeltaMs,
+      requestedFrameCount,
+      startFrameCount,
+      startSimStepCount,
+      startNowMs: startNow,
+      renderScales,
+      frames,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+    };
+  }
+
+  async function renderFrozenScaleToCanvas(options = {}) {
+    const fullFieldImportSessionId = String(options.fullFieldImportSessionId || '');
+    const importedFieldCustody = Boolean(
+      fullFieldImportSessionId
+      && state.fullFieldImportReceipt?.status === 'applied'
+      && state.fullFieldImportReceipt?.renderLoopPaused === true
+      && fullFieldImportSessionId === state.fullFieldImportReceipt.sessionId
+    );
+    if ((!state.active && !importedFieldCustody) || !device) return { ok: false, reason: 'inactive', ...state };
+    const compositionExplicit = options.boundarySplatComposition != null;
+    const boundarySplatCompositionRequestedRaw = options.boundarySplatComposition ?? 'splat-only-v0';
+    const compositionRequest = selectiveHeadLiveRenderCompositionRequest(boundarySplatCompositionRequestedRaw);
+    if (compositionRequest.fallbackReason) {
+      return {
+        ok: false,
+        reason: 'unsupported-boundary-splat-composition',
+        boundarySplatCompositionRequestedRaw,
+        boundarySplatCompositionRequested: null,
+        boundarySplatCompositionEffective: 'unavailable',
+        raymarchEncoded: false,
+        splatEncoded: false,
+        raymarchApplied: false,
+        splatApplied: false,
+      };
+    }
+    const compositionDefinition = compositionRequest.definition;
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) {
+      await device.queue.onSubmittedWorkDone();
+    }
+    const controlsBefore = { ...controlsSnapshot };
+    const renderScale = normalizeRenderScale(options.renderScale ?? controlsSnapshot.renderScale);
+    const controlOverrides = {
+      ...(options.controlOverrides && typeof options.controlOverrides === 'object' ? options.controlOverrides : {}),
+      selectiveHeadLiveRenderComposition: compositionRequest.requested,
+    };
+    const boundarySplatCompositionRequested = boundarySplatCompositionRequestedRaw === 'raymarch-under-splats-v0'
+      ? boundarySplatCompositionRequestedRaw
+      : compositionRequest.requested;
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
+    const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
+    const baseSimStepCount = Number.isFinite(Number(options.baseSimStepCount)) ? Number(options.baseSimStepCount) : state.simStepCount;
+    try {
+      controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...controlOverrides, renderScale });
+      resetTemporalHistory('same-state-render-scale-canvas-capture');
+      updateUniforms(fixedNow);
+      const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
+      encodeMajorant(encoder, { force: true });
+      encodeBoundarySidecar(encoder);
+      encodeBoundarySplats(encoder);
+      const currentTexture = context.getCurrentTexture();
+      let residualApplied = false;
+      let raymarchEncoded = false;
+      let splatEncoded = false;
+      let raymarchApplied = false;
+      let splatApplied = false;
+      const explicitCompositionRoute = compositionExplicit || boundarySplatRequested();
+      let boundarySplatCompositionEffective = explicitCompositionRoute
+        ? boundarySplatCompositionRequested
+        : 'raymarch-only-v0';
+      let compositionAuthority = explicitCompositionRoute
+        ? compositionDefinition.compositionAuthority
+        : 'diagnostic-raymarch-full-selected-field-authority-v0';
+      let raymarchFireAuthority = explicitCompositionRoute ? compositionDefinition.raymarchFireAuthority : 1;
+      let featureCaptureSourcePassApplied = false;
+      let sourcePassEncodeMs = null;
+      let residualPassEncodeMs = null;
+      let boundarySplatInitialOverflowCount = 0;
+      let boundarySplatCapacityRetryCount = 0;
+      if (explicitCompositionRoute) {
+        if (compositionDefinition.splat && !boundarySplatRequested()) {
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-canvas-route-unavailable',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            compositionAuthority,
+            raymarchFireAuthority,
+            raymarchEncoded: false,
+            splatEncoded: false,
+            raymarchApplied: false,
+            splatApplied: false,
+            boundarySplatFallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-mode-off',
+            boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+            boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+            boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+          };
+        }
+        if (compositionDefinition.raymarch) {
+          encodeDraw(
+            encoder,
+            currentTexture.createView(),
+            `kaminos frozen ${boundarySplatCompositionRequested} raymarch pass`,
+          );
+          raymarchEncoded = true;
+        }
+        if (compositionDefinition.splat) {
+          splatEncoded = encodeBoundarySplatDraw(
+            encoder,
+            currentTexture.createView(),
+            boundarySplatRenderPipeline,
+            { loadOp: raymarchEncoded ? 'load' : 'clear' },
+          );
+        }
+        if (compositionDefinition.splat && !splatEncoded) {
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-canvas-route-unavailable',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            raymarchEncoded,
+            splatEncoded,
+            raymarchApplied: false,
+            splatApplied: false,
+            boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+            boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+            boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+            boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+          };
+        }
+        state.volumeReconstructionStyle = boundarySplatCompositionEffective;
+        if (compositionDefinition.splat) encodeBoundarySplatTelemetry(encoder, true);
+        recordBrowserResidualCost({ applied: false });
+      } else if (browserResidualCanApply()) {
+        ensureFrameTexture();
+        ensureBrowserResidualFeatureTexture();
+        const sourcePassStart = performance.now();
+        encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
+        raymarchEncoded = true;
+        sourcePassEncodeMs = performance.now() - sourcePassStart;
+        featureCaptureSourcePassApplied = true;
+        const residualPassStart = performance.now();
+        residualApplied = encodeBrowserResidualPass(encoder, currentTexture.createView());
+        residualPassEncodeMs = performance.now() - residualPassStart;
+        recordBrowserResidualCost({ applied: residualApplied, sourcePassEncodeMs, residualPassEncodeMs });
+      } else {
+        encodeDraw(encoder, currentTexture.createView(), 'kaminos frozen render-scale canvas pass');
+        raymarchEncoded = true;
+        state.volumeReconstructionStyle = state.renderScale < 0.999 ? 'linear-css-upscale' : 'native-resolution';
+        recordBrowserResidualCost({ applied: false });
+      }
+      if (options.includeFeatureRgba === true && !featureCaptureSourcePassApplied) {
+        ensureFrameTexture();
+        ensureBrowserResidualFeatureTexture();
+        encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
+        featureCaptureSourcePassApplied = true;
+      }
+      device.queue.submit([encoder.finish()]);
+      raymarchApplied = raymarchEncoded;
+      splatApplied = splatEncoded;
+      if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+      if (device.queue?.onSubmittedWorkDone) {
+        await device.queue.onSubmittedWorkDone();
+      }
+      if (compositionDefinition.splat && Number(state.boundarySplatOverflowCount) > 0) {
+        boundarySplatInitialOverflowCount = Number(state.boundarySplatOverflowCount);
+        const candidateCount = Number(state.boundarySplatCandidateCount);
+        if (!Number.isFinite(candidateCount) || boundarySplatCapacity < candidateCount) {
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-capacity-growth-unavailable',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+            boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+            boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+            boundarySplatCapacity,
+            boundarySplatInitialOverflowCount,
+            boundarySplatCapacityRetryCount,
+            raymarchEncoded,
+            splatEncoded,
+            raymarchApplied,
+            splatApplied: false,
+          };
+        }
+        updateUniforms(fixedNow);
+        const retryEncoder = device.createCommandEncoder({ label: 'kaminos frozen-boundary-splat-capacity-retry' });
+        encodeBoundarySplats(retryEncoder);
+        const retryTexture = context.getCurrentTexture();
+        let retryRaymarchEncoded = false;
+        if (compositionDefinition.raymarch) {
+          encodeDraw(
+            retryEncoder,
+            retryTexture.createView(),
+            `kaminos frozen ${boundarySplatCompositionRequested} capacity-retry raymarch pass`,
+          );
+          retryRaymarchEncoded = true;
+        }
+        const retrySplatEncoded = encodeBoundarySplatDraw(
+          retryEncoder,
+          retryTexture.createView(),
+          boundarySplatRenderPipeline,
+          { loadOp: retryRaymarchEncoded ? 'load' : 'clear' },
+        );
+        if (!retrySplatEncoded) {
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-capacity-retry-unavailable',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+            boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+            boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+            boundarySplatCapacity,
+            boundarySplatInitialOverflowCount,
+            boundarySplatCapacityRetryCount,
+            raymarchEncoded,
+            splatEncoded: false,
+            raymarchApplied,
+            splatApplied: false,
+          };
+        }
+        encodeBoundarySplatTelemetry(retryEncoder, true);
+        device.queue.submit([retryEncoder.finish()]);
+        boundarySplatCapacityRetryCount += 1;
+        raymarchEncoded = raymarchEncoded || retryRaymarchEncoded;
+        splatEncoded = retrySplatEncoded;
+        raymarchApplied = raymarchEncoded;
+        splatApplied = splatEncoded;
+        if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        if (Number(state.boundarySplatOverflowCount) > 0) {
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-capacity-retry-overflow',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+            boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+            boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+            boundarySplatCapacity,
+            boundarySplatInitialOverflowCount,
+            boundarySplatCapacityRetryCount,
+            raymarchEncoded,
+            splatEncoded,
+            raymarchApplied,
+            splatApplied: false,
+          };
+        }
+      }
+      const featureCapture = featureCaptureSourcePassApplied && browserResidualFeatureTexture
+        ? await readTextureRgba8(
+          browserResidualFeatureTexture,
+          state.width,
+          state.height,
+          'kaminos residual shader-material-authority feature readback'
+        )
+        : null;
+      const canvasRect = canvas.getBoundingClientRect();
+      return {
+        ok: true,
+        sampleAuthority: 'render-only-frozen-sim-state',
+        imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        controlOverrides,
+        boundarySplatCompositionRequestedRaw,
+        boundarySplatCompositionRequested,
+        boundarySplatCompositionEffective,
+        compositionAuthority,
+        raymarchFireAuthority,
+        raymarchEncoded,
+        splatEncoded,
+        raymarchApplied,
+        splatApplied,
+        residualApplied,
+        residualSourcePassEncodeMs: sourcePassEncodeMs,
+        residualPassEncodeMs,
+        featureCapture: featureCapture ? {
+          ...featureCapture,
+          featureAuthority: BROWSER_RESIDUAL_FEATURE_AUTHORITY,
+          imageAuthority: 'gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass',
+          inputChannels: 4,
+          channelLayout: 'radiance-fire-interface-smoke',
+          source: 'browserResidualFeatureTexture',
+          sourcePassApplied: featureCaptureSourcePassApplied,
+        } : null,
+        featureCaptureSourcePassApplied,
+        sameStateCaptureId,
+        baseFrameCount,
+        baseSimStepCount,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        sampleNowMs: fixedNow,
+        requestedRenderScale: renderScale,
+        renderScale: state.renderScale,
+        renderPixelRatio: state.renderPixelRatio,
+        displayWidth: state.displayWidth,
+        displayHeight: state.displayHeight,
+        renderWidth: state.renderWidth,
+        renderHeight: state.renderHeight,
+        volumeReconstructionStyle: state.volumeReconstructionStyle,
+        canvasCssRect: {
+          x: canvasRect.left,
+          y: canvasRect.top,
+          width: canvasRect.width,
+          height: canvasRect.height,
+        },
+        devicePixelRatio: window.devicePixelRatio || 1,
+        effectiveRoute: state.effectiveRoute,
+        prototypeIdentity: state.prototypeIdentity,
+        backend: state.backend,
+        boundarySidecarIdentity: state.boundarySidecarIdentity,
+        boundarySidecarAuthority: state.boundarySidecarAuthority,
+        boundarySidecarSource: state.boundarySidecarSource,
+        boundarySidecarOverrideReceipt: state.boundarySidecarOverrideReceipt,
+        boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+        boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+        boundarySplatRadius: state.boundarySplatRadius,
+        boundarySplatSharpness: state.boundarySplatSharpness,
+        boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+        boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+        boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+        boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+        boundarySplatCapacity,
+        boundarySplatInitialOverflowCount,
+        boundarySplatCapacityRetryCount,
+        boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+      };
+    } finally {
+      if (options.restoreControls !== false) {
+        controlsSnapshot = controlsBefore;
+        resetTemporalHistory('same-state-render-scale-canvas-restore');
+      }
+      if (options.resumeRenderLoop === true && state.active) {
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(render);
+      }
+    }
+  }
+
+  async function sampleDeterministicReplayFrame(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const requestedSteps = Math.floor(Number(options.steps));
+    const steps = Number.isFinite(requestedSteps) && requestedSteps > 0 ? requestedSteps : 1;
+    const timeStepMs = Number.isFinite(Number(options.timeStepMs)) ? Number(options.timeStepMs) : 1000 / 60;
+    const startTimeMs = Number.isFinite(Number(options.startTimeMs)) ? Number(options.startTimeMs) : 1000;
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+
+    const controlsBefore = { ...controlsSnapshot };
+    controlsSnapshot = applyRuntimeQualityControls({
+      ...controlsSnapshot,
+      boundarySidecarSource: 'live',
+      boundarySplatMode: 'off',
+      lookFreeze: 0,
+      temporalAccum: 0,
+      temporalJitter: 0,
+    });
+    rebuildFluidState(gridSize, majorantGridSize, 'deterministic-replay-reset');
+    state.frameCount = 0;
+    state.lookFreezeFrame = null;
+    state.lookFreezeRenderTimeMs = null;
+    state.lookFreezeRenderFrame = null;
+
+    for (let step = 0; step < steps; step += 1) {
+      const now = startTimeMs + step * timeStepMs;
+      updateUniforms(now);
+      const encoder = device.createCommandEncoder({ label: `kaminos deterministic replay step ${step + 1}/${steps}` });
+      encodeSim(encoder);
+      if (step === steps - 1) encodeMajorant(encoder, { force: true });
+      device.queue.submit([encoder.finish()]);
+      state.frameCount += 1;
+    }
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    if (gridSize === 160) {
+      selectiveHeadLiveRuntime = await createSelectiveHeadLiveRuntime({
+        device,
+        sourceFluidBuffers: fluidBuffers,
+        sourceFrontBuffers: frontBuffers,
+      });
+      rebuildSelectiveHeadLiveBindGroups();
+      state.selectiveHeadLive = selectiveHeadLiveRuntime.debugState();
+    }
+    if (options.restoreControls === true) {
+      controlsSnapshot = applyRuntimeQualityControls(controlsBefore);
+      updateUniforms(startTimeMs + steps * timeStepMs);
+    }
+    return {
+      ok: true,
+      identity: 'deterministic-replay-same-route-controls-fixed-step-v0',
+      authority: 'same-route-controls-fixed-step-replay',
+      resetReason: 'deterministic-replay-reset',
+      requestedSteps: steps,
+      completedSteps: state.simStepCount,
+      timeStepMs,
+      startTimeMs,
+      finalTimeMs: startTimeMs + Math.max(0, steps - 1) * timeStepMs,
+      controlsSignature: temporalControlSignature(controlsSnapshot),
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      grid: gridSize,
+      majorantGrid: majorantGridSize,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+      selectiveHeadLiveModelIdentity: selectiveHeadLiveRuntime?.modelIdentity || null,
+      controlsRestored: options.restoreControls === true,
+    };
+  }
+
+  function decodeBoundarySidecarChunk(base64) {
+    const binary = atob(String(base64 || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  function beginDebugBoundarySidecarOverride(payload = {}) {
+    const requestedGrid = Number(payload.grid);
+    const expectedByteLength = boundarySidecarBufferBytes(gridSize);
+    const byteLength = Number(payload.byteLength);
+    if (requestedGrid !== gridSize) {
+      return { ok: false, reason: 'grid-mismatch', requestedGrid, effectiveGrid: gridSize };
+    }
+    if (byteLength !== expectedByteLength) {
+      return { ok: false, reason: 'byte-length-mismatch', requestedByteLength: byteLength, expectedByteLength };
+    }
+    if (!payload.boundarySidecarSha256 || !payload.sourceManifestSha256 || !payload.role) {
+      return { ok: false, reason: 'missing-source-identity' };
+    }
+    const sessionId = globalThis.crypto?.randomUUID?.() || `boundary-sidecar-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    boundarySidecarOverrideUpload = {
+      sessionId,
+      role: String(payload.role),
+      grid: requestedGrid,
+      byteLength,
+      boundarySidecarSha256: String(payload.boundarySidecarSha256),
+      sourceManifestPath: String(payload.sourceManifestPath || ''),
+      sourceManifestSha256: String(payload.sourceManifestSha256),
+      sourceKind: String(payload.sourceKind || 'unknown'),
+      packIdentity: payload.packIdentity == null ? null : String(payload.packIdentity),
+      bytes: new Uint8Array(byteLength),
+      receivedBytes: 0,
+      chunkCount: 0,
+    };
+    state.boundarySidecarOverrideReceipt = {
+      identity: EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY,
+      status: 'receiving',
+      sessionId,
+      role: boundarySidecarOverrideUpload.role,
+      grid: requestedGrid,
+      byteLength,
+      receivedBytes: 0,
+      sourceManifestPath: boundarySidecarOverrideUpload.sourceManifestPath,
+      sourceManifestSha256: boundarySidecarOverrideUpload.sourceManifestSha256,
+      sourceKind: boundarySidecarOverrideUpload.sourceKind,
+      packIdentity: boundarySidecarOverrideUpload.packIdentity,
+      boundarySidecarSha256: boundarySidecarOverrideUpload.boundarySidecarSha256,
+    };
+    return { ok: true, ...state.boundarySidecarOverrideReceipt };
+  }
+
+  function writeDebugBoundarySidecarOverrideChunk(payload = {}) {
+    if (!boundarySidecarOverrideUpload || payload.sessionId !== boundarySidecarOverrideUpload.sessionId) {
+      return { ok: false, reason: 'unknown-session' };
+    }
+    const byteOffset = Number(payload.byteOffset);
+    if (byteOffset !== boundarySidecarOverrideUpload.receivedBytes) {
+      return {
+        ok: false,
+        reason: 'non-sequential-chunk',
+        requestedByteOffset: byteOffset,
+        expectedByteOffset: boundarySidecarOverrideUpload.receivedBytes,
+      };
+    }
+    const chunk = decodeBoundarySidecarChunk(payload.base64);
+    if (byteOffset + chunk.byteLength > boundarySidecarOverrideUpload.byteLength) {
+      return { ok: false, reason: 'chunk-overflow' };
+    }
+    boundarySidecarOverrideUpload.bytes.set(chunk, byteOffset);
+    boundarySidecarOverrideUpload.receivedBytes += chunk.byteLength;
+    boundarySidecarOverrideUpload.chunkCount += 1;
+    state.boundarySidecarOverrideReceipt = {
+      ...state.boundarySidecarOverrideReceipt,
+      receivedBytes: boundarySidecarOverrideUpload.receivedBytes,
+      chunkCount: boundarySidecarOverrideUpload.chunkCount,
+    };
+    return {
+      ok: true,
+      sessionId: boundarySidecarOverrideUpload.sessionId,
+      receivedBytes: boundarySidecarOverrideUpload.receivedBytes,
+      chunkCount: boundarySidecarOverrideUpload.chunkCount,
+    };
+  }
+
+  async function finishDebugBoundarySidecarOverride(payload = {}) {
+    if (!boundarySidecarOverrideUpload || payload.sessionId !== boundarySidecarOverrideUpload.sessionId) {
+      return { ok: false, reason: 'unknown-session' };
+    }
+    const upload = boundarySidecarOverrideUpload;
+    if (upload.receivedBytes !== upload.byteLength) {
+      return { ok: false, reason: 'partial-upload', receivedBytes: upload.receivedBytes, expectedBytes: upload.byteLength };
+    }
+    const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', upload.bytes));
+    const actualSha256 = Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
+    if (actualSha256 !== upload.boundarySidecarSha256) {
+      state.boundarySidecarOverrideReceipt = {
+        ...state.boundarySidecarOverrideReceipt,
+        status: 'rejected',
+        failureReason: 'sha256-mismatch',
+        actualSha256,
+      };
+      boundarySidecarOverrideUpload = null;
+      return { ok: false, reason: 'sha256-mismatch', actualSha256, expectedSha256: upload.boundarySidecarSha256 };
+    }
+    await ensureGpu();
+    ensureBoundarySidecarBuffer();
+    device.queue.writeBuffer(boundarySidecarBuffer, 0, upload.bytes);
+    controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, boundarySidecarSource: 'override' });
+    state.boundarySidecarSource = 'override';
+    state.boundaryStructureSource = 'override';
+    state.boundarySidecarAuthority = EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY;
+    state.boundarySidecarBuilt = true;
+    state.boundarySidecarBuiltThisFrame = true;
+    state.boundarySidecarOverrideReceipt = {
+      identity: EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY,
+      status: 'applied',
+      sessionId: upload.sessionId,
+      role: upload.role,
+      grid: upload.grid,
+      byteLength: upload.byteLength,
+      receivedBytes: upload.receivedBytes,
+      chunkCount: upload.chunkCount,
+      sourceManifestPath: upload.sourceManifestPath,
+      sourceManifestSha256: upload.sourceManifestSha256,
+      sourceKind: upload.sourceKind,
+      packIdentity: upload.packIdentity,
+      boundarySidecarSha256: upload.boundarySidecarSha256,
+      actualSha256,
+      appliedAtFrameCount: state.frameCount,
+      appliedAtSimStepCount: state.simStepCount,
+      authority: EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY,
+    };
+    boundarySidecarOverrideUpload = null;
+    state.boundarySidecarDebug = boundarySidecarDebug('override');
+    return { ok: true, ...state.boundarySidecarOverrideReceipt };
   }
 
   return {
@@ -9154,7 +13139,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.quenchVaporStrength = snuffQuenchVaporStrength(controlsSnapshot);
       state.snuffVisualModel = state.quenchVaporStrength > 0 ? 'quench-vapor-v0' : 'inactive';
       state.flameQuenchModel = state.quenchVaporStrength > 0 ? 'quench-flame-body-v0' : 'inactive';
-      updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+      const controlsLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
+      if (!controlsLookFreeze) updatePyroDynamicDetailState({ inputKind: 'control-proxy' });
+      else if (state.pyroDynamicDetail) {
+        state.pyroDynamicDetail = {
+          ...state.pyroDynamicDetail,
+          frozen: true,
+          freezeFrame: state.lookFreezeFrame ?? state.frameCount,
+          lastInputKind: 'look-lab-frozen-control-change',
+        };
+      }
       state.runtimeQualityRequested = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityRequested);
       state.runtimeQualityEffective = normalizeRuntimeQuality(controlsSnapshot.runtimeQualityEffective || controlsSnapshot.runtimeQualityRequested);
       state.gpuPressure = clampFinite(controlsSnapshot.gpuPressure, 0, 1, 0);
@@ -9172,6 +13166,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.bonfireAblation = normalizeBonfireAblationControls(controlsSnapshot);
       state.renderScale = normalizeRenderScale(controlsSnapshot.renderScale);
       state.renderPixelRatio = state.renderWidth / Math.max(1, state.displayWidth || state.renderWidth || 1);
+      state.volumeResidualMode = normalizeBrowserResidualMode(controlsSnapshot.volumeResidualMode);
+      state.volumeResidualModelUrl = String(controlsSnapshot.volumeResidualModelUrl || '');
+      state.volumeResidualStrength = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
+      state.volumeResidualFeatureDebug = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
+      state.volumeResidualFeatureDebugMode = state.volumeResidualFeatureDebug ? 'residual-feature-debug-false-color-v0' : 'off';
+      const selectiveCompositionRequest = selectiveHeadLiveRenderCompositionRequest(
+        controlsSnapshot.selectiveHeadLiveRenderComposition ?? state.selectiveHeadLiveCompositionRequestedRaw,
+      );
+      state.selectiveHeadLiveRole = normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole);
+      state.selectiveHeadLiveCompositionRequestedRaw = selectiveCompositionRequest.raw;
+      state.selectiveHeadLiveCompositionRequested = selectiveCompositionRequest.requested;
+      state.selectiveHeadLiveCompositionAuthority = selectiveHeadLiveRenderCompositionAuthority(selectiveCompositionRequest.requested);
+      state.selectiveHeadLiveCompositionFallbackReason = selectiveCompositionRequest.fallbackReason;
+      state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
+      state.boundarySplatRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
+      state.boundarySplatSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
+      if (device) void ensureBrowserResidualModel();
       state.majorantGrid = majorantGridSize;
       state.majorantCadence = normalizeMajorantBuildCadence(controlsSnapshot.majorantCadence);
       state.pressureIterationDefault = defaultPressureIterationsForScene(controlsSnapshot.volumeScene);
@@ -9237,6 +13248,81 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         frameId: state.externalEmitterFrameId,
       };
     },
+    setSelectiveHeadLiveRole(role) {
+      const requestedRole = normalizeSelectiveHeadLiveRole(role);
+      controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRole: requestedRole };
+      state.selectiveHeadLiveRole = requestedRole;
+      resetTemporalHistory('selective-head-live-role-change');
+      return {
+        requestedRole,
+        effectiveRole: state.selectiveHeadLiveEffectiveRole,
+        routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+        modelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
+        fallbackReason: state.selectiveHeadLiveFallbackReason,
+      };
+    },
+    setSelectiveHeadLiveRenderComposition(composition) {
+      const request = selectiveHeadLiveRenderCompositionRequest(composition);
+      controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRenderComposition: request.requested };
+      updateSelectiveHeadLiveCompositionState();
+      resetTemporalHistory('selective-head-live-render-composition-change');
+      return {
+        requestedCompositionRaw: request.raw,
+        requestedComposition: request.requested,
+        effectiveComposition: state.selectiveHeadLiveCompositionEffective,
+        compositionAuthority: state.selectiveHeadLiveCompositionAuthority,
+        compositionFallbackReason: request.fallbackReason,
+        routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+      };
+    },
+    setSelectiveHeadLiveCapturePaused(paused) {
+      selectiveHeadLiveCapturePaused = Boolean(paused);
+      state.selectiveHeadLiveCapturePaused = selectiveHeadLiveCapturePaused;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (!selectiveHeadLiveCapturePaused && state.active) raf = requestAnimationFrame(render);
+      return {
+        paused: selectiveHeadLiveCapturePaused,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        authority: 'witness-owned-presented-frame-pause-release-v0',
+      };
+    },
+    async stepSelectiveHeadLiveCaptureFrame() {
+      if (!state.active || !device) return { ok: false, reason: 'inactive' };
+      if (!selectiveHeadLiveCapturePaused) return { ok: false, reason: 'capture-not-paused' };
+      const beforeFrameCount = state.frameCount;
+      const beforeSimStepCount = state.simStepCount;
+      selectiveHeadLiveCapturePaused = false;
+      render(performance.now());
+      selectiveHeadLiveCapturePaused = true;
+      state.selectiveHeadLiveCapturePaused = true;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      const simStepDelta = state.simStepCount - beforeSimStepCount;
+      const frameDelta = state.frameCount - beforeFrameCount;
+      return {
+        ok: state.active && simStepDelta === 1 && frameDelta === 1,
+        reason: state.error || (simStepDelta !== 1 || frameDelta !== 1 ? `single-step-delta-mismatch:${frameDelta}/${simStepDelta}` : null),
+        authority: 'renderer-internal-paused-single-step-gpu-complete-v0',
+        beforeFrameCount,
+        beforeSimStepCount,
+        frameCount: state.frameCount,
+        simStepCount: state.simStepCount,
+        effectiveRole: state.selectiveHeadLiveEffectiveRole,
+        requestedRole: state.selectiveHeadLiveRole,
+        roleAuthority: state.selectiveHeadLiveRoleAuthority,
+        fallbackReason: state.selectiveHeadLiveFallbackReason,
+        boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+        selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+        selectiveHeadLiveCompositionEffective: state.selectiveHeadLiveCompositionEffective,
+        selectiveHeadLiveCompositionAuthority: state.selectiveHeadLiveCompositionAuthority,
+        selectiveHeadLiveCompositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+        selectiveHeadLivePassReceipt: state.selectiveHeadLivePassReceipt,
+      };
+    },
+    loadSelectiveHeadLiveReplayAnchor,
     setTruthOracleActivityCue(payload = {}) {
       const source = payload && typeof payload === 'object' ? payload : {};
       const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
@@ -9280,11 +13366,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       emitStatus({ phase: 'truth-oracle-activity-cue-uploaded' });
       return { ...state.scalarActivityReceiver };
     },
+    beginDebugBoundarySidecarOverride,
+    writeDebugBoundarySidecarOverrideChunk,
+    finishDebugBoundarySidecarOverride,
     syntheticHandTrailEmitters,
     async setActive(active) {
       if (active) {
+        if (state.fullFieldImportReceipt?.status === 'applied'
+          && state.fullFieldImportReceipt?.renderLoopPaused === true) {
+          throw new Error('full-field-import-live-resume-api-required');
+        }
         try {
           await ensureGpu();
+          await ensureBrowserResidualModel();
           state.active = true;
           state.error = null;
           canvas.classList.add('active');
@@ -9320,11 +13414,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     sampleFrame,
     sampleLiquidFireContactConsumer,
+    sampleDeterministicReplayFrame,
+    beginDebugFullFieldImport,
+    writeDebugFullFieldImportChunk,
+    finishDebugFullFieldImport,
+    advanceDebugImportedFieldSteps,
+    resumeDebugImportedFieldLive,
+    beginDebugFullFieldExport,
+    readDebugFullFieldExportChunk,
+    releaseDebugFullFieldExport,
+    sampleRenderScaleSet,
+    controlledStepFrame,
+    controlledStepSequence,
+    captureSelectiveHeadLiveFrame,
+    renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
+      browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
       destroyLiquidFireContactConsumer();
+      boundarySplatCameraBuffer?.destroy();
+      boundarySplatCameraBuffer = null;
       destroyTemporalHistory();
       destroyFluidState();
       destroyMajorantState();
