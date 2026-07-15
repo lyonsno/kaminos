@@ -358,12 +358,22 @@ physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTrainingLoss
   visibleEnergy: 'max(opacity,0)*max(rec709-luminance,0)',
   visibleEnergyChannels: { color: [17, 18, 19], opacity: 20 },
   weights: { candidate: 0.1, splat: 1.0, visibleEnergy: 0.25 },
+  responseAnchor: {
+    authority: 'frozen-teacher-response-on-current-model-exposed-inputs-v0',
+    scope: 'predicted-splat-exposure-rows-only',
+    weight: 1.0,
+  },
+  visibleEnergyScale: 0.01,
   splatAttributeOrder: [
     'splat.support',
     'splat.color.r', 'splat.color.g', 'splat.color.b',
     'splat.opacity', 'splat.shape.x', 'splat.shape.y',
     'splat.ridge', 'splat.fireSignal',
   ],
+};
+physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTraining = {
+  authority: 'protected-splat-anchored-online-scheduled-exposure-training-v0',
+  mode: 'protected-anchored-online-rollout',
 };
 physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateCorpora = {
   trainingManifestSha256: '6'.repeat(64),
@@ -391,6 +401,10 @@ for (const mutate of [
   identity => { identity.visibleEnergy = 'max(shape.y,0)*rec709(color.b,opacity,shape.x)'; },
   identity => { identity.weights.splat = 0.5; },
   identity => { identity.weights.visibleEnergy = 0.5; },
+  identity => { identity.responseAnchor.weight = 999; },
+  identity => { delete identity.responseAnchor; },
+  identity => { identity.splatAttributeOrder[1] = 'splat.color.counterfeit'; },
+  identity => { identity.unexpectedObjective = { weight: 1.0 }; },
 ]) {
   const alternateObjective = structuredClone(physicalEnergyEnvelopeWitness);
   mutate(alternateObjective.source.sharedIdentity.destinationStateTrainingLoss);
@@ -398,6 +412,18 @@ for (const mutate of [
     () => cohortAudit.validateMotionCohortWitness(alternateObjective),
     /physical visible-energy loss identity/i,
     'v1 must bind formula and all objective weights, not only authority and channel indices',
+  );
+}
+for (const mutate of [
+  identity => { identity.mode = 'protected-online-rollout'; },
+  identity => { identity.authority = 'protected-splat-online-scheduled-exposure-training-v0'; },
+]) {
+  const alternateTraining = structuredClone(physicalEnergyEnvelopeWitness);
+  mutate(alternateTraining.source.sharedIdentity.destinationStateTraining);
+  assert.throws(
+    () => cohortAudit.validateMotionCohortWitness(alternateTraining),
+    /destination state training identity/i,
+    'v1 must bind anchored training mode as well as the projected loss terms',
   );
 }
 const missingWitnessCorpora = structuredClone(physicalEnergyEnvelopeWitness);
@@ -424,7 +450,14 @@ const destinationModel = {
     attributeCount: 25,
     attributeOrder: [...Array.from({ length: 16 }, (_, index) => `candidate.${index}`), ...physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTrainingLoss.splatAttributeOrder],
   },
-  training: { distribution: { loss: structuredClone(fullLoss) }, loss: { ...structuredClone(fullLoss), visibleEnergyScale: 0.01 } },
+  training: {
+    distribution: {
+      authority: physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTraining.authority,
+      mode: physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTraining.mode,
+      loss: structuredClone(fullLoss),
+    },
+    loss: { ...structuredClone(fullLoss), visibleEnergyScale: 0.01 },
+  },
   trainingManifest: { sha256: '6'.repeat(64) },
   evaluationManifest: { sha256: 'b'.repeat(64) },
 };
@@ -435,10 +468,25 @@ const destinationReportIdentity = {
 assert.deepEqual(
   cohortAudit.physicalDestinationStateModelIdentity(destinationModel, destinationReportIdentity),
   {
+    training: physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTraining,
     loss: physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTrainingLoss,
     corpora: physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateCorpora,
   },
 );
+for (const mutate of [
+  model => { model.training.distribution.loss.responseAnchor.weight = 999; model.training.loss.responseAnchor.weight = 999; },
+  model => { delete model.training.distribution.loss.responseAnchor; delete model.training.loss.responseAnchor; },
+  model => { model.training.distribution.mode = 'protected-online-rollout'; },
+  model => { model.training.distribution.authority = 'protected-splat-online-scheduled-exposure-training-v0'; },
+]) {
+  const model = structuredClone(destinationModel);
+  mutate(model);
+  assert.throws(
+    () => cohortAudit.physicalDestinationStateModelIdentity(model, structuredClone(destinationReportIdentity)),
+    /destination state model .*identity mismatch/i,
+    'checkpoint identity must reject anchor and training-mode counterfeits',
+  );
+}
 for (const mutate of [
   (model, report) => { delete model.trainingManifest; },
   (model, report) => { delete report.evaluationManifest; },

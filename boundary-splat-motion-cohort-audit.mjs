@@ -33,7 +33,16 @@ const PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY = Object.freeze({
   visibleEnergy: 'max(opacity,0)*max(rec709-luminance,0)',
   visibleEnergyChannels: Object.freeze({ color: Object.freeze([17, 18, 19]), opacity: 20 }),
   weights: Object.freeze({ candidate: 0.1, splat: 1.0, visibleEnergy: 0.25 }),
+  responseAnchor: Object.freeze({
+    authority: 'frozen-teacher-response-on-current-model-exposed-inputs-v0',
+    scope: 'predicted-splat-exposure-rows-only',
+    weight: 1.0,
+  }),
   splatAttributeOrder: PHYSICAL_SPLAT_ATTRIBUTE_ORDER,
+});
+const PHYSICAL_ANCHORED_TRAINING_IDENTITY = Object.freeze({
+  authority: 'protected-splat-anchored-online-scheduled-exposure-training-v0',
+  mode: 'protected-anchored-online-rollout',
 });
 
 function parseArgs(argv) {
@@ -69,20 +78,41 @@ function routeHasExactOption(route, option, expectedValue) {
   return values.length === 1 && values[0] === expectedValue;
 }
 
-function lossContractIdentity(loss) {
-  return {
+function lossContractIdentity(loss, { final = false, requireSplatAttributeOrder = false } = {}) {
+  const identity = {
     authority: loss?.authority,
     candidateChannelCount: loss?.candidateChannelCount,
     splatChannelCount: loss?.splatChannelCount,
     visibleEnergy: loss?.visibleEnergy,
     visibleEnergyChannels: loss?.visibleEnergyChannels,
     weights: loss?.weights,
-    splatAttributeOrder: PHYSICAL_SPLAT_ATTRIBUTE_ORDER,
+    responseAnchor: loss?.responseAnchor,
+    splatAttributeOrder: requireSplatAttributeOrder ? loss?.splatAttributeOrder : PHYSICAL_SPLAT_ATTRIBUTE_ORDER,
   };
+  const expectedKeys = Object.keys(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY).filter(key => key !== 'splatAttributeOrder');
+  const actualKeys = Object.keys(loss ?? {}).filter(key => !['visibleEnergyScale', 'splatAttributeOrder'].includes(key)).sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys.sort())) identity.unexpectedObjectiveKeys = actualKeys;
+  if (final) identity.visibleEnergyScale = loss?.visibleEnergyScale;
+  return identity;
+}
+
+function finalLossContractIdentity(loss, options = {}) {
+  const identity = lossContractIdentity(loss, { final: true, ...options });
+  if (!Number.isFinite(identity.visibleEnergyScale) || identity.visibleEnergyScale <= 0) {
+    identity.visibleEnergyScale = null;
+  }
+  return identity;
 }
 
 export function physicalDestinationStateModelIdentity(model, reportIdentity) {
   const losses = [model?.training?.distribution?.loss, model?.training?.loss];
+  const trainingIdentity = {
+    authority: model?.training?.distribution?.authority,
+    mode: model?.training?.distribution?.mode,
+  };
+  const distributionLossIdentity = lossContractIdentity(losses[0]);
+  const finalLossIdentity = finalLossContractIdentity(losses[1]);
+  const { visibleEnergyScale, ...finalLossBaseIdentity } = finalLossIdentity;
   const output = model?.output;
   if (
     model?.schema !== 'kaminos-boundary-splat-phase-destination-state-model-v0'
@@ -95,7 +125,10 @@ export function physicalDestinationStateModelIdentity(model, reportIdentity) {
     || !Array.isArray(output.attributeOrder)
     || output.attributeOrder.length !== 25
     || JSON.stringify(output.attributeOrder.slice(16)) !== JSON.stringify(PHYSICAL_SPLAT_ATTRIBUTE_ORDER)
-    || losses.some(loss => JSON.stringify(lossContractIdentity(loss)) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY))
+    || JSON.stringify(trainingIdentity) !== JSON.stringify(PHYSICAL_ANCHORED_TRAINING_IDENTITY)
+    || JSON.stringify(distributionLossIdentity) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY)
+    || JSON.stringify(finalLossBaseIdentity) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY)
+    || visibleEnergyScale === null
   ) throw new Error('destination state model physical visible-energy loss identity mismatch');
   const trainingManifestSha256 = model.trainingManifest?.sha256;
   const evaluationManifestSha256 = model.evaluationManifest?.sha256;
@@ -108,7 +141,8 @@ export function physicalDestinationStateModelIdentity(model, reportIdentity) {
     || reportIdentity.evaluationManifest.sha256 !== evaluationManifestSha256
   ) throw new Error('destination state model corpus identity mismatch');
   return {
-    loss: PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY,
+    training: PHYSICAL_ANCHORED_TRAINING_IDENTITY,
+    loss: finalLossIdentity,
     corpora: { trainingManifestSha256, evaluationManifestSha256 },
   };
 }
@@ -293,10 +327,19 @@ export function validateMotionCohortWitness(witness) {
       || !Number.isInteger(shared?.inferenceFrameZero?.count)
       || shared.inferenceFrameZero.count <= 0
     ) throw new Error('recurrent envelope shared identity, envelope audit, or frame zero mismatch');
-    if (
-      physicalEnergyComparison
-      && JSON.stringify(shared.destinationStateTrainingLoss) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY)
-    ) throw new Error('recurrent envelope physical visible-energy loss identity mismatch');
+    if (physicalEnergyComparison) {
+      const sharedLossIdentity = finalLossContractIdentity(shared.destinationStateTrainingLoss, {
+        requireSplatAttributeOrder: true,
+      });
+      const { visibleEnergyScale, ...sharedLossBaseIdentity } = sharedLossIdentity;
+      if (JSON.stringify(shared.destinationStateTraining) !== JSON.stringify(PHYSICAL_ANCHORED_TRAINING_IDENTITY)) {
+        throw new Error('recurrent envelope destination state training identity mismatch');
+      }
+      if (
+        JSON.stringify(sharedLossBaseIdentity) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY)
+        || visibleEnergyScale === null
+      ) throw new Error('recurrent envelope physical visible-energy loss identity mismatch');
+    }
     if (physicalEnergyComparison && (
       !isSha256(shared.destinationStateCorpora?.trainingManifestSha256)
       || !isSha256(shared.destinationStateCorpora?.evaluationManifestSha256)
@@ -1202,6 +1245,7 @@ export async function writeRecurrentEnvelopeWitness(
       throw new Error('destination state model paired report identity mismatch');
     }
     const destinationStateTrainingLoss = destinationStateIdentity.loss;
+    const destinationStateTraining = destinationStateIdentity.training;
     const destinationStateCorpora = destinationStateIdentity.corpora;
     const frameCount = legacyPredictions.frames.length - 1;
     const cadenceMs = legacyPredictions.temporal.controlledStepDeltaMs;
@@ -1222,6 +1266,7 @@ export async function writeRecurrentEnvelopeWitness(
       destinationStateModelPath,
       destinationStateModelSha256,
       destinationStateTrainingLoss,
+      destinationStateTraining,
       destinationStateCorpora,
       trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
       inferenceFrameZero: frameZero,
@@ -1341,6 +1386,7 @@ export async function writeRecurrentEnvelopeWitness(
         sharedIdentity: {
           occupancyModelSha256: legacyReport.model.sha256,
           destinationStateModelSha256,
+          destinationStateTraining,
           destinationStateTrainingLoss,
           destinationStateCorpora,
           trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
