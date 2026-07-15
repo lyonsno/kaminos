@@ -10,6 +10,11 @@ const ROUTE = 'exact-basin-selective-head-live-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 const SEQUENCE_AUTHORITY = 'frame-locked-consecutive-simulation-steps-v0';
 const PRESENTED_FRAME_AUTHORITY = 'cdp-presented-frame-after-consecutive-sim-step-v0';
+const ROLE_AUTHORITIES = Object.freeze({
+  truthHigh: 'current-high-field-reference-no-learned-composition-v0',
+  lowPhaseAligned: 'phase-aligned-low-field-control-v0',
+  selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
+});
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-selective-head-live-sequence.mp4'));
@@ -86,8 +91,10 @@ try {
   failurePhase = 'trained-horizon-settle';
   const settleStarted = performance.now();
   let state = null;
+  let expectedRoleAuthority = null;
   while (performance.now() - settleStarted < timeoutMs) {
     state = await evaluate(socket, 'window.__kaminosSelectiveHeadLive?.debugState?.()');
+    expectedRoleAuthority = ROLE_AUTHORITIES[state?.requestedRole] || null;
     if (state?.status === 'failed') throw new Error(state.error || state.fallbackReason || 'live route failed');
     if (
       state?.routeIdentity === ROUTE
@@ -95,6 +102,7 @@ try {
       && state?.warmupComplete === true
       && state?.warmupReceipt?.completedSteps === state?.warmupTarget
       && state?.effectiveRole === state?.requestedRole
+      && state?.roleAuthority === expectedRoleAuthority
       && state?.modelIdentity === MODEL
       && !state?.fallbackReason
       && !state?.boundarySplatFallbackReason
@@ -106,6 +114,7 @@ try {
   assert.equal(state?.warmupComplete, true, 'trained replay warmup was incomplete');
   assert.equal(state?.warmupReceipt?.completedSteps, state?.warmupTarget, 'warmup receipt did not match the requested horizon');
   assert.equal(state?.effectiveRole, state?.requestedRole, 'requested role silently fell back');
+  assert.equal(state?.roleAuthority, expectedRoleAuthority, 'requested role used the wrong composition authority');
   assert.equal(state?.modelIdentity, MODEL, 'wrong frozen model identity');
 
   await evaluate(socket, "document.getElementById('toolbar').style.display='none'; window.__kaminosSelectiveHeadLive.setCapturePaused(true)");
@@ -133,6 +142,7 @@ try {
     assert.equal(Number(stepReceipt.beforeSimStepCount), previousStep, `renderer-internal step ${frameIndex} started from the wrong state`);
     assert.equal(Number(stepReceipt.simStepCount), previousStep + 1, `simulation step discontinuity before captured frame ${frameIndex}`);
     assert.equal(stepReceipt.effectiveRole, stepReceipt.requestedRole, `renderer-internal step ${frameIndex} changed role`);
+    assert.equal(stepReceipt.roleAuthority, expectedRoleAuthority, `renderer-internal step ${frameIndex} changed composition authority`);
     assert.equal(stepReceipt.fallbackReason, null, `renderer-internal step ${frameIndex} reported model fallback`);
     assert.equal(stepReceipt.boundarySplatFallbackReason, null, `renderer-internal step ${frameIndex} reported splat fallback`);
     const capture = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, clip });
@@ -174,6 +184,7 @@ try {
     effectiveRoute: state.routeIdentity,
     requestedRole: state.requestedRole,
     effectiveRole: state.effectiveRole,
+    roleAuthority: state.roleAuthority,
     modelIdentity: state.modelIdentity,
     featureAuthority: state.featureAuthority,
     pairAuthority: state.pairAuthority,

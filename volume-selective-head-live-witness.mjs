@@ -8,6 +8,11 @@ import { spawn } from 'node:child_process';
 const SCHEMA = 'kaminos.volume.selective-head-live-witness.v0';
 const ROUTE = 'exact-basin-selective-head-live-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
+const ROLE_AUTHORITIES = Object.freeze({
+  truthHigh: 'current-high-field-reference-no-learned-composition-v0',
+  lowPhaseAligned: 'phase-aligned-low-field-control-v0',
+  selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
+});
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-selective-head-live.png'));
@@ -75,23 +80,27 @@ try {
   failurePhase = 'route-settle';
   const started = performance.now();
   let state = null;
+  let expectedRoleAuthority = null;
   while (performance.now() - started < timeoutMs) {
     state = await evaluate(socket, 'window.__kaminosSelectiveHeadLive?.debugState?.()');
+    expectedRoleAuthority = ROLE_AUTHORITIES[state?.requestedRole] || null;
     if (state?.status === 'failed') throw new Error(state.error || state.fallbackReason || 'live route failed');
     if (
       state?.routeIdentity === ROUTE
       && state?.status === 'running'
       && state?.effectiveRole === state?.requestedRole
+      && state?.roleAuthority === expectedRoleAuthority
       && state?.modelIdentity === MODEL
       && !state?.fallbackReason
       && !state?.boundarySplatFallbackReason
-      && Number(state?.encodedFrameCount || 0) >= 2
+      && (state?.requestedRole === 'truthHigh' || Number(state?.encodedFrameCount || 0) >= 2)
     ) break;
     await delay(250);
   }
   assert.equal(state?.routeIdentity, ROUTE, 'wrong effective route');
   assert.equal(state?.status, 'running', 'live route did not reach running state');
   assert.equal(state?.effectiveRole, state?.requestedRole, 'requested role silently fell back');
+  assert.equal(state?.roleAuthority, expectedRoleAuthority, 'requested role used the wrong composition authority');
   assert.equal(state?.modelIdentity, MODEL, 'wrong frozen model identity');
   assert.equal(state?.fallbackReason, null, 'selective route reported fallback');
   assert.equal(state?.boundarySplatFallbackReason, null, 'boundary splat route reported fallback');
@@ -108,7 +117,8 @@ try {
   assert.ok(observedSeconds >= minimumContinuousSeconds * 0.98, 'observation window was truncated');
   assert.ok(continuousFrameDelta >= 2, 'render frames did not advance continuously');
   assert.ok(continuousSimStepDelta >= 2, 'simulation steps did not advance continuously');
-  assert.ok(continuousEncodedFrameDelta >= 2, 'learned fields did not update continuously');
+  if (endState?.requestedRole === 'truthHigh') assert.equal(continuousEncodedFrameDelta, 0, 'truthHigh unexpectedly ran learned composition');
+  else assert.ok(continuousEncodedFrameDelta >= 2, 'learned fields did not update continuously');
   assert.equal(endState?.effectiveRole, startState?.effectiveRole, 'effective role drifted during observation');
   assert.equal(endState?.fallbackReason, null, 'selective route fell back during observation');
   assert.equal(endState?.boundarySplatFallbackReason, null, 'splat route fell back during observation');
@@ -124,6 +134,7 @@ try {
     effectiveRoute: endState.routeIdentity,
     requestedRole: endState.requestedRole,
     effectiveRole: endState.effectiveRole,
+    roleAuthority: endState.roleAuthority,
     fallbackReason: endState.fallbackReason,
     modelIdentity: endState.modelIdentity,
     featureAuthority: endState.featureAuthority,

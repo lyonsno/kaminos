@@ -41,6 +41,11 @@
     const ANCHOR_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
     const ANCHOR_FRONT_SHA256 = '1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8';
     const roles = ['truthHigh', 'lowPhaseAligned', 'selectiveFullResidual'];
+    const roleAuthorities = Object.freeze({
+      truthHigh: 'current-high-field-reference-no-learned-composition-v0',
+      lowPhaseAligned: 'phase-aligned-low-field-control-v0',
+      selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
+    });
     const params = new URLSearchParams(location.search);
     let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
     const warmupTarget = Math.max(0, Math.floor(Number(params.get('warmup_steps') ?? 96) || 0));
@@ -127,6 +132,7 @@
         warmupStarted,
         warmupReceipt,
         effectiveRole: state?.selectiveHeadLiveEffectiveRole || null,
+        roleAuthority: state?.selectiveHeadLiveRoleAuthority || null,
         fallbackReason: state?.selectiveHeadLiveFallbackReason || null,
         modelIdentity: state?.selectiveHeadLiveModelIdentity || null,
         featureAuthority: state?.selectiveHeadLiveFeatureAuthority || null,
@@ -194,6 +200,7 @@
       status.textContent = [
         state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`,
         `effective role: ${state.effectiveRole || 'starting'}`,
+        `role authority: ${state.roleAuthority || roleAuthorities[requestedRole]}`,
         `model identity: ${state.modelIdentity || 'loading'}`,
         `step: ${state.simStepCount}`,
         `fps: ${Number(state.timing?.rafFps || 0).toFixed(1)}`,

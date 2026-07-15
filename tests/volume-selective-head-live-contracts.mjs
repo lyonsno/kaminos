@@ -59,6 +59,10 @@ assert.match(core, /downsampled-same-high-history-input-to-exact-high-target/, '
 assert.match(core, /selectiveHeadLiveRole/, 'live route exposes explicit truth, low-control, and learned roles');
 assert.match(core, /selectiveHeadLiveModelIdentity/, 'live debug state exposes frozen model identity');
 assert.match(core, /selectiveHeadLiveEffectiveRole/, 'live debug state distinguishes requested from effective role');
+assert.match(core, /current-high-field-reference-no-learned-composition-v0/, 'truthHigh names its intentional learned-composition bypass authority');
+assert.match(core, /phase-aligned-low-field-control-v0/, 'lowPhaseAligned names its control authority');
+assert.match(core, /learned-selective-full-residual-composition-v0/, 'selectiveFullResidual names its learned composition authority');
+assert.match(core, /if \(requestedRole === 'truthHigh'\) \{[\s\S]*selectiveHeadLiveRoleAuthority[\s\S]*return false;[\s\S]*selectiveHeadLiveRuntime\.encode/, 'truthHigh bypasses learned inference explicitly before the learned composition path');
 assert.match(core, /selectiveHeadLiveFallbackReason/, 'live route fails loud when exact inference cannot apply');
 assert.match(core, /encodeSelectiveHeadLiveFields/, 'live frame derives low and learned fields before rendering');
 assert.match(core, /sampleSelectiveHeadLiveFields/, 'frame-locked samples derive the learned fields on each controlled simulation step');
@@ -80,6 +84,7 @@ assert.match(page, /setCapturePaused/, 'operator page relays the frame-lock paus
 assert.match(page, /stepCaptureFrame/, 'operator page relays renderer-internal single-step capture');
 assert.match(page, /model identity/i);
 assert.match(page, /effective role/i);
+assert.match(page, /role authority/i);
 assert.match(page, /fallback/i);
 assert.match(page, /checksum-bound-exact-basin-step96-field-anchor-v0/, 'page names the exact replay-anchor authority');
 assert.match(page, /d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1/, 'page pins the exact high fluid checksum');
@@ -94,6 +99,8 @@ assert.match(witness, /minimumContinuousSeconds/);
 assert.match(witness, /continuousFrameDelta/);
 assert.match(witness, /requestedRole/);
 assert.match(witness, /effectiveRole/);
+assert.match(witness, /expectedRoleAuthority/);
+assert.match(witness, /roleAuthority/);
 assert.match(witness, /fallbackReason/);
 assert.match(witness, /failurePhase/);
 
@@ -111,6 +118,8 @@ assert.match(sequenceWitness, /requestedFrameCount/);
 assert.match(sequenceWitness, /capturedSimSteps/);
 assert.match(sequenceWitness, /assertConsecutiveSteps/);
 assert.match(sequenceWitness, /effectiveRole/);
+assert.match(sequenceWitness, /expectedRoleAuthority/);
+assert.match(sequenceWitness, /roleAuthority/);
 assert.match(sequenceWitness, /failurePhase/);
 assert.match(sequenceWitness, /ffmpeg/);
 

@@ -49,6 +49,12 @@ const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-f
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
+const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
+  off: 'off',
+  truthHigh: 'current-high-field-reference-no-learned-composition-v0',
+  lowPhaseAligned: 'phase-aligned-low-field-control-v0',
+  selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
+});
 const SELECTIVE_HEAD_LIVE_REPLAY_ANCHOR_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
@@ -119,6 +125,10 @@ function normalizeGridSize(value) {
 function normalizeSelectiveHeadLiveRole(value) {
   const role = String(value || 'off');
   return SELECTIVE_HEAD_LIVE_ROLES.has(role) ? role : 'off';
+}
+
+function selectiveHeadLiveRoleAuthority(role) {
+  return SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES[normalizeSelectiveHeadLiveRole(role)];
 }
 
 function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE) {
@@ -5108,6 +5118,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     effectiveRoute: ROUTE_IDENTITY,
     selectiveHeadLiveRole: normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole),
     selectiveHeadLiveEffectiveRole: 'off',
+    selectiveHeadLiveRoleAuthority: SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES.off,
     selectiveHeadLiveRouteIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
     selectiveHeadLiveModelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
     selectiveHeadLiveModelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
@@ -6425,6 +6436,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function encodeSelectiveHeadLiveFields(encoder) {
     const requestedRole = selectiveHeadLiveRequestedRole();
     state.selectiveHeadLiveRole = requestedRole;
+    state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority(requestedRole);
     state.selectiveHeadLiveFallbackReason = null;
     if (requestedRole === 'off') {
       state.selectiveHeadLiveEffectiveRole = 'off';
@@ -6433,11 +6445,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     if (gridSize !== 160) {
       state.selectiveHeadLiveEffectiveRole = 'truthHigh';
+      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
       state.selectiveHeadLiveFallbackReason = `unsupported-grid-${gridSize}-requires-160`;
+      return false;
+    }
+    if (requestedRole === 'truthHigh') {
+      state.selectiveHeadLiveEffectiveRole = 'truthHigh';
+      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
+      state.selectiveHeadLive = null;
       return false;
     }
     if (!selectiveHeadLiveRuntime || !selectiveHeadLiveBindGroups) {
       state.selectiveHeadLiveEffectiveRole = 'truthHigh';
+      state.selectiveHeadLiveRoleAuthority = selectiveHeadLiveRoleAuthority('truthHigh');
       state.selectiveHeadLiveFallbackReason = 'frozen-model-runtime-unavailable';
       return false;
     }
@@ -11893,6 +11913,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frameCount: state.frameCount,
       effectiveRole: state.selectiveHeadLiveEffectiveRole,
       requestedRole: state.selectiveHeadLiveRole,
+      roleAuthority: state.selectiveHeadLiveRoleAuthority,
       modelIdentity: state.selectiveHeadLiveModelIdentity,
       routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
       fallbackReason: state.selectiveHeadLiveFallbackReason,
@@ -12548,6 +12569,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         simStepCount: state.simStepCount,
         effectiveRole: state.selectiveHeadLiveEffectiveRole,
         requestedRole: state.selectiveHeadLiveRole,
+        roleAuthority: state.selectiveHeadLiveRoleAuthority,
         fallbackReason: state.selectiveHeadLiveFallbackReason,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
       };
