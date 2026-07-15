@@ -982,12 +982,12 @@ function mlxMetalErf(value) {
   return result * value + value;
 }
 
-export function summarizeSam3LayerParityCheckpoint(layerIndex, isGlobal, expected, actual) {
+export function summarizeSam3TensorParityCheckpoint(expected, actual) {
   if (!(expected instanceof Float32Array) || !(actual instanceof Float32Array)) {
-    throw new Error('layer parity expected and actual values must be Float32Array instances');
+    throw new Error('tensor parity expected and actual values must be Float32Array instances');
   }
   if (expected.length !== actual.length) {
-    throw new Error(`layer parity length mismatch: expected ${expected.length}, received ${actual.length}`);
+    throw new Error(`tensor parity length mismatch: expected ${expected.length}, received ${actual.length}`);
   }
   let maxAbsDiff = -1;
   let maxAbsDiffIndex = -1;
@@ -1009,8 +1009,6 @@ export function summarizeSam3LayerParityCheckpoint(layerIndex, isGlobal, expecte
     sumSquaredDiff += absDiff * absDiff;
   }
   return {
-    layerIndex,
-    isGlobal,
     elementCount: actual.length,
     maxAbsDiff,
     meanAbsDiff: sumAbsDiff / actual.length,
@@ -1021,6 +1019,10 @@ export function summarizeSam3LayerParityCheckpoint(layerIndex, isGlobal, expecte
     expectedAtMaxAbsDiff: expected[maxAbsDiffIndex],
     actualAtMaxAbsDiff: actual[maxAbsDiffIndex],
   };
+}
+
+export function summarizeSam3LayerParityCheckpoint(layerIndex, isGlobal, expected, actual) {
+  return { layerIndex, isGlobal, ...summarizeSam3TensorParityCheckpoint(expected, actual) };
 }
 
 export function passesSam3LayerParityCheckpoint(summary, tolerance) {

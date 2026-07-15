@@ -184,6 +184,7 @@ export {
   summarizeSam3FiniteValues,
   summarizeSam3LayerParityCheckpoint,
   summarizeSam3PhaseParityCheckpoints,
+  summarizeSam3TensorParityCheckpoint,
   stableSam3Gelu,
 } from './sam-image-vit-block-stack-phase-program.js';
 

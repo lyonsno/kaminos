@@ -84,6 +84,7 @@ const {
   summarizeSam3FiniteValues,
   summarizeSam3FinitePhaseOutputs,
   summarizeSam3LayerParityCheckpoint,
+  summarizeSam3TensorParityCheckpoint,
   passesSam3LayerParityCheckpoint,
   normalizeSam3ExpectedLayerCheckpoints,
   summarizeSam3PhaseParityCheckpoints,
@@ -192,6 +193,21 @@ assert.deepEqual(
   },
   'layer parity checkpoint must preserve layer identity and diagnose the absolute MLX/WebGPU error distribution',
 );
+assert.deepEqual(
+  summarizeSam3TensorParityCheckpoint(new Float32Array([1, -2, 4]), new Float32Array([1.25, -2.125, 4])),
+  {
+    elementCount: 3,
+    maxAbsDiff: 0.25,
+    meanAbsDiff: 0.125,
+    rootMeanSquareDiff: Math.sqrt((0.25 ** 2 + 0.125 ** 2) / 3),
+    maxAbsExpected: 4,
+    maxAbsActual: 4,
+    maxAbsDiffIndex: 0,
+    expectedAtMaxAbsDiff: 1,
+    actualAtMaxAbsDiff: 1.25,
+  },
+  'generic tensor parity must preserve the same distribution evidence without inventing layer identity',
+);
 assert.throws(
   () => summarizeSam3LayerParityCheckpoint(3, true, new Float32Array([1]), new Float32Array([1, 2])),
   /length mismatch/,
@@ -222,6 +238,17 @@ assert.equal(passesSam3LayerParityCheckpoint({
   rootMeanSquareDiff: 0.00002,
   expectedAtMaxAbsDiff: 0,
 }, compoundParityTolerance), false, 'compound parity must retain its absolute bound near zero');
+assert.equal(passesSam3LayerParityCheckpoint({
+  maxAbsDiff: 0.008362,
+  meanAbsDiff: 0.0000492,
+  rootMeanSquareDiff: 0.000124,
+  expectedAtMaxAbsDiff: -18.08,
+}, {
+  maxAbsDiff: 0.006,
+  meanAbsDiff: 0.000075,
+  rootMeanSquareDiff: 0.0002,
+  relativeDiffAtMaxAbsDiff: 0.0005,
+}), true, 'prefix parity must admit measured sparse LayerNorm reduction drift without raising its absolute floor');
 
 assert.equal(stableSam3Gelu(-Number.MAX_VALUE), 0, 'stable GELU must saturate extreme negative finite inputs to zero');
 assert.equal(stableSam3Gelu(Number.MAX_VALUE), Number.MAX_VALUE, 'stable GELU must preserve extreme positive finite inputs');

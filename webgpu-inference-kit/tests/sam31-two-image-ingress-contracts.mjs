@@ -36,7 +36,9 @@ assert.match(backboneSource, /diagnostics: layerDiagnostics/, 'failed browser ev
 for (const source of [backboneSource, promotedBackboneSource]) {
   assert.match(source, /summarizeSam3LayerParityCheckpoint/, 'two-image backbone must measure final ViT error distribution against the official tensor');
   assert.match(source, /passesSam3LayerParityCheckpoint/, 'two-image backbone must apply the compound FP32 parity contract');
+  assert.match(source, /passesVitPrefixParity/, 'two-image backbone must apply the measured compound prefix contract');
   assert.match(source, /vitBackboneDiagnostics/, 'two-image backbone must preserve final ViT distribution evidence');
+  assert.match(source, /vitPrefixDiagnostics/, 'two-image backbone must preserve ViT-prefix distribution evidence');
 }
 
 const spatialPositions = resolveSam31SpatialPositionEmbeddings({

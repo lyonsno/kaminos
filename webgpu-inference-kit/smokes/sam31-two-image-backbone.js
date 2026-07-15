@@ -16,6 +16,7 @@ import {
   runSam31InteractiveNeckPhaseProgramRoute,
   passesSam3LayerParityCheckpoint,
   summarizeSam3LayerParityCheckpoint,
+  summarizeSam3TensorParityCheckpoint,
   verifySam31PacketFloat32Bytes,
 } from '../src/index.js';
 
@@ -61,6 +62,15 @@ function passesVitBackboneParity(summary, tolerances) {
     meanAbsDiff: tolerances.vitBackboneMeanAbsDiff,
     rootMeanSquareDiff: tolerances.vitBackboneRootMeanSquareDiff,
     relativeDiffAtMaxAbsDiff: tolerances.vitBackboneRelativeDiffAtMaxAbsDiff,
+  });
+}
+
+function passesVitPrefixParity(summary, tolerances) {
+  return passesSam3LayerParityCheckpoint(summary, {
+    maxAbsDiff: tolerances.vitPrefixMaxAbsDiff,
+    meanAbsDiff: tolerances.vitPrefixMeanAbsDiff,
+    rootMeanSquareDiff: tolerances.vitPrefixRootMeanSquareDiff,
+    relativeDiffAtMaxAbsDiff: tolerances.vitPrefixRelativeDiffAtMaxAbsDiff,
   });
 }
 
@@ -245,7 +255,10 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
     model: { ...model, weightsHash: prefixHash }, kernel: prefixRoute.kernel, tensors: { patchEmbeddings, weights: prefixWeights.values, shape: prefixShape }, includeReadback: true,
   });
   const prefixHiddenStates = new Float32Array(prefixResult.debugReadback.vitPrefixHiddenStates);
-  parity.vitPrefix = await compareExpected(prefixHiddenStates, tensorsByRole.get(`frame-${frameIndex}-vit-prefix-hidden-states`), loadFloat32, verificationAttached);
+  parity.vitPrefixDiagnostics = verificationAttached
+    ? summarizeSam3TensorParityCheckpoint(await loadFloat32(tensorsByRole.get(`frame-${frameIndex}-vit-prefix-hidden-states`)), prefixHiddenStates)
+    : null;
+  parity.vitPrefix = parity.vitPrefixDiagnostics?.maxAbsDiff ?? null;
   receipts.push(prefixResult.receipt); routes.push(prefixRoute.routeId);
   const prefixOutput = routeOutput(prefixResult, 'vit-prefix-hidden-states');
 
@@ -428,11 +441,11 @@ export async function runSam31TwoImageBackbone({
     interactive.route.routeId, propagation[0].route.routeId, propagation[1].route.routeId,
     frame0High.route.routeId, frame1High.route.routeId,
   ];
-  const { vitLayerDiagnostics: frame0LayerDiagnostics, vitBackboneDiagnostics: frame0BackboneDiagnostics, ...frame0Parity } = backbones[0].parity;
-  const { vitLayerDiagnostics: frame1LayerDiagnostics, vitBackboneDiagnostics: frame1BackboneDiagnostics, ...frame1Parity } = backbones[1].parity;
+  const { vitLayerDiagnostics: frame0LayerDiagnostics, vitBackboneDiagnostics: frame0BackboneDiagnostics, vitPrefixDiagnostics: frame0PrefixDiagnostics, ...frame0Parity } = backbones[0].parity;
+  const { vitLayerDiagnostics: frame1LayerDiagnostics, vitBackboneDiagnostics: frame1BackboneDiagnostics, vitPrefixDiagnostics: frame1PrefixDiagnostics, ...frame1Parity } = backbones[1].parity;
   const layerDiagnostics = {
-    frame0: { vitBackbone: frame0BackboneDiagnostics, vitLayers: frame0LayerDiagnostics },
-    frame1: { vitBackbone: frame1BackboneDiagnostics, vitLayers: frame1LayerDiagnostics },
+    frame0: { vitPrefix: frame0PrefixDiagnostics, vitBackbone: frame0BackboneDiagnostics, vitLayers: frame0LayerDiagnostics },
+    frame1: { vitPrefix: frame1PrefixDiagnostics, vitBackbone: frame1BackboneDiagnostics, vitLayers: frame1LayerDiagnostics },
   };
   const maximums = {
     frame0: { ...frame0Parity, interactive: interactive.parity, propagation: propagation[0].parity, highResolution: frame0High.parity },
@@ -441,7 +454,7 @@ export async function runSam31TwoImageBackbone({
   const parityMaximum = maximumSam31ParityValue(maximums);
   const routeChainPassed = receipts.every((receipt, index) => receipt.status === 'real' && receipt.fallbackReason == null && receipt.effectiveRouteId === requestedRouteIds[index]);
   const tolerances = manifest.tolerances;
-  const parityPassed = !verificationAttached || (backbones.every(frame => frame.parity.pixelValues <= tolerances.pixelValuesMaxAbsDiff && frame.parity.patchEmbeddings <= tolerances.patchEmbeddingsMaxAbsDiff && frame.parity.vitPrefix <= tolerances.vitPrefixMaxAbsDiff && passesVitBackboneParity(frame.parity.vitBackboneDiagnostics, tolerances) && Object.values(frame.parity.vitLayers).every(value => value <= tolerances.vitBackboneMaxAbsDiff) && Object.values(frame.parity.vitPhases).every(value => value <= tolerances.vitBackboneMaxAbsDiff))
+  const parityPassed = !verificationAttached || (backbones.every(frame => frame.parity.pixelValues <= tolerances.pixelValuesMaxAbsDiff && frame.parity.patchEmbeddings <= tolerances.patchEmbeddingsMaxAbsDiff && passesVitPrefixParity(frame.parity.vitPrefixDiagnostics, tolerances) && passesVitBackboneParity(frame.parity.vitBackboneDiagnostics, tolerances) && Object.values(frame.parity.vitLayers).every(value => value <= tolerances.vitBackboneMaxAbsDiff) && Object.values(frame.parity.vitPhases).every(value => value <= tolerances.vitBackboneMaxAbsDiff))
     && Object.values(interactive.parity).every(value => value <= (value === interactive.parity.position2 ? tolerances.positionMaxAbsDiff : tolerances.neckMaxAbsDiff))
     && propagation.every(neck => Object.entries(neck.parity).every(([name, value]) => value <= (name === 'position2' ? tolerances.positionMaxAbsDiff : tolerances.neckMaxAbsDiff)))
     && [frame0High, frame1High].every(item => Object.values(item.parity).every(value => value <= tolerances.highResolutionMaxAbsDiff)));
