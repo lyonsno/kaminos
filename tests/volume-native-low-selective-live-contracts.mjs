@@ -56,6 +56,10 @@ assert.match(route, /noHiddenCaps/, 'route rejects hidden caps instead of silent
 assert.match(route, /inferenceGpuMs/, 'route measures inference-only GPU time');
 assert.match(route, /uploadDispatchMs/, 'route measures upload/dispatch overhead');
 assert.match(route, /endToEndFrameMs/, 'route measures end-to-end frame impact');
+assert.match(core, /nativeLowMaterializationProfile/, 'shared-device route records a materialization profile instead of one opaque copy timer');
+assert.match(core, /treatmentRebuildMs[\s\S]*treatmentCopyMs[\s\S]*restoreRebuildMs[\s\S]*restoreCopyMs/, 'materialization profile splits rebuild and copy costs');
+assert.match(core, /skipInitialFluid:\s*true/, 'treatment/restore materialization avoids wasted initial-field uploads before copying shared-device buffers');
+assert.match(core, /hiddenSupportCap:\s*false/, 'cost attack must not hide support caps while reducing work');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');
@@ -92,5 +96,6 @@ assert.match(witness, /transportMode[\s\S]*shared-device-gpu-buffers-no-readback
 assert.match(witness, /nativeLowControl[\s\S]*nativeLowSelectivePredicted/, 'witness preserves live native control beside treatment');
 assert.match(witness, /requestedCalibration[\s\S]*effectiveCalibration[\s\S]*modelOutputMutation/, 'witness preserves calibration identity and model-output non-mutation');
 assert.match(witness, /treatmentSplatRadianceGain[\s\S]*treatmentSplatOpacityGain/, 'witness preserves learned splat radiance/opacity gains');
+assert.match(witness, /nativeLowMaterializationProfile[\s\S]*treatmentRebuildMs[\s\S]*restoreCopyMs/, 'witness preserves split materialization timing profile');
 
 console.log('native-low selective live route contracts passed');

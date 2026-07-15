@@ -123,6 +123,9 @@ try {
       && Number(state?.calibrationGain) >= 0
       && Number(state?.treatmentSplatRadianceGain) >= 0
       && Number(state?.treatmentSplatOpacityGain) >= 0
+      && state?.nativeLowMaterializationProfile?.hiddenSupportCap === false
+      && Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0
+      && Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0
       && Number(state?.inferenceGpuMs) >= 0
       && Number(state?.uploadDispatchMs) >= 0
       && Number(state?.endToEndFrameMs) >= 0
@@ -151,6 +154,9 @@ try {
   assert.ok(Number(state?.calibrationGain) >= 0, 'calibrationGain missing');
   assert.ok(Number(state?.treatmentSplatRadianceGain) >= 0, 'treatmentSplatRadianceGain missing');
   assert.ok(Number(state?.treatmentSplatOpacityGain) >= 0, 'treatmentSplatOpacityGain missing');
+  assert.equal(state?.nativeLowMaterializationProfile?.hiddenSupportCap, false, 'hidden support cap used in materialization profile');
+  assert.ok(Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0, 'treatmentRebuildMs missing');
+  assert.ok(Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0, 'restoreCopyMs missing');
 
   const startState = state;
   const observationStartMs = performance.now();
@@ -195,6 +201,7 @@ try {
     modelOutputMutation: endState.modelOutputMutation,
     treatmentSplatRadianceGain: endState.treatmentSplatRadianceGain,
     treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
+    nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
     requestedBackend: endState.requestedBackend,
     effectiveBackend: endState.effectiveBackend,
     transportMode: endState.transportMode,
@@ -211,6 +218,10 @@ try {
     frameDelta,
     inferenceGpuMs: endState.inferenceGpuMs,
     uploadDispatchMs: endState.uploadDispatchMs,
+    treatmentRebuildMs: endState.treatmentRebuildMs,
+    treatmentCopyMs: endState.treatmentCopyMs,
+    restoreRebuildMs: endState.restoreRebuildMs,
+    restoreCopyMs: endState.restoreCopyMs,
     endToEndFrameMs: endState.endToEndFrameMs,
     blankFrameRejection: 'passed',
     cachedFrameRejection: 'passed',

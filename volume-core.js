@@ -6807,9 +6807,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return true;
   }
 
-  function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
+  function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt', options = {}) {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
+    const skipInitialFluid = options.skipInitialFluid === true;
     destroyFluidState();
     boundarySplatCapacity = Math.min(BOUNDARY_SPLAT_INITIAL_CAPACITY, gridCellCount(gridSize));
     state.boundarySplatCapacity = boundarySplatCapacity;
@@ -6821,14 +6822,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const nextFrontBufferBytes = frontFieldBufferBytes(gridSize);
     const nextBoundarySidecarBufferBytes = boundarySidecarBufferBytes(gridSize);
     const nextPressureBufferBytes = pressureBufferBytes(gridSize);
-    const initialFluid = makeInitialFluid(gridSize);
+    const initialFluid = skipInitialFluid ? null : makeInitialFluid(gridSize);
     fluidBuffers = [0, 1].map(i => {
       const buffer = device.createBuffer({
         label: `kaminos fluid state ${gridSize}^3 ${i}`,
         size: nextBufferBytes,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
-      device.queue.writeBuffer(buffer, 0, initialFluid);
+      if (!skipInitialFluid) device.queue.writeBuffer(buffer, 0, initialFluid);
       return buffer;
     });
     frontBuffers = [0, 1].map(i => {
@@ -6837,7 +6838,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         size: nextFrontBufferBytes,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
-      device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
+      if (!skipInitialFluid) device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
       return buffer;
     });
     pressureBuffers = [0, 1].map(i => {
@@ -6846,7 +6847,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         size: nextPressureBufferBytes,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
-      device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
+      if (!skipInitialFluid) device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize) * 4));
       return buffer;
     });
     ensureOracleActivityCueBuffer();
@@ -7085,6 +7086,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     state.fluidStateResetCount += 1;
     state.fluidStateResetReason = reason;
+    state.fluidStateInitialization = {
+      identity: 'fluid-state-initialization-v0',
+      skipInitialFluid,
+      reason,
+    };
     resetTemporalHistory(reason);
     updateSimCostLedger();
     emitStatus({ phase: reason });
@@ -12606,7 +12612,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
       failurePhase = 'shared-device-treatment-materialization';
       const treatmentMaterializeStart = performance.now();
-      rebuildFluidState(160, sourceMajorantGrid, 'native-low-shared-device-treatment-materialize');
+      const treatmentRebuildStart = performance.now();
+      rebuildFluidState(160, sourceMajorantGrid, 'native-low-shared-device-treatment-materialize', { skipInitialFluid: true });
+      const treatmentRebuildMs = performance.now() - treatmentRebuildStart;
+      const treatmentCopyStart = performance.now();
       const treatmentEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} predicted 160 materialization` });
       for (const target of fluidBuffers) {
         treatmentEncoder.copyBufferToBuffer(runtime.buffers.predictedFluid, 0, target, 0, fluidBufferBytes(160));
@@ -12617,6 +12626,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.queue.submit([treatmentEncoder.finish()]);
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       setSharedDeviceCopiedState(sourceStep, sourceFrame + 1);
+      const treatmentCopyMs = performance.now() - treatmentCopyStart;
       const treatmentMaterializeMs = performance.now() - treatmentMaterializeStart;
 
       failurePhase = 'shared-device-treatment-splat-render';
@@ -12648,7 +12658,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
       failurePhase = 'shared-device-source-restore';
       const restoreStart = performance.now();
-      rebuildFluidState(128, sourceMajorantGrid, 'native-low-shared-device-source-restore');
+      const restoreRebuildStart = performance.now();
+      rebuildFluidState(128, sourceMajorantGrid, 'native-low-shared-device-source-restore', { skipInitialFluid: true });
+      const restoreRebuildMs = performance.now() - restoreRebuildStart;
+      const restoreCopyStart = performance.now();
       const restoreEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} restore 128 source materialization` });
       for (const target of fluidBuffers) {
         restoreEncoder.copyBufferToBuffer(runtime.buffers.lowSnapshotFluid, 0, target, 0, fluidBufferBytes(128));
@@ -12659,6 +12672,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       device.queue.submit([restoreEncoder.finish()]);
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       setSharedDeviceCopiedState(sourceStep, sourceFrame + 1);
+      const restoreCopyMs = performance.now() - restoreCopyStart;
       const restoreMaterializeMs = performance.now() - restoreStart;
 
       failurePhase = 'shared-device-control-splat-render';
@@ -12676,6 +12690,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const controlRenderMs = performance.now() - controlRenderStart;
       const controlSplatCandidateCount = controlRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
       const controlSplatInstanceCount = controlRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      const nativeLowMaterializationProfile = {
+        identity: 'native-low-shared-device-materialization-profile-v0',
+        transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+        skipInitialFluid: true,
+        hiddenSupportCap: false,
+        droppedInputChannels: false,
+        treatmentRebuildMs,
+        treatmentCopyMs,
+        treatmentMaterializeMs,
+        restoreRebuildMs,
+        restoreCopyMs,
+        restoreMaterializeMs,
+        treatmentCopyBytes: fluidBufferBytes(160) * 2 + frontFieldBufferBytes(160) * 2,
+        restoreCopyBytes: fluidBufferBytes(128) * 2 + frontFieldBufferBytes(128) * 2,
+      };
 
       const sameNativeStateIdentity = `${sourceStepIdentity}:model-${runtime.modelSha256}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
       const supportPositiveCount = supportStats.supportPositiveCount ?? runtimeState.supportPositiveCount ?? 0;
@@ -12735,9 +12764,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeStepMs,
         supportStatsMs,
         treatmentMaterializeMs,
+        treatmentRebuildMs,
+        treatmentCopyMs,
         treatmentRenderMs,
         restoreMaterializeMs,
+        restoreRebuildMs,
+        restoreCopyMs,
         controlRenderMs,
+        nativeLowMaterializationProfile,
         endToEndFrameMs: performance.now() - startedAt,
         stageTiming: {
           nativeStepMs,
@@ -12745,8 +12779,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           inferenceTimingAuthority: inferenceTiming.authority,
           uploadDispatchMs: inferenceWallMs,
           supportStatsMs,
+          treatmentRebuildMs,
+          treatmentCopyMs,
           treatmentMaterializeMs,
           treatmentRenderMs,
+          restoreRebuildMs,
+          restoreCopyMs,
           restoreMaterializeMs,
           controlRenderMs,
         },
