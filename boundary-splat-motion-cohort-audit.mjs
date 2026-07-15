@@ -272,7 +272,7 @@ export function validateMotionCohortWitness(witness) {
     if (
       typeof witness.claimBoundary !== 'string'
       || !/offline/i.test(witness.claimBoundary)
-      || !/no runtime|runtime authorization|does not[^.]*authorize runtime/i.test(witness.claimBoundary)
+      || !/no runtime(?:\s+authorization)?|does not[^.]*authorize runtime/i.test(witness.claimBoundary)
     ) throw new Error('recurrent envelope witness claim boundary mismatch');
   }
   const artifact = witness.artifact;

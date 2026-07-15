@@ -307,6 +307,13 @@ assert.doesNotThrow(
   () => cohortAudit.validateMotionCohortWitness(generatedBoundaryWitness),
   'the writer-generated claim boundary must satisfy its own validator',
 );
+const runtimeAuthorizingBoundary = structuredClone(envelopeComparisonWitness);
+runtimeAuthorizingBoundary.claimBoundary = 'Offline diagnostic only; this grants runtime authorization for composition.';
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(runtimeAuthorizingBoundary),
+  /claim boundary/i,
+  'mentioning runtime authorization affirmatively must never satisfy the negative claim boundary',
+);
 const maskedMovingEnvelopeControl = structuredClone(envelopeComparisonWitness);
 maskedMovingEnvelopeControl.emphasis = structuredClone(validWitness.emphasis);
 maskedMovingEnvelopeControl.roleEvidence.control[1].sha256 = 'e'.repeat(64);
