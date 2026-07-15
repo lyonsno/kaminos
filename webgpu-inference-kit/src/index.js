@@ -126,6 +126,17 @@ export {
 } from './resource-factory.js';
 
 export {
+  WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA,
+  defineWebGpuModelResourceManifest,
+  loadWebGpuModelResources,
+  validateWebGpuModelResourceManifest,
+  verifyWebGpuModelResourceBundle,
+} from './model-resource-manifest.js';
+
+export {
   WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
   WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
   WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,

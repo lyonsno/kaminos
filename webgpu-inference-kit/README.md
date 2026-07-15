@@ -146,6 +146,73 @@ const commandDutyReport = runtime.finishCommandDuties();
 
 That `profile` is the runtime receipt substrate a route can attach to its outputs. It records the effective adapter/device identity, kernel profile, stage timings, required stages, and yield metadata for the run that actually happened.
 
+## Load And Share Model Weights
+
+A shared inference session can verify one content-addressed weight bundle, upload its packed allocation ranges once, and give every registered route an independent lease over the same GPU buffers:
+
+```js
+import {
+  WEBGPU_BUFFER_USAGE,
+  createWebGpuInferenceSession,
+  defineWebGpuModelResourceManifest,
+} from "@kaminos/webgpu-inference-kit";
+
+const manifest = defineWebGpuModelResourceManifest({
+  modelId: "acme/vision-model",
+  revision: "0123456789abcdef",
+  bundle: {
+    byteLength: weightBytes.byteLength,
+    sha256: publishedWeightSha256,
+  },
+  allocations: [{
+    allocationId: "decoder",
+    byteOffset: 0,
+    byteLength: weightBytes.byteLength,
+    usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+    tensors: [
+      {
+        name: "decoder.weight",
+        dtype: "f16",
+        shape: [256, 256],
+        byteOffset: 0,
+        byteLength: 256 * 256 * 2,
+      },
+      {
+        name: "decoder.bias",
+        dtype: "f16",
+        shape: [256],
+        byteOffset: 256 * 256 * 2,
+        byteLength: 256 * 2,
+      },
+    ],
+  }],
+});
+
+const session = await createWebGpuInferenceSession({
+  sessionId: crypto.randomUUID(),
+  gpu: navigator.gpu,
+});
+const sharp = await session.registerRoute({ routeId: "sharp.image-to-splat.webgpu-local.v0" });
+const sf3d = await session.registerRoute({ routeId: "sf3d.image-to-mesh.webgpu-local.v0" });
+
+const [sharpWeights, sf3dWeights] = await Promise.all([
+  sharp.loadModelResources({ manifest, bundle: weightBytes }),
+  sf3d.loadModelResources({ manifest, bundle: weightBytes }),
+]);
+
+sharpWeights.tensors["decoder.weight"].buffer ===
+  sf3dWeights.tensors["decoder.weight"].buffer; // true
+
+// Tensor views expose buffer, bufferOffset, byteLength, shape, strides, and dtype,
+// so they can be bound directly by runtime kernels and phase programs.
+const decoderWeight = sharpWeights.tensors["decoder.weight"];
+
+sharpWeights.release();
+sf3dWeights.release();
+```
+
+The loader first takes an owned byte snapshot, then hashes those exact bytes with Web Crypto before any GPU allocation. Bundle length or digest mismatch fails before upload, and caller mutation cannot change bytes after verification. Concurrent loads single-flight each content-derived allocation, while cancellation and partial failure release every model lease already acquired. Released buffers remain visible in session residency as explicit eviction candidates until caller policy evicts them; they are not reported as an active model.
+
 ## What The Kit Gives A Port
 
 - `createWebGpuInferenceRuntime(input)`: acquire or wrap a browser WebGPU device, preserve backend identity, expose runtime helpers, time named stages, and finish a runtime profile.
@@ -167,6 +234,9 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `createWebGpuInferenceSession(input)`: own one browser WebGPU device, backend identity, and coordinator across explicitly registered route runtimes, with device-loss and idle-close lifecycle truth.
 - `createWebGpuResourceResidency(input)`: account for caller-declared GPU allocations once across routes, issue explicit route leases, retain released allocations as eviction candidates, and invalidate the whole ledger on device loss without claiming access to browser-global VRAM.
 - `createWebGpuResourceFactory(input)`: collapse concurrent asynchronous creation or weight-upload requests for one absent resource into a single abortable flight, then issue independent route leases over the one resulting object.
+- `defineWebGpuModelResourceManifest(input)`: freeze an exact model revision, bundle SHA-256, packed allocation ranges, and typed tensor views into a validated loading contract.
+- `verifyWebGpuModelResourceBundle(manifest, bundle)`: hash the effective bytes with Web Crypto and reject length or identity mismatch before GPU work.
+- `loadWebGpuModelResources(input)` and `route.loadModelResources(input)`: upload each content-derived allocation through shared single-flight residency and return one independently releasable model lease whose tensor views plug into kernels and phase programs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
 - `defineTensorManifest(input)`: normalize model tensor metadata, dtype sizes, byte lengths, offsets, and shapes for browser-loaded weight bundles.
