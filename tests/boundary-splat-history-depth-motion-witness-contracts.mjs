@@ -12,6 +12,10 @@ assert.match(witness, /kaminos\.volume\.boundary-splat-history-depth-motion-witn
 assert.match(witness, /REQUIRED_HISTORY_DEPTHS\s*=\s*\[16,\s*32,\s*64\]/, 'witness must require all operator-signed depths');
 assert.match(witness, /measureHistoryUpperRung/, 'upper rung must be measured from runtime/device authority');
 assert.match(witness, /activateFreshMeasuredUpperRung/, 'upper rung must be measured and activated synchronously');
+const freshUpperActivationSource = witness.match(/async function activateFreshMeasuredUpperRung\(boundedObservedUpperFloor\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(freshUpperActivationSource, 'fresh upper activation must remain directly contract-testable');
+assert.match(freshUpperActivationSource, /\.replaceAll\('__FRESH_UPPER_DEPTH__',\s*String\(selectedDepth\)\)/, 'fresh upper activation must resolve every depth placeholder in its effective route');
+assert.match(freshUpperActivationSource, /fresh-upper-route-placeholder-unresolved/, 'fresh upper activation must fail before capture if any route placeholder survives');
 assert.match(witness, /sampleBoundarySplatHistorySlotMetadata[\s\S]*setControls\(\{\s*boundarySplatHistoryDepth:/, 'fresh GPU upper authority must be applied before another simulation frame can invalidate it');
 assert.match(witness, /transitionHistoryDepthInPlace/, 'bounded depth rows after the first must preserve the live simulator episode');
 assert.match(witness, /history\.replaceState/, 'in-place depth transitions must keep effective URL identity inspectable');

@@ -485,7 +485,8 @@ async function activateFreshMeasuredUpperRung(boundedObservedUpperFloor) {
     const freshMeasuredUpperDepth = Number(slotMetadata?.measuredUpperHistoryDepth);
     const selectedDepth = Math.min(freshMeasuredUpperDepth, ${JSON.stringify(boundedObservedUpperFloor)});
     prototype.setControls({ boundarySplatHistoryDepth: selectedDepth });
-    const effectiveRoute = ${JSON.stringify(rowRouteTemplate)}.replace('__FRESH_UPPER_DEPTH__', String(selectedDepth));
+    const effectiveRoute = ${JSON.stringify(rowRouteTemplate)}.replaceAll('__FRESH_UPPER_DEPTH__', String(selectedDepth));
+    if (effectiveRoute.includes('__FRESH_UPPER_DEPTH__')) throw new Error('fresh-upper-route-placeholder-unresolved');
     history.replaceState(null, '', effectiveRoute);
     const after = prototype.debugState();
     return {
