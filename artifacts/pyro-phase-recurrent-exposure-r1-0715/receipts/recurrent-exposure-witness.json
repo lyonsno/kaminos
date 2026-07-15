@@ -3,7 +3,8 @@
   "status": "completed",
   "configuration": {
     "authority": "frozen-seed-vs-recurrent-exposure-physical-energy-v0",
-    "witnessMode": "raw-recurrent-exposure-comparison"
+    "witnessMode": "raw-recurrent-exposure-comparison",
+    "nestedArtifactMode": "rehash-validated-existing"
   },
   "source": {
     "seedAudit": {
@@ -79,8 +80,11 @@
     },
     "sharedIdentity": {
       "seedModelSha256": "e51c23d25eb38ec778c65774aae46c78bbcb02808d582539843417b10043c073",
+      "seedModelPath": "/private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json",
       "exposureModelSha256": "88d5898448aed8ae1f92130e1a997f9ec6ef0301db0ac940ebf4794d36bc7645",
+      "exposureModelPath": "/private/tmp/kaminos-phase-transport-eulerian-rollout-exposure-r1-0715/transport-model.json",
       "destinationStateModelSha256": "48c7bb6ad4ce0fedbac6e4cecb92d3f5cbc619a9bc718775f87b49867fb38e65",
+      "destinationStateModelPath": "/private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json",
       "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1",
       "exposureAuthority": "exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0",
       "sampleCap": null
@@ -2272,6 +2276,1144 @@
         "firstClampStep": 25
       }
     },
+    "seedHoldout": [
+      {
+        "beatsIdentity": true,
+        "exactCount": 60014,
+        "identityIoU": 0.43477638469705465,
+        "predictionCount": 60679,
+        "predictionIoU": 0.48042342320241394,
+        "predictionToIdentityRatio": 1.1049896915104196,
+        "step": 1
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 60597,
+        "identityIoU": 0.2951123589485303,
+        "predictionCount": 61102,
+        "predictionIoU": 0.35649159570199296,
+        "predictionToIdentityRatio": 1.2079859920884155,
+        "step": 2
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 60940,
+        "identityIoU": 0.22214603353870666,
+        "predictionCount": 61528,
+        "predictionIoU": 0.277731408062766,
+        "predictionToIdentityRatio": 1.2502199730447774,
+        "step": 3
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 61547,
+        "identityIoU": 0.18439936990723635,
+        "predictionCount": 61957,
+        "predictionIoU": 0.22858990300920168,
+        "predictionToIdentityRatio": 1.2396457923050157,
+        "step": 4
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 62908,
+        "identityIoU": 0.1637643501677139,
+        "predictionCount": 62389,
+        "predictionIoU": 0.20057682725844161,
+        "predictionToIdentityRatio": 1.2247893210764578,
+        "step": 5
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 63871,
+        "identityIoU": 0.14584006424753765,
+        "predictionCount": 62824,
+        "predictionIoU": 0.17848140121108394,
+        "predictionToIdentityRatio": 1.2238159804163513,
+        "step": 6
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 64940,
+        "identityIoU": 0.13565364101447697,
+        "predictionCount": 63262,
+        "predictionIoU": 0.16412868778773598,
+        "predictionToIdentityRatio": 1.2099099335654409,
+        "step": 7
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 67084,
+        "identityIoU": 0.12686936976797691,
+        "predictionCount": 63703,
+        "predictionIoU": 0.15110148830741338,
+        "predictionToIdentityRatio": 1.1910005431866888,
+        "step": 8
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68577,
+        "identityIoU": 0.12020589334933181,
+        "predictionCount": 64147,
+        "predictionIoU": 0.14298016723934517,
+        "predictionToIdentityRatio": 1.1894605435344903,
+        "step": 9
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69816,
+        "identityIoU": 0.11637028390950599,
+        "predictionCount": 64594,
+        "predictionIoU": 0.1390774498088967,
+        "predictionToIdentityRatio": 1.1951285597708834,
+        "step": 10
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70393,
+        "identityIoU": 0.11338167997477566,
+        "predictionCount": 65044,
+        "predictionIoU": 0.1342182396784189,
+        "predictionToIdentityRatio": 1.1837736017695168,
+        "step": 11
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70931,
+        "identityIoU": 0.11202468340481801,
+        "predictionCount": 65498,
+        "predictionIoU": 0.13248221534170618,
+        "predictionToIdentityRatio": 1.1826162887955844,
+        "step": 12
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71041,
+        "identityIoU": 0.11120514556533515,
+        "predictionCount": 65955,
+        "predictionIoU": 0.13094589462908846,
+        "predictionToIdentityRatio": 1.1775165075626401,
+        "step": 13
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70870,
+        "identityIoU": 0.11140399203288553,
+        "predictionCount": 66415,
+        "predictionIoU": 0.1310161308925541,
+        "predictionToIdentityRatio": 1.1760452071940044,
+        "step": 14
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70703,
+        "identityIoU": 0.11396345820149026,
+        "predictionCount": 66878,
+        "predictionIoU": 0.13475417137484225,
+        "predictionToIdentityRatio": 1.1824331544642448,
+        "step": 15
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69965,
+        "identityIoU": 0.11537077958785139,
+        "predictionCount": 67344,
+        "predictionIoU": 0.13569555759575858,
+        "predictionToIdentityRatio": 1.1761692005594058,
+        "step": 16
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69823,
+        "identityIoU": 0.11840770355085548,
+        "predictionCount": 67814,
+        "predictionIoU": 0.13666919926004228,
+        "predictionToIdentityRatio": 1.1542255711541909,
+        "step": 17
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70012,
+        "identityIoU": 0.11825400231769603,
+        "predictionCount": 68287,
+        "predictionIoU": 0.13474240422721268,
+        "predictionToIdentityRatio": 1.1394320833659366,
+        "step": 18
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69758,
+        "identityIoU": 0.1170997010001031,
+        "predictionCount": 68763,
+        "predictionIoU": 0.1333742431680576,
+        "predictionToIdentityRatio": 1.1389802196671721,
+        "step": 19
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70461,
+        "identityIoU": 0.11774262505344164,
+        "predictionCount": 69243,
+        "predictionIoU": 0.13381379041682898,
+        "predictionToIdentityRatio": 1.1364940297202721,
+        "step": 20
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71726,
+        "identityIoU": 0.12077750038212666,
+        "predictionCount": 69726,
+        "predictionIoU": 0.13472059554942323,
+        "predictionToIdentityRatio": 1.115444475363227,
+        "step": 21
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71677,
+        "identityIoU": 0.1272245717459097,
+        "predictionCount": 70212,
+        "predictionIoU": 0.14177999517180334,
+        "predictionToIdentityRatio": 1.1144073289157022,
+        "step": 22
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71481,
+        "identityIoU": 0.13528838944855698,
+        "predictionCount": 70702,
+        "predictionIoU": 0.14944582326167974,
+        "predictionToIdentityRatio": 1.1046463327032663,
+        "step": 23
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70978,
+        "identityIoU": 0.14032862095632,
+        "predictionCount": 71195,
+        "predictionIoU": 0.1541046684363052,
+        "predictionToIdentityRatio": 1.0981699056550498,
+        "step": 24
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70631,
+        "identityIoU": 0.14357356911329144,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15578220235676554,
+        "predictionToIdentityRatio": 1.0850339886294842,
+        "step": 25
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70729,
+        "identityIoU": 0.1450100088287485,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1583766757014138,
+        "predictionToIdentityRatio": 1.0921775467819663,
+        "step": 26
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71812,
+        "identityIoU": 0.1381702545717782,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15691811214199275,
+        "predictionToIdentityRatio": 1.1356866398510919,
+        "step": 27
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71798,
+        "identityIoU": 0.13478328120166364,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15696384336698055,
+        "predictionToIdentityRatio": 1.164564640121279,
+        "step": 28
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71998,
+        "identityIoU": 0.128723095567276,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15511041390129118,
+        "predictionToIdentityRatio": 1.2049928819511964,
+        "step": 29
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72486,
+        "identityIoU": 0.12636080541012956,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15114616042250933,
+        "predictionToIdentityRatio": 1.1961474915574801,
+        "step": 30
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 73212,
+        "identityIoU": 0.12143541313078694,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1459776027858019,
+        "predictionToIdentityRatio": 1.2021007630499254,
+        "step": 31
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 73045,
+        "identityIoU": 0.1176658002850675,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14171028015250905,
+        "predictionToIdentityRatio": 1.2043455261357956,
+        "step": 32
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72620,
+        "identityIoU": 0.11480347330005453,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13787933782568212,
+        "predictionToIdentityRatio": 1.2010031914741437,
+        "step": 33
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72494,
+        "identityIoU": 0.11178761358402077,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13460220964020506,
+        "predictionToIdentityRatio": 1.2040887655145853,
+        "step": 34
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72177,
+        "identityIoU": 0.1128795072393133,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13562936924839053,
+        "predictionToIdentityRatio": 1.2015411172981625,
+        "step": 35
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71690,
+        "identityIoU": 0.11297709923664122,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1330175474667278,
+        "predictionToIdentityRatio": 1.1773850485230637,
+        "step": 36
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71100,
+        "identityIoU": 0.11328734151467897,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13336192790989532,
+        "predictionToIdentityRatio": 1.1772006132972521,
+        "step": 37
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70188,
+        "identityIoU": 0.11227926568268828,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1326494743233311,
+        "predictionToIdentityRatio": 1.1814244911274263,
+        "step": 38
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70454,
+        "identityIoU": 0.11385404594723567,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13405880990970132,
+        "predictionToIdentityRatio": 1.1774619759391713,
+        "step": 39
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70663,
+        "identityIoU": 0.11436256234785422,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13320321835417828,
+        "predictionToIdentityRatio": 1.1647449621583053,
+        "step": 40
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70468,
+        "identityIoU": 0.1148378403731846,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13098308971051878,
+        "predictionToIdentityRatio": 1.1405917185909062,
+        "step": 41
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70829,
+        "identityIoU": 0.115737509575283,
+        "predictionCount": 71588,
+        "predictionIoU": 0.12954062371117667,
+        "predictionToIdentityRatio": 1.1192622356101005,
+        "step": 42
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70268,
+        "identityIoU": 0.11836829117828501,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1291390728476821,
+        "predictionToIdentityRatio": 1.0909938089177469,
+        "step": 43
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70153,
+        "identityIoU": 0.11994503843016016,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1330487541667666,
+        "predictionToIdentityRatio": 1.1092476679995085,
+        "step": 44
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70214,
+        "identityIoU": 0.12086354420810282,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13591540833900748,
+        "predictionToIdentityRatio": 1.1245360148051622,
+        "step": 45
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70045,
+        "identityIoU": 0.12350405242283152,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13692956050571944,
+        "predictionToIdentityRatio": 1.1087050005203394,
+        "step": 46
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69595,
+        "identityIoU": 0.12453993574255454,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13858176275615125,
+        "predictionToIdentityRatio": 1.1127495925694355,
+        "step": 47
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69010,
+        "identityIoU": 0.12423467612885271,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13851909435429016,
+        "predictionToIdentityRatio": 1.1149793171322155,
+        "step": 48
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68992,
+        "identityIoU": 0.12335517738879521,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14166450103950104,
+        "predictionToIdentityRatio": 1.148427686930382,
+        "step": 49
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69625,
+        "identityIoU": 0.11956418677217208,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14035031049881697,
+        "predictionToIdentityRatio": 1.173849078790228,
+        "step": 50
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69160,
+        "identityIoU": 0.12077282135217757,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1411475688954832,
+        "predictionToIdentityRatio": 1.1687030849754863,
+        "step": 51
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68431,
+        "identityIoU": 0.11996866977068013,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14146544274697145,
+        "predictionToIdentityRatio": 1.1791865577686438,
+        "step": 52
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68340,
+        "identityIoU": 0.1208447365209964,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14372588766102137,
+        "predictionToIdentityRatio": 1.1893433822502435,
+        "step": 53
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68400,
+        "identityIoU": 0.12086945158339504,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14483390307332472,
+        "predictionToIdentityRatio": 1.1982672310992921,
+        "step": 54
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68553,
+        "identityIoU": 0.12047459160418225,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14297249023333958,
+        "predictionToIdentityRatio": 1.1867439294010964,
+        "step": 55
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68658,
+        "identityIoU": 0.11720916528008875,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1383603896103896,
+        "predictionToIdentityRatio": 1.1804570852437763,
+        "step": 56
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69517,
+        "identityIoU": 0.11637189457022916,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13818219949344218,
+        "predictionToIdentityRatio": 1.187419007001306,
+        "step": 57
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69955,
+        "identityIoU": 0.11634645885308162,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13798842257597685,
+        "predictionToIdentityRatio": 1.1860130848522341,
+        "step": 58
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69968,
+        "identityIoU": 0.11691753505724946,
+        "predictionCount": 71588,
+        "predictionIoU": 0.138367511057499,
+        "predictionToIdentityRatio": 1.1834624377750218,
+        "step": 59
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70464,
+        "identityIoU": 0.1169946424451641,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1392047732850017,
+        "predictionToIdentityRatio": 1.1898388710427281,
+        "step": 60
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70074,
+        "identityIoU": 0.11684961909903425,
+        "predictionCount": 71588,
+        "predictionIoU": 0.139898290900898,
+        "predictionToIdentityRatio": 1.1972507225918227,
+        "step": 61
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70098,
+        "identityIoU": 0.11979967528841776,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1404125852174403,
+        "predictionToIdentityRatio": 1.1720614841350525,
+        "step": 62
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70612,
+        "identityIoU": 0.12233504279368129,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13922225248754225,
+        "predictionToIdentityRatio": 1.1380406571021626,
+        "step": 63
+      }
+    ],
+    "exposureHoldout": [
+      {
+        "beatsIdentity": true,
+        "exactCount": 60014,
+        "identityIoU": 0.43477638469705465,
+        "predictionCount": 60681,
+        "predictionIoU": 0.4773130638073905,
+        "predictionToIdentityRatio": 1.0978357624919641,
+        "step": 1
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 60597,
+        "identityIoU": 0.2951123589485303,
+        "predictionCount": 61105,
+        "predictionIoU": 0.35702418518559814,
+        "predictionToIdentityRatio": 1.2097906927980124,
+        "step": 2
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 60940,
+        "identityIoU": 0.22214603353870666,
+        "predictionCount": 61532,
+        "predictionIoU": 0.28205342936102507,
+        "predictionToIdentityRatio": 1.2696757392784155,
+        "step": 3
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 61547,
+        "identityIoU": 0.18439936990723635,
+        "predictionCount": 61962,
+        "predictionIoU": 0.23534942337890957,
+        "predictionToIdentityRatio": 1.276302752538168,
+        "step": 4
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 62908,
+        "identityIoU": 0.1637643501677139,
+        "predictionCount": 62395,
+        "predictionIoU": 0.20888164241886312,
+        "predictionToIdentityRatio": 1.2755013054119766,
+        "step": 5
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 63871,
+        "identityIoU": 0.14584006424753765,
+        "predictionCount": 62831,
+        "predictionIoU": 0.18718200983836963,
+        "predictionToIdentityRatio": 1.2834745431863042,
+        "step": 6
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 64940,
+        "identityIoU": 0.13565364101447697,
+        "predictionCount": 63271,
+        "predictionIoU": 0.17137949622212273,
+        "predictionToIdentityRatio": 1.263360827917867,
+        "step": 7
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 67084,
+        "identityIoU": 0.12686936976797691,
+        "predictionCount": 63714,
+        "predictionIoU": 0.15890947431842145,
+        "predictionToIdentityRatio": 1.2525440506959291,
+        "step": 8
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68577,
+        "identityIoU": 0.12020589334933181,
+        "predictionCount": 64160,
+        "predictionIoU": 0.1501741677209157,
+        "predictionToIdentityRatio": 1.2493078628390768,
+        "step": 9
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69816,
+        "identityIoU": 0.11637028390950599,
+        "predictionCount": 64609,
+        "predictionIoU": 0.1444808650121323,
+        "predictionToIdentityRatio": 1.24156150658261,
+        "step": 10
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70393,
+        "identityIoU": 0.11338167997477566,
+        "predictionCount": 65061,
+        "predictionIoU": 0.14017558774757788,
+        "predictionToIdentityRatio": 1.236316023706503,
+        "step": 11
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70931,
+        "identityIoU": 0.11202468340481801,
+        "predictionCount": 65516,
+        "predictionIoU": 0.1370014832591704,
+        "predictionToIdentityRatio": 1.222958004389934,
+        "step": 12
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71041,
+        "identityIoU": 0.11120514556533515,
+        "predictionCount": 65974,
+        "predictionIoU": 0.13450248818010946,
+        "predictionToIdentityRatio": 1.2094987825998273,
+        "step": 13
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70870,
+        "identityIoU": 0.11140399203288553,
+        "predictionCount": 66435,
+        "predictionIoU": 0.13412408005484566,
+        "predictionToIdentityRatio": 1.2039432125130072,
+        "step": 14
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70703,
+        "identityIoU": 0.11396345820149026,
+        "predictionCount": 66900,
+        "predictionIoU": 0.13813667267704421,
+        "predictionToIdentityRatio": 1.212113732393195,
+        "step": 15
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69965,
+        "identityIoU": 0.11537077958785139,
+        "predictionCount": 67368,
+        "predictionIoU": 0.13871960067328343,
+        "predictionToIdentityRatio": 1.2023807169271368,
+        "step": 16
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69823,
+        "identityIoU": 0.11840770355085548,
+        "predictionCount": 67839,
+        "predictionIoU": 0.13940688136799675,
+        "predictionToIdentityRatio": 1.1773463819279482,
+        "step": 17
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70012,
+        "identityIoU": 0.11825400231769603,
+        "predictionCount": 68314,
+        "predictionIoU": 0.13818582760096107,
+        "predictionToIdentityRatio": 1.168550957199039,
+        "step": 18
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69758,
+        "identityIoU": 0.1170997010001031,
+        "predictionCount": 68792,
+        "predictionIoU": 0.13676454902732993,
+        "predictionToIdentityRatio": 1.1679325212556224,
+        "step": 19
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70461,
+        "identityIoU": 0.11774262505344164,
+        "predictionCount": 69273,
+        "predictionIoU": 0.13570714500516104,
+        "predictionToIdentityRatio": 1.152574481361916,
+        "step": 20
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71726,
+        "identityIoU": 0.12077750038212666,
+        "predictionCount": 69758,
+        "predictionIoU": 0.1374591995883781,
+        "predictionToIdentityRatio": 1.138119261894578,
+        "step": 21
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71677,
+        "identityIoU": 0.1272245717459097,
+        "predictionCount": 70246,
+        "predictionIoU": 0.14544559409856175,
+        "predictionToIdentityRatio": 1.1432193648019715,
+        "step": 22
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71481,
+        "identityIoU": 0.13528838944855698,
+        "predictionCount": 70737,
+        "predictionIoU": 0.15334647106050653,
+        "predictionToIdentityRatio": 1.1334784284560953,
+        "step": 23
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70978,
+        "identityIoU": 0.14032862095632,
+        "predictionCount": 71232,
+        "predictionIoU": 0.15867519452478918,
+        "predictionToIdentityRatio": 1.1307400688714806,
+        "step": 24
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70631,
+        "identityIoU": 0.14357356911329144,
+        "predictionCount": 71588,
+        "predictionIoU": 0.16287950024121212,
+        "predictionToIdentityRatio": 1.1344671672310849,
+        "step": 25
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70729,
+        "identityIoU": 0.1450100088287485,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1687841333716585,
+        "predictionToIdentityRatio": 1.1639481628539612,
+        "step": 26
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71812,
+        "identityIoU": 0.1381702545717782,
+        "predictionCount": 71588,
+        "predictionIoU": 0.16589157370971414,
+        "predictionToIdentityRatio": 1.2006315992096184,
+        "step": 27
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71798,
+        "identityIoU": 0.13478328120166364,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1632242467509289,
+        "predictionToIdentityRatio": 1.211012562505521,
+        "step": 28
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71998,
+        "identityIoU": 0.128723095567276,
+        "predictionCount": 71588,
+        "predictionIoU": 0.15784890050076203,
+        "predictionToIdentityRatio": 1.2262671263857516,
+        "step": 29
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72486,
+        "identityIoU": 0.12636080541012956,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1535517550602101,
+        "predictionToIdentityRatio": 1.2151849979257952,
+        "step": 30
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 73212,
+        "identityIoU": 0.12143541313078694,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14939791552560347,
+        "predictionToIdentityRatio": 1.2302664574846933,
+        "step": 31
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 73045,
+        "identityIoU": 0.1176658002850675,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14350658591736373,
+        "predictionToIdentityRatio": 1.219611693199656,
+        "step": 32
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72620,
+        "identityIoU": 0.11480347330005453,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14076875004944112,
+        "predictionToIdentityRatio": 1.226171526026245,
+        "step": 33
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72494,
+        "identityIoU": 0.11178761358402077,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1373248608753996,
+        "predictionToIdentityRatio": 1.2284443371911216,
+        "step": 34
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 72177,
+        "identityIoU": 0.1128795072393133,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13773236995591995,
+        "predictionToIdentityRatio": 1.2201716088635703,
+        "step": 35
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71690,
+        "identityIoU": 0.11297709923664122,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13666690466557188,
+        "predictionToIdentityRatio": 1.209686791296616,
+        "step": 36
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 71100,
+        "identityIoU": 0.11328734151467897,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13625902832525064,
+        "predictionToIdentityRatio": 1.2027736418158879,
+        "step": 37
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70188,
+        "identityIoU": 0.11227926568268828,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13532515995739808,
+        "predictionToIdentityRatio": 1.2052551210999156,
+        "step": 38
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70454,
+        "identityIoU": 0.11385404594723567,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1347836160132938,
+        "predictionToIdentityRatio": 1.183828074724351,
+        "step": 39
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70663,
+        "identityIoU": 0.11436256234785422,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13390778943340878,
+        "predictionToIdentityRatio": 1.170905816416602,
+        "step": 40
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70468,
+        "identityIoU": 0.1148378403731846,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13264232179875618,
+        "predictionToIdentityRatio": 1.1550401972704551,
+        "step": 41
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70829,
+        "identityIoU": 0.115737509575283,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1327389284805294,
+        "predictionToIdentityRatio": 1.1468963602866156,
+        "step": 42
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70268,
+        "identityIoU": 0.11836829117828501,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13227547013186042,
+        "predictionToIdentityRatio": 1.1174907470162645,
+        "step": 43
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70153,
+        "identityIoU": 0.11994503843016016,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1358726139150225,
+        "predictionToIdentityRatio": 1.132790615546273,
+        "step": 44
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70214,
+        "identityIoU": 0.12086354420810282,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13900848220023132,
+        "predictionToIdentityRatio": 1.1501274690479584,
+        "step": 45
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70045,
+        "identityIoU": 0.12350405242283152,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14191613386975838,
+        "predictionToIdentityRatio": 1.1490807879233857,
+        "step": 46
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69595,
+        "identityIoU": 0.12453993574255454,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14391392064559516,
+        "predictionToIdentityRatio": 1.1555644363193665,
+        "step": 47
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69010,
+        "identityIoU": 0.12423467612885271,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14336133497060236,
+        "predictionToIdentityRatio": 1.1539558796121625,
+        "step": 48
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68992,
+        "identityIoU": 0.12335517738879521,
+        "predictionCount": 71588,
+        "predictionIoU": 0.144331659191365,
+        "predictionToIdentityRatio": 1.17004946404848,
+        "step": 49
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69625,
+        "identityIoU": 0.11956418677217208,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14266640772928096,
+        "predictionToIdentityRatio": 1.1932202407827175,
+        "step": 50
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69160,
+        "identityIoU": 0.12077282135217757,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14469286010556537,
+        "predictionToIdentityRatio": 1.1980581267008426,
+        "step": 51
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68431,
+        "identityIoU": 0.11996866977068013,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1443480961448875,
+        "predictionToIdentityRatio": 1.2032149428747405,
+        "step": 52
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68340,
+        "identityIoU": 0.1208447365209964,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1455892586679766,
+        "predictionToIdentityRatio": 1.2047629285259016,
+        "step": 53
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68400,
+        "identityIoU": 0.12086945158339504,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14703833894610915,
+        "predictionToIdentityRatio": 1.2165053867615063,
+        "step": 54
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68553,
+        "identityIoU": 0.12047459160418225,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1462070093649041,
+        "predictionToIdentityRatio": 1.2135920729680942,
+        "step": 55
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 68658,
+        "identityIoU": 0.11720916528008875,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1418917268500802,
+        "predictionToIdentityRatio": 1.2105855929526397,
+        "step": 56
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69517,
+        "identityIoU": 0.11637189457022916,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14129379792293506,
+        "predictionToIdentityRatio": 1.2141574084081428,
+        "step": 57
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69955,
+        "identityIoU": 0.11634645885308162,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14129172714078375,
+        "predictionToIdentityRatio": 1.2144050496560637,
+        "step": 58
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 69968,
+        "identityIoU": 0.11691753505724946,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13938457328214168,
+        "predictionToIdentityRatio": 1.1921614085850432,
+        "step": 59
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70464,
+        "identityIoU": 0.1169946424451641,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14007335532387902,
+        "predictionToIdentityRatio": 1.1972629891110784,
+        "step": 60
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70074,
+        "identityIoU": 0.11684961909903425,
+        "predictionCount": 71588,
+        "predictionIoU": 0.13986160283231414,
+        "predictionToIdentityRatio": 1.1969367457995426,
+        "step": 61
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70098,
+        "identityIoU": 0.11979967528841776,
+        "predictionCount": 71588,
+        "predictionIoU": 0.14172669986623476,
+        "predictionToIdentityRatio": 1.1830307513357419,
+        "step": 62
+      },
+      {
+        "beatsIdentity": true,
+        "exactCount": 70612,
+        "identityIoU": 0.12233504279368129,
+        "predictionCount": 71588,
+        "predictionIoU": 0.1428755133697146,
+        "predictionToIdentityRatio": 1.1679034077805075,
+        "step": 63
+      }
+    ],
     "comparison": {
       "authority": "same-corpus-stepwise-recurrent-exposure-vs-frozen-seed-support-iou-v0",
       "evaluatedStepCount": 63,

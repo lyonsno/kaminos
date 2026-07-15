@@ -35,6 +35,7 @@ Result: Recurrent exposure produces a small but persistent improvement over the 
 - Greenroom jobs: SEED `f1a19c5759b9`; EXPOSURE `285dce2ffec4`
 - Playback: 63 future states, 160 ms controlled simulator cadence, 10.08 simulated/encoded seconds, 6.25 fps, no generated loop
 - Witness command: `node boundary-splat-motion-cohort-audit.mjs --manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --predictions /private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715/transport-predictions.json --exposure-predictions /private/tmp/kaminos-phase-rollout-exposure-support-envelope-r1-0715/transport-predictions.json --seed-training-report /private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715/training-report.json --exposure-training-report /private/tmp/kaminos-phase-rollout-exposure-support-envelope-r1-0715/training-report.json --seed-receipt /Users/noahlyons/.local/state/gpu-greenroom/done/f1a19c5759b9/receipt.json --exposure-receipt /Users/noahlyons/.local/state/gpu-greenroom/done/285dce2ffec4/receipt.json --out-dir /private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715`
+- Final receipt regeneration added `--reuse-nested-artifacts 1` after a complete fresh replay. Effective mode `rehash-validated-existing` revalidated both nested audit receipts, every role-frame hash, and both nested video hashes before rebuilding the four-role media and receipt.
 
 ## Artifact Hashes
 
@@ -42,5 +43,6 @@ Result: Recurrent exposure produces a small but persistent improvement over the 
 - Debug video: `4a5c5bb07162dd0be50e6d3b34c8c3b80d3262db81ce7760029d1cfea970c0ab`
 - Beauty contact sheet: `d9d369054c0a5588eb8600d8ddf2dc58b8ad70aa9ac3751ef96e102d0cd1e570`
 - Debug contact sheet: `63b52f5621024f174e670fcd18764b08c9f40c70d1b17dfe1e87ac2ca40f33fa`
+- Hardened witness receipt: `05bc7f76d201c7b7f4965b92a01975809e8cc23a35f10bc56aa49e24b7dc6e01`
 
 Does not prove: analytical-raymarch image agreement, multiple-basin generalization, unsupported-birth recovery, indefinite stability, runtime composition fitness, or product acceptance. The isolated raster is useful for paired diagnosis but does not define all visually valid splat basins.

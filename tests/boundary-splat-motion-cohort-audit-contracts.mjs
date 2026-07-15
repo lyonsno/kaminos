@@ -56,20 +56,22 @@ const exposurePairFixture = {
   seedReport: {
     status: 'completed',
     route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
-    manifest: { sha256: 'a'.repeat(64) },
-    model: { sha256: 'b'.repeat(64) },
+    manifest: { path: '/corpus.json', sha256: 'a'.repeat(64) },
+    model: { path: '/seed-model.json', sha256: 'b'.repeat(64) },
     modelTrainingManifest: { sha256: 'c'.repeat(64) },
-    destinationStateModel: { sha256: 'd'.repeat(64) },
+    destinationStateModel: { path: '/state-model.json', sha256: 'd'.repeat(64) },
+    predictions: { path: '/seed-output/transport-predictions.json' },
     supportBudget: { mode: 'training-episode-envelope' },
     holdoutMetrics: [{ step: 1 }, { step: 2 }],
   },
   exposureReport: {
     status: 'completed',
     route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
-    manifest: { sha256: 'a'.repeat(64) },
-    model: { sha256: 'e'.repeat(64) },
+    manifest: { path: '/corpus.json', sha256: 'a'.repeat(64) },
+    model: { path: '/exposure-model.json', sha256: 'e'.repeat(64) },
     modelTrainingManifest: { sha256: 'c'.repeat(64) },
-    destinationStateModel: { sha256: 'd'.repeat(64) },
+    destinationStateModel: { path: '/state-model.json', sha256: 'd'.repeat(64) },
+    predictions: { path: '/exposure-output/transport-predictions.json' },
     supportBudget: { mode: 'training-episode-envelope' },
     holdoutMetrics: [{ step: 1 }, { step: 2 }],
   },
@@ -99,11 +101,11 @@ const exposurePairFixture = {
   },
   seedReceipt: {
     status: 'done', exit_code: 0, failure_phase: null,
-    effective_route: 'python transport --support-budget-mode training-episode-envelope',
+    effective_route: 'python transport --manifest /corpus.json --model /seed-model.json --state-model /state-model.json --state-recurrence-mode protected-splat --support-budget-mode training-episode-envelope --out-dir /seed-output --inference-start 0 --inference-steps 2 --grid-size 160 --batch-size 4096',
   },
   exposureReceipt: {
     status: 'done', exit_code: 0, failure_phase: null,
-    effective_route: 'python transport --support-budget-mode training-episode-envelope',
+    effective_route: 'python transport --manifest /corpus.json --model /exposure-model.json --state-model /state-model.json --state-recurrence-mode protected-splat --support-budget-mode training-episode-envelope --out-dir /exposure-output --inference-start 0 --inference-steps 2 --grid-size 160 --batch-size 4096',
   },
 };
 assert.doesNotThrow(() => cohortAudit.validateRecurrentExposurePair(exposurePairFixture));
@@ -116,6 +118,11 @@ for (const [label, mutate, pattern] of [
   ['wrong support mode', value => { value.exposureReport.supportBudget.mode = 'one-step-ratio'; }, /support budget mode/i],
   ['fallback backend', value => { value.exposureReport.route.fallbackReason = 'cpu'; }, /MLX GPU/i],
   ['duplicate route flag', value => { value.exposureReceipt.effective_route += ' --support-budget-mode one-step-ratio'; }, /route identity/i],
+  ['stale route corpus', value => { value.exposureReceipt.effective_route = value.exposureReceipt.effective_route.replace('/corpus.json', '/wrong-corpus.json'); }, /route identity/i],
+  ['stale route model', value => { value.exposureReceipt.effective_route = value.exposureReceipt.effective_route.replace('/exposure-model.json', '/wrong-model.json'); }, /route identity/i],
+  ['stale route state model', value => { value.exposureReceipt.effective_route = value.exposureReceipt.effective_route.replace('/state-model.json', '/wrong-state.json'); }, /route identity/i],
+  ['stale route output', value => { value.exposureReceipt.effective_route = value.exposureReceipt.effective_route.replace('/exposure-output', '/wrong-output'); }, /route identity/i],
+  ['partial route steps', value => { value.exposureReceipt.effective_route = value.exposureReceipt.effective_route.replace('--inference-steps 2', '--inference-steps 1'); }, /route identity/i],
 ]) {
   const hostile = structuredClone(exposurePairFixture);
   mutate(hostile);
@@ -291,6 +298,7 @@ rawProductWitness.emphasis = {
   motionCohorts: [],
   staticAttenuation: 1,
   unmatchedAttenuation: 1,
+  thresholdSelection: 'none; every full splat retains original opacity',
 };
 rawProductWitness.roles = {
   reference: 'exact-heldout-full-splat-state-v0',
@@ -405,31 +413,39 @@ const recurrentExposureWitness = structuredClone(envelopeComparisonWitness);
 recurrentExposureWitness.configuration = {
   authority: 'frozen-seed-vs-recurrent-exposure-physical-energy-v0',
   witnessMode: 'raw-recurrent-exposure-comparison',
+  nestedArtifactMode: 'freshly-rendered',
 };
 recurrentExposureWitness.source = {
   seedAudit: { sha256: '0'.repeat(64) },
   exposureAudit: { sha256: '1'.repeat(64) },
-  manifest: { sha256: 'b'.repeat(64) },
+  manifest: { path: '/corpus.json', sha256: 'b'.repeat(64) },
   seed: {
-    predictions: { sha256: 'c'.repeat(64) },
+    predictions: { path: '/seed-output/transport-predictions.json', sha256: 'c'.repeat(64) },
     trainingReport: { sha256: 'd'.repeat(64) },
-    greenroomReceipt: envelopeComparisonWitness.source.envelope.greenroomReceipt,
+    greenroomReceipt: {
+      ...envelopeComparisonWitness.source.envelope.greenroomReceipt,
+      effectiveRoute: 'python transport --manifest /corpus.json --model /seed-model.json --state-model /state-model.json --state-recurrence-mode protected-splat --support-budget-mode training-episode-envelope --out-dir /seed-output --inference-start 0 --inference-steps 2 --grid-size 160 --batch-size 4096',
+    },
     backend: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
   },
   exposure: {
-    predictions: { sha256: 'e'.repeat(64) },
+    predictions: { path: '/exposure-output/transport-predictions.json', sha256: 'e'.repeat(64) },
     trainingReport: { sha256: 'f'.repeat(64) },
     greenroomReceipt: {
       ...envelopeComparisonWitness.source.envelope.greenroomReceipt,
       sha256: '2'.repeat(64),
       jobId: 'exposure-job',
+      effectiveRoute: 'python transport --manifest /corpus.json --model /exposure-model.json --state-model /state-model.json --state-recurrence-mode protected-splat --support-budget-mode training-episode-envelope --out-dir /exposure-output --inference-start 0 --inference-steps 2 --grid-size 160 --batch-size 4096',
     },
     backend: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
   },
   sharedIdentity: {
     seedModelSha256: '3'.repeat(64),
+    seedModelPath: '/seed-model.json',
     exposureModelSha256: '4'.repeat(64),
+    exposureModelPath: '/exposure-model.json',
     destinationStateModelSha256: '5'.repeat(64),
+    destinationStateModelPath: '/state-model.json',
     trainingManifestSha256: '6'.repeat(64),
     exposureAuthority: 'exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0',
     sampleCap: null,
@@ -448,6 +464,35 @@ recurrentExposureWitness.roleEvidence = {
   exposure: envelopeComparisonWitness.roleEvidence.envelope,
 };
 delete recurrentExposureWitness.supportBudgetComparison;
+recurrentExposureWitness.metrics = {
+  authority: 'accepted-training-report-support-and-same-corpus-iou-v0',
+  seedHoldout: [
+    { step: 1, predictionIoU: 0.4 },
+    { step: 2, predictionIoU: 0.2 },
+  ],
+  exposureHoldout: [
+    { step: 1, predictionIoU: 0.5 },
+    { step: 2, predictionIoU: 0.18 },
+  ],
+  comparison: {
+    authority: 'same-corpus-stepwise-recurrent-exposure-vs-frozen-seed-support-iou-v0',
+    evaluatedStepCount: 2,
+    improvedStepCount: 1,
+    meanRelativeIoUDelta: 0.075,
+    stepOneRelativeIoUDelta: 0.25,
+    bestStep: {
+      step: 1,
+      seedIoU: 0.4,
+      exposureIoU: 0.5,
+      absoluteIoUDelta: 0.1,
+      relativeIoUDelta: 0.25,
+    },
+    steps: [
+      { step: 1, seedIoU: 0.4, exposureIoU: 0.5, absoluteIoUDelta: 0.1, relativeIoUDelta: 0.25 },
+      { step: 2, seedIoU: 0.2, exposureIoU: 0.18, absoluteIoUDelta: -0.02, relativeIoUDelta: -0.1 },
+    ],
+  },
+};
 recurrentExposureWitness.claimBoundary = 'Offline same-raster diagnostic only; it does not establish analytical-raymarch image error, authorize runtime composition, prove cross-basin generalization, or establish long-horizon visual preservation.';
 assert.doesNotThrow(() => cohortAudit.validateRecurrentExposureWitness(recurrentExposureWitness));
 const sameExposureModelWitness = structuredClone(recurrentExposureWitness);
@@ -459,6 +504,21 @@ assert.throws(() => cohortAudit.validateRecurrentExposureWitness(movingExposureC
 const staticExposureRole = structuredClone(recurrentExposureWitness);
 staticExposureRole.roleEvidence.exposure[1].sha256 = staticExposureRole.roleEvidence.exposure[0].sha256;
 assert.throws(() => cohortAudit.validateRecurrentExposureWitness(staticExposureRole), /static rather than moving/i);
+const maskedExposureWitness = structuredClone(recurrentExposureWitness);
+maskedExposureWitness.emphasis = structuredClone(validWitness.emphasis);
+assert.throws(() => cohortAudit.validateRecurrentExposureWitness(maskedExposureWitness), /emphasis/i);
+const missingExposureMetrics = structuredClone(recurrentExposureWitness);
+delete missingExposureMetrics.metrics;
+assert.throws(() => cohortAudit.validateRecurrentExposureWitness(missingExposureMetrics), /metrics/i);
+const counterfeitExposureMetrics = structuredClone(recurrentExposureWitness);
+counterfeitExposureMetrics.metrics.comparison.improvedStepCount = 2;
+assert.throws(() => cohortAudit.validateRecurrentExposureWitness(counterfeitExposureMetrics), /metrics/i);
+const staleCompletedExposureRoute = structuredClone(recurrentExposureWitness);
+staleCompletedExposureRoute.source.exposure.greenroomReceipt.effectiveRoute = staleCompletedExposureRoute.source.exposure.greenroomReceipt.effectiveRoute.replace('/exposure-model.json', '/wrong-model.json');
+assert.throws(() => cohortAudit.validateRecurrentExposureWitness(staleCompletedExposureRoute), /route identity/i);
+const missingNestedArtifactMode = structuredClone(recurrentExposureWitness);
+delete missingNestedArtifactMode.configuration.nestedArtifactMode;
+assert.throws(() => cohortAudit.validateRecurrentExposureWitness(missingNestedArtifactMode), /nested artifact mode/i);
 const runtimeAuthorizingBoundary = structuredClone(envelopeComparisonWitness);
 runtimeAuthorizingBoundary.claimBoundary = 'Offline diagnostic only; this grants runtime authorization for composition.';
 assert.throws(
