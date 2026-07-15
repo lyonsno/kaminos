@@ -1,0 +1,7 @@
+Review surface: one ordinary fresh-context GPT-5.5 review cycle.
+Review range: ac88db7^..fae69ad
+Initial GPT-5.5 findings: high failure provenance loss; medium stale output retention.
+Repair b27b590: durable pre-cleanup failure report with failure phase and last trustworthy evidence.
+Confirmation finding: tilde path expansion diverged from shared path identity.
+Repair fae69ad: shared requested/effective path resolver used for all source paths.
+Final GPT-5.5 confirmation: no material findings.

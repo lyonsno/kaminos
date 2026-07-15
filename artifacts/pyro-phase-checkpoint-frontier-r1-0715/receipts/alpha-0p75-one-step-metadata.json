@@ -1,0 +1,17 @@
+{
+  "name": "phase-corpus",
+  "job_type": "kaminos_phase_destination_state_mlx_evaluate",
+  "job_id": "4675784514b9",
+  "input_path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+  "input_name": "phase-corpus.json",
+  "params": {
+    "model": "/private/tmp/kaminos-phase-checkpoint-interpolation-r1-0715/destination-state-model-alpha-0p75.json",
+    "batch_size": "4096",
+    "cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713"
+  },
+  "output_files": [
+    "destination-state-evaluation.json"
+  ],
+  "created_at": 1784110204.5346491,
+  "duration_s": 452.8
+}

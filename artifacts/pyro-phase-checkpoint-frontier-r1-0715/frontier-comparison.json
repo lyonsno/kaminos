@@ -1,0 +1,587 @@
+{
+  "schema": "kaminos-pyro-phase-checkpoint-frontier-comparison-v1",
+  "status": "completed",
+  "authority": "same-audit-formulas-verified-against-preserved-generation-two-online-comparison-v0",
+  "knownMetricVerification": {
+    "tolerance": 1e-12,
+    "generationTwoAndOnline": "exact-within-tolerance"
+  },
+  "support": {
+    "candidateFrameHashAgreementEveryArm": true,
+    "frameCount": 64,
+    "transitionCount": 63,
+    "stateRecurrenceMode": "protected-splat",
+    "candidateStateProtected": true,
+    "occupancyFeedbackEnabled": false,
+    "backend": "mlx",
+    "device": "Device(gpu, 0)",
+    "fallbackReason": null
+  },
+  "cohorts": [
+    "stable-q1",
+    "stable-q2",
+    "stable-q3",
+    "stable-q4",
+    "transported",
+    "birth"
+  ],
+  "arms": [
+    {
+      "name": "generation-two",
+      "alpha": 0,
+      "modelSha256": "5eeb7e8563d59d59d7c8b69e4360634d7931db3399e993a36a27eb27f783f267",
+      "audit": {
+        "path": "artifacts/pyro-phase-online-rollout-r1-0715/receipts/generation-two-audit.json",
+        "sha256": "17f48a901a44bfb3ea6ff4c6194c2cbe12f285892bb30f9bde5c6e439273177f"
+      },
+      "predictions": {
+        "path": "artifacts/pyro-phase-rollout-generation-two-r1-0715/receipts/gen2-predictions.json",
+        "sha256": "fc19c101f3a1297ef42415117a4bf7e2e66e03c5a193bb7fa8fd569a8ac3746d"
+      },
+      "greenroomJob": null,
+      "aggregate": {
+        "stable-q1": {
+          "state": 0.8639038911191714,
+          "energy": 0.4758757371284264
+        },
+        "stable-q2": {
+          "state": 0.8862433218148117,
+          "energy": 0.32171427988064644
+        },
+        "stable-q3": {
+          "state": 0.8847816964291085,
+          "energy": 0.27868233267454284
+        },
+        "stable-q4": {
+          "state": 0.9323406198877421,
+          "energy": 0.23555077024699395
+        },
+        "transported": {
+          "state": 0.9383608571532154,
+          "energy": 0.18821731011459886
+        },
+        "birth": {
+          "state": 0.9638138727097,
+          "energy": 0.18581256403010918
+        }
+      },
+      "lateSteps49Through63": {
+        "stable-q1": {
+          "state": 0.8865880753009582,
+          "energy": 0.440313420163552
+        },
+        "stable-q2": {
+          "state": 0.9073711205974142,
+          "energy": 0.2965041805155848
+        },
+        "stable-q3": {
+          "state": 0.9202953004493066,
+          "energy": 0.2567425560850865
+        },
+        "stable-q4": {
+          "state": 0.9872154340297778,
+          "energy": 0.2145979022248665
+        },
+        "transported": {
+          "state": 1.0143490532840995,
+          "energy": 0.19755324414870534
+        },
+        "birth": {
+          "state": 1.0415200358870276,
+          "energy": 0.20354411889396873
+        }
+      },
+      "firstPersistentStateLossStep": {
+        "stable-q1": null,
+        "stable-q2": null,
+        "stable-q3": null,
+        "stable-q4": null,
+        "transported": 58,
+        "birth": 58
+      },
+      "oneStep": {
+        "report": {
+          "path": "artifacts/pyro-phase-rollout-generation-two-r1-0715/receipts/gen2-model.json",
+          "sha256": "5eeb7e8563d59d59d7c8b69e4360634d7931db3399e993a36a27eb27f783f267"
+        },
+        "greenroomJob": null,
+        "route": {
+          "backend": "mlx",
+          "device": "Device(gpu, 0)",
+          "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+          "fallbackReason": null
+        },
+        "evaluatedPairCount": 63,
+        "sampleCount": 3059367,
+        "pairCap": null,
+        "sampleCap": null,
+        "allCohortsBeatCarriedDonor": true,
+        "predictionToDonorMseRatio": {
+          "aggregate": 0.6141467126120157,
+          "transported": 0.7517318860175548,
+          "birth": 0.7722987949364243,
+          "stable-q3": 0.6880461774032014,
+          "stable-q4": 0.43692396357379126
+        }
+      }
+    },
+    {
+      "name": "alpha-0.25",
+      "alpha": 0.25,
+      "modelSha256": "acdb1a0910cbf96ba3b46eed69197f0458befc71d959409b125dc4ce9b3d6189",
+      "audit": {
+        "path": "/private/tmp/kaminos-phase-checkpoint-alpha-0p25-audit-r1-0715/motion-cohort-audit.json",
+        "sha256": "15546bbb04a0753eee15d87582be589fb6454316b7250c933f0dec72a8674042"
+      },
+      "predictions": {
+        "path": "/private/tmp/kaminos-phase-transport-checkpoint-alpha-0p25-r1-0715/transport-predictions.json",
+        "sha256": "17278a75a56ef5e997b76f2252e5b4c715359e7f2497894fd74e7297cc661f0e"
+      },
+      "greenroomJob": "f520872634ee",
+      "aggregate": {
+        "stable-q1": {
+          "state": 0.8601883831533247,
+          "energy": 0.4816359575649039
+        },
+        "stable-q2": {
+          "state": 0.8864242776326351,
+          "energy": 0.3257615259521316
+        },
+        "stable-q3": {
+          "state": 0.8861466496551155,
+          "energy": 0.2823689750682429
+        },
+        "stable-q4": {
+          "state": 0.9327697607155563,
+          "energy": 0.23875215514710021
+        },
+        "transported": {
+          "state": 0.9389814996999906,
+          "energy": 0.1909721709143909
+        },
+        "birth": {
+          "state": 0.9650629919986734,
+          "energy": 0.18869194849886256
+        }
+      },
+      "lateSteps49Through63": {
+        "stable-q1": {
+          "state": 0.8784830222853185,
+          "energy": 0.44829873984693325
+        },
+        "stable-q2": {
+          "state": 0.9072494828165886,
+          "energy": 0.30161594678765374
+        },
+        "stable-q3": {
+          "state": 0.9226322403490292,
+          "energy": 0.26120453997924953
+        },
+        "stable-q4": {
+          "state": 0.9883364356133078,
+          "energy": 0.218412938514236
+        },
+        "transported": {
+          "state": 1.0152821577877946,
+          "energy": 0.20128492880487045
+        },
+        "birth": {
+          "state": 1.0429089687598547,
+          "energy": 0.20752566236494766
+        }
+      },
+      "firstPersistentStateLossStep": {
+        "stable-q1": null,
+        "stable-q2": null,
+        "stable-q3": null,
+        "stable-q4": null,
+        "transported": 58,
+        "birth": 58
+      },
+      "gate": {
+        "energyGainAllAggregateAndLateCohorts": true,
+        "hardLateStateNotWorse": false,
+        "persistentHardLossNotEarlier": true,
+        "passes": false
+      },
+      "oneStep": {
+        "report": {
+          "path": "/private/tmp/kaminos-phase-checkpoint-alpha-0p25-one-step-r1-0715/destination-state-evaluation.json",
+          "sha256": "7d862ecabdc86280e9d390580314d66273012f9e1bff4676bf1c896c8e36cd25"
+        },
+        "greenroomJob": "239402d12ebe",
+        "route": {
+          "backend": "mlx",
+          "device": "Device(gpu, 0)",
+          "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+          "fallbackReason": null
+        },
+        "evaluatedPairCount": 63,
+        "sampleCount": 3059367,
+        "pairCap": null,
+        "sampleCap": null,
+        "allCohortsBeatCarriedDonor": true,
+        "predictionToDonorMseRatio": {
+          "aggregate": 0.6135196110592634,
+          "transported": 0.7505382352877349,
+          "birth": 0.770397962486977,
+          "stable-q3": 0.686817198520329,
+          "stable-q4": 0.43730609249478
+        },
+        "improvesGenerationTwo": {
+          "aggregate": true,
+          "transported": true,
+          "birth": true,
+          "stable-q3": true,
+          "stable-q4": false
+        }
+      }
+    },
+    {
+      "name": "alpha-0.50",
+      "alpha": 0.5,
+      "modelSha256": "5512e3647afde87266134231260006ac0370927f0abb5c06191eaef97c78f7e2",
+      "audit": {
+        "path": "/private/tmp/kaminos-phase-checkpoint-alpha-0p5-audit-r1-0715/motion-cohort-audit.json",
+        "sha256": "4af84e6cf9cf32f15a2da3d70ef950f53a3e30ac217e1f3a78a24efb89306de6"
+      },
+      "predictions": {
+        "path": "/private/tmp/kaminos-phase-transport-checkpoint-alpha-0p5-r1-0715/transport-predictions.json",
+        "sha256": "0aa72f7477b2f66068470412cbce6e87a5840db83520efe90b4c19e7ba71a954"
+      },
+      "greenroomJob": "41cdaf6df5d1",
+      "aggregate": {
+        "stable-q1": {
+          "state": 0.862330557509628,
+          "energy": 0.4889423218806494
+        },
+        "stable-q2": {
+          "state": 0.8895388499016841,
+          "energy": 0.3303569392138709
+        },
+        "stable-q3": {
+          "state": 0.8895816803910872,
+          "energy": 0.2863863858284092
+        },
+        "stable-q4": {
+          "state": 0.934280519932756,
+          "energy": 0.24216865321926476
+        },
+        "transported": {
+          "state": 0.9412769230953517,
+          "energy": 0.1939086631073285
+        },
+        "birth": {
+          "state": 0.9680143509566058,
+          "energy": 0.1917618671189978
+        }
+      },
+      "lateSteps49Through63": {
+        "stable-q1": {
+          "state": 0.8823568465775992,
+          "energy": 0.4583046036763549
+        },
+        "stable-q2": {
+          "state": 0.9133855982823235,
+          "energy": 0.30754187466133515
+        },
+        "stable-q3": {
+          "state": 0.9295373769155452,
+          "energy": 0.26617970098131316
+        },
+        "stable-q4": {
+          "state": 0.9921824787642716,
+          "energy": 0.22258039995727905
+        },
+        "transported": {
+          "state": 1.0197035895025208,
+          "energy": 0.20531543456138052
+        },
+        "birth": {
+          "state": 1.0477262068560025,
+          "energy": 0.21184400481896523
+        }
+      },
+      "firstPersistentStateLossStep": {
+        "stable-q1": null,
+        "stable-q2": null,
+        "stable-q3": null,
+        "stable-q4": null,
+        "transported": 58,
+        "birth": 58
+      },
+      "gate": {
+        "energyGainAllAggregateAndLateCohorts": true,
+        "hardLateStateNotWorse": false,
+        "persistentHardLossNotEarlier": true,
+        "passes": false
+      },
+      "oneStep": {
+        "report": {
+          "path": "/private/tmp/kaminos-phase-checkpoint-alpha-0p5-one-step-r1-0715/destination-state-evaluation.json",
+          "sha256": "25f2616756aec6e4f69f79c03897de21b2974d5a9e8ca42c5a6e888e4ff7fe0f"
+        },
+        "greenroomJob": "071a8ffd7d48",
+        "route": {
+          "backend": "mlx",
+          "device": "Device(gpu, 0)",
+          "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+          "fallbackReason": null
+        },
+        "evaluatedPairCount": 63,
+        "sampleCount": 3059367,
+        "pairCap": null,
+        "sampleCap": null,
+        "allCohortsBeatCarriedDonor": true,
+        "predictionToDonorMseRatio": {
+          "aggregate": 0.6133945893789544,
+          "transported": 0.7500671569341516,
+          "birth": 0.7692353749954541,
+          "stable-q3": 0.6864143329365315,
+          "stable-q4": 0.43785770602010016
+        },
+        "improvesGenerationTwo": {
+          "aggregate": true,
+          "transported": true,
+          "birth": true,
+          "stable-q3": true,
+          "stable-q4": false
+        }
+      }
+    },
+    {
+      "name": "alpha-0.75",
+      "alpha": 0.75,
+      "modelSha256": "04b4b5afbbe1b767842840097e48d61f32ecd01a70a7199c8f9d363ec1edc5e8",
+      "audit": {
+        "path": "/private/tmp/kaminos-phase-checkpoint-alpha-0p75-audit-r1-0715/motion-cohort-audit.json",
+        "sha256": "420bd676c25fd5bdd5e6f3c30d7ecd4a5de26a56ac354e98983014e6d214a22c"
+      },
+      "predictions": {
+        "path": "/private/tmp/kaminos-phase-transport-checkpoint-alpha-0p75-r1-0715/transport-predictions.json",
+        "sha256": "3c49aeafb0a6723cf79a0d1837eeb2abff02b773247d2be02ca5b5d7982a5502"
+      },
+      "greenroomJob": "c2c782885ccf",
+      "aggregate": {
+        "stable-q1": {
+          "state": 0.8706569282293233,
+          "energy": 0.49803985887661734
+        },
+        "stable-q2": {
+          "state": 0.8956681544188428,
+          "energy": 0.3355529668528163
+        },
+        "stable-q3": {
+          "state": 0.8951244187577084,
+          "energy": 0.2907499563853537
+        },
+        "stable-q4": {
+          "state": 0.936851944557209,
+          "energy": 0.2457791675718961
+        },
+        "transported": {
+          "state": 0.9452316157270656,
+          "energy": 0.1970188456603671
+        },
+        "birth": {
+          "state": 0.9726882661144716,
+          "energy": 0.19501435057068478
+        }
+      },
+      "lateSteps49Through63": {
+        "stable-q1": {
+          "state": 0.8990157786489388,
+          "energy": 0.4706467195525487
+        },
+        "stable-q2": {
+          "state": 0.9259710772970534,
+          "energy": 0.3142907899081952
+        },
+        "stable-q3": {
+          "state": 0.9410402238879674,
+          "energy": 0.2716622833521522
+        },
+        "stable-q4": {
+          "state": 0.9986688544833552,
+          "energy": 0.22701638554083003
+        },
+        "transported": {
+          "state": 1.0275598974748164,
+          "energy": 0.2096201245485372
+        },
+        "birth": {
+          "state": 1.0559718759524168,
+          "energy": 0.2164535183419042
+        }
+      },
+      "firstPersistentStateLossStep": {
+        "stable-q1": null,
+        "stable-q2": null,
+        "stable-q3": 63,
+        "stable-q4": 61,
+        "transported": 58,
+        "birth": 45
+      },
+      "gate": {
+        "energyGainAllAggregateAndLateCohorts": true,
+        "hardLateStateNotWorse": false,
+        "persistentHardLossNotEarlier": false,
+        "passes": false
+      },
+      "oneStep": {
+        "report": {
+          "path": "/private/tmp/kaminos-phase-checkpoint-alpha-0p75-one-step-r1-0715/destination-state-evaluation.json",
+          "sha256": "732b2e3fb66c4dad53e602999297e964d0818e618f51481152c002886cbac913"
+        },
+        "greenroomJob": "4675784514b9",
+        "route": {
+          "backend": "mlx",
+          "device": "Device(gpu, 0)",
+          "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+          "fallbackReason": null
+        },
+        "evaluatedPairCount": 63,
+        "sampleCount": 3059367,
+        "pairCap": null,
+        "sampleCap": null,
+        "allCohortsBeatCarriedDonor": true,
+        "predictionToDonorMseRatio": {
+          "aggregate": 0.6138270016838888,
+          "transported": 0.7503633074547501,
+          "birth": 0.7688331643416179,
+          "stable-q3": 0.6868686238176945,
+          "stable-q4": 0.438659587652427
+        },
+        "improvesGenerationTwo": {
+          "aggregate": true,
+          "transported": true,
+          "birth": true,
+          "stable-q3": true,
+          "stable-q4": false
+        }
+      }
+    },
+    {
+      "name": "online",
+      "alpha": 1,
+      "modelSha256": "64098ba1e5282b384d5c325a356e4a9446248762471fa3c59974007517c4bd8c",
+      "audit": {
+        "path": "artifacts/pyro-phase-online-rollout-r1-0715/receipts/online-audit.json",
+        "sha256": "236a7df826629d28528d7aef67f47020f97ee529d36ea8c17297ae7acc2d74f3"
+      },
+      "predictions": {
+        "path": "artifacts/pyro-phase-online-rollout-r1-0715/receipts/online-predictions.json",
+        "sha256": "4ad1c0ab9cf808da656620248210aefd9781a50e97d3fbf62085f1ca059f59cf"
+      },
+      "greenroomJob": null,
+      "aggregate": {
+        "stable-q1": {
+          "state": 0.8858168530494633,
+          "energy": 0.5091503689207002
+        },
+        "stable-q2": {
+          "state": 0.9050003267306421,
+          "energy": 0.34137570856108107
+        },
+        "stable-q3": {
+          "state": 0.9028223035839467,
+          "energy": 0.2954593346610031
+        },
+        "stable-q4": {
+          "state": 0.9405205145721058,
+          "energy": 0.24957230541670983
+        },
+        "transported": {
+          "state": 0.9509317657795046,
+          "energy": 0.20029671755650374
+        },
+        "birth": {
+          "state": 0.9791865601098412,
+          "energy": 0.1984508748288112
+        }
+      },
+      "lateSteps49Through63": {
+        "stable-q1": {
+          "state": 0.929896863912468,
+          "energy": 0.48567057704348515
+        },
+        "stable-q2": {
+          "state": 0.9454796732924112,
+          "energy": 0.3219306351072348
+        },
+        "stable-q3": {
+          "state": 0.9572783463582833,
+          "energy": 0.2776394413807322
+        },
+        "stable-q4": {
+          "state": 1.0078990924228037,
+          "energy": 0.23173904435743492
+        },
+        "transported": {
+          "state": 1.0390770989759632,
+          "energy": 0.21420348734915134
+        },
+        "birth": {
+          "state": 1.067816472666098,
+          "energy": 0.22135755275943253
+        }
+      },
+      "firstPersistentStateLossStep": {
+        "stable-q1": null,
+        "stable-q2": null,
+        "stable-q3": 63,
+        "stable-q4": 61,
+        "transported": 53,
+        "birth": 45
+      },
+      "oneStep": {
+        "report": {
+          "path": "artifacts/pyro-phase-online-rollout-r1-0715/receipts/online-model.json",
+          "sha256": "64098ba1e5282b384d5c325a356e4a9446248762471fa3c59974007517c4bd8c"
+        },
+        "greenroomJob": null,
+        "route": {
+          "backend": "mlx",
+          "device": "Device(gpu, 0)",
+          "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+          "fallbackReason": null
+        },
+        "evaluatedPairCount": 63,
+        "sampleCount": 3059367,
+        "pairCap": null,
+        "sampleCap": null,
+        "allCohortsBeatCarriedDonor": true,
+        "predictionToDonorMseRatio": {
+          "aggregate": 0.6149334153759155,
+          "transported": 0.7515478948309817,
+          "birth": 0.7693069434078761,
+          "stable-q3": 0.688305383116083,
+          "stable-q4": 0.4398227115773729
+        }
+      }
+    }
+  ],
+  "decision": {
+    "passingInterpolants": [],
+    "renderRequired": false,
+    "result": "no-interpolant-meets-predeclared-state-energy-gate",
+    "bestOneStepAggregate": "alpha-0.50",
+    "bestOneStepTransported": "alpha-0.50",
+    "bestOneStepBirth": "alpha-0.75",
+    "recurrentAlignedStateWinner": "generation-two",
+    "interpretation": "online-direction-improves-valid-one-step-fit-but-progressively-harms-closed-loop-response",
+    "nextExperiment": "protected-online-rollout-with-generation-two-response-anchor-on-current-model-exposed-inputs"
+  },
+  "claimBoundary": "One heldout basin, exact protected support, fixed transport model, 63 uncapped one-step pairs and 63 protected recurrent steps. Weight-space interpolation only; no rendered candidate passed the predeclared gate, and no analytical-raymarch, multi-basin, runtime, or product claim is made.",
+  "oneStepSupport": {
+    "authority": "full-cross-episode-state-mse-versus-carried-donor-v0",
+    "controlledStepDeltaMs": 160,
+    "evaluatedPairCountEveryArm": 63,
+    "sampleCountEveryArm": 3059367,
+    "pairCap": null,
+    "sampleCap": null,
+    "backendEveryArm": "mlx",
+    "deviceEveryArm": "Device(gpu, 0)",
+    "fallbackEveryArm": null
+  }
+}
