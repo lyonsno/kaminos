@@ -1,0 +1,13 @@
+job_id	shape	stance	seed	output_dir
+bf0f311ca03f	prior-shape-0021	preserve-gestalt	715211	cells/prior-shape-0021-preserve-gestalt
+7dec4cbb021f	prior-shape-0021	lineage-seed	715212	cells/prior-shape-0021-lineage-seed
+f51e209237c2	prior-shape-0021	prior-forward	715213	cells/prior-shape-0021-prior-forward
+9dd21cad6ec6	prior-shape-0032	preserve-gestalt	715321	cells/prior-shape-0032-preserve-gestalt
+8632e626c91a	prior-shape-0032	lineage-seed	715322	cells/prior-shape-0032-lineage-seed
+31ad39b0db45	prior-shape-0032	prior-forward	715323	cells/prior-shape-0032-prior-forward
+5c7acd050127	prior-shape-0066	preserve-gestalt	715661	cells/prior-shape-0066-preserve-gestalt
+bff342232d28	prior-shape-0066	lineage-seed	715662	cells/prior-shape-0066-lineage-seed
+8a43f362b830	prior-shape-0066	prior-forward	715663	cells/prior-shape-0066-prior-forward
+6ceeecc90e4e	prior-shape-0087	preserve-gestalt	715871	cells/prior-shape-0087-preserve-gestalt
+71acdfe325b9	prior-shape-0087	lineage-seed	715872	cells/prior-shape-0087-lineage-seed
+181a982a1308	prior-shape-0087	prior-forward	715873	cells/prior-shape-0087-prior-forward

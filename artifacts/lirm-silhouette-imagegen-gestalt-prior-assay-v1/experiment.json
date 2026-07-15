@@ -1,0 +1,50 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-gestalt-prior-assay.v1",
+  "purpose": "Measure literal scaffold adherence, ancestral-lineage elaboration, and prior-forward organism invention from four structurally divergent latent silhouette extrusions.",
+  "sourceRoot": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715",
+  "sourceReceiptHash": "sha256:395d1bd8b360fce33540088302e73f523098977196f8fdfa6f7fe06410a1ce9f",
+  "sourceRoute": "kaminos/lirm-speciation-armature/silhouette-extrusion-conditioning-v0",
+  "requestedRoute": "gpu-greenroom/mflux_flux2_edit_promptfile",
+  "model": "flux2-klein-9b",
+  "quantize": 4,
+  "width": 512,
+  "height": 512,
+  "steps": 8,
+  "guidance": 1.0,
+  "routeReceiptManifest": {
+    "path": "route-receipts.json",
+    "sha256": "sha256:b232c663f93e6db7f6293947f199205cb3171e6958d11d4756490891ee51cd8f",
+    "jobCount": 27,
+    "allDoneExitZero": true
+  },
+  "shapes": {
+    "prior-shape-0021": {
+      "structuralEvent": "forked crown",
+      "clayHash": "sha256:43aebedd38c48d833a23b92661cffd19a0c9c24f08d632c5a9d435116363ff48"
+    },
+    "prior-shape-0032": {
+      "structuralEvent": "narrow waist with lateral point",
+      "clayHash": "sha256:26c22a0367d56ebd5d579407027cf11bbbc994cb257bb658b5f308d18d2f54c4"
+    },
+    "prior-shape-0066": {
+      "structuralEvent": "pendant lower mass",
+      "clayHash": "sha256:10c5e76fe780e535e6137a9fac0079373193f062a0f81ed87c1e4ae19381119c"
+    },
+    "prior-shape-0087": {
+      "structuralEvent": "near-ring negative space",
+      "clayHash": "sha256:eec3b9963e7d70e1c4280f5c1700499759b445f2171efe59c2d9c6b325859a97"
+    }
+  },
+  "stances": {
+    "preserve-gestalt": "prompts/preserve-gestalt.txt",
+    "lineage-seed": "prompts/lineage-seed.txt",
+    "prior-forward": "prompts/prior-forward.txt"
+  },
+  "seedRule": "715000 + shape numeric id * 10 + stance index (1 preserve, 2 lineage, 3 prior-forward)",
+  "acceptance": {
+    "routeIdentity": "The hash-bound compact route receipt manifest preserves each Greenroom receipt, effective runner, effective parameters, exit state, input hash, and output hash.",
+    "visual": "One complete coherent organism; classify how much source gestalt survives, whether a distinctive structural event survives, and whether the departure discovers a selectable creature basin.",
+    "failure": "Reject icon or symbol collapse, duplicate organisms, severed-parts composition, blank or partial output, or unreceipted fallback output.",
+    "downstream": "Only visually inspected strong cells may become Trellis candidates."
+  }
+}

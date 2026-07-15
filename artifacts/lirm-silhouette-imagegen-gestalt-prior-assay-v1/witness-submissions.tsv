@@ -1,0 +1,13 @@
+job_id	cast	view	yaw	pitch	output_dir
+848b527965fa	prior-shape-0032-prior-forward	left	-0.85	0.2	trellis-witness/prior-shape-0032-prior-forward/left
+2277c751ec1f	prior-shape-0032-prior-forward	front	0	0.2	trellis-witness/prior-shape-0032-prior-forward/front
+d6d80efd9450	prior-shape-0032-prior-forward	right	0.85	0.2	trellis-witness/prior-shape-0032-prior-forward/right
+18e19f1100cc	prior-shape-0066-preserve-gestalt	left	-0.85	0.2	trellis-witness/prior-shape-0066-preserve-gestalt/left
+f3fb8f11248a	prior-shape-0066-preserve-gestalt	front	0	0.2	trellis-witness/prior-shape-0066-preserve-gestalt/front
+027492a0fc1d	prior-shape-0066-preserve-gestalt	right	0.85	0.2	trellis-witness/prior-shape-0066-preserve-gestalt/right
+b9c3b8eb09c1	prior-shape-0087-preserve-gestalt	left	-0.85	0.2	trellis-witness/prior-shape-0087-preserve-gestalt/left
+b84b26524150	prior-shape-0087-preserve-gestalt	front	0	0.2	trellis-witness/prior-shape-0087-preserve-gestalt/front
+d6efd83b728d	prior-shape-0087-preserve-gestalt	right	0.85	0.2	trellis-witness/prior-shape-0087-preserve-gestalt/right
+9a0c7e1ef6d0	prior-shape-0032-prior-forward	opposite	3.141593	0.2	trellis-witness/prior-shape-0032-prior-forward/opposite
+f5720b6552a2	prior-shape-0066-preserve-gestalt	opposite	3.141593	0.2	trellis-witness/prior-shape-0066-preserve-gestalt/opposite
+55e1ae6f2c64	prior-shape-0087-preserve-gestalt	opposite	3.141593	0.2	trellis-witness/prior-shape-0087-preserve-gestalt/opposite

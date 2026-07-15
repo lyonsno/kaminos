@@ -1,0 +1,4 @@
+job_id	imagegen_cell	image_hash	selection_reason	seed	steps	target_faces	texture_size	output_dir
+612443decf9e	prior-shape-0032-prior-forward	sha256:9875b7206be0860ca79c77c7b5584d81a246db5fe3d7ff00fc018a3daa20c6d2	prior-forward topology jump to low spider-like organism	42	6	200000	1024	trellis/prior-shape-0032-prior-forward
+548249eaddfc	prior-shape-0066-preserve-gestalt	sha256:f0604bb7e5b911b8dd7ff7b4ffba3349b0a11a1be2e5a8823dd45bbca21d97e2	pendant mass resolves into a strange multi-contact underbody	42	6	200000	1024	trellis/prior-shape-0066-preserve-gestalt
+c2b2ac211b2a	prior-shape-0087-preserve-gestalt	sha256:993608e914ad107c7cb8f0133974c97f7a1cd4d89e4bc205ff3cc9aea7c734f0	near-ring negative space resolves as a terminal annular mouth	42	6	200000	1024	trellis/prior-shape-0087-preserve-gestalt
