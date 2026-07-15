@@ -141,7 +141,14 @@ assert.equal(sf3dWeights.release().status, 'released');
 assert.equal(sf3dWeights.release().status, 'already-released');
 snapshot = residency.snapshot();
 assert.equal(snapshot.totalResidentDeclaredBytes, 1_280);
-assert.equal(snapshot.routes.find(route => route.routeId.startsWith('sf3d')).leasedDeclaredBytes, 0);
+const releasedSf3dRoute = snapshot.routes.find(route => route.routeId.startsWith('sf3d'));
+assert.equal(releasedSf3dRoute.leasedDeclaredBytes, 0);
+assert.deepEqual(releasedSf3dRoute.resources, [{
+  resourceId: 'weights.dinov2.vitl14',
+  generation: 1,
+  declaredBytes: 1_024,
+  activeLeaseCount: 0,
+}]);
 assert.deepEqual(snapshot.evictionCandidates, []);
 
 assert.equal(sharpWeights.release().status, 'released');
@@ -187,7 +194,17 @@ const session = await createWebGpuInferenceSession({
   adapterName: 'test-adapter',
 });
 const route = await session.registerRoute({ routeId: 'sharp.image-to-splat.webgpu-local.v0' });
-assert.equal(route.residency, session.residency, 'routes must share their session residency ledger');
+assert.notEqual(route.residency, session.residency, 'route handles must expose a route-scoped residency facade');
+assert.equal(route.residency.snapshot().routeId, route.routeId);
+assert.throws(
+  () => route.residency.acquire({
+    routeId: 'forged.webgpu-local.v0',
+    resourceId: 'forged',
+    declaredBytes: 1,
+    resource: {},
+  }),
+  /route owns routeId|cannot override/i,
+);
 const routeLease = route.acquireResource({
   resourceId: 'sharp.weights',
   declaredBytes: 4_096,
@@ -210,6 +227,10 @@ const detachedSnapshot = route.snapshot();
 assert.equal(detachedSnapshot.residency.activeLeaseCount, 0);
 assert.throws(
   () => route.acquireResource({ resourceId: 'detached', declaredBytes: 1 }),
+  /unregistered|detached/i,
+);
+assert.throws(
+  () => route.residency.acquire({ resourceId: 'detached-bypass', declaredBytes: 1, resource: {} }),
   /unregistered|detached/i,
 );
 

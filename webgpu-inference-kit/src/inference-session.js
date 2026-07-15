@@ -241,18 +241,24 @@ export async function createWebGpuInferenceSession(input = {}) {
         jobHandles: new Map(),
         handle: null,
       };
+      function acquireResource(resourceInput = {}) {
+        assertAttached(route);
+        assertActive();
+        if (!isPlainObject(resourceInput)) throw new Error('resource input must be an object');
+        if (Object.hasOwn(resourceInput, 'routeId')) {
+          throw new Error('session route owns routeId; acquireResource cannot override it');
+        }
+        return residency.acquire({ ...resourceInput, routeId: route.routeId });
+      }
+      const routeResidency = Object.freeze({
+        acquire: acquireResource,
+        snapshot() { return deepFreeze(residency.routeSnapshot(route.routeId)); },
+      });
       route.handle = Object.freeze({
         routeId: route.routeId,
         runtime,
-        residency,
-        acquireResource(resourceInput = {}) {
-          assertAttached(route);
-          assertActive();
-          if (Object.hasOwn(resourceInput, 'routeId')) {
-            throw new Error('session route owns routeId; acquireResource cannot override it');
-          }
-          return residency.acquire({ ...resourceInput, routeId: route.routeId });
-        },
+        residency: routeResidency,
+        acquireResource,
         enqueue(jobInput = {}) {
           assertAttached(route);
           assertActive();

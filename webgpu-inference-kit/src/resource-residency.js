@@ -123,18 +123,21 @@ export function createWebGpuResourceResidency(input = {}) {
 
   function routeSnapshot(routeId) {
     const resources = [...state.resources.values()]
-      .filter(resource => (resource.routeLeaseCounts.get(routeId) || 0) > 0)
+      .filter(resource => resource.routeParticipation.has(routeId))
       .map(resource => ({
         resourceId: resource.resourceId,
-        generation: resource.generation,
+        generation: resource.routeParticipation.get(routeId).generation,
         declaredBytes: resource.declaredBytes,
-        activeLeaseCount: resource.routeLeaseCounts.get(routeId),
+        activeLeaseCount: resource.routeLeaseCounts.get(routeId) || 0,
       }))
       .sort((left, right) => compareText(left.resourceId, right.resourceId));
     return {
       routeId,
       activeLeaseCount: resources.reduce((sum, resource) => sum + resource.activeLeaseCount, 0),
-      leasedDeclaredBytes: resources.reduce((sum, resource) => sum + resource.declaredBytes, 0),
+      leasedDeclaredBytes: resources.reduce(
+        (sum, resource) => sum + (resource.activeLeaseCount > 0 ? resource.declaredBytes : 0),
+        0,
+      ),
       resources,
     };
   }
@@ -203,6 +206,7 @@ export function createWebGpuResourceResidency(input = {}) {
         generation: 1,
         leases: new Map(),
         routeLeaseCounts: new Map(),
+        routeParticipation: new Map(),
         createdAtMs: acquiredAtMs,
         lastAcquiredAtMs: acquiredAtMs,
         lastReleasedAtMs: null,
@@ -243,6 +247,7 @@ export function createWebGpuResourceResidency(input = {}) {
       invalidated: false,
     };
     state.routeIds.add(lease.routeId);
+    resource.routeParticipation.set(lease.routeId, { generation: resource.generation });
     state.leases.set(leaseId, lease);
     resource.leases.set(leaseId, lease);
     resource.routeLeaseCounts.set(lease.routeId, (resource.routeLeaseCounts.get(lease.routeId) || 0) + 1);
@@ -331,7 +336,12 @@ export function createWebGpuResourceResidency(input = {}) {
     if (resource.status === 'resident' || resource.leases.size > 0) {
       throw new Error(`resource ${resourceId} must be evicted and unleased before forget`);
     }
-    return state.resources.delete(resourceId);
+    const forgotten = state.resources.delete(resourceId);
+    for (const routeId of state.routeIds) {
+      const retained = [...state.resources.values()].some(candidate => candidate.routeParticipation.has(routeId));
+      if (!retained) state.routeIds.delete(routeId);
+    }
+    return forgotten;
   }
 
   function invalidateAll(invalidationInput = {}) {
@@ -383,7 +393,9 @@ export function createWebGpuResourceResidency(input = {}) {
       resource.invalidatedAtMs = invalidatedAtMs;
       resource.leases.clear();
       resource.routeLeaseCounts.clear();
+      resource.routeParticipation.clear();
     }
+    state.routeIds.clear();
     return state.invalidation;
   }
 
