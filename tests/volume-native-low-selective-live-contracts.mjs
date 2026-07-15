@@ -96,6 +96,11 @@ assert.match(combined, /dense278MbRouteDisposition[\s\S]*fidelity-control-only[\
 assert.match(combined, /gpuResidentDirectSparseRequirement[\s\S]*noJsVisibleDenseArrays[\s\S]*noCpuReadback[\s\S]*noFull160Materialization/, 'ledger requires GPU-resident sparse route without JS dense arrays, readback, or full materialization');
 assert.match(combined, /denseSupportFrontDependencyKilledByBudget[\s\S]*skeletonPlausibleUnder24ms/, 'ledger records whether dense support/front dependency is killed by the 24ms boundary');
 assert.match(witness, /nativeLowBreakEvenBudgetLedger[\s\S]*outerKillBoundaryMs[\s\S]*skeletonPlausibleUnder24ms/, 'witness preserves learned-transfer break-even budget ledger');
+assert.match(combined, /native-low-coarse-front-sparse-detail-band-v0/, 'route records coarse-front scaffold plus sparse ridge/temporal-detail band architecture');
+assert.match(combined, /coarseFrontScaffold[\s\S]*spatialCorrelation[\s\S]*0\.9875[\s\S]*ridgeTop10Recall[\s\S]*0\.7563/, 'coarse front scaffold records interpolation-corrected spatial/ridge evidence');
+assert.match(combined, /sparseTemporalDetailBand[\s\S]*consecutiveDeltaEnergyRetained[\s\S]*0\.1205[\s\S]*top5CellEnergy[\s\S]*0\.9088[\s\S]*top10CellEnergy[\s\S]*0\.97/, 'sparse detail band records concentrated missing temporal-detail energy');
+assert.match(combined, /trueCompactCarrierDispatch[\s\S]*profitableTargetMs[\s\S]*credibleBreakEvenTargetMs[\s\S]*outerKillBoundaryMs/, 'sparse route keeps true compact carrier dispatch inside 10/15/24ms economics');
+assert.match(witness, /nativeLowCoarseFrontSparseDetailBand[\s\S]*noFull160Materialization[\s\S]*noCpuReadback[\s\S]*noJsVisibleDenseArrays/, 'witness preserves sparse detail-band budget contract without dense receiver shortcuts');
 assert.match(combined, /native-low-front-topology-ablation-v0/, 'route records shared-device learned frontTopology visual ablation');
 assert.match(combined, /fullFrozenTreatmentReference[\s\S]*frontTopologyAblatedTreatment[\s\S]*nativeLowControl/, 'frontTopology ablation keeps native control, full frozen reference, and ablated treatment');
 assert.match(combined, /native-low-nearest-normalized-front-upsampling-no-learned-front-residual-v0/, 'frontTopology ablation labels native-low upsample authority with no learned front residual');

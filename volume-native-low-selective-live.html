@@ -97,6 +97,13 @@
       treatmentSplatRadianceGain: 1.12,
       treatmentSplatOpacityGain: 1.05,
       modelOutputMutation: false,
+      nativeLowCoarseFrontSparseDetailBand: {
+        identity: 'native-low-coarse-front-sparse-detail-band-v0',
+        coarseFrontScaffold: { spatialCorrelation: 0.9875, ridgeTop10Recall: 0.7563 },
+        sparseTemporalDetailBand: { consecutiveDeltaEnergyRetained: 0.1205, top5CellEnergy: 0.9088, top10CellEnergy: 0.97 },
+        trueCompactCarrierDispatch: { required: true, profitableTargetMs: 10, credibleBreakEvenTargetMs: 15, outerKillBoundaryMs: 24 },
+        candidatePathScope: { noJsVisibleDenseArrays: true, noCpuReadback: true, noFull160Materialization: true },
+      },
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -368,6 +375,7 @@
         nativeLowMaterializationProfile: receipt.nativeLowMaterializationProfile || null,
         nativeLowProductionStageLedger: receipt.nativeLowProductionStageLedger || null,
         nativeLowBreakEvenBudgetLedger: receipt.nativeLowBreakEvenBudgetLedger || null,
+        nativeLowCoarseFrontSparseDetailBand: receipt.nativeLowCoarseFrontSparseDetailBand || null,
         endToEndFrameMs: receipt.endToEndFrameMs ?? null,
         simulationSteppingReceipt: receipt.simulationSteppingReceipt || null,
         currentSourceFrameConsumption: receipt.currentSourceFrameConsumption || null,

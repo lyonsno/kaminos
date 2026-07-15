@@ -163,6 +163,13 @@ try {
       && Number(state?.nativeLowBreakEvenBudgetLedger?.credibleBreakEvenTargetMs) === 15
       && Number(state?.nativeLowBreakEvenBudgetLedger?.profitableTargetMs) === 10
       && typeof state?.nativeLowBreakEvenBudgetLedger?.skeletonPlausibleUnder24ms === 'boolean'
+      && state?.nativeLowCoarseFrontSparseDetailBand?.identity === 'native-low-coarse-front-sparse-detail-band-v0'
+      && Number(state?.nativeLowCoarseFrontSparseDetailBand?.coarseFrontScaffold?.spatialCorrelation) === 0.9875
+      && Number(state?.nativeLowCoarseFrontSparseDetailBand?.sparseTemporalDetailBand?.top5CellEnergy) === 0.9088
+      && state?.nativeLowCoarseFrontSparseDetailBand?.trueCompactCarrierDispatch?.required === true
+      && state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noFull160Materialization === true
+      && state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noCpuReadback === true
+      && state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noJsVisibleDenseArrays === true
       && (!frontTopologyAblationRequested
         || (
           state?.nativeLowFrontTopologyAblation?.identity === 'native-low-front-topology-ablation-v0'
@@ -242,6 +249,14 @@ try {
   assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.credibleBreakEvenTargetMs), 15, 'credible break-even target must be 15ms');
   assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.profitableTargetMs), 10, 'profitable target must be 10ms');
   assert.equal(typeof state?.nativeLowBreakEvenBudgetLedger?.skeletonPlausibleUnder24ms, 'boolean', '24ms plausibility decision missing');
+  assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.identity, 'native-low-coarse-front-sparse-detail-band-v0', 'coarse-front sparse detail-band receipt missing');
+  assert.equal(Number(state?.nativeLowCoarseFrontSparseDetailBand?.coarseFrontScaffold?.spatialCorrelation), 0.9875, 'coarse front spatial correlation missing');
+  assert.equal(Number(state?.nativeLowCoarseFrontSparseDetailBand?.sparseTemporalDetailBand?.consecutiveDeltaEnergyRetained), 0.1205, 'coarse front temporal-delta energy retention missing');
+  assert.equal(Number(state?.nativeLowCoarseFrontSparseDetailBand?.sparseTemporalDetailBand?.top10CellEnergy), 0.97, 'temporal-detail concentration missing');
+  assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.trueCompactCarrierDispatch?.required, true, 'true compact carrier dispatch is not required');
+  assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noFull160Materialization, true, 'sparse detail-band path allowed full 160 materialization');
+  assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noCpuReadback, true, 'sparse detail-band path allowed CPU readback');
+  assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noJsVisibleDenseArrays, true, 'sparse detail-band path allowed JS-visible dense arrays');
   if (frontTopologyAblationRequested) {
     assert.equal(state?.nativeLowFrontTopologyAblation?.identity, 'native-low-front-topology-ablation-v0', 'frontTopology ablation missing');
     assert.equal(state?.nativeLowFrontTopologyAblation?.offlineImporterUsed, false, 'offline importer was used for frontTopology ablation');
@@ -307,6 +322,7 @@ try {
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
     nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
     nativeLowBreakEvenBudgetLedger: endState.nativeLowBreakEvenBudgetLedger,
+    nativeLowCoarseFrontSparseDetailBand: endState.nativeLowCoarseFrontSparseDetailBand,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
     frontTopologyAblatedTreatment: endState.frontTopologyAblatedTreatment,

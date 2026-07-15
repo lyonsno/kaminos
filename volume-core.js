@@ -13195,6 +13195,52 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const credibleBreakEvenTargetMs = 15;
       const profitableTargetMs = 10;
       const denseSupportFrontDependencyKilledByBudget = Number(nativeLowHeadCostProfile.supportFrontGpuMs ?? inferenceTiming.ms) > outerKillBoundaryMs;
+      const nativeLowCoarseFrontSparseDetailBand = {
+        identity: 'native-low-coarse-front-sparse-detail-band-v0',
+        authority: 'interpolation-corrected-coarse-front-plus-sparse-temporal-detail-band-v0',
+        implementationStatus: 'projection-contract-not-yet-production-route',
+        coarseFrontScaffold: {
+          identity: 'native-low-coarse-front-scaffold-40^3-trilinear-v0',
+          grid: 40,
+          reconstruction: 'trilinear-front-reconstruction-v0',
+          spatialCorrelation: 0.9875,
+          ridgeTop10Recall: 0.7563,
+          role: 'broad-placement-scaffold-not-final-front',
+          mayServeAsFinalFront: false,
+        },
+        sparseTemporalDetailBand: {
+          identity: 'native-low-sparse-ridge-temporal-detail-band-v0',
+          required: true,
+          authority: 'concentrated-missing-temporal-detail-energy-v0',
+          consecutiveDeltaEnergyRetained: 0.1205,
+          top5CellEnergy: 0.9088,
+          top10CellEnergy: 0.97,
+          selection: 'ridge-or-high-temporal-detail-candidates-v0',
+          hiddenDenseReceiverForbidden: true,
+        },
+        trueCompactCarrierDispatch: {
+          required: true,
+          currentDenseResidualStageMs: nativeLowHeadCostProfile.supportPositiveResidualGpuMs,
+          currentResidualDispatchMode: nativeLowInferenceWorkProfile.residualDispatchMode,
+          currentSupportCompactedCount: supportPositiveCount,
+          profitableTargetMs,
+          credibleBreakEvenTargetMs,
+          outerKillBoundaryMs,
+        },
+        candidatePathScope: {
+          includesCoarseScaffold: true,
+          includesSparseRidgeTemporalDetailBand: true,
+          includesFineSupportGate: true,
+          includesTrueCompactCarrierDispatch: true,
+          includesDirectRendererCueEmission: true,
+          noJsVisibleDenseArrays: true,
+          noCpuReadback: true,
+          noFull160Materialization: true,
+        },
+        frozenDenseRouteControl: true,
+        nativeNoModelControl: true,
+        runtimeDecision: 'coarse-front-alone-rejected-sparse-temporal-detail-band-required',
+      };
       const nativeLowBreakEvenBudgetLedger = {
         identity: 'native-low-learned-transfer-break-even-ledger-v0',
         authority: 'operator-corrected-native160-minus-native128-economics-v0',
@@ -13329,6 +13375,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           hiddenSupportCap: nativeLowSourceTileCandidate.hiddenSupportCap,
         },
         learnedTransferBreakEven: nativeLowBreakEvenBudgetLedger,
+        coarseFrontSparseDetailBand: nativeLowCoarseFrontSparseDetailBand,
         simulationSteppingReceipt,
         currentSourceFrameConsumption,
         stalePredictionRejection,
@@ -13441,6 +13488,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeLowMaterializationProfile,
         nativeLowProductionStageLedger,
         nativeLowBreakEvenBudgetLedger,
+        nativeLowCoarseFrontSparseDetailBand,
         nativeLowFrontTopologyAblation,
         frontTopologyAblationEnabled,
         frontTopologyAblatedSplatCandidateCount,
