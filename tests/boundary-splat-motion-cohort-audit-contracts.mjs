@@ -36,6 +36,95 @@ assert.equal(
   'function',
   'transport contract must expose cohort-specific prediction/control evaluation',
 );
+assert.equal(
+  typeof cohortAudit.validateRecurrentExposurePair,
+  'function',
+  'motion witness must expose a recurrent-exposure pair validator',
+);
+assert.equal(
+  typeof cohortAudit.writeRecurrentExposureWitness,
+  'function',
+  'motion witness must expose a paired recurrent-exposure writer',
+);
+assert.equal(
+  typeof cohortAudit.validateRecurrentExposureWitness,
+  'function',
+  'motion witness must validate paired recurrent-exposure output before handoff',
+);
+
+const exposurePairFixture = {
+  seedReport: {
+    status: 'completed',
+    route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+    manifest: { sha256: 'a'.repeat(64) },
+    model: { sha256: 'b'.repeat(64) },
+    modelTrainingManifest: { sha256: 'c'.repeat(64) },
+    destinationStateModel: { sha256: 'd'.repeat(64) },
+    supportBudget: { mode: 'training-episode-envelope' },
+    holdoutMetrics: [{ step: 1 }, { step: 2 }],
+  },
+  exposureReport: {
+    status: 'completed',
+    route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+    manifest: { sha256: 'a'.repeat(64) },
+    model: { sha256: 'e'.repeat(64) },
+    modelTrainingManifest: { sha256: 'c'.repeat(64) },
+    destinationStateModel: { sha256: 'd'.repeat(64) },
+    supportBudget: { mode: 'training-episode-envelope' },
+    holdoutMetrics: [{ step: 1 }, { step: 2 }],
+  },
+  seedPredictions: {
+    temporal: { controlledStepDeltaMs: 160, heldoutReferenceFrameIds: ['frame-0', 'frame-1', 'frame-2'] },
+    frames: [{ referenceFrameId: 'frame-0' }, { referenceFrameId: 'frame-1' }, { referenceFrameId: 'frame-2' }],
+  },
+  exposurePredictions: {
+    temporal: { controlledStepDeltaMs: 160, heldoutReferenceFrameIds: ['frame-0', 'frame-1', 'frame-2'] },
+    frames: [{ referenceFrameId: 'frame-0' }, { referenceFrameId: 'frame-1' }, { referenceFrameId: 'frame-2' }],
+  },
+  exposureModel: {
+    training: {
+      initializationAuthority: 'frozen-seed-model-weights-v0',
+      rolloutSeedModel: {
+        authority: 'byte-hash-bound-frozen-eulerian-rollout-seed-v0',
+        sha256: 'b'.repeat(64),
+        trainingManifestSha256: 'c'.repeat(64),
+      },
+      rolloutExposure: {
+        authority: 'exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0',
+        exactPairCount: 7,
+        recurrentPairCount: 5,
+        sampleCap: null,
+      },
+    },
+  },
+  seedReceipt: {
+    status: 'done', exit_code: 0, failure_phase: null,
+    effective_route: 'python transport --support-budget-mode training-episode-envelope',
+  },
+  exposureReceipt: {
+    status: 'done', exit_code: 0, failure_phase: null,
+    effective_route: 'python transport --support-budget-mode training-episode-envelope',
+  },
+};
+assert.doesNotThrow(() => cohortAudit.validateRecurrentExposurePair(exposurePairFixture));
+for (const [label, mutate, pattern] of [
+  ['same model', value => { value.exposureReport.model.sha256 = value.seedReport.model.sha256; }, /distinct model/i],
+  ['wrong seed ancestry', value => { value.exposureModel.training.rolloutSeedModel.sha256 = 'f'.repeat(64); }, /seed ancestry/i],
+  ['mismatched corpus', value => { value.exposureReport.manifest.sha256 = 'f'.repeat(64); }, /corpus identity/i],
+  ['mismatched cadence', value => { value.exposurePredictions.temporal.controlledStepDeltaMs = 320; }, /temporal identity/i],
+  ['mismatched state model', value => { value.exposureReport.destinationStateModel.sha256 = 'f'.repeat(64); }, /destination state model/i],
+  ['wrong support mode', value => { value.exposureReport.supportBudget.mode = 'one-step-ratio'; }, /support budget mode/i],
+  ['fallback backend', value => { value.exposureReport.route.fallbackReason = 'cpu'; }, /MLX GPU/i],
+  ['duplicate route flag', value => { value.exposureReceipt.effective_route += ' --support-budget-mode one-step-ratio'; }, /route identity/i],
+]) {
+  const hostile = structuredClone(exposurePairFixture);
+  mutate(hostile);
+  assert.throws(
+    () => cohortAudit.validateRecurrentExposurePair(hostile),
+    pattern,
+    `${label} must fail before paired raster evidence`,
+  );
+}
 
 const source = [
   site([0, 0, 0], 0),
@@ -312,6 +401,64 @@ assert.doesNotThrow(
   () => cohortAudit.validateMotionCohortWitness(generatedBoundaryWitness),
   'the writer-generated claim boundary must satisfy its own validator',
 );
+const recurrentExposureWitness = structuredClone(envelopeComparisonWitness);
+recurrentExposureWitness.configuration = {
+  authority: 'frozen-seed-vs-recurrent-exposure-physical-energy-v0',
+  witnessMode: 'raw-recurrent-exposure-comparison',
+};
+recurrentExposureWitness.source = {
+  seedAudit: { sha256: '0'.repeat(64) },
+  exposureAudit: { sha256: '1'.repeat(64) },
+  manifest: { sha256: 'b'.repeat(64) },
+  seed: {
+    predictions: { sha256: 'c'.repeat(64) },
+    trainingReport: { sha256: 'd'.repeat(64) },
+    greenroomReceipt: envelopeComparisonWitness.source.envelope.greenroomReceipt,
+    backend: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+  },
+  exposure: {
+    predictions: { sha256: 'e'.repeat(64) },
+    trainingReport: { sha256: 'f'.repeat(64) },
+    greenroomReceipt: {
+      ...envelopeComparisonWitness.source.envelope.greenroomReceipt,
+      sha256: '2'.repeat(64),
+      jobId: 'exposure-job',
+    },
+    backend: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+  },
+  sharedIdentity: {
+    seedModelSha256: '3'.repeat(64),
+    exposureModelSha256: '4'.repeat(64),
+    destinationStateModelSha256: '5'.repeat(64),
+    trainingManifestSha256: '6'.repeat(64),
+    exposureAuthority: 'exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0',
+    sampleCap: null,
+  },
+};
+recurrentExposureWitness.roles = {
+  reference: 'exact-heldout-full-splat-state-v0',
+  control: 'frozen-current-full-splat-state-v0',
+  seed: 'frozen-seed-learned-recurrent-full-splat-state-v0',
+  exposure: 'recurrent-exposure-learned-recurrent-full-splat-state-v0',
+};
+recurrentExposureWitness.roleEvidence = {
+  reference: envelopeComparisonWitness.roleEvidence.reference,
+  control: envelopeComparisonWitness.roleEvidence.control,
+  seed: envelopeComparisonWitness.roleEvidence.legacy,
+  exposure: envelopeComparisonWitness.roleEvidence.envelope,
+};
+delete recurrentExposureWitness.supportBudgetComparison;
+recurrentExposureWitness.claimBoundary = 'Offline same-raster diagnostic only; it does not establish analytical-raymarch image error, authorize runtime composition, prove cross-basin generalization, or establish long-horizon visual preservation.';
+assert.doesNotThrow(() => cohortAudit.validateRecurrentExposureWitness(recurrentExposureWitness));
+const sameExposureModelWitness = structuredClone(recurrentExposureWitness);
+sameExposureModelWitness.source.sharedIdentity.exposureModelSha256 = sameExposureModelWitness.source.sharedIdentity.seedModelSha256;
+assert.throws(() => cohortAudit.validateRecurrentExposureWitness(sameExposureModelWitness), /distinct model/i);
+const movingExposureControl = structuredClone(recurrentExposureWitness);
+movingExposureControl.roleEvidence.control[1].sha256 = 'f'.repeat(64);
+assert.throws(() => cohortAudit.validateRecurrentExposureWitness(movingExposureControl), /control frame identity/i);
+const staticExposureRole = structuredClone(recurrentExposureWitness);
+staticExposureRole.roleEvidence.exposure[1].sha256 = staticExposureRole.roleEvidence.exposure[0].sha256;
+assert.throws(() => cohortAudit.validateRecurrentExposureWitness(staticExposureRole), /static rather than moving/i);
 const runtimeAuthorizingBoundary = structuredClone(envelopeComparisonWitness);
 runtimeAuthorizingBoundary.claimBoundary = 'Offline diagnostic only; this grants runtime authorization for composition.';
 assert.throws(

@@ -20,6 +20,7 @@ const PREDICTION_SPLAT_AUTHORITY = 'learned-local-grid-transport-plus-residual-c
 const WITNESS_SCHEMA = 'kaminos-boundary-splat-motion-cohort-witness-v0';
 const RECURRENT_ENVELOPE_AUTHORITY = 'legacy-vs-training-episode-envelope-recurrence-v0';
 const PHYSICAL_ENERGY_ENVELOPE_AUTHORITY = 'legacy-vs-training-episode-envelope-physical-energy-v1';
+const RECURRENT_EXPOSURE_AUTHORITY = 'frozen-seed-vs-recurrent-exposure-physical-energy-v0';
 const PHYSICAL_SPLAT_ATTRIBUTE_ORDER = Object.freeze([
   'splat.support',
   'splat.color.r', 'splat.color.g', 'splat.color.b',
@@ -76,6 +77,79 @@ function routeHasExactOption(route, option, expectedValue) {
     else if (tokens[index].startsWith(`${option}=`)) values.push(tokens[index].slice(option.length + 1));
   }
   return values.length === 1 && values[0] === expectedValue;
+}
+
+export function validateRecurrentExposurePair(pair) {
+  const {
+    seedReport, exposureReport, seedPredictions, exposurePredictions,
+    exposureModel, seedReceipt, exposureReceipt,
+  } = pair ?? {};
+  for (const [label, report] of [['seed', seedReport], ['recurrent exposure', exposureReport]]) {
+    if (report?.status !== 'completed') throw new Error(`${label} report status mismatch`);
+    if (
+      report.route?.backend !== 'mlx'
+      || !/^Device\(gpu,\s*\d+\)$/i.test(String(report.route?.device))
+      || report.route?.fallbackReason !== null
+    ) throw new Error(`${label} report requires completed MLX GPU identity with null fallback`);
+    if (report.supportBudget?.mode !== 'training-episode-envelope') {
+      throw new Error(`${label} support budget mode mismatch`);
+    }
+    if (!isSha256(report.manifest?.sha256) || !isSha256(report.model?.sha256)) {
+      throw new Error(`${label} corpus/model identity is malformed`);
+    }
+    if (
+      !Array.isArray(report.holdoutMetrics)
+      || report.holdoutMetrics.length === 0
+      || report.holdoutMetrics.some((row, index) => row?.step !== index + 1)
+    ) throw new Error(`${label} holdout step identity mismatch`);
+  }
+  if (seedReport.model.sha256 === exposureReport.model.sha256) {
+    throw new Error('recurrent exposure comparison requires distinct model identities');
+  }
+  if (seedReport.manifest.sha256 !== exposureReport.manifest.sha256) {
+    throw new Error('recurrent exposure corpus identity mismatch');
+  }
+  if (
+    !isSha256(seedReport.modelTrainingManifest?.sha256)
+    || seedReport.modelTrainingManifest.sha256 !== exposureReport.modelTrainingManifest?.sha256
+  ) throw new Error('recurrent exposure training corpus identity mismatch');
+  if (
+    !isSha256(seedReport.destinationStateModel?.sha256)
+    || seedReport.destinationStateModel.sha256 !== exposureReport.destinationStateModel?.sha256
+  ) throw new Error('recurrent exposure destination state model identity mismatch');
+  const seedTemporal = seedPredictions?.temporal;
+  const exposureTemporal = exposurePredictions?.temporal;
+  if (
+    !Number.isFinite(seedTemporal?.controlledStepDeltaMs)
+    || seedTemporal.controlledStepDeltaMs <= 0
+    || JSON.stringify(seedTemporal) !== JSON.stringify(exposureTemporal)
+    || !Array.isArray(seedPredictions?.frames)
+    || seedPredictions.frames.length !== exposurePredictions?.frames?.length
+    || seedPredictions.frames.some((frame, index) => frame?.referenceFrameId !== exposurePredictions.frames[index]?.referenceFrameId)
+    || seedPredictions.frames.length !== seedReport.holdoutMetrics.length + 1
+    || exposurePredictions.frames.length !== exposureReport.holdoutMetrics.length + 1
+  ) throw new Error('recurrent exposure temporal identity mismatch');
+  const training = exposureModel?.training;
+  if (
+    training?.initializationAuthority !== 'frozen-seed-model-weights-v0'
+    || training.rolloutSeedModel?.authority !== 'byte-hash-bound-frozen-eulerian-rollout-seed-v0'
+    || training.rolloutSeedModel.sha256 !== seedReport.model.sha256
+    || training.rolloutSeedModel.trainingManifestSha256 !== seedReport.modelTrainingManifest.sha256
+    || training.rolloutExposure?.authority !== 'exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0'
+    || !Number.isInteger(training.rolloutExposure.exactPairCount)
+    || training.rolloutExposure.exactPairCount <= 0
+    || !Number.isInteger(training.rolloutExposure.recurrentPairCount)
+    || training.rolloutExposure.recurrentPairCount <= 0
+    || training.rolloutExposure.sampleCap !== null
+  ) throw new Error('recurrent exposure seed ancestry or exposure identity mismatch');
+  for (const [label, receipt] of [['seed', seedReceipt], ['recurrent exposure', exposureReceipt]]) {
+    if (
+      receipt?.status !== 'done'
+      || receipt.exit_code !== 0
+      || receipt.failure_phase !== null
+      || !routeHasExactOption(receipt.effective_route, '--support-budget-mode', 'training-episode-envelope')
+    ) throw new Error(`${label} Greenroom route identity mismatch`);
+  }
 }
 
 function lossContractIdentity(loss, { final = false, requireSplatAttributeOrder = false } = {}) {
@@ -419,6 +493,105 @@ export function validateMotionCohortWitness(witness) {
     || debugProbe.fps !== playback.effectiveFps
     || !Number.isFinite(debugProbe.duration) || debugProbe.duration <= 0
   ) throw new Error('motion cohort witness flow debug artifact mismatch');
+}
+
+export function validateRecurrentExposureWitness(witness) {
+  if (
+    witness?.schema !== WITNESS_SCHEMA
+    || witness.status !== 'completed'
+    || witness.configuration?.authority !== RECURRENT_EXPOSURE_AUTHORITY
+    || witness.configuration.witnessMode !== 'raw-recurrent-exposure-comparison'
+  ) throw new Error('recurrent exposure witness schema/status/configuration mismatch');
+  const playback = witness.playback;
+  if (
+    !Number.isInteger(playback?.frameCount) || playback.frameCount <= 0
+    || !Number.isFinite(playback.effectiveFps) || playback.effectiveFps <= 0
+    || !Number.isFinite(playback.encodedDurationSeconds) || playback.encodedDurationSeconds <= 0
+    || playback.loops !== false
+  ) throw new Error('recurrent exposure witness playback mismatch');
+  const expectedRoles = {
+    reference: 'exact-heldout-full-splat-state-v0',
+    control: 'frozen-current-full-splat-state-v0',
+    seed: 'frozen-seed-learned-recurrent-full-splat-state-v0',
+    exposure: 'recurrent-exposure-learned-recurrent-full-splat-state-v0',
+  };
+  if (JSON.stringify(witness.roles) !== JSON.stringify(expectedRoles)) {
+    throw new Error('recurrent exposure witness role contract mismatch');
+  }
+  for (const role of Object.keys(expectedRoles)) {
+    const frames = witness.roleEvidence?.[role];
+    if (
+      !Array.isArray(frames)
+      || frames.length !== playback.frameCount
+      || frames.some((frame, index) => frame?.step !== index + 1 || !isSha256(frame.sha256))
+    ) throw new Error(`recurrent exposure ${role} evidence mismatch`);
+  }
+  const controlHashes = witness.roleEvidence.control.map(frame => frame.sha256);
+  if (
+    new Set(controlHashes).size !== 1
+    || witness.controlFrameIdentity?.authority !== 'pixel-identical-frozen-control-v0'
+    || witness.controlFrameIdentity.frameCount !== controlHashes.length
+    || witness.controlFrameIdentity.uniqueFrameCount !== 1
+    || witness.controlFrameIdentity.sha256 !== controlHashes[0]
+  ) throw new Error('recurrent exposure control frame identity mismatch');
+  for (const role of ['seed', 'exposure']) {
+    if (new Set(witness.roleEvidence[role].map(frame => frame.sha256)).size <= 1) {
+      throw new Error(`recurrent exposure ${role} is static rather than moving`);
+    }
+  }
+  const source = witness.source;
+  const shared = source?.sharedIdentity;
+  if (
+    !isSha256(source?.manifest?.sha256)
+    || !isSha256(source?.seedAudit?.sha256)
+    || !isSha256(source?.exposureAudit?.sha256)
+    || !isSha256(shared?.seedModelSha256)
+    || !isSha256(shared?.exposureModelSha256)
+    || shared.seedModelSha256 === shared.exposureModelSha256
+    || !isSha256(shared?.destinationStateModelSha256)
+    || !isSha256(shared?.trainingManifestSha256)
+    || shared.exposureAuthority !== 'exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0'
+    || shared.sampleCap !== null
+  ) throw new Error('recurrent exposure shared identity requires distinct model identities');
+  for (const role of ['seed', 'exposure']) {
+    const identity = source?.[role];
+    const receipt = identity?.greenroomReceipt;
+    if (
+      !isSha256(identity?.predictions?.sha256)
+      || !isSha256(identity?.trainingReport?.sha256)
+      || !isSha256(receipt?.sha256)
+      || typeof receipt.jobId !== 'string' || !receipt.jobId
+      || receipt.status !== 'done' || receipt.exitCode !== 0
+      || !routeHasExactOption(receipt.effectiveRoute, '--support-budget-mode', 'training-episode-envelope')
+      || identity.backend?.backend !== 'mlx'
+      || !/^Device\(gpu,\s*\d+\)$/i.test(String(identity.backend?.device))
+      || identity.backend?.fallbackReason !== null
+    ) throw new Error(`recurrent exposure ${role} route identity mismatch`);
+  }
+  const artifact = witness.artifact;
+  const probe = artifact?.probe;
+  const debug = witness.partialFlowDebug;
+  const debugArtifact = debug?.artifact;
+  const debugProbe = debugArtifact?.probe;
+  if (
+    !isSha256(artifact?.sha256) || !Number.isInteger(artifact.bytes) || artifact.bytes <= 0
+    || probe?.frameCount !== playback.frameCount || probe.width !== 1280
+    || probe.fps !== playback.effectiveFps || !Number.isFinite(probe.duration) || probe.duration <= 0
+  ) throw new Error('recurrent exposure beauty artifact mismatch');
+  if (
+    debug?.authority !== 'display-only-motion-cohort-debug-mix-v0'
+    || debug.requestedGain !== 0.625 || debug.effectiveGain !== 0.625 || debug.stateMutation !== false
+    || !isSha256(debugArtifact?.sha256) || !Number.isInteger(debugArtifact.bytes) || debugArtifact.bytes <= 0
+    || debugProbe?.frameCount !== playback.frameCount || debugProbe.width !== probe.width
+    || debugProbe.height !== probe.height || debugProbe.fps !== playback.effectiveFps
+    || !Number.isFinite(debugProbe.duration) || debugProbe.duration <= 0
+  ) throw new Error('recurrent exposure flow debug artifact mismatch');
+  if (
+    typeof witness.claimBoundary !== 'string'
+    || !/offline/i.test(witness.claimBoundary)
+    || !/does not[^.]*authorize runtime/i.test(witness.claimBoundary)
+    || !/long-horizon visual preservation/i.test(witness.claimBoundary)
+  ) throw new Error('recurrent exposure claim boundary mismatch');
 }
 
 function run(command, args, label) {
@@ -1456,6 +1629,234 @@ export async function writeRecurrentEnvelopeWitness(
   }
 }
 
+function recurrentExposureGuide(report) {
+  const delta = report.metrics.comparison;
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Recurrent Exposure Phase Witness</title>
+<style>body{margin:0;background:#0b0c0e;color:#eef0f2;font:15px/1.45 system-ui,sans-serif}main{max-width:1320px;margin:auto;padding:24px}h1,h2{letter-spacing:0}section{margin:24px 0}video{display:block;width:100%;background:#000;border:1px solid #30343a}code{color:#9dd7ff}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:7px;border-bottom:1px solid #30343a}.roles strong{display:inline-block;min-width:170px}</style></head>
+<body><main><h1>Frozen Seed vs Recurrent Exposure</h1>
+<p>One exact held-out basin, one camera, 160 ms simulator cadence, 63 discrete future states, and 10.08 seconds of non-looping playback. This compares occupancy models only: both learned roles use the same training-episode support envelope and the same protected physical destination-state model.</p>
+<section class="roles"><h2>Role Context</h2><p><strong>REFERENCE</strong> exact held-out simulator splat state at each future step.</p><p><strong>FROZEN</strong> frame-zero splat state repeated pixel-identically; it must not move.</p><p><strong>SEED</strong> frozen exact-pair occupancy model under recurrent reuse.</p><p><strong>EXPOSURE</strong> successor initialized from SEED and trained on seven exact plus five frozen-seed recurrent pairs.</p></section>
+<section><h2>Raw Product View</h2><p>Every splat keeps its original opacity. No target-derived cohort mask is applied. Compare support continuity, flame-sheet topology, low-frequency contraction, bright saturation, and whether EXPOSURE remains temporally distinct from SEED.</p><video controls muted playsinline src="recurrent-exposure-comparison.mp4"></video></section>
+<section><h2>Additive Flow Debug, Gain 0.625</h2><p>Display-only overlay over the same role states and cadence. Green: stable Q1/Q2; yellow: Q3; red: Q4; blue: transported; magenta: birth; orange: unmatched/death. It does not mutate prediction or raster state.</p><video controls muted playsinline src="recurrent-exposure-debug-comparison.mp4"></video></section>
+<section><h2>Measured Support Result</h2><table><tr><th>Improved steps</th><td>${delta.improvedStepCount}/${delta.evaluatedStepCount}</td></tr><tr><th>Mean relative IoU delta</th><td>${(100 * delta.meanRelativeIoUDelta).toFixed(3)}%</td></tr><tr><th>Step 1 relative delta</th><td>${(100 * delta.stepOneRelativeIoUDelta).toFixed(3)}%</td></tr><tr><th>Best step</th><td>${delta.bestStep.step} (${(100 * delta.bestStep.relativeIoUDelta).toFixed(3)}%)</td></tr></table></section>
+<section><h2>Evidence Identity</h2><p>Held-out corpus <code>${report.source.manifest.sha256}</code><br>SEED model <code>${report.source.sharedIdentity.seedModelSha256}</code><br>EXPOSURE model <code>${report.source.sharedIdentity.exposureModelSha256}</code><br>Physical state model <code>${report.source.sharedIdentity.destinationStateModelSha256}</code></p></section>
+<section><h2>Claim Boundary</h2><p>${report.claimBoundary}</p></section></main></body></html>`;
+}
+
+function recurrentExposureComparison(seedReport, exposureReport) {
+  const rows = exposureReport.holdoutMetrics.map((row, index) => {
+    const seed = seedReport.holdoutMetrics[index];
+    const delta = row.predictionIoU - seed.predictionIoU;
+    return {
+      step: row.step,
+      seedIoU: seed.predictionIoU,
+      exposureIoU: row.predictionIoU,
+      absoluteIoUDelta: delta,
+      relativeIoUDelta: row.predictionIoU / seed.predictionIoU - 1,
+    };
+  });
+  const bestStep = [...rows].sort((left, right) => right.relativeIoUDelta - left.relativeIoUDelta)[0];
+  return {
+    authority: 'same-corpus-stepwise-recurrent-exposure-vs-frozen-seed-support-iou-v0',
+    evaluatedStepCount: rows.length,
+    improvedStepCount: rows.filter(row => row.absoluteIoUDelta > 0).length,
+    meanRelativeIoUDelta: rows.reduce((sum, row) => sum + row.relativeIoUDelta, 0) / rows.length,
+    stepOneRelativeIoUDelta: rows[0].relativeIoUDelta,
+    bestStep,
+    steps: rows,
+  };
+}
+
+export async function writeRecurrentExposureWitness(
+  manifestPathValue, seedPredictionsPathValue, exposurePredictionsPathValue, options = {},
+) {
+  const manifestPath = resolve(manifestPathValue);
+  const seedPredictionsPath = resolve(seedPredictionsPathValue);
+  const exposurePredictionsPath = resolve(exposurePredictionsPathValue);
+  const seedTrainingReportPath = resolve(String(options.seedTrainingReport));
+  const exposureTrainingReportPath = resolve(String(options.exposureTrainingReport));
+  const seedReceiptPath = resolve(String(options.seedReceipt));
+  const exposureReceiptPath = resolve(String(options.exposureReceipt));
+  const outDir = resolve(options.outDir ?? '/tmp/kaminos-recurrent-exposure-witness');
+  const reportPath = resolve(options.report ?? outDir, options.report ? '' : 'recurrent-exposure-witness.json');
+  const width = Math.max(32, Math.floor(Number(options.width ?? 320)));
+  const height = Math.max(32, Math.floor(Number(options.height ?? 240)));
+  const ffmpeg = String(options.ffmpeg ?? 'ffmpeg');
+  const ffprobe = String(options.ffprobe ?? 'ffprobe');
+  let failurePhase = 'argument-validation';
+  let lastTrustworthyEvidence = {
+    manifestPath, seedPredictionsPath, exposurePredictionsPath,
+    seedTrainingReportPath, exposureTrainingReportPath, seedReceiptPath, exposureReceiptPath, outDir,
+  };
+  await mkdir(outDir, { recursive: true });
+  try {
+    if ([options.seedTrainingReport, options.exposureTrainingReport, options.seedReceipt, options.exposureReceipt].some(value => typeof value !== 'string' || !value)) {
+      throw new Error('recurrent exposure witness requires both training reports and Greenroom receipts');
+    }
+    failurePhase = 'source-validation';
+    const bytes = await Promise.all([
+      readFile(manifestPath), readFile(seedPredictionsPath), readFile(exposurePredictionsPath),
+      readFile(seedTrainingReportPath), readFile(exposureTrainingReportPath),
+      readFile(seedReceiptPath), readFile(exposureReceiptPath),
+    ]);
+    const [manifestBytes, seedPredictionBytes, exposurePredictionBytes, seedReportBytes, exposureReportBytes, seedReceiptBytes, exposureReceiptBytes] = bytes;
+    const manifestSha256 = sha256(manifestBytes);
+    const seedPredictionsSha256 = sha256(seedPredictionBytes);
+    const exposurePredictionsSha256 = sha256(exposurePredictionBytes);
+    const seedPredictions = JSON.parse(seedPredictionBytes.toString('utf8'));
+    const exposurePredictions = JSON.parse(exposurePredictionBytes.toString('utf8'));
+    const seedReport = JSON.parse(seedReportBytes.toString('utf8'));
+    const exposureReport = JSON.parse(exposureReportBytes.toString('utf8'));
+    const seedReceipt = JSON.parse(seedReceiptBytes.toString('utf8'));
+    const exposureReceipt = JSON.parse(exposureReceiptBytes.toString('utf8'));
+    if (
+      seedReport.manifest?.sha256 !== manifestSha256
+      || exposureReport.manifest?.sha256 !== manifestSha256
+      || seedReport.predictions?.sha256 !== seedPredictionsSha256
+      || exposureReport.predictions?.sha256 !== exposurePredictionsSha256
+      || seedPredictions.model?.sha256 !== seedReport.model?.sha256
+      || exposurePredictions.model?.sha256 !== exposureReport.model?.sha256
+    ) throw new Error('recurrent exposure report/prediction identity mismatch');
+    const exposureModelPath = resolve(String(exposureReport.model.path));
+    const exposureModelBytes = await readFile(exposureModelPath);
+    if (sha256(exposureModelBytes) !== exposureReport.model.sha256) throw new Error('recurrent exposure model byte/hash mismatch');
+    const exposureModel = JSON.parse(exposureModelBytes.toString('utf8'));
+    validateRecurrentExposurePair({
+      seedReport, exposureReport, seedPredictions, exposurePredictions,
+      exposureModel, seedReceipt, exposureReceipt,
+    });
+    const frameCount = seedReport.holdoutMetrics.length;
+    const cadenceMs = seedPredictions.temporal.controlledStepDeltaMs;
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      manifestSha256, seedPredictionsSha256, exposurePredictionsSha256,
+      seedModelSha256: seedReport.model.sha256,
+      exposureModelSha256: exposureReport.model.sha256,
+      destinationStateModelSha256: seedReport.destinationStateModel.sha256,
+      frameCount, controlledStepDeltaMs: cadenceMs,
+    };
+    failurePhase = 'nested-audit';
+    const seedDir = resolve(outDir, 'seed-source');
+    const exposureDir = resolve(outDir, 'exposure-source');
+    const seedAudit = await writeMotionCohortAudit(manifestPath, seedPredictionsPath, { outDir: seedDir });
+    const exposureAudit = await writeMotionCohortAudit(manifestPath, exposurePredictionsPath, { outDir: exposureDir });
+    failurePhase = 'nested-raster';
+    const witnessOptions = {
+      width, height, staticAttenuation: 1, unmatchedAttenuation: 1,
+      partialFlowDebugGain: 0.625, witnessMode: 'raw-product-view', ffmpeg, ffprobe,
+    };
+    const seedWitness = await writeMotionCohortWitness(
+      manifestPath, seedPredictionsPath, resolve(seedDir, 'motion-cohort-audit.json'),
+      { ...witnessOptions, outDir: seedDir, predictionLabel: 'SEED' },
+    );
+    const exposureWitness = await writeMotionCohortWitness(
+      manifestPath, exposurePredictionsPath, resolve(exposureDir, 'motion-cohort-audit.json'),
+      { ...witnessOptions, outDir: exposureDir, predictionLabel: 'EXPOSURE' },
+    );
+    for (const role of ['reference', 'control']) {
+      if (
+        JSON.stringify(seedWitness.roleEvidence[role].map(frame => frame.sha256))
+        !== JSON.stringify(exposureWitness.roleEvidence[role].map(frame => frame.sha256))
+      ) throw new Error(`recurrent exposure nested ${role} raster identity mismatch`);
+    }
+    failurePhase = 'four-role-encode';
+    const roleSources = [
+      resolve(seedDir, 'beauty', 'reference'), resolve(seedDir, 'beauty', 'control'),
+      resolve(seedDir, 'beauty', 'predicted'), resolve(exposureDir, 'beauty', 'predicted'),
+    ];
+    const debugSources = [
+      resolve(seedDir, 'debug', 'reference'), resolve(seedDir, 'debug', 'control'),
+      resolve(seedDir, 'debug', 'predicted'), resolve(exposureDir, 'debug', 'predicted'),
+    ];
+    const fps = 1000 / cadenceMs;
+    const artifact = await encodeComparison(
+      roleSources, resolve(outDir, 'recurrent-exposure-comparison.mp4'), fps, frameCount, ffmpeg, ffprobe,
+    );
+    const debugArtifact = await encodeComparison(
+      debugSources, resolve(outDir, 'recurrent-exposure-debug-comparison.mp4'), fps, frameCount, ffmpeg, ffprobe,
+    );
+    const stepped = frames => frames.map((frame, index) => ({ step: index + 1, ...frame }));
+    const receiptIdentity = (path, value, rawBytes) => ({
+      path, bytes: rawBytes.byteLength, sha256: sha256(rawBytes), jobId: value.job_id,
+      status: value.status, exitCode: value.exit_code, effectiveRoute: value.effective_route,
+      startedAt: value.started_at, finishedAt: value.finished_at,
+    });
+    failurePhase = 'report-write';
+    const report = {
+      schema: WITNESS_SCHEMA,
+      status: 'completed',
+      configuration: { authority: RECURRENT_EXPOSURE_AUTHORITY, witnessMode: 'raw-recurrent-exposure-comparison' },
+      source: {
+        seedAudit: { path: resolve(seedDir, 'motion-cohort-audit.json'), sha256: sha256(await readFile(resolve(seedDir, 'motion-cohort-audit.json'))) },
+        exposureAudit: { path: resolve(exposureDir, 'motion-cohort-audit.json'), sha256: sha256(await readFile(resolve(exposureDir, 'motion-cohort-audit.json'))) },
+        manifest: { path: manifestPath, bytes: manifestBytes.byteLength, sha256: manifestSha256 },
+        seed: {
+          predictions: { path: seedPredictionsPath, bytes: seedPredictionBytes.byteLength, sha256: seedPredictionsSha256 },
+          trainingReport: { path: seedTrainingReportPath, bytes: seedReportBytes.byteLength, sha256: sha256(seedReportBytes) },
+          greenroomReceipt: receiptIdentity(seedReceiptPath, seedReceipt, seedReceiptBytes), backend: seedReport.route,
+        },
+        exposure: {
+          predictions: { path: exposurePredictionsPath, bytes: exposurePredictionBytes.byteLength, sha256: exposurePredictionsSha256 },
+          trainingReport: { path: exposureTrainingReportPath, bytes: exposureReportBytes.byteLength, sha256: sha256(exposureReportBytes) },
+          greenroomReceipt: receiptIdentity(exposureReceiptPath, exposureReceipt, exposureReceiptBytes), backend: exposureReport.route,
+        },
+        sharedIdentity: {
+          seedModelSha256: seedReport.model.sha256,
+          exposureModelSha256: exposureReport.model.sha256,
+          destinationStateModelSha256: seedReport.destinationStateModel.sha256,
+          trainingManifestSha256: seedReport.modelTrainingManifest.sha256,
+          exposureAuthority: exposureModel.training.rolloutExposure.authority,
+          sampleCap: exposureModel.training.rolloutExposure.sampleCap,
+        },
+      },
+      playback: {
+        authority: 'finite-complete-heldout-recurrent-exposure-comparison-v0', frameCount,
+        controlledStepDeltaMs: cadenceMs, simulatorDurationSeconds: frameCount * cadenceMs / 1000,
+        requestedFps: fps, effectiveFps: artifact.probe.fps,
+        encodedDurationSeconds: artifact.probe.duration, loops: false,
+      },
+      emphasis: {
+        authority: 'raw-product-view-no-cohort-attenuation-v0', staticCohorts: [], motionCohorts: [],
+        staticAttenuation: 1, unmatchedAttenuation: 1,
+        thresholdSelection: 'none; every full splat retains original opacity',
+      },
+      roles: {
+        reference: 'exact-heldout-full-splat-state-v0', control: 'frozen-current-full-splat-state-v0',
+        seed: 'frozen-seed-learned-recurrent-full-splat-state-v0',
+        exposure: 'recurrent-exposure-learned-recurrent-full-splat-state-v0',
+      },
+      roleEvidence: {
+        reference: stepped(seedWitness.roleEvidence.reference), control: stepped(seedWitness.roleEvidence.control),
+        seed: stepped(seedWitness.roleEvidence.predicted), exposure: stepped(exposureWitness.roleEvidence.predicted),
+      },
+      controlFrameIdentity: seedWitness.controlFrameIdentity,
+      artifact,
+      partialFlowDebug: {
+        authority: 'display-only-motion-cohort-debug-mix-v0', requestedGain: 0.625,
+        effectiveGain: 0.625, stateMutation: false, artifact: debugArtifact,
+      },
+      metrics: {
+        authority: 'accepted-training-report-support-and-same-corpus-iou-v0',
+        summary: { seed: recurrentSummary(seedReport), exposure: recurrentSummary(exposureReport) },
+        comparison: recurrentExposureComparison(seedReport, exposureReport),
+      },
+      claimBoundary: 'Offline same-raster diagnostic only; it does not establish analytical-raymarch image error, authorize runtime composition, prove cross-basin generalization, or establish long-horizon visual preservation.',
+    };
+    validateRecurrentExposureWitness(report);
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+    await writeFile(resolve(outDir, 'inspection-guide.html'), recurrentExposureGuide(report));
+    return report;
+  } catch (error) {
+    const failure = {
+      schema: WITNESS_SCHEMA, status: 'failed', failurePhase,
+      error: error?.stack || error?.message || String(error), lastTrustworthyEvidence,
+    };
+    await writeFile(reportPath, `${JSON.stringify(failure, null, 2)}\n`);
+    throw error;
+  }
+}
+
 if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href) {
   const args = parseArgs(process.argv.slice(2));
   if (!args.get('--manifest') || !args.get('--predictions')) {
@@ -1463,7 +1864,22 @@ if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.arg
     process.exitCode = 2;
   } else {
     try {
-      if (args.get('--envelope-predictions')) {
+      if (args.get('--exposure-predictions')) {
+        const report = await writeRecurrentExposureWitness(
+          args.get('--manifest'), args.get('--predictions'), args.get('--exposure-predictions'), {
+            seedTrainingReport: args.get('--seed-training-report'),
+            exposureTrainingReport: args.get('--exposure-training-report'),
+            seedReceipt: args.get('--seed-receipt'), exposureReceipt: args.get('--exposure-receipt'),
+            outDir: args.get('--out-dir'), report: args.get('--report'),
+            width: args.get('--width'), height: args.get('--height'),
+            ffmpeg: args.get('--ffmpeg'), ffprobe: args.get('--ffprobe'),
+          },
+        );
+        console.log(JSON.stringify({
+          schema: report.schema, status: report.status, frames: report.playback.frameCount,
+          roles: Object.keys(report.roles), comparison: report.metrics.comparison,
+        }, null, 2));
+      } else if (args.get('--envelope-predictions')) {
         const report = await writeRecurrentEnvelopeWitness(
           args.get('--manifest'), args.get('--predictions'), args.get('--envelope-predictions'), {
             legacyTrainingReport: args.get('--legacy-training-report'),

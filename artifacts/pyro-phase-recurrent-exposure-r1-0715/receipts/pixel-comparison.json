@@ -1,0 +1,35 @@
+{
+  "schema": "kaminos-recurrent-exposure-pixel-comparison-v0",
+  "status": "completed",
+  "authority": "label-excluded-same-encoded-raster-psnr-v0",
+  "sourceVideoSha256": "06d455888ea6dc3380b6ad9becdfa778b61a9fcc1e44aadb6f1edb3a88c45455",
+  "measurement": {
+    "referenceCrop": "x=0,y=12,width=320,height=228",
+    "seedCrop": "x=640,y=12,width=320,height=228",
+    "exposureCrop": "x=960,y=12,width=320,height=228",
+    "labelRowsExcluded": 12,
+    "frameCount": 63,
+    "improvedStepCount": 59,
+    "worsenedOrEqualStepCount": 4,
+    "meanExposureMinusSeedDb": 0.21920634920634907,
+    "bestStep": {
+      "step": 18,
+      "seedPsnrDb": 17.13,
+      "exposurePsnrDb": 17.74,
+      "exposureMinusSeedDb": 0.61
+    },
+    "worstStep": {
+      "step": 35,
+      "seedPsnrDb": 16.69,
+      "exposurePsnrDb": 16.63,
+      "exposureMinusSeedDb": -0.06
+    },
+    "terminalStep": {
+      "step": 63,
+      "seedPsnrDb": 16.62,
+      "exposurePsnrDb": 16.73,
+      "exposureMinusSeedDb": 0.11
+    }
+  },
+  "claimBoundary": "The comparison excludes baked role-label rows but operates on the shared H.264 witness raster. It is supporting same-raster evidence, not analytical-raymarch error or perceptual equivalence."
+}

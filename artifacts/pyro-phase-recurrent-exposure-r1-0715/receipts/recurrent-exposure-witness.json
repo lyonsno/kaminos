@@ -1,0 +1,2734 @@
+{
+  "schema": "kaminos-boundary-splat-motion-cohort-witness-v0",
+  "status": "completed",
+  "configuration": {
+    "authority": "frozen-seed-vs-recurrent-exposure-physical-energy-v0",
+    "witnessMode": "raw-recurrent-exposure-comparison"
+  },
+  "source": {
+    "seedAudit": {
+      "path": "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/seed-source/motion-cohort-audit.json",
+      "sha256": "71a79bcc7fd19eb327121ee4d73f9b7021b08e8f28c2fc886f2daaca71723e2e"
+    },
+    "exposureAudit": {
+      "path": "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/exposure-source/motion-cohort-audit.json",
+      "sha256": "d310c4bc121bf9566b2428d3ffb51a49dc3ee7b627f7bc8a3037d441aba34eef"
+    },
+    "manifest": {
+      "path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+      "bytes": 421170,
+      "sha256": "d38028655e038df55af0fb5f1c9cfc5c40f3464992ebd26b106c29b234f88c78"
+    },
+    "seed": {
+      "predictions": {
+        "path": "/private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715/transport-predictions.json",
+        "bytes": 224395,
+        "sha256": "94e3f9e680fd4d7c16634b8c25d86b4323bd7213c6f82f0b4c084bc1366112d5"
+      },
+      "trainingReport": {
+        "path": "/private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715/training-report.json",
+        "bytes": 166608,
+        "sha256": "74b8fa9df8ed1dacd1ef9eee51f136bce578fc156bc14ed34a9276e98020d715"
+      },
+      "greenroomReceipt": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/done/f1a19c5759b9/receipt.json",
+        "bytes": 1737,
+        "sha256": "b8ddc28a80ee741752cf7ba7214af959eb5f4f4337d70d2abbd1412f54eb7df5",
+        "jobId": "f1a19c5759b9",
+        "status": "done",
+        "exitCode": 0,
+        "effectiveRoute": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-transport-mlx.py --manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --model /private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json --state-model /private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json --state-recurrence-mode protected-splat --support-budget-mode training-episode-envelope --out-dir /private/tmp/kaminos-phase-physical-energy-support-envelope-r1-0715 --inference-start 0 --inference-steps 63 --grid-size 160 --batch-size 4096",
+        "startedAt": 1784132594.166236,
+        "finishedAt": 1784132713.6514401
+      },
+      "backend": {
+        "backend": "mlx",
+        "device": "Device(gpu, 0)",
+        "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+        "fallbackReason": null
+      }
+    },
+    "exposure": {
+      "predictions": {
+        "path": "/private/tmp/kaminos-phase-rollout-exposure-support-envelope-r1-0715/transport-predictions.json",
+        "bytes": 224613,
+        "sha256": "e27c1e05e7330c223813d9f8cd6a53faac11ed893ebf0526f3a54c21fb24ac69"
+      },
+      "trainingReport": {
+        "path": "/private/tmp/kaminos-phase-rollout-exposure-support-envelope-r1-0715/training-report.json",
+        "bytes": 166699,
+        "sha256": "fab568105ce7b9bf56401185737ab86a57e3c2aa3210b43f63873289df7c65f3"
+      },
+      "greenroomReceipt": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/done/285dce2ffec4/receipt.json",
+        "bytes": 1749,
+        "sha256": "b037d4e8aee58de081ad35464f25f82d75bad4447c3288901230f64bdeda9fc4",
+        "jobId": "285dce2ffec4",
+        "status": "done",
+        "exitCode": 0,
+        "effectiveRoute": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-transport-mlx.py --manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --model /private/tmp/kaminos-phase-transport-eulerian-rollout-exposure-r1-0715/transport-model.json --state-model /private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json --state-recurrence-mode protected-splat --support-budget-mode training-episode-envelope --out-dir /private/tmp/kaminos-phase-rollout-exposure-support-envelope-r1-0715 --inference-start 0 --inference-steps 63 --grid-size 160 --batch-size 4096",
+        "startedAt": 1784138594.127064,
+        "finishedAt": 1784138758.81504
+      },
+      "backend": {
+        "backend": "mlx",
+        "device": "Device(gpu, 0)",
+        "effectiveRunner": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python",
+        "fallbackReason": null
+      }
+    },
+    "sharedIdentity": {
+      "seedModelSha256": "e51c23d25eb38ec778c65774aae46c78bbcb02808d582539843417b10043c073",
+      "exposureModelSha256": "88d5898448aed8ae1f92130e1a997f9ec6ef0301db0ac940ebf4794d36bc7645",
+      "destinationStateModelSha256": "48c7bb6ad4ce0fedbac6e4cecb92d3f5cbc619a9bc718775f87b49867fb38e65",
+      "trainingManifestSha256": "f1ccbfa37eb90b065d461b54e814b7dd339a9d619b237143669a4371ff6d40b1",
+      "exposureAuthority": "exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0",
+      "sampleCap": null
+    }
+  },
+  "playback": {
+    "authority": "finite-complete-heldout-recurrent-exposure-comparison-v0",
+    "frameCount": 63,
+    "controlledStepDeltaMs": 160,
+    "simulatorDurationSeconds": 10.08,
+    "requestedFps": 6.25,
+    "effectiveFps": 6.25,
+    "encodedDurationSeconds": 10.08,
+    "loops": false
+  },
+  "emphasis": {
+    "authority": "raw-product-view-no-cohort-attenuation-v0",
+    "staticCohorts": [],
+    "motionCohorts": [],
+    "staticAttenuation": 1,
+    "unmatchedAttenuation": 1,
+    "thresholdSelection": "none; every full splat retains original opacity"
+  },
+  "roles": {
+    "reference": "exact-heldout-full-splat-state-v0",
+    "control": "frozen-current-full-splat-state-v0",
+    "seed": "frozen-seed-learned-recurrent-full-splat-state-v0",
+    "exposure": "recurrent-exposure-learned-recurrent-full-splat-state-v0"
+  },
+  "roleEvidence": {
+    "reference": [
+      {
+        "step": 1,
+        "sha256": "314507a63a1c65cef91e083c068aa85be5c3a70e7c87abd886bae7c23e2a2c3b",
+        "inputSplatCount": 60014,
+        "projectedSplatCount": 50412,
+        "nonBackgroundPixelCount": 56172,
+        "maxLuminance": 1
+      },
+      {
+        "step": 2,
+        "sha256": "3c7c198678132ab0421bb5e07be5125f86d2f7350dba3eaf4f45f784ece213c3",
+        "inputSplatCount": 60597,
+        "projectedSplatCount": 51145,
+        "nonBackgroundPixelCount": 58329,
+        "maxLuminance": 1
+      },
+      {
+        "step": 3,
+        "sha256": "77e3ee7ad58257564434e03b349a040078b19adf3cd41ab599044e660f37cbe4",
+        "inputSplatCount": 60940,
+        "projectedSplatCount": 51417,
+        "nonBackgroundPixelCount": 58697,
+        "maxLuminance": 1
+      },
+      {
+        "step": 4,
+        "sha256": "e31f478727ccbc767296ce578d5b76e544b806d4e2d8bfe6aa5d5de0d878f03c",
+        "inputSplatCount": 61547,
+        "projectedSplatCount": 51864,
+        "nonBackgroundPixelCount": 59413,
+        "maxLuminance": 1
+      },
+      {
+        "step": 5,
+        "sha256": "849de421780d946cd9c1bb3c47f605574df23f95a313f2aea48bb68cef014aee",
+        "inputSplatCount": 62908,
+        "projectedSplatCount": 53418,
+        "nonBackgroundPixelCount": 60036,
+        "maxLuminance": 1
+      },
+      {
+        "step": 6,
+        "sha256": "5ca1905ab0696bcf2fc146c74f6f788d8a7a105116452cef34b89d7028401613",
+        "inputSplatCount": 63871,
+        "projectedSplatCount": 54446,
+        "nonBackgroundPixelCount": 61685,
+        "maxLuminance": 1
+      },
+      {
+        "step": 7,
+        "sha256": "0e2453c93f56fad8b54d7c2316f22d8e70b902cb8277bd8e7da61a97e9bd7cfa",
+        "inputSplatCount": 64940,
+        "projectedSplatCount": 55653,
+        "nonBackgroundPixelCount": 63048,
+        "maxLuminance": 1
+      },
+      {
+        "step": 8,
+        "sha256": "dae8bd36743d27b2c068c124c264cb54481d3ed977ee1a703e03cba6f7434826",
+        "inputSplatCount": 67084,
+        "projectedSplatCount": 57893,
+        "nonBackgroundPixelCount": 64014,
+        "maxLuminance": 1
+      },
+      {
+        "step": 9,
+        "sha256": "995d8bd49d0e3c35c2a1f9407ad1194eb9fbe97441534715f741ee2f06932f3a",
+        "inputSplatCount": 68577,
+        "projectedSplatCount": 59405,
+        "nonBackgroundPixelCount": 66146,
+        "maxLuminance": 1
+      },
+      {
+        "step": 10,
+        "sha256": "aba66e84ca19837c265761db13e609a884b5da5c5a74c63982ed906ce32981a3",
+        "inputSplatCount": 69816,
+        "projectedSplatCount": 60402,
+        "nonBackgroundPixelCount": 67468,
+        "maxLuminance": 1
+      },
+      {
+        "step": 11,
+        "sha256": "7cdc3f5d2b0c79bfe0fb9087aae0cfa581a79efc8b53edec9ef0ef07179f6385",
+        "inputSplatCount": 70393,
+        "projectedSplatCount": 60668,
+        "nonBackgroundPixelCount": 66865,
+        "maxLuminance": 1
+      },
+      {
+        "step": 12,
+        "sha256": "54ec1985c575d2f934f6326d65939ff2531508f5ec76ef6fb6985622a77ffde5",
+        "inputSplatCount": 70931,
+        "projectedSplatCount": 61031,
+        "nonBackgroundPixelCount": 67141,
+        "maxLuminance": 1
+      },
+      {
+        "step": 13,
+        "sha256": "6e235d81fbf4ff0923f62337d2098d9f2e2ea61d8a25eda7cf394227e79dc71a",
+        "inputSplatCount": 71041,
+        "projectedSplatCount": 60981,
+        "nonBackgroundPixelCount": 66538,
+        "maxLuminance": 1
+      },
+      {
+        "step": 14,
+        "sha256": "dd4e48de84b7b90020b69b89b6c9bf00a6172162a6f361ce517d1a64d6a98050",
+        "inputSplatCount": 70870,
+        "projectedSplatCount": 60588,
+        "nonBackgroundPixelCount": 66825,
+        "maxLuminance": 1
+      },
+      {
+        "step": 15,
+        "sha256": "7228dd704ce423cf001727f239ef5eede4e731ec90680ee7343e09ceebbc32c7",
+        "inputSplatCount": 70703,
+        "projectedSplatCount": 60184,
+        "nonBackgroundPixelCount": 66048,
+        "maxLuminance": 1
+      },
+      {
+        "step": 16,
+        "sha256": "9dcb9c589409fd17b39426927179d48e7d03368b6e94711add79d8ac2729ec71",
+        "inputSplatCount": 69965,
+        "projectedSplatCount": 59289,
+        "nonBackgroundPixelCount": 65223,
+        "maxLuminance": 1
+      },
+      {
+        "step": 17,
+        "sha256": "cb67b5207820aa3533129dfa99f9f8e8782151c09fbcc339dcd3ff7f752c4b86",
+        "inputSplatCount": 69823,
+        "projectedSplatCount": 58895,
+        "nonBackgroundPixelCount": 64777,
+        "maxLuminance": 1
+      },
+      {
+        "step": 18,
+        "sha256": "d0a9f38e768af3cb607b001e8d78123e623a80f76726aa45100646b6c16ad5da",
+        "inputSplatCount": 70012,
+        "projectedSplatCount": 59012,
+        "nonBackgroundPixelCount": 66545,
+        "maxLuminance": 1
+      },
+      {
+        "step": 19,
+        "sha256": "3aa8f7fd5489a2890a45ce305da17b4623f393db38974c72bae114ec50945bea",
+        "inputSplatCount": 69758,
+        "projectedSplatCount": 58943,
+        "nonBackgroundPixelCount": 67462,
+        "maxLuminance": 1
+      },
+      {
+        "step": 20,
+        "sha256": "1f35894a471d4fd79bad26f8991b2684e1f55c5895c85b4b14570950141fa935",
+        "inputSplatCount": 70461,
+        "projectedSplatCount": 59974,
+        "nonBackgroundPixelCount": 69693,
+        "maxLuminance": 1
+      },
+      {
+        "step": 21,
+        "sha256": "ffbca126f393b6992b9236521faa88fe46a82f8b0ce986bba48f3d697ebac2e1",
+        "inputSplatCount": 71726,
+        "projectedSplatCount": 61043,
+        "nonBackgroundPixelCount": 71752,
+        "maxLuminance": 1
+      },
+      {
+        "step": 22,
+        "sha256": "332bcec5ca385007369859469a7c2292e2e21d7f44727f2161efb0077ab5ce17",
+        "inputSplatCount": 71677,
+        "projectedSplatCount": 60813,
+        "nonBackgroundPixelCount": 72240,
+        "maxLuminance": 1
+      },
+      {
+        "step": 23,
+        "sha256": "63a6cd5ff25db08a30479d8c08c1bb3aa3a851e44856ee4517abbbdfb4d3a9a0",
+        "inputSplatCount": 71481,
+        "projectedSplatCount": 60858,
+        "nonBackgroundPixelCount": 71491,
+        "maxLuminance": 1
+      },
+      {
+        "step": 24,
+        "sha256": "673e9c3d97609c11ce822ce646db9fe99e620ccbd3074a3eb6bec816207b1b3a",
+        "inputSplatCount": 70978,
+        "projectedSplatCount": 60883,
+        "nonBackgroundPixelCount": 71147,
+        "maxLuminance": 1
+      },
+      {
+        "step": 25,
+        "sha256": "1ed382fab4267429f7a89b1d7c65d9c76241592be0d7b0be0d014bb27912c0b3",
+        "inputSplatCount": 70631,
+        "projectedSplatCount": 60717,
+        "nonBackgroundPixelCount": 70199,
+        "maxLuminance": 1
+      },
+      {
+        "step": 26,
+        "sha256": "1ac6f053d0b960302595172fbb9c3da9a5155c8eacc723979748e7f72bdc71e4",
+        "inputSplatCount": 70729,
+        "projectedSplatCount": 60939,
+        "nonBackgroundPixelCount": 69557,
+        "maxLuminance": 1
+      },
+      {
+        "step": 27,
+        "sha256": "93a0d4dc7fcd2f0e5aff99dbf07580ff36941f838ac6af550a576224907a24b5",
+        "inputSplatCount": 71812,
+        "projectedSplatCount": 62126,
+        "nonBackgroundPixelCount": 69923,
+        "maxLuminance": 1
+      },
+      {
+        "step": 28,
+        "sha256": "7231358db17b47e6d7a7e5a1715da39b388df76b36452ef45d1437cca38c00a9",
+        "inputSplatCount": 71798,
+        "projectedSplatCount": 62037,
+        "nonBackgroundPixelCount": 69581,
+        "maxLuminance": 1
+      },
+      {
+        "step": 29,
+        "sha256": "d887541e2aa59221a314c90febe1ca74ae237883613999460fcf8b837d44fddc",
+        "inputSplatCount": 71998,
+        "projectedSplatCount": 62478,
+        "nonBackgroundPixelCount": 67071,
+        "maxLuminance": 1
+      },
+      {
+        "step": 30,
+        "sha256": "2d605c0c4b4836b4615d3354fb26656c37ee49f8796dcfaeb9ac8be3e6354c34",
+        "inputSplatCount": 72486,
+        "projectedSplatCount": 63009,
+        "nonBackgroundPixelCount": 66102,
+        "maxLuminance": 1
+      },
+      {
+        "step": 31,
+        "sha256": "fea8cc4fd37e3bac9453f1cdd9c0177f09ac5832bb5423547d6c830830b5a01e",
+        "inputSplatCount": 73212,
+        "projectedSplatCount": 63785,
+        "nonBackgroundPixelCount": 65042,
+        "maxLuminance": 1
+      },
+      {
+        "step": 32,
+        "sha256": "b3ff95fc8a33e88b0509d533eeafff2b7992881d41411d62389ddf7a50416772",
+        "inputSplatCount": 73045,
+        "projectedSplatCount": 63880,
+        "nonBackgroundPixelCount": 66309,
+        "maxLuminance": 1
+      },
+      {
+        "step": 33,
+        "sha256": "09c07c4d0811ff493486d3c0219c789cf9877a8ecfb4a8aa7f67f2d5e780b2cd",
+        "inputSplatCount": 72620,
+        "projectedSplatCount": 63458,
+        "nonBackgroundPixelCount": 65709,
+        "maxLuminance": 1
+      },
+      {
+        "step": 34,
+        "sha256": "d4d22c8bc11c9e341b9f883d8aca1b6486ae6f4895dadd54085f8fb971a85754",
+        "inputSplatCount": 72494,
+        "projectedSplatCount": 63100,
+        "nonBackgroundPixelCount": 65644,
+        "maxLuminance": 1
+      },
+      {
+        "step": 35,
+        "sha256": "82a90d881d4e358f837129705da38b2d6d171ef087bfd5272a1b7e94bd9e039c",
+        "inputSplatCount": 72177,
+        "projectedSplatCount": 62654,
+        "nonBackgroundPixelCount": 64684,
+        "maxLuminance": 1
+      },
+      {
+        "step": 36,
+        "sha256": "7d7ae1e90866171ef7c09e5b9b3b79b9c5bddd67a162e214f64bb377ad36513f",
+        "inputSplatCount": 71690,
+        "projectedSplatCount": 61815,
+        "nonBackgroundPixelCount": 63893,
+        "maxLuminance": 1
+      },
+      {
+        "step": 37,
+        "sha256": "394abb6a03b86f3e5ae4db26c1738e6791a3ae2a62e8c181b24f6b7aad8a9805",
+        "inputSplatCount": 71100,
+        "projectedSplatCount": 60850,
+        "nonBackgroundPixelCount": 63132,
+        "maxLuminance": 1
+      },
+      {
+        "step": 38,
+        "sha256": "0328fba4a647401e483f39ca86141fef5f449af58ec186125ed80ff91a281406",
+        "inputSplatCount": 70188,
+        "projectedSplatCount": 59685,
+        "nonBackgroundPixelCount": 62962,
+        "maxLuminance": 1
+      },
+      {
+        "step": 39,
+        "sha256": "da89a8d7d48a3c48b5bb0e8d3be25fa3c4a1a5cc0646ecb7858c837e120fff77",
+        "inputSplatCount": 70454,
+        "projectedSplatCount": 59850,
+        "nonBackgroundPixelCount": 65643,
+        "maxLuminance": 1
+      },
+      {
+        "step": 40,
+        "sha256": "d50ca1b92fa276de067f10b9befad4f5aa8a12615b6b4ab2913bb59b79c3f3dc",
+        "inputSplatCount": 70663,
+        "projectedSplatCount": 60189,
+        "nonBackgroundPixelCount": 66714,
+        "maxLuminance": 1
+      },
+      {
+        "step": 41,
+        "sha256": "6e10e6035dffd30063cf71967ef5cf8993da1608da5fc2ae0c22d14cdf03e2a6",
+        "inputSplatCount": 70468,
+        "projectedSplatCount": 60219,
+        "nonBackgroundPixelCount": 67182,
+        "maxLuminance": 1
+      },
+      {
+        "step": 42,
+        "sha256": "6775037e952a233d613c0bcdeec1c9a39d6ec6bd66ed90580a82ca521bfa9b13",
+        "inputSplatCount": 70829,
+        "projectedSplatCount": 60643,
+        "nonBackgroundPixelCount": 66316,
+        "maxLuminance": 1
+      },
+      {
+        "step": 43,
+        "sha256": "b6ec8d6412f13d203535cefcfb0167340ea68957ba9a3d94a2f6f36548736ce8",
+        "inputSplatCount": 70268,
+        "projectedSplatCount": 60184,
+        "nonBackgroundPixelCount": 66659,
+        "maxLuminance": 1
+      },
+      {
+        "step": 44,
+        "sha256": "4eb7eedbb67c0718836c80f8f0d6bd91057b545685c63ab46e1befcc49276716",
+        "inputSplatCount": 70153,
+        "projectedSplatCount": 59922,
+        "nonBackgroundPixelCount": 67697,
+        "maxLuminance": 1
+      },
+      {
+        "step": 45,
+        "sha256": "d032c3ac7531cf6803e450bed17e180c8de86c37ab9bb5b55bdec741766bd338",
+        "inputSplatCount": 70214,
+        "projectedSplatCount": 59779,
+        "nonBackgroundPixelCount": 68507,
+        "maxLuminance": 1
+      },
+      {
+        "step": 46,
+        "sha256": "6d233b3147646c082636227bb2c75f1917dd789e8b10c675e5f9fa03820ede66",
+        "inputSplatCount": 70045,
+        "projectedSplatCount": 59501,
+        "nonBackgroundPixelCount": 68085,
+        "maxLuminance": 1
+      },
+      {
+        "step": 47,
+        "sha256": "2aff26ed50807e5ec141a5d2e0ab8262091e7245eb6f36f4662fd9dce003d5cf",
+        "inputSplatCount": 69595,
+        "projectedSplatCount": 59470,
+        "nonBackgroundPixelCount": 69215,
+        "maxLuminance": 1
+      },
+      {
+        "step": 48,
+        "sha256": "090cfb841d4b7a57540f308aebf98f7fe1bf017f20ce82788a2efc0649e2597a",
+        "inputSplatCount": 69010,
+        "projectedSplatCount": 58962,
+        "nonBackgroundPixelCount": 68237,
+        "maxLuminance": 1
+      },
+      {
+        "step": 49,
+        "sha256": "c69457a4e50ac756e61b05fa49688a295fb0bf0deac6b0f30c5d1615220c9bd5",
+        "inputSplatCount": 68992,
+        "projectedSplatCount": 58852,
+        "nonBackgroundPixelCount": 67477,
+        "maxLuminance": 1
+      },
+      {
+        "step": 50,
+        "sha256": "c7558256cd55c6ed4dac134f8ead96c2c6b30507cbbbfc9e4a86bbfefda30680",
+        "inputSplatCount": 69625,
+        "projectedSplatCount": 59522,
+        "nonBackgroundPixelCount": 67349,
+        "maxLuminance": 1
+      },
+      {
+        "step": 51,
+        "sha256": "4ddccc6e8321200efebd9b66db9df776eddd23da56b369e4800eeadae192ffc9",
+        "inputSplatCount": 69160,
+        "projectedSplatCount": 59016,
+        "nonBackgroundPixelCount": 66037,
+        "maxLuminance": 1
+      },
+      {
+        "step": 52,
+        "sha256": "1966d8067c55b0a1b251dbe8a4339e227fb66669ce6111f7720d8fd3ddad79c6",
+        "inputSplatCount": 68431,
+        "projectedSplatCount": 58245,
+        "nonBackgroundPixelCount": 65572,
+        "maxLuminance": 1
+      },
+      {
+        "step": 53,
+        "sha256": "1d31a1948fec65450a3d1f3212f2d8ab0ccea68c1b3763032fd4615a1e82fee9",
+        "inputSplatCount": 68340,
+        "projectedSplatCount": 58074,
+        "nonBackgroundPixelCount": 65219,
+        "maxLuminance": 1
+      },
+      {
+        "step": 54,
+        "sha256": "818c1c32571b8c96fc48377f53dedfce51cddb5b53847db84c783d0594c2bb4e",
+        "inputSplatCount": 68400,
+        "projectedSplatCount": 58105,
+        "nonBackgroundPixelCount": 63695,
+        "maxLuminance": 1
+      },
+      {
+        "step": 55,
+        "sha256": "bc8105f2875b2aad9a2263ce5c2359c69e1ef48ece9b112e050b219b4b82e556",
+        "inputSplatCount": 68553,
+        "projectedSplatCount": 58241,
+        "nonBackgroundPixelCount": 63051,
+        "maxLuminance": 1
+      },
+      {
+        "step": 56,
+        "sha256": "7cd7305f0122fbfd295cdd366a44f04b3980a0105d1fe34f56a28b8469b6f240",
+        "inputSplatCount": 68658,
+        "projectedSplatCount": 58639,
+        "nonBackgroundPixelCount": 62909,
+        "maxLuminance": 1
+      },
+      {
+        "step": 57,
+        "sha256": "b376157a71609d4798f7c713d5846b5ba35c3ee00d1b61db217a797d106e2ded",
+        "inputSplatCount": 69517,
+        "projectedSplatCount": 59455,
+        "nonBackgroundPixelCount": 63576,
+        "maxLuminance": 1
+      },
+      {
+        "step": 58,
+        "sha256": "9f644a7bf2d50ef6911ff5d1f5e7e34997b51434773aa8adc5ebea993f388493",
+        "inputSplatCount": 69955,
+        "projectedSplatCount": 59995,
+        "nonBackgroundPixelCount": 65366,
+        "maxLuminance": 1
+      },
+      {
+        "step": 59,
+        "sha256": "cfc9e8f0fd7fe7abd5083a8e57f38d58cb074ec4bf504783ac455887f37cf0f4",
+        "inputSplatCount": 69968,
+        "projectedSplatCount": 60202,
+        "nonBackgroundPixelCount": 66974,
+        "maxLuminance": 1
+      },
+      {
+        "step": 60,
+        "sha256": "f839f3d7c4703040b88d138532f37c98107ec277a7519aa969e8dfedfaf2a29a",
+        "inputSplatCount": 70464,
+        "projectedSplatCount": 60668,
+        "nonBackgroundPixelCount": 66786,
+        "maxLuminance": 1
+      },
+      {
+        "step": 61,
+        "sha256": "0c1d8482833323a793f67ec812dd7a3e7f5c8867d3c7010a622f3ebfdea918e0",
+        "inputSplatCount": 70074,
+        "projectedSplatCount": 60350,
+        "nonBackgroundPixelCount": 64796,
+        "maxLuminance": 1
+      },
+      {
+        "step": 62,
+        "sha256": "7e6250255f8d4a1d7d9452007484cfa4ca5bec2f131537d29ab985efd1f609f5",
+        "inputSplatCount": 70098,
+        "projectedSplatCount": 60345,
+        "nonBackgroundPixelCount": 64457,
+        "maxLuminance": 1
+      },
+      {
+        "step": 63,
+        "sha256": "7dc3de57ed509c3ac9a3b015882f2869d1fc703f9d2ad3700379ada4f287e664",
+        "inputSplatCount": 70612,
+        "projectedSplatCount": 60521,
+        "nonBackgroundPixelCount": 64498,
+        "maxLuminance": 1
+      }
+    ],
+    "control": [
+      {
+        "step": 1,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 2,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 3,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 4,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 5,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 6,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 7,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 8,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 9,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 10,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 11,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 12,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 13,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 14,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 15,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 16,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 17,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 18,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 19,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 20,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 21,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 22,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 23,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 24,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 25,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 26,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 27,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 28,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 29,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 30,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 31,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 32,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 33,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 34,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 35,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 36,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 37,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 38,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 39,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 40,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 41,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 42,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 43,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 44,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 45,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 46,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 47,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 48,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 49,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 50,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 51,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 52,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 53,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 54,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 55,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 56,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 57,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 58,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 59,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 60,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 61,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 62,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      },
+      {
+        "step": 63,
+        "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b",
+        "inputSplatCount": 60259,
+        "projectedSplatCount": 50584,
+        "nonBackgroundPixelCount": 55380,
+        "maxLuminance": 1
+      }
+    ],
+    "seed": [
+      {
+        "step": 1,
+        "sha256": "7911be279024fb0e62e04a16b44431872fc6a903a103cd89563a7fc681145d11",
+        "inputSplatCount": 60679,
+        "projectedSplatCount": 50512,
+        "nonBackgroundPixelCount": 48757,
+        "maxLuminance": 1
+      },
+      {
+        "step": 2,
+        "sha256": "04739caf361235d71067838282e6f83fc39328216b88387a505e7b00508e713e",
+        "inputSplatCount": 61102,
+        "projectedSplatCount": 50702,
+        "nonBackgroundPixelCount": 43627,
+        "maxLuminance": 1
+      },
+      {
+        "step": 3,
+        "sha256": "5d56f7a0d9b668f2cdae475bac3cdf29a1b4b55992d0972d0e711e759fa80dbc",
+        "inputSplatCount": 61528,
+        "projectedSplatCount": 51033,
+        "nonBackgroundPixelCount": 39831,
+        "maxLuminance": 1
+      },
+      {
+        "step": 4,
+        "sha256": "a66befdf1c629fb7b7c7607d60bf6601270c6a6d2d10be2d30a591d412f90f8c",
+        "inputSplatCount": 61957,
+        "projectedSplatCount": 51395,
+        "nonBackgroundPixelCount": 37631,
+        "maxLuminance": 1
+      },
+      {
+        "step": 5,
+        "sha256": "803062baa2732e742afdab2481884e3e45c805d30b292e6f97418761e23be63f",
+        "inputSplatCount": 62389,
+        "projectedSplatCount": 51795,
+        "nonBackgroundPixelCount": 35707,
+        "maxLuminance": 1
+      },
+      {
+        "step": 6,
+        "sha256": "bec343664dca8b3cc253df705b11521702ddec45b65c78556a5bbe770764b8c1",
+        "inputSplatCount": 62824,
+        "projectedSplatCount": 52202,
+        "nonBackgroundPixelCount": 34161,
+        "maxLuminance": 1
+      },
+      {
+        "step": 7,
+        "sha256": "de7c8914b0f84b43dad3394f6ecf695abd6457d8e7b8c230b7e648ee208fa657",
+        "inputSplatCount": 63262,
+        "projectedSplatCount": 52607,
+        "nonBackgroundPixelCount": 33147,
+        "maxLuminance": 1
+      },
+      {
+        "step": 8,
+        "sha256": "d77897f032f93d7f4d023ff54671283da98695f357ebc3e1e9ac934352636ad6",
+        "inputSplatCount": 63703,
+        "projectedSplatCount": 53023,
+        "nonBackgroundPixelCount": 32393,
+        "maxLuminance": 1
+      },
+      {
+        "step": 9,
+        "sha256": "48194d6cafae5333babcde261300a62620680f91f40d9a36911c21f58fcd5aa3",
+        "inputSplatCount": 64147,
+        "projectedSplatCount": 53441,
+        "nonBackgroundPixelCount": 31527,
+        "maxLuminance": 1
+      },
+      {
+        "step": 10,
+        "sha256": "5ac600b2a375973357aaf7acde345ec84ee12716ae5eeadb1660901625e85d86",
+        "inputSplatCount": 64594,
+        "projectedSplatCount": 53874,
+        "nonBackgroundPixelCount": 31203,
+        "maxLuminance": 1
+      },
+      {
+        "step": 11,
+        "sha256": "75217f2bc2b02830ff64d202d1c3a42f41d644bca6071b72452ae5d50f2b4679",
+        "inputSplatCount": 65044,
+        "projectedSplatCount": 54306,
+        "nonBackgroundPixelCount": 31178,
+        "maxLuminance": 1
+      },
+      {
+        "step": 12,
+        "sha256": "5672740eafdb83cf4885105015faf2a32a3a1f06b994f38155be6c1682cd8a0b",
+        "inputSplatCount": 65498,
+        "projectedSplatCount": 54739,
+        "nonBackgroundPixelCount": 31179,
+        "maxLuminance": 1
+      },
+      {
+        "step": 13,
+        "sha256": "711a53878b3fc4f64d0dc2121e877f8f8e539802108d94c53525342463eea990",
+        "inputSplatCount": 65955,
+        "projectedSplatCount": 55182,
+        "nonBackgroundPixelCount": 31165,
+        "maxLuminance": 1
+      },
+      {
+        "step": 14,
+        "sha256": "0da70a027579c32c30eeceab368bd234acb77aa1a5e97a74cc64f2f1e6d0d442",
+        "inputSplatCount": 66415,
+        "projectedSplatCount": 55633,
+        "nonBackgroundPixelCount": 31164,
+        "maxLuminance": 1
+      },
+      {
+        "step": 15,
+        "sha256": "f408e0e99947df883482c10fa48a867911efcb149619bdf6685a4f844bc05e27",
+        "inputSplatCount": 66878,
+        "projectedSplatCount": 56079,
+        "nonBackgroundPixelCount": 31087,
+        "maxLuminance": 1
+      },
+      {
+        "step": 16,
+        "sha256": "5f6cba4af0390c1c8d6bb87ce348ffcc9e4a2e017d6a90487720932556f44ea3",
+        "inputSplatCount": 67344,
+        "projectedSplatCount": 56526,
+        "nonBackgroundPixelCount": 30985,
+        "maxLuminance": 1
+      },
+      {
+        "step": 17,
+        "sha256": "a74f64aaeca3b05f776de24d77624638f0ac48ec3b187617268b32c531184ba1",
+        "inputSplatCount": 67814,
+        "projectedSplatCount": 56969,
+        "nonBackgroundPixelCount": 30862,
+        "maxLuminance": 1
+      },
+      {
+        "step": 18,
+        "sha256": "50e3a9652347fd0542f15dfb06037de69c4994f52bb9e5012595fc2ce4a10c65",
+        "inputSplatCount": 68287,
+        "projectedSplatCount": 57418,
+        "nonBackgroundPixelCount": 30868,
+        "maxLuminance": 1
+      },
+      {
+        "step": 19,
+        "sha256": "8a9c8e37a82a6718ee211aeb022fd98cc134fdd3508393bc41e68d7990b34b92",
+        "inputSplatCount": 68763,
+        "projectedSplatCount": 57876,
+        "nonBackgroundPixelCount": 30868,
+        "maxLuminance": 1
+      },
+      {
+        "step": 20,
+        "sha256": "8927b32ac9908a9e4d41ca1b5124b0bb576f60701957478a5a1fc84126ba4f37",
+        "inputSplatCount": 69243,
+        "projectedSplatCount": 58338,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 21,
+        "sha256": "7f408c44a2ddd77d96e4eff34697a52383b46f57308795f8d903d97b291e6823",
+        "inputSplatCount": 69726,
+        "projectedSplatCount": 58816,
+        "nonBackgroundPixelCount": 30871,
+        "maxLuminance": 1
+      },
+      {
+        "step": 22,
+        "sha256": "5d52826b7473269c9857308cc3ed2f473aca11947b7b08e9bbb1ac47a5f98887",
+        "inputSplatCount": 70212,
+        "projectedSplatCount": 59296,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 23,
+        "sha256": "00aae42581d145b2ab7cb92401a0a2c9ffa847293c559b5c08de1b0304c166ae",
+        "inputSplatCount": 70702,
+        "projectedSplatCount": 59778,
+        "nonBackgroundPixelCount": 30870,
+        "maxLuminance": 1
+      },
+      {
+        "step": 24,
+        "sha256": "90f10ec25e628cddd4c7465a5d32df9a11430664da26f03c46ef2a297d110667",
+        "inputSplatCount": 71195,
+        "projectedSplatCount": 60266,
+        "nonBackgroundPixelCount": 30874,
+        "maxLuminance": 1
+      },
+      {
+        "step": 25,
+        "sha256": "0a57f1bea65349067bf695cfec378f730612fc1b34733bd6add8b735874047c8",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60651,
+        "nonBackgroundPixelCount": 30878,
+        "maxLuminance": 1
+      },
+      {
+        "step": 26,
+        "sha256": "4c1ccb309d4e789332b690591b81cb0edf6eca6bd97341733a7861a13b3334ee",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60651,
+        "nonBackgroundPixelCount": 30884,
+        "maxLuminance": 1
+      },
+      {
+        "step": 27,
+        "sha256": "3738375ab4f3388be02a14efa6f1b4e3de53543b1869dc27f74688705c4ac577",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60647,
+        "nonBackgroundPixelCount": 30884,
+        "maxLuminance": 1
+      },
+      {
+        "step": 28,
+        "sha256": "9fcdeda500f70c930de5a41a0b7c0ca1e1c4ebcfcf093e0f07a0eee81cd5a31f",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60646,
+        "nonBackgroundPixelCount": 30881,
+        "maxLuminance": 1
+      },
+      {
+        "step": 29,
+        "sha256": "e7d2681745a0a8cd093ebb2faa21a1e088530ee7278400d31412495fb0463c93",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60647,
+        "nonBackgroundPixelCount": 30887,
+        "maxLuminance": 1
+      },
+      {
+        "step": 30,
+        "sha256": "8bd03968a71cc11e38369fb528d5de5e4f79b543627d41124fc201297bbea95c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60647,
+        "nonBackgroundPixelCount": 30890,
+        "maxLuminance": 1
+      },
+      {
+        "step": 31,
+        "sha256": "f0528f11468efb068f2d62cf837bf477f00c14b6e9ccf139377946055e4056ff",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60649,
+        "nonBackgroundPixelCount": 30895,
+        "maxLuminance": 1
+      },
+      {
+        "step": 32,
+        "sha256": "c083906fdafff9d90fb556a9a4130216068982b8d0d996eb05dd58f2a1b403ac",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60651,
+        "nonBackgroundPixelCount": 30896,
+        "maxLuminance": 1
+      },
+      {
+        "step": 33,
+        "sha256": "35f494d9851449d391627b8f31ce1eec7e0a8a3c49fce0c823fe0dcdad2b4757",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60654,
+        "nonBackgroundPixelCount": 30896,
+        "maxLuminance": 1
+      },
+      {
+        "step": 34,
+        "sha256": "3d87a03efccda49b462319522bae8e0562ccb1d28b9a218af11ee25cdfe5e9be",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60653,
+        "nonBackgroundPixelCount": 30897,
+        "maxLuminance": 1
+      },
+      {
+        "step": 35,
+        "sha256": "4c4fc89e6ce45d79bb7b5c74795ccba3f446e92c9d19aa85e31b2399b9dc0bbd",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60656,
+        "nonBackgroundPixelCount": 30899,
+        "maxLuminance": 1
+      },
+      {
+        "step": 36,
+        "sha256": "91e7f984c955b489157f2a96badd5a75752d1a4c7e22556e44d0ea24b4a179d3",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60657,
+        "nonBackgroundPixelCount": 30905,
+        "maxLuminance": 1
+      },
+      {
+        "step": 37,
+        "sha256": "dbfb4fb8c4759509a34c11c633bdccf0dd7ededce68b7ac85fa06b7417e43fa0",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60657,
+        "nonBackgroundPixelCount": 30904,
+        "maxLuminance": 1
+      },
+      {
+        "step": 38,
+        "sha256": "ea113087848a1098d9a21ed50e61ee469d13da87a6785e766eb6fec7513f79ce",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60655,
+        "nonBackgroundPixelCount": 30904,
+        "maxLuminance": 1
+      },
+      {
+        "step": 39,
+        "sha256": "4124b1182be8e4a9d5828be2290f87776804926712944799342ce1eae1251af6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60652,
+        "nonBackgroundPixelCount": 30907,
+        "maxLuminance": 1
+      },
+      {
+        "step": 40,
+        "sha256": "5c52d2496b5db8f11d00593d13e17a2852c75e27db059d86e4ab6b6bdda5f0b6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60650,
+        "nonBackgroundPixelCount": 30914,
+        "maxLuminance": 1
+      },
+      {
+        "step": 41,
+        "sha256": "2f9b2207ddd862cd3ac1da1058251c5def5652d90feabe1b84feec8c88e92f79",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60648,
+        "nonBackgroundPixelCount": 30913,
+        "maxLuminance": 1
+      },
+      {
+        "step": 42,
+        "sha256": "c84ada4ee13104e87d9d7b310758794de17857fd4cded6a14ab0133d718b1136",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60649,
+        "nonBackgroundPixelCount": 30914,
+        "maxLuminance": 1
+      },
+      {
+        "step": 43,
+        "sha256": "0b5e61944b4452964673e9534c497c7af188f931804ee4e4a58357a51df1fe38",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60648,
+        "nonBackgroundPixelCount": 30914,
+        "maxLuminance": 1
+      },
+      {
+        "step": 44,
+        "sha256": "4a11905ec83452da87a01ca40fbbb97997031561be02be9911fb73cf26861877",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60646,
+        "nonBackgroundPixelCount": 30915,
+        "maxLuminance": 1
+      },
+      {
+        "step": 45,
+        "sha256": "31e15de702b1c6d309526c95895a5b7b2dd2b8d870c72104e285e70b5acbd545",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60646,
+        "nonBackgroundPixelCount": 30917,
+        "maxLuminance": 1
+      },
+      {
+        "step": 46,
+        "sha256": "d4f4403c8847aad19936e19490dffc6e25522581d7e05515e60dd9e298f7fd1a",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60645,
+        "nonBackgroundPixelCount": 30922,
+        "maxLuminance": 1
+      },
+      {
+        "step": 47,
+        "sha256": "2a34148cc9f4f6d7506f3c5319c404639fd1f761478bef3d239a0cddcc89207f",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60642,
+        "nonBackgroundPixelCount": 30929,
+        "maxLuminance": 1
+      },
+      {
+        "step": 48,
+        "sha256": "daf5ed9fb05291e723cb987b069c9b789f158d1031e90f991bedc5345fa78c03",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60642,
+        "nonBackgroundPixelCount": 30926,
+        "maxLuminance": 1
+      },
+      {
+        "step": 49,
+        "sha256": "ba0e8df751b77418b390f205a6783ec031265f4727d02160392813faaf36abfa",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60640,
+        "nonBackgroundPixelCount": 30927,
+        "maxLuminance": 1
+      },
+      {
+        "step": 50,
+        "sha256": "d617e4a0d1d0044130528386092f24b18713fa4683d1f65650345ffd7b0258dc",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60637,
+        "nonBackgroundPixelCount": 30928,
+        "maxLuminance": 1
+      },
+      {
+        "step": 51,
+        "sha256": "b9693bd5b4ae3016ac5a5a87ab93099df3ba007202eff0b2c36dc7e6fd7a0fde",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60635,
+        "nonBackgroundPixelCount": 30929,
+        "maxLuminance": 1
+      },
+      {
+        "step": 52,
+        "sha256": "58215fb3df50193d0ac7043e69149f36128d20db772687634ed222f89e0457f1",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60636,
+        "nonBackgroundPixelCount": 30933,
+        "maxLuminance": 1
+      },
+      {
+        "step": 53,
+        "sha256": "c5b1c4199cd5cb580152a829326cc41e73233ac6467f6e2e1642f99eb42bec93",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60631,
+        "nonBackgroundPixelCount": 30935,
+        "maxLuminance": 1
+      },
+      {
+        "step": 54,
+        "sha256": "6574015fadb5aef56aafc77a4b2f51afb0d76492031aed4995699816e15c3203",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60631,
+        "nonBackgroundPixelCount": 30936,
+        "maxLuminance": 1
+      },
+      {
+        "step": 55,
+        "sha256": "19ca70dc54de9ee672c3e3fba0cddd447250151c970ef4dd4144fd9d530d1993",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60629,
+        "nonBackgroundPixelCount": 30938,
+        "maxLuminance": 1
+      },
+      {
+        "step": 56,
+        "sha256": "f858cad5f24f21224a2133c3a4213020d57940edd527dea0f49d0044500cf83d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60629,
+        "nonBackgroundPixelCount": 30944,
+        "maxLuminance": 1
+      },
+      {
+        "step": 57,
+        "sha256": "2ceaa2125d716d759cfbf244bb7f57093abf5245e0f2885eb8e03dbf6423c169",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60628,
+        "nonBackgroundPixelCount": 30946,
+        "maxLuminance": 1
+      },
+      {
+        "step": 58,
+        "sha256": "a6b460a88113a8f4c224851b2346908abc9bf479ec554f132604155ee4b0b94c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60628,
+        "nonBackgroundPixelCount": 30952,
+        "maxLuminance": 1
+      },
+      {
+        "step": 59,
+        "sha256": "7d5ee45dfd3c7d0d92953042fc3626fb870e505d4911bdd82e0d37437f0a45f0",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60629,
+        "nonBackgroundPixelCount": 30951,
+        "maxLuminance": 1
+      },
+      {
+        "step": 60,
+        "sha256": "a909425001211f2f632253792b05d82b9ce4b16e12488af8a88cdfcdd6f6eec2",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60631,
+        "nonBackgroundPixelCount": 30952,
+        "maxLuminance": 1
+      },
+      {
+        "step": 61,
+        "sha256": "7c4acdf3ff659f9d72b2af2aba81792a8f80891a1cf9d247002490674e5a38e5",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60630,
+        "nonBackgroundPixelCount": 30957,
+        "maxLuminance": 1
+      },
+      {
+        "step": 62,
+        "sha256": "413d7ee6a32f7fbac3034b2fbf693620c0d69efdc0432f33c186f41626003583",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60627,
+        "nonBackgroundPixelCount": 30958,
+        "maxLuminance": 1
+      },
+      {
+        "step": 63,
+        "sha256": "83d7ffd97514891c7330af57a87fc1ea5ecc31b73c1ced23e31b8c835f85fba7",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 60627,
+        "nonBackgroundPixelCount": 30961,
+        "maxLuminance": 1
+      }
+    ],
+    "exposure": [
+      {
+        "step": 1,
+        "sha256": "b7aa948b43d8f0275e32a1025ef8636cf310fa1abe8fe7ed007a89914c161f3f",
+        "inputSplatCount": 60681,
+        "projectedSplatCount": 50112,
+        "nonBackgroundPixelCount": 49505,
+        "maxLuminance": 1
+      },
+      {
+        "step": 2,
+        "sha256": "e6d06d4cbb88df2b01513b4c73ecc3b5d9e3f8a0191aa538ec8a6cba457191bd",
+        "inputSplatCount": 61105,
+        "projectedSplatCount": 50099,
+        "nonBackgroundPixelCount": 44029,
+        "maxLuminance": 1
+      },
+      {
+        "step": 3,
+        "sha256": "d3bfc43159d45128540af740dea4752b2142219cd90465e2a7c3e2ac60528e22",
+        "inputSplatCount": 61532,
+        "projectedSplatCount": 50324,
+        "nonBackgroundPixelCount": 39113,
+        "maxLuminance": 1
+      },
+      {
+        "step": 4,
+        "sha256": "d61a97db756d3d9d4d3440d7bf532328c51f887e092d5a3d8d1558de465c4b20",
+        "inputSplatCount": 61962,
+        "projectedSplatCount": 50610,
+        "nonBackgroundPixelCount": 36038,
+        "maxLuminance": 1
+      },
+      {
+        "step": 5,
+        "sha256": "9d408831a51a8aa0478e4eacec85574a3fdb6d796a8b1cc103ada276c86a7b68",
+        "inputSplatCount": 62395,
+        "projectedSplatCount": 50931,
+        "nonBackgroundPixelCount": 34117,
+        "maxLuminance": 1
+      },
+      {
+        "step": 6,
+        "sha256": "b0434587f48b72aa51167f2d73b46e2a44962618880b7d7a71cc476a005005bf",
+        "inputSplatCount": 62831,
+        "projectedSplatCount": 51271,
+        "nonBackgroundPixelCount": 32758,
+        "maxLuminance": 1
+      },
+      {
+        "step": 7,
+        "sha256": "7c0828deac909ea988bad777dadcc326605b7d211ef6fd91569b881a1d47b951",
+        "inputSplatCount": 63271,
+        "projectedSplatCount": 51637,
+        "nonBackgroundPixelCount": 31957,
+        "maxLuminance": 1
+      },
+      {
+        "step": 8,
+        "sha256": "25e06a62007470eafac30ed46ae37ac8e7d846222162b0fdf09e5a9e8318ece2",
+        "inputSplatCount": 63714,
+        "projectedSplatCount": 52019,
+        "nonBackgroundPixelCount": 31174,
+        "maxLuminance": 1
+      },
+      {
+        "step": 9,
+        "sha256": "672c125f218b150215d13201241b0d2079e788bf76e37eb2efc4aac5f607ef53",
+        "inputSplatCount": 64160,
+        "projectedSplatCount": 52395,
+        "nonBackgroundPixelCount": 30953,
+        "maxLuminance": 1
+      },
+      {
+        "step": 10,
+        "sha256": "6614c4f9557c90639dd9ffcce1ef73d78aa4fb7bdf83500a20319891334f8c2e",
+        "inputSplatCount": 64609,
+        "projectedSplatCount": 52820,
+        "nonBackgroundPixelCount": 30412,
+        "maxLuminance": 1
+      },
+      {
+        "step": 11,
+        "sha256": "333f9efb560a07173e60ce429d0ff633edb3ddbe56226d1f273debbae392f4b0",
+        "inputSplatCount": 65061,
+        "projectedSplatCount": 53253,
+        "nonBackgroundPixelCount": 30173,
+        "maxLuminance": 1
+      },
+      {
+        "step": 12,
+        "sha256": "1e50be0d36e5496968f17b6de3da56cc90ed687fddc59d63c5d889993dfd0135",
+        "inputSplatCount": 65516,
+        "projectedSplatCount": 53701,
+        "nonBackgroundPixelCount": 30148,
+        "maxLuminance": 1
+      },
+      {
+        "step": 13,
+        "sha256": "be7b82d7521c578ba186815358a23f76c0d2a206930f012e12ebfa99cfe3e9ec",
+        "inputSplatCount": 65974,
+        "projectedSplatCount": 54165,
+        "nonBackgroundPixelCount": 30077,
+        "maxLuminance": 1
+      },
+      {
+        "step": 14,
+        "sha256": "ebc20057521355cf16b18fd34ba3c03de6fa914991d576af5c708570c9f225ed",
+        "inputSplatCount": 66435,
+        "projectedSplatCount": 54624,
+        "nonBackgroundPixelCount": 29885,
+        "maxLuminance": 1
+      },
+      {
+        "step": 15,
+        "sha256": "d735b3cdb59ec4b163865dee6a0127e4c733c558c88105f856f9e1b7b9596dca",
+        "inputSplatCount": 66900,
+        "projectedSplatCount": 55088,
+        "nonBackgroundPixelCount": 29435,
+        "maxLuminance": 1
+      },
+      {
+        "step": 16,
+        "sha256": "cacaa1b99f0deb57e9f94ec3a84201f1923a2bc1932f284db45c5a1eb03e9ddc",
+        "inputSplatCount": 67368,
+        "projectedSplatCount": 55558,
+        "nonBackgroundPixelCount": 29432,
+        "maxLuminance": 1
+      },
+      {
+        "step": 17,
+        "sha256": "c2749603233474744b98945d510f9b7405713c2e437b1bc74434f77cea4aca60",
+        "inputSplatCount": 67839,
+        "projectedSplatCount": 56027,
+        "nonBackgroundPixelCount": 29431,
+        "maxLuminance": 1
+      },
+      {
+        "step": 18,
+        "sha256": "ee77257df9c9c5d0a845fe3f2b6397895c1954972e62e9ca902a71ddde26238e",
+        "inputSplatCount": 68314,
+        "projectedSplatCount": 56503,
+        "nonBackgroundPixelCount": 29433,
+        "maxLuminance": 1
+      },
+      {
+        "step": 19,
+        "sha256": "cb76ed79916e403bd62a2c7115733d00d70bf577d8f61477ab9b01cca338372c",
+        "inputSplatCount": 68792,
+        "projectedSplatCount": 56985,
+        "nonBackgroundPixelCount": 29436,
+        "maxLuminance": 1
+      },
+      {
+        "step": 20,
+        "sha256": "641259ddcc88285eec31bde761908a468be316bb9c7e43fe92e27db72d263b0d",
+        "inputSplatCount": 69273,
+        "projectedSplatCount": 57466,
+        "nonBackgroundPixelCount": 29437,
+        "maxLuminance": 1
+      },
+      {
+        "step": 21,
+        "sha256": "9519d1b533906f549e5c1ffe0d07b9293a817ed401517f06edcdf7f221e6db44",
+        "inputSplatCount": 69758,
+        "projectedSplatCount": 57951,
+        "nonBackgroundPixelCount": 29438,
+        "maxLuminance": 1
+      },
+      {
+        "step": 22,
+        "sha256": "5524527799e8375a98b5e61dec150f0d8f59ec6e5f4ff8cc458c976ea069b31b",
+        "inputSplatCount": 70246,
+        "projectedSplatCount": 58438,
+        "nonBackgroundPixelCount": 29436,
+        "maxLuminance": 1
+      },
+      {
+        "step": 23,
+        "sha256": "6ff0d5fd7bc39af9ed9ae871223c0d89ef995ffb677dc1c8a7d9ccd6bd1f273f",
+        "inputSplatCount": 70737,
+        "projectedSplatCount": 58927,
+        "nonBackgroundPixelCount": 29439,
+        "maxLuminance": 1
+      },
+      {
+        "step": 24,
+        "sha256": "d72c425e6afe0bf0e24e759b61a4b574f262064825f8d960758e2a9fcf4cd3a4",
+        "inputSplatCount": 71232,
+        "projectedSplatCount": 59417,
+        "nonBackgroundPixelCount": 29441,
+        "maxLuminance": 1
+      },
+      {
+        "step": 25,
+        "sha256": "4608758cae7dda51391b3dde077847dfc7a7d8a4e8e2361b31b617c60b1a50ad",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59769,
+        "nonBackgroundPixelCount": 29443,
+        "maxLuminance": 1
+      },
+      {
+        "step": 26,
+        "sha256": "ed892e8267d54f92f9b6a5ead4226c660a31c42a66124b009e4c1ade597e08f9",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59768,
+        "nonBackgroundPixelCount": 29444,
+        "maxLuminance": 1
+      },
+      {
+        "step": 27,
+        "sha256": "26e2bced5240160f0badc7225be5fea27b0e2660a42865a3550a4ad9835aff1c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59766,
+        "nonBackgroundPixelCount": 29450,
+        "maxLuminance": 1
+      },
+      {
+        "step": 28,
+        "sha256": "23dc50b8391bd8a608d401e39d31423cb37b8d4c21bcfe266dac46ec627c320e",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59766,
+        "nonBackgroundPixelCount": 29449,
+        "maxLuminance": 1
+      },
+      {
+        "step": 29,
+        "sha256": "ed9855fd68208c284ea8f3914a64a163de1fa60de30133e2ab0f57d74c3849dc",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59762,
+        "nonBackgroundPixelCount": 29451,
+        "maxLuminance": 1
+      },
+      {
+        "step": 30,
+        "sha256": "249e877e164e849e44635cc053b0728c40d691f4ac11e5ecb5d6a8a236b3ebc4",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59759,
+        "nonBackgroundPixelCount": 29454,
+        "maxLuminance": 1
+      },
+      {
+        "step": 31,
+        "sha256": "01af82dce5417ba5239738a2e15221852a8c5195d77e065a705266783f0399fa",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59760,
+        "nonBackgroundPixelCount": 29457,
+        "maxLuminance": 1
+      },
+      {
+        "step": 32,
+        "sha256": "21eac889f50d11822fbb00a08a30b2dbaef47051c27e705d7086aa0ac4922553",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59761,
+        "nonBackgroundPixelCount": 29458,
+        "maxLuminance": 1
+      },
+      {
+        "step": 33,
+        "sha256": "ac366168b251e80f34f5016968c7ffb91ea49fe56823c4b41fa4143764d2ae9a",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59761,
+        "nonBackgroundPixelCount": 29464,
+        "maxLuminance": 1
+      },
+      {
+        "step": 34,
+        "sha256": "13d7ab735830aa7ee160557a085aef30768ced1ee71fb47482073487c643ba31",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59759,
+        "nonBackgroundPixelCount": 29466,
+        "maxLuminance": 1
+      },
+      {
+        "step": 35,
+        "sha256": "5c70d6704145c74e29f41f19ac1178eded21cdac1d1ed7b4c74f9eb31612a9ef",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59758,
+        "nonBackgroundPixelCount": 29468,
+        "maxLuminance": 1
+      },
+      {
+        "step": 36,
+        "sha256": "09209a89eaa26fafe3a55ebf55b820cc0ee2bec0315d029a78421c7e5bcc4b54",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59754,
+        "nonBackgroundPixelCount": 29472,
+        "maxLuminance": 1
+      },
+      {
+        "step": 37,
+        "sha256": "2955ce0e6b31389d32c50585ce4c0453e4bf01bd1c5742a2a020f59645eeedb6",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59754,
+        "nonBackgroundPixelCount": 29477,
+        "maxLuminance": 1
+      },
+      {
+        "step": 38,
+        "sha256": "10417e670d97f2b231ff4902ddb895f498b3c642c5ac037ebf41b641d2d85d64",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59754,
+        "nonBackgroundPixelCount": 29480,
+        "maxLuminance": 1
+      },
+      {
+        "step": 39,
+        "sha256": "6c26b9dd460e2e2277a408d7f4493600eca56a340b5d8d80118ec5f86295de7b",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59752,
+        "nonBackgroundPixelCount": 29481,
+        "maxLuminance": 1
+      },
+      {
+        "step": 40,
+        "sha256": "003c98e4b19504f66af08380167ebb1676997ccb50a9238d10191ce4cb8f4482",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59750,
+        "nonBackgroundPixelCount": 29485,
+        "maxLuminance": 1
+      },
+      {
+        "step": 41,
+        "sha256": "512bbf1f8117ec4bc212cc7de3264214c1f5bf1b9e23a04ea18106df808a4da3",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59750,
+        "nonBackgroundPixelCount": 29485,
+        "maxLuminance": 1
+      },
+      {
+        "step": 42,
+        "sha256": "63fc0e9f1c6768ee5832a3650868c3d79f8db9252cc33221678b157006ca0c17",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59747,
+        "nonBackgroundPixelCount": 29488,
+        "maxLuminance": 1
+      },
+      {
+        "step": 43,
+        "sha256": "35424c6cb3003617225b07ab6b8d1a1743773595f7d83bccdf1c4a0c9d48e22f",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59746,
+        "nonBackgroundPixelCount": 29489,
+        "maxLuminance": 1
+      },
+      {
+        "step": 44,
+        "sha256": "dd22f914640fa3d3f1248b476c72abb58db5a6cd99f3b8a664bcae87f6b105c9",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59745,
+        "nonBackgroundPixelCount": 29491,
+        "maxLuminance": 1
+      },
+      {
+        "step": 45,
+        "sha256": "a49415a3c6f2ce38c48789516526b7f6b16d838cf382a9a3553e5a3d1ea73057",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59748,
+        "nonBackgroundPixelCount": 29495,
+        "maxLuminance": 1
+      },
+      {
+        "step": 46,
+        "sha256": "3b49d32248d19397659aabe247f85ea25d0051e9a9516e64acc482606f945c1c",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59747,
+        "nonBackgroundPixelCount": 29496,
+        "maxLuminance": 1
+      },
+      {
+        "step": 47,
+        "sha256": "ee8cdb8ea8e41ea5b0db45c2a27c50347e5fc2283eb06ec34188f8a151a9ef3d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59747,
+        "nonBackgroundPixelCount": 29498,
+        "maxLuminance": 1
+      },
+      {
+        "step": 48,
+        "sha256": "b521c1c5ea4d92458df4973e7f19b3440171d1638fbb7e83d7de3a6d58fcedea",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59744,
+        "nonBackgroundPixelCount": 29501,
+        "maxLuminance": 1
+      },
+      {
+        "step": 49,
+        "sha256": "51381111ca5bcb379f4a490ee1ea078048df23aad408902f6cf47a02024429c2",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59741,
+        "nonBackgroundPixelCount": 29503,
+        "maxLuminance": 1
+      },
+      {
+        "step": 50,
+        "sha256": "977b0a2eabc52c234aba11e5c5606095a26c90aadecc6a2130655318c2074113",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59738,
+        "nonBackgroundPixelCount": 29506,
+        "maxLuminance": 1
+      },
+      {
+        "step": 51,
+        "sha256": "a79d2543e3c04bf7b0ee03d9e7aeeeb63f5952f6d18ed1d44d64d6b1e98a4a76",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59738,
+        "nonBackgroundPixelCount": 29508,
+        "maxLuminance": 1
+      },
+      {
+        "step": 52,
+        "sha256": "e80c97569030fff961fd49dff9e999b59410c3cd7cc363fecab35f7b9023668d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59736,
+        "nonBackgroundPixelCount": 29512,
+        "maxLuminance": 1
+      },
+      {
+        "step": 53,
+        "sha256": "0539dbd3128c832a43e44e82bdaccb004371370a7e6843292d764937fa91aae2",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59737,
+        "nonBackgroundPixelCount": 29513,
+        "maxLuminance": 1
+      },
+      {
+        "step": 54,
+        "sha256": "0953989d34dcad4b4c1cdc25359987052f7a9db462bfbf9b9e56cc65dbd7d3b3",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59736,
+        "nonBackgroundPixelCount": 29514,
+        "maxLuminance": 1
+      },
+      {
+        "step": 55,
+        "sha256": "90b39a71ee70fd06382451e3ad39c5f592b4d88d9f1bb3aa8ac3dc553927583d",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59735,
+        "nonBackgroundPixelCount": 29515,
+        "maxLuminance": 1
+      },
+      {
+        "step": 56,
+        "sha256": "deed460e73b2d7c35dd918009346469292add1d5ef3da17128eaef5ec72717c8",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59734,
+        "nonBackgroundPixelCount": 29519,
+        "maxLuminance": 1
+      },
+      {
+        "step": 57,
+        "sha256": "9d90da50bf1b80f6356bc479ae869725b21ce069d6b261bd8f8c193bc1562b98",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59732,
+        "nonBackgroundPixelCount": 29518,
+        "maxLuminance": 1
+      },
+      {
+        "step": 58,
+        "sha256": "1b94a2a1dff8188b23c26e4ddeb97d99eaf854a6f8087447424c9bbc0dfcb9e8",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59727,
+        "nonBackgroundPixelCount": 29523,
+        "maxLuminance": 1
+      },
+      {
+        "step": 59,
+        "sha256": "36f7fa73faf128ce0aaa65e9ca74f7d5785b65967f0bbd6316df84865c925272",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59727,
+        "nonBackgroundPixelCount": 29528,
+        "maxLuminance": 1
+      },
+      {
+        "step": 60,
+        "sha256": "68fdb6b3d5cc608101f09b0579dd1c63b9e11501d7084639ef49f0b9da60d7ea",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59727,
+        "nonBackgroundPixelCount": 29535,
+        "maxLuminance": 1
+      },
+      {
+        "step": 61,
+        "sha256": "b0eb5e7626d989b3cd7d7dd4c6f56916aaa9818d4619ee1459c2c78513634a2b",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59726,
+        "nonBackgroundPixelCount": 29535,
+        "maxLuminance": 1
+      },
+      {
+        "step": 62,
+        "sha256": "c4409a7f5b0a6854270b68a6b776b197099e161299b29412c438a80dcb6e27a1",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59726,
+        "nonBackgroundPixelCount": 29539,
+        "maxLuminance": 1
+      },
+      {
+        "step": 63,
+        "sha256": "611df65862c680501606c805635f3a648052fdba590d97a6c7848445ab2d4fb5",
+        "inputSplatCount": 71588,
+        "projectedSplatCount": 59725,
+        "nonBackgroundPixelCount": 29542,
+        "maxLuminance": 1
+      }
+    ]
+  },
+  "controlFrameIdentity": {
+    "authority": "pixel-identical-frozen-control-v0",
+    "frameCount": 63,
+    "uniqueFrameCount": 1,
+    "sha256": "521047f5be6672a9ccc87141c86368b1f78c0e847d33f98ccc6bd1a1163f0a5b"
+  },
+  "artifact": {
+    "path": "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/recurrent-exposure-comparison.mp4",
+    "bytes": 605348,
+    "sha256": "06d455888ea6dc3380b6ad9becdfa778b61a9fcc1e44aadb6f1edb3a88c45455",
+    "probe": {
+      "width": 1280,
+      "height": 240,
+      "fps": 6.25,
+      "frameCount": 63,
+      "duration": 10.08
+    },
+    "command": [
+      "ffmpeg",
+      "-y",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/seed-source/beauty/reference/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/seed-source/beauty/control/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/seed-source/beauty/predicted/frame-%03d.png",
+      "-framerate",
+      "6.25",
+      "-i",
+      "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/exposure-source/beauty/predicted/frame-%03d.png",
+      "-filter_complex",
+      "[0:v][1:v][2:v][3:v]hstack=inputs=4[out]",
+      "-map",
+      "[out]",
+      "-frames:v",
+      "63",
+      "-c:v",
+      "libx264",
+      "-preset",
+      "slow",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-movflags",
+      "+faststart",
+      "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/recurrent-exposure-comparison.mp4"
+    ]
+  },
+  "partialFlowDebug": {
+    "authority": "display-only-motion-cohort-debug-mix-v0",
+    "requestedGain": 0.625,
+    "effectiveGain": 0.625,
+    "stateMutation": false,
+    "artifact": {
+      "path": "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/recurrent-exposure-debug-comparison.mp4",
+      "bytes": 1109975,
+      "sha256": "4a5c5bb07162dd0be50e6d3b34c8c3b80d3262db81ce7760029d1cfea970c0ab",
+      "probe": {
+        "width": 1280,
+        "height": 240,
+        "fps": 6.25,
+        "frameCount": 63,
+        "duration": 10.08
+      },
+      "command": [
+        "ffmpeg",
+        "-y",
+        "-framerate",
+        "6.25",
+        "-i",
+        "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/seed-source/debug/reference/frame-%03d.png",
+        "-framerate",
+        "6.25",
+        "-i",
+        "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/seed-source/debug/control/frame-%03d.png",
+        "-framerate",
+        "6.25",
+        "-i",
+        "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/seed-source/debug/predicted/frame-%03d.png",
+        "-framerate",
+        "6.25",
+        "-i",
+        "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/exposure-source/debug/predicted/frame-%03d.png",
+        "-filter_complex",
+        "[0:v][1:v][2:v][3:v]hstack=inputs=4[out]",
+        "-map",
+        "[out]",
+        "-frames:v",
+        "63",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "slow",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "/private/tmp/kaminos-phase-recurrent-exposure-witness-r1-0715/recurrent-exposure-debug-comparison.mp4"
+      ]
+    }
+  },
+  "metrics": {
+    "authority": "accepted-training-report-support-and-same-corpus-iou-v0",
+    "summary": {
+      "seed": {
+        "terminalPredictedCount": 71588,
+        "terminalExactCount": 70612,
+        "terminalCountError": 976,
+        "terminalPredictionIoU": 0.13922225248754225,
+        "terminalIdentityIoU": 0.12233504279368129,
+        "terminalPredictionToIdentityRatio": 1.1380406571021626,
+        "beatsIdentitySteps": 63,
+        "clampCount": 39,
+        "firstClampStep": 25
+      },
+      "exposure": {
+        "terminalPredictedCount": 71588,
+        "terminalExactCount": 70612,
+        "terminalCountError": 976,
+        "terminalPredictionIoU": 0.1428755133697146,
+        "terminalIdentityIoU": 0.12233504279368129,
+        "terminalPredictionToIdentityRatio": 1.1679034077805075,
+        "beatsIdentitySteps": 63,
+        "clampCount": 39,
+        "firstClampStep": 25
+      }
+    },
+    "comparison": {
+      "authority": "same-corpus-stepwise-recurrent-exposure-vs-frozen-seed-support-iou-v0",
+      "evaluatedStepCount": 63,
+      "improvedStepCount": 61,
+      "meanRelativeIoUDelta": 0.024792666484307196,
+      "stepOneRelativeIoUDelta": -0.0064742043056317256,
+      "bestStep": {
+        "step": 26,
+        "seedIoU": 0.1583766757014138,
+        "exposureIoU": 0.1687841333716585,
+        "absoluteIoUDelta": 0.010407457670244702,
+        "relativeIoUDelta": 0.0657133231528726
+      },
+      "steps": [
+        {
+          "step": 1,
+          "seedIoU": 0.48042342320241394,
+          "exposureIoU": 0.4773130638073905,
+          "absoluteIoUDelta": -0.00311035939502341,
+          "relativeIoUDelta": -0.0064742043056317256
+        },
+        {
+          "step": 2,
+          "seedIoU": 0.35649159570199296,
+          "exposureIoU": 0.35702418518559814,
+          "absoluteIoUDelta": 0.0005325894836051837,
+          "relativeIoUDelta": 0.0014939748651197071
+        },
+        {
+          "step": 3,
+          "seedIoU": 0.277731408062766,
+          "exposureIoU": 0.28205342936102507,
+          "absoluteIoUDelta": 0.004322021298259038,
+          "relativeIoUDelta": 0.015561874432589384
+        },
+        {
+          "step": 4,
+          "seedIoU": 0.22858990300920168,
+          "exposureIoU": 0.23534942337890957,
+          "absoluteIoUDelta": 0.006759520369707894,
+          "relativeIoUDelta": 0.02957051156120305
+        },
+        {
+          "step": 5,
+          "seedIoU": 0.20057682725844161,
+          "exposureIoU": 0.20888164241886312,
+          "absoluteIoUDelta": 0.008304815160421503,
+          "relativeIoUDelta": 0.041404659122067144
+        },
+        {
+          "step": 6,
+          "seedIoU": 0.17848140121108394,
+          "exposureIoU": 0.18718200983836963,
+          "absoluteIoUDelta": 0.008700608627285694,
+          "relativeIoUDelta": 0.04874798476618736
+        },
+        {
+          "step": 7,
+          "seedIoU": 0.16412868778773598,
+          "exposureIoU": 0.17137949622212273,
+          "absoluteIoUDelta": 0.007250808434386746,
+          "relativeIoUDelta": 0.0441775812145897
+        },
+        {
+          "step": 8,
+          "seedIoU": 0.15110148830741338,
+          "exposureIoU": 0.15890947431842145,
+          "absoluteIoUDelta": 0.007807986011008072,
+          "relativeIoUDelta": 0.051673786264254895
+        },
+        {
+          "step": 9,
+          "seedIoU": 0.14298016723934517,
+          "exposureIoU": 0.1501741677209157,
+          "absoluteIoUDelta": 0.007194000481570539,
+          "relativeIoUDelta": 0.05031467384933164
+        },
+        {
+          "step": 10,
+          "seedIoU": 0.1390774498088967,
+          "exposureIoU": 0.1444808650121323,
+          "absoluteIoUDelta": 0.0054034152032356175,
+          "relativeIoUDelta": 0.038851842701029815
+        },
+        {
+          "step": 11,
+          "seedIoU": 0.1342182396784189,
+          "exposureIoU": 0.14017558774757788,
+          "absoluteIoUDelta": 0.005957348069158985,
+          "relativeIoUDelta": 0.04438553272217338
+        },
+        {
+          "step": 12,
+          "seedIoU": 0.13248221534170618,
+          "exposureIoU": 0.1370014832591704,
+          "absoluteIoUDelta": 0.004519267917464209,
+          "relativeIoUDelta": 0.034112261074498385
+        },
+        {
+          "step": 13,
+          "seedIoU": 0.13094589462908846,
+          "exposureIoU": 0.13450248818010946,
+          "absoluteIoUDelta": 0.0035565935510210034,
+          "relativeIoUDelta": 0.027160786988360774
+        },
+        {
+          "step": 14,
+          "seedIoU": 0.1310161308925541,
+          "exposureIoU": 0.13412408005484566,
+          "absoluteIoUDelta": 0.003107949162291568,
+          "relativeIoUDelta": 0.02372188173409273
+        },
+        {
+          "step": 15,
+          "seedIoU": 0.13475417137484225,
+          "exposureIoU": 0.13813667267704421,
+          "absoluteIoUDelta": 0.003382501302201968,
+          "relativeIoUDelta": 0.025101273435112814
+        },
+        {
+          "step": 16,
+          "seedIoU": 0.13569555759575858,
+          "exposureIoU": 0.13871960067328343,
+          "absoluteIoUDelta": 0.0030240430775248517,
+          "relativeIoUDelta": 0.022285498000852666
+        },
+        {
+          "step": 17,
+          "seedIoU": 0.13666919926004228,
+          "exposureIoU": 0.13940688136799675,
+          "absoluteIoUDelta": 0.00273768210795447,
+          "relativeIoUDelta": 0.02003144909589638
+        },
+        {
+          "step": 18,
+          "seedIoU": 0.13474240422721268,
+          "exposureIoU": 0.13818582760096107,
+          "absoluteIoUDelta": 0.0034434233737483944,
+          "relativeIoUDelta": 0.025555602881642603
+        },
+        {
+          "step": 19,
+          "seedIoU": 0.1333742431680576,
+          "exposureIoU": 0.13676454902732993,
+          "absoluteIoUDelta": 0.00339030585927233,
+          "relativeIoUDelta": 0.02541949463960891
+        },
+        {
+          "step": 20,
+          "seedIoU": 0.13381379041682898,
+          "exposureIoU": 0.13570714500516104,
+          "absoluteIoUDelta": 0.0018933545883320635,
+          "relativeIoUDelta": 0.014149173881363719
+        },
+        {
+          "step": 21,
+          "seedIoU": 0.13472059554942323,
+          "exposureIoU": 0.1374591995883781,
+          "absoluteIoUDelta": 0.0027386040389548727,
+          "relativeIoUDelta": 0.020328028003336662
+        },
+        {
+          "step": 22,
+          "seedIoU": 0.14177999517180334,
+          "exposureIoU": 0.14544559409856175,
+          "absoluteIoUDelta": 0.003665598926758412,
+          "relativeIoUDelta": 0.025854133527911216
+        },
+        {
+          "step": 23,
+          "seedIoU": 0.14944582326167974,
+          "exposureIoU": 0.15334647106050653,
+          "absoluteIoUDelta": 0.0039006477988267896,
+          "relativeIoUDelta": 0.026100748175455823
+        },
+        {
+          "step": 24,
+          "seedIoU": 0.1541046684363052,
+          "exposureIoU": 0.15867519452478918,
+          "absoluteIoUDelta": 0.004570526088483989,
+          "relativeIoUDelta": 0.02965858292847945
+        },
+        {
+          "step": 25,
+          "seedIoU": 0.15578220235676554,
+          "exposureIoU": 0.16287950024121212,
+          "absoluteIoUDelta": 0.007097297884446574,
+          "relativeIoUDelta": 0.04555910609218805
+        },
+        {
+          "step": 26,
+          "seedIoU": 0.1583766757014138,
+          "exposureIoU": 0.1687841333716585,
+          "absoluteIoUDelta": 0.010407457670244702,
+          "relativeIoUDelta": 0.0657133231528726
+        },
+        {
+          "step": 27,
+          "seedIoU": 0.15691811214199275,
+          "exposureIoU": 0.16589157370971414,
+          "absoluteIoUDelta": 0.008973461567721386,
+          "relativeIoUDelta": 0.057185632972702516
+        },
+        {
+          "step": 28,
+          "seedIoU": 0.15696384336698055,
+          "exposureIoU": 0.1632242467509289,
+          "absoluteIoUDelta": 0.006260403383948343,
+          "relativeIoUDelta": 0.03988436604034695
+        },
+        {
+          "step": 29,
+          "seedIoU": 0.15511041390129118,
+          "exposureIoU": 0.15784890050076203,
+          "absoluteIoUDelta": 0.0027384865994708463,
+          "relativeIoUDelta": 0.017655078924704304
+        },
+        {
+          "step": 30,
+          "seedIoU": 0.15114616042250933,
+          "exposureIoU": 0.1535517550602101,
+          "absoluteIoUDelta": 0.002405594637700764,
+          "relativeIoUDelta": 0.015915684731760527
+        },
+        {
+          "step": 31,
+          "seedIoU": 0.1459776027858019,
+          "exposureIoU": 0.14939791552560347,
+          "absoluteIoUDelta": 0.003420312739801562,
+          "relativeIoUDelta": 0.023430393940776728
+        },
+        {
+          "step": 32,
+          "seedIoU": 0.14171028015250905,
+          "exposureIoU": 0.14350658591736373,
+          "absoluteIoUDelta": 0.0017963057648546776,
+          "relativeIoUDelta": 0.012675902996744481
+        },
+        {
+          "step": 33,
+          "seedIoU": 0.13787933782568212,
+          "exposureIoU": 0.14076875004944112,
+          "absoluteIoUDelta": 0.0028894122237589914,
+          "relativeIoUDelta": 0.02095609298190859
+        },
+        {
+          "step": 34,
+          "seedIoU": 0.13460220964020506,
+          "exposureIoU": 0.1373248608753996,
+          "absoluteIoUDelta": 0.002722651235194551,
+          "relativeIoUDelta": 0.02022738885544495
+        },
+        {
+          "step": 35,
+          "seedIoU": 0.13562936924839053,
+          "exposureIoU": 0.13773236995591995,
+          "absoluteIoUDelta": 0.0021030007075294177,
+          "relativeIoUDelta": 0.01550549648047106
+        },
+        {
+          "step": 36,
+          "seedIoU": 0.1330175474667278,
+          "exposureIoU": 0.13666690466557188,
+          "absoluteIoUDelta": 0.003649357198844072,
+          "relativeIoUDelta": 0.02743515625077131
+        },
+        {
+          "step": 37,
+          "seedIoU": 0.13336192790989532,
+          "exposureIoU": 0.13625902832525064,
+          "absoluteIoUDelta": 0.0028971004153553193,
+          "relativeIoUDelta": 0.02172359428781445
+        },
+        {
+          "step": 38,
+          "seedIoU": 0.1326494743233311,
+          "exposureIoU": 0.13532515995739808,
+          "absoluteIoUDelta": 0.0026756856340669766,
+          "relativeIoUDelta": 0.02017109866221589
+        },
+        {
+          "step": 39,
+          "seedIoU": 0.13405880990970132,
+          "exposureIoU": 0.1347836160132938,
+          "absoluteIoUDelta": 0.0007248061035924902,
+          "relativeIoUDelta": 0.005406627912635464
+        },
+        {
+          "step": 40,
+          "seedIoU": 0.13320321835417828,
+          "exposureIoU": 0.13390778943340878,
+          "absoluteIoUDelta": 0.0007045710792304982,
+          "relativeIoUDelta": 0.0052894448642906156
+        },
+        {
+          "step": 41,
+          "seedIoU": 0.13098308971051878,
+          "exposureIoU": 0.13264232179875618,
+          "absoluteIoUDelta": 0.0016592320882374,
+          "relativeIoUDelta": 0.012667529006258782
+        },
+        {
+          "step": 42,
+          "seedIoU": 0.12954062371117667,
+          "exposureIoU": 0.1327389284805294,
+          "absoluteIoUDelta": 0.0031983047693527333,
+          "relativeIoUDelta": 0.024689589085842734
+        },
+        {
+          "step": 43,
+          "seedIoU": 0.1291390728476821,
+          "exposureIoU": 0.13227547013186042,
+          "absoluteIoUDelta": 0.003136397284178305,
+          "relativeIoUDelta": 0.024286973841585846
+        },
+        {
+          "step": 44,
+          "seedIoU": 0.1330487541667666,
+          "exposureIoU": 0.1358726139150225,
+          "absoluteIoUDelta": 0.0028238597482559136,
+          "relativeIoUDelta": 0.021224247952870146
+        },
+        {
+          "step": 45,
+          "seedIoU": 0.13591540833900748,
+          "exposureIoU": 0.13900848220023132,
+          "absoluteIoUDelta": 0.003093073861223844,
+          "relativeIoUDelta": 0.022757345168024967
+        },
+        {
+          "step": 46,
+          "seedIoU": 0.13692956050571944,
+          "exposureIoU": 0.14191613386975838,
+          "absoluteIoUDelta": 0.004986573364038932,
+          "relativeIoUDelta": 0.036417069810361635
+        },
+        {
+          "step": 47,
+          "seedIoU": 0.13858176275615125,
+          "exposureIoU": 0.14391392064559516,
+          "absoluteIoUDelta": 0.0053321578894439114,
+          "relativeIoUDelta": 0.03847662046864264
+        },
+        {
+          "step": 48,
+          "seedIoU": 0.13851909435429016,
+          "exposureIoU": 0.14336133497060236,
+          "absoluteIoUDelta": 0.004842240616312193,
+          "relativeIoUDelta": 0.034957206722180834
+        },
+        {
+          "step": 49,
+          "seedIoU": 0.14166450103950104,
+          "exposureIoU": 0.144331659191365,
+          "absoluteIoUDelta": 0.0026671581518639687,
+          "relativeIoUDelta": 0.018827286527626885
+        },
+        {
+          "step": 50,
+          "seedIoU": 0.14035031049881697,
+          "exposureIoU": 0.14266640772928096,
+          "absoluteIoUDelta": 0.002316097230463998,
+          "relativeIoUDelta": 0.016502259398161634
+        },
+        {
+          "step": 51,
+          "seedIoU": 0.1411475688954832,
+          "exposureIoU": 0.14469286010556537,
+          "absoluteIoUDelta": 0.00354529121008218,
+          "relativeIoUDelta": 0.025117621492350306
+        },
+        {
+          "step": 52,
+          "seedIoU": 0.14146544274697145,
+          "exposureIoU": 0.1443480961448875,
+          "absoluteIoUDelta": 0.0028826533979160462,
+          "relativeIoUDelta": 0.020377085328690647
+        },
+        {
+          "step": 53,
+          "seedIoU": 0.14372588766102137,
+          "exposureIoU": 0.1455892586679766,
+          "absoluteIoUDelta": 0.0018633710069552167,
+          "relativeIoUDelta": 0.012964755600257671
+        },
+        {
+          "step": 54,
+          "seedIoU": 0.14483390307332472,
+          "exposureIoU": 0.14703833894610915,
+          "absoluteIoUDelta": 0.0022044358727844326,
+          "relativeIoUDelta": 0.015220440974157867
+        },
+        {
+          "step": 55,
+          "seedIoU": 0.14297249023333958,
+          "exposureIoU": 0.1462070093649041,
+          "absoluteIoUDelta": 0.0032345191315645283,
+          "relativeIoUDelta": 0.022623367098702607
+        },
+        {
+          "step": 56,
+          "seedIoU": 0.1383603896103896,
+          "exposureIoU": 0.1418917268500802,
+          "absoluteIoUDelta": 0.003531337239690596,
+          "relativeIoUDelta": 0.025522747150644287
+        },
+        {
+          "step": 57,
+          "seedIoU": 0.13818219949344218,
+          "exposureIoU": 0.14129379792293506,
+          "absoluteIoUDelta": 0.003111598429492879,
+          "relativeIoUDelta": 0.022518084390750648
+        },
+        {
+          "step": 58,
+          "seedIoU": 0.13798842257597685,
+          "exposureIoU": 0.14129172714078375,
+          "absoluteIoUDelta": 0.0033033045648069026,
+          "relativeIoUDelta": 0.023938997947368312
+        },
+        {
+          "step": 59,
+          "seedIoU": 0.138367511057499,
+          "exposureIoU": 0.13938457328214168,
+          "absoluteIoUDelta": 0.0010170622246426786,
+          "relativeIoUDelta": 0.007350440987697215
+        },
+        {
+          "step": 60,
+          "seedIoU": 0.1392047732850017,
+          "exposureIoU": 0.14007335532387902,
+          "absoluteIoUDelta": 0.0008685820388773247,
+          "relativeIoUDelta": 0.0062395995365691626
+        },
+        {
+          "step": 61,
+          "seedIoU": 0.139898290900898,
+          "exposureIoU": 0.13986160283231414,
+          "absoluteIoUDelta": -0.00003668806858386775,
+          "relativeIoUDelta": -0.0002622481543385069
+        },
+        {
+          "step": 62,
+          "seedIoU": 0.1404125852174403,
+          "exposureIoU": 0.14172669986623476,
+          "absoluteIoUDelta": 0.0013141146487944677,
+          "relativeIoUDelta": 0.00935895202527215
+        },
+        {
+          "step": 63,
+          "seedIoU": 0.13922225248754225,
+          "exposureIoU": 0.1428755133697146,
+          "absoluteIoUDelta": 0.0036532608821723545,
+          "relativeIoUDelta": 0.02624049544449991
+        }
+      ]
+    }
+  },
+  "claimBoundary": "Offline same-raster diagnostic only; it does not establish analytical-raymarch image error, authorize runtime composition, prove cross-basin generalization, or establish long-horizon visual preservation."
+}
