@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Combustible Plank Witness</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      background: #10110f;
+      color: #f2efe6;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #10110f; }
+    canvas { position: fixed; z-index: 0; inset: 0; display: block; width: 100%; height: 100%; }
+    #topbar {
+      position: fixed;
+      z-index: 3;
+      inset: 0 0 auto 0;
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(239, 225, 191, 0.22);
+      background: rgba(16, 17, 15, 0.88);
+      backdrop-filter: blur(8px);
+    }
+    #title { min-width: 190px; }
+    #title strong { display: block; font-size: 13px; line-height: 1.2; }
+    #title span { display: block; margin-top: 3px; color: #aaa89f; font: 10px/1.25 "SF Mono", Menlo, monospace; }
+    #phase {
+      flex: 1;
+      min-width: 0;
+      color: #f3c765;
+      font: 11px/1.35 "SF Mono", Menlo, monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #reset {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid #595b54;
+      border-radius: 4px;
+      background: #242620;
+      color: #f2efe6;
+      font-size: 21px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    #reset:hover { background: #32352c; border-color: #8f927f; }
+    .bay-label {
+      position: fixed;
+      z-index: 4;
+      top: 76px;
+      transform: translateX(-50%);
+      text-align: center;
+      pointer-events: none;
+    }
+    .bay-label strong { display: block; font-size: 12px; }
+    .bay-label span { display: block; margin-top: 3px; color: #aaa89f; font: 10px/1.2 "SF Mono", Menlo, monospace; }
+    #burning-label { left: 72%; }
+    #control-label { left: 28%; }
+    #ledger {
+      position: fixed;
+      z-index: 3;
+      inset: auto 0 0 0;
+      min-height: 44px;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 1px;
+      border-top: 1px solid rgba(239, 225, 191, 0.20);
+      background: rgba(16, 17, 15, 0.90);
+      backdrop-filter: blur(8px);
+    }
+    .metric { min-width: 0; padding: 8px 12px; border-right: 1px solid rgba(239, 225, 191, 0.12); }
+    .metric:last-child { border-right: 0; }
+    .metric b { display: block; color: #9b9d91; font-size: 9px; font-weight: 600; text-transform: uppercase; }
+    .metric span { display: block; margin-top: 3px; font: 11px/1.15 "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #error {
+      position: fixed;
+      z-index: 5;
+      inset: 58px 0 44px;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      color: #ffad99;
+      background: #17120f;
+      font: 13px/1.5 "SF Mono", Menlo, monospace;
+      text-align: center;
+    }
+    @media (max-width: 720px) {
+      #topbar { gap: 10px; padding: 8px 10px; }
+      #title { min-width: 150px; }
+      #phase { font-size: 9px; }
+      .bay-label { top: 68px; }
+      #burning-label { left: 75%; }
+      #control-label { left: 25%; }
+      #ledger { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .metric:nth-child(n + 4) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    <div id="title">
+      <strong>Combustible plank</strong>
+      <span>internal object-side / support-collapse.v0</span>
+    </div>
+    <div id="phase">Initializing WebGPU witness</div>
+    <button id="reset" type="button" title="Restart witness" aria-label="Restart witness">&#8635;</button>
+  </div>
+  <div id="burning-label" class="bay-label"><strong>Combustion</strong><span>fuel -> char -> support loss</span></div>
+  <div id="control-label" class="bay-label"><strong>Control</strong><span>same load, no ignition</span></div>
+  <div id="ledger">
+    <div class="metric"><b>Fuel</b><span id="fuel">1.000</span></div>
+    <div class="metric"><b>Char</b><span id="char">0.000</span></div>
+    <div class="metric"><b>Capacity / load</b><span id="capacity">1.000 / 0.560</span></div>
+    <div class="metric"><b>Volatiles</b><span id="volatiles">0.000</span></div>
+    <div class="metric"><b>Accounting residual</b><span id="residual">0.000000</span></div>
+  </div>
+  <div id="error"></div>
+  <script type="module">
+    import * as THREE from './lib/three.webgpu.js';
+    import {
+      COMBUSTIBLE_PLANK_ROUTE,
+      COMBUSTIBLE_PLANK_SCHEMA,
+      COMBUSTIBLE_PLANK_SOURCE_AUTHORITY,
+      createCombustiblePlankState,
+      stepCombustiblePlank,
+    } from './combustible-plank-core.js';
+
+    const params = new URLSearchParams(location.search);
+    const autoplay = params.get('plank_autoplay') !== '0';
+    const speed = Math.max(0.1, Math.min(4, Number(params.get('plank_speed') || 1.25)));
+    const phaseEl = document.getElementById('phase');
+    const errorEl = document.getElementById('error');
+    const fuelEl = document.getElementById('fuel');
+    const charEl = document.getElementById('char');
+    const capacityEl = document.getElementById('capacity');
+    const volatilesEl = document.getElementById('volatiles');
+    const residualEl = document.getElementById('residual');
+
+    let burning = createCombustiblePlankState({ ignition: true });
+    let control = createCombustiblePlankState({ ignition: false });
+    let renderer = null;
+    let frameCount = 0;
+    let sceneStatus = 'initializing';
+    let sceneError = null;
+    let accumulator = 0;
+    let lastNow = null;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x242620);
+    scene.fog = new THREE.Fog(0x242620, 12, 24);
+    const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 60);
+    camera.position.set(8.3, 5.6, 10.5);
+    camera.lookAt(0, 1.15, 0);
+
+    scene.add(new THREE.HemisphereLight(0xffecc7, 0x4a5660, 2.15));
+    scene.add(new THREE.AmbientLight(0xffefd4, 1.2));
+    const key = new THREE.DirectionalLight(0xffe4ad, 3.2);
+    key.position.set(3, 8, 6);
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0x9ec7d7, 1.8);
+    fill.position.set(-7, 5, -5);
+    scene.add(fill);
+    const fireLight = new THREE.PointLight(0xff7b2f, 18, 7, 1.8);
+    fireLight.position.set(-0.55, 2.0, -1.65);
+    scene.add(fireLight);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(26, 18),
+      new THREE.MeshStandardMaterial({
+        color: 0x404437,
+        roughness: 0.96,
+        metalness: 0.02,
+        emissive: 0x1d2019,
+        emissiveIntensity: 0.75,
+      }),
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.08;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const supportMaterial = new THREE.MeshStandardMaterial({ color: 0x7b8177, roughness: 0.92, metalness: 0.02 });
+    const ironMaterial = new THREE.MeshStandardMaterial({ color: 0x525a5d, roughness: 0.38, metalness: 0.7 });
+    const woodColor = new THREE.Color(0xb56f32);
+    const charColor = new THREE.Color(0x17130f);
+
+    function createBay(z, isBurning) {
+      const root = new THREE.Group();
+      root.position.z = z;
+      scene.add(root);
+
+      const pedestal = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.45, 1.35), supportMaterial);
+      pedestal.position.set(-2.65, 0.65, 0);
+      root.add(pedestal);
+      const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.58, 1.08), ironMaterial);
+      clamp.position.set(-1.92, 1.54, 0);
+      root.add(clamp);
+
+      const fixedMaterial = new THREE.MeshStandardMaterial({ color: woodColor.clone(), roughness: 0.73 });
+      const fallingMaterial = new THREE.MeshStandardMaterial({ color: woodColor.clone(), roughness: 0.73 });
+      const fixed = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.38, 0.92), fixedMaterial);
+      fixed.position.set(-1.43, 1.72, 0);
+      root.add(fixed);
+
+      const pivot = new THREE.Group();
+      pivot.position.set(-0.30, 1.72, 0);
+      root.add(pivot);
+      const falling = new THREE.Mesh(new THREE.BoxGeometry(3.95, 0.38, 0.92), fallingMaterial);
+      falling.position.x = 1.975;
+      pivot.add(falling);
+
+      const load = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.62, 0.72), ironMaterial);
+      load.position.set(3.45, 0.48, 0);
+      pivot.add(load);
+
+      const charMaterial = new THREE.MeshStandardMaterial({ color: 0x2a1b12, roughness: 0.98 });
+      const charBand = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.405, 0.95), charMaterial);
+      charBand.position.set(0.10, 0, 0);
+      charBand.visible = isBurning;
+      pivot.add(charBand);
+
+      const flameGroup = new THREE.Group();
+      flameGroup.position.set(-0.18, 1.98, 0);
+      root.add(flameGroup);
+      const flameMaterials = [
+        new THREE.MeshBasicMaterial({ color: 0xffc52f }),
+        new THREE.MeshBasicMaterial({ color: 0xff5b20 }),
+      ];
+      const flames = [];
+      for (let i = 0; i < 7; i += 1) {
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12 + (i % 3) * 0.025, 0.58 + (i % 2) * 0.18, 9), flameMaterials[i % 2]);
+        flame.position.set((i - 3) * 0.105, 0.20 + (i % 2) * 0.08, ((i % 3) - 1) * 0.18);
+        flame.rotation.z = (i - 3) * 0.035;
+        flameGroup.add(flame);
+        flames.push(flame);
+      }
+
+      const smokeMaterial = new THREE.MeshBasicMaterial({ color: 0x555851 });
+      const smoke = [];
+      for (let i = 0; i < 8; i += 1) {
+        const puff = new THREE.Mesh(new THREE.SphereGeometry(0.16 + i * 0.025, 10, 8), smokeMaterial);
+        flameGroup.add(puff);
+        smoke.push(puff);
+      }
+      flameGroup.visible = isBurning;
+      return { root, pivot, fixedMaterial, fallingMaterial, charBand, charMaterial, flameGroup, flames, smoke, load };
+    }
+
+    const burningBay = createBay(-1.75, true);
+    const controlBay = createBay(1.75, false);
+
+    function reset() {
+      burning = createCombustiblePlankState({ ignition: true });
+      control = createCombustiblePlankState({ ignition: false });
+      accumulator = 0;
+      lastNow = null;
+      burningBay.pivot.rotation.z = 0;
+      controlBay.pivot.rotation.z = 0;
+      sceneStatus = 'running';
+    }
+
+    document.getElementById('reset').addEventListener('click', reset);
+    window.kaminosCombustiblePlankReset = reset;
+
+    window.kaminosCombustiblePlankAdvance = steps => {
+      const count = Math.max(0, Math.floor(Number(steps) || 0));
+      for (let step = 0; step < count; step += 1) {
+        burning = stepCombustiblePlank(burning, 1 / 60);
+        control = stepCombustiblePlank(control, 1 / 60);
+      }
+      updateVisuals(performance.now() * 0.001);
+      return debugState();
+    };
+
+    function updateVisuals(nowSeconds) {
+      burningBay.pivot.rotation.z = -burning.motion.angleRad;
+      controlBay.pivot.rotation.z = -control.motion.angleRad;
+      const damage = 1 - burning.material.remainingFuel;
+      const fixedWood = woodColor.clone().lerp(charColor, Math.min(0.38, damage * 0.44));
+      const fallingWood = woodColor.clone().lerp(charColor, Math.min(0.50, damage * 0.58));
+      burningBay.fixedMaterial.color.copy(fixedWood);
+      burningBay.fallingMaterial.color.copy(fallingWood);
+      burningBay.charBand.scale.x = 0.35 + damage * 1.45;
+      burningBay.charMaterial.color.setRGB(0.12 + damage * 0.02, 0.075, 0.04);
+      burningBay.flameGroup.visible = burning.combustion.active && !burning.motion.impacted;
+      fireLight.intensity = burningBay.flameGroup.visible ? 13 + burning.combustion.burnRate * 32 : 0;
+      for (let i = 0; i < burningBay.flames.length; i += 1) {
+        const flame = burningBay.flames[i];
+        const flicker = 0.78 + Math.sin(nowSeconds * (8.2 + i * 0.7) + i * 1.9) * 0.18;
+        flame.scale.set(0.78 + damage * 0.25, Math.max(0.35, flicker * (0.75 + burning.combustion.burnRate)), 0.78 + damage * 0.25);
+      }
+      for (let i = 0; i < burningBay.smoke.length; i += 1) {
+        const cycle = (nowSeconds * 0.24 + i / burningBay.smoke.length) % 1;
+        const puff = burningBay.smoke[i];
+        const compact = innerWidth <= 720;
+        puff.position.set(
+          Math.sin(i * 2.7 + nowSeconds) * 0.18,
+          0.5 + cycle * (compact ? 1.7 : 2.5),
+          Math.cos(i * 1.8) * 0.20,
+        );
+        puff.scale.setScalar(0.7 + cycle * (compact ? 1.15 : 1.8));
+      }
+
+      phaseEl.textContent = `${burning.phase} | step ${burning.step} | support ${burning.support.capacity.toFixed(3)} / ${burning.support.demand.toFixed(3)} | angle ${burning.motion.angleRad.toFixed(3)}`;
+      fuelEl.textContent = burning.material.remainingFuel.toFixed(3);
+      charEl.textContent = burning.material.charMass.toFixed(3);
+      capacityEl.textContent = `${burning.support.capacity.toFixed(3)} / ${burning.support.demand.toFixed(3)}`;
+      volatilesEl.textContent = burning.material.emittedVolatiles.toFixed(3);
+      residualEl.textContent = burning.material.accountingResidual.toFixed(6);
+    }
+
+    function debugState() {
+      return JSON.parse(JSON.stringify({
+        schema: COMBUSTIBLE_PLANK_SCHEMA,
+        requestedRoute: COMBUSTIBLE_PLANK_ROUTE,
+        effectiveRoute: COMBUSTIBLE_PLANK_ROUTE,
+        sourceAuthority: COMBUSTIBLE_PLANK_SOURCE_AUTHORITY,
+        status: sceneError ? 'failed' : sceneStatus,
+        backend: renderer ? 'three-webgpu' : null,
+        fallback: null,
+        error: sceneError,
+        frameCount,
+        canvas: renderer ? { width: renderer.domElement.width, height: renderer.domElement.height } : null,
+        burning,
+        control,
+        events: burning.events,
+      }));
+    }
+    window.kaminosCombustiblePlankDebugState = debugState;
+
+    function resize() {
+      if (!renderer) return;
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    }
+    addEventListener('resize', resize);
+
+    async function initialize() {
+      try {
+        renderer = new THREE.WebGPURenderer({ antialias: true });
+        renderer.shadowMap.enabled = true;
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+        renderer.setSize(innerWidth, innerHeight);
+        document.body.prepend(renderer.domElement);
+        await renderer.init();
+        sceneStatus = 'running';
+        renderer.setAnimationLoop(now => {
+          const nowSeconds = now * 0.001;
+          if (lastNow === null) lastNow = nowSeconds;
+          const elapsed = Math.min(0.1, Math.max(0, nowSeconds - lastNow));
+          lastNow = nowSeconds;
+          if (autoplay && !burning.motion.impacted) {
+            accumulator += elapsed * speed;
+            while (accumulator >= 1 / 60) {
+              burning = stepCombustiblePlank(burning, 1 / 60);
+              control = stepCombustiblePlank(control, 1 / 60);
+              accumulator -= 1 / 60;
+            }
+          }
+          updateVisuals(nowSeconds);
+          renderer.render(scene, camera);
+          frameCount += 1;
+        });
+      } catch (error) {
+        sceneError = error?.message || String(error);
+        sceneStatus = 'failed';
+        errorEl.style.display = 'grid';
+        errorEl.textContent = `Combustible plank witness failed before render: ${sceneError}`;
+        phaseEl.textContent = 'render failed';
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>
