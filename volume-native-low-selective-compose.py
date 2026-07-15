@@ -18,6 +18,8 @@ SCHEMA = "kaminos.volume.native-low-selective-composition.v0"
 IDENTITY = "native-low-zero-shot-selective-composition-v0"
 INPUT_AUTHORITY = "native-low-simulator-state-no-synthetic-downsample-v0"
 COMPOSITION_AUTHORITY = "frozen-exact-basin-heads-applied-to-native-low-state-v0"
+CROSS_GRID_COMPOSITION_AUTHORITY = "frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0"
+SAMPLING_IDENTITY = "normalized-nearest-cell-low-to-output-grid-v0"
 MODEL_IDENTITY = "exact-basin-selective-carrier-heads-160-to-128-v0"
 FLUID_CHANNELS = [
     "velocityX", "velocityY", "velocityZ", "densityCarrier",
@@ -44,6 +46,11 @@ def parse_args() -> argparse.Namespace:
         / "selective-head-live" / "exact-basin-160-to-128-v0" / "manifest.json"
     ))
     parser.add_argument("--batch-cells", type=int, default=32768)
+    parser.add_argument(
+        "--allow-cross-grid-native-input",
+        action="store_true",
+        help="Explicitly apply the frozen model to a native grid different from its training low grid.",
+    )
     return parser.parse_args()
 
 
@@ -160,11 +167,26 @@ def main() -> int:
         if native.get("failurePhase") is not None or native.get("completeFieldCoverage") is not True:
             raise ApplicationFailure(phase, "native export is partial or carries a failure phase")
         low_grid = int(native.get("grid") or 0)
+        trained_low_grid = int(model.get("source", {}).get("lowGrid") or 0)
         high_grid = int(model.get("source", {}).get("highGrid") or 0)
-        if low_grid != int(model.get("source", {}).get("lowGrid") or 0) or low_grid != 128 or high_grid != 160:
+        if trained_low_grid != 128 or high_grid != 160:
             raise ApplicationFailure(phase, "native/model grid relationship mismatch", {
-                "nativeGrid": low_grid, "modelLowGrid": model.get("source", {}).get("lowGrid"), "modelHighGrid": high_grid,
+                "nativeGrid": low_grid, "modelLowGrid": trained_low_grid, "modelHighGrid": high_grid,
             })
+        if low_grid < 2 or low_grid > high_grid:
+            raise ApplicationFailure(phase, "native grid is outside the normalized sampling domain", {
+                "nativeGrid": low_grid, "outputGrid": high_grid,
+            })
+        if low_grid != trained_low_grid and not args.allow_cross_grid_native_input:
+            raise ApplicationFailure(phase, "cross-grid native input requires explicit caller admission", {
+                "nativeGrid": low_grid,
+                "trainedLowGrid": trained_low_grid,
+                "requiredFlag": "--allow-cross-grid-native-input",
+            })
+        cross_grid_application = low_grid != trained_low_grid
+        composition_authority = (
+            CROSS_GRID_COMPOSITION_AUTHORITY if cross_grid_application else COMPOSITION_AUTHORITY
+        )
         if native.get("effectiveRoute") != "native-3d-compute-fluid-raymarch-v0":
             raise ApplicationFailure(phase, "native export route identity mismatch")
         deterministic = native.get("deterministicReplay") or {}
@@ -262,7 +284,7 @@ def main() -> int:
             "status": "captured",
             "failurePhase": None,
             "inputAuthority": INPUT_AUTHORITY,
-            "compositionAuthority": COMPOSITION_AUTHORITY,
+            "compositionAuthority": composition_authority,
             "runtimeTruthAvailable": False,
             "sameNativeStateIdentity": same_native_state_identity,
             "source": {
@@ -282,12 +304,20 @@ def main() -> int:
                 "manifestPath": str(model_manifest_path),
                 "manifestSha256": evidence["modelManifestSha256"],
                 "trainingPairAuthority": model.get("source", {}).get("pairAuthority"),
+                "trainedLowGrid": trained_low_grid,
+                "trainedHighGrid": high_grid,
                 "features": model.get("features"),
                 "architecture": model.get("architecture"),
             },
             "relationship": {
                 "lowGrid": low_grid,
                 "highGrid": high_grid,
+                "trainedLowGrid": trained_low_grid,
+                "applicationLowGrid": low_grid,
+                "outputGrid": high_grid,
+                "crossGridApplication": cross_grid_application,
+                "crossGridCallerAdmission": bool(args.allow_cross_grid_native_input),
+                "samplingIdentity": SAMPLING_IDENTITY,
                 "applicationInput": "native low simulator field only",
                 "syntheticDownsampleApplied": False,
                 "highTruthUse": "unavailable; not loaded and not used for application or metrics",
@@ -328,7 +358,12 @@ def main() -> int:
             },
             "limitations": [
                 "Frozen heads were trained on one synthetic phase-aligned 160-to-128 basin.",
-                "This is the first zero-shot application to a genuinely native 128-grid simulator state.",
+                (
+                    f"This is an explicit cross-grid zero-shot application from native {low_grid} to output {high_grid}; "
+                    f"the model training low grid remains {trained_low_grid}."
+                    if cross_grid_application
+                    else "This is a zero-shot application to a genuinely native 128-grid simulator state."
+                ),
                 "No high truth exists at the native phase, so visual coherence and persistence are the discriminants.",
             ],
         }

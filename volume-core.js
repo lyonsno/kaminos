@@ -27,6 +27,7 @@ const SELECTIVE_COMPOSITION_APPLICATION_IDENTITY = 'learned-selective-head-appli
 const NATIVE_LOW_HELD_INITIALIZATION_AUTHORITY = 'native-low-simulator-held-control-v0';
 const NATIVE_LOW_HELD_APPLICATION_IDENTITY = 'native-low-held-render-application-v0';
 const NATIVE_LOW_SELECTIVE_INITIALIZATION_AUTHORITY = 'frozen-exact-basin-heads-applied-to-native-low-state-v0';
+const NATIVE_LOW_CROSS_GRID_SELECTIVE_INITIALIZATION_AUTHORITY = 'frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0';
 const NATIVE_LOW_SELECTIVE_APPLICATION_IDENTITY = 'native-low-selective-held-render-application-v0';
 const PHASE_ALIGNED_TRUTH_HELD_AUTHORITY = 'offline-high-truth-held-render-only-v0';
 const PHASE_ALIGNED_LOW_HELD_AUTHORITY = 'downsampled-same-high-history-held-control-v0';
@@ -9365,7 +9366,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && payload.filterIdentity === NATIVE_LOW_HELD_APPLICATION_IDENTITY;
     const isNativeLowSelective = payload.initializationAuthority === NATIVE_LOW_SELECTIVE_INITIALIZATION_AUTHORITY
       && payload.filterIdentity === NATIVE_LOW_SELECTIVE_APPLICATION_IDENTITY;
-    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld && !isNativeLowHeld && !isNativeLowSelective) {
+    const isNativeLowCrossGridSelective = payload.initializationAuthority === NATIVE_LOW_CROSS_GRID_SELECTIVE_INITIALIZATION_AUTHORITY
+      && payload.filterIdentity === NATIVE_LOW_SELECTIVE_APPLICATION_IDENTITY;
+    if (!isCoarseReceiver && !isSelectiveComposition && !isPhaseAlignedHeld && !isNativeLowHeld && !isNativeLowSelective && !isNativeLowCrossGridSelective) {
       return fullFieldImportFailure('begin', 'initialization-authority-mismatch', {
         requestedInitializationAuthority: payload.initializationAuthority || null,
         requestedFilterIdentity: payload.filterIdentity || null,

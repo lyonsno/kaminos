@@ -17,6 +17,7 @@ const SELECTIVE_COMPOSITION_AUTHORITY = 'learned-selective-head-composition-not-
 const SELECTIVE_COMPOSITION_APPLICATION = 'learned-selective-head-application-v0';
 const NATIVE_LOW_SELECTIVE_SCHEMA = 'kaminos.volume.native-low-selective-composition.v0';
 const NATIVE_LOW_SELECTIVE_AUTHORITY = 'frozen-exact-basin-heads-applied-to-native-low-state-v0';
+const NATIVE_LOW_CROSS_GRID_SELECTIVE_AUTHORITY = 'frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0';
 const NATIVE_LOW_INPUT_AUTHORITY = 'native-low-simulator-state-no-synthetic-downsample-v0';
 const NATIVE_LOW_HELD_SCHEMA = 'kaminos.volume.native-low-held-field.v0';
 const NATIVE_LOW_HELD_AUTHORITY = 'native-low-simulator-held-control-v0';
@@ -117,6 +118,7 @@ function resolveInitialFieldManifest() {
   const isNativeLowSelective = manifest.schema === NATIVE_LOW_SELECTIVE_SCHEMA;
   const isNativeLowHeld = manifest.schema === NATIVE_LOW_HELD_SCHEMA;
   const isPhaseAlignedHeld = manifest.schema === PHASE_ALIGNED_HELD_SCHEMA;
+  const nativeLowSelectiveAuthority = isNativeLowSelective ? manifest.compositionAuthority : null;
   if (!isCoarseReceiver && !isSelectiveComposition && !isNativeLowSelective && !isNativeLowHeld && !isPhaseAlignedHeld) {
     throw new Error(`unsupported initial field manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
   }
@@ -136,7 +138,12 @@ function resolveInitialFieldManifest() {
     }
   }
   if (isNativeLowSelective) {
-    if (manifest.compositionAuthority !== NATIVE_LOW_SELECTIVE_AUTHORITY
+    const isMatchedGridAuthority = nativeLowSelectiveAuthority === NATIVE_LOW_SELECTIVE_AUTHORITY;
+    const isExplicitCrossGridAuthority = nativeLowSelectiveAuthority === NATIVE_LOW_CROSS_GRID_SELECTIVE_AUTHORITY
+      && manifest.relationship?.crossGridApplication === true
+      && manifest.relationship?.crossGridCallerAdmission === true
+      && manifest.relationship?.applicationLowGrid !== manifest.relationship?.trainedLowGrid;
+    if ((!isMatchedGridAuthority && !isExplicitCrossGridAuthority)
       || manifest.inputAuthority !== NATIVE_LOW_INPUT_AUTHORITY
       || manifest.runtimeTruthAvailable !== false
       || manifest.relationship?.syntheticDownsampleApplied !== false
@@ -194,7 +201,7 @@ function resolveInitialFieldManifest() {
     initializationAuthority: isNativeLowHeld
       ? NATIVE_LOW_HELD_AUTHORITY
       : isNativeLowSelective
-      ? NATIVE_LOW_SELECTIVE_AUTHORITY
+      ? nativeLowSelectiveAuthority
       : isSelectiveComposition
       ? SELECTIVE_COMPOSITION_AUTHORITY
       : isPhaseAlignedHeld

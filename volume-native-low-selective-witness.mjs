@@ -9,6 +9,7 @@ const IDENTITY = 'native-low-control-vs-frozen-selective-splat-witness-v0';
 const INPUT_AUTHORITY = 'native-low-simulator-state-no-synthetic-downsample-v0';
 const CONTROL_AUTHORITY = 'native-low-simulator-held-control-v0';
 const TREATMENT_AUTHORITY = 'frozen-exact-basin-heads-applied-to-native-low-state-v0';
+const CROSS_GRID_TREATMENT_AUTHORITY = 'frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0';
 const FIELD_LAYOUT_IDENTITY = 'x-fastest-zyx-c-interleaved-v0';
 const FLUID_CHANNELS = [
   'velocityX', 'velocityY', 'velocityZ', 'densityCarrier', 'smokeDensity', 'heat', 'fuel', 'detail',
@@ -99,16 +100,19 @@ function validateRender(render, label, expectedGrid, sameNativeStateIdentity) {
   };
 }
 
-function htmlPage(control, treatment, sameNativeStateIdentity) {
+function htmlPage(control, treatment, sameNativeStateIdentity, relationship) {
   const imageName = path => `./${path.split('/').pop()}`;
+  const nativeGrid = relationship.applicationLowGrid;
+  const trainedLowGrid = relationship.trainedLowGrid;
+  const outputGrid = relationship.outputGrid;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Native-low zero-shot selective transfer</title>
 <style>
 :root{color-scheme:dark;font-family:Inter,system-ui,sans-serif;background:#080a0b;color:#eef3f4}*{box-sizing:border-box}body{margin:0;background:#080a0b}header{padding:14px 18px;border-bottom:1px solid #2c3639;background:#101416}h1{font-size:18px;margin:0 0 5px}p{margin:0;color:#aebbc0;font-size:12px}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px;background:#2c3639}.panel{min-width:0;background:#050607}.label{padding:10px 12px;background:#111719;border-bottom:1px solid #263034}.label strong{display:block;font-size:15px}.label span{display:block;color:#9eacb1;font-size:11px;margin-top:3px}img{display:block;width:100%;height:auto;background:#000;image-rendering:auto}@media(max-width:900px){.grid{grid-template-columns:1fr}}
-</style></head><body><header><h1>Native 128 control vs frozen-head reconstruction</h1><p>Same native simulator state ${sameNativeStateIdentity.slice(0, 16)}... | splat-only on both | no high truth or synthetic downsample at application time</p></header>
-<main class="grid"><section class="panel"><div class="label"><strong>Native-low control</strong><span>Untouched native 128³ simulator state, held render</span></div><img src="${imageName(control.image.path)}" alt="Native low control"></section>
-<section class="panel"><div class="label"><strong>Native-low selective predicted</strong><span>Frozen 160→128 heads applied zero-shot to the same native state, rendered at 160³</span></div><img src="${imageName(treatment.image.path)}" alt="Native low selective predicted"></section></main></body></html>`;
+</style></head><body><header><h1>Native ${nativeGrid} control vs frozen-head reconstruction</h1><p>Same native simulator state ${sameNativeStateIdentity.slice(0, 16)}... | splat-only on both | no high truth or synthetic downsample at application time</p></header>
+<main class="grid"><section class="panel"><div class="label"><strong>Native-low control</strong><span>Untouched native ${nativeGrid}³ simulator state, held render</span></div><img src="${imageName(control.image.path)}" alt="Native low control"></section>
+<section class="panel"><div class="label"><strong>Native-low selective predicted</strong><span>Frozen model trained on ${trainedLowGrid}³ input applied zero-shot to the same native ${nativeGrid}³ state, rendered at ${outputGrid}³</span></div><img src="${imageName(treatment.image.path)}" alt="Native low selective predicted"></section></main></body></html>`;
 }
 
 let phase = 'input-validation';
@@ -118,18 +122,25 @@ try {
   const native = readManifest(nativeManifestPath, 'nativeLowControl');
   const predicted = readManifest(predictedManifestPath, 'nativeLowSelectivePredicted');
   readManifest(sourceCapturePath, 'sourceCapture');
+  const nativeGrid = native.manifest.grid;
+  const predictedGrid = predicted.manifest.relationship?.outputGrid;
+  const crossGridApplication = predicted.manifest.relationship?.crossGridApplication === true;
+  const expectedTreatmentAuthority = crossGridApplication ? CROSS_GRID_TREATMENT_AUTHORITY : TREATMENT_AUTHORITY;
   if (native.manifest.schema !== 'kaminos.volume.full-grid-field-export.v0'
     || native.manifest.status !== 'captured'
     || native.manifest.failurePhase !== null
-    || native.manifest.grid !== 128
+    || !Number.isInteger(nativeGrid)
+    || nativeGrid < 2
     || native.manifest.completeFieldCoverage !== true) {
-    throw new Error('native control is not a complete captured 128-grid simulator field');
+    throw new Error('native control is not a complete captured simulator field');
   }
   if (predicted.manifest.schema !== 'kaminos.volume.native-low-selective-composition.v0'
     || predicted.manifest.status !== 'captured'
     || predicted.manifest.failurePhase !== null
     || predicted.manifest.inputAuthority !== INPUT_AUTHORITY
-    || predicted.manifest.compositionAuthority !== TREATMENT_AUTHORITY
+    || predicted.manifest.compositionAuthority !== expectedTreatmentAuthority
+    || predicted.manifest.relationship?.applicationLowGrid !== nativeGrid
+    || !Number.isInteger(predictedGrid)
     || predicted.manifest.runtimeTruthAvailable !== false) {
     throw new Error('predicted treatment authority mismatch');
   }
@@ -158,7 +169,7 @@ try {
       backend: native.manifest.backend,
     },
     receiver: {
-      grid: 128,
+      grid: nativeGrid,
       initialSimStepCount: 0,
       fluid: { ...fluid, path: resolve(String(fluid.path)) },
       front: { ...front, path: resolve(String(front.path)) },
@@ -205,10 +216,10 @@ try {
   phase = 'render-validation';
   const controlRender = readManifest(join(controlDir, 'manifest.json'), 'nativeLowControlRender');
   const treatmentRender = readManifest(join(treatmentDir, 'manifest.json'), 'nativeLowSelectivePredictedRender');
-  const control = validateRender(controlRender.manifest, 'nativeLowControl', 128, sameNativeStateIdentity);
-  const treatment = validateRender(treatmentRender.manifest, 'nativeLowSelectivePredicted', 160, sameNativeStateIdentity);
+  const control = validateRender(controlRender.manifest, 'nativeLowControl', nativeGrid, sameNativeStateIdentity);
+  const treatment = validateRender(treatmentRender.manifest, 'nativeLowSelectivePredicted', predictedGrid, sameNativeStateIdentity);
   const htmlPath = join(outDir, 'index.html');
-  writeFileSync(htmlPath, htmlPage(control, treatment, sameNativeStateIdentity));
+  writeFileSync(htmlPath, htmlPage(control, treatment, sameNativeStateIdentity, predicted.manifest.relationship));
   writeReport({
     schema: SCHEMA,
     identity: IDENTITY,
@@ -217,6 +228,7 @@ try {
     inputAuthority: INPUT_AUTHORITY,
     runtimeTruthAvailable: false,
     sameNativeStateIdentity,
+    relationship: predicted.manifest.relationship,
     renderer: {
       requested: 'splat-only-v0',
       controlEffective: control.effectiveComposition,
