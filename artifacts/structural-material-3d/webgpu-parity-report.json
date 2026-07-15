@@ -1,0 +1,185 @@
+{
+  "schema": "kaminos.structural-material.webgpu-browser-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "requestedPageRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "effectivePageRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "requestedRoute": "kaminos.structural-material.webgpu-bond-response-parity.v0",
+  "effectiveRoute": "kaminos.structural-material.webgpu-bond-response-parity.v0",
+  "requestedBackend": "webgpu",
+  "effectiveBackend": "webgpu",
+  "cpuFallbackUsed": false,
+  "requestedConfig": {
+    "url": "http://127.0.0.1:8195/structural-material-3d.html",
+    "debugPort": 9223,
+    "width": 1280,
+    "height": 820,
+    "deviceScaleFactor": 1,
+    "loadTimeoutMs": 30000,
+    "reportPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/webgpu-parity-report.json",
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/webgpu-parity.png"
+  },
+  "effectiveConfig": {
+    "url": "http://127.0.0.1:8195/structural-material-3d.html",
+    "debugPort": 9223,
+    "loadTimeoutMs": 30000,
+    "viewport": {
+      "width": 1280,
+      "height": 820,
+      "deviceScaleFactor": 1
+    },
+    "reportPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/webgpu-parity-report.json",
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/webgpu-parity.png",
+    "browserTarget": "first-page-target"
+  },
+  "adapter": {
+    "vendor": "apple",
+    "architecture": "metal-3",
+    "device": null,
+    "description": null,
+    "isFallbackAdapter": false
+  },
+  "abi": {
+    "abi": "kaminos.structural-material.packed-bond-abi.v0",
+    "workgroupSize": 64,
+    "nodeStrideBytes": 32,
+    "bondStrideBytes": 80,
+    "responseStrideBytes": 32,
+    "eventStrideBytes": 48,
+    "eventHeaderBytes": 16,
+    "interactionBytes": 48,
+    "nodeFields": [
+      "position3",
+      "pinned",
+      "displacement3",
+      "componentOrdinal"
+    ],
+    "bondFields": [
+      "endpointIndices",
+      "bondKind",
+      "geometryRole",
+      "direction3",
+      "midpoint3",
+      "rest",
+      "strength",
+      "stiffness",
+      "alive",
+      "lastStress",
+      "lastStrain",
+      "repaired"
+    ],
+    "responseFields": [
+      "stress",
+      "strain",
+      "energy",
+      "shouldBreak",
+      "bondIndex",
+      "bondKind",
+      "geometryRole",
+      "nextAlive"
+    ],
+    "eventFields": [
+      "bondIndex",
+      "bondKind",
+      "geometryRole",
+      "cause",
+      "stress",
+      "strain",
+      "energy",
+      "midpoint3"
+    ],
+    "geometryRoleCodes": {
+      "body": 0,
+      "skin": 1,
+      "depth-tie": 2,
+      "notch-depth-tie": 3,
+      "notch-bridge": 4,
+      "notch-shoulder": 5
+    }
+  },
+  "dispatch": {
+    "workgroupSize": 64,
+    "workgroupCount": 10,
+    "bondCount": 631,
+    "nodeCount": 180,
+    "eventCapacity": 631
+  },
+  "timingsMs": {
+    "adapterRequest": 0.29999999701976776,
+    "deviceRequest": 0.29999999701976776,
+    "pipelineCompile": 1,
+    "dispatchAndGpuCompletion": 0.4000000059604645,
+    "readbackMapAndCopy": 0.19999998807907104
+  },
+  "parity": {
+    "ok": true,
+    "tolerances": {
+      "stress": 0.0005,
+      "strain": 0.0005,
+      "energy": 0.0005,
+      "midpoint": 0.00001
+    },
+    "responseCountMatches": true,
+    "responseIdentityMatches": true,
+    "breakSetMatches": true,
+    "eventSetMatches": true,
+    "eventPayloadMatches": true,
+    "livenessMatches": true,
+    "numericValuesFinite": true,
+    "numericParity": true,
+    "eventOverflowCount": 0,
+    "cpuBreakCount": 58,
+    "gpuBreakCount": 58,
+    "cpuEventCount": 58,
+    "gpuEventCount": 58,
+    "maxStressError": 0.00000865821986217874,
+    "maxStrainError": 0.0000121114009621337,
+    "maxEnergyError": 0.0000042962511896949,
+    "maxEventStressError": 0.00000865821986217874,
+    "maxEventStrainError": 0.0000121114009621337,
+    "maxEventEnergyError": 0.0000042962511896949,
+    "maxEventMidpointError": 2.4394989028841962e-8
+  },
+  "checks": {
+    "pageRouteIdentity": true,
+    "gpuStatusPassed": true,
+    "routeIdentity": true,
+    "backendIdentity": true,
+    "noCpuFallback": true,
+    "parityPassed": true,
+    "responseIdentityMatches": true,
+    "breakSetMatches": true,
+    "eventSetMatches": true,
+    "eventPayloadMatches": true,
+    "livenessMatches": true,
+    "noEventOverflow": true,
+    "screenshotWritten": true,
+    "routeStatusVisible": true,
+    "noRuntimeErrors": true
+  },
+  "pixelProbe": {
+    "ok": true,
+    "source": "canvas-blob-pixels",
+    "nonDarkPixels": 2114,
+    "width": 1280,
+    "height": 765,
+    "sampleWidth": 96,
+    "sampleHeight": 96
+  },
+  "runtimeErrors": [],
+  "lastTrustworthyEvidence": {
+    "phase": "visual-evidence",
+    "effectiveRoute": "kaminos.structural-material.webgpu-bond-response-parity.v0",
+    "pixelProbe": {
+      "ok": true,
+      "source": "canvas-blob-pixels",
+      "nonDarkPixels": 2114,
+      "width": 1280,
+      "height": 765,
+      "sampleWidth": 96,
+      "sampleHeight": 96
+    },
+    "screenshotPath": "/private/tmp/kaminos-structural-material-sidecar-0715/artifacts/structural-material-3d/webgpu-parity.png"
+  },
+  "error": null
+}

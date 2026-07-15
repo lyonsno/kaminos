@@ -69,7 +69,7 @@
       bottom: 12px;
       right: 14px;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) auto auto;
       gap: 12px;
       pointer-events: none;
       font-family: ui-monospace, Menlo, monospace;
@@ -85,6 +85,10 @@
     }
     #gesture {
       color: #f1cc62;
+      white-space: nowrap;
+    }
+    #gpu-status {
+      color: #95d0a5;
       white-space: nowrap;
     }
     @media (max-width: 640px) {
@@ -125,6 +129,7 @@
   <main id="stage" aria-label="Layered structural material sidecar route">
     <div id="hud">
       <div id="route"></div>
+      <div id="gpu-status"></div>
       <div id="gesture"></div>
     </div>
   </main>
@@ -141,10 +146,15 @@
       createLayeredStructuralMaterial,
       summarizeLayeredStructuralState,
     } from './structural-material-3d-core.js';
+    import {
+      STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE,
+      runLayeredStructuralWebGpuParity,
+    } from './structural-material-3d-webgpu-core.js';
 
     const stage = document.querySelector('#stage');
     const readout = document.querySelector('#readout');
     const route = document.querySelector('#route');
+    const gpuStatus = document.querySelector('#gpu-status');
     const gesture = document.querySelector('#gesture');
     const CAMERA_CONTROL_AUTHORITY = 'operator-camera-controls-v0';
 
@@ -208,6 +218,8 @@
     let forceEnvelope = null;
     let lastPoint = { x: 0.92, y: 0.52, z: 0.85 };
     const cameraInvariantViolations = [];
+    let gpuParityReceipt = null;
+    let gpuParityPromise = null;
 
     function worldPoint(node) {
       return new THREE.Vector3(
@@ -271,6 +283,10 @@
       const summary = summarizeLayeredStructuralState(material);
       readout.textContent = `broken ${summary.brokenBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
       route.textContent = `${STRUCTURAL_MATERIAL_3D_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
+      gpuStatus.textContent = gpuParityReceipt
+        ? `GPU ${gpuParityReceipt.status} ${gpuParityReceipt.parity?.gpuBreakCount ?? 0}/${gpuParityReceipt.parity?.cpuBreakCount ?? 0}`
+        : '';
+      gpuStatus.title = gpuParityReceipt?.effectiveRoute || STRUCTURAL_MATERIAL_3D_WEBGPU_ROUTE;
       gesture.textContent = forceEnvelope
         ? `drag ${forceEnvelope.dragLength.toFixed(3)} | mag ${forceEnvelope.magnitude.toFixed(3)} | z ${forceEnvelope.point.z.toFixed(3)} | stress ${summary.maxStress.toFixed(3)}`
         : `drag 0.000 | mag 0.000 | z 0.500 | stress ${summary.maxStress.toFixed(3)}`;
@@ -426,6 +442,7 @@
       renderer: 'THREE.WebGPURenderer',
       cameraControlAuthority: CAMERA_CONTROL_AUTHORITY,
       cameraInvariantViolationCount: cameraInvariantViolations.length,
+      gpuParity: gpuParityReceipt,
     });
 
     window.__structuralMaterial3dCameraWitness = () => ({
@@ -511,6 +528,25 @@
         after,
         invariantViolationCount: cameraInvariantViolations.length,
       };
+    };
+
+    window.__structuralMaterial3dRunGpuParity = async () => {
+      if (!gpuParityPromise) {
+        const scenario = buildLayeredStructuralWitnessScenario();
+        const parityState = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+        gpuParityPromise = runLayeredStructuralWebGpuParity({
+          state: parityState,
+          interaction: scenario.force,
+        }).then(receipt => {
+          gpuParityReceipt = receipt;
+          updateReadout();
+          renderScene();
+          return receipt;
+        }).finally(() => {
+          gpuParityPromise = null;
+        });
+      }
+      return gpuParityPromise;
     };
 
     window.addEventListener('resize', resize);

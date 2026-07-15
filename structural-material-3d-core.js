@@ -342,6 +342,30 @@ function stressForBond(bond, interaction) {
   return magnitude * contactRamp * (0.18 + 0.78 * axial + 0.35 * shear + depthShear) * xLoad * grip * notchBoost;
 }
 
+export function evaluateLayeredStructuralBondResponse(bond, interaction = {}) {
+  if (!bond.alive) {
+    return {
+      stress: finite(bond.lastStress),
+      strain: finite(bond.lastStrain),
+      energy: 0,
+      shouldBreak: false,
+      nextAlive: false,
+    };
+  }
+  const stress = stressForBond(bond, interaction);
+  const strain = stress / Math.max(0.001, bond.stiffness);
+  const shouldBreak = strain > bond.strength;
+  return {
+    stress,
+    strain,
+    energy: shouldBreak
+      ? (strain - bond.strength) * bond.rest * (bond.bondKind === 'depth' ? 1.05 : 0.86)
+      : 0,
+    shouldBreak,
+    nextAlive: !shouldBreak,
+  };
+}
+
 export function applyLayeredStructuralInteraction(state, interaction = {}, options = {}) {
   let next = cloneState(state);
   const steps = Math.max(1, Math.floor(finite(options.steps, 1)));
@@ -351,19 +375,17 @@ export function applyLayeredStructuralInteraction(state, interaction = {}, optio
   for (let step = 0; step < steps; step += 1) {
     next.bonds = next.bonds.map(bond => {
       if (!bond.alive) return bond;
-      const stress = stressForBond(bond, interaction);
-      const strain = stress / Math.max(0.001, bond.stiffness);
-      const shouldBreak = strain > bond.strength;
-      if (!shouldBreak) return { ...bond, lastStress: round(stress), lastStrain: round(strain) };
+      const response = evaluateLayeredStructuralBondResponse(bond, interaction);
+      if (!response.shouldBreak) return { ...bond, lastStress: round(response.stress), lastStrain: round(response.strain) };
       events.push({
         kind: 'crack',
         bondId: bond.id,
         bondKind: bond.bondKind,
         geometryRole: bond.geometryRole,
         cause: 'stress-threshold',
-        stress: round(stress),
-        strain: round(strain),
-        energy: round((strain - bond.strength) * bond.rest * (bond.bondKind === 'depth' ? 1.05 : 0.86)),
+        stress: round(response.stress),
+        strain: round(response.strain),
+        energy: round(response.energy),
         midpoint: { ...bond.midpoint },
         step,
       });
@@ -371,8 +393,8 @@ export function applyLayeredStructuralInteraction(state, interaction = {}, optio
         ...bond,
         alive: false,
         cause: 'stress-threshold',
-        lastStress: round(stress),
-        lastStrain: round(strain),
+        lastStress: round(response.stress),
+        lastStrain: round(response.strain),
       };
     });
   }
