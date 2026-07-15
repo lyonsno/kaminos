@@ -386,11 +386,16 @@ def main():
         block = trunk.blocks[diagnostic_vit_phase_layer]
         def capture_vit_phase(phase):
             return lambda _module, _inputs, output: captures.__setitem__(f"vit-phase-{phase}", output.detach().clone())
+        def diagnostic_addmm_act(_activation, linear, value):
+            output = F.gelu(linear(value), approximate="none")
+            if linear is block.mlp.fc1:
+                captures.__setitem__("vit-phase-mlpHidden", output.detach().clone())
+            return output
+        vitdet.addmm_act = diagnostic_addmm_act
         hooks.extend([
             block.norm1.register_forward_hook(capture_vit_phase("layerNorm1")),
             block.attn.proj.register_forward_hook(capture_vit_phase("projected")),
             block.norm2.register_forward_hook(capture_vit_phase("layerNorm2")),
-            block.mlp.act.register_forward_hook(capture_vit_phase("mlpHidden")),
             block.mlp.fc2.register_forward_hook(capture_vit_phase("mlpOut")),
         ])
     outputs = []
