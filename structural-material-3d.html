@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="kaminos-visual-consumer-authority" content="threejs-sidecar-consumer-not-truth-v0">
+  <title>Kaminos Layered Structural Sidecar</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0a0d10;
+      color: #f4efe0;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      background: #0a0d10;
+      overflow: hidden;
+    }
+    header {
+      display: grid;
+      grid-template-columns: auto auto auto minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid #273342;
+      background: #101821;
+      min-width: 0;
+    }
+    button {
+      appearance: none;
+      border: 1px solid #41556d;
+      border-radius: 6px;
+      background: #1d2b36;
+      color: #f4efe0;
+      min-height: 34px;
+      padding: 0 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover { background: #263848; }
+    #readout {
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      color: #9fb6c9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+    }
+    #stage {
+      position: relative;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      background: #0a0d10;
+    }
+    #stage canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    #hud {
+      position: absolute;
+      left: 14px;
+      bottom: 12px;
+      right: 14px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      pointer-events: none;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 12px;
+      color: #d6e4ea;
+      text-shadow: 0 1px 2px #000;
+    }
+    #route {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #95d0a5;
+    }
+    #gesture {
+      color: #f1cc62;
+      white-space: nowrap;
+    }
+    @media (max-width: 640px) {
+      header {
+        grid-template-columns: auto auto auto minmax(0, 1fr);
+        gap: 8px;
+      }
+      button {
+        min-height: 34px;
+        padding: 0 10px;
+      }
+      #hud {
+        grid-template-columns: 1fr;
+      }
+      #route {
+        display: none;
+      }
+    }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./lib/three.webgpu.js",
+        "three/webgpu": "./lib/three.webgpu.js",
+        "three/tsl": "./lib/three.tsl.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header>
+    <button id="reset">Reset</button>
+    <button id="fracture">Shear</button>
+    <button id="bind">Bind</button>
+    <div id="readout"></div>
+  </header>
+  <main id="stage" aria-label="Layered structural material sidecar route">
+    <div id="hud">
+      <div id="route"></div>
+      <div id="gesture"></div>
+    </div>
+  </main>
+  <script type="module">
+    import * as THREE from 'three';
+    import {
+      STRUCTURAL_MATERIAL_3D_ROUTE,
+      STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
+      applyLayeredStructuralInteraction,
+      bindLayeredStructuralConnectivity,
+      buildLayeredStructuralWitnessScenario,
+      createLayeredStructuralDragInteraction,
+      createLayeredStructuralMaterial,
+      summarizeLayeredStructuralState,
+    } from './structural-material-3d-core.js';
+
+    const stage = document.querySelector('#stage');
+    const readout = document.querySelector('#readout');
+    const route = document.querySelector('#route');
+    const gesture = document.querySelector('#gesture');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0d10);
+    const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 100);
+    camera.position.set(0.2, 1.2, 3.35);
+    camera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGPURenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    stage.prepend(renderer.domElement);
+    await renderer.init();
+
+    const world = new THREE.Group();
+    scene.add(world);
+    scene.add(new THREE.HemisphereLight(0xe8f3ff, 0x1d2530, 2.3));
+    const key = new THREE.DirectionalLight(0xffffff, 2.1);
+    key.position.set(1.5, 2.2, 2.4);
+    scene.add(key);
+
+    const nodeGeometry = new THREE.SphereGeometry(0.025, 12, 8);
+    const liveMaterial = new THREE.LineBasicMaterial({ color: 0x6ec6d3, transparent: true, opacity: 0.62 });
+    const stressedMaterial = new THREE.LineBasicMaterial({ color: 0xf2b84b, transparent: true, opacity: 0.92 });
+    const brokenMaterial = new THREE.LineBasicMaterial({ color: 0xff4a3b, transparent: true, opacity: 0.95 });
+    const depthMaterial = new THREE.LineBasicMaterial({ color: 0x95d0a5, transparent: true, opacity: 0.62 });
+    const nodeMaterial = new THREE.MeshStandardMaterial({ color: 0xf4efe0, roughness: 0.82, metalness: 0.05 });
+    const pinnedMaterial = new THREE.MeshStandardMaterial({ color: 0x697a9a, roughness: 0.7, metalness: 0.08 });
+    const looseMaterial = new THREE.MeshStandardMaterial({ color: 0xffe078, roughness: 0.66, metalness: 0.05 });
+    const forceMaterial = new THREE.LineBasicMaterial({ color: 0xf1cc62, transparent: true, opacity: 0.96 });
+    const forceNodeMaterial = new THREE.MeshBasicMaterial({ color: 0xff785a });
+
+    let material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+    let pointerDown = false;
+    let dragStart = null;
+    let forceEnvelope = null;
+    let lastPoint = { x: 0.92, y: 0.52, z: 0.85 };
+    let yaw = -0.45;
+    let pitch = -0.18;
+
+    function worldPoint(node) {
+      return new THREE.Vector3(
+        (node.x + node.displacement.x - 0.5) * 2.35,
+        (0.5 - node.y - node.displacement.y) * 1.25,
+        (node.z + node.displacement.z - 0.5) * 0.95,
+      );
+    }
+
+    function clearWorld() {
+      while (world.children.length > 0) {
+        const child = world.children.pop();
+        child.geometry?.dispose?.();
+      }
+    }
+
+    function lineBetween(a, b, lineMaterial) {
+      const geometry = new THREE.BufferGeometry().setFromPoints([a, b]);
+      return new THREE.Line(geometry, lineMaterial);
+    }
+
+    function renderMaterial() {
+      clearWorld();
+      const nodeById = new Map(material.nodes.map(node => [node.id, node]));
+      const maxStress = Math.max(0.001, ...material.bonds.map(bond => bond.lastStress || 0));
+      for (const bond of material.bonds) {
+        const a = worldPoint(nodeById.get(bond.a));
+        const b = worldPoint(nodeById.get(bond.b));
+        const stress = (bond.lastStress || 0) / maxStress;
+        const lineMaterial = bond.alive
+          ? bond.bondKind === 'depth'
+            ? depthMaterial
+            : stress > 0.58
+              ? stressedMaterial
+              : liveMaterial
+          : brokenMaterial;
+        const line = lineBetween(a, b, lineMaterial);
+        if (!bond.alive) line.computeLineDistances?.();
+        world.add(line);
+      }
+      for (const node of material.nodes) {
+        const mesh = new THREE.Mesh(
+          nodeGeometry,
+          node.pinned ? pinnedMaterial : node.componentId === 'c0' ? nodeMaterial : looseMaterial,
+        );
+        mesh.position.copy(worldPoint(node));
+        mesh.scale.setScalar(node.pinned ? 1.32 : 1);
+        world.add(mesh);
+      }
+      if (forceEnvelope) {
+        const start = new THREE.Vector3((forceEnvelope.start.x - 0.5) * 2.35, (0.5 - forceEnvelope.start.y) * 1.25, (forceEnvelope.start.z - 0.5) * 0.95);
+        const end = new THREE.Vector3((forceEnvelope.point.x - 0.5) * 2.35, (0.5 - forceEnvelope.point.y) * 1.25, (forceEnvelope.point.z - 0.5) * 0.95);
+        world.add(lineBetween(start, end, forceMaterial));
+        const contact = new THREE.Mesh(new THREE.SphereGeometry(0.055 + forceEnvelope.radius * 0.05, 18, 10), forceNodeMaterial);
+        contact.position.copy(end);
+        world.add(contact);
+      }
+      world.rotation.y = yaw;
+      world.rotation.x = pitch;
+    }
+
+    function updateReadout() {
+      const summary = summarizeLayeredStructuralState(material);
+      readout.textContent = `broken ${summary.brokenBondCount} | depth ${summary.brokenDepthBondCount}/${summary.crossDepthBondCount} | components ${summary.componentCount} | sound ${summary.sound.signature}`;
+      route.textContent = `${STRUCTURAL_MATERIAL_3D_ROUTE} | ${STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY}`;
+      gesture.textContent = forceEnvelope
+        ? `drag ${forceEnvelope.dragLength.toFixed(3)} | mag ${forceEnvelope.magnitude.toFixed(3)} | z ${forceEnvelope.point.z.toFixed(3)} | stress ${summary.maxStress.toFixed(3)}`
+        : `drag 0.000 | mag 0.000 | z 0.500 | stress ${summary.maxStress.toFixed(3)}`;
+    }
+
+    function render() {
+      renderMaterial();
+      updateReadout();
+      renderer.render(scene, camera);
+    }
+
+    function resize() {
+      const rect = stage.getBoundingClientRect();
+      const width = Math.max(320, Math.floor(rect.width));
+      const height = Math.max(280, Math.floor(rect.height));
+      camera.aspect = width / height;
+      camera.position.z = camera.aspect < 0.75 ? 8.5 : 3.35;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+      render();
+    }
+
+    function eventPoint(event) {
+      const rect = stage.getBoundingClientRect();
+      return {
+        x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+        y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+      };
+    }
+
+    function applyDrag(point, steps = 1) {
+      const depthBias = -0.65;
+      forceEnvelope = createLayeredStructuralDragInteraction({
+        start: dragStart || point,
+        current: point,
+        depthBias,
+      });
+      lastPoint = forceEnvelope.point;
+      material = applyLayeredStructuralInteraction(material, forceEnvelope, { steps });
+      render();
+    }
+
+    stage.addEventListener('pointerdown', (event) => {
+      pointerDown = true;
+      dragStart = eventPoint(event);
+      forceEnvelope = createLayeredStructuralDragInteraction({ start: dragStart, current: dragStart, depthBias: -0.65 });
+      stage.setPointerCapture(event.pointerId);
+      render();
+    });
+    stage.addEventListener('pointermove', (event) => {
+      if (!pointerDown) {
+        yaw += event.movementX * 0.0008;
+        return;
+      }
+      applyDrag(eventPoint(event), 1);
+    });
+    stage.addEventListener('pointerup', (event) => {
+      if (pointerDown) applyDrag(eventPoint(event), 1);
+      pointerDown = false;
+      stage.releasePointerCapture(event.pointerId);
+    });
+    document.querySelector('#reset').addEventListener('click', () => {
+      material = createLayeredStructuralMaterial({ columns: 9, rows: 5, layers: 4, notch: true });
+      dragStart = null;
+      forceEnvelope = null;
+      render();
+    });
+    document.querySelector('#fracture').addEventListener('click', () => {
+      forceEnvelope = {
+        kind: 'screen-space-layered-drag',
+        authority: 'screen-space-drag-to-layered-force-envelope-v0',
+        start: { x: Math.max(0, lastPoint.x - 0.38), y: lastPoint.y, z: 0.5 },
+        point: lastPoint,
+        vector: { x: 0.84, y: 0.07, z: -0.54 },
+        dragLength: 0.5,
+        magnitude: 1.46,
+        radius: 0.26,
+      };
+      material = applyLayeredStructuralInteraction(material, forceEnvelope, { steps: 4 });
+      render();
+    });
+    document.querySelector('#bind').addEventListener('click', () => {
+      const summary = summarizeLayeredStructuralState(material);
+      const bindPoint = summary.crackPath.find(edge => edge.bondKind === 'depth')?.midpoint || lastPoint;
+      material = bindLayeredStructuralConnectivity(material, {
+        point: bindPoint,
+        radius: 0.22,
+        strength: 1.25,
+      });
+      render();
+    });
+
+    window.__structuralMaterial3dWitness = () => ({
+      requestedRoute: STRUCTURAL_MATERIAL_3D_ROUTE,
+      effectiveRoute: STRUCTURAL_MATERIAL_3D_ROUTE,
+      visualConsumerAuthority: STRUCTURAL_MATERIAL_3D_VISUAL_AUTHORITY,
+      summary: summarizeLayeredStructuralState(material),
+      forceEnvelope,
+      renderer: 'THREE.WebGPURenderer',
+    });
+
+    async function countCanvasPixelsFromBlob() {
+      const blob = await new Promise(resolve => renderer.domElement.toBlob(resolve, 'image/png'));
+      if (!blob) return { ok: false, reason: 'canvas blob unavailable', nonDarkPixels: 0, width: 0, height: 0 };
+      const bitmap = await createImageBitmap(blob);
+      const sampleWidth = Math.min(96, bitmap.width);
+      const sampleHeight = Math.min(96, bitmap.height);
+      const canvas = new OffscreenCanvas(sampleWidth, sampleHeight);
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0, sampleWidth, sampleHeight);
+      const pixels = context.getImageData(0, 0, sampleWidth, sampleHeight).data;
+      let nonDarkPixels = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] + pixels[i + 1] + pixels[i + 2] > 42) nonDarkPixels += 1;
+      }
+      return { ok: nonDarkPixels > 0, source: 'canvas-blob-pixels', nonDarkPixels, width: bitmap.width, height: bitmap.height, sampleWidth, sampleHeight };
+    }
+
+    window.__structuralMaterial3dPixelProbe = async () => {
+      renderer.render(scene, camera);
+      const gl = renderer.getContext?.();
+      if (!gl?.readPixels) {
+        return countCanvasPixelsFromBlob();
+      }
+      const width = gl.drawingBufferWidth;
+      const height = gl.drawingBufferHeight;
+      const sampleWidth = Math.min(96, width);
+      const sampleHeight = Math.min(96, height);
+      const pixels = new Uint8Array(sampleWidth * sampleHeight * 4);
+      gl.readPixels(
+        Math.floor((width - sampleWidth) * 0.5),
+        Math.floor((height - sampleHeight) * 0.5),
+        sampleWidth,
+        sampleHeight,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        pixels,
+      );
+      let nonDarkPixels = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] + pixels[i + 1] + pixels[i + 2] > 42) nonDarkPixels += 1;
+      }
+      return { ok: nonDarkPixels > 0, source: 'readPixels', nonDarkPixels, width, height, sampleWidth, sampleHeight };
+    };
+
+    window.__structuralMaterial3dApplyWitnessForce = () => {
+      const scenario = buildLayeredStructuralWitnessScenario();
+      material = scenario.states.cracked;
+      forceEnvelope = {
+        ...scenario.force,
+        authority: 'screen-space-drag-to-layered-force-envelope-v0',
+        start: { x: Math.max(0, scenario.force.point.x - 0.38), y: scenario.force.point.y, z: 0.5 },
+        dragLength: 0.5,
+      };
+      lastPoint = scenario.force.point;
+      render();
+      return window.__structuralMaterial3dWitness();
+    };
+
+    window.addEventListener('resize', resize);
+    resize();
+  </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "ok": true,
+  "failurePhase": null,
+  "requestedRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "effectiveRoute": "kaminos.structural-material.layered-slab-fracture.v0",
+  "output": "artifacts/structural-material-3d/layered-sidecar.json",
+  "reportPath": "artifacts/structural-material-3d/layered-sidecar-report.json",
+  "crackedBrokenBonds": 58,
+  "brokenDepthBonds": 13,
+  "controlBrokenBonds": 4,
+  "repairedBonds": 12,
+  "soundSignature": "material-derived-sound-impulses-v0:e16.8592:b2.8776:r0.3097:c58:m0"
+}
