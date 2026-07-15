@@ -49,6 +49,8 @@ function validateControlConditioning(frame, label) {
   for (const key of ['inputRadius', 'flowRate', 'fireScale', 'reactionFuelScale', 'lifecycleT', 'quenchVapor']) {
     if (typeof values[key] !== 'number' || !Number.isFinite(values[key])) throw new Error(`${label} control conditioning ${key} must be finite`);
   }
+  if (values.inputRadius < 0.04) throw new Error(`${label} control conditioning inputRadius must be at least 0.04`);
+  if (values.flowRate < 0) throw new Error(`${label} control conditioning flowRate must be non-negative`);
   if (!['none', 'snuff'].includes(values.lifecycleEffect)) throw new Error(`${label} control conditioning lifecycleEffect is invalid`);
   return conditioning;
 }

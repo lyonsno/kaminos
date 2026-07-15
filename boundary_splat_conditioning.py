@@ -12,20 +12,27 @@ EMITTER_LIFECYCLE_CONDITION_ORDER = (
     "lifecycleT",
     "quenchVapor",
 )
-EMITTER_LIFECYCLE_CONDITION_RANGES = {
-    "inputRadius": (0.08, 0.7),
-    "flowRate": (0.0, 2.5),
-    "fireScale": (0.35, 1.3),
-    "reactionFuelScale": (0.0, 1.5),
-    "lifecycleT": (0.0, 1.0),
-    "quenchVapor": (0.0, 2.0),
+EMITTER_LIFECYCLE_CONDITION_NORMALIZATION = {
+    "inputRadius": {"kind": "offset-rational", "lower": 0.04, "scale": 0.66},
+    "flowRate": {"kind": "offset-rational", "lower": 0.0, "scale": 2.5},
+    "fireScale": {"kind": "bounded-linear", "lower": 0.35, "upper": 1.3},
+    "reactionFuelScale": {"kind": "bounded-linear", "lower": 0.0, "upper": 1.5},
+    "lifecycleT": {"kind": "bounded-linear", "lower": 0.0, "upper": 1.0},
+    "quenchVapor": {"kind": "bounded-linear", "lower": 0.0, "upper": 2.0},
 }
 
 
-def _normalized(value, lower, upper, label):
+def _normalized(value, specification, label):
     numeric = float(value)
-    if not math.isfinite(numeric) or numeric < lower or numeric > upper:
-        raise ValueError(f"{label} must be finite within {lower}..{upper}")
+    lower = specification["lower"]
+    if not math.isfinite(numeric) or numeric < lower:
+        raise ValueError(f"{label} must be finite and at least {lower}")
+    if specification["kind"] == "offset-rational":
+        shifted = numeric - lower
+        return shifted / (shifted + specification["scale"])
+    upper = specification["upper"]
+    if numeric > upper:
+        raise ValueError(f"{label} must be at most {upper}")
     return (numeric - lower) / (upper - lower)
 
 
@@ -48,8 +55,8 @@ def resolve_emitter_lifecycle_condition(frame, label):
     if lifecycle_effect not in ("none", "snuff"):
         raise ValueError(f"{label} lifecycleEffect must be none or snuff")
     normalized = {
-        name: _normalized(values.get(name), *bounds, f"{label} {name}")
-        for name, bounds in EMITTER_LIFECYCLE_CONDITION_RANGES.items()
+        name: _normalized(values.get(name), specification, f"{label} {name}")
+        for name, specification in EMITTER_LIFECYCLE_CONDITION_NORMALIZATION.items()
     }
     normalized["lifecycleSnuff"] = 1.0 if lifecycle_effect == "snuff" else 0.0
     return tuple(normalized[name] for name in EMITTER_LIFECYCLE_CONDITION_ORDER)

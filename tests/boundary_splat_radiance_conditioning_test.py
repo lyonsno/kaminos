@@ -21,8 +21,8 @@ class EmitterLifecycleConditioningTest(unittest.TestCase):
                 "sameStateCaptureId": "state-7",
                 "simStepCount": 88,
                 "values": {
-                    "inputRadius": 0.08,
-                    "flowRate": 2.5,
+                    "inputRadius": 0.04,
+                    "flowRate": 10.0,
                     "fireScale": 1.3,
                     "reactionFuelScale": 0.75,
                     "lifecycleEffect": "snuff",
@@ -35,7 +35,7 @@ class EmitterLifecycleConditioningTest(unittest.TestCase):
         condition = MODULE.resolve_emitter_lifecycle_condition(frame, "frame 0")
 
         self.assertEqual(condition[MODULE.EMITTER_LIFECYCLE_CONDITION_ORDER.index("inputRadius")], 0.0)
-        self.assertEqual(condition[MODULE.EMITTER_LIFECYCLE_CONDITION_ORDER.index("flowRate")], 1.0)
+        self.assertEqual(condition[MODULE.EMITTER_LIFECYCLE_CONDITION_ORDER.index("flowRate")], 0.8)
         self.assertEqual(condition[MODULE.EMITTER_LIFECYCLE_CONDITION_ORDER.index("fireScale")], 1.0)
         self.assertEqual(condition[MODULE.EMITTER_LIFECYCLE_CONDITION_ORDER.index("reactionFuelScale")], 0.5)
         self.assertEqual(condition[MODULE.EMITTER_LIFECYCLE_CONDITION_ORDER.index("lifecycleSnuff")], 1.0)

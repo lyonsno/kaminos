@@ -29,6 +29,16 @@ assert.doesNotMatch(core, /targetSample\.simStepCount\s*!==\s*baseSimStepCount/,
 assert.match(core, /cameraRight:\s*Array\.from\(/, 'supervision camera metadata includes the exact billboard right basis used by the rasterizer');
 assert.match(core, /cameraUp:\s*Array\.from\(/, 'supervision camera metadata includes the exact billboard up basis used by the rasterizer');
 assert.match(core, /splatControls:[\s\S]*radius:[\s\S]*sharpness:/, 'supervision metadata records the effective splat footprint controls required for differentiable replay');
+assert.match(
+  core,
+  /const effectiveEmitterSource = getPrimitiveSource\(\);[\s\S]*controlConditioning:[\s\S]*inputRadius:\s*effectiveEmitterSource\.radius[\s\S]*flowRate:\s*effectiveEmitterSource\.flowRate/,
+  'conditioning records the effective primitive-backed emitter rather than UI controls that the simulator may ignore',
+);
+assert.doesNotMatch(
+  core,
+  /controlConditioning:[\s\S]{0,700}inputRadius:\s*clampFinite\(controlsBefore\.inputRadius|controlConditioning:[\s\S]{0,700}flowRate:\s*clampFinite\(controlsBefore\.flowRate/,
+  'effective emitter conditioning cannot silently fall back to shadowed UI radius or flow',
+);
 assert.match(core, /controlsSnapshot\s*=\s*controlsBefore[\s\S]*resetTemporalHistory\('fixed-candidate-supervision-restore'\)/, 'supervision capture restores controls after success or failure');
 assert.match(core, /boundarySplatSupervisionCaptureActive\s*=\s*false[\s\S]*requestAnimationFrame\(render\)/, 'supervision capture releases the live-render suspension before optionally resuming animation');
 assert.match(core, /boundarySplatSupervisionFireOnlyTargetActive\s*=\s*false/, 'supervision capture always releases the fire-only target override');

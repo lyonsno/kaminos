@@ -22,8 +22,8 @@ from boundary_splat_native_sidecar import (
 from boundary_splat_conditioning import (
     EMITTER_LIFECYCLE_CONDITION_AUTHORITY,
     EMITTER_LIFECYCLE_CONDITION_IDENTITY,
+    EMITTER_LIFECYCLE_CONDITION_NORMALIZATION,
     EMITTER_LIFECYCLE_CONDITION_ORDER,
-    EMITTER_LIFECYCLE_CONDITION_RANGES,
     resolve_emitter_lifecycle_condition,
 )
 
@@ -1613,7 +1613,7 @@ def main():
                 "conditionIdentity": EMITTER_LIFECYCLE_CONDITION_IDENTITY if args.optical_condition_mode == "emitter-lifecycle" else None,
                 "conditionAuthority": EMITTER_LIFECYCLE_CONDITION_AUTHORITY if args.optical_condition_mode == "emitter-lifecycle" else None,
                 "conditionOrder": list(EMITTER_LIFECYCLE_CONDITION_ORDER) if args.optical_condition_mode == "emitter-lifecycle" else [],
-                "conditionRanges": EMITTER_LIFECYCLE_CONDITION_RANGES if args.optical_condition_mode == "emitter-lifecycle" else {},
+                "conditionNormalization": EMITTER_LIFECYCLE_CONDITION_NORMALIZATION if args.optical_condition_mode == "emitter-lifecycle" else {},
                 "inputChannels": optical_decoder.input_channels,
                 "baseChannels": args.optical_channels,
                 "residualScale": args.optical_residual_scale,
@@ -1725,7 +1725,7 @@ def main():
                 "opticalConditionIdentity": EMITTER_LIFECYCLE_CONDITION_IDENTITY if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else None,
                 "opticalConditionAuthority": EMITTER_LIFECYCLE_CONDITION_AUTHORITY if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else None,
                 "opticalConditionOrder": list(EMITTER_LIFECYCLE_CONDITION_ORDER) if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else [],
-                "opticalConditionRanges": EMITTER_LIFECYCLE_CONDITION_RANGES if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else {},
+                "opticalConditionNormalization": EMITTER_LIFECYCLE_CONDITION_NORMALIZATION if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else {},
                 "opticalInputAuthority": (
                     model_receipt["inputAuthority"] if optical_decoder is not None else None
                 ),

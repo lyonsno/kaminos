@@ -12191,6 +12191,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     cancelAnimationFrame(raf);
     const controlsBefore = { ...controlsSnapshot };
+    const effectiveEmitterSource = getPrimitiveSource();
     const baseFrameCount = state.frameCount;
     const baseSimStepCount = state.simStepCount;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
@@ -12337,8 +12338,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           sameStateCaptureId,
           simStepCount: capturedBaseSimStepCount,
           values: {
-            inputRadius: clampFinite(controlsBefore.inputRadius, 0.08, 0.7, 0.24),
-            flowRate: clampFinite(controlsBefore.flowRate, 0, 2.5, 0.3),
+            inputRadius: effectiveEmitterSource.radius,
+            flowRate: effectiveEmitterSource.flowRate,
             fireScale: clampFinite(controlsBefore.fireScale, 0.35, 1.3, 0.86),
             reactionFuelScale: normalizeReactionFuelScale(controlsBefore.reactionFuelScale),
             lifecycleEffect: normalizeLifecycleEffect(controlsBefore.lifecycleEffect),
