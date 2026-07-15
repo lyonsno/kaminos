@@ -2842,6 +2842,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         camera: capture.camera,
         replayedCamera,
         splatControls: capture.splatControls,
+        captureAdmission: capture.captureAdmission,
         controlConditioning: capture.controlConditioning,
         stepReceipt,
         candidates: {
@@ -2926,7 +2927,11 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
     };
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     supervisionPhase = 'validate-corpus';
-    const validation = await validateBoundarySplatSupervisionCorpus(manifestPath, { expectedGrid });
+    const validation = await validateBoundarySplatSupervisionCorpus(manifestPath, {
+      expectedGrid,
+      requireControlConditioning: true,
+      requireFreshLiveAdmission: true,
+    });
     if (boundarySplatSupervisionRawSidecar && validation.structuralFrameCount !== frames.length) {
       throw new Error(`fixed-candidate supervision raw sidecar frame count mismatch: ${validation.structuralFrameCount}/${frames.length}`);
     }

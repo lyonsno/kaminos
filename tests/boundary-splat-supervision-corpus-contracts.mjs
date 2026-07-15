@@ -99,6 +99,32 @@ try {
         viewport: [640, 480],
       },
       splatControls: { radius: 0.8, sharpness: 6.5 },
+      captureAdmission: {
+        identity: 'fresh-live-selective-splat-capture-admission-v0',
+        authority: 'fresh-live-settings-no-anchor-v0',
+        requestedRole: 'truthHigh',
+        effectiveRole: 'truthHigh',
+        roleAuthority: 'current-high-field-reference-no-learned-composition-v0',
+        requestedComposition: 'splat-only-v0',
+        effectiveComposition: 'splat-only-v0',
+        compositionAuthority: 'splat-fire-authority-learned-boundary-sheets-v0',
+        passReceipt: {
+          composition: 'splat-only-v0',
+          raymarchEncoded: false,
+          raymarchApplied: false,
+          splatEncoded: true,
+          splatApplied: true,
+          fallbackReason: null,
+        },
+        boundarySidecarSource: 'baked',
+        boundarySidecarBuilt: true,
+        boundarySidecarBuiltThisFrame: true,
+        boundarySplatSourceAuthority: 'live-baked-sidecar-plus-fluid-material-v0',
+        boundarySplatFallbackReason: null,
+        boundarySidecarOverrideReceipt: null,
+        fullFieldImportReceipt: null,
+        replayAnchor: null,
+      },
       controlConditioning: {
         identity: 'boundary-splat-emitter-lifecycle-conditioning-v0',
         authority: 'effective-runtime-controls-frozen-sim-state-v0',
@@ -156,6 +182,49 @@ try {
   assert.equal(valid.frames[0].metaPath, metaPath);
   assert.equal(valid.frames[0].controlConditioning.values.inputRadius, 0.24);
   assert.match(valid.corpusIdentity, /^sha256:[a-f0-9]{64}$/);
+
+  const validateFresh = () => validateBoundarySplatSupervisionCorpus(manifestPath, {
+    expectedGrid: 1,
+    requireFreshLiveAdmission: true,
+  });
+  const validFresh = await validateFresh();
+  assert.equal(validFresh.frames[0].captureAdmission.effectiveRole, 'truthHigh');
+
+  const inactiveSelectiveRole = structuredClone(manifest);
+  inactiveSelectiveRole.frames[0].captureAdmission.effectiveRole = 'off';
+  await writeFile(manifestPath, JSON.stringify(inactiveSelectiveRole));
+  await assert.rejects(validateFresh, /fresh-live.*effective role/i);
+
+  const missingSplatComposition = structuredClone(manifest);
+  missingSplatComposition.frames[0].captureAdmission.effectiveComposition = 'raymarch-only-v0';
+  await writeFile(manifestPath, JSON.stringify(missingSplatComposition));
+  await assert.rejects(validateFresh, /fresh-live.*composition/i);
+
+  const unappliedSplatPass = structuredClone(manifest);
+  unappliedSplatPass.frames[0].captureAdmission.passReceipt.splatApplied = false;
+  await writeFile(manifestPath, JSON.stringify(unappliedSplatPass));
+  await assert.rejects(validateFresh, /fresh-live.*splat pass/i);
+
+  const staleSidecar = structuredClone(manifest);
+  staleSidecar.frames[0].captureAdmission.boundarySidecarBuiltThisFrame = false;
+  await writeFile(manifestPath, JSON.stringify(staleSidecar));
+  await assert.rejects(validateFresh, /fresh-live.*sidecar/i);
+
+  const importedSidecar = structuredClone(manifest);
+  importedSidecar.frames[0].captureAdmission.boundarySidecarSource = 'override';
+  importedSidecar.frames[0].captureAdmission.boundarySidecarOverrideReceipt = { status: 'applied' };
+  await writeFile(manifestPath, JSON.stringify(importedSidecar));
+  await assert.rejects(validateFresh, /fresh-live.*override/i);
+
+  const importedFullField = structuredClone(manifest);
+  importedFullField.frames[0].captureAdmission.fullFieldImportReceipt = { status: 'applied' };
+  await writeFile(manifestPath, JSON.stringify(importedFullField));
+  await assert.rejects(validateFresh, /fresh-live.*full-field/i);
+
+  const replayedAnchor = structuredClone(manifest);
+  replayedAnchor.frames[0].captureAdmission.replayAnchor = { captureId: 'held-state' };
+  await writeFile(manifestPath, JSON.stringify(replayedAnchor));
+  await assert.rejects(validateFresh, /fresh-live.*replay/i);
 
   const missingControlConditioning = structuredClone(manifest);
   delete missingControlConditioning.frames[0].controlConditioning;

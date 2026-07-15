@@ -17,6 +17,8 @@ export const BOUNDARY_SPLAT_SUPERVISION_SCHEMA = 'kaminos-boundary-splat-supervi
 export const BOUNDARY_SPLAT_STRUCTURAL_SUPERVISION_IDENTITY = 'native-boundary-sidecar-structural-supervision-v0';
 export const BOUNDARY_SPLAT_CONTROL_CONDITIONING_IDENTITY = 'boundary-splat-emitter-lifecycle-conditioning-v0';
 export const BOUNDARY_SPLAT_CONTROL_CONDITIONING_AUTHORITY = 'effective-runtime-controls-frozen-sim-state-v0';
+export const BOUNDARY_SPLAT_FRESH_LIVE_ADMISSION_IDENTITY = 'fresh-live-selective-splat-capture-admission-v0';
+export const BOUNDARY_SPLAT_FRESH_LIVE_ADMISSION_AUTHORITY = 'fresh-live-settings-no-anchor-v0';
 
 const BOUNDARY_SPLAT_STRUCTURAL_STRUCTURE_CHANNELS = ['support', 'coverage', 'ridge', 'footprint'];
 const BOUNDARY_SPLAT_STRUCTURAL_META_CHANNELS = ['proximity', 'normalX', 'normalY', 'normalZ'];
@@ -53,6 +55,38 @@ function validateControlConditioning(frame, label) {
   if (values.flowRate < 0) throw new Error(`${label} control conditioning flowRate must be non-negative`);
   if (!['none', 'snuff'].includes(values.lifecycleEffect)) throw new Error(`${label} control conditioning lifecycleEffect is invalid`);
   return conditioning;
+}
+
+function validateFreshLiveAdmission(frame, label) {
+  const admission = frame.captureAdmission;
+  if (!admission || typeof admission !== 'object') throw new Error(`${label} fresh-live capture admission is missing`);
+  if (admission.identity !== BOUNDARY_SPLAT_FRESH_LIVE_ADMISSION_IDENTITY) throw new Error(`${label} fresh-live capture admission identity is invalid`);
+  if (admission.authority !== BOUNDARY_SPLAT_FRESH_LIVE_ADMISSION_AUTHORITY) throw new Error(`${label} fresh-live capture admission authority is invalid`);
+  if (admission.requestedRole !== 'truthHigh' || admission.effectiveRole !== 'truthHigh'
+    || admission.roleAuthority !== 'current-high-field-reference-no-learned-composition-v0') {
+    throw new Error(`${label} fresh-live requested/effective role is not truthHigh current-field authority`);
+  }
+  if (admission.requestedComposition !== 'splat-only-v0' || admission.effectiveComposition !== 'splat-only-v0'
+    || admission.compositionAuthority !== 'splat-fire-authority-learned-boundary-sheets-v0') {
+    throw new Error(`${label} fresh-live composition is not exact splat-only authority`);
+  }
+  const pass = admission.passReceipt;
+  if (!pass || pass.composition !== 'splat-only-v0' || pass.raymarchEncoded !== false || pass.raymarchApplied !== false
+    || pass.splatEncoded !== true || pass.splatApplied !== true || pass.fallbackReason != null) {
+    throw new Error(`${label} fresh-live splat pass was not exclusively encoded and applied`);
+  }
+  if (admission.boundarySidecarSource === 'override' || admission.boundarySidecarOverrideReceipt != null) {
+    throw new Error(`${label} fresh-live capture contains an external sidecar override`);
+  }
+  if (admission.boundarySidecarSource !== 'baked' || admission.boundarySidecarBuilt !== true
+    || admission.boundarySidecarBuiltThisFrame !== true
+    || admission.boundarySplatSourceAuthority !== 'live-baked-sidecar-plus-fluid-material-v0') {
+    throw new Error(`${label} fresh-live sidecar was not baked from the current live field this frame`);
+  }
+  if (admission.fullFieldImportReceipt != null) throw new Error(`${label} fresh-live capture contains a full-field import receipt`);
+  if (admission.replayAnchor != null) throw new Error(`${label} fresh-live capture contains a replay anchor`);
+  if (admission.boundarySplatFallbackReason != null) throw new Error(`${label} fresh-live capture contains splat fallback evidence`);
+  return admission;
 }
 
 function artifactPath(manifestPath, value) {
@@ -160,6 +194,12 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
     if (options.requireControlConditioning === true && controlConditioning == null) {
       throw new Error(`${label} control conditioning is required by this invocation`);
     }
+    const captureAdmission = frame.captureAdmission != null
+      ? validateFreshLiveAdmission(frame, label)
+      : null;
+    if (options.requireFreshLiveAdmission === true && captureAdmission == null) {
+      throw new Error(`${label} fresh-live capture admission is required by this invocation`);
+    }
 
     const candidateArtifact = await validateArtifact(manifestPath, frame.candidates, `${label} candidate`);
     if (frame.candidates.dtype !== 'float32-le' || frame.candidates.strideFloats !== BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS || !Number.isInteger(frame.candidates.count) || frame.candidates.count <= 0) {
@@ -244,6 +284,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
       metaPath: metaArtifact?.path || null,
       structuralSupervisionIdentity: frame.structuralSupervision?.identity || null,
       controlConditioning,
+      captureAdmission,
       candidateCount: frame.candidates.count,
     });
   }
