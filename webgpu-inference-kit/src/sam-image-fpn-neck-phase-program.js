@@ -844,6 +844,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     levels: weights.levels.map(level => ({
       level: level.level,
       outputShape: { height: shape.levels[level.level].height, width: shape.levels[level.level].width, channels: shape.fpnHiddenSize },
+      poolShape: level.level === 3 ? level3PoolShape : null,
       scaleShapes: level.level === 0 ? [level0Scale0Shape, level0Scale1Shape] : level.level === 1 ? [level1Scale0Shape] : [],
       scaleActivations: level.scaleLayers.map(scaleLayer => scaleLayer.activation),
     })),
@@ -1071,7 +1072,10 @@ export function createSam3FpnNeckDispatchPlan(input = {}) {
       add(sam31ScaleStageName(levelIndex, scaleIndex), scaleShape);
       if (level.scaleActivations[scaleIndex] === 'gelu') add('fpn-neck-gelu-0', scaleShape);
     }
-    if (input.includePoolLevel === levelIndex) add(`fpn-neck-maxpool-${levelIndex}`, level.outputShape);
+    if (input.includePoolLevel === levelIndex) {
+      if (!level.poolShape) throw new Error(`FPN dispatch pool level ${levelIndex} requires poolShape`);
+      add(`fpn-neck-maxpool-${levelIndex}`, level.poolShape);
+    }
     add(`fpn-neck-proj1-${levelIndex}`, level.outputShape);
     add(`fpn-neck-proj2-${levelIndex}`, level.outputShape);
     if (input.includePositionLevel === levelIndex) add(`fpn-neck-position-${levelIndex}`, level.outputShape);

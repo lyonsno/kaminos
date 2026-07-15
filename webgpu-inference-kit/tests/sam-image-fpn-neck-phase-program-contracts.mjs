@@ -64,6 +64,20 @@ assert.deepEqual(fpn448['fpn-neck-proj1-0'], fpn448['fpn-neck-transpose-conv-0-s
 assert.deepEqual(fpn448['fpn-neck-proj2-0'], fpn448['fpn-neck-proj1-0']);
 assert.deepEqual(fpn448['fpn-neck-position-2'], { logicalInvocations: 262_144, dispatch: [4_096] });
 
+const imageFpn448 = createSam3FpnNeckDispatchPlan({
+  batch: 1,
+  levels: [
+    { level: 0, outputShape: { height: 128, width: 128, channels: 256 }, scaleShapes: [{ height: 64, width: 64, channels: 512 }, { height: 128, width: 128, channels: 256 }], scaleActivations: ['gelu', null] },
+    { level: 1, outputShape: { height: 64, width: 64, channels: 256 }, scaleShapes: [{ height: 64, width: 64, channels: 512 }], scaleActivations: [null] },
+    { level: 2, outputShape: { height: 32, width: 32, channels: 256 }, scaleShapes: [], scaleActivations: [] },
+    { level: 3, outputShape: { height: 16, width: 16, channels: 256 }, poolShape: { height: 16, width: 16, channels: 1024 }, scaleShapes: [], scaleActivations: [] },
+  ],
+  includePoolLevel: 3,
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.deepEqual(imageFpn448['fpn-neck-maxpool-3'], { logicalInvocations: 262_144, dispatch: [4_096] });
+assert.deepEqual(imageFpn448['fpn-neck-proj1-3'], { logicalInvocations: 65_536, dispatch: [1_024] });
+
 const fpn1008 = createSam3FpnNeckDispatchPlan({
   batch: 1,
   levels: [
