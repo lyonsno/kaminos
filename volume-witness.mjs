@@ -5,6 +5,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSy
 import { dirname, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash, randomInt } from 'node:crypto';
+import { measureReceiverLightDelta } from './receiver-light-witness-metrics.mjs';
 
 function parseCliArgs(argv) {
   const parsed = new Map();
@@ -2543,6 +2544,84 @@ async function main() {
     );
     if (expectsRenderedReceiverLightEvidence && !isCaptureReplay) {
       phase = 'receiver-light-rendered-evidence';
+      let receiverLightDeltaEvidence = null;
+      if (expectsReceiverLightBrickWallEvidence) {
+        const freezeEval = await wsRequest(ws, 'Runtime.evaluate', {
+          expression: `(() => {
+            const freeze = document.getElementById('volume-look-freeze');
+            if (!freeze) return { accepted: false, reason: 'missing-volume-look-freeze' };
+            freeze.value = '1';
+            freeze.dispatchEvent(new Event('input', { bubbles: true }));
+            freeze.dispatchEvent(new Event('change', { bubbles: true }));
+            const canvas = window.__kaminosVolumePrototype?.canvasElement?.();
+            const rect = canvas?.getBoundingClientRect?.();
+            return {
+              accepted: Boolean(rect && rect.width > 1 && rect.height > 1),
+              reason: rect ? null : 'missing-volume-canvas-bounds',
+              clip: rect ? {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+                scale: 1,
+              } : null,
+            };
+          })()`,
+          returnByValue: true,
+        });
+        const freezeReceipt = freezeEval.result.value || null;
+        if (!freezeReceipt?.accepted || !freezeReceipt.clip) {
+          throw new Error(`receiver-light paired delta could not freeze and frame the render surface: ${JSON.stringify(freezeReceipt)}`);
+        }
+        await delay(250);
+        const receiverOnShot = await wsRequest(ws, 'Page.captureScreenshot', {
+          format: 'png',
+          fromSurface: true,
+          clip: freezeReceipt.clip,
+        });
+        const receiverOnBuffer = Buffer.from(receiverOnShot.data || '', 'base64');
+        const receiverOnPath = out.replace(/\.png$/i, '.receiver-on.png');
+        const receiverMutedPath = out.replace(/\.png$/i, '.receiver-muted.png');
+        writeFileSync(receiverOnPath, receiverOnBuffer);
+        let receiverMutedBuffer;
+        try {
+          const muteEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessMute?.(true) ?? null',
+            returnByValue: true,
+          });
+          if (muteEval.result.value?.witnessMuted !== true) {
+            throw new Error(`receiver-light paired delta could not mute only the receiver contribution: ${JSON.stringify(muteEval.result.value)}`);
+          }
+          await delay(100);
+          const receiverMutedShot = await wsRequest(ws, 'Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            clip: freezeReceipt.clip,
+          });
+          receiverMutedBuffer = Buffer.from(receiverMutedShot.data || '', 'base64');
+          writeFileSync(receiverMutedPath, receiverMutedBuffer);
+        } finally {
+          await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessMute?.(false) ?? null',
+            returnByValue: true,
+          });
+        }
+        const delta = measureReceiverLightDelta(
+          parsePngRgba(receiverOnBuffer),
+          parsePngRgba(receiverMutedBuffer),
+          { xMin: 0, xMax: 1, yMin: 0, yMax: 1 },
+        );
+        receiverLightDeltaEvidence = {
+          ...delta,
+          accepted: delta.warmPositivePixels >= 100 && delta.meanPositiveLumaDelta >= 2,
+          freezeReceipt,
+          receiverOnPath,
+          receiverMutedPath,
+        };
+        if (!receiverLightDeltaEvidence.accepted) {
+          throw new Error(`receiver-light paired delta missing warm receiver signal: ${JSON.stringify(receiverLightDeltaEvidence)}`);
+        }
+      }
       const pageShot = await wsRequest(ws, 'Page.captureScreenshot', {
         format: 'png',
         fromSurface: true,
@@ -2594,6 +2673,7 @@ async function main() {
           ...receiverLightEvidence,
           debugAtCapture: refreshedReceiverLightEval.result.value || receiverLightEvidence.debugLater,
         },
+        receiverLightDeltaEvidence,
         sceneContextEvidence: {
           ...sceneContextEvidence,
           debug: refreshedSceneContextEval.result.value || sceneContextEvidence.debug,

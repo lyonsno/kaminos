@@ -9044,6 +9044,7 @@ async function initScene() {
     hiddenThreeLightAuthority: false,
     canvasBridgeAuthority: false,
   };
+  window.kaminosTier2ReceiverLightSetWitnessMute = muted => tier2ReceiverLightPass?.setWitnessMute?.(muted) || null;
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
     hasRenderPipeline: !!renderPipeline,
@@ -19872,6 +19873,7 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     hiddenThreeLightAuthority: false,
     canvasBridgeAuthority: false,
     fallbackAuthority: false,
+    witnessMuted: false,
     active: false,
     isolate: isolateMix.value > 0,
     receiverCount: receiverProxies.length,
@@ -19924,7 +19926,7 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
       );
       boundAttachmentKey = attachmentKey;
     }
-    receiverStrength.value = state.isolate ? 1.35 : 0.82;
+    receiverStrength.value = state.witnessMuted ? 0 : (state.isolate ? 1.35 : 0.82);
     state.effectiveAttachmentIdentity = attachments.identity;
     state.attachmentStatus = attachments.status;
     state.attachmentReason = null;
@@ -20037,6 +20039,15 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
       state.lastRenderTargetSize = {
         width: receiverMaskRenderTarget.width,
         height: receiverMaskRenderTarget.height,
+      };
+    },
+    setWitnessMute(muted) {
+      state.witnessMuted = Boolean(muted);
+      receiverStrength.value = state.witnessMuted ? 0 : (state.isolate ? 1.35 : 0.82);
+      return {
+        identity: 'tier2-receiver-light-witness-mute-v0',
+        witnessMuted: state.witnessMuted,
+        strength: receiverStrength.value,
       };
     },
     debugState() {

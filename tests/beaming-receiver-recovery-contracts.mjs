@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const core = await readFile(new URL('../volume-core.js', import.meta.url), 'utf8');
 const witness = await readFile(new URL('../volume-witness.mjs', import.meta.url), 'utf8');
+const receiverMetrics = await readFile(new URL('../receiver-light-witness-metrics.mjs', import.meta.url), 'utf8');
 
 function requirePatterns(source, surface, patterns) {
   for (const [pattern, contract] of patterns) {
@@ -94,6 +95,10 @@ requirePatterns(witness, 'witness', [
   [/attachmentFrameCount[\s\S]{0,500}break/, 'cadence polling exits only after the attachment frame advances'],
   [/receiver-light attachment cadence did not advance within 5s/, 'cadence timeout names the actual evidence horizon'],
   [/receiver-light rendered evidence overexposed/, 'overexposed evidence fails loud'],
+  [/kaminosTier2ReceiverLightSetWitnessMute/, 'the witness can mute only the receiver contribution without changing scene composition'],
+  [/finally\s*\{[\s\S]*kaminosTier2ReceiverLightSetWitnessMute\?\.\(false\)/, 'mute-only diagnostics restore receiver output even when capture fails'],
+  [/receiverLightDeltaEvidence/, 'reports preserve receiver-region delta evidence'],
+  [/receiver-light paired delta missing warm receiver signal/, 'a nonblank flame or scene cannot substitute for positive receiver-light delta'],
   [/receiverLightDebug\.identity !== 'tier2-opt-in-receiver-buffer-light-pass-v0'/, 'wrong light-pass identity fails loud'],
   [/attachmentIdentity !== 'gpu-splat-radiance-coverage-depth-moments-v0'/, 'wrong requested native attachment fails loud'],
   [/effectiveAttachmentIdentity !== 'gpu-splat-radiance-coverage-depth-moments-v0'/, 'missing effective native attachment fails loud'],
@@ -102,6 +107,12 @@ requirePatterns(witness, 'witness', [
   [/!expectsNoFireVolumeEvidence\s*&&\s*!expectsReceiverSupportEvidence\s*&&\s*!expectsReceiverLightIsolateEvidence\s*&&\s*!expectsReceiverLightBrickWallEvidence[\s\S]*fireLayerMean/, 'receiver modes bypass legacy fire-layer beauty gates'],
   [/!expectsFuelStarvedTallPlume\s*&&\s*!expectsNoFireVolumeEvidence\s*&&\s*!expectsReceiverSupportEvidence\s*&&\s*!expectsReceiverLightIsolateEvidence\s*&&\s*!expectsReceiverLightBrickWallEvidence[\s\S]*radianceMean/, 'receiver modes bypass legacy radiance beauty gates'],
   [/else if \(!expectsReceiverSupportEvidence && !expectsReceiverLightIsolateEvidence && !expectsReceiverLightBrickWallEvidence && \([\s\S]*fireFuelOverlapRatio <= 0\.01[\s\S]*\)\) \{/, 'receiver modes bypass the legacy overlap threshold'],
+]);
+
+requirePatterns(receiverMetrics, 'receiver delta metrics', [
+  [/receiver-light-paired-delta-v0/, 'brick-wall evidence carries a paired light-on/light-muted delta identity'],
+  [/warmPositivePixels/, 'paired metrics distinguish warm receiver gain from arbitrary frame change'],
+  [/matching dimensions and channels/, 'mismatched paired captures fail loud'],
 ]);
 
 console.log('beaming receiver recovery contracts passed');
