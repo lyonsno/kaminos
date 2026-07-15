@@ -1,0 +1,17 @@
+{
+  "schema": "kaminos.volume.residual-greenroom-runner.v0",
+  "phase": "route-proof-before-child",
+  "createdAt": "2026-07-09T07:40:06Z",
+  "python": "/private/tmp/kaminos-mlx-residual-venv/bin/python",
+  "cwd": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707",
+  "script": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/volume-residual-greenroom-runner.py",
+  "corpusManifest": "/private/tmp/kaminos-support-scaling-corpus-070-from165-sameeval-rs010-0709/corpus-manifest.json",
+  "outDir": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0709/small-unet-greenroom/small-unet-050-sameeval-rs010",
+  "pid": 70228,
+  "env": {
+    "PYTHONPATH": ".",
+    "MLX_METAL_DEBUG": null
+  },
+  "mlxAvailable": true,
+  "mlxDefaultDevice": "Device(gpu, 0)"
+}

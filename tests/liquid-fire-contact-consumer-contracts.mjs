@@ -139,7 +139,7 @@ assert.match(volumeSource, /1\.0\s*-\s*trans/, 'raymarch exports extinction-deri
 assert.match(volumeSource, /mix\(1\.0,\s*0\.0,\s*TRANSPARENT_CANVAS\)/, 'ray misses become transparent instead of clipping the lower liquid canvas');
 assert.match(volumeSource, /alphaMode:\s*transparentCanvas\s*\?\s*'premultiplied'\s*:\s*'opaque'/, 'only composition routes opt into browser alpha blending');
 assert.match(volumeSource, /setLiquidFireContactDescriptor\(descriptor/, 'Pyro exposes the sparse contact binding API');
-assert.match(volumeSource, /encodeLiquidFireContactTransfer\(encoder\);[\s\S]*encodeMajorant\(encoder\)/, 'liquid transfer is ordered after simulation and before majorant/render');
+assert.match(volumeSource, /encodeSim\(encoder\);[\s\S]*encodeLiquidFireContactTransfer\(encoder\);[\s\S]*encodeSelectiveHeadLiveFields\(encoder\);[\s\S]*encodeMajorant\(encoder,/, 'liquid transfer is ordered after simulation and before selective-field majorant/render composition');
 assert.match(volumeSource, /setPipeline\(liquidFireContactApplyPipeline\)[\s\S]*dispatchWorkgroups\(Math\.ceil\(gridCellCount\(gridSize\) \/ 64\)\)[\s\S]*setPipeline\(liquidFireContactFinalizePipeline\)[\s\S]*dispatchWorkgroups\(1\)/, 'a separate one-thread finalize dispatch runs after every apply workgroup');
 assert.match(volumeSource, /device\s*!==\s*descriptor\.device[\s\S]*same GPUDevice/, 'Pyro rejects a descriptor from another device');
 assert.match(indexSource, /finger_fluid_pyro_composition/, 'the composition route is explicit and inspectable');

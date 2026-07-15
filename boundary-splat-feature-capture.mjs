@@ -1,0 +1,78 @@
+export const BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY = 'boundary-splat-selected-candidate-features-v0';
+export const BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS = 16;
+export const BOUNDARY_SPLAT_FEATURE_ORDER = Object.freeze([
+  'sidecar.support',
+  'sidecar.coverage',
+  'sidecar.ridge',
+  'sidecar.footprint',
+  'material.density',
+  'material.heat',
+  'material.fuel',
+  'material.detail',
+  'fire.energy',
+  'fire.temperature',
+  'fire.emission',
+  'fire.detail',
+  'micro.x',
+  'micro.y',
+  'micro.z',
+  'micro.w',
+]);
+
+export function decodeBoundarySplatFeatureCapture(values, rowCount, capacity, { includeRows = true } = {}) {
+  if (!(values instanceof Float32Array)) throw new Error('feature capture values must be a Float32Array');
+  if (!Number.isInteger(rowCount) || rowCount <= 0) throw new Error('feature capture row count must be a positive integer');
+  if (!Number.isInteger(capacity) || capacity <= 0) throw new Error('feature capture capacity must be a positive integer');
+  if (rowCount > capacity) throw new Error(`feature capture row count ${rowCount} exceeds capacity ${capacity}`);
+  const expectedLength = rowCount * BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS;
+  if (values.length !== expectedLength) throw new Error(`feature capture must contain exactly ${expectedLength} values, received ${values.length}`);
+
+  const minima = new Array(BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS).fill(Number.POSITIVE_INFINITY);
+  const maxima = new Array(BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS).fill(Number.NEGATIVE_INFINITY);
+  const sums = new Array(BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS).fill(0);
+  const rows = includeRows ? new Array(rowCount) : null;
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const row = new Array(BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS);
+    const offset = rowIndex * BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS;
+    for (let featureIndex = 0; featureIndex < BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS; featureIndex += 1) {
+      const value = values[offset + featureIndex];
+      if (!Number.isFinite(value)) throw new Error(`feature capture contains non-finite value at row ${rowIndex}, feature ${featureIndex}`);
+      row[featureIndex] = value;
+      minima[featureIndex] = Math.min(minima[featureIndex], value);
+      maxima[featureIndex] = Math.max(maxima[featureIndex], value);
+      sums[featureIndex] += value;
+    }
+    if (rows) rows[rowIndex] = row;
+  }
+
+  const capture = {
+    identity: BOUNDARY_SPLAT_FEATURE_CAPTURE_IDENTITY,
+    featureOrder: [...BOUNDARY_SPLAT_FEATURE_ORDER],
+    strideFloats: BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS,
+    rowCount,
+    statistics: BOUNDARY_SPLAT_FEATURE_ORDER.map((feature, index) => ({
+      feature,
+      min: minima[index],
+      max: maxima[index],
+      mean: sums[index] / rowCount,
+    })),
+  };
+  if (rows) capture.rows = rows;
+  return capture;
+}
+
+export function packBoundarySplatFeatureCapture(values, rowCount, capacity) {
+  const capture = decodeBoundarySplatFeatureCapture(values, rowCount, capacity, { includeRows: false });
+  const bytes = new Uint8Array(values.buffer, values.byteOffset, values.byteLength);
+  let binary = '';
+  const chunkBytes = 32768;
+  for (let offset = 0; offset < bytes.length; offset += chunkBytes) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + chunkBytes)));
+  }
+  return {
+    ...capture,
+    packedEncoding: 'float32-le-base64',
+    packedByteLength: bytes.byteLength,
+    packedFloat32Base64: btoa(binary),
+  };
+}

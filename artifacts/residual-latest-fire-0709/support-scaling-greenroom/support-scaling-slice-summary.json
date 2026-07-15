@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos.residual.support-scaling-slice-summary.v0",
+  "createdAt": "2026-07-09T05:50:00Z",
+  "runs": {
+    "support165": "support-165-fire-rs010",
+    "support050SameEval": "support-050-sameeval-fire-rs010",
+    "support165On050EvalOnly": "support-165-on050-sameeval-evalonly-rs010"
+  },
+  "jobs": {
+    "support165": "2afb27f9dab3",
+    "support050SameEval": "329f215ad54a",
+    "support165On050EvalOnly": "7b9b767f0d2f",
+    "invalidMaskControl": "80724bd448dc"
+  },
+  "keyArtifacts": [
+    "support-165-vs-050-sameeval-comparison.json",
+    "support-165-vs-050-sameeval-model-comparison.json",
+    "support-165-vs-050-sameeval-model-preview-contact.jpg",
+    "support-165-vs-050-sameeval-model-zoom-delta.jpg",
+    "support-050-sameeval-fire-rs010/same-eval-subset-proof.json"
+  ],
+  "interpretation": [
+    "train_count/test_count submitted to Greenroom are not consumed by the current kaminos_residual_mlx route; a true 50/20 control required a stamped 70-pair subset manifest.",
+    "The true same-eval 50/20 control shows worse full and weighted PSNR than the 145/20 expanded-support model on the same eval image paths.",
+    "The 145-trained model evaluated on the stamped same-eval subset improves edge-band delta PSNR materially over 50-trained control but still has negative full/weighted PSNR and worse temporal delta on this pass.",
+    "Visual delta is real but subtle; the strongest immediate read is that support scaling helps, but does not by itself unlock a threshold jump under this direct-residual regime."
+  ]
+}

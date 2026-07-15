@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Field Replay</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #020304; color: #f3f6f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; overflow: hidden; background: #020304; }
+    iframe { width: 100vw; height: calc(100vh - 58px); margin-top: 58px; border: 0; display: block; background: #020304; }
+    #receipt-band { position: fixed; z-index: 20; inset: 0 0 auto 0; min-height: 58px; display: flex; align-items: center; gap: 16px; padding: 9px 14px; border-bottom: 1px solid #485257; background: rgba(4, 7, 8, .94); }
+    #identity { min-width: 220px; }
+    #identity strong { display: block; font-size: 15px; line-height: 1.2; }
+    #identity span { display: block; margin-top: 3px; color: #a7b2b6; font: 11px/1.3 "SF Mono", Menlo, monospace; }
+    #compositions { display: flex; gap: 4px; }
+    button { min-height: 34px; padding: 0 12px; border: 1px solid #435057; border-radius: 4px; background: #11181b; color: #e5ecee; font: 600 12px/1 system-ui, sans-serif; cursor: pointer; }
+    button:hover { border-color: #89a8b3; }
+    button[aria-pressed="true"] { border-color: #76bdd3; background: #25596a; color: #fff; }
+    button:disabled { cursor: wait; opacity: .55; }
+    #status { margin-left: auto; min-width: 280px; text-align: right; }
+    #status strong { display: block; color: #79d79c; font-size: 13px; }
+    #status span { display: block; max-width: 620px; margin-top: 3px; overflow: hidden; color: #aeb9bd; font: 10px/1.3 "SF Mono", Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    #status.loading strong { color: #f0c56b; }
+    #status.failed strong { color: #ff8d7e; }
+    #failure { position: fixed; z-index: 30; inset: 58px 0 0; display: none; place-items: center; padding: 32px; background: #050708; color: #ffb4aa; text-align: center; }
+    #failure.visible { display: grid; }
+    #failure strong { display: block; font-size: 24px; }
+    #failure pre { max-width: min(900px, 92vw); overflow: auto; color: #d9e1e3; font: 12px/1.5 "SF Mono", Menlo, monospace; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="receipt-band">
+    <div id="identity">
+      <strong id="replay-label">Field replay</strong>
+      <span id="source-label">Awaiting manifest identity</span>
+    </div>
+    <div id="compositions" role="group" aria-label="Renderer composition">
+      <button type="button" data-composition="splat-only-v0">Splat only</button>
+      <button type="button" data-composition="smoke-raymarch-under-splats-v0">Smoke hybrid</button>
+      <button type="button" data-composition="raymarch-only-v0">Raymarch only</button>
+      <button type="button" data-composition="full-raymarch-under-splats-diagnostic-v0">Full hybrid diagnostic</button>
+    </div>
+    <div id="status" class="loading">
+      <strong id="status-title">Loading manifest</strong>
+      <span id="status-detail">No field authority has been accepted yet</span>
+    </div>
+  </div>
+  <iframe id="basin" title="Checksum-bound volume field replay"></iframe>
+  <div id="failure">
+    <div>
+      <strong>Held field replay failed</strong>
+      <pre id="failure-detail"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    const ROUTE_IDENTITY = 'kaminos.volume.held-field-viewer.v0';
+    const MANIFEST_SCHEMA = 'kaminos.volume.operator-basin-replay.v0';
+    const COMPOSITIONS = new Set([
+      'splat-only-v0',
+      'smoke-raymarch-under-splats-v0',
+      'raymarch-only-v0',
+      'full-raymarch-under-splats-diagnostic-v0',
+    ]);
+    const params = new URLSearchParams(location.search);
+    const manifestRequested = params.get('manifest');
+    const manifestSha256Requested = String(params.get('manifest_sha256') || '').toLowerCase();
+    const compositionParam = params.get('composition');
+    const playbackRouteParam = params.get('playback');
+    const basin = document.getElementById('basin');
+    const status = document.getElementById('status');
+    const statusTitle = document.getElementById('status-title');
+    const statusDetail = document.getElementById('status-detail');
+    const sourceLabel = document.getElementById('source-label');
+    const replayLabel = document.getElementById('replay-label');
+    const failure = document.getElementById('failure');
+    const failureDetail = document.getElementById('failure-detail');
+    const compositionButtons = Array.from(document.querySelectorAll('[data-composition]'));
+    let manifest = null;
+    let manifestEffectiveUrl = null;
+    let prototype = null;
+    let importReceipt = null;
+    let boundaryReceipt = null;
+    let advanceReceipt = null;
+    let cameraReceipt = null;
+    let renderReceipt = null;
+    let controlReceipt = null;
+    let liveReplayReceipt = null;
+    let compositionRequested = null;
+    let playbackRequested = null;
+    let failurePhase = null;
+    let mountedCanvas = null;
+    let renderInFlight = null;
+    let queuedRenderReason = null;
+    let interactionRaf = 0;
+    let lastCameraSignature = null;
+    let lastViewportSignature = null;
+    let liveCompositionSwitchInFlight = false;
+
+    const state = {
+      routeIdentity: ROUTE_IDENTITY,
+      status: 'loading',
+      failurePhase: null,
+      error: null,
+      requestedRoute: location.href,
+      effectiveRoute: null,
+      manifestRequested,
+      manifestEffectiveUrl: null,
+      manifestSha256Requested,
+      manifestSha256Effective: null,
+      innerRouteRequested: null,
+      innerRouteEffective: null,
+      source: null,
+      importReceipt: null,
+      boundaryReceipt: null,
+      advanceReceipt: null,
+      controlReceipt: null,
+      controlSubstitutions: [],
+      liveReplayReceipt: null,
+      playbackRequested: null,
+      playbackEffective: null,
+      initialSimStepCount: null,
+      effectiveSimStepCount: null,
+      cameraRequested: null,
+      cameraEffective: null,
+      compositionRequested: null,
+      compositionEffective: null,
+      compositionAuthority: null,
+      raymarchFireAuthority: null,
+      raymarchEncoded: null,
+      raymarchApplied: null,
+      splatEncoded: null,
+      splatApplied: null,
+      residualApplied: null,
+      boundarySplatCandidateCount: null,
+      boundarySplatInstanceCount: null,
+      boundarySplatOverflowCount: null,
+      boundarySplatPopulationComplete: null,
+      boundarySplatInitialOverflowCount: null,
+      boundarySplatCapacityRetryCount: null,
+      cameraInteractionAuthority: 'orbit-controls-event-plus-polled-held-rerender-v0',
+      cameraRevision: 0,
+      renderRevision: 0,
+      lastRenderReason: null,
+      viewportEffective: null,
+      nativeShell: null,
+    };
+
+    window.__kaminosHeldFieldViewer = {
+      debugState: () => structuredClone(state),
+      setComposition: value => requestComposition('operator-composition-request', value),
+      rerender: reason => requestViewerRerender(reason),
+    };
+
+    function requestViewerRerender(reason) {
+      if (state.playbackEffective === 'live') {
+        return Promise.reject(new Error('live-native-loop-owns-rerender'));
+      }
+      return requestHeldRender(reason || 'operator-held-rerender', compositionRequested, { cameraChanged: true });
+    }
+
+    function setStatus(title, detail, kind = 'loading') {
+      status.className = kind;
+      statusTitle.textContent = title;
+      statusDetail.textContent = detail;
+    }
+
+    function setButtonsEnabled(enabled) {
+      for (const button of compositionButtons) button.disabled = !enabled;
+    }
+
+    function updateCompositionButtons() {
+      for (const button of compositionButtons) {
+        button.setAttribute('aria-pressed', String(button.dataset.composition === compositionRequested));
+      }
+    }
+
+    function fail(phase, reason, extra = null) {
+      failurePhase = phase;
+      const error = reason instanceof Error ? reason : new Error(String(reason));
+      state.status = 'failed';
+      state.failurePhase = phase;
+      state.error = error.message;
+      setButtonsEnabled(false);
+      setStatus('Replay failed', `${phase}: ${error.message}`, 'failed');
+      failureDetail.textContent = JSON.stringify({
+        routeIdentity: ROUTE_IDENTITY,
+        failurePhase: phase,
+        reason: error.message,
+        manifestRequested,
+        manifestEffectiveUrl,
+        manifestSha256Requested,
+        extra,
+      }, null, 2);
+      failure.classList.add('visible');
+      console.error('Kaminos held field replay failed', window.__kaminosHeldFieldViewer.debugState(), extra);
+      return error;
+    }
+
+    function hex(bytes) {
+      return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    function bytesToBase64(bytes) {
+      let binary = '';
+      const batch = 0x8000;
+      for (let index = 0; index < bytes.length; index += batch) {
+        binary += String.fromCharCode(...bytes.subarray(index, Math.min(bytes.length, index + batch)));
+      }
+      return btoa(binary);
+    }
+
+    async function loadManifest() {
+      failurePhase = 'manifest-request';
+      if (!manifestRequested) throw new Error('manifest-required');
+      if (!/^[a-f0-9]{64}$/.test(manifestSha256Requested)) throw new Error('manifest-sha256-required');
+      manifestEffectiveUrl = new URL(manifestRequested, location.href).href;
+      const response = await fetch(manifestEffectiveUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`manifest-http-${response.status}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const actualSha256 = hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
+      state.manifestEffectiveUrl = manifestEffectiveUrl;
+      state.manifestSha256Effective = actualSha256;
+      if (actualSha256 !== manifestSha256Requested) throw new Error('manifest-sha256-mismatch');
+      const parsed = JSON.parse(new TextDecoder().decode(bytes));
+      if (parsed.schema !== MANIFEST_SCHEMA) throw new Error(`manifest-schema-mismatch:${parsed.schema || 'missing'}`);
+      if (parsed.status !== 'captured') throw new Error(`manifest-status-mismatch:${parsed.status || 'missing'}`);
+      if (parsed.failurePhase !== null) throw new Error(`manifest-failure-phase:${parsed.failurePhase}`);
+      if (!parsed.fluid || !parsed.front || !parsed.boundary) throw new Error('manifest-artifacts-incomplete');
+      return parsed;
+    }
+
+    async function waitForPrototype() {
+      failurePhase = 'renderer-load';
+      const innerRoute = new URL(manifest.innerRoute, manifestEffectiveUrl);
+      innerRoute.searchParams.set('volume_field_replay_manifest_sha256', manifestSha256Requested);
+      state.innerRouteRequested = manifest.innerRoute;
+      state.innerRouteEffective = innerRoute.href;
+      basin.src = innerRoute.href;
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('renderer-load-timeout')), 30000);
+        basin.addEventListener('load', () => {
+          clearTimeout(timeout);
+          resolve();
+        }, { once: true });
+      });
+      const deadline = performance.now() + 30000;
+      while (performance.now() < deadline) {
+        const candidate = basin.contentWindow?.__kaminosVolumePrototype;
+        const debug = candidate?.debugState?.();
+        if (candidate && debug?.active === true && debug?.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0') {
+          return candidate;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      throw new Error('renderer-prototype-unavailable');
+    }
+
+    async function streamArtifact(artifact, writeChunk, label) {
+      failurePhase = `upload-${label}`;
+      const artifactUrl = new URL(artifact.url, manifestEffectiveUrl).href;
+      const response = await fetch(artifactUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`${label}-http-${response.status}`);
+      const declaredLength = Number(response.headers.get('content-length'));
+      if (Number.isFinite(declaredLength) && declaredLength !== Number(artifact.byteLength)) {
+        throw new Error(`${label}-content-length-mismatch:${declaredLength}/${artifact.byteLength}`);
+      }
+      if (!response.body) throw new Error(`${label}-stream-missing`);
+      const reader = response.body.getReader();
+      let receivedBytes = 0;
+      let chunkCount = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+        const receipt = writeChunk(receivedBytes, bytesToBase64(bytes));
+        if (receipt?.ok !== true || Number(receipt.byteOffset ?? receivedBytes) !== receivedBytes) {
+          throw new Error(`${label}-chunk-rejected:${JSON.stringify(receipt)}`);
+        }
+        receivedBytes += bytes.byteLength;
+        chunkCount += 1;
+        const percent = Math.min(100, Math.floor(100 * receivedBytes / Number(artifact.byteLength)));
+        setStatus(`Loading ${label}`, `${percent}% | ${receivedBytes}/${artifact.byteLength} bytes`, 'loading');
+      }
+      if (receivedBytes !== Number(artifact.byteLength)) {
+        throw new Error(`${label}-partial-transfer:${receivedBytes}/${artifact.byteLength}`);
+      }
+      return { label, artifactUrl, receivedBytes, chunkCount };
+    }
+
+    function applyNativeControls(controlOverrides = {}) {
+      const applyControls = basin.contentWindow?.kaminosApplyVolumeControlsSnapshot;
+      if (typeof applyControls !== 'function') throw new Error('native-control-snapshot-api-missing');
+      let receipt = applyControls({
+        ...manifest.controls,
+        ...controlOverrides,
+        selectiveHeadLiveRole: 'truthHigh',
+        selectiveHeadLiveRenderComposition: compositionRequested,
+      });
+      if (receipt?.status !== 'applied') {
+        throw new Error(`native-control-snapshot-rejected:${JSON.stringify(receipt)}`);
+      }
+      const roleReceipt = prototype.setSelectiveHeadLiveRole('truthHigh');
+      if (roleReceipt?.requestedRole !== 'truthHigh') {
+        throw new Error(`selective-role-rejected:${JSON.stringify(roleReceipt)}`);
+      }
+      const compositionReceipt = prototype.setSelectiveHeadLiveRenderComposition(compositionRequested);
+      if (compositionReceipt?.requestedComposition !== compositionRequested) {
+        throw new Error(`selective-composition-request-rejected:${JSON.stringify(compositionReceipt)}`);
+      }
+      receipt = { ...receipt, roleReceipt, compositionReceipt };
+      state.controlReceipt = receipt;
+      state.controlSubstitutions = Array.isArray(receipt.substitutions) ? receipt.substitutions : [];
+      return receipt;
+    }
+
+    function controlSubstitutionStatus() {
+      const substitutions = state.controlSubstitutions;
+      if (!substitutions.length) return 'controls exact';
+      return `controls normalized ${substitutions.length}: ${substitutions.map(item => item.key).join(',')}`;
+    }
+
+    async function importHeldField() {
+      failurePhase = 'field-import-begin';
+      controlReceipt = applyNativeControls();
+      const begin = prototype.beginDebugFullFieldImport({
+        grid: manifest.grid,
+        initializationAuthority: manifest.initializationAuthority,
+        filterIdentity: manifest.filterIdentity,
+        layoutIdentity: manifest.layoutIdentity,
+        sourceManifestPath: manifestEffectiveUrl,
+        sourceManifestSha256: manifestSha256Requested,
+        source: manifest.source,
+        receiverInitialSimStepCount: manifest.initialSimStepCount,
+        fluid: manifest.fluid,
+        front: manifest.front,
+      });
+      if (begin?.ok !== true) throw new Error(`field-import-begin-rejected:${JSON.stringify(begin)}`);
+      const fluidTransfer = await streamArtifact(
+        manifest.fluid,
+        (byteOffset, base64) => prototype.writeDebugFullFieldImportChunk({
+          sessionId: begin.sessionId, kind: 'fluid', byteOffset, base64,
+        }),
+        'fluid',
+      );
+      const frontTransfer = await streamArtifact(
+        manifest.front,
+        (byteOffset, base64) => prototype.writeDebugFullFieldImportChunk({
+          sessionId: begin.sessionId, kind: 'front', byteOffset, base64,
+        }),
+        'front',
+      );
+      failurePhase = 'field-import-finish';
+      const finish = await prototype.finishDebugFullFieldImport({ sessionId: begin.sessionId });
+      if (finish?.ok !== true || finish.status !== 'applied') {
+        throw new Error(`field-import-finish-rejected:${JSON.stringify(finish)}`);
+      }
+      return { ...finish, transfers: { fluid: fluidTransfer, front: frontTransfer } };
+    }
+
+    async function importBoundary() {
+      failurePhase = 'boundary-import-begin';
+      const begin = prototype.beginDebugBoundarySidecarOverride({
+        role: 'truthHigh',
+        grid: manifest.grid,
+        byteLength: manifest.boundary.byteLength,
+        boundarySidecarSha256: manifest.boundary.sha256,
+        sourceManifestPath: manifestEffectiveUrl,
+        sourceManifestSha256: manifestSha256Requested,
+        sourceKind: 'operator-live-evolved-basin',
+        packIdentity: manifest.source?.identity || null,
+      });
+      if (begin?.ok !== true) throw new Error(`boundary-import-begin-rejected:${JSON.stringify(begin)}`);
+      const transfer = await streamArtifact(
+        manifest.boundary,
+        (byteOffset, base64) => prototype.writeDebugBoundarySidecarOverrideChunk({
+          sessionId: begin.sessionId, byteOffset, base64,
+        }),
+        'boundary',
+      );
+      failurePhase = 'boundary-import-finish';
+      const finish = await prototype.finishDebugBoundarySidecarOverride({ sessionId: begin.sessionId });
+      if (finish?.ok !== true || finish.status !== 'applied') {
+        throw new Error(`boundary-import-finish-rejected:${JSON.stringify(finish)}`);
+      }
+      return { ...finish, transfer };
+    }
+
+    function mountCanvas() {
+      const canvas = prototype.canvasElement();
+      const innerDocument = basin.contentDocument;
+      if (canvas.parentElement?.id !== 'viewport') throw new Error('native-viewport-canvas-ownership-mismatch');
+      const sidebar = innerDocument.getElementById('sidebar');
+      const sidebarRect = sidebar?.getBoundingClientRect();
+      const sidebarStyle = sidebar ? basin.contentWindow.getComputedStyle(sidebar) : null;
+      if (!sidebar || !sidebarRect || sidebarRect.width < 200 || sidebarRect.height < 200
+        || sidebarStyle?.display === 'none' || sidebarStyle?.visibility === 'hidden') {
+        throw new Error('sidebar-not-visible');
+      }
+      canvas.style.removeProperty('inset');
+      canvas.style.removeProperty('position');
+      canvas.style.removeProperty('width');
+      canvas.style.removeProperty('height');
+      canvas.style.removeProperty('display');
+      canvas.style.removeProperty('visibility');
+      canvas.style.removeProperty('opacity');
+      canvas.style.removeProperty('transform');
+      canvas.style.removeProperty('z-index');
+      canvas.style.pointerEvents = 'none';
+      canvas.classList.add('active');
+      mountedCanvas = canvas;
+      state.nativeShell = {
+        canvasParentId: canvas.parentElement.id,
+        sidebarVisible: true,
+        sidebarWidth: Math.round(sidebarRect.width),
+        sidebarHeight: Math.round(sidebarRect.height),
+      };
+      return canvas;
+    }
+
+    function effectiveCamera() {
+      return basin.contentWindow?.kaminosCameraDebugState?.() || null;
+    }
+
+    function roundedSignature(values) {
+      return Array.isArray(values)
+        ? values.map(value => Number.isFinite(Number(value)) ? Number(value).toFixed(6) : String(value)).join(',')
+        : 'missing';
+    }
+
+    function cameraSignature(camera) {
+      if (!camera) return 'missing';
+      return [
+        roundedSignature(camera.position),
+        roundedSignature(camera.target),
+        roundedSignature(camera.projectionMatrix),
+      ].join('|');
+    }
+
+    function viewportReceipt() {
+      const rect = basin.getBoundingClientRect();
+      const inner = basin.contentWindow;
+      return {
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height)),
+        innerWidth: Math.max(1, Math.round(Number(inner?.innerWidth) || 0)),
+        innerHeight: Math.max(1, Math.round(Number(inner?.innerHeight) || 0)),
+        devicePixelRatio: Number(inner?.devicePixelRatio) || 1,
+      };
+    }
+
+    function viewportSignature(viewport) {
+      return `${viewport.width}x${viewport.height}:${viewport.innerWidth}x${viewport.innerHeight}@${viewport.devicePixelRatio}`;
+    }
+
+    function completeSplatPopulation(receipt) {
+      const candidateCount = Number(receipt?.boundarySplatCandidateCount);
+      const instanceCount = Number(receipt?.boundarySplatInstanceCount);
+      const overflowCount = Number(receipt?.boundarySplatOverflowCount);
+      return Number.isFinite(candidateCount)
+        && Number.isFinite(instanceCount)
+        && Number.isFinite(overflowCount)
+        && candidateCount > 0
+        && instanceCount === candidateCount
+        && overflowCount === 0;
+    }
+
+    async function renderComposition(nextComposition, options = {}) {
+      if (!manifest || !prototype || !importReceipt) throw new Error('held-field-not-imported');
+      if (!COMPOSITIONS.has(nextComposition)) throw new Error(`unsupported-composition:${nextComposition}`);
+      const requestedComposition = nextComposition;
+      compositionRequested = requestedComposition;
+      state.compositionRequested = requestedComposition;
+      updateCompositionButtons();
+      setButtonsEnabled(false);
+      failurePhase = 'held-render';
+      failure.classList.remove('visible');
+      mountCanvas();
+      cameraReceipt = options.applyCapturedCamera === true
+        ? basin.contentWindow.kaminosSetCameraDebugPose(manifest.camera)
+        : effectiveCamera();
+      const receipt = await prototype.renderFrozenScaleToCanvas({
+        fullFieldImportSessionId: importReceipt.sessionId,
+        renderScale: 1,
+        boundarySplatComposition: requestedComposition,
+        controlOverrides: {
+          ...manifest.controls,
+          boundarySidecarSource: 'override',
+          selectiveHeadLiveRole: 'truthHigh',
+          selectiveHeadLiveRenderComposition: requestedComposition,
+        },
+        now: manifest.sampleNowMs,
+        sameStateCaptureId: `${manifest.captureId}:${requestedComposition}`,
+      });
+      const compositionEffective = receipt?.boundarySplatCompositionEffective;
+      if (receipt?.ok !== true) throw new Error(`held-render-rejected:${JSON.stringify(receipt)}`);
+      if (compositionEffective !== requestedComposition) {
+        throw new Error(`composition-substitution:${requestedComposition}/${compositionEffective || 'missing'}`);
+      }
+      const boundarySplatPopulationComplete = receipt.splatApplied ? completeSplatPopulation(receipt) : null;
+      if (receipt.splatApplied && boundarySplatPopulationComplete !== true) {
+        throw new Error(`incomplete-splat-population:${JSON.stringify({
+          candidateCount: receipt.boundarySplatCandidateCount,
+          instanceCount: receipt.boundarySplatInstanceCount,
+          overflowCount: receipt.boundarySplatOverflowCount,
+        })}`);
+      }
+      renderReceipt = receipt;
+      state.status = 'running';
+      state.failurePhase = null;
+      state.error = null;
+      state.effectiveRoute = receipt.effectiveRoute;
+      state.cameraRequested = manifest.camera;
+      state.cameraEffective = cameraReceipt;
+      state.compositionEffective = compositionEffective;
+      state.compositionAuthority = receipt.compositionAuthority;
+      state.raymarchFireAuthority = receipt.raymarchFireAuthority;
+      state.raymarchEncoded = receipt.raymarchEncoded;
+      state.raymarchApplied = receipt.raymarchApplied;
+      state.splatEncoded = receipt.splatEncoded;
+      state.splatApplied = receipt.splatApplied;
+      state.residualApplied = receipt.residualApplied;
+      state.boundarySplatCandidateCount = receipt.boundarySplatCandidateCount;
+      state.boundarySplatInstanceCount = receipt.boundarySplatInstanceCount;
+      state.boundarySplatOverflowCount = receipt.boundarySplatOverflowCount;
+      state.boundarySplatPopulationComplete = boundarySplatPopulationComplete;
+      state.boundarySplatInitialOverflowCount = receipt.boundarySplatInitialOverflowCount;
+      state.boundarySplatCapacityRetryCount = receipt.boundarySplatCapacityRetryCount;
+      state.cameraEffective = effectiveCamera();
+      state.cameraRevision += options.cameraChanged ? 1 : 0;
+      state.renderRevision += 1;
+      state.lastRenderReason = options.reason || 'requested';
+      state.viewportEffective = viewportReceipt();
+      setStatus(
+        'Checksum-verified interactive held field',
+        `${compositionEffective} | raymarch ${receipt.raymarchApplied ? receipt.raymarchFireAuthority > 0 ? 'full-fire applied' : 'smoke-only applied' : 'off'} | splats ${receipt.splatApplied ? `${receipt.boundarySplatInstanceCount}/${receipt.boundarySplatCandidateCount} complete${receipt.boundarySplatCapacityRetryCount ? ` after ${receipt.boundarySplatCapacityRetryCount} capacity retry` : ''}` : 'off'} | camera ${state.cameraRevision} | step ${manifest.initialSimStepCount}`,
+        'running',
+      );
+      setButtonsEnabled(true);
+      return window.__kaminosHeldFieldViewer.debugState();
+    }
+
+    function requestHeldRender(reason, nextComposition = compositionRequested, options = {}) {
+      if (!COMPOSITIONS.has(nextComposition)) return Promise.reject(new Error(`unsupported-composition:${nextComposition}`));
+      compositionRequested = nextComposition;
+      state.compositionRequested = compositionRequested;
+      updateCompositionButtons();
+      queuedRenderReason = { reason, options };
+      if (renderInFlight) return renderInFlight;
+      renderInFlight = (async () => {
+        while (queuedRenderReason) {
+          const request = queuedRenderReason;
+          queuedRenderReason = null;
+          await renderComposition(compositionRequested, { ...request.options, reason: request.reason });
+        }
+      })().finally(() => {
+        renderInFlight = null;
+        if (queuedRenderReason) requestHeldRender(queuedRenderReason.reason).catch(error => fail(failurePhase || 'held-rerender', error));
+      });
+      return renderInFlight;
+    }
+
+    async function requestLiveComposition(reason, nextComposition) {
+      if (!COMPOSITIONS.has(nextComposition)) throw new Error(`unsupported-composition:${nextComposition}`);
+      liveCompositionSwitchInFlight = true;
+      try {
+        const receipt = prototype.setSelectiveHeadLiveRenderComposition(nextComposition);
+        if (receipt?.requestedComposition !== nextComposition || receipt?.effectiveComposition !== nextComposition) {
+          throw new Error(`composition-substitution:${nextComposition}/${receipt?.effectiveComposition || 'missing'}`);
+        }
+        compositionRequested = nextComposition;
+        state.compositionRequested = nextComposition;
+        state.compositionEffective = receipt.effectiveComposition;
+        state.compositionAuthority = receipt.compositionAuthority;
+        state.lastRenderReason = reason;
+        updateCompositionButtons();
+        await waitForLiveReplayStep(state.effectiveSimStepCount ?? manifest.initialSimStepCount);
+        return window.__kaminosHeldFieldViewer.debugState();
+      } finally {
+        liveCompositionSwitchInFlight = false;
+      }
+    }
+
+    function requestComposition(reason, nextComposition) {
+      return state.playbackEffective === 'live'
+        ? requestLiveComposition(reason, nextComposition)
+        : requestHeldRender(reason, nextComposition);
+    }
+
+    function applyLiveDebugReceipt(debug) {
+      const pass = debug?.selectiveHeadLivePassReceipt || null;
+      state.effectiveSimStepCount = debug?.simStepCount ?? null;
+      state.compositionEffective = debug?.selectiveHeadLiveCompositionEffective || state.compositionEffective;
+      state.compositionAuthority = debug?.selectiveHeadLiveCompositionAuthority || state.compositionAuthority;
+      state.raymarchEncoded = pass?.raymarchEncoded ?? state.raymarchEncoded;
+      state.raymarchApplied = pass?.raymarchApplied ?? state.raymarchApplied;
+      state.splatEncoded = pass?.splatEncoded ?? state.splatEncoded;
+      state.splatApplied = pass?.splatApplied ?? state.splatApplied;
+      state.raymarchFireAuthority = pass?.raymarchFireAuthority ?? state.raymarchFireAuthority;
+      state.boundarySplatCandidateCount = debug?.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
+      state.boundarySplatInstanceCount = debug?.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      state.boundarySplatOverflowCount = debug?.boundarySplatOverflowCount ?? state.boundarySplatOverflowCount;
+      state.boundarySplatPopulationComplete = state.splatApplied ? completeSplatPopulation(state) : null;
+      state.cameraEffective = effectiveCamera();
+      state.viewportEffective = viewportReceipt();
+    }
+
+    function livePassMatchesComposition(debug) {
+      const pass = debug?.selectiveHeadLivePassReceipt;
+      if (debug?.selectiveHeadLiveCompositionEffective !== compositionRequested || !pass) return false;
+      if (compositionRequested === 'splat-only-v0') return pass.splatApplied === true && pass.raymarchApplied === false;
+      if (compositionRequested === 'smoke-raymarch-under-splats-v0') {
+        return pass.splatApplied === true && pass.raymarchApplied === true && pass.raymarchFireAuthority === 0;
+      }
+      if (compositionRequested === 'raymarch-only-v0') {
+        return pass.splatApplied === false && pass.raymarchApplied === true && pass.raymarchFireAuthority === 1;
+      }
+      return pass.splatApplied === true && pass.raymarchApplied === true && pass.raymarchFireAuthority === 1;
+    }
+
+    async function waitForLiveReplayStep(afterSimStepCount) {
+      let visibleWaitMs = 0;
+      let lastPollMs = performance.now();
+      let lastDebug = null;
+      while (visibleWaitMs < 60000) {
+        const pollNowMs = performance.now();
+        const innerVisibility = basin.contentDocument?.visibilityState || 'hidden';
+        if (innerVisibility === 'visible') visibleWaitMs += pollNowMs - lastPollMs;
+        lastPollMs = pollNowMs;
+        const debug = prototype.debugState();
+        lastDebug = debug;
+        if (debug?.active === true
+          && Number(debug.simStepCount) > Number(afterSimStepCount)
+          && debug.selectiveHeadLiveCompositionEffective === compositionRequested
+          && livePassMatchesComposition(debug)) {
+          applyLiveDebugReceipt(debug);
+          state.status = 'running';
+          state.failurePhase = null;
+          state.error = null;
+          setStatus(
+            'Checksum-verified live field',
+            `${state.compositionEffective} | native shell | step ${state.initialSimStepCount} -> ${state.effectiveSimStepCount} | splats ${state.splatApplied ? `${state.boundarySplatInstanceCount}/${state.boundarySplatCandidateCount}` : 'off'} | ${controlSubstitutionStatus()}`,
+            'running',
+          );
+          setButtonsEnabled(true);
+          return debug;
+        }
+        if (innerVisibility !== 'visible') {
+          setStatus('Live replay admitted', 'Waiting for visible tab before requiring native animation progress', 'loading');
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (Number(lastDebug?.simStepCount) > Number(afterSimStepCount)) {
+        throw new Error(`live-composition-substitution:${compositionRequested}/${lastDebug?.selectiveHeadLiveCompositionEffective || 'missing'}`);
+      }
+      throw new Error('live-replay-step-timeout');
+    }
+
+    function pollLiveReceipt() {
+      interactionRaf = requestAnimationFrame(pollLiveReceipt);
+      if (state.status !== 'running' || state.playbackEffective !== 'live') return;
+      if (liveCompositionSwitchInFlight) return;
+      const debug = prototype.debugState();
+      const passMatchesComposition = livePassMatchesComposition(debug);
+      if (debug?.active !== true || !passMatchesComposition) {
+        fail('live-pass-receipt', new Error(`live-pass-substitution:${compositionRequested}/${debug?.selectiveHeadLiveCompositionEffective || 'missing'}`), debug);
+        return;
+      }
+      applyLiveDebugReceipt(debug);
+      setStatus(
+        'Checksum-verified live field',
+        `${state.compositionEffective} | native shell | step ${state.initialSimStepCount} -> ${state.effectiveSimStepCount} | splats ${state.splatApplied ? `${state.boundarySplatInstanceCount}/${state.boundarySplatCandidateCount}` : 'off'} | ${controlSubstitutionStatus()}`,
+        'running',
+      );
+    }
+
+    async function startLiveReplay() {
+      failurePhase = 'live-replay-resume';
+      liveReplayReceipt = prototype.resumeDebugImportedFieldLive({ sessionId: importReceipt.sessionId });
+      if (liveReplayReceipt?.ok !== true || liveReplayReceipt.playbackEffective !== 'live') {
+        throw new Error(`live-replay-resume-rejected:${JSON.stringify(liveReplayReceipt)}`);
+      }
+      state.liveReplayReceipt = liveReplayReceipt;
+      state.playbackRequested = 'live';
+      state.playbackEffective = liveReplayReceipt.playbackEffective;
+      state.cameraInteractionAuthority = 'native-orbit-controls-plus-native-render-loop-v0';
+      await waitForLiveReplayStep(manifest.initialSimStepCount);
+      cancelAnimationFrame(interactionRaf);
+      interactionRaf = requestAnimationFrame(pollLiveReceipt);
+    }
+
+    function pollHeldInteraction() {
+      interactionRaf = requestAnimationFrame(pollHeldInteraction);
+      if (state.status !== 'running' || !mountedCanvas) return;
+      const camera = effectiveCamera();
+      const viewport = viewportReceipt();
+      const nextCameraSignature = cameraSignature(camera);
+      const nextViewportSignature = viewportSignature(viewport);
+      const cameraChanged = lastCameraSignature !== null && nextCameraSignature !== lastCameraSignature;
+      const viewportChanged = lastViewportSignature !== null && nextViewportSignature !== lastViewportSignature;
+      lastCameraSignature = nextCameraSignature;
+      lastViewportSignature = nextViewportSignature;
+      if (!cameraChanged && !viewportChanged) return;
+      requestHeldRender(
+        cameraChanged && viewportChanged ? 'camera-and-viewport-change' : cameraChanged ? 'camera-change' : 'viewport-change',
+        compositionRequested,
+        { cameraChanged },
+      ).catch(error => fail(failurePhase || 'held-interaction', error));
+    }
+
+    function requestInteractiveRender(event) {
+      if (state.status !== 'running') return;
+      if (event?.type === 'pointermove' && Number(event.buttons) === 0) return;
+      const reason = event?.type === 'resize' ? 'viewport-change' : `camera-${event?.type || 'interaction'}`;
+      requestHeldRender(reason, compositionRequested, { cameraChanged: reason !== 'viewport-change' })
+        .catch(error => fail(failurePhase || 'held-interaction', error));
+    }
+
+    function installHeldInteractionListeners() {
+      const innerDocument = basin.contentDocument;
+      const innerWindow = basin.contentWindow;
+      innerDocument.addEventListener('pointermove', requestInteractiveRender);
+      innerDocument.addEventListener('pointerup', requestInteractiveRender);
+      innerDocument.addEventListener('wheel', requestInteractiveRender);
+      innerWindow.addEventListener('resize', requestInteractiveRender);
+    }
+
+    function startHeldInteraction() {
+      cancelAnimationFrame(interactionRaf);
+      lastCameraSignature = cameraSignature(effectiveCamera());
+      lastViewportSignature = viewportSignature(viewportReceipt());
+      installHeldInteractionListeners();
+      interactionRaf = requestAnimationFrame(pollHeldInteraction);
+    }
+
+    for (const button of compositionButtons) {
+      button.addEventListener('click', () => {
+        requestComposition('composition-switch', button.dataset.composition).catch(error => fail(failurePhase || 'composition-switch', error));
+      });
+    }
+    setButtonsEnabled(false);
+
+    try {
+      manifest = await loadManifest();
+      playbackRequested = playbackRouteParam || manifest.defaultPlayback || 'held';
+      if (!['live', 'held'].includes(playbackRequested)) throw new Error(`unsupported-playback:${playbackRequested}`);
+      state.playbackRequested = playbackRequested;
+      state.initialSimStepCount = manifest.initialSimStepCount;
+      replayLabel.textContent = playbackRequested === 'live' ? 'Live field replay' : 'Held field replay';
+      compositionRequested = COMPOSITIONS.has(compositionParam)
+        ? compositionParam
+        : COMPOSITIONS.has(manifest.defaultComposition)
+          ? manifest.defaultComposition
+          : 'splat-only-v0';
+      state.source = manifest.source;
+      state.compositionRequested = compositionRequested;
+      sourceLabel.textContent = `${manifest.captureId} | ${manifest.grid}^3 | step ${manifest.initialSimStepCount}`;
+      updateCompositionButtons();
+      setStatus('Starting WebGPU receiver', manifest.source?.identity || manifest.captureId, 'loading');
+      prototype = await waitForPrototype();
+      importReceipt = await importHeldField();
+      state.importReceipt = importReceipt;
+      boundaryReceipt = await importBoundary();
+      state.boundaryReceipt = boundaryReceipt;
+      controlReceipt = applyNativeControls({ boundarySidecarSource: 'override' });
+      await renderComposition(compositionRequested, { applyCapturedCamera: true, reason: 'initial-held-render' });
+      if (playbackRequested === 'live') {
+        await startLiveReplay();
+      } else {
+        failurePhase = 'held-state-advance';
+        advanceReceipt = prototype.advanceDebugImportedFieldSteps({ sessionId: importReceipt.sessionId, steps: 0 });
+        if (advanceReceipt?.ok !== true || advanceReceipt.completedSteps !== 0) {
+          throw new Error(`held-state-advance-rejected:${JSON.stringify(advanceReceipt)}`);
+        }
+        state.advanceReceipt = advanceReceipt;
+        state.playbackEffective = 'held';
+        startHeldInteraction();
+      }
+    } catch (error) {
+      fail(failurePhase || 'initialization', error);
+    }
+  </script>
+</body>
+</html>

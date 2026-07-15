@@ -1,0 +1,82 @@
+{
+  "00-rs010-linear-off": {
+    "meanAbsVsOff": 0.0,
+    "p95AbsVsOff": 0,
+    "changedPixelsGt1": 0.0,
+    "changedPixelsGt4": 0.0,
+    "meanAbsVsRef": 0.42472667684867,
+    "p95AbsVsRef": 2
+  },
+  "rs010-frontbite-direct-gain1": {
+    "meanAbsVsOff": 1.1307832718170634,
+    "p95AbsVsOff": 8,
+    "changedPixelsGt1": 0.14330151457299223,
+    "changedPixelsGt4": 0.06810996563573883,
+    "meanAbsVsRef": 1.198860252004582,
+    "p95AbsVsRef": 8
+  },
+  "rs010-frontbite-direct-gain2": {
+    "meanAbsVsOff": 2.034628569004285,
+    "p95AbsVsOff": 15,
+    "changedPixelsGt1": 0.18465063001145476,
+    "changedPixelsGt4": 0.105162593865343,
+    "meanAbsVsRef": 2.0555970260065335,
+    "p95AbsVsRef": 14
+  },
+  "rs010-highlimit-direct-gain1": {
+    "meanAbsVsOff": 0.8160263671460694,
+    "p95AbsVsOff": 6,
+    "changedPixelsGt1": 0.07941198930889652,
+    "changedPixelsGt4": 0.06515782105129184,
+    "meanAbsVsRef": 0.9472419498536337,
+    "p95AbsVsRef": 6
+  },
+  "rs010-highlimit-direct-gain2": {
+    "meanAbsVsOff": 1.5153020660981715,
+    "p95AbsVsOff": 12,
+    "changedPixelsGt1": 0.09334001527300496,
+    "changedPixelsGt4": 0.07441930762377498,
+    "meanAbsVsRef": 1.6053418395485979,
+    "p95AbsVsRef": 12
+  },
+  "rs010-highlimit-smoke-energy-2p0-gain1": {
+    "meanAbsVsOff": 0.7798230876925035,
+    "p95AbsVsOff": 6,
+    "changedPixelsGt1": 0.07930826015018455,
+    "changedPixelsGt4": 0.06501590938017054,
+    "meanAbsVsRef": 0.9169843239574053,
+    "p95AbsVsRef": 6
+  },
+  "rs010-highlimit-smoke-energy-2p0-gain2": {
+    "meanAbsVsOff": 1.4419302320648255,
+    "p95AbsVsOff": 11,
+    "changedPixelsGt1": 0.08799350897289042,
+    "changedPixelsGt4": 0.07413421153111875,
+    "meanAbsVsRef": 1.537154978575368,
+    "p95AbsVsRef": 11
+  },
+  "rs010-smoke-structure-routed-gain1": {
+    "meanAbsVsOff": 0.7863428577489288,
+    "p95AbsVsOff": 5,
+    "changedPixelsGt1": 0.16283536973399515,
+    "changedPixelsGt4": 0.06580565101183658,
+    "meanAbsVsRef": 0.8664740571040686,
+    "p95AbsVsRef": 5
+  },
+  "rs010-smoke-structure-routed-gain2": {
+    "meanAbsVsOff": 1.554768147299648,
+    "p95AbsVsOff": 10,
+    "changedPixelsGt1": 0.20417303041873489,
+    "changedPixelsGt4": 0.12796041746213568,
+    "meanAbsVsRef": 1.5730477069280047,
+    "p95AbsVsRef": 9
+  },
+  "99-rs100-native-reference": {
+    "meanAbsVsOff": 0.42472667684867,
+    "p95AbsVsOff": 2,
+    "changedPixelsGt1": 0.09003881888761614,
+    "changedPixelsGt4": 0.041384434262441136,
+    "meanAbsVsRef": 0.0,
+    "p95AbsVsRef": 0
+  }
+}

@@ -1,0 +1,485 @@
+{
+  "schema": "kaminos.volume.residual-upscale-mlx.v0",
+  "createdAt": "2026-07-07T20:36:25Z",
+  "corpusManifest": "/private/tmp/kaminos-latest-main-pyro-corpus-0707/corpus-manifest.json",
+  "corpusSchema": "kaminos.volume.frame-locked-pair-corpus.v0",
+  "pairAuthority": "frame-locked-render-scale-set-v0",
+  "imageAuthority": "cdp-canvas-clip-capture-after-render-only-frozen-sim-state",
+  "lowRenderScale": 0.1,
+  "requestedModelArch": "direct-residual",
+  "modelArch": "direct-residual",
+  "modelConfigSource": "cli",
+  "modelArtifactSchema": "kaminos.volume.residual-upscale-model-artifact.v0",
+  "modelArtifactAuthority": "offline-mlx-residual-upscaler-weights-v0",
+  "requestedSaveModelDir": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/model",
+  "requestedLoadModelDir": null,
+  "savedModelArtifact": {
+    "schema": "kaminos.volume.residual-upscale-model-artifact.v0",
+    "authority": "offline-mlx-residual-upscaler-weights-v0",
+    "manifestPath": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/model/model-artifact.json",
+    "manifestSha256": "e222dcfb5bbb69926d25dfb3614b5d2bb1ad107b8daff2c2aef68ee139c3f695",
+    "weightsPath": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/model/weights.safetensors",
+    "weightsSha256": "6d5285acccef152e2468019a3f5ab4cf488e64496037437e851b80776ef2657f",
+    "model": {
+      "modelArch": "direct-residual",
+      "hiddenChannels": 16,
+      "inputChannels": 7,
+      "conditionRenderScale": false,
+      "scaleChannel": null,
+      "featureInputMode": "feature-rgba",
+      "featureInputAuthority": "shader-material-authority-residual-feature-v0",
+      "featureInputChannels": 4,
+      "detailGate": null,
+      "residualOutputLimit": 0.1,
+      "residualApplicationMaskMode": "soft-active-edge-band",
+      "residualMaskFeatherRadius": 2,
+      "residualColorMode": "rgb",
+      "chromaResidualScale": 1.0
+    }
+  },
+  "loadedModelArtifact": null,
+  "evalOnly": false,
+  "trainingSkipped": false,
+  "seed": 710,
+  "seededRandomGenerators": [
+    "numpy.default_rng",
+    "mlx.core.random"
+  ],
+  "selectedPairCount": 9,
+  "trainPairCount": 6,
+  "evalPairCount": 3,
+  "trainPairs": [
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100",
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100",
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100",
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100",
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100",
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100"
+  ],
+  "evalPairs": [
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100",
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100",
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100"
+  ],
+  "temporalSequenceCount": 3,
+  "temporalTrainPairCount": 3,
+  "temporalEvalPairCount": 0,
+  "temporalSelectedPairCount": 6,
+  "maxSteps": 900,
+  "effectiveMaxSteps": 900,
+  "sleepMs": 0.0,
+  "lossMode": "weighted",
+  "foregroundThreshold": 0.025,
+  "foregroundProbability": 0.85,
+  "foregroundLossWeight": 1.0,
+  "differenceLossWeight": 0.25,
+  "edgeBandMode": "difference-gradient",
+  "edgeBandAuthority": "target-derived-low-high",
+  "edgeBandThreshold": 0.03,
+  "edgeBandDilate": 2,
+  "edgeSamplingProbability": 0.5,
+  "edgeLossWeight": 0.5,
+  "edgeGradientLossWeight": 0.25,
+  "outsideEdgeResidualWeight": 0.0,
+  "residualOutputLimit": 0.1,
+  "residualColorMode": "rgb",
+  "chromaResidualScale": 1.0,
+  "chromaResidualLossWeight": 0.0,
+  "residualApplicationMaskMode": "soft-active-edge-band",
+  "residualMaskFeatherRadius": 2,
+  "residualApplicationMaskAuthority": "teacher-upper-bound-target-derived-soft-active-edge-band",
+  "residualSmoothnessLossWeight": 0.0,
+  "smokeStructureLossWeight": 1.25,
+  "smokeResidualDcLossWeight": 1.0,
+  "smokeMaskThreshold": 0.025,
+  "conditionRenderScale": false,
+  "featureInputMode": "feature-rgba",
+  "featureInputAuthority": "shader-material-authority-residual-feature-v0",
+  "featureInputChannels": 4,
+  "featurePaths": {
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-canonical/controlled-step-frames/frame-001/latest-pyro-bonfire-canonical-frame-001-01-rs010.feature.png",
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-canonical/controlled-step-frames/frame-002/latest-pyro-bonfire-canonical-frame-002-01-rs010.feature.png",
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-canonical/controlled-step-frames/frame-003/latest-pyro-bonfire-canonical-frame-003-01-rs010.feature.png",
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-hot-edge/controlled-step-frames/frame-001/latest-pyro-bonfire-hot-edge-frame-001-01-rs010.feature.png",
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-hot-edge/controlled-step-frames/frame-002/latest-pyro-bonfire-hot-edge-frame-002-01-rs010.feature.png",
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-hot-edge/controlled-step-frames/frame-003/latest-pyro-bonfire-hot-edge-frame-003-01-rs010.feature.png",
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-soft-smoke-edge/controlled-step-frames/frame-001/latest-pyro-bonfire-soft-smoke-edge-frame-001-01-rs010.feature.png",
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-soft-smoke-edge/controlled-step-frames/frame-002/latest-pyro-bonfire-soft-smoke-edge-frame-002-01-rs010.feature.png",
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100": "/tmp/kaminos-latest-main-pyro-corpus-0707/latest-pyro-bonfire-soft-smoke-edge/controlled-step-frames/frame-003/latest-pyro-bonfire-soft-smoke-edge-frame-003-01-rs010.feature.png"
+  },
+  "temporalLossWeight": 0.0,
+  "activeTemporalLossWeight": 0.0,
+  "residualTemporalLossWeight": 0.0,
+  "activeResidualTemporalLossWeight": 0.0,
+  "residualContinuationMode": "none",
+  "residualContinuationEffectiveMode": "none",
+  "residualContinuationAlpha": 1.0,
+  "temporalLossPairCount": 3,
+  "temporalLossPairs": [
+    {
+      "previous": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    },
+    {
+      "previous": "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1
+    }
+  ],
+  "temporalLossFallback": null,
+  "previewMode": "foreground",
+  "previewFrameCount": 6,
+  "fullFramePreview": false,
+  "previewFocus": {
+    "mode": "foreground",
+    "centerY": 890.0071446511638,
+    "centerX": 1078.4480926493675,
+    "foregroundPixels": 1445277,
+    "top": 634,
+    "left": 822,
+    "height": 512,
+    "width": 512
+  },
+  "temporalEval": true,
+  "temporalEvalScope": "selected",
+  "inputChannels": 7,
+  "scaleChannel": null,
+  "foregroundPixels": {
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100": 1450035,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100": 1447701,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100": 1445277,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100": 1460395,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100": 1442505,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100": 1439161,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100": 1542857,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100": 1548808,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100": 1554772
+  },
+  "edgeBandPixels": {
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100": 85389,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100": 100572,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100": 93929,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100": 72872,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100": 71378,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100": 81898,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100": 91054,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100": 94566,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100": 81379
+  },
+  "edgeBandCoverage": {
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100": 0.027169721267659413,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100": 0.03200076365024818,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100": 0.029887043400789105,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100": 0.023186967035764287,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100": 0.022711594756268296,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100": 0.026058928344151713,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100": 0.028972254040982564,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100": 0.030089728904161894,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100": 0.02589378897798142
+  },
+  "edgeBandSignalMax": {
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100": 0.2549019455909729,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100": 0.21960783004760742,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100": 0.1882352977991104,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100": 0.3333333432674408,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100": 0.3529411852359772,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100": 0.3607843518257141,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100": 0.18431371450424194,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100": 0.23137253522872925,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100": 0.15686273574829102
+  },
+  "targetEdgeBandPixels": {
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100": 85389,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100": 100572,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100": 93929,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100": 72872,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100": 71378,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100": 81898,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100": 91054,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100": 94566,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100": 81379
+  },
+  "targetEdgeBandCoverage": {
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100": 0.027169721267659413,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100": 0.03200076365024818,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100": 0.029887043400789105,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100": 0.023186967035764287,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100": 0.022711594756268296,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100": 0.026058928344151713,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100": 0.028972254040982564,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100": 0.030089728904161894,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100": 0.02589378897798142
+  },
+  "targetEdgeBandSignalMax": {
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100": 0.2549019455909729,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100": 0.21960783004760742,
+    "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100": 0.1882352977991104,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100": 0.3333333432674408,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100": 0.3529411852359772,
+    "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100": 0.3607843518257141,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100": 0.18431371450424194,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100": 0.23137253522872925,
+    "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100": 0.15686273574829102
+  },
+  "batchSize": 4,
+  "patchSize": 64,
+  "hiddenChannels": 16,
+  "detailGate": null,
+  "learningRate": 0.001,
+  "evalPatches": 128,
+  "durationSeconds": 5.321268320083618,
+  "device": "Device(gpu, 0)",
+  "trainingLosses": [
+    {
+      "step": 1,
+      "loss": 0.0018399531254544854
+    },
+    {
+      "step": 90,
+      "loss": 0.0009431231301277876
+    },
+    {
+      "step": 180,
+      "loss": 0.00022451711993198842
+    },
+    {
+      "step": 270,
+      "loss": 0.0009653695742599666
+    },
+    {
+      "step": 360,
+      "loss": 0.0002850959135685116
+    },
+    {
+      "step": 450,
+      "loss": 0.0005640918388962746
+    },
+    {
+      "step": 540,
+      "loss": 0.00016160377708729357
+    },
+    {
+      "step": 630,
+      "loss": 0.0003911369130946696
+    },
+    {
+      "step": 720,
+      "loss": 0.0028911682311445475
+    },
+    {
+      "step": 810,
+      "loss": 0.001137677114456892
+    },
+    {
+      "step": 900,
+      "loss": 0.0001973802427528426
+    }
+  ],
+  "temporalTrainingLosses": [],
+  "residualTemporalTrainingLosses": [],
+  "baselineMse": 0.0008407873747842132,
+  "modelMse": 0.0004810915879147615,
+  "baselinePsnr": 30.75313818272292,
+  "modelPsnr": 33.17772236849546,
+  "deltaPsnr": 2.424584185772538,
+  "weightedBaselineMse": 0.0008803767098584103,
+  "weightedModelMse": 0.0005009616896245461,
+  "weightedBaselinePsnr": 30.553314551166064,
+  "weightedModelPsnr": 33.00195484952768,
+  "weightedDeltaPsnr": 2.448640298361614,
+  "edgeBandBaselineMse": 0.0015950012384564616,
+  "edgeBandModelMse": 0.0008843197397254698,
+  "edgeBandBaselinePsnr": 27.972389753938856,
+  "edgeBandModelPsnr": 30.533906805845916,
+  "edgeBandDeltaPsnr": 2.5615170519070602,
+  "edgeBandEvalCoverage": 0.4582061767578125,
+  "targetEdgeBandBaselineMse": 0.0015950012384564616,
+  "targetEdgeBandModelMse": 0.0008843197397254698,
+  "targetEdgeBandBaselinePsnr": 27.972389753938856,
+  "targetEdgeBandModelPsnr": 30.533906805845916,
+  "targetEdgeBandDeltaPsnr": 2.5615170519070602,
+  "targetEdgeBandEvalCoverage": 0.4582061767578125,
+  "outsideEdgeResidualMse": 1.4699125300055016e-05,
+  "improvedPatchFraction": 0.5859375,
+  "temporalPairCount": 6,
+  "temporalBaselineDeltaMse": 1.3506619325198699e-05,
+  "temporalModelDeltaMse": 1.3288226909935474e-05,
+  "temporalBaselineDeltaPsnr": 48.69453340255581,
+  "temporalModelDeltaPsnr": 48.76532964475124,
+  "temporalDeltaPsnr": 0.0707962421954278,
+  "temporalFlickerAmplification": 1.0026928784767553,
+  "temporalPairs": [
+    {
+      "previous": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "latest-pyro-bonfire-canonical",
+      "previousTemporalFrameIndex": 0,
+      "currentTemporalFrameIndex": 1,
+      "baselineDeltaMse": 2.4940973162301816e-05,
+      "modelDeltaMse": 2.3038257495500147e-05,
+      "temporalDeltaPsnr": 0.3446376702447935,
+      "temporalFlickerAmplification": 1.0077335265214125
+    },
+    {
+      "previous": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "latest-pyro-bonfire-canonical",
+      "previousTemporalFrameIndex": 1,
+      "currentTemporalFrameIndex": 2,
+      "baselineDeltaMse": 2.5225594072253443e-05,
+      "modelDeltaMse": 2.5817955247475766e-05,
+      "temporalDeltaPsnr": -0.10080440837955962,
+      "temporalFlickerAmplification": 1.0084237443391186
+    },
+    {
+      "previous": "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-001-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "latest-pyro-bonfire-hot-edge",
+      "previousTemporalFrameIndex": 0,
+      "currentTemporalFrameIndex": 1,
+      "baselineDeltaMse": 8.12726648291573e-06,
+      "modelDeltaMse": 8.12726648291573e-06,
+      "temporalDeltaPsnr": 0.0,
+      "temporalFlickerAmplification": 1.0
+    },
+    {
+      "previous": "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-002-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "latest-pyro-bonfire-hot-edge",
+      "previousTemporalFrameIndex": 1,
+      "currentTemporalFrameIndex": 2,
+      "baselineDeltaMse": 7.93850176705746e-06,
+      "modelDeltaMse": 7.93850176705746e-06,
+      "temporalDeltaPsnr": 0.0,
+      "temporalFlickerAmplification": 1.0
+    },
+    {
+      "previous": "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-001-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "latest-pyro-bonfire-soft-smoke-edge",
+      "previousTemporalFrameIndex": 0,
+      "currentTemporalFrameIndex": 1,
+      "baselineDeltaMse": 7.580838882859098e-06,
+      "modelDeltaMse": 7.580838882859098e-06,
+      "temporalDeltaPsnr": 0.0,
+      "temporalFlickerAmplification": 1.0
+    },
+    {
+      "previous": "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-002-pair-001-rs010-to-rs100",
+      "current": "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100",
+      "lowRenderScale": 0.1,
+      "temporalSequenceId": "latest-pyro-bonfire-soft-smoke-edge",
+      "previousTemporalFrameIndex": 1,
+      "currentTemporalFrameIndex": 2,
+      "baselineDeltaMse": 7.2265415838046465e-06,
+      "modelDeltaMse": 7.2265415838046465e-06,
+      "temporalDeltaPsnr": 0.0,
+      "temporalFlickerAmplification": 1.0
+    }
+  ],
+  "temporalPreview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/temporal-preview-low0-low1-model0-model1-target0-target1-delta-diff.png",
+  "temporalPreviewFocus": {
+    "mode": "foreground",
+    "centerY": 893.9867416993383,
+    "centerX": 1079.3186495498385,
+    "foregroundPixels": 1450035,
+    "top": 637,
+    "left": 823,
+    "height": 512,
+    "width": 512
+  },
+  "temporalSequencePreview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/temporal-sequence-preview-low-model-target-error-mask.png",
+  "temporalSequenceFrames": [
+    {
+      "item": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-001-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "latest-pyro-bonfire-canonical",
+      "temporalFrameIndex": 0,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-002-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "latest-pyro-bonfire-canonical",
+      "temporalFrameIndex": 1,
+      "lowRenderScale": 0.1
+    },
+    {
+      "item": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100",
+      "temporalSequenceId": "latest-pyro-bonfire-canonical",
+      "temporalFrameIndex": 2,
+      "lowRenderScale": 0.1
+    }
+  ],
+  "residualContinuationAuthority": null,
+  "continuationStillBaselinePsnr": null,
+  "continuationStillRawModelPsnr": null,
+  "continuationStillModelPsnr": null,
+  "continuationStillDeltaPsnr": null,
+  "continuationStillVsRawDeltaPsnr": null,
+  "continuationTemporalModelDeltaPsnr": null,
+  "continuationTemporalDeltaPsnr": null,
+  "continuationFlickerAmplification": null,
+  "continuationPreview": null,
+  "preview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/residual-preview-low-model-target-diff.png",
+  "diagnosticPreview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/residual-preview-low-model-target-targetres-modelres-error-mask.png",
+  "previewFrames": [
+    {
+      "index": 0,
+      "item": "latest-pyro-bonfire-canonical::latest-pyro-bonfire-canonical-frame-003-pair-001-rs010-to-rs100",
+      "preview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/residual-preview-low-model-target-diff.png",
+      "diagnosticPreview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/residual-preview-low-model-target-targetres-modelres-error-mask.png",
+      "previewFocus": {
+        "mode": "foreground",
+        "centerY": 890.0071446511638,
+        "centerX": 1078.4480926493675,
+        "foregroundPixels": 1445277,
+        "top": 634,
+        "left": 822,
+        "height": 512,
+        "width": 512
+      }
+    },
+    {
+      "index": 1,
+      "item": "latest-pyro-bonfire-hot-edge::latest-pyro-bonfire-hot-edge-frame-003-pair-001-rs010-to-rs100",
+      "preview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/residual-preview-frame-001-low-model-target-diff.png",
+      "diagnosticPreview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/residual-preview-frame-001-low-model-target-targetres-modelres-error-mask.png",
+      "previewFocus": {
+        "mode": "foreground",
+        "centerY": 832.4801888044493,
+        "centerX": 1083.1048333021809,
+        "foregroundPixels": 1439161,
+        "top": 576,
+        "left": 827,
+        "height": 512,
+        "width": 512
+      }
+    },
+    {
+      "index": 2,
+      "item": "latest-pyro-bonfire-soft-smoke-edge::latest-pyro-bonfire-soft-smoke-edge-frame-003-pair-001-rs010-to-rs100",
+      "preview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/residual-preview-frame-002-low-model-target-diff.png",
+      "diagnosticPreview": "/private/tmp/kaminos-latest-main-pyro-residual-0707/rs010-direct-smoke-structure-routed/residual-preview-frame-002-low-model-target-targetres-modelres-error-mask.png",
+      "previewFocus": {
+        "mode": "foreground",
+        "centerY": 788.4455457134551,
+        "centerX": 1121.073842981479,
+        "foregroundPixels": 1554772,
+        "top": 532,
+        "left": 865,
+        "height": 512,
+        "width": 512
+      }
+    }
+  ]
+}
