@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
@@ -137,6 +138,11 @@ assert.equal(
   typeof cohortAudit.writeRecurrentEnvelopeWitness,
   'function',
   'audit must expose the accepted legacy/envelope four-role witness writer',
+);
+assert.equal(
+  typeof cohortAudit.validateNestedMotionCohortArtifacts,
+  'function',
+  'verified resume must rehash every nested audit, raster, and video before reuse',
 );
 const legacyModeContract = cohortAudit.motionWitnessModeContract('motion-cohort', 9);
 assert.equal(legacyModeContract.includeControlFrameIdentity, false);
@@ -295,6 +301,12 @@ assert.doesNotThrow(
   () => cohortAudit.validateMotionCohortWitness(envelopeComparisonWitness),
   'paired recurrence witness must preserve both accepted routes and a truly frozen control',
 );
+const generatedBoundaryWitness = structuredClone(envelopeComparisonWitness);
+generatedBoundaryWitness.claimBoundary = 'Offline same-raster diagnostic only; it does not establish analytical-raymarch image error, authorize runtime composition, or prove cross-basin generalization.';
+assert.doesNotThrow(
+  () => cohortAudit.validateMotionCohortWitness(generatedBoundaryWitness),
+  'the writer-generated claim boundary must satisfy its own validator',
+);
 const maskedMovingEnvelopeControl = structuredClone(envelopeComparisonWitness);
 maskedMovingEnvelopeControl.emphasis = structuredClone(validWitness.emphasis);
 maskedMovingEnvelopeControl.roleEvidence.control[1].sha256 = 'e'.repeat(64);
@@ -408,6 +420,59 @@ assert.equal(
   existsSync(join(missingEnvelopeCliDir, 'recurrent-envelope-witness.json')),
   true,
   'paired CLI failure must route through the recurrent witness and preserve its failure report',
+);
+
+const nestedDir = await mkdtemp(join(tmpdir(), 'kaminos-nested-witness-'));
+const nestedAudit = {
+  schema: 'kaminos-boundary-splat-motion-cohort-audit-v0',
+  status: 'completed',
+  source: { manifest: { sha256: '1'.repeat(64) }, predictions: { sha256: '2'.repeat(64) } },
+};
+const nestedAuditBytes = Buffer.from(`${JSON.stringify(nestedAudit)}\n`);
+const digest = value => createHash('sha256').update(value).digest('hex');
+await writeFile(join(nestedDir, 'motion-cohort-audit.json'), nestedAuditBytes);
+const nestedWitness = structuredClone(rawProductWitness);
+nestedWitness.source = {
+  audit: { sha256: digest(nestedAuditBytes) },
+  manifest: { sha256: '1'.repeat(64) },
+  predictions: { sha256: '2'.repeat(64) },
+};
+for (const surface of ['beauty', 'debug']) {
+  for (const role of ['reference', 'control', 'predicted']) {
+    const roleDir = join(nestedDir, surface, role);
+    await import('node:fs/promises').then(({ mkdir }) => mkdir(roleDir, { recursive: true }));
+    const evidence = [];
+    for (let index = 0; index < 2; index += 1) {
+      const value = Buffer.from(role === 'control' ? 'frozen' : `${surface}-${role}-${index}`);
+      await writeFile(join(roleDir, `frame-${String(index).padStart(3, '0')}.png`), value);
+      evidence.push({ sha256: digest(value) });
+    }
+    if (surface === 'beauty') nestedWitness.roleEvidence[role] = evidence;
+    else nestedWitness.partialFlowDebug.roleEvidence = { ...(nestedWitness.partialFlowDebug.roleEvidence ?? {}), [role]: evidence };
+  }
+}
+nestedWitness.controlFrameIdentity.sha256 = nestedWitness.roleEvidence.control[0].sha256;
+const beautyVideo = Buffer.from('beauty-video');
+const debugVideo = Buffer.from('debug-video');
+await writeFile(join(nestedDir, 'motion-cohort-comparison.mp4'), beautyVideo);
+await writeFile(join(nestedDir, 'motion-cohort-debug-comparison.mp4'), debugVideo);
+nestedWitness.artifact = { ...nestedWitness.artifact, path: join(nestedDir, 'motion-cohort-comparison.mp4'), bytes: beautyVideo.byteLength, sha256: digest(beautyVideo) };
+nestedWitness.partialFlowDebug.artifact = { ...nestedWitness.partialFlowDebug.artifact, path: join(nestedDir, 'motion-cohort-debug-comparison.mp4'), bytes: debugVideo.byteLength, sha256: digest(debugVideo) };
+assert.doesNotThrow(() => cohortAudit.validateMotionCohortWitness(nestedWitness));
+await assert.doesNotReject(
+  cohortAudit.validateNestedMotionCohortArtifacts(nestedDir, nestedWitness, nestedAudit, nestedAuditBytes, {
+    manifestSha256: '1'.repeat(64),
+    predictionsSha256: '2'.repeat(64),
+  }),
+);
+await writeFile(join(nestedDir, 'beauty', 'predicted', 'frame-001.png'), 'tampered');
+await assert.rejects(
+  cohortAudit.validateNestedMotionCohortArtifacts(nestedDir, nestedWitness, nestedAudit, nestedAuditBytes, {
+    manifestSha256: '1'.repeat(64),
+    predictionsSha256: '2'.repeat(64),
+  }),
+  /byte|hash|cached|raster/i,
+  'verified resume must reject one mutated cached frame',
 );
 
 console.log('boundary splat motion cohort audit contracts passed');

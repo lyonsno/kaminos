@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 import { renderBoundarySplatRowsPng } from './boundary-splat-phase-render-witness.mjs';
@@ -272,7 +272,7 @@ export function validateMotionCohortWitness(witness) {
     if (
       typeof witness.claimBoundary !== 'string'
       || !/offline/i.test(witness.claimBoundary)
-      || !/no runtime|runtime authorization/i.test(witness.claimBoundary)
+      || !/no runtime|runtime authorization|does not[^.]*authorize runtime/i.test(witness.claimBoundary)
     ) throw new Error('recurrent envelope witness claim boundary mismatch');
   }
   const artifact = witness.artifact;
@@ -365,6 +365,54 @@ async function renderLabeledFrame(rows, camera, options, label, path) {
     nonBackgroundPixelCount: rendered.nonBackgroundPixelCount,
     maxLuminance: rendered.maxLuminance,
   };
+}
+
+export async function validateNestedMotionCohortArtifacts(nestedDirValue, witness, audit, auditBytes, expected) {
+  const nestedDir = resolve(nestedDirValue);
+  validateMotionCohortWitness(witness);
+  if (
+    audit?.schema !== SCHEMA || audit.status !== 'completed'
+    || audit.source?.manifest?.sha256 !== expected?.manifestSha256
+    || audit.source?.predictions?.sha256 !== expected?.predictionsSha256
+    || witness.source?.manifest?.sha256 !== expected.manifestSha256
+    || witness.source?.predictions?.sha256 !== expected.predictionsSha256
+    || witness.source?.audit?.sha256 !== sha256(auditBytes)
+  ) throw new Error('nested motion cohort audit/source identity mismatch');
+  const surfaces = [
+    ['beauty', witness.roleEvidence],
+    ['debug', witness.partialFlowDebug?.roleEvidence],
+  ];
+  for (const [surface, evidenceByRole] of surfaces) {
+    for (const role of ['reference', 'control', 'predicted']) {
+      const evidence = evidenceByRole?.[role];
+      const roleDir = resolve(nestedDir, surface, role);
+      const names = (await readdir(roleDir)).filter(name => /^frame-\d{3}\.png$/.test(name)).sort();
+      if (!Array.isArray(evidence) || evidence.length !== witness.playback.frameCount || names.length !== evidence.length) {
+        throw new Error(`nested ${surface} ${role} raster frame count mismatch`);
+      }
+      for (let index = 0; index < names.length; index += 1) {
+        if (names[index] !== `frame-${String(index).padStart(3, '0')}.png`) {
+          throw new Error(`nested ${surface} ${role} raster sequence mismatch`);
+        }
+        const bytes = await readFile(resolve(roleDir, names[index]));
+        if (sha256(bytes) !== evidence[index]?.sha256) {
+          throw new Error(`nested ${surface} ${role} raster byte/hash mismatch at frame ${index}`);
+        }
+      }
+    }
+  }
+  for (const [name, artifact] of [
+    ['motion-cohort-comparison.mp4', witness.artifact],
+    ['motion-cohort-debug-comparison.mp4', witness.partialFlowDebug?.artifact],
+  ]) {
+    const expectedPath = resolve(nestedDir, name);
+    if (resolve(artifact?.path ?? '') !== expectedPath) throw new Error(`nested ${name} path mismatch`);
+    const bytes = await readFile(expectedPath);
+    if (bytes.byteLength !== artifact.bytes || sha256(bytes) !== artifact.sha256) {
+      throw new Error(`nested ${name} byte/hash mismatch`);
+    }
+  }
+  return true;
 }
 
 function motionWitnessGuide(witness, audit) {
@@ -1086,21 +1134,45 @@ export async function writeRecurrentEnvelopeWitness(
     failurePhase = 'nested-audit';
     const legacyDir = resolve(outDir, 'legacy-source');
     const envelopeDir = resolve(outDir, 'envelope-source');
-    const legacyAudit = await writeMotionCohortAudit(manifestPath, legacyPredictionsPath, { outDir: legacyDir });
-    const envelopeAudit = await writeMotionCohortAudit(manifestPath, envelopePredictionsPath, { outDir: envelopeDir });
-    failurePhase = 'nested-raster';
-    const witnessOptions = {
-      width, height, staticAttenuation: 1, unmatchedAttenuation: 1,
-      partialFlowDebugGain: 0.625, witnessMode: 'raw-product-view', ffmpeg, ffprobe,
-    };
-    const legacyWitness = await writeMotionCohortWitness(
-      manifestPath, legacyPredictionsPath, resolve(legacyDir, 'motion-cohort-audit.json'),
-      { ...witnessOptions, outDir: legacyDir, predictionLabel: 'LEGACY' },
-    );
-    const envelopeWitness = await writeMotionCohortWitness(
-      manifestPath, envelopePredictionsPath, resolve(envelopeDir, 'motion-cohort-audit.json'),
-      { ...witnessOptions, outDir: envelopeDir, predictionLabel: 'ENVELOPE' },
-    );
+    let legacyAudit;
+    let envelopeAudit;
+    let legacyWitness;
+    let envelopeWitness;
+    if (options.reuseNestedArtifacts === true) {
+      failurePhase = 'nested-artifact-revalidation';
+      const [legacyAuditBytes, envelopeAuditBytes, legacyWitnessBytes, envelopeWitnessBytes] = await Promise.all([
+        readFile(resolve(legacyDir, 'motion-cohort-audit.json')),
+        readFile(resolve(envelopeDir, 'motion-cohort-audit.json')),
+        readFile(resolve(legacyDir, 'motion-cohort-witness.json')),
+        readFile(resolve(envelopeDir, 'motion-cohort-witness.json')),
+      ]);
+      legacyAudit = JSON.parse(legacyAuditBytes.toString('utf8'));
+      envelopeAudit = JSON.parse(envelopeAuditBytes.toString('utf8'));
+      legacyWitness = JSON.parse(legacyWitnessBytes.toString('utf8'));
+      envelopeWitness = JSON.parse(envelopeWitnessBytes.toString('utf8'));
+      await validateNestedMotionCohortArtifacts(legacyDir, legacyWitness, legacyAudit, legacyAuditBytes, {
+        manifestSha256, predictionsSha256: legacyPredictionsSha256,
+      });
+      await validateNestedMotionCohortArtifacts(envelopeDir, envelopeWitness, envelopeAudit, envelopeAuditBytes, {
+        manifestSha256, predictionsSha256: envelopePredictionsSha256,
+      });
+    } else {
+      legacyAudit = await writeMotionCohortAudit(manifestPath, legacyPredictionsPath, { outDir: legacyDir });
+      envelopeAudit = await writeMotionCohortAudit(manifestPath, envelopePredictionsPath, { outDir: envelopeDir });
+      failurePhase = 'nested-raster';
+      const witnessOptions = {
+        width, height, staticAttenuation: 1, unmatchedAttenuation: 1,
+        partialFlowDebugGain: 0.625, witnessMode: 'raw-product-view', ffmpeg, ffprobe,
+      };
+      legacyWitness = await writeMotionCohortWitness(
+        manifestPath, legacyPredictionsPath, resolve(legacyDir, 'motion-cohort-audit.json'),
+        { ...witnessOptions, outDir: legacyDir, predictionLabel: 'LEGACY' },
+      );
+      envelopeWitness = await writeMotionCohortWitness(
+        manifestPath, envelopePredictionsPath, resolve(envelopeDir, 'motion-cohort-audit.json'),
+        { ...witnessOptions, outDir: envelopeDir, predictionLabel: 'ENVELOPE' },
+      );
+    }
     for (const role of ['reference', 'control']) {
       if (
         JSON.stringify(legacyWitness.roleEvidence[role].map(frame => frame.sha256))
@@ -1256,6 +1328,7 @@ if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.arg
             outDir: args.get('--out-dir'), report: args.get('--report'),
             width: args.get('--width'), height: args.get('--height'),
             ffmpeg: args.get('--ffmpeg'), ffprobe: args.get('--ffprobe'),
+            reuseNestedArtifacts: args.get('--reuse-nested-artifacts') === '1',
           },
         );
         console.log(JSON.stringify({
