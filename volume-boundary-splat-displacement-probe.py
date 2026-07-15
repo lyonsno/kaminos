@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Learn a bounded one-cell correction for learned boundary-splat positions."""
+"""Learn a bounded correction for learned boundary-splat positions."""
 
 from __future__ import annotations
 
@@ -32,6 +32,11 @@ GLOBAL_GATE_EVALUATION_AUTHORITY = "global-vacancy-election-then-role-slice-v0"
 THRESHOLD_SWEEP_IDENTITY = "uncapped-validation-vacancy-threshold-sweep-v0"
 MAXIMUM_UNIQUE_OVERLAP_SELECTION = "maximum-unique-overlap"
 MAXIMUM_COVERAGE_POSITIVE_NET_SELECTION = "maximum-coverage-positive-net"
+ARGMAX_NONCENTER_PROPOSAL_POLICY = "argmax-noncenter-only"
+ARGMAX_NONCENTER_PROPOSAL_IDENTITY = "argmax-noncenter-only-proposal-v0"
+FIRE_ACTIVE_BEST_NONCENTER_PROPOSAL_POLICY = "source-fire-active-best-noncenter"
+FIRE_ACTIVE_BEST_NONCENTER_PROPOSAL_IDENTITY = "source-fire-active-best-noncenter-proposal-v0"
+FIRE_ACTIVE_SELECTION_AUTHORITY = "source-field-fire-channel-positive-support-v0"
 FEATURE_ORDER = [
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.smokeDensity", "material.heat", "material.fuel", "material.detail",
@@ -45,6 +50,44 @@ OFFSETS = np.asarray([
     for dx in (-1, 0, 1)
 ], dtype=np.int8)
 CENTER_CLASS = 13
+CLASS_COUNT = 27
+OFFSET_RADIUS = 1
+
+
+def configure_offset_radius(radius: int) -> None:
+    global IDENTITY, SPLIT_GUARD_IDENTITY, MOVE_GATE_IDENTITY
+    global DISPLACEMENT_GRID_AUTHORITY, OFFSETS, CENTER_CLASS, CLASS_COUNT, OFFSET_RADIUS
+    radius = int(radius)
+    if radius == 1:
+        identity = "one-cell-27-class-offset-v0"
+        guard_identity = "one-cell-chebyshev-cross-role-exclusion-v0"
+        move_gate_identity = "validation-selected-collision-aware-move-gate-v0"
+        dense_authority = "validation-selected-vacancy-gated-offset-class-grid-v0"
+    elif radius == 2:
+        identity = "two-cell-125-class-offset-v0"
+        guard_identity = "two-cell-chebyshev-cross-role-exclusion-v0"
+        move_gate_identity = "validation-selected-collision-aware-two-cell-move-gate-v0"
+        dense_authority = "validation-selected-vacancy-gated-two-cell-offset-class-grid-v0"
+    else:
+        raise ProbeFailure("arguments", "offset radius must be one or two", {"offsetRadius": radius})
+    values = range(-radius, radius + 1)
+    offsets = np.asarray([
+        (dx, dy, dz)
+        for dz in values
+        for dy in values
+        for dx in values
+    ], dtype=np.int8)
+    center_rows = np.flatnonzero(np.all(offsets == 0, axis=1))
+    if center_rows.size != 1:
+        raise ProbeFailure("arguments", "offset contract does not contain exactly one center class")
+    IDENTITY = identity
+    SPLIT_GUARD_IDENTITY = guard_identity
+    MOVE_GATE_IDENTITY = move_gate_identity
+    DISPLACEMENT_GRID_AUTHORITY = dense_authority
+    OFFSETS = offsets
+    CENTER_CLASS = int(center_rows[0])
+    CLASS_COUNT = int(offsets.shape[0])
+    OFFSET_RADIUS = radius
 
 
 class ProbeFailure(RuntimeError):
@@ -60,6 +103,10 @@ def sha256_bytes(value: bytes) -> str:
 
 def sha256_file(path: Path) -> str:
     return sha256_bytes(path.read_bytes())
+
+
+def sha256_json(value: dict[str, Any]) -> str:
+    return sha256_bytes(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8"))
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -200,11 +247,12 @@ def spatial_split(coords: np.ndarray, block_size: int, seed: int, grid: int) -> 
     receipt = {
         "identity": SPLIT_IDENTITY,
         "guardBandIdentity": SPLIT_GUARD_IDENTITY,
+        "guardRadius": OFFSET_RADIUS,
         "spatialBlockSize": max(1, int(block_size)),
         "hashConstants": [73856093, 19349663, 83492791],
         "hashSeed": int(seed),
         "roleBins": {"test": [0, 1], "validation": [2, 3], "train": [4, 5, 6, 7, 8, 9]},
-        "roleAuthority": "whole spatial blocks with one-cell Chebyshev exclusion around cross-role boundaries",
+        "roleAuthority": f"whole spatial blocks with radius-{OFFSET_RADIUS} Chebyshev exclusion around cross-role boundaries",
         "rawRoleRows": {
             "test": int(np.count_nonzero(raw_roles == 0)),
             "validation": int(np.count_nonzero(raw_roles == 1)),
@@ -212,11 +260,13 @@ def spatial_split(coords: np.ndarray, block_size: int, seed: int, grid: int) -> 
         },
         "guardBandRows": int(np.count_nonzero(guard)),
         "activeRows": int(np.count_nonzero(roles >= 0)),
-        "crossRoleRadiusOneRowsAfterGuard": int(np.count_nonzero(cross_role_after_guard)),
+        "crossRoleOffsetRadiusRowsAfterGuard": int(np.count_nonzero(cross_role_after_guard)),
         "testRows": int(np.count_nonzero(roles == 0)),
         "validationRows": int(np.count_nonzero(roles == 1)),
         "trainRows": int(np.count_nonzero(roles == 2)),
     }
+    if OFFSET_RADIUS == 1:
+        receipt["crossRoleRadiusOneRowsAfterGuard"] = receipt["crossRoleOffsetRadiusRowsAfterGuard"]
     if min(receipt["testRows"], receipt["validationRows"], receipt["trainRows"]) <= 0:
         raise ProbeFailure("dataset-split", "spatial split produced an empty role", receipt)
     return roles, receipt
@@ -246,8 +296,9 @@ def build_offset_labels(low_indexes: np.ndarray, coords: np.ndarray, high_indexe
     high_set = set(int(value) for value in high_indexes.tolist())
     labels = np.full(low_indexes.size, CENTER_CLASS, dtype=np.int64)
     correctable = np.zeros(low_indexes.size, dtype=np.bool_)
+    values = range(-OFFSET_RADIUS, OFFSET_RADIUS + 1)
     search = sorted(
-        ((dx, dy, dz) for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)),
+        ((dx, dy, dz) for dx in values for dy in values for dz in values),
         key=lambda value: (value[0] ** 2 + value[1] ** 2 + value[2] ** 2, value[2], value[1], value[0]),
     )
     offset_to_class = {tuple(int(v) for v in offset): index for index, offset in enumerate(OFFSETS.tolist())}
@@ -319,9 +370,9 @@ def standardize(train: np.ndarray, *others: np.ndarray) -> tuple[np.ndarray, lis
 
 
 def class_weights(labels: np.ndarray) -> np.ndarray:
-    counts = np.bincount(labels, minlength=27).astype(np.float64)
+    counts = np.bincount(labels, minlength=CLASS_COUNT).astype(np.float64)
     nonzero = counts > 0
-    weights = np.ones(27, dtype=np.float64)
+    weights = np.ones(CLASS_COUNT, dtype=np.float64)
     weights[nonzero] = np.sqrt(labels.size / (np.count_nonzero(nonzero) * counts[nonzero]))
     sample_mean = float(np.mean(weights[labels]))
     weights /= max(1.0e-12, sample_mean)
@@ -332,7 +383,7 @@ def train_ridge(x: np.ndarray, labels: np.ndarray, alpha: float) -> dict[str, An
     weights_per_class = class_weights(labels)
     sample_weight = weights_per_class[labels]
     design = np.concatenate([x, np.ones((x.shape[0], 1), dtype=np.float32)], axis=1)
-    target = np.eye(27, dtype=np.float32)[labels]
+    target = np.eye(CLASS_COUNT, dtype=np.float32)[labels]
     scale = np.sqrt(sample_weight).reshape(-1, 1)
     weighted_design = design * scale
     weighted_target = target * scale
@@ -358,8 +409,8 @@ def train_mlp(x: np.ndarray, labels: np.ndarray, args: argparse.Namespace, rng: 
     hidden = max(4, int(args.hidden_width))
     w1 = rng.normal(0.0, math.sqrt(2.0 / x.shape[1]), size=(x.shape[1], hidden)).astype(np.float32)
     b1 = np.zeros((1, hidden), dtype=np.float32)
-    w2 = rng.normal(0.0, math.sqrt(2.0 / hidden), size=(hidden, 27)).astype(np.float32)
-    b2 = np.zeros((1, 27), dtype=np.float32)
+    w2 = rng.normal(0.0, math.sqrt(2.0 / hidden), size=(hidden, CLASS_COUNT)).astype(np.float32)
+    b2 = np.zeros((1, CLASS_COUNT), dtype=np.float32)
     params = [w1, b1, w2, b2]
     moments = [np.zeros_like(value) for value in params]
     variances = [np.zeros_like(value) for value in params]
@@ -432,6 +483,55 @@ def mlp_probabilities(x: np.ndarray, state: dict[str, Any]) -> np.ndarray:
 
 def predict_mlp(x: np.ndarray, state: dict[str, Any]) -> np.ndarray:
     return np.argmax(mlp_probabilities(x, state), axis=1).astype(np.int64)
+
+
+def move_proposals(
+    probabilities: np.ndarray,
+    low: dict[str, Any],
+    indexes: np.ndarray,
+    policy: str,
+) -> tuple[np.ndarray, dict[str, Any]]:
+    argmax_classes = np.argmax(probabilities, axis=1).astype(np.int64)
+    argmax_noncenter_count = int(np.count_nonzero(argmax_classes != CENTER_CLASS))
+    if policy == ARGMAX_NONCENTER_PROPOSAL_POLICY:
+        proposed = argmax_classes
+        eligible = np.ones(indexes.size, dtype=np.bool_)
+        identity = ARGMAX_NONCENTER_PROPOSAL_IDENTITY
+        selection_authority = "model-argmax-including-center-v0"
+        source_channels: list[str] = []
+    elif policy == FIRE_ACTIVE_BEST_NONCENTER_PROPOSAL_POLICY:
+        fire_rows = low["fluid"][indexes, 8:12]
+        eligible = np.max(fire_rows, axis=1) > np.float32(0.0)
+        noncenter_probabilities = probabilities.copy()
+        noncenter_probabilities[:, CENTER_CLASS] = np.float32(-1.0)
+        best_noncenter = np.argmax(noncenter_probabilities, axis=1).astype(np.int64)
+        proposed = np.where(eligible, best_noncenter, CENTER_CLASS).astype(np.int64)
+        identity = FIRE_ACTIVE_BEST_NONCENTER_PROPOSAL_IDENTITY
+        selection_authority = FIRE_ACTIVE_SELECTION_AUTHORITY
+        source_channels = FEATURE_ORDER[8:12]
+    else:
+        raise ProbeFailure("evaluation", "unsupported move proposal policy", {
+            "moveProposalPolicy": policy,
+        })
+    proposed_rows = proposed != CENTER_CLASS
+    selected_probability = probabilities[np.arange(proposed.size), proposed]
+    margins = selected_probability - probabilities[:, CENTER_CLASS]
+    proposed_margins = margins[proposed_rows]
+    return proposed, {
+        "identity": identity,
+        "policy": policy,
+        "selectionAuthority": selection_authority,
+        "sourceChannels": source_channels,
+        "sourceSupportRule": "max selected source fire channel > 0" if source_channels else "none",
+        "targetDataUsedForAdmission": False,
+        "eligibilityMaskSha256": sha256_bytes(eligible.astype(np.uint8, copy=False).tobytes(order="C")),
+        "eligibleCandidateCount": int(np.count_nonzero(eligible)),
+        "ineligibleCandidateCount": int(eligible.size - np.count_nonzero(eligible)),
+        "argmaxNoncenterCount": argmax_noncenter_count,
+        "proposedNoncenterCount": int(np.count_nonzero(proposed_rows)),
+        "minimumProposalMargin": float(np.min(proposed_margins)) if proposed_margins.size else None,
+        "maximumProposalMargin": float(np.max(proposed_margins)) if proposed_margins.size else None,
+    }
 
 
 def vacancy_winners(
@@ -569,7 +669,7 @@ def calibrate_vacancy_threshold(
         "selectedOn": "validation",
         "selectionPolicy": selection_policy,
         "selectionMetric": selection_metric,
-        "confidence": "predicted-class probability minus center-class probability",
+        "confidence": "proposed-class probability minus center-class probability",
         "threshold": selected_point["threshold"],
         "arbitrationAuthority": GLOBAL_GATE_EVALUATION_AUTHORITY,
         "globalWinnerCount": len(winners),
@@ -729,12 +829,19 @@ def main() -> int:
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--learning-rate", type=float, default=2.0e-3)
     parser.add_argument("--weight-decay", type=float, default=1.0e-5)
+    parser.add_argument("--offset-radius", type=int, choices=[1, 2], default=1)
     parser.add_argument(
         "--move-gate-selection",
         choices=[MAXIMUM_UNIQUE_OVERLAP_SELECTION, MAXIMUM_COVERAGE_POSITIVE_NET_SELECTION],
         default=MAXIMUM_UNIQUE_OVERLAP_SELECTION,
     )
+    parser.add_argument(
+        "--move-proposal-policy",
+        choices=[ARGMAX_NONCENTER_PROPOSAL_POLICY, FIRE_ACTIVE_BEST_NONCENTER_PROPOSAL_POLICY],
+        default=ARGMAX_NONCENTER_PROPOSAL_POLICY,
+    )
     args = parser.parse_args()
+    configure_offset_radius(args.offset_radius)
     out_dir = Path(args.out_dir).resolve()
     manifest_path = out_dir / "manifest.json"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -784,29 +891,32 @@ def main() -> int:
         mlp_state, mlp_training = train_mlp(train_features, labels[train_mask], args, rng)
         mlp_probability_rows = {role: mlp_probabilities(role_features[role], mlp_state) for role in role_features}
         mlp_predictions = {role: np.argmax(values, axis=1).astype(np.int64) for role, values in mlp_probability_rows.items()}
+        move_proposal_classes, proposal_admission = move_proposals(
+            mlp_probability_rows["all"], low, low_indexes, args.move_proposal_policy,
+        )
 
         phase = "evaluation"
         high_set = set(int(value) for value in high_indexes.tolist())
         low_set = set(int(value) for value in low_indexes.tolist())
         calibration = calibrate_vacancy_threshold(
-            low_indexes, low_coords, mlp_predictions["all"],
+            low_indexes, low_coords, move_proposal_classes,
             mlp_probability_rows["all"], low_set, high_set, grid, validation_mask,
             args.move_gate_selection,
         )
         global_gated, global_gate = apply_vacancy_gate(
-            low_indexes, low_coords, mlp_predictions["all"], mlp_probability_rows["all"],
+            low_indexes, low_coords, move_proposal_classes, mlp_probability_rows["all"],
             low_set, calibration["threshold"], grid,
         )
         global_winners = vacancy_winners(
-            low_indexes, low_coords, mlp_predictions["all"], mlp_probability_rows["all"], low_set, grid,
+            low_indexes, low_coords, move_proposal_classes, mlp_probability_rows["all"], low_set, grid,
         )
         gated_predictions = {role: global_gated[mask] for role, mask in role_masks.items()}
         gate_roles = gate_role_receipts(
-            roles, mlp_predictions["all"], global_gated, global_winners, calibration["threshold"],
+            roles, move_proposal_classes, global_gated, global_winners, calibration["threshold"],
         )
         gate_roles["all"].update(global_gate)
         center_predictions = {role: np.full(np.count_nonzero(mask), CENTER_CLASS, dtype=np.int64) for role, mask in role_masks.items()}
-        counts = np.bincount(labels[train_mask], minlength=27)
+        counts = np.bincount(labels[train_mask], minlength=CLASS_COUNT)
         frequency_class = int(np.argmax(counts))
         frequency_predictions = {role: np.full(np.count_nonzero(mask), frequency_class, dtype=np.int64) for role, mask in role_masks.items()}
         models = {
@@ -824,17 +934,23 @@ def main() -> int:
             correctable, high_set, grid, mlp_training,
         )
         gated_receipt["calibration"] = calibration
+        gated_receipt["proposalAdmission"] = proposal_admission
         gated_receipt["gateRoles"] = gate_roles
         gated_receipt["evaluationAuthority"] = GLOBAL_GATE_EVALUATION_AUTHORITY
         models["mlpVacancyGated"] = gated_receipt
 
         phase = "checkpoint-write"
+        source_candidate_indexes_sha = sha256_bytes(low_indexes.astype("<i8", copy=False).tobytes(order="C"))
+        proposal_admission_sha = sha256_json(proposal_admission)
         checkpoint_path = out_dir / "displacement-model.npz"
         np.savez_compressed(
             checkpoint_path,
             schema=np.asarray([SCHEMA]),
             identity=np.asarray([IDENTITY]),
             offsets=OFFSETS,
+            offsetRadius=np.asarray([OFFSET_RADIUS], dtype=np.int32),
+            offsetClassCount=np.asarray([CLASS_COUNT], dtype=np.int32),
+            centerClass=np.asarray([CENTER_CLASS], dtype=np.int32),
             normalizationMean=normalization["mean"],
             normalizationStd=normalization["std"],
             ridgeWeights=ridge_state["weights"],
@@ -845,6 +961,11 @@ def main() -> int:
             moveGateIdentity=np.asarray([MOVE_GATE_IDENTITY]),
             moveGateSelectionPolicy=np.asarray([args.move_gate_selection]),
             moveGateThreshold=np.asarray([calibration["threshold"]], dtype=np.float32),
+            moveProposalPolicy=np.asarray([args.move_proposal_policy]),
+            sourceManifestSha256=np.asarray([low["sha256"]]),
+            sourcePayloadSha256=np.asarray([source_pair["payloadSha256"]]),
+            sourceCandidateIndexesSha256=np.asarray([source_candidate_indexes_sha]),
+            proposalAdmissionSha256=np.asarray([proposal_admission_sha]),
         )
         phase = "checkpoint-replay"
         with np.load(checkpoint_path, allow_pickle=False) as replay:
@@ -858,8 +979,59 @@ def main() -> int:
                 "b2": replay["mlpB2"].astype(np.float32),
             }
             replay_probabilities = mlp_probabilities(replay_features, replay_state)
-            replay_raw = np.argmax(replay_probabilities, axis=1).astype(np.int64)
+            replay_radius = int(replay["offsetRadius"][0])
+            replay_class_count = int(replay["offsetClassCount"][0])
+            replay_center_class = int(replay["centerClass"][0])
+            replay_offsets = replay["offsets"].astype(np.int8)
+            if (
+                replay_radius != OFFSET_RADIUS
+                or replay_class_count != CLASS_COUNT
+                or replay_center_class != CENTER_CLASS
+                or not np.array_equal(replay_offsets, OFFSETS)
+            ):
+                raise ProbeFailure("checkpoint-replay", "serialized checkpoint offset contract differs", {
+                    "expectedRadius": OFFSET_RADIUS,
+                    "actualRadius": replay_radius,
+                    "expectedClassCount": CLASS_COUNT,
+                    "actualClassCount": replay_class_count,
+                    "expectedCenterClass": CENTER_CLASS,
+                    "actualCenterClass": replay_center_class,
+                })
+            replay_source_binding = {
+                "lowManifestSha256": str(replay["sourceManifestSha256"][0]),
+                "sourcePayloadSha256": str(replay["sourcePayloadSha256"][0]),
+                "candidateIndexesSha256": str(replay["sourceCandidateIndexesSha256"][0]),
+            }
+            effective_source_binding = {
+                "lowManifestSha256": low["sha256"],
+                "sourcePayloadSha256": source_pair["payloadSha256"],
+                "candidateIndexesSha256": source_candidate_indexes_sha,
+            }
+            source_binding_parity = replay_source_binding == effective_source_binding
+            if not source_binding_parity:
+                raise ProbeFailure("checkpoint-replay", "serialized checkpoint source binding differs", {
+                    "expected": replay_source_binding,
+                    "actual": effective_source_binding,
+                })
+            replay_raw, replay_proposal_admission = move_proposals(
+                replay_probabilities, low, low_indexes, str(replay["moveProposalPolicy"][0]),
+            )
+            replay_proposal_admission_sha = str(replay["proposalAdmissionSha256"][0])
             replay_threshold = float(replay["moveGateThreshold"][0])
+        proposal_receipt_parity = bool(
+            replay_proposal_admission == proposal_admission
+            and sha256_json(replay_proposal_admission) == replay_proposal_admission_sha
+        )
+        if not proposal_receipt_parity:
+            raise ProbeFailure("checkpoint-replay", "serialized checkpoint does not reproduce proposal admission receipt", {
+                "expectedSha256": replay_proposal_admission_sha,
+                "actualSha256": sha256_json(replay_proposal_admission),
+            })
+        proposal_parity = bool(np.array_equal(replay_raw, move_proposal_classes))
+        if not proposal_parity:
+            raise ProbeFailure("checkpoint-replay", "serialized checkpoint does not reproduce move proposal classes", {
+                "mismatchCount": int(np.count_nonzero(replay_raw != move_proposal_classes)),
+            })
         replay_gated, replay_gate = apply_vacancy_gate(
             low_indexes, low_coords, replay_raw, replay_probabilities, low_set, replay_threshold, grid,
         )
@@ -870,9 +1042,10 @@ def main() -> int:
             })
 
         phase = "dense-output-write"
-        displacement_values = np.full(grid ** 3, np.float32(CENTER_CLASS / 26.0), dtype="<f4")
+        class_denominator = np.float32(CLASS_COUNT - 1)
+        displacement_values = np.full(grid ** 3, np.float32(CENTER_CLASS) / class_denominator, dtype="<f4")
         displacement_values[low_indexes] = (
-            replay_gated.astype(np.float32) / np.float32(26.0)
+            replay_gated.astype(np.float32) / class_denominator
         ).astype("<f4", copy=False)
         displacement_path = out_dir / "boundary-splat-offset-class-normalized.f32"
         displacement_bytes = displacement_values.tobytes(order="C")
@@ -885,9 +1058,11 @@ def main() -> int:
             "channelOrder": [DISPLACEMENT_GRID_CHANNEL],
             "authority": DISPLACEMENT_GRID_AUTHORITY,
             "applicationIdentity": MOVE_GATE_IDENTITY,
-            "encoding": "offset class index divided by 26; decode round(value * 26)",
+            "encoding": f"offset class index divided by {CLASS_COUNT - 1}; decode round(value * {CLASS_COUNT - 1})",
+            "offsetRadius": OFFSET_RADIUS,
+            "offsetClassCount": CLASS_COUNT,
             "centerClass": CENTER_CLASS,
-            "centerEncodedValue": float(CENTER_CLASS / 26.0),
+            "centerEncodedValue": float(CENTER_CLASS / (CLASS_COUNT - 1)),
             "acceptedMovedCandidateCount": replay_gate["acceptedMoveCount"],
             "candidateCount": int(low_indexes.size),
             "nonCandidatePolicy": "center class",
@@ -899,9 +1074,23 @@ def main() -> int:
             "targetDataUsedForTraining": True,
             "targetDataUsedForCalibration": True,
             "targetLabelsUsedForModelSelection": True,
+            "offsetRadius": OFFSET_RADIUS,
+            "offsetClassCount": CLASS_COUNT,
+            "centerClass": CENTER_CLASS,
+            "moveProposalPolicy": args.move_proposal_policy,
+            "proposalAdmission": proposal_admission,
+            "sourceBinding": {
+                **effective_source_binding,
+                "eligibilityMaskSha256": proposal_admission["eligibilityMaskSha256"],
+                "proposalAdmissionSha256": proposal_admission_sha,
+                "authority": "checkpoint-plus-checksum-bound-external-source-v0",
+            },
             "targetSplitAuthority": "guarded train-role exact-high offsets enter fitting; guarded validation exact-high support selects only the threshold after global arbitration; guarded test remains audit-only",
             "replay": {
-                "status": "verified",
+                "status": "source-bound-verified",
+                "sourceBindingParity": source_binding_parity,
+                "proposalReceiptParity": proposal_receipt_parity,
+                "proposalParity": proposal_parity,
                 "classParity": class_parity,
                 "globalGateDuplicateDestinationCount": replay_gate["duplicateDestinationCount"],
                 "outputSha256": displacement_artifact["sha256"],
@@ -909,6 +1098,26 @@ def main() -> int:
         }
 
         overlap = len(low_set & high_set)
+        dataset_receipt = {
+            "identity": IDENTITY,
+            "featureAuthority": feature_receipt,
+            "lowCandidateCount": int(low_indexes.size),
+            "highCandidateCount": int(high_indexes.size),
+            "exactOverlapCount": overlap,
+            "lowOnlyCount": int(low_indexes.size - overlap),
+            "highOnlyCount": int(high_indexes.size - overlap),
+            "offsetRadius": OFFSET_RADIUS,
+            "correctableWithinOffsetRadiusCount": int(np.count_nonzero(correctable)),
+            "uncorrectableWithinOffsetRadiusCount": int(np.count_nonzero(~correctable)),
+            "offsetClassCount": CLASS_COUNT,
+            "centerClass": CENTER_CLASS,
+            "offsetHistogram": offset_histogram,
+            "labelTieBreak": "minimum squared offset distance, then z/y/x ascending",
+            "uncorrectablePolicy": "retain center class and report separately",
+        }
+        if OFFSET_RADIUS == 1:
+            dataset_receipt["correctableWithinRadiusOneCount"] = dataset_receipt["correctableWithinOffsetRadiusCount"]
+            dataset_receipt["uncorrectableWithinRadiusOneCount"] = dataset_receipt["uncorrectableWithinOffsetRadiusCount"]
         report = {
             "schema": SCHEMA,
             "identity": IDENTITY,
@@ -927,22 +1136,7 @@ def main() -> int:
                 },
                 "highArtifacts": {"splats": high["splatArtifact"]},
             },
-            "dataset": {
-                "identity": IDENTITY,
-                "featureAuthority": feature_receipt,
-                "lowCandidateCount": int(low_indexes.size),
-                "highCandidateCount": int(high_indexes.size),
-                "exactOverlapCount": overlap,
-                "lowOnlyCount": int(low_indexes.size - overlap),
-                "highOnlyCount": int(high_indexes.size - overlap),
-                "correctableWithinRadiusOneCount": int(np.count_nonzero(correctable)),
-                "uncorrectableWithinRadiusOneCount": int(np.count_nonzero(~correctable)),
-                "offsetClassCount": 27,
-                "centerClass": CENTER_CLASS,
-                "offsetHistogram": offset_histogram,
-                "labelTieBreak": "minimum squared offset distance, then z/y/x ascending",
-                "uncorrectablePolicy": "retain center class and report separately",
-            },
+            "dataset": dataset_receipt,
             "split": split_receipt,
             "models": models,
             "denseOutputs": {
@@ -956,7 +1150,7 @@ def main() -> int:
             "limitations": [
                 "same-state exact-high support labels enter train-role fitting",
                 "candidate displacement does not add missing candidates or alter learned attributes",
-                "one-cell labels are deterministic nearest-support targets, not physical velocity truth",
+                f"radius-{OFFSET_RADIUS} labels are deterministic nearest-support targets, not physical velocity truth",
                 "validation exact-high support selects the vacancy-gate confidence threshold",
                 "test destination membership and unique overlap, not class accuracy alone, decide usefulness",
             ],

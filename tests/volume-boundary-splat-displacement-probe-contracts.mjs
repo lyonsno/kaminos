@@ -24,9 +24,96 @@ assert.match(source, /vacant-in-original-candidate-set-v0/, 'move gate only targ
 assert.match(source, /validation-selected-vacancy-gated-offset-class-grid-v0/, 'probe names the dense displacement output authority');
 assert.match(source, /boundarySplatOffsetClassNormalized/, 'probe emits a renderer-consumable normalized offset class channel');
 assert.match(source, /global-vacancy-election-then-role-slice-v0/, 'probe evaluates every role from one deployment-identical global vacancy election');
+assert.match(source, /source-fire-active-best-noncenter-proposal-v0/, 'probe can admit fire-active non-center proposals even when center has the highest probability');
+assert.match(source, /two-cell-125-class-offset-v0/, 'probe gives radius-two labels a distinct identity and class contract');
 assert.match(source, /postOffsetUniqueOverlap/, 'probe reports collision-aware unique support overlap');
 assert.match(source, /duplicateDestinationCount/, 'probe reports candidate collapse explicitly');
 assert.match(source, /failurePhase/, 'probe writes durable failure-phase reports');
+
+const directAdmissionRun = spawnSync('python3', ['-c', `
+import importlib.util
+import json
+import numpy as np
+spec = importlib.util.spec_from_file_location("displacement_probe", ${JSON.stringify(probePath)})
+probe = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(probe)
+probabilities = np.full((3, 27), np.float32(0.001), dtype=np.float32)
+probabilities[0, probe.CENTER_CLASS] = np.float32(0.7)
+probabilities[0, 14] = np.float32(0.2)
+probabilities[1, probe.CENTER_CLASS] = np.float32(0.1)
+probabilities[1, 12] = np.float32(0.8)
+probabilities[2, probe.CENTER_CLASS] = np.float32(0.05)
+probabilities[2, 11] = np.float32(0.9)
+fluid = np.zeros((3, 16), dtype=np.float32)
+fluid[:2, 8] = np.float32(1.0)
+classes, receipt = probe.move_proposals(
+    probabilities,
+    {"fluid": fluid},
+    np.asarray([0, 1, 2], dtype=np.int64),
+    probe.FIRE_ACTIVE_BEST_NONCENTER_PROPOSAL_POLICY,
+)
+print(json.dumps({"classes": classes.tolist(), "receipt": receipt}))
+`], { encoding: 'utf8' });
+assert.equal(directAdmissionRun.status, 0, `direct center-dominant admission probe succeeds: ${directAdmissionRun.stderr}`);
+const directAdmission = JSON.parse(directAdmissionRun.stdout);
+assert.deepEqual(directAdmission.classes, [14, 12, 13]);
+assert.equal(directAdmission.receipt.eligibleCandidateCount, 2);
+assert.equal(directAdmission.receipt.ineligibleCandidateCount, 1);
+assert.equal(directAdmission.receipt.argmaxNoncenterCount, 2);
+assert.equal(directAdmission.receipt.proposedNoncenterCount, 2);
+assert.ok(directAdmission.receipt.minimumProposalMargin < 0, 'center-dominant source-fire proposal is admitted with a negative margin');
+assert.match(directAdmission.receipt.eligibilityMaskSha256, /^[a-f0-9]{64}$/);
+
+const radiusTwoContractRun = spawnSync('python3', ['-c', `
+import importlib.util
+import json
+import numpy as np
+spec = importlib.util.spec_from_file_location("displacement_probe", ${JSON.stringify(probePath)})
+probe = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(probe)
+probe.configure_offset_radius(2)
+grid = 24
+def cell(x, y, z):
+    return x + y * grid + z * grid * grid
+low_indexes = np.asarray([cell(2, 2, 2), cell(5, 5, 5)], dtype=np.int64)
+low_coords = np.asarray([[2, 2, 2], [5, 5, 5]], dtype=np.int64)
+high_indexes = np.asarray([cell(4, 2, 2), cell(3, 5, 5)], dtype=np.int64)
+labels, correctable, histogram = probe.build_offset_labels(low_indexes, low_coords, high_indexes, grid)
+axes = np.arange(grid, dtype=np.int64)
+coords = np.stack(np.meshgrid(axes, axes, axes, indexing="ij"), axis=-1).reshape(-1, 3)
+roles, split = probe.spatial_split(coords, 8, 9413, grid)
+print(json.dumps({
+    "identity": probe.IDENTITY,
+    "guardIdentity": probe.SPLIT_GUARD_IDENTITY,
+    "moveGateIdentity": probe.MOVE_GATE_IDENTITY,
+    "denseAuthority": probe.DISPLACEMENT_GRID_AUTHORITY,
+    "radius": probe.OFFSET_RADIUS,
+    "classCount": probe.CLASS_COUNT,
+    "centerClass": probe.CENTER_CLASS,
+    "labelOffsets": [probe.OFFSETS[value].tolist() for value in labels.tolist()],
+    "correctable": correctable.tolist(),
+    "histogram": histogram,
+    "split": split,
+}))
+`], { encoding: 'utf8' });
+assert.equal(radiusTwoContractRun.status, 0, `radius-two contract probe succeeds: ${radiusTwoContractRun.stderr}`);
+const radiusTwoContract = JSON.parse(radiusTwoContractRun.stdout);
+assert.equal(radiusTwoContract.identity, 'two-cell-125-class-offset-v0');
+assert.equal(radiusTwoContract.guardIdentity, 'two-cell-chebyshev-cross-role-exclusion-v0');
+assert.equal(radiusTwoContract.moveGateIdentity, 'validation-selected-collision-aware-two-cell-move-gate-v0');
+assert.equal(radiusTwoContract.denseAuthority, 'validation-selected-vacancy-gated-two-cell-offset-class-grid-v0');
+assert.equal(radiusTwoContract.radius, 2);
+assert.equal(radiusTwoContract.classCount, 125);
+assert.equal(radiusTwoContract.centerClass, 62);
+assert.deepEqual(radiusTwoContract.labelOffsets, [[2, 0, 0], [-2, 0, 0]]);
+assert.deepEqual(radiusTwoContract.correctable, [true, true]);
+assert.equal(radiusTwoContract.histogram['2,0,0'], 1);
+assert.equal(radiusTwoContract.histogram['-2,0,0'], 1);
+assert.equal(radiusTwoContract.split.guardRadius, 2);
+assert.equal(radiusTwoContract.split.crossRoleOffsetRadiusRowsAfterGuard, 0);
+assert.ok(radiusTwoContract.split.testRows > 0);
+assert.ok(radiusTwoContract.split.validationRows > 0);
+assert.ok(radiusTwoContract.split.trainRows > 0);
 
 const fixtureRoot = mkdtempSync(join(tmpdir(), 'kaminos-boundary-splat-displacement-'));
 const grid = 8;
@@ -219,7 +306,9 @@ assert.ok(
 );
 assert.equal(report.models.mlpVacancyGated.evaluationAuthority, 'global-vacancy-election-then-role-slice-v0');
 assert.equal(report.models.mlpVacancyGated.gateRoles.all.duplicateDestinationCount, 0);
-assert.equal(report.checkpoint.replay.status, 'verified');
+assert.equal(report.checkpoint.replay.status, 'source-bound-verified');
+assert.equal(report.checkpoint.replay.sourceBindingParity, true);
+assert.equal(report.checkpoint.replay.proposalReceiptParity, true);
 assert.equal(report.checkpoint.replay.classParity, true);
 assert.equal(report.checkpoint.replay.outputSha256, report.denseOutputs.boundarySplatOffsetClass.sha256);
 assert.equal(report.producer.script.path, probePath);
@@ -272,8 +361,53 @@ assert.ok(
     >= displacement.acceptedMovedCandidateCount,
   'coverage-edge policy emits at least as many globally gated moves as maximum-overlap selection',
 );
-assert.equal(coverageReport.checkpoint.replay.status, 'verified');
+assert.equal(coverageReport.checkpoint.replay.status, 'source-bound-verified');
 assert.equal(coverageReport.checkpoint.replay.classParity, true);
+
+const fireAdmissionOutDir = join(fixtureRoot, 'probe-source-fire-best-noncenter');
+const fireAdmissionRun = spawnSync('python3', [
+  probePath,
+  '--low-manifest', lowManifest,
+  '--high-manifest', highManifest,
+  '--out-dir', fireAdmissionOutDir,
+  '--spatial-block-size', '4',
+  '--epochs', '10',
+  '--hidden-width', '16',
+  '--batch-size', '32',
+  '--seed', '9413',
+  '--move-gate-selection', 'maximum-coverage-positive-net',
+  '--move-proposal-policy', 'source-fire-active-best-noncenter',
+], { encoding: 'utf8' });
+assert.equal(fireAdmissionRun.status, 0, `fire-active admission fixture probe succeeds: ${fireAdmissionRun.stderr}`);
+const fireAdmissionReport = JSON.parse(readFileSync(join(fireAdmissionOutDir, 'manifest.json'), 'utf8'));
+const fireAdmissionCalibration = fireAdmissionReport.models.mlpVacancyGated.calibration;
+const fireAdmissionReceipt = fireAdmissionReport.models.mlpVacancyGated.proposalAdmission;
+assert.equal(fireAdmissionReceipt.identity, 'source-fire-active-best-noncenter-proposal-v0');
+assert.equal(fireAdmissionReceipt.selectionAuthority, 'source-field-fire-channel-positive-support-v0');
+assert.deepEqual(fireAdmissionReceipt.sourceChannels, [
+  'fire.flame', 'fire.ember', 'fire.visibleFireCarrier', 'fire.combustionFront',
+]);
+assert.equal(fireAdmissionReceipt.targetDataUsedForAdmission, false);
+assert.equal(fireAdmissionReceipt.eligibleCandidateCount, lowIndexes.length);
+assert.ok(
+  fireAdmissionReceipt.proposedNoncenterCount >= fireAdmissionReceipt.argmaxNoncenterCount,
+  'best-noncenter admission does not silently discard argmax non-center proposals',
+);
+assert.ok(Number.isFinite(fireAdmissionReceipt.minimumProposalMargin));
+assert.ok(fireAdmissionCalibration.thresholdSweep.points.length > 1);
+assert.equal(fireAdmissionCalibration.testDataUsedForSelection, false);
+assert.equal(fireAdmissionReport.checkpoint.moveProposalPolicy, 'source-fire-active-best-noncenter');
+assert.equal(fireAdmissionReport.checkpoint.replay.status, 'source-bound-verified');
+assert.equal(fireAdmissionReport.checkpoint.replay.sourceBindingParity, true);
+assert.equal(fireAdmissionReport.checkpoint.replay.proposalReceiptParity, true);
+assert.equal(fireAdmissionReport.checkpoint.sourceBinding.lowManifestSha256, fireAdmissionReport.source.lowManifest.sha256);
+assert.equal(
+  fireAdmissionReport.checkpoint.sourceBinding.eligibilityMaskSha256,
+  fireAdmissionReport.models.mlpVacancyGated.proposalAdmission.eligibilityMaskSha256,
+);
+assert.equal(fireAdmissionReport.checkpoint.replay.proposalParity, true);
+assert.equal(fireAdmissionReport.checkpoint.replay.classParity, true);
+assert.equal(fireAdmissionReport.models.mlpVacancyGated.gateRoles.all.duplicateDestinationCount, 0);
 
 const mismatchedManifest = join(fixtureRoot, 'high-mismatched-source.json');
 const mismatched = JSON.parse(readFileSync(highManifest, 'utf8'));
