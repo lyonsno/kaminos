@@ -190,7 +190,10 @@ class DestinationStateTrainerContracts(unittest.TestCase):
             "protected-rollout", "/models/one-step.json", 4, 0.625, 0.1, 1.0, 0.25,
         )
         rollout_receipt = MODULE.build_training_loss_receipt(rollout, visible_energy_scale=2.0)
-        self.assertEqual(rollout_receipt["authority"], "candidate-splat-visible-energy-weighted-loss-v0")
+        self.assertEqual(
+            rollout_receipt["authority"],
+            "candidate-splat-physical-visible-energy-weighted-loss-v1",
+        )
         self.assertEqual(rollout_receipt["visibleEnergyScale"], 2.0)
 
     def test_protected_exposure_replaces_only_splat_baseline_and_records_authority(self):
@@ -319,8 +322,8 @@ class DestinationStateTrainerContracts(unittest.TestCase):
 
     def test_visible_energy_matches_opacity_weighted_luminance(self):
         states = np.zeros((2, 25), dtype=np.float32)
-        states[0, 19:23] = [1.0, 0.5, 0.25, 0.8]
-        states[1, 19:23] = [0.2, 0.4, 0.6, -1.0]
+        states[0, 16:25] = [91.0, 1.0, 0.5, 0.25, 0.8, 37.0, 41.0, 43.0, 47.0]
+        states[1, 16:25] = [53.0, 0.2, 0.4, 0.6, -1.0, 59.0, 61.0, 67.0, 71.0]
         energy = MODULE.visible_energy_numpy(states)
         self.assertAlmostEqual(
             energy[0],
@@ -329,12 +332,27 @@ class DestinationStateTrainerContracts(unittest.TestCase):
         )
         self.assertEqual(energy[1], 0.0)
 
+    def test_splat_attribute_order_names_the_physical_candidate_payload(self):
+        self.assertEqual(MODULE.SPLAT_ATTRIBUTE_ORDER, (
+            "splat.support",
+            "splat.color.r", "splat.color.g", "splat.color.b",
+            "splat.opacity", "splat.shape.x", "splat.shape.y",
+            "splat.ridge", "splat.fireSignal",
+        ))
+
     def test_loss_contract_keeps_candidate_splat_and_energy_terms_distinct(self):
         contract = MODULE.build_rollout_loss_contract(0.1, 1.0, 0.25)
-        self.assertEqual(contract["authority"], "candidate-splat-visible-energy-weighted-loss-v0")
+        self.assertEqual(
+            contract["authority"],
+            "candidate-splat-physical-visible-energy-weighted-loss-v1",
+        )
         self.assertEqual(contract["candidateChannelCount"], 16)
         self.assertEqual(contract["splatChannelCount"], 9)
         self.assertEqual(contract["visibleEnergy"], "max(opacity,0)*max(rec709-luminance,0)")
+        self.assertEqual(contract["visibleEnergyChannels"], {
+            "color": [17, 18, 19],
+            "opacity": 20,
+        })
         self.assertEqual(contract["weights"], {"candidate": 0.1, "splat": 1.0, "visibleEnergy": 0.25})
 
     def test_protected_rollout_preserves_seed_normalization_identity(self):

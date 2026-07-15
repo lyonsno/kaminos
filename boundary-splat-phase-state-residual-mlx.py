@@ -37,10 +37,16 @@ ONLINE_ROLLOUT_TRAINING_MODES = (
 ANCHORED_ROLLOUT_TRAINING_MODE = "protected-anchored-online-rollout"
 ROLLOUT_STATE_COHORTS = CORE.SUPPORTED_DESTINATION_STATE_COHORTS
 SPLAT_ATTRIBUTE_ORDER = (
-    "splat.scale.x", "splat.scale.y", "splat.scale.z",
+    "splat.support",
     "splat.color.r", "splat.color.g", "splat.color.b",
-    "splat.opacity", "splat.rotation.x", "splat.rotation.y",
+    "splat.opacity", "splat.shape.x", "splat.shape.y",
+    "splat.ridge", "splat.fireSignal",
 )
+VISIBLE_ENERGY_COLOR_INDICES = tuple(
+    len(CORE.FEATURES) + SPLAT_ATTRIBUTE_ORDER.index(channel)
+    for channel in ("splat.color.r", "splat.color.g", "splat.color.b")
+)
+VISIBLE_ENERGY_OPACITY_INDEX = len(CORE.FEATURES) + SPLAT_ATTRIBUTE_ORDER.index("splat.opacity")
 
 
 def parse_args(argv=None):
@@ -68,10 +74,14 @@ def parse_args(argv=None):
 
 def build_rollout_loss_contract(candidate_weight, splat_weight, energy_weight):
     return {
-        "authority": "candidate-splat-visible-energy-weighted-loss-v0",
+        "authority": "candidate-splat-physical-visible-energy-weighted-loss-v1",
         "candidateChannelCount": len(CORE.FEATURES),
         "splatChannelCount": len(SPLAT_ATTRIBUTE_ORDER),
         "visibleEnergy": "max(opacity,0)*max(rec709-luminance,0)",
+        "visibleEnergyChannels": {
+            "color": list(VISIBLE_ENERGY_COLOR_INDICES),
+            "opacity": VISIBLE_ENERGY_OPACITY_INDEX,
+        },
         "weights": {
             "candidate": float(candidate_weight),
             "splat": float(splat_weight),
@@ -175,11 +185,11 @@ def visible_energy_numpy(states):
     if states.ndim != 2 or states.shape[1] != CORE.DESTINATION_STATE_ATTRIBUTE_COUNT:
         raise ValueError("visible energy requires aligned 25-attribute states")
     luminance = (
-        states[:, 19] * 0.2126
-        + states[:, 20] * 0.7152
-        + states[:, 21] * 0.0722
+        states[:, VISIBLE_ENERGY_COLOR_INDICES[0]] * 0.2126
+        + states[:, VISIBLE_ENERGY_COLOR_INDICES[1]] * 0.7152
+        + states[:, VISIBLE_ENERGY_COLOR_INDICES[2]] * 0.0722
     )
-    return np.maximum(states[:, 22], 0) * np.maximum(luminance, 0)
+    return np.maximum(states[:, VISIBLE_ENERGY_OPACITY_INDEX], 0) * np.maximum(luminance, 0)
 
 
 def apply_protected_splat_exposure(inputs, baselines, targets, predicted_splats, exposure_mask):
@@ -691,8 +701,12 @@ def prepare_training_arrays(datasets, normalization, training_cohorts):
 
 
 def visible_energy_mlx(states):
-    luminance = states[:, 19] * 0.2126 + states[:, 20] * 0.7152 + states[:, 21] * 0.0722
-    return mx.maximum(states[:, 22], 0) * mx.maximum(luminance, 0)
+    luminance = (
+        states[:, VISIBLE_ENERGY_COLOR_INDICES[0]] * 0.2126
+        + states[:, VISIBLE_ENERGY_COLOR_INDICES[1]] * 0.7152
+        + states[:, VISIBLE_ENERGY_COLOR_INDICES[2]] * 0.0722
+    )
+    return mx.maximum(states[:, VISIBLE_ENERGY_OPACITY_INDEX], 0) * mx.maximum(luminance, 0)
 
 
 def rollout_destination_state_loss(
