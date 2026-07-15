@@ -78,6 +78,44 @@ let inFlightCapture = {
     : null,
 };
 const runtimeExceptions = [];
+const requestedInvocation = {
+  url,
+  screenshot: out,
+  reportPath,
+  fireFriendly,
+  replayCastReportPath,
+  schedulerProfileId,
+  sourceAssetId: requestedSourceAssetId,
+  firePresentation: requestedFirePresentation,
+  flameContinuity: requestedFlameContinuity,
+  captureInFlight,
+  requireFrameStageLedger,
+};
+
+function bestKnownEffectiveIdentity() {
+  const evidence = lastTrustworthyEvidence || {};
+  const route = evidence.fullRoute || null;
+  const replay = evidence.replayedCast || replayCastEvidence || null;
+  const sourceAssetId = evidence.sourceSelectionExercise?.effectiveAssetId
+    ?? evidence.workroom?.effectiveState?.source?.assetId
+    ?? null;
+  const output = route?.output || replay?.artifact || null;
+  return {
+    sourceAssetId,
+    requestedPipelineId: route?.requestedPipelineId ?? replay?.requestedPipelineId ?? null,
+    effectiveRouteId: route?.effectiveRouteId
+      ?? replay?.effectiveRouteId
+      ?? evidence.workroom?.effectiveState?.effectiveRouteId
+      ?? null,
+    scheduler: route?.effectiveScheduler ?? null,
+    fireBudget: route?.foregroundKilnHeartbeat?.effectiveFireBudget ?? null,
+    output: output ? {
+      status: output.status ?? null,
+      sha256: output.sha256 ?? null,
+      bytes: output.bytes ?? null,
+    } : null,
+  };
+}
 
 function expectedSchedulerForProfile(profileId) {
   const common = {
@@ -218,6 +256,8 @@ function writeReport(payload) {
     phase,
     startedAt,
     finishedAt: new Date().toISOString(),
+    requestedInvocation,
+    effectiveIdentity: bestKnownEffectiveIdentity(),
     ...payload,
   }, null, 2));
 }

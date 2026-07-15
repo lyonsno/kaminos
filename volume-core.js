@@ -10750,7 +10750,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       raf = 0;
       const holdoverFramePromise = actuateSingleFlameHistoryHoldoverFrame(now, { stageLedgerFrameId })
         .then(result => {
-          if (!result.ok && state.active) {
+          if (!result.ok && state.active && !fireEpisodeFramesQuiescing) {
             renderLiveFrame(now, { preserveContinuityDecision: true, stageLedgerFrameId });
           } else {
             finishKilnFrameStage(stageLedgerFrameId);

@@ -53,17 +53,23 @@ function ledger({ firingId, mode }) {
     eventCount: 5,
     frames: [
       {
+        schema: 'kaminos.kiln-frame-stage-frame.v0',
         frameId: `${firingId}:1`,
+        firingId,
         path: 'live',
         presentationOrdinal: 1,
+        status: 'complete',
         startEpochMs: origin,
         volumeRafGapMs: null,
         stages: [stage('live-source-encode', 1, 5), stage('hybrid-smoke-encode', 5, 6)],
       },
       {
+        schema: 'kaminos.kiln-frame-stage-frame.v0',
         frameId: `${firingId}:2`,
+        firingId,
         path: holdover ? 'holdover' : 'live',
         presentationOrdinal: 2,
+        status: 'complete',
         startEpochMs: origin + 16,
         volumeRafGapMs: 16,
         stages: holdover
@@ -76,9 +82,12 @@ function ledger({ firingId, mode }) {
           : [stage('live-source-encode', 18, 25), stage('hybrid-smoke-encode', 25, 26)],
       },
       {
+        schema: 'kaminos.kiln-frame-stage-frame.v0',
         frameId: `${firingId}:3`,
+        firingId,
         path: 'live',
         presentationOrdinal: 3,
+        status: 'complete',
         startEpochMs: origin + 80,
         volumeRafGapMs: 64,
         stages: [stage('live-source-encode', 81, 85), stage('hybrid-smoke-encode', 85, 86)],
@@ -177,6 +186,31 @@ partial.state.fullRoute.kilnFrameStageLedger.events.pop();
 const partialComparison = createKilnFrameStageCausalComparison({ liveReport, holdoverReport: partial });
 assert.equal(partialComparison.status, 'invalid');
 assert.ok(partialComparison.failures.includes('holdover-ledger-events-partial'));
+
+const crossFiring = structuredClone(holdoverReport);
+crossFiring.state.fullRoute.kilnFrameStageLedger.frames[1].firingId = 'stale-firing';
+crossFiring.state.fullRoute.kilnFrameStageLedger.frames[1].frameId = 'stale-firing:2';
+const crossFiringComparison = createKilnFrameStageCausalComparison({ liveReport, holdoverReport: crossFiring });
+assert.equal(crossFiringComparison.status, 'invalid');
+assert.ok(crossFiringComparison.failures.includes('holdover-ledger-frame-firing-mismatch'));
+
+const unresolvedEventFrame = structuredClone(holdoverReport);
+unresolvedEventFrame.state.fullRoute.kilnFrameStageLedger.events.at(-1).detail.frameId = 'missing-firing:99';
+const unresolvedEventComparison = createKilnFrameStageCausalComparison({
+  liveReport,
+  holdoverReport: unresolvedEventFrame,
+});
+assert.equal(unresolvedEventComparison.status, 'invalid');
+assert.ok(unresolvedEventComparison.failures.includes('holdover-ledger-event-frame-unresolved'));
+
+const dishonestPathCounts = structuredClone(holdoverReport);
+dishonestPathCounts.state.fullRoute.kilnFrameStageLedger.frames[1].path = 'live';
+const dishonestPathComparison = createKilnFrameStageCausalComparison({
+  liveReport,
+  holdoverReport: dishonestPathCounts,
+});
+assert.equal(dishonestPathComparison.status, 'invalid');
+assert.ok(dishonestPathComparison.failures.includes('holdover-ledger-path-count-mismatch'));
 
 const root = mkdtempSync(join(tmpdir(), 'kaminos-frame-stage-causal-'));
 try {

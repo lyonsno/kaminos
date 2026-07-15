@@ -75,6 +75,11 @@ assert.match(
   /if \(!state\.active \|\| fireEpisodeFramesQuiescing\) return;[\s\S]*if \(state\.active && !fireEpisodeFramesQuiescing\) raf = requestAnimationFrame\(render\)/,
   'quiescence must reject new volume RAF work before and after an asynchronous held frame',
 );
+assert.match(
+  renderLoop,
+  /if \(!result\.ok && state\.active && !fireEpisodeFramesQuiescing\) \{[\s\S]{0,300}renderLiveFrame\(now, \{ preserveContinuityDecision: true, stageLedgerFrameId \}\);[\s\S]{0,200}\} else \{[\s\S]{0,120}finishKilnFrameStage\(stageLedgerFrameId\);/,
+  'an in-flight held-frame failure must close without submitting fallback live work after quiescence begins',
+);
 const quiesceIndex = fireEpisodeCloser.indexOf('await volumePrototype.quiesceFireEpisodeFrames()');
 const ledgerCloseIndex = fireEpisodeCloser.indexOf('volumePrototype.endFireEpisode');
 assert.ok(

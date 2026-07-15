@@ -75,6 +75,27 @@ try {
   assert.equal(argumentFailureDocument.ok, false);
   assert.equal(argumentFailureDocument.phase, 'validating-arguments');
   assert.equal(argumentFailureDocument.primaryOutputWritten, false);
+  assert.deepEqual(argumentFailureDocument.requestedInvocation, {
+    url: 'http://127.0.0.1:8095/',
+    screenshot: join(argumentFailureRoot, 'should-not-exist.png'),
+    reportPath: argumentFailureReport,
+    fireFriendly: true,
+    replayCastReportPath: join(argumentFailureRoot, 'completed-pipeline-witness.json'),
+    schedulerProfileId: 'cooperative-spn-gaussian',
+    sourceAssetId: null,
+    firePresentation: 'full-volume',
+    flameContinuity: 'live-every-frame',
+    captureInFlight: false,
+    requireFrameStageLedger: false,
+  });
+  assert.deepEqual(argumentFailureDocument.effectiveIdentity, {
+    sourceAssetId: null,
+    requestedPipelineId: null,
+    effectiveRouteId: null,
+    scheduler: null,
+    fireBudget: null,
+    output: null,
+  });
   assert.match(argumentFailureDocument.error, /cannot be combined/);
   assert.equal(existsSync(join(argumentFailureRoot, 'should-not-exist.png')), false, 'argument rejection must happen before browser capture');
 } finally {
