@@ -43,6 +43,11 @@ assert.doesNotMatch(
   /frame0Producer\.pointerOutput\.sha256 === pointerPacketEntry\.sha256/,
   'floating-point pointer parity must not be laundered into bit-identical reference digest equality',
 );
+assert.doesNotMatch(
+  browser,
+  /shape: \[1, 2, 2, 256\]|queryHeight: 2, queryWidth: 2, queryTokens: 4|shape: \[1, 20, 256\]/,
+  'the direct browser transaction must not retain fixed 28px memory, attention, or temporal request geometry',
+);
 for (const token of [
   'runSam31MultiplexMaskDecoderPhaseProgramRoute',
   'runSam31MemoryEncoderPhaseProgramRoute',
@@ -77,8 +82,8 @@ for (const token of [
   'suppressedAbsentMaskCount',
   'frame1AttentionResult.receipt',
   'frame1DecoderResult.receipt',
-  'numObjPtrTokens: 16',
-  'memoryTokens: 20',
+  'numObjPtrTokens: episode.shape.numObjPtrTokens',
+  'memoryTokens: episode.shape.memoryTokens',
   'routeChainPassed',
   'stateTransitionPassed',
   'referenceStateTransition',
