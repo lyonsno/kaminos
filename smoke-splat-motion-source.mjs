@@ -302,6 +302,8 @@ function prepareProductUpload(product, fineLodFraction) {
   const sourceMass = product.splats.reduce((sum, splat) => sum + splat.extinctionMass, 0);
   const coarseMass = coarseIndices.reduce((sum, index) => sum + product.splats[index].extinctionMass, 0);
   const compensation = coarseMass > 0 ? (sourceMass - selectedMass) / coarseMass : 0;
+  const representedMass = coarseMass > 0 ? sourceMass : selectedMass;
+  const rejectedMass = Math.max(0, sourceMass - representedMass);
   let packed = null;
   if (product.packed instanceof Float32Array) {
     packed = new Float32Array(selectedIndices.length * CHANNEL_COUNT);
@@ -321,8 +323,8 @@ function prepareProductUpload(product, fineLodFraction) {
     coarseCount: coarseIndices.length,
     fineCount: selectedIndices.length - coarseIndices.length,
     sourceExtinctionMass: sourceMass,
-    representedExtinctionMass: sourceMass,
-    rejectedExtinctionMass: 0,
+    representedExtinctionMass: representedMass,
+    rejectedExtinctionMass: rejectedMass,
     coarseMassCompensation: compensation,
     packed,
   };

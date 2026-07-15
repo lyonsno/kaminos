@@ -244,6 +244,11 @@ assert.equal(denseOnlyPlan.productUploads[0].fineCount, 2);
 assert.equal(denseOnlyPlan.productUploads[0].representedExtinctionMass, 1);
 assert.equal(denseOnlyPlan.rejectedExtinctionMass, 0);
 assert.equal(denseOnlyPlan.coarseSplatsAlwaysPresent, false, 'the dense competence route truthfully has no coarse transport tier');
+const reducedDenseOnlyPlan = buildSmokeSplatDrawPlan({ products: [denseOnlyProduct], instanceCount: 1, fineLodFraction: 0 });
+assert.equal(reducedDenseOnlyPlan.productUploads[0].selectedCount, 0);
+assert.equal(reducedDenseOnlyPlan.productUploads[0].representedExtinctionMass, 0, 'zero-coarse products cannot report dropped fine mass as represented');
+assert.equal(reducedDenseOnlyPlan.productUploads[0].rejectedExtinctionMass, 1, 'zero-coarse products report exact fine mass rejected by LOD');
+assert.equal(reducedDenseOnlyPlan.rejectedExtinctionMass, 1, 'draw-plan accounting carries zero-coarse LOD rejection');
 
 const packed = new Float32Array([
   0, 0, 0, 0, 1, 0, 0.1, 0.2, 0.1, 0.5, 0.25, 0.1, 0, 0.2, 0, 0,
