@@ -34,7 +34,7 @@ const core = readFileSync(corePath, 'utf8');
 const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
-assert.match(combined, /native-low-fixed-source-delta-timing-history-epoch-repair-v1/, 'route and witness carry fail-loud runtime build identity');
+assert.match(combined, /native-low-fixed-source-delta-calibration-relative-warning-v1/, 'route and witness carry fail-loud runtime build identity');
 assert.match(witness, /expectedRuntimeBuildIdentity[\s\S]*runtimeBuildIdentity[\s\S]*cachedCodeRejection/, 'witness records expected/effective runtime build identity and cached-code rejection');
 assert.match(witness, /user-data-dir[\s\S]*Network\.setCacheDisabled[\s\S]*cacheBustUrl/, 'witness uses a fresh browser profile, disables cache, and cache-busts the route URL');
 assert.match(witness, /servedSourceBundleSha256[\s\S]*fresh-http-served-source-bundle-sha256-v0[\s\S]*runtimeBuildIdentityPresent/, 'witness binds receipt to the HTTP-served source bundle hash and runtime marker');
@@ -132,8 +132,12 @@ assert.match(combined, /sourceHistoryStatsReadbackAuthority[\s\S]*diagnostic-onl
 assert.match(combined, /productionCandidateNoCpuReadback[\s\S]*true/, 'fixed-gate production candidate path preserves no CPU readback despite diagnostic receipts');
 assert.match(combined, /fixedSourceDeltaLongStripSha256[\s\S]*7c65fc162fbf2c91e7a614ec6e0b37797d31441872d00ced3bbc325a513f8d23/, 'fixed gate receipt records long-strip normal-basin artifact checksum');
 assert.match(combined, /normalBasinCoverageRange[\s\S]*0\.099875[\s\S]*0\.100891[\s\S]*normalBasinCoverageMean[\s\S]*0\.100226/, 'fixed gate receipt records long-strip coverage bounds and mean');
+assert.match(combined, /mohelWarningThresholdMode[\s\S]*normal-basin-coverage-mean-multiple-v0[\s\S]*mohelWarningThresholdMultiple[\s\S]*1\.5[\s\S]*mohelWarningBoundaryCoverage/, 'fixed gate Mohel warning is calibrated to normal-basin coverage pressure, not an absolute 20pct tripwire');
+assert.doesNotMatch(runtime, /uncappedCandidateCount \/ highCells > 0\.20/, 'fixed gate Mohel warning cannot stay hidden until an absolute 20pct coverage tripwire');
 assert.match(combined, /native-low-fixed-source-delta-discontinuity-assay-v0/, 'route records fixed-gate discontinuity assay identity');
 assert.match(combined, /steadyPreShiftStrip[\s\S]*minimumValidHistoryFrames[\s\S]*4[\s\S]*coverageMin[\s\S]*coverageMax[\s\S]*coverageMean[\s\S]*candidateCountMin[\s\S]*candidateCountMax[\s\S]*candidateCountMean/, 'discontinuity assay records a four-frame valid-history pre-shift strip with coverage and candidate-count stats');
+assert.match(combined, /steadyPreShiftStrip[\s\S]*sourceDeltaAdmissionGpuMsMin[\s\S]*sourceDeltaAdmissionGpuMsMax[\s\S]*sourceDeltaAdmissionGpuMsMean/, 'discontinuity assay records steady source-delta admission GPU timing min/max/mean');
+assert.match(combined, /sourceDeltaAdmissionContentionRangeMs[\s\S]*1\.043567[\s\S]*9\.699227/, 'discontinuity assay preserves observed steady admission contention range instead of smoothing it away');
 assert.match(combined, /preShiftWorkloadPressure[\s\S]*phaseAlignedLongStripCoverageRange[\s\S]*0\.099875[\s\S]*0\.100891/, 'discontinuity assay preserves workload pressure above the phase-aligned long-strip instead of retargeting');
 assert.match(combined, /no-rebuild-violent-source-shape-shift-v0[\s\S]*historyEpochChanged[\s\S]*false[\s\S]*historyEpochValidForAdmission[\s\S]*true/, 'discontinuity assay preserves valid prior history for no-rebuild source-shape shift');
 assert.match(combined, /actual-basin-grid-scene-rebuild-v0[\s\S]*historyEpochChanged[\s\S]*true[\s\S]*sourceHistoryResetReason[\s\S]*epoch-changed-first-frame-invalidated/, 'discontinuity assay invalidates first frame after real epoch-changing rebuild');

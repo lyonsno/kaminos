@@ -12,7 +12,7 @@ const ROUTE = 'native-low-live-browser-webgpu-inference-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 const MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9';
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
-const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-fixed-source-delta-timing-history-epoch-repair-v1';
+const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-fixed-source-delta-calibration-relative-warning-v1';
 const WITNESS_CONTRACT_MARKERS = Object.freeze({
   transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
   requestedCalibration: 'native-low-learned-splat-calibration-v0',
@@ -346,6 +346,9 @@ try {
   assert.ok(Object.hasOwn(state?.nativeLowFixedSourceDeltaAdmission || {}, 'priorHistoryEpochIdentity'), 'prior history epoch identity missing');
   assert.ok(Object.hasOwn(state?.nativeLowFixedSourceDeltaAdmission || {}, 'historyEpochValidForAdmission'), 'history epoch validity missing');
   assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.fixedSourceDeltaLongStripSha256, '7c65fc162fbf2c91e7a614ec6e0b37797d31441872d00ced3bbc325a513f8d23', 'fixed source-delta long-strip receipt missing');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.mohelWarningThresholdMode, 'normal-basin-coverage-mean-multiple-v0', 'Mohel warning is not calibrated to the normal-basin coverage mean');
+  assert.equal(Number(state?.nativeLowFixedSourceDeltaAdmission?.mohelWarningThresholdMultiple), 1.5, 'Mohel warning threshold multiple drifted');
+  assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.mohelWarningBoundaryCoverage) > 0, 'Mohel warning boundary coverage missing');
   assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount) >= 0, 'uncapped candidate count missing');
   assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCoverage) >= 0, 'uncapped candidate coverage missing');
   if (frontTopologyAblationRequested) {
@@ -361,8 +364,21 @@ try {
   assert.equal(state?.stalePredictionRejection?.repeatedStaticPrediction, false, 'stale prediction was not rejected');
   if (fixedGateDiscontinuityAssayRequested) {
     assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.identity, 'native-low-fixed-source-delta-discontinuity-assay-v0', 'fixed-gate discontinuity assay missing');
-    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.steadyPreShiftStrip?.minimumValidHistoryFrames, 4, 'pre-shift strip minimum missing');
-    assert.ok(Number(state?.nativeLowFixedGateDiscontinuityAssay?.steadyPreShiftStrip?.validHistoryFrameCount) >= 4, 'pre-shift strip did not capture four valid-history frames');
+    const steadyStrip = state?.nativeLowFixedGateDiscontinuityAssay?.steadyPreShiftStrip || {};
+    const workloadPressure = state?.nativeLowFixedGateDiscontinuityAssay?.preShiftWorkloadPressure || {};
+    assert.equal(steadyStrip.minimumValidHistoryFrames, 4, 'pre-shift strip minimum missing');
+    assert.ok(Number(steadyStrip.validHistoryFrameCount) >= 4, 'pre-shift strip did not capture four valid-history frames');
+    assert.ok(Number(steadyStrip.sourceDeltaAdmissionGpuMsMin) >= 0, 'pre-shift source-delta admission timing min missing');
+    assert.ok(Number(steadyStrip.sourceDeltaAdmissionGpuMsMax) >= Number(steadyStrip.sourceDeltaAdmissionGpuMsMin), 'pre-shift source-delta admission timing max invalid');
+    assert.ok(Number(steadyStrip.sourceDeltaAdmissionGpuMsMean) >= Number(steadyStrip.sourceDeltaAdmissionGpuMsMin), 'pre-shift source-delta admission timing mean invalid');
+    assert.deepEqual(steadyStrip.sourceDeltaAdmissionContentionRangeMs?.priorObservedR26, [1.043567, 9.699227], 'prior r26 source-delta admission contention range missing');
+    assert.equal(steadyStrip.sourceDeltaAdmissionContentionRangeMs?.smoothingApplied, false, 'source-delta admission contention range was smoothed');
+    assert.equal(workloadPressure.mohelWarningThresholdMode, 'normal-basin-coverage-mean-multiple-v0', 'assay workload warning mode missing');
+    assert.equal(Number(workloadPressure.mohelWarningThresholdMultiple), 1.5, 'assay workload warning multiple drifted');
+    assert.ok(Number(workloadPressure.mohelWarningBoundaryCoverage) > 0, 'assay workload warning boundary missing');
+    if (Number(steadyStrip.coverageMax) > Number(workloadPressure.mohelWarningBoundaryCoverage)) {
+      assert.ok(Number(steadyStrip.mohelWarningFrameCount) > 0, 'pre-shift strip exceeded warning boundary without a Mohel warning');
+    }
     assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.noRebuildViolentSourceShapeShift?.historyEpochChanged, false, 'no-rebuild shift changed history epoch');
     assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.noRebuildViolentSourceShapeShift?.historyEpochValidForAdmission, true, 'no-rebuild shift lost valid history');
     assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.actualBasinGridSceneRebuild?.historyEpochChanged, true, 'rebuild did not change history epoch');

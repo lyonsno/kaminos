@@ -14,7 +14,7 @@ export const NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH = 'native-low-support
 export const NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH = 'native-low-support-positive-indirect-residual-dispatch-v0';
 export const NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION = 'native-low-fixed-source-delta-admission-v0';
 export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
-export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-fixed-source-delta-timing-history-epoch-repair-v1';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-fixed-source-delta-calibration-relative-warning-v1';
 
 const LOW_GRID = 128;
 const HIGH_GRID = 160;
@@ -781,6 +781,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       const uncappedCandidateCount = Number(sourceHistoryValues[1] || 0);
       const sourceHistoryDispatchWorkgroups = Math.ceil(uncappedCandidateCount / RESIDUAL_WORKGROUP_SIZE);
       const sourceHistoryAvailable = Number(sourceHistoryValues[3] || 0) > 0;
+      const uncappedCandidateCoverage = uncappedCandidateCount / highCells;
+      const normalBasinCoverageMean = 0.100226;
+      const mohelWarningThresholdMultiple = 1.5;
+      const mohelWarningBoundaryCoverage = normalBasinCoverageMean * mohelWarningThresholdMultiple;
       lastSourceHistoryAdmission = {
         identity: NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION,
         authority: 'fixed-q99.5-source-delta-scales-threshold-baseline-v0',
@@ -802,7 +806,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         productionCandidateNoCpuReadback: true,
         uncappedLowCandidateCount: Number(sourceHistoryValues[0] || 0),
         uncappedCandidateCount,
-        uncappedCandidateCoverage: uncappedCandidateCount / highCells,
+        uncappedCandidateCoverage,
         calibrationCoverage: 0.1,
         calibrationCandidateCount: 409600,
         calibrationEnergyCapture: 0.830176,
@@ -811,14 +815,18 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         heldEnergyCapture: 0.826572,
         fixedSourceDeltaLongStripSha256: '7c65fc162fbf2c91e7a614ec6e0b37797d31441872d00ced3bbc325a513f8d23',
         normalBasinCoverageRange: [0.099875, 0.100891],
-        normalBasinCoverageMean: 0.100226,
+        normalBasinCoverageMean,
         normalBasinCandidateCountRange: [409086, 413249],
         sourceHistoryDispatchArgsFinalized: true,
         sourceHistoryDispatchIndirectReady: true,
         sourceHistoryDispatchWorkgroups,
         sourceHistoryDispatchThreadCount: sourceHistoryDispatchWorkgroups * RESIDUAL_WORKGROUP_SIZE,
-        mohelWarning: uncappedCandidateCount / highCells > 0.20
-          ? 'source-history-admission-coverage-exceeds-20pct-mohel-warning-no-cap-applied'
+        mohelWarningThresholdMode: 'normal-basin-coverage-mean-multiple-v0',
+        mohelWarningThresholdMultiple,
+        mohelWarningBoundaryCoverage,
+        mohelWarningCoverageRatio: normalBasinCoverageMean > 0 ? uncappedCandidateCoverage / normalBasinCoverageMean : null,
+        mohelWarning: uncappedCandidateCoverage > mohelWarningBoundaryCoverage
+          ? 'source-history-admission-coverage-exceeds-1.5x-normal-basin-mean-mohel-warning-no-cap-applied'
           : null,
         selectedNextImplementation: 'fixed-gate-candidate-head-dispatch-with-mohel-warning-under-emitter-shifts',
       };
