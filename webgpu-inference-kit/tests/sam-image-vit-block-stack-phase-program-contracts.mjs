@@ -37,7 +37,7 @@ assert.ok(
   'every ViT linear kernel family must receive the effective two-dimensional dispatch grid',
 );
 assert.doesNotMatch(routeSource, /dispatch:\s*\[workgroups\(/, 'ViT block-stack phases must not wrap a one-dimensional workgroup count');
-assert.match(routeSource, /dispatch:\s*linearDispatch\(/, 'ViT block-stack phases must pass the shared dispatch tuple directly');
+assert.match(routeSource, /dispatch:\s*dispatchPlan\.mlpFc1\.dispatch/, 'ViT block-stack phases must consume the executable named dispatch plan');
 
 assert.match(stackExporter, /--image-vit-block-stack-ingress/, 'detector-stack packet must expose image ViT block-stack ingress CLI flag');
 assert.match(stackExporter, /--image-vit-full-backbone-ingress/, 'detector-stack packet must expose image ViT full-backbone ingress CLI flag');
@@ -77,6 +77,7 @@ assert.match(witness, /--vit-finite-phase-layer/, 'browser witness must expose a
 
 const {
   SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitBlockStackDispatchPlan,
   createSam3ImageVitBlockStackPhaseProgramCpuOracle,
   createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
   summarizeSam3FiniteValues,
@@ -85,6 +86,57 @@ const {
   stableSam3Gelu,
   validateRouteDefinition,
 } = await import('../src/index.js');
+
+const dispatchShape = {
+  batch: 1,
+  height: 32,
+  width: 32,
+  hiddenSize: 1024,
+  numHeads: 16,
+  windowSize: 14,
+  intermediateSize: 4736,
+  ropePretrainGridSize: 72,
+  interpolateRope: true,
+  startLayerIndex: 0,
+  endLayerIndex: 31,
+  firstGlobalLayerIndex: 7,
+  finalLayerIndex: 31,
+  fullBackbone: true,
+  globalAttnIndexes: [7, 15, 23, 31],
+};
+const dispatch448 = createSam3ImageVitBlockStackDispatchPlan({
+  shape: dispatchShape,
+  layerIndex: 0,
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.deepEqual(dispatch448.layerNorm1, { logicalInvocations: 1_024, dispatch: [16] });
+assert.deepEqual(dispatch448.windowPartition, { logicalInvocations: 1_806_336, dispatch: [28_224] });
+assert.deepEqual(dispatch448.mlpFc1, { logicalInvocations: 4_849_664, dispatch: [276, 275] });
+assert.deepEqual(dispatch448.mlpFc2, { logicalInvocations: 1_048_576, dispatch: [16_384] });
+assert.deepEqual(dispatch448.residualMlp, dispatch448.mlpFc2);
+
+const dispatch1008Local = createSam3ImageVitBlockStackDispatchPlan({
+  shape: { ...dispatchShape, height: 72, width: 72 },
+  layerIndex: 0,
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.deepEqual(dispatch1008Local.windowPartition, { logicalInvocations: 7_225_344, dispatch: [336, 336] });
+assert.deepEqual(dispatch1008Local.qProjection, dispatch1008Local.windowPartition);
+assert.deepEqual(dispatch1008Local.attention, dispatch1008Local.windowPartition);
+assert.deepEqual(dispatch1008Local.mlpFc1, { logicalInvocations: 24_551_424, dispatch: [620, 619] });
+assert.deepEqual(dispatch1008Local.windowUnpartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
+
+const dispatch1008Global = createSam3ImageVitBlockStackDispatchPlan({
+  shape: { ...dispatchShape, height: 72, width: 72 },
+  layerIndex: 7,
+  isGlobal: true,
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.deepEqual(dispatch1008Global.windowPartition, { logicalInvocations: 5_308_416, dispatch: [288, 288] });
+for (const [phase, entry] of Object.entries(dispatch1008Global)) {
+  assert.ok(entry.dispatch.every(dimension => dimension <= 65_535), `${phase} must respect the effective device limit`);
+  assert.ok(entry.dispatch.reduce((product, dimension) => product * dimension, 1) * 64 >= entry.logicalInvocations, `${phase} must cover its logical invocation domain`);
+}
 
 assert.deepEqual(
   summarizeSam3LayerParityCheckpoint(3, true, new Float32Array([1, -2, 4]), new Float32Array([1.25, -2.125, 4])),

@@ -573,6 +573,40 @@ function blockShapeForLayer(baseShape, layer) {
   };
 }
 
+export function createSam3ImageVitBlockStackDispatchPlan(input = {}) {
+  const shape = normalizeShape(input.shape);
+  const layerShape = blockShapeForLayer(shape, {
+    layerIndex: input.layerIndex,
+    isGlobal: input.isGlobal === true,
+  });
+  const maxWorkgroupsPerDimension = input.maxWorkgroupsPerDimension ?? 65_535;
+  const entry = logicalInvocations => ({
+    logicalInvocations,
+    dispatch: createLinearDispatch(logicalInvocations, {
+      workgroupSize: 64,
+      maxWorkgroupsPerDimension,
+    }),
+  });
+  const padded = () => entry(layerShape.paddedTotalValues);
+  const total = () => entry(shape.totalValues);
+  return {
+    layerNorm1: entry(shape.tokenCount),
+    windowPartition: padded(),
+    qProjection: padded(),
+    kProjection: padded(),
+    vProjection: padded(),
+    qRope: padded(),
+    kRope: padded(),
+    attention: padded(),
+    outputProjection: padded(),
+    windowUnpartition: total(),
+    layerNorm2: entry(shape.tokenCount),
+    mlpFc1: entry(shape.tokenCount * shape.intermediateSize),
+    mlpFc2: total(),
+    residualMlp: total(),
+  };
+}
+
 function validateImageVitBlockStackInputs(input = {}) {
   const shape = normalizeShape(input.shape);
   const hiddenStates = ensureFloat32Array(input.hiddenStates, 'hiddenStates');
@@ -993,10 +1027,6 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
     now: input.now,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
-  const linearDispatch = totalInvocations => createLinearDispatch(totalInvocations, {
-    workgroupSize: 64,
-    maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
-  });
 
   let tensors = null;
   const blockDimsValues = layerShape => ({
@@ -1109,21 +1139,27 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
   const bindTensor = (resource, access = 'read-only-storage') => ({ name: resource.replace(/^tensor:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, access });
   const bindUniform = resource => ({ name: resource.replace(/^uniform:/, ''), resource, visibility: WEBGPU_SHADER_STAGE.compute, type: 'uniform' });
   const createLayerProgram = ({ layerShape, inputTensorName, outputTensorName }) => {
+    const dispatchPlan = createSam3ImageVitBlockStackDispatchPlan({
+      shape,
+      layerIndex: layerShape.layerIndex,
+      isGlobal: layerShape.isGlobal,
+      maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
+    });
     const phases = [
-      { name: 'vit-block-stack-layernorm1', kernel: 'layerNorm1', dispatch: linearDispatch(shape.tokenCount), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-window-partition', kernel: 'windowPartition', dispatch: linearDispatch(layerShape.paddedTotalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'qProjection', dispatch: linearDispatch(layerShape.paddedTotalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'kProjection', dispatch: linearDispatch(layerShape.paddedTotalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-qkv-projection', kernel: 'vProjection', dispatch: linearDispatch(layerShape.paddedTotalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-rope-attention', kernel: 'qRope', dispatch: linearDispatch(layerShape.paddedTotalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-rope-attention', kernel: 'kRope', dispatch: linearDispatch(layerShape.paddedTotalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: layerShape.isGlobal ? 'vit-block-stack-global-attention' : 'vit-block-stack-rope-attention', kernel: 'attention', dispatch: linearDispatch(layerShape.paddedTotalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-output-projection', kernel: 'outputProjection', dispatch: linearDispatch(layerShape.paddedTotalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-window-unpartition', kernel: 'windowUnpartition', dispatch: linearDispatch(shape.totalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-layernorm2', kernel: 'layerNorm2', dispatch: linearDispatch(shape.tokenCount), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc1', dispatch: linearDispatch(shape.tokenCount * shape.intermediateSize), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: linearDispatch(shape.totalValues), metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
-      { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: linearDispatch(shape.totalValues), yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-layernorm1', kernel: 'layerNorm1', dispatch: dispatchPlan.layerNorm1.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-window-partition', kernel: 'windowPartition', dispatch: dispatchPlan.windowPartition.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'qProjection', dispatch: dispatchPlan.qProjection.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'kProjection', dispatch: dispatchPlan.kProjection.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-qkv-projection', kernel: 'vProjection', dispatch: dispatchPlan.vProjection.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-rope-attention', kernel: 'qRope', dispatch: dispatchPlan.qRope.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-rope-attention', kernel: 'kRope', dispatch: dispatchPlan.kRope.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: layerShape.isGlobal ? 'vit-block-stack-global-attention' : 'vit-block-stack-rope-attention', kernel: 'attention', dispatch: dispatchPlan.attention.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-output-projection', kernel: 'outputProjection', dispatch: dispatchPlan.outputProjection.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-window-unpartition', kernel: 'windowUnpartition', dispatch: dispatchPlan.windowUnpartition.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-layernorm2', kernel: 'layerNorm2', dispatch: dispatchPlan.layerNorm2.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc1', dispatch: dispatchPlan.mlpFc1.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'mlpFc2', dispatch: dispatchPlan.mlpFc2.dispatch, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
+      { name: 'vit-block-stack-gelu-mlp', kernel: 'residualMlp', dispatch: dispatchPlan.residualMlp.dispatch, yieldAfter: true, metadata: { layerIndex: layerShape.layerIndex, isGlobal: layerShape.isGlobal } },
     ];
     const phaseTensorNames = {
       layerNorm1: 'layerNorm1',

@@ -35,7 +35,7 @@ assert.ok(
   'every FPN linear kernel family must receive the effective two-dimensional dispatch grid',
 );
 assert.doesNotMatch(routeSource, /dispatch:\s*\[workgroups\(/, 'FPN phases must not wrap a one-dimensional workgroup count');
-assert.match(routeSource, /dispatch:\s*linearDispatch\(/, 'FPN phases must pass the shared dispatch tuple directly');
+assert.match(routeSource, /dispatch:\s*dispatchFor\(/, 'FPN phases must consume and total-check the executable named dispatch plan');
 assert.match(routeSource, /fpn-neck-transpose-conv-0-scale0/, 'image FPN-neck route must expose level-0 first transpose-conv stage metadata');
 assert.match(routeSource, /fpn-neck-transpose-conv-0-scale1/, 'image FPN-neck route must expose level-0 second transpose-conv stage metadata');
 assert.match(routeSource, /fpn-neck-transpose-conv-1/, 'image FPN-neck route must expose level-1 transpose-conv stage metadata');
@@ -45,6 +45,43 @@ assert.match(routeSource, /fpn-neck-proj1-3/, 'image FPN-neck route must expose 
 assert.match(routeSource, /fpn-neck-proj2-0/, 'image FPN-neck route must expose level-0 3x3 projection stage metadata');
 assert.match(routeSource, /fpn-neck-proj2-3/, 'image FPN-neck route must expose level-3 3x3 projection stage metadata');
 assert.match(routeSource, /readback-fpn-neck-features/, 'image FPN-neck route must expose FPN feature readback stage metadata');
+
+const { createSam3FpnNeckDispatchPlan } = await import('../src/index.js');
+const fpn448 = createSam3FpnNeckDispatchPlan({
+  batch: 1,
+  levels: [
+    { level: 0, outputShape: { height: 128, width: 128, channels: 256 }, scaleShapes: [{ height: 64, width: 64, channels: 512 }, { height: 128, width: 128, channels: 256 }], scaleActivations: ['gelu', null] },
+    { level: 1, outputShape: { height: 64, width: 64, channels: 256 }, scaleShapes: [{ height: 64, width: 64, channels: 512 }], scaleActivations: [null] },
+    { level: 2, outputShape: { height: 32, width: 32, channels: 256 }, scaleShapes: [], scaleActivations: [] },
+  ],
+  includePositionLevel: 2,
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.deepEqual(fpn448['fpn-neck-transpose-conv-0-scale0'], { logicalInvocations: 2_097_152, dispatch: [32_768] });
+assert.deepEqual(fpn448['fpn-neck-gelu-0'], fpn448['fpn-neck-transpose-conv-0-scale0']);
+assert.deepEqual(fpn448['fpn-neck-transpose-conv-0-scale1'], { logicalInvocations: 4_194_304, dispatch: [256, 256] });
+assert.deepEqual(fpn448['fpn-neck-proj1-0'], fpn448['fpn-neck-transpose-conv-0-scale1']);
+assert.deepEqual(fpn448['fpn-neck-proj2-0'], fpn448['fpn-neck-proj1-0']);
+assert.deepEqual(fpn448['fpn-neck-position-2'], { logicalInvocations: 262_144, dispatch: [4_096] });
+
+const fpn1008 = createSam3FpnNeckDispatchPlan({
+  batch: 1,
+  levels: [
+    { level: 0, outputShape: { height: 288, width: 288, channels: 256 }, scaleShapes: [{ height: 144, width: 144, channels: 512 }, { height: 288, width: 288, channels: 256 }], scaleActivations: ['gelu', null] },
+    { level: 1, outputShape: { height: 144, width: 144, channels: 256 }, scaleShapes: [{ height: 144, width: 144, channels: 512 }], scaleActivations: [null] },
+    { level: 2, outputShape: { height: 72, width: 72, channels: 256 }, scaleShapes: [], scaleActivations: [] },
+  ],
+  includePositionLevel: 2,
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.deepEqual(fpn1008['fpn-neck-transpose-conv-0-scale0'], { logicalInvocations: 10_616_832, dispatch: [408, 407] });
+assert.deepEqual(fpn1008['fpn-neck-transpose-conv-0-scale1'], { logicalInvocations: 21_233_664, dispatch: [576, 576] });
+assert.deepEqual(fpn1008['fpn-neck-proj1-0'], fpn1008['fpn-neck-transpose-conv-0-scale1']);
+assert.deepEqual(fpn1008['fpn-neck-transpose-conv-1'], fpn1008['fpn-neck-transpose-conv-0-scale0']);
+for (const [phase, entry] of Object.entries(fpn1008)) {
+  assert.ok(entry.dispatch.every(dimension => dimension <= 65_535), `${phase} must respect the effective device limit`);
+  assert.ok(entry.dispatch.reduce((product, dimension) => product * dimension, 1) * 64 >= entry.logicalInvocations, `${phase} must cover its logical invocation domain`);
+}
 
 assert.match(stackExporter, /--image-fpn-neck-ingress/, 'detector-stack packet must expose image FPN-neck ingress CLI flag');
 assert.match(stackExporter, /mlx-detector-stack-image-fpn-neck-export/, 'detector-stack packet must expose FPN-neck ingress mode');

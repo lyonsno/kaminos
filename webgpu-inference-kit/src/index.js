@@ -172,6 +172,7 @@ export {
 
 export {
   SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitBlockStackDispatchPlan,
   createSam3ImageVitBlockStackPhaseProgramCpuOracle,
   createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
   createSam3ImageVitBlockStackPhaseProgramRouteReceipt,
@@ -193,6 +194,7 @@ export {
   createSam31PropagationNeckPhaseProgramRouteDefinition,
   createSam31PropagationNeckPhaseProgramRouteReceipt,
   createSam31TrackingNeckPhaseProgramCpuOracle,
+  createSam3FpnNeckDispatchPlan,
   createSam3ImageFpnNeckPhaseProgramCpuOracle,
   createSam3ImageFpnNeckPhaseProgramRouteDefinition,
   createSam3ImageFpnNeckPhaseProgramRouteReceipt,

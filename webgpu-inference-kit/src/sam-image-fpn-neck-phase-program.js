@@ -832,10 +832,6 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     now: input.now,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
-  const linearDispatch = totalInvocations => createLinearDispatch(totalInvocations, {
-    workgroupSize: 64,
-    maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
-  });
 
   let tensors = null;
   const backboneShape = { height: shape.backboneHeight, width: shape.backboneWidth, channels: shape.backboneChannels };
@@ -843,6 +839,25 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
   const level0Scale1Shape = transposeConv2dOutShape(level0Scale0Shape, weights.levels[0].scaleLayers[1]);
   const level1Scale0Shape = transposeConv2dOutShape(backboneShape, weights.levels[1].scaleLayers[0]);
   const level3PoolShape = { height: Math.floor(backboneShape.height / 2), width: Math.floor(backboneShape.width / 2), channels: shape.backboneChannels };
+  const dispatchPlan = createSam3FpnNeckDispatchPlan({
+    batch: shape.batch,
+    levels: weights.levels.map(level => ({
+      level: level.level,
+      outputShape: { height: shape.levels[level.level].height, width: shape.levels[level.level].width, channels: shape.fpnHiddenSize },
+      scaleShapes: level.level === 0 ? [level0Scale0Shape, level0Scale1Shape] : level.level === 1 ? [level1Scale0Shape] : [],
+      scaleActivations: level.scaleLayers.map(scaleLayer => scaleLayer.activation),
+    })),
+    includePoolLevel: 3,
+    maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
+  });
+  const dispatchFor = (name, logicalInvocations) => {
+    const entry = dispatchPlan[name];
+    if (!entry) throw new Error(`missing FPN dispatch plan entry ${name}`);
+    if (entry.logicalInvocations !== logicalInvocations) {
+      throw new Error(`FPN dispatch plan ${name} logical invocation mismatch ${entry.logicalInvocations} != ${logicalInvocations}`);
+    }
+    return entry.dispatch;
+  };
   await runtime.runStage('load-image-fpn-neck-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
@@ -930,7 +945,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor], weight: tensors[weightTensor], bias: tensors[biasTensor] },
       uniforms: { convDims: tensors.convDims },
       kernels,
-      phases: [{ name, kernel, dispatch: linearDispatch(shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
+      phases: [{ name, kernel, dispatch: dispatchFor(name, shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(single);
@@ -941,7 +956,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor] },
       uniforms: { convDims: tensors.convDims },
       kernels,
-      phases: [{ name, kernel: 'gelu', dispatch: linearDispatch(total), yieldAfter: true }],
+      phases: [{ name, kernel: 'gelu', dispatch: dispatchFor(name, total), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(single);
@@ -953,7 +968,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
       tensors: { ...tensors, input: tensors[inputTensor], output: tensors[outputTensor] },
       uniforms: { convDims: tensors.convDims, poolDims: tensors.poolDims },
       kernels,
-      phases: [{ name, kernel: 'maxpool2d', dispatch: linearDispatch(shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
+      phases: [{ name, kernel: 'maxpool2d', dispatch: dispatchFor(name, shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(single);
@@ -1026,6 +1041,44 @@ function sam31ScaleStageName(level, scaleIndex) {
   throw new Error(`unsupported SAM3.1 propagation scale stage level=${level} index=${scaleIndex}`);
 }
 
+export function createSam3FpnNeckDispatchPlan(input = {}) {
+  const batch = input.batch;
+  if (!Number.isInteger(batch) || batch <= 0) throw new Error('FPN dispatch batch must be a positive integer');
+  if (!Array.isArray(input.levels) || input.levels.length === 0) throw new Error('FPN dispatch levels must be a non-empty array');
+  const maxWorkgroupsPerDimension = input.maxWorkgroupsPerDimension ?? 65_535;
+  const plan = {};
+  const logicalInvocations = shape => {
+    for (const key of ['height', 'width', 'channels']) {
+      if (!Number.isInteger(shape?.[key]) || shape[key] <= 0) throw new Error(`FPN dispatch shape.${key} must be a positive integer`);
+    }
+    return batch * shape.height * shape.width * shape.channels;
+  };
+  const add = (name, shape) => {
+    if (plan[name]) throw new Error(`duplicate FPN dispatch phase ${name}`);
+    const total = logicalInvocations(shape);
+    plan[name] = {
+      logicalInvocations: total,
+      dispatch: createLinearDispatch(total, { workgroupSize: 64, maxWorkgroupsPerDimension }),
+    };
+  };
+
+  for (const [levelIndex, level] of input.levels.entries()) {
+    if (level?.level !== levelIndex) throw new Error('FPN dispatch levels must be ordered by level');
+    if (!Array.isArray(level.scaleShapes) || !Array.isArray(level.scaleActivations) || level.scaleShapes.length !== level.scaleActivations.length) {
+      throw new Error(`FPN dispatch level ${levelIndex} scale shapes and activations must align`);
+    }
+    for (const [scaleIndex, scaleShape] of level.scaleShapes.entries()) {
+      add(sam31ScaleStageName(levelIndex, scaleIndex), scaleShape);
+      if (level.scaleActivations[scaleIndex] === 'gelu') add('fpn-neck-gelu-0', scaleShape);
+    }
+    if (input.includePoolLevel === levelIndex) add(`fpn-neck-maxpool-${levelIndex}`, level.outputShape);
+    add(`fpn-neck-proj1-${levelIndex}`, level.outputShape);
+    add(`fpn-neck-proj2-${levelIndex}`, level.outputShape);
+    if (input.includePositionLevel === levelIndex) add(`fpn-neck-position-${levelIndex}`, level.outputShape);
+  }
+  return plan;
+}
+
 async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || defaultRoute;
@@ -1055,10 +1108,6 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
     now: input.now,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
-  const linearDispatch = totalInvocations => createLinearDispatch(totalInvocations, {
-    workgroupSize: 64,
-    maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
-  });
 
   const backboneShape = { height: shape.backboneHeight, width: shape.backboneWidth, channels: shape.backboneChannels };
   const scaleShapes = weights.levels.map(level => {
@@ -1070,6 +1119,25 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
     }
     return levelShapes;
   });
+  const dispatchPlan = createSam3FpnNeckDispatchPlan({
+    batch: shape.batch,
+    levels: weights.levels.map(level => ({
+      level: level.level,
+      outputShape: { height: shape.levels[level.level].height, width: shape.levels[level.level].width, channels: shape.fpnHiddenSize },
+      scaleShapes: scaleShapes[level.level],
+      scaleActivations: level.scaleLayers.map(scaleLayer => scaleLayer.activation),
+    })),
+    includePositionLevel: descriptor.includePosition ? 2 : null,
+    maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
+  });
+  const dispatchFor = (name, logicalInvocations) => {
+    const entry = dispatchPlan[name];
+    if (!entry) throw new Error(`missing FPN dispatch plan entry ${name}`);
+    if (entry.logicalInvocations !== logicalInvocations) {
+      throw new Error(`FPN dispatch plan ${name} logical invocation mismatch ${entry.logicalInvocations} != ${logicalInvocations}`);
+    }
+    return entry.dispatch;
+  };
   let tensors = null;
   await runtime.runStage('load-image-fpn-neck-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
@@ -1148,7 +1216,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       tensors: { input: tensors[inputTensor], output: tensors[outputTensor], weight: tensors[weightTensor], bias: tensors[biasTensor] },
       uniforms: { convDims: tensors.convDims },
       kernels,
-      phases: [{ name, kernel, dispatch: linearDispatch(shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
+      phases: [{ name, kernel, dispatch: dispatchFor(name, shape.batch * outShape.height * outShape.width * outShape.channels), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(program);
@@ -1159,7 +1227,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       tensors: { input: tensors[inputTensor], output: tensors[outputTensor] },
       uniforms: {},
       kernels,
-      phases: [{ name, kernel: 'gelu', dispatch: linearDispatch(total), yieldAfter: true }],
+      phases: [{ name, kernel: 'gelu', dispatch: dispatchFor(name, total), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(program);
@@ -1192,7 +1260,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       tensors: { output: tensors.position2 },
       uniforms: { positionDims: tensors.positionDims },
       kernels,
-      phases: [{ name: 'fpn-neck-position-2', kernel: 'positionEncoding', dispatch: linearDispatch(total), yieldAfter: true }],
+      phases: [{ name: 'fpn-neck-position-2', kernel: 'positionEncoding', dispatch: dispatchFor('fpn-neck-position-2', total), yieldAfter: true }],
       metadata,
     });
     await runtime.runProgram(program);
