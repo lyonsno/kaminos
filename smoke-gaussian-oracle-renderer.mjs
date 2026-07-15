@@ -177,7 +177,7 @@ async function readJson(path) {
   return JSON.parse((await readFile(path)).toString('utf8'));
 }
 
-function validateTeacher(report) {
+function validateTeacher(report, projectionMode) {
   if (report.schema !== 'kaminos.smoke-gaussian-oracle-static-fit-report.v0'
     || report.identity !== STATIC_FIT_IDENTITY
     || report.status !== 'passed') {
@@ -188,7 +188,27 @@ function validateTeacher(report) {
   if (teacher.effectiveRoute !== EXPECTED_ROUTE) throw new Error(`wrong effective route: ${teacher.effectiveRoute || '(missing)'}`);
   if (teacher.prototypeIdentity !== EXPECTED_PROTOTYPE) throw new Error(`wrong prototype identity: ${teacher.prototypeIdentity || '(missing)'}`);
   if (typeof teacher.backend !== 'string' || !teacher.backend.startsWith('WebGPU:')) throw new Error(`wrong backend: ${teacher.backend || '(missing)'}`);
-  if (teacher.worldSpace?.transformAuthority !== 'native-volume-grid-world-transform-v0') throw new Error('static fit report lacks native world-space authority');
+  if (projectionMode === 'native-camera') {
+    if (teacher.sourceSchema !== 'kaminos.volume.operator-basin-replay.v0'
+      || teacher.worldSpace?.transformAuthority !== 'operator-basin-normalized-volume-domain-v0') {
+      throw new Error('native-camera rendering requires checksum-bound held replay world-space authority');
+    }
+    const camera = teacher.camera;
+    if (!camera || !['position', 'target'].every(key => Array.isArray(camera[key]) && camera[key].length === 3 && camera[key].every(Number.isFinite))
+      || !['projectionMatrix', 'matrixWorldInverse'].every(key => Array.isArray(camera[key]) && camera[key].length === 16 && camera[key].every(Number.isFinite))) {
+      throw new Error('native-camera rendering requires complete finite camera matrices');
+    }
+    const cameraIdentity = `sha256:${sha256(Buffer.from(JSON.stringify(camera)))}`;
+    if (cameraIdentity !== teacher.cameraIdentity) throw new Error(`camera identity mismatch: ${cameraIdentity} != ${teacher.cameraIdentity || '(missing)'}`);
+  } else if (teacher.worldSpace?.transformAuthority !== 'native-volume-grid-world-transform-v0') {
+    throw new Error('static fit report lacks native world-space authority');
+  }
+}
+
+function normalizeProjectionMode(value) {
+  const mode = value || 'orthographic';
+  if (!['orthographic', 'native-camera'].includes(mode)) throw new Error(`unsupported projection mode ${mode}`);
+  return mode;
 }
 
 function channelMap(channelOrder) {
@@ -273,6 +293,107 @@ export function projectOrthographicGaussianFootprint(covariance, varianceFloor =
   };
 }
 
+function multiplyMatrix4(left, right) {
+  const result = new Array(16).fill(0);
+  for (let column = 0; column < 4; column += 1) {
+    for (let row = 0; row < 4; row += 1) {
+      for (let inner = 0; inner < 4; inner += 1) {
+        result[column * 4 + row] += left[inner * 4 + row] * right[column * 4 + inner];
+      }
+    }
+  }
+  return result;
+}
+
+function transformPoint4(matrix, point) {
+  return [0, 1, 2, 3].map(row => (
+    matrix[row] * point[0]
+    + matrix[4 + row] * point[1]
+    + matrix[8 + row] * point[2]
+    + matrix[12 + row]
+  ));
+}
+
+function covarianceQuadratic(left, covariance, right) {
+  return left[0] * right[0] * covariance[0]
+    + (left[0] * right[1] + left[1] * right[0]) * covariance[1]
+    + (left[0] * right[2] + left[2] * right[0]) * covariance[2]
+    + left[1] * right[1] * covariance[3]
+    + (left[1] * right[2] + left[2] * right[1]) * covariance[4]
+    + left[2] * right[2] * covariance[5];
+}
+
+export function projectPerspectiveGaussianFootprint({
+  position,
+  covariance,
+  projectionMatrix,
+  matrixWorldInverse,
+  width,
+  height,
+  varianceFloor = 0,
+  coverageScale = 1,
+} = {}) {
+  if (!Array.isArray(position) || position.length !== 3 || !position.every(Number.isFinite)) throw new Error('three finite Gaussian position channels are required');
+  if (!Array.isArray(covariance) || covariance.length !== 6 || !covariance.every(Number.isFinite)) throw new Error('six finite symmetric covariance channels are required');
+  if (!Array.isArray(projectionMatrix) || projectionMatrix.length !== 16 || !projectionMatrix.every(Number.isFinite)) throw new Error('finite 4x4 projectionMatrix is required');
+  if (!Array.isArray(matrixWorldInverse) || matrixWorldInverse.length !== 16 || !matrixWorldInverse.every(Number.isFinite)) throw new Error('finite 4x4 matrixWorldInverse is required');
+  if (!(width > 0) || !(height > 0)) throw new Error('positive projection dimensions are required');
+  if (!(varianceFloor >= 0)) throw new Error(`nonnegative variance floor required, got ${varianceFloor}`);
+  if (!(coverageScale > 0)) throw new Error(`positive coverage scale required, got ${coverageScale}`);
+
+  const viewProjection = multiplyMatrix4(projectionMatrix, matrixWorldInverse);
+  const clip = transformPoint4(viewProjection, position);
+  const clipW = clip[3];
+  if (!(clipW > 1e-12)) {
+    return { visible: false, rejectionReason: 'behind-camera', clipW };
+  }
+  const ndc = [clip[0] / clipW, clip[1] / clipW, clip[2] / clipW];
+  if (ndc[2] < -1 || ndc[2] > 1) {
+    return { visible: false, rejectionReason: 'outside-depth-range', clipW, ndc };
+  }
+
+  const jacobian = [0, 1].map(clipAxis => {
+    const pixelScale = clipAxis === 0 ? width / 2 : -height / 2;
+    return [0, 1, 2].map(worldAxis => {
+      const numeratorDerivative = viewProjection[worldAxis * 4 + clipAxis];
+      const denominatorDerivative = viewProjection[worldAxis * 4 + 3];
+      return pixelScale * ((numeratorDerivative * clipW - clip[clipAxis] * denominatorDerivative) / (clipW * clipW));
+    });
+  });
+  const covarianceScale = coverageScale * coverageScale;
+  let varianceX = Math.max(covarianceQuadratic(jacobian[0], covariance, jacobian[0]) * covarianceScale, varianceFloor);
+  const covarianceXY = covarianceQuadratic(jacobian[0], covariance, jacobian[1]) * covarianceScale;
+  let varianceY = Math.max(covarianceQuadratic(jacobian[1], covariance, jacobian[1]) * covarianceScale, varianceFloor);
+  const minimumDeterminant = Math.max(varianceFloor * varianceFloor, Number.EPSILON);
+  let determinant = varianceX * varianceY - covarianceXY * covarianceXY;
+  if (determinant < minimumDeterminant) {
+    let jitter = Math.max(varianceFloor, 1e-12);
+    for (let iteration = 0; iteration < 12 && determinant < minimumDeterminant; iteration += 1) {
+      varianceX += jitter;
+      varianceY += jitter;
+      determinant = varianceX * varianceY - covarianceXY * covarianceXY;
+      jitter *= 10;
+    }
+  }
+  if (!(determinant > 0)) throw new Error(`perspective projected covariance is not positive definite: determinant ${determinant}`);
+  return {
+    visible: true,
+    pixelX: (ndc[0] * 0.5 + 0.5) * width,
+    pixelY: (0.5 - ndc[1] * 0.5) * height,
+    ndc,
+    clipW,
+    jacobian,
+    varianceX,
+    covarianceXY,
+    varianceY,
+    determinant,
+    inverseXX: varianceY / determinant,
+    inverseXY: -covarianceXY / determinant,
+    inverseYY: varianceX / determinant,
+    normalization: 1 / (2 * Math.PI * Math.sqrt(determinant)),
+  };
+}
+
 function projectOrthographicOpticalDepth(rows, width, height, worldSpace, coverageScale) {
   const opticalDepth = new Float32Array(width * height);
   const minimum = worldSpace?.bounds?.minimum || [-1, -1, -1];
@@ -334,6 +455,89 @@ function projectOrthographicOpticalDepth(rows, width, height, worldSpace, covera
       meanPeakContributionFraction: supportPixelCount ? peakDominanceSum / supportPixelCount : 0,
       minimumProjectedCovarianceDeterminant: Math.min(...determinants),
       maximumProjectedCovarianceDeterminant: Math.max(...determinants),
+    },
+  };
+}
+
+function projectPerspectiveOpticalDepth(rows, width, height, camera, coverageScale) {
+  const opticalDepth = new Float32Array(width * height);
+  const contributorCounts = new Uint32Array(width * height);
+  const peakContributions = new Float32Array(width * height);
+  const varianceFloor = 1 / 12;
+  const projectedRows = rows.map(row => ({
+    ...row,
+    footprint: projectPerspectiveGaussianFootprint({
+      position: row.position,
+      covariance: row.covariance,
+      projectionMatrix: camera.projectionMatrix,
+      matrixWorldInverse: camera.matrixWorldInverse,
+      width,
+      height,
+      varianceFloor,
+      coverageScale,
+    }),
+  }));
+  const footprints = projectedRows.filter(row => row.footprint.visible);
+  for (const row of footprints) {
+    const footprint = row.footprint;
+    const trace = footprint.varianceX + footprint.varianceY;
+    const discriminant = Math.sqrt(Math.max(0, (footprint.varianceX - footprint.varianceY) ** 2 + 4 * footprint.covarianceXY ** 2));
+    const maximumVariance = (trace + discriminant) / 2;
+    const supportRadius = Math.sqrt(32 * maximumVariance);
+    const minX = Math.max(0, Math.floor(footprint.pixelX - supportRadius));
+    const maxX = Math.min(width - 1, Math.ceil(footprint.pixelX + supportRadius));
+    const minY = Math.max(0, Math.floor(footprint.pixelY - supportRadius));
+    const maxY = Math.min(height - 1, Math.ceil(footprint.pixelY + supportRadius));
+    for (let y = minY; y <= maxY; y += 1) {
+      const dy = y + 0.5 - footprint.pixelY;
+      for (let x = minX; x <= maxX; x += 1) {
+        const dx = x + 0.5 - footprint.pixelX;
+        const mahalanobisSquared = footprint.inverseXX * dx * dx
+          + 2 * footprint.inverseXY * dx * dy
+          + footprint.inverseYY * dy * dy;
+        if (mahalanobisSquared > 32) continue;
+        const contribution = row.extinctionMass * footprint.normalization * Math.exp(-0.5 * mahalanobisSquared);
+        const index = y * width + x;
+        opticalDepth[index] += contribution;
+        peakContributions[index] = Math.max(peakContributions[index], contribution);
+        if (mahalanobisSquared <= 16) contributorCounts[index] += 1;
+      }
+    }
+  }
+  let supportPixelCount = 0;
+  let singleContributorPixelCount = 0;
+  let contributorSum = 0;
+  let maxContributors = 0;
+  let peakDominanceSum = 0;
+  for (let index = 0; index < opticalDepth.length; index += 1) {
+    const contributors = contributorCounts[index];
+    if (contributors === 0) continue;
+    supportPixelCount += 1;
+    contributorSum += contributors;
+    maxContributors = Math.max(maxContributors, contributors);
+    if (contributors === 1) singleContributorPixelCount += 1;
+    if (opticalDepth[index] > 0) peakDominanceSum += peakContributions[index] / opticalDepth[index];
+  }
+  const determinants = footprints.map(row => row.footprint.determinant);
+  return {
+    opticalDepth,
+    diagnostics: {
+      identity: 'perspective-full-covariance-overlap-diagnostics-v0',
+      coverageScale,
+      requestedGaussianCount: rows.length,
+      visibleGaussianCount: footprints.length,
+      rejectedGaussianCount: rows.length - footprints.length,
+      rejectionReasons: Object.fromEntries(projectedRows
+        .filter(row => !row.footprint.visible)
+        .reduce((counts, row) => counts.set(row.footprint.rejectionReason, (counts.get(row.footprint.rejectionReason) || 0) + 1), new Map())),
+      supportPixelCount,
+      singleContributorPixelCount,
+      singleContributorPixelFraction: supportPixelCount ? singleContributorPixelCount / supportPixelCount : 0,
+      meanContributorsPerSupportPixel: supportPixelCount ? contributorSum / supportPixelCount : 0,
+      maxContributors,
+      meanPeakContributionFraction: supportPixelCount ? peakDominanceSum / supportPixelCount : 0,
+      minimumProjectedCovarianceDeterminant: determinants.length ? Math.min(...determinants) : null,
+      maximumProjectedCovarianceDeterminant: determinants.length ? Math.max(...determinants) : null,
     },
   };
 }
@@ -422,20 +626,16 @@ function makeContactSheet(images, width, height) {
   return { width: sheetWidth, height: height * images.length, rgba: sheet };
 }
 
-async function renderBudget({ reportPath, report, raymarch, teacherLuma, entry, budget, outDir, extinctionScales, coverageScales }) {
+async function renderBudget({ reportPath, report, raymarch, teacherLuma, entry, budget, outDir, extinctionScales, coverageScales, projectionMode }) {
   if (entry.activeGaussianCount !== budget) throw new Error(`budget ${budget} has active count ${entry.activeGaussianCount}; refusing hidden cap/substitution`);
   if (entry.extinctionAccounting?.relativeError > 1e-5) throw new Error(`budget ${budget} does not conserve extinction`);
   const loaded = await loadRows(reportPath, entry);
   const started = performance.now();
   let best = null;
   for (const coverageScale of coverageScales) {
-    const projected = projectOrthographicOpticalDepth(
-      loaded.rows,
-      raymarch.width,
-      raymarch.height,
-      report.teacher.worldSpace,
-      coverageScale,
-    );
+    const projected = projectionMode === 'native-camera'
+      ? projectPerspectiveOpticalDepth(loaded.rows, raymarch.width, raymarch.height, report.teacher.camera, coverageScale)
+      : projectOrthographicOpticalDepth(loaded.rows, raymarch.width, raymarch.height, report.teacher.worldSpace, coverageScale);
     for (const scale of extinctionScales) {
       const luma = lumaFromOpticalDepth(projected.opticalDepth, scale);
       const metrics = compareLuma(teacherLuma, luma);
@@ -448,8 +648,9 @@ async function renderBudget({ reportPath, report, raymarch, teacherLuma, entry, 
   if (best.metrics.renderActivePixels <= 0) throw new Error(`budget ${budget} rendered blank output`);
   const renderRgba = lumaToRgba(best.luma);
   const diffRgba = lumaToRgba(diffLuma(teacherLuma, best.luma), 'diff');
-  const renderPngPath = join(outDir, `budget-${budget}.orthographic-render.png`);
-  const diffPngPath = join(outDir, `budget-${budget}.orthographic-diff.png`);
+  const imagePrefix = projectionMode === 'native-camera' ? 'perspective' : 'orthographic';
+  const renderPngPath = join(outDir, `budget-${budget}.${imagePrefix}-render.png`);
+  const diffPngPath = join(outDir, `budget-${budget}.${imagePrefix}-diff.png`);
   writeRgbaPng(renderPngPath, raymarch.width, raymarch.height, renderRgba);
   writeRgbaPng(diffPngPath, raymarch.width, raymarch.height, diffRgba);
   return {
@@ -482,6 +683,7 @@ export async function renderSmokeGaussianOracleWitness({
   budgets = [32, 64, 128],
   extinctionScales = [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016],
   coverageScales = [1],
+  projectionMode = 'orthographic',
   inspectedNote = null,
 } = {}) {
   if (!fitReportPath) throw new Error('fitReportPath is required');
@@ -490,10 +692,11 @@ export async function renderSmokeGaussianOracleWitness({
   const requestedBudgets = normalizeBudgets(budgets);
   const requestedScales = normalizeScales(extinctionScales);
   const requestedCoverageScales = normalizeCoverageScales(coverageScales);
+  const effectiveProjectionMode = normalizeProjectionMode(projectionMode);
   await mkdir(outDir, { recursive: true });
   const reportPath = resolve(fitReportPath);
   const report = await readJson(reportPath);
-  validateTeacher(report);
+  validateTeacher(report, effectiveProjectionMode);
   const raymarchPath = resolve(raymarchPngPath);
   const raymarchBytes = await readFile(raymarchPath);
   const raymarch = parsePngRgba(raymarchBytes);
@@ -512,10 +715,11 @@ export async function renderSmokeGaussianOracleWitness({
       outDir,
       extinctionScales: requestedScales,
       coverageScales: requestedCoverageScales,
+      projectionMode: effectiveProjectionMode,
     }));
   }
   const sheet = makeContactSheet(budgetCurve.map(entry => entry.contactSheetRow), raymarch.width, raymarch.height);
-  const contactSheetPath = join(outDir, 'orthographic-render-contact-sheet.png');
+  const contactSheetPath = join(outDir, `${effectiveProjectionMode === 'native-camera' ? 'perspective' : 'orthographic'}-render-contact-sheet.png`);
   writeRgbaPng(contactSheetPath, sheet.width, sheet.height, sheet.rgba);
   const finalReport = {
     schema: 'kaminos.smoke-gaussian-oracle-render-witness-report.v0',
@@ -533,12 +737,21 @@ export async function renderSmokeGaussianOracleWitness({
       prototypeIdentity: report.teacher.prototypeIdentity,
       backend: report.teacher.backend,
       worldSpace: report.teacher.worldSpace,
+      cameraIdentity: report.teacher.cameraIdentity || null,
+      camera: report.teacher.camera || null,
     },
     renderer: {
-      identity: 'cpu-orthographic-full-covariance-gaussian-smoke-v1',
-      cameraAuthority: 'orthographic-world-proxy-not-native-camera-v0',
+      identity: effectiveProjectionMode === 'native-camera'
+        ? 'cpu-perspective-full-covariance-gaussian-smoke-v0'
+        : 'cpu-orthographic-full-covariance-gaussian-smoke-v1',
+      cameraAuthority: effectiveProjectionMode === 'native-camera'
+        ? 'checksum-bound-fit-teacher-camera-v0'
+        : 'orthographic-world-proxy-not-native-camera-v0',
+      cameraIdentity: report.teacher.cameraIdentity || null,
       compositorAuthority: 'single-channel-smoke-luma-proxy-not-production-compositor-v0',
-      projectionAuthority: 'exact-world-xy-covariance-line-integral-v0',
+      projectionAuthority: effectiveProjectionMode === 'native-camera'
+        ? 'full-view-projection-jacobian-covariance-v0'
+        : 'exact-world-xy-covariance-line-integral-v0',
       scaleSelection: 'explicit-extinction-scale-sweep-min-luma-mse-v0',
       requestedExtinctionScales: requestedScales,
       coverageSelection: 'explicit-mass-preserving-covariance-dilation-sweep-min-luma-mse-v0',
@@ -599,6 +812,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       budgets,
       extinctionScales,
       coverageScales,
+      projectionMode: args.get('--projection') || 'orthographic',
       inspectedNote: args.get('--inspected-note') || null,
     });
     console.log(JSON.stringify({

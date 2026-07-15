@@ -140,6 +140,12 @@ async function loadHeldTeacherFrame({ manifestPath, manifestBytes, manifest, exp
     simStepCount: manifest.initialSimStepCount,
     sourceCaptureIdentity: `sha256:${sourceCaptureSha}`,
     cameraIdentity: `sha256:${sha256(Buffer.from(JSON.stringify(camera)))}`,
+    camera: {
+      position: [...camera.position],
+      target: [...camera.target],
+      projectionMatrix: [...camera.projectionMatrix],
+      matrixWorldInverse: [...camera.matrixWorldInverse],
+    },
   };
 }
 
@@ -208,6 +214,7 @@ async function loadTeacherFrame(manifestPath, expectedManifestSha256) {
     simStepCount: replay.simStepCount,
     sourceCaptureIdentity: manifest.sourceCapture?.manifestSha256 || null,
     cameraIdentity: null,
+    camera: null,
   };
 }
 
@@ -589,6 +596,7 @@ export async function fitSmokeGaussianOracleFrame({
       simStepCount: frame.simStepCount,
       sourceCaptureIdentity: frame.sourceCaptureIdentity,
       cameraIdentity: frame.cameraIdentity,
+      camera: frame.camera,
       fluidPath: frame.fluidPath,
       fluidIdentity: frame.fluidIdentity,
       effectiveRoute: frame.manifest.effectiveRoute,

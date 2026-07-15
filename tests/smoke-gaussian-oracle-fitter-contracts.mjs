@@ -241,6 +241,12 @@ try {
   assert.equal(heldReport.teacher.manifestIdentity, `sha256:${held.manifestSha256}`);
   assert.equal(heldReport.teacher.sourceCaptureIdentity, `sha256:${sha256(held.sourceCaptureBytes)}`);
   assert.match(heldReport.teacher.cameraIdentity, /^sha256:[a-f0-9]{64}$/);
+  assert.deepEqual(heldReport.teacher.camera, {
+    position: [-4.2, 2.1, 8.2],
+    target: [0, 0.02, 0],
+    projectionMatrix: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.02, 0],
+    matrixWorldInverse: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -9, 1],
+  }, 'held camera matrices must remain in the fitted product, not only behind an identity hash');
   assert.equal(heldReport.teacher.worldSpace.transformAuthority, 'operator-basin-normalized-volume-domain-v0');
 
   await assert.rejects(

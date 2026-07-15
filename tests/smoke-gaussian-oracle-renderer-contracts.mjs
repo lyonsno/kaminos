@@ -7,9 +7,12 @@ import { tmpdir } from 'node:os';
 import { deflateSync } from 'node:zlib';
 
 const rendererUrl = new URL('../smoke-gaussian-oracle-renderer.mjs', import.meta.url);
+const rendererSource = await readFile(rendererUrl, 'utf8');
+assert.match(rendererSource, /args\.get\('--projection'\)/, 'native-camera projection must be selectable from the reproducible CLI');
 const {
   SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY,
   projectOrthographicGaussianFootprint,
+  projectPerspectiveGaussianFootprint,
   renderSmokeGaussianOracleWitness,
 } = await import(rendererUrl);
 
@@ -31,6 +34,45 @@ assert.equal(dilatedFootprint.covarianceXY, 6, 'coverage dilation preserves cova
 assert.equal(dilatedFootprint.varianceY, 4);
 assert.ok(Math.abs(dilatedFootprint.determinant - 28) < 1e-12, '2x footprint dilation scales 2D determinant by 16');
 assert.ok(Math.abs(dilatedFootprint.normalization - (tiltedFootprint.normalization / 4)) < 1e-12, 'mass normalization falls with projected area');
+
+const perspectiveMatrix = [
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, -11 / 9, -1,
+  0, 0, -20 / 9, 0,
+];
+const identityViewMatrix = [
+  1, 0, 0, 0,
+  0, 1, 0, 0,
+  0, 0, 1, 0,
+  0, 0, 0, 1,
+];
+const perspectiveFootprint = projectPerspectiveGaussianFootprint({
+  position: [0, 0, -2],
+  covariance: [0.04, 0, 0, 0.09, 0, 0.16],
+  projectionMatrix: perspectiveMatrix,
+  matrixWorldInverse: identityViewMatrix,
+  width: 200,
+  height: 100,
+});
+assert.equal(perspectiveFootprint.visible, true, 'front-facing Gaussian must survive native-camera projection');
+assert.ok(Math.abs(perspectiveFootprint.pixelX - 100) < 1e-12, 'perspective mean projects through the recorded matrix');
+assert.ok(Math.abs(perspectiveFootprint.pixelY - 50) < 1e-12);
+assert.ok(Math.abs(perspectiveFootprint.varianceX - 100) < 1e-10, 'world covariance is pushed through the perspective Jacobian');
+assert.ok(Math.abs(perspectiveFootprint.varianceY - 56.25) < 1e-10);
+assert.ok(Math.abs(perspectiveFootprint.covarianceXY) < 1e-12);
+assert.ok(Math.abs(perspectiveFootprint.determinant - 5625) < 1e-8);
+
+const behindCamera = projectPerspectiveGaussianFootprint({
+  position: [0, 0, 2],
+  covariance: [0.04, 0, 0, 0.09, 0, 0.16],
+  projectionMatrix: perspectiveMatrix,
+  matrixWorldInverse: identityViewMatrix,
+  width: 200,
+  height: 100,
+});
+assert.equal(behindCamera.visible, false, 'behind-camera support cannot be mirrored into a plausible witness');
+assert.equal(behindCamera.rejectionReason, 'behind-camera');
 
 const gaussianChannels = [
   'positionX', 'positionY', 'positionZ',
@@ -127,7 +169,7 @@ async function writeGaussianArtifact(directory, budget, rows) {
   };
 }
 
-async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raymarch-v0' } = {}) {
+async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raymarch-v0', camera = null } = {}) {
   await mkdir(directory, { recursive: true });
   const raymarchPath = join(directory, 'teacher.png');
   const raymarchBytes = await writeTinyPng(raymarchPath);
@@ -169,13 +211,16 @@ async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raym
     teacher: {
       manifestPath,
       manifestIdentity: 'synthetic',
+      sourceSchema: camera ? 'kaminos.volume.operator-basin-replay.v0' : 'kaminos.volume.full-grid-field-export.v0',
       effectiveRoute: route,
       prototypeIdentity: 'kaminos-volume-prototype-v0',
       backend: 'WebGPU:apple',
+      camera,
+      cameraIdentity: camera ? `sha256:${sha256(Buffer.from(JSON.stringify(camera)))}` : null,
       grid: 8,
       worldSpace: {
         coordinateFrame: 'kaminos-volume-world-v0',
-        transformAuthority: 'native-volume-grid-world-transform-v0',
+        transformAuthority: camera ? 'operator-basin-normalized-volume-domain-v0' : 'native-volume-grid-world-transform-v0',
         bounds: { minimum: [-1, -1, -1], maximum: [1, 1, 1] },
       },
       activeSmokeVoxelCount: 16,
@@ -227,6 +272,48 @@ try {
   assert.ok(existsSync(report.budgetCurve[0].images.diffPngPath));
   assert.ok(existsSync(report.contactSheet.path));
   assert.equal((await readFile(report.contactSheet.path)).readUInt32BE(0), 0x89504e47, 'contact sheet must be a PNG');
+
+  const heldCamera = {
+    position: [0, 0, 2],
+    target: [0, 0, 0],
+    projectionMatrix: perspectiveMatrix,
+    matrixWorldInverse: [
+      1, 0, 0, 0,
+      0, 1, 0, 0,
+      0, 0, 1, 0,
+      0, 0, -2, 1,
+    ],
+  };
+  const held = await writeFitReport(join(directory, 'held'), { camera: heldCamera });
+  const nativeReport = await renderSmokeGaussianOracleWitness({
+    fitReportPath: held.reportPath,
+    raymarchPngPath: held.raymarchPath,
+    outDir: join(directory, 'native-render'),
+    budgets: [2],
+    extinctionScales: [1, 10],
+    coverageScales: [1, 1.7],
+    projectionMode: 'native-camera',
+  });
+  assert.equal(nativeReport.renderer.cameraAuthority, 'checksum-bound-fit-teacher-camera-v0');
+  assert.equal(nativeReport.renderer.projectionAuthority, 'full-view-projection-jacobian-covariance-v0');
+  assert.equal(nativeReport.renderer.cameraIdentity, heldCamera ? `sha256:${sha256(Buffer.from(JSON.stringify(heldCamera)))}` : null);
+  assert.match(nativeReport.contactSheet.path, /perspective-render-contact-sheet\.png$/);
+  assert.ok(nativeReport.budgetCurve[0].projectionDiagnostics.visibleGaussianCount > 0);
+
+  const staleCameraReport = JSON.parse(await readFile(held.reportPath, 'utf8'));
+  staleCameraReport.teacher.camera.position[0] = 0.25;
+  await writeFile(held.reportPath, `${JSON.stringify(staleCameraReport, null, 2)}\n`);
+  await assert.rejects(
+    () => renderSmokeGaussianOracleWitness({
+      fitReportPath: held.reportPath,
+      raymarchPngPath: held.raymarchPath,
+      outDir: join(directory, 'stale-camera-render'),
+      budgets: [2],
+      projectionMode: 'native-camera',
+    }),
+    /camera identity mismatch/i,
+    'changed camera matrices cannot retain a stale authoritative identity',
+  );
 
   const wrong = await writeFitReport(join(directory, 'wrong'), { route: 'cached-demo-route-v0' });
   await assert.rejects(
