@@ -1,6 +1,6 @@
 import { WEBGPU_BUFFER_USAGE } from './runtime-primitives.js';
 
-export const WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA = 'kaminos.webgpu-model-resource-manifest.v0';
+export const WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA = 'kaminos.webgpu-model-resource-manifest.v1';
 export const WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA = 'kaminos.webgpu-model-resource-bundle-verification.v0';
 export const WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA = 'kaminos.webgpu-model-resource-bundle-custody.v0';
 export const WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-lease.v0';
@@ -11,6 +11,7 @@ export const WEBGPU_MODEL_RESOURCE_SHARING_POLICIES = Object.freeze({
 });
 
 const bundleCustody = new WeakMap();
+const PRIOR_PHYSICAL_ONLY_MANIFEST_SCHEMA = 'kaminos.webgpu-model-resource-manifest.v0';
 
 const DTYPE_BYTES = new Map([
   ['f32', 4],
@@ -200,6 +201,14 @@ export function validateWebGpuModelResourceManifest(manifest) {
   const errors = [];
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
     return { ok: false, errors: ['manifest must be an object'] };
+  }
+  if (manifest.schema === PRIOR_PHYSICAL_ONLY_MANIFEST_SCHEMA) {
+    return {
+      ok: false,
+      errors: [
+        `schema ${PRIOR_PHYSICAL_ONLY_MANIFEST_SCHEMA} is an unsupported prior physical-only manifest; regenerate it as ${WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA} and choose resourceSharing policy explicitly`,
+      ],
+    };
   }
   if (manifest.schema !== WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA) {
     errors.push(`schema must be ${WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA}`);

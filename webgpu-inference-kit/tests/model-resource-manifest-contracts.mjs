@@ -135,7 +135,7 @@ function routeFixture({ routeId, runtime, residency, factory }) {
 
 const bundle = Uint8Array.from({ length: 32 }, (_, index) => index);
 const manifest = manifestFor(bundle);
-assert.equal(manifest.schema, 'kaminos.webgpu-model-resource-manifest.v0');
+assert.equal(manifest.schema, 'kaminos.webgpu-model-resource-manifest.v1');
 assert.equal(manifest.identity, `acme/vision-model@0123456789abcdef#sha256:${sha256(bundle)}`);
 assert.equal(manifest.allocations.length, 2);
 assert.equal(manifest.resourceSharing.policy, 'semantic-identity');
@@ -147,6 +147,22 @@ assert.equal(Object.isFrozen(manifest.allocations), true);
 assert.equal(Object.isFrozen(manifest.allocations[0].tensors[0].shape), true);
 assert.throws(() => { manifest.allocations.push({}); }, /read only|not extensible|object is not extensible/i);
 assert.deepEqual(validateWebGpuModelResourceManifest(manifest), { ok: true, errors: [] });
+
+const priorPhysicalOnlyManifest = {
+  ...manifest,
+  schema: 'kaminos.webgpu-model-resource-manifest.v0',
+  resourceSharing: undefined,
+  allocations: manifest.allocations.map(allocation => {
+    const { physicalResourceId, semanticResourceId, ...priorAllocation } = allocation;
+    return { ...priorAllocation, resourceId: physicalResourceId };
+  }),
+};
+assert.deepEqual(validateWebGpuModelResourceManifest(priorPhysicalOnlyManifest), {
+  ok: false,
+  errors: [
+    'schema kaminos.webgpu-model-resource-manifest.v0 is an unsupported prior physical-only manifest; regenerate it as kaminos.webgpu-model-resource-manifest.v1 and choose resourceSharing policy explicitly',
+  ],
+});
 
 const verification = await verifyWebGpuModelResourceBundle(manifest, bundle);
 assert.deepEqual(verification, {
