@@ -500,6 +500,10 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 #finger-fluid-bench-operator-panel[hidden] { display: none; }
 #finger-fluid-bench-canvas { width: 100%; height: 100%; display: block; background: #03070a; touch-action: none; cursor: grab; }
 #finger-fluid-bench-canvas:active { cursor: grabbing; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] { background: #020304; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] #kaminos-volume-canvas.active { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; opacity: 1; background: transparent; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] #finger-fluid-bench-canvas { position: absolute; inset: 0; z-index: 1; background: transparent; }
+#finger-fluid-bench-operator-panel[data-pyro-composition="active"] #finger-fluid-bench-overlay { z-index: 3; }
 #finger-fluid-bench-overlay { position: absolute; right: 16px; bottom: 16px; width: min(520px, calc(100% - 32px)); background: rgba(3,7,10,0.76); border: 1px solid #2d5065; border-radius: 8px; padding: 10px 12px; color: #c7e7ef; box-shadow: 0 10px 30px rgba(0,0,0,0.36); }
 #finger-fluid-bench-overlay-title { font: 11px 'SF Mono', monospace; color: #7fd7e0; text-transform: uppercase; letter-spacing: 0.8px; }
 #finger-fluid-bench-overlay-body { margin-top: 5px; font: 10px 'SF Mono', monospace; color: #efe5c0; overflow-wrap: anywhere; }
@@ -2764,6 +2768,14 @@ let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 let fingerFluidBenchConfig = null;
+let fingerFluidPyroCompositionState = {
+  schema: 'kaminos.finger-fluid-pyro-composition.v0',
+  requestedRoute: 'finger_fluid_pyro_composition=1',
+  effectiveRoute: 'inactive',
+  source: 'unbound',
+  consumer: 'unbound',
+  sameDevice: false,
+};
 
 function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.location.search)) {
   const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
@@ -8730,7 +8742,8 @@ async function initScene() {
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
-    const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute();
+    const liquidFireCompositionActive = fingerFluidPyroCompositionRequested();
+    const volumeSmokeRouteActive = isKaminosVolumeSmokeRoute() || liquidFireCompositionActive;
     updateHybridSplatOverlayFrame();
     const motionAgencyActive = updateMotionAgencyFrame(performance.now() / 1000);
     const motionDecisionActive = updateMotionDecisionFrame(performance.now() / 1000);
@@ -8739,7 +8752,7 @@ async function initScene() {
     const motionOutputMapActive = updateGeneratedPoseOutputMapFrame(performance.now() / 1000);
     const motionTemporalActive = updateGeneratedPoseTemporalFrame(performance.now() / 1000);
     const forgeHostActive = updateForgeHostStationFrame(performance.now() / 1000);
-    const volumeBridgeActive = volumeBridge ? volumeBridge.update() === true : false;
+    const volumeBridgeActive = !liquidFireCompositionActive && volumeBridge ? volumeBridge.update() === true : false;
     const mainRendererNeeded = !volumeSmokeRouteActive || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive;
 
     if (mainRendererNeeded && (needsRender || motionAgencyActive || motionDecisionActive || motionPhraseControlActive || motionTrackActive || motionOutputMapActive || motionTemporalActive || forgeHostActive || volumeBridgeActive || idleFrames < IDLE_THRESHOLD)) {
@@ -9774,6 +9787,74 @@ function ensureFingerFluidBenchCanvasSize(canvas) {
   return { width, height };
 }
 
+function fingerFluidPyroCompositionRequested(params = new URLSearchParams(window.location.search)) {
+  return params.get('finger_fluid_pyro_composition') === '1';
+}
+
+function syncFingerFluidCompositionCamera() {
+  if (!fingerFluidPyroCompositionRequested() || !camera || !controls) return;
+  const { yaw, pitch, distance, target } = fingerFluidBenchCamera;
+  const cp = Math.cos(pitch);
+  camera.position.set(
+    target[0] + Math.sin(yaw) * cp * distance,
+    target[1] + Math.sin(pitch) * distance,
+    target[2] + Math.cos(yaw) * cp * distance,
+  );
+  camera.fov = 180 / 3.15;
+  camera.updateProjectionMatrix();
+  controls.target.set(target[0], target[1], target[2]);
+  controls.update();
+}
+
+async function activateFingerFluidPyroComposition() {
+  if (!fingerFluidPyroCompositionRequested() || !fingerFluidBenchSolver?.available || !volumePrototype) return false;
+  if (fingerFluidPyroCompositionState.effectiveRoute === 'same-device-liquid-contact-pyro-near-field-v0') return true;
+  const descriptor = fingerFluidBenchSolver.getLiquidFireContactDescriptor();
+  const binding = volumePrototype.setLiquidFireContactDescriptor(descriptor);
+  const panel = document.getElementById('finger-fluid-bench-operator-panel');
+  const volumeCanvas = volumePrototype.canvasElement();
+  panel.prepend(volumeCanvas);
+  panel.dataset.pyroComposition = 'active';
+  volumeCanvas.dataset.liquidFireComposition = 'true';
+  volumePrototype.setControls({
+    volumeScene: 'bonfire_plume',
+    density: 0.82,
+    fire: 1.25,
+    radiance: 1.85,
+    glow: 1.2,
+    smoke: 0.82,
+    quenchVapor: 0,
+  });
+  syncFingerFluidCompositionCamera();
+  await volumePrototype.setActive(true);
+  fingerFluidPyroCompositionState = {
+    schema: 'kaminos.finger-fluid-pyro-composition.v0',
+    requestedRoute: 'finger_fluid_pyro_composition=1',
+    effectiveRoute: 'same-device-liquid-contact-pyro-near-field-v0',
+    source: descriptor.schema,
+    sourcePacking: descriptor.packing,
+    sourceGeneration: descriptor.allocationGeneration,
+    sourceEpoch: descriptor.epoch,
+    sourceFrameHash: descriptor.sourceFrameHash,
+    sourceFrameId: descriptor.sourceFrameId,
+    receiverTransformId: binding.receiverTransformId,
+    consumer: binding.schema,
+    sameDevice: binding.sameDevice,
+  };
+  window.__kaminosFingerFluidPyroCompositionState = fingerFluidPyroCompositionState;
+  return true;
+}
+
+async function sampleFingerFluidPyroComposition() {
+  const consumer = await volumePrototype?.sampleLiquidFireContactConsumer?.();
+  return {
+    ...fingerFluidPyroCompositionState,
+    consumerWitness: consumer || null,
+    volume: volumePrototype?.debugState?.() || null,
+    liquid: fingerFluidBenchSolver?.getDebugState?.() || null,
+  };
+}
+
 async function requestFingerFluidBenchDiagnostics() {
   if (!fingerFluidBenchSolver?.available) return null;
   const diagnostics = await fingerFluidBenchSolver.requestDiagnostics();
@@ -9795,6 +9876,7 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     return;
   }
   const frameStart = performance.now();
+  syncFingerFluidCompositionCamera();
   const { width, height } = ensureFingerFluidBenchCanvasSize(canvas);
   const t = (now - fingerFluidBenchFrameStartedAt) * 0.001;
   if (!fingerFluidBenchSolver?.available) {
@@ -9893,6 +9975,7 @@ async function startFingerFluidBench() {
       colorMode: fingerFluidBenchConfig.effectiveColorMode,
       particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
       chemistryDiffusion: fingerFluidBenchConfig.effectiveChemistryDiffusion,
+      transparentBackground: fingerFluidPyroCompositionRequested(),
     });
     fingerFluidBenchSolver = await fingerFluidBenchSolverPromise;
     if (!fingerFluidBenchSolver.available) {
@@ -9906,7 +9989,9 @@ async function startFingerFluidBench() {
       updateFingerFluidBenchReadout();
       return;
     }
+    await activateFingerFluidPyroComposition();
   }
+  await activateFingerFluidPyroComposition();
   if (!fingerFluidBenchAnimationFrame && fingerFluidBenchRunning) {
     fingerFluidBenchFrameStartedAt = performance.now();
     drawFingerFluidBenchFrame.lastNow = performance.now() - 16.7;
@@ -9930,6 +10015,8 @@ function initKaminosFingerFluidBenchRoute() {
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
+  window.kaminosFingerFluidPyroCompositionDebugState = () => fingerFluidPyroCompositionState;
+  window.kaminosFingerFluidPyroCompositionSample = sampleFingerFluidPyroComposition;
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   let pointer = null;
   canvas?.addEventListener('pointerdown', event => {
@@ -17575,8 +17662,17 @@ async function initKaminosVolumeRoute() {
       document.getElementById('volume-backend').textContent = status.backend || status.phase || 'unknown';
       if (status.error) setInfo(`Volume renderer: ${status.error}`);
     },
+    transparentCanvas: fingerFluidPyroCompositionRequested(),
   });
   window.__kaminosVolumePrototype = volumePrototype;
+  void activateFingerFluidPyroComposition().catch(error => {
+    fingerFluidPyroCompositionState = {
+      ...fingerFluidPyroCompositionState,
+      effectiveRoute: 'failed',
+      error: error?.message || String(error),
+    };
+    console.error('Finger fluid / Pyro composition activation failed:', error);
+  });
   volumeBridge?.dispose?.();
   volumeBridge = createVolumeMainRendererBridge();
   window.__kaminosVolumeBridge = volumeBridge;

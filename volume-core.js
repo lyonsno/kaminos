@@ -1,3 +1,14 @@
+import {
+  LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
+  LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
+  LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
+  LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
+  LIQUID_FIRE_CONTACT_STATS_WORDS,
+  createLiquidFireContactConsumerShaderWGSL,
+  liquidFireContactConsumerParams,
+  validateLiquidFireContactSourceDescriptor,
+} from './liquid-fire-contact-consumer.mjs';
+
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
 const FRONT_FIELD_IDENTITY = 'combustion-front-topology-sidecar-v0';
@@ -762,6 +773,7 @@ function normalizeExternalEmitters(payload = {}, nowMs = externalEmitterNowMs())
 const WGSL = /* wgsl */`
 override GRID: u32 = 64u;
 override MAJORANT_GRID: u32 = 24u;
+override TRANSPARENT_CANVAS: f32 = 0.0;
 const SLOTS_PER_CELL: u32 = 4u;
 const MAX_EXTERNAL_EMITTERS_WGSL: u32 = 32u;
 
@@ -3522,7 +3534,8 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let rd = normalize(farWorld - nearWorld);
   let hit = boxHit(ro, rd, vec3<f32>(1.0, 1.0, 1.0));
   if (hit.y <= max(hit.x, 0.0)) {
-    return vec4<f32>(0.004, 0.005, 0.006, 1.0);
+    let missAlpha = mix(1.0, 0.0, TRANSPARENT_CANVAS);
+    return vec4<f32>(vec3<f32>(0.004, 0.005, 0.006) * missAlpha, missAlpha);
   }
 
   let steps = clamp(u.viewport_steps_density.z, 24.0, 192.0);
@@ -4568,11 +4581,15 @@ fn fs(in: VSOut) -> @location(0) vec4<f32> {
   let temporalConfidence = temporalReprojectionConfidence(temporalMaterialWeight, temporalMajorantEdge, temporalReactiveSignal);
   let temporalUv = temporalReprojectionUv(temporalWorld, temporalVelocity, temporalConfidence);
   let materialTemporalWeights = materialAwareTemporalWeights(temporalSmokeHistoryTrustSum, temporalFireHistoryProtectSum, temporalInterfaceHistoryProtectSum, temporalDetailHistoryProtectSum, temporalMaterialWeight);
-  return vec4<f32>(temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z, materialTemporalWeights), 1.0);
+  let resolvedColor = temporalResolveColor(current, in.uv, temporalUv.xy, temporalConfidence * temporalUv.z, temporalReactiveSignal, temporalMajorantEdge, temporalUv.z, materialTemporalWeights);
+  let composedAlpha = clamp(1.0 - trans + max(max(resolvedColor.r, resolvedColor.g), resolvedColor.b) * 0.08, 0.0, 1.0);
+  let outputAlpha = mix(1.0, composedAlpha, TRANSPARENT_CANVAS);
+  let outputColor = mix(resolvedColor, resolvedColor * outputAlpha, TRANSPARENT_CANVAS);
+  return vec4<f32>(outputColor, outputAlpha);
 }
 `;
 
-export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus }) {
+export function createKaminosVolumePrototype({ THREE, viewport, camera, controls, getControls, onStatus, sharedGpuContext = null, transparentCanvas = false }) {
   const canvas = document.createElement('canvas');
   canvas.id = 'kaminos-volume-canvas';
   canvas.dataset.prototype = PROTOTYPE_IDENTITY;
@@ -4672,6 +4689,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterCount: 0,
     externalEmitterAgeMs: null,
     externalEmitterFrameId: null,
+    liquidFireContactConsumerSchema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
+    liquidFireContactAccumulationLayout: LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
+    liquidFireContactStatus: 'unbound',
+    liquidFireContactDispatchCount: 0,
+    liquidFireContactSourceGeneration: null,
+    liquidFireContactSourceEpoch: null,
+    liquidFireContactSourceFrameHash: null,
     scalarActivityReceiver: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
@@ -4976,6 +5000,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   let adapter = null;
   let device = null;
+  let gpuInitialized = false;
+  let configuredSharedGpuContext = sharedGpuContext;
   let context = null;
   let pipeline = null;
   let readbackPipeline = null;
@@ -5017,6 +5043,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let uniformBuffer = null;
   let externalEmitterBuffer = null;
   let externalEmitterState = normalizeExternalEmitters();
+  let liquidFireContactDescriptor = null;
+  let liquidFireContactShader = null;
+  let liquidFireContactBindGroupLayout = null;
+  let liquidFireContactPipelineLayout = null;
+  let liquidFireContactClearPipeline = null;
+  let liquidFireContactScatterPipeline = null;
+  let liquidFireContactApplyPipeline = null;
+  let liquidFireContactAccumulationBuffer = null;
+  let liquidFireContactStatsBuffer = null;
+  let liquidFireContactParamsBuffer = null;
+  let liquidFireContactBindGroups = [];
   let volumePrimitives = [];
   let majorantBuffer = null;
   let boundarySidecarBuffer = null;
@@ -5660,6 +5697,174 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
+  function destroyLiquidFireContactConsumer() {
+    liquidFireContactAccumulationBuffer?.destroy();
+    liquidFireContactStatsBuffer?.destroy();
+    liquidFireContactParamsBuffer?.destroy();
+    liquidFireContactAccumulationBuffer = null;
+    liquidFireContactStatsBuffer = null;
+    liquidFireContactParamsBuffer = null;
+    liquidFireContactShader = null;
+    liquidFireContactBindGroupLayout = null;
+    liquidFireContactPipelineLayout = null;
+    liquidFireContactClearPipeline = null;
+    liquidFireContactScatterPipeline = null;
+    liquidFireContactApplyPipeline = null;
+    liquidFireContactBindGroups = [];
+  }
+
+  function rebuildLiquidFireContactConsumer() {
+    destroyLiquidFireContactConsumer();
+    if (!device || !liquidFireContactDescriptor || fluidBuffers.length !== 2) {
+      state.liquidFireContactStatus = liquidFireContactDescriptor ? 'waiting-for-pyro-state' : 'unbound';
+      return;
+    }
+    const descriptor = validateLiquidFireContactSourceDescriptor(liquidFireContactDescriptor, {
+      device,
+      expectedGeneration: liquidFireContactDescriptor.allocationGeneration,
+      expectedEpoch: liquidFireContactDescriptor.epoch,
+    });
+    const cellCount = gridCellCount(gridSize);
+    liquidFireContactAccumulationBuffer = device.createBuffer({
+      label: `kaminos liquid-fire transient contact accumulation ${gridSize}^3`,
+      size: cellCount * 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    liquidFireContactStatsBuffer = device.createBuffer({
+      label: 'kaminos liquid-fire contact consumer stats',
+      size: LIQUID_FIRE_CONTACT_STATS_WORDS * 4,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+    });
+    liquidFireContactParamsBuffer = device.createBuffer({
+      label: 'kaminos liquid-fire contact consumer params',
+      size: 64,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(liquidFireContactAccumulationBuffer, 0, new Uint32Array(cellCount * 4));
+    device.queue.writeBuffer(liquidFireContactStatsBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_STATS_WORDS));
+    device.queue.writeBuffer(liquidFireContactParamsBuffer, 0, liquidFireContactConsumerParams({
+      allocationGeneration: descriptor.allocationGeneration,
+      epoch: descriptor.epoch,
+      sourceFrameHash: descriptor.sourceFrameHash,
+    }));
+    liquidFireContactShader = device.createShaderModule({
+      label: `kaminos liquid-fire contact consumer ${gridSize}^3`,
+      code: createLiquidFireContactConsumerShaderWGSL(gridSize),
+    });
+    liquidFireContactBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos liquid-fire contact consumer bind group layout',
+      entries: [
+        { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
+        { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      ],
+    });
+    liquidFireContactPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos liquid-fire contact consumer pipeline layout',
+      bindGroupLayouts: [liquidFireContactBindGroupLayout],
+    });
+    const makePipeline = (entryPoint, label) => device.createComputePipeline({
+      label,
+      layout: liquidFireContactPipelineLayout,
+      compute: { module: liquidFireContactShader, entryPoint },
+    });
+    liquidFireContactClearPipeline = makePipeline(
+      'clear_liquid_fire_contact_consumer_stats',
+      'kaminos clear liquid-fire contact consumer stats',
+    );
+    liquidFireContactScatterPipeline = makePipeline(
+      'scatter_liquid_fire_contacts',
+      'kaminos scatter sparse liquid contacts into Pyro near field',
+    );
+    liquidFireContactApplyPipeline = makePipeline(
+      'apply_liquid_fire_contact_transfer',
+      'kaminos apply local liquid quench and vapor transfer',
+    );
+    liquidFireContactBindGroups = fluidBuffers.map((fluidBuffer, index) => device.createBindGroup({
+      label: `kaminos liquid-fire contact consumer bind group ${gridSize}^3 ${index}`,
+      layout: liquidFireContactBindGroupLayout,
+      entries: [
+        { binding: 0, resource: { buffer: descriptor.headerBuffer } },
+        { binding: 1, resource: { buffer: descriptor.recordsBuffer } },
+        { binding: 2, resource: { buffer: liquidFireContactAccumulationBuffer } },
+        { binding: 3, resource: { buffer: liquidFireContactStatsBuffer } },
+        { binding: 4, resource: { buffer: liquidFireContactParamsBuffer } },
+        { binding: 5, resource: { buffer: fluidBuffer } },
+      ],
+    }));
+    state.liquidFireContactStatus = 'bound-gpu-sparse-source';
+    state.liquidFireContactSourceGeneration = descriptor.allocationGeneration;
+    state.liquidFireContactSourceEpoch = descriptor.epoch;
+    state.liquidFireContactSourceFrameHash = descriptor.sourceFrameHash;
+  }
+
+  function encodeLiquidFireContactTransfer(encoder) {
+    if (
+      !liquidFireContactDescriptor ||
+      !liquidFireContactClearPipeline ||
+      !liquidFireContactScatterPipeline ||
+      !liquidFireContactApplyPipeline ||
+      liquidFireContactBindGroups.length !== 2
+    ) return;
+    const bindGroup = liquidFireContactBindGroups[currentFluid];
+    const pass = encoder.beginComputePass({ label: 'kaminos liquid-fire contact transfer pass' });
+    pass.setBindGroup(0, bindGroup);
+    pass.setPipeline(liquidFireContactClearPipeline);
+    pass.dispatchWorkgroups(1);
+    pass.setPipeline(liquidFireContactScatterPipeline);
+    pass.dispatchWorkgroups(Math.ceil(liquidFireContactDescriptor.capacity / 64));
+    pass.setPipeline(liquidFireContactApplyPipeline);
+    pass.dispatchWorkgroups(Math.ceil(gridCellCount(gridSize) / 64));
+    pass.end();
+    state.liquidFireContactDispatchCount += 1;
+    state.liquidFireContactStatus = 'gpu-dispatched-awaiting-header-gate';
+  }
+
+  async function sampleLiquidFireContactConsumer() {
+    if (!device || !liquidFireContactStatsBuffer) {
+      return { ok: false, status: state.liquidFireContactStatus, reason: 'liquid-fire-contact-consumer-unavailable' };
+    }
+    const readback = device.createBuffer({
+      label: 'kaminos liquid-fire contact consumer stats readback',
+      size: LIQUID_FIRE_CONTACT_STATS_WORDS * 4,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos liquid-fire contact consumer witness readback' });
+    encoder.copyBufferToBuffer(liquidFireContactStatsBuffer, 0, readback, 0, LIQUID_FIRE_CONTACT_STATS_WORDS * 4);
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const words = new Uint32Array(readback.getMappedRange()).slice();
+    readback.unmap();
+    readback.destroy();
+    const statusLabels = ['unset', 'applied', 'invalid-source-header', 'stale-source-tick'];
+    return {
+      ok: words[1] === 1,
+      schema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
+      accumulationLayout: LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT,
+      lastConsumedTick: words[0],
+      statusCode: words[1],
+      status: statusLabels[words[1]] || `unknown-${words[1]}`,
+      acceptedContacts: words[2],
+      rejectedContacts: words[3],
+      touchedCells: words[4],
+      removedHeat: words[5] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
+      removedFuel: words[6] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
+      removedFlame: words[7] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
+      addedVapor: words[8] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
+      sourceGeneration: words[9],
+      sourceEpoch: words[10],
+      sourceFrameHash: words[11],
+      sourceFrameId: liquidFireContactDescriptor?.sourceFrameId || null,
+      receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
+      receiverScale: [1 / 24, 1 / 7, 1 / 24],
+      receiverOffset: [0.66, 0.34, 0.5],
+      dispatchCount: state.liquidFireContactDispatchCount,
+    };
+  }
+
   function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
@@ -5711,7 +5916,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
+    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize, TRANSPARENT_CANVAS: transparentCanvas ? 1 : 0 };
     const computePipelineConstants = { GRID: gridSize };
     const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
     const makePipeline = (targetFormat, label) => device.createRenderPipeline({
@@ -5849,6 +6054,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ],
       }),
     ];
+    rebuildLiquidFireContactConsumer();
     currentFluid = 0;
     currentFront = 0;
     state.simStepCount = 0;
@@ -5889,24 +6095,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   async function ensureGpu() {
-    if (device) return;
+    if (gpuInitialized) return;
     if (!navigator.gpu) {
       throw new Error('WebGPU unavailable');
     }
-    adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-    if (!adapter) throw new Error('WebGPU adapter unavailable');
-    const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
-    const requiredLimits = {};
-    if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
-      requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+    if (configuredSharedGpuContext?.device) {
+      device = configuredSharedGpuContext.device;
+      adapter = configuredSharedGpuContext.adapter || null;
+      if (configuredSharedGpuContext.queue && configuredSharedGpuContext.queue !== device.queue) {
+        throw new Error('Shared Pyro GPU context queue does not belong to the supplied GPUDevice');
+      }
+    } else {
+      adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (!adapter) throw new Error('WebGPU adapter unavailable');
+      const maxRequestedFluidBufferBytes = fluidBufferBytes(Math.max(...SUPPORTED_GRID_SIZES));
+      const requiredLimits = {};
+      if ((adapter.limits?.maxStorageBufferBindingSize ?? 0) >= maxRequestedFluidBufferBytes) {
+        requiredLimits.maxStorageBufferBindingSize = maxRequestedFluidBufferBytes;
+      }
+      device = await adapter.requestDevice(Object.keys(requiredLimits).length ? { requiredLimits } : undefined);
     }
-    device = await adapter.requestDevice(Object.keys(requiredLimits).length ? { requiredLimits } : undefined);
     context = canvas.getContext('webgpu');
     format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({
       device,
       format,
-      alphaMode: 'opaque',
+      alphaMode: transparentCanvas ? 'premultiplied' : 'opaque',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
     device.addEventListener('uncapturederror', event => {
@@ -6128,7 +6342,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (pipelineError) {
       throw new Error(`fluid pipeline validation: ${pipelineError.message || String(pipelineError)}`);
     }
-    state.backend = `WebGPU:${adapter.info?.vendor || 'adapter'}`;
+    gpuInitialized = true;
+    state.backend = `WebGPU:${adapter?.info?.vendor || (configuredSharedGpuContext?.device ? 'shared-device' : 'adapter')}`;
     emitStatus({ phase: 'gpu-ready' });
   }
 
@@ -7155,7 +7370,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       label,
       colorAttachments: [{
         view,
-        clearValue: { r: 0.004, g: 0.005, b: 0.006, a: 1 },
+        clearValue: transparentCanvas
+          ? { r: 0, g: 0, b: 0, a: 0 }
+          : { r: 0.004, g: 0.005, b: 0.006, a: 1 },
         loadOp: 'clear',
         storeOp: 'store',
       }],
@@ -7196,6 +7413,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.lookFreezeFrame = null;
         state.lookFreezeSkippedFrames = 0;
         encodeSim(encoder);
+        encodeLiquidFireContactTransfer(encoder);
         encodeMajorant(encoder);
       }
       encodeBoundarySidecar(encoder);
@@ -8390,6 +8608,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const sampleLookFreeze = normalizeLookFreeze(controlsSnapshot.lookFreeze) && lookFreezeCanPin(state) ? 1 : 0;
     if (!sampleLookFreeze) {
       encodeSim(encoder);
+      encodeLiquidFireContactTransfer(encoder);
       encodeMajorant(encoder, { force: true });
     } else {
       state.majorantBuiltThisFrame = false;
@@ -8961,6 +9180,41 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       publishVolumePrimitiveState();
       if (device) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
     },
+    setLiquidFireContactDescriptor(descriptor) {
+      if (!descriptor?.device) throw new Error('Liquid fire contact descriptor has no GPUDevice');
+      if (gpuInitialized && device !== descriptor.device) {
+        throw new Error('Liquid fire contact descriptor must use the same GPUDevice as the active Pyro simulator');
+      }
+      if (configuredSharedGpuContext?.device && configuredSharedGpuContext.device !== descriptor.device) {
+        throw new Error('Liquid fire contact descriptor conflicts with the configured shared GPUDevice');
+      }
+      configuredSharedGpuContext = {
+        device: descriptor.device,
+        queue: descriptor.queue,
+        adapter: configuredSharedGpuContext?.adapter || null,
+      };
+      liquidFireContactDescriptor = validateLiquidFireContactSourceDescriptor(descriptor, {
+        device: descriptor.device,
+        expectedGeneration: descriptor.allocationGeneration,
+        expectedEpoch: descriptor.epoch,
+      });
+      state.liquidFireContactStatus = gpuInitialized ? 'binding-gpu-sparse-source' : 'bound-awaiting-pyro-initialization';
+      state.liquidFireContactSourceGeneration = descriptor.allocationGeneration;
+      state.liquidFireContactSourceEpoch = descriptor.epoch;
+      state.liquidFireContactSourceFrameHash = descriptor.sourceFrameHash;
+      if (gpuInitialized) rebuildLiquidFireContactConsumer();
+      emitStatus({ phase: 'liquid-fire-contact-source-bound' });
+      return {
+        schema: LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA,
+        status: state.liquidFireContactStatus,
+        sameDevice: !gpuInitialized || device === descriptor.device,
+        sourceGeneration: descriptor.allocationGeneration,
+        sourceEpoch: descriptor.epoch,
+        sourceFrameHash: descriptor.sourceFrameHash,
+        sourceFrameId: descriptor.sourceFrameId,
+        receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
+      };
+    },
     setExternalEmitters(payload = {}) {
       externalEmitterState = normalizeExternalEmitters(payload);
       updateExternalEmitterDebug();
@@ -9056,10 +9310,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleLiquidFireContactConsumer,
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();
       externalEmitterBuffer?.destroy();
+      destroyLiquidFireContactConsumer();
       destroyTemporalHistory();
       destroyFluidState();
       destroyMajorantState();

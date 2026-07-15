@@ -29,6 +29,7 @@ let canvasActivity = null;
 let cadenceProbe = null;
 let automaticDiagnosticsRequestCount = null;
 let explicitDiagnosticsReceipt = null;
+let compositionWitness = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -57,6 +58,7 @@ function writeReport(report = {}) {
     cadenceProbe,
     automaticDiagnosticsRequestCount,
     explicitDiagnosticsReceipt,
+    compositionWitness,
     canvasOut,
     output: primaryOutputWritten ? out : null,
     ...report,
@@ -228,6 +230,44 @@ async function main() {
       const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
       return typeof read === 'function' ? read() : null;
     })()`);
+
+    if (new URL(url).searchParams.get('finger_fluid_pyro_composition') === '1') {
+      phase = 'read_liquid_fire_composition';
+      const compositionDeadline = Date.now() + 5000;
+      while (Date.now() < compositionDeadline) {
+        compositionWitness = await evaluate(ws, `(async () => {
+          if (typeof window.kaminosFingerFluidPyroCompositionSample !== 'function') {
+            throw new Error('missing liquid/fire composition witness hook');
+          }
+          return window.kaminosFingerFluidPyroCompositionSample();
+        })()`);
+        if (
+          compositionWitness?.sameDevice === true &&
+          compositionWitness?.consumerWitness?.ok === true &&
+          compositionWitness.consumerWitness.acceptedContacts > 0 &&
+          compositionWitness.consumerWitness.touchedCells > 0 &&
+          compositionWitness.consumerWitness.removedHeat > 0 &&
+          compositionWitness.consumerWitness.removedFlame > 0 &&
+          compositionWitness.consumerWitness.addedVapor > 0
+        ) break;
+        await delay(100);
+      }
+      if (compositionWitness?.effectiveRoute !== 'same-device-liquid-contact-pyro-near-field-v0') {
+        throw new Error(`liquid/fire effective route mismatch: ${compositionWitness?.effectiveRoute}`);
+      }
+      if (compositionWitness?.sameDevice !== true) throw new Error('liquid/fire composition did not preserve the same GPUDevice');
+      if (compositionWitness?.source !== 'kaminos.liquid-fire-contact-descriptor.v1') throw new Error(`liquid/fire composition source schema mismatch: ${compositionWitness?.source}`);
+      if (compositionWitness?.sourceFrameId !== 'kaminos/finger-fluid-bench:gpu-simulation-frame') throw new Error(`liquid/fire composition source frame mismatch: ${compositionWitness?.sourceFrameId}`);
+      if (compositionWitness?.receiverTransformId !== 'affine-liquid-world-to-pyro-near-domain-v0') throw new Error(`liquid/fire composition receiver transform mismatch: ${compositionWitness?.receiverTransformId}`);
+      if (compositionWitness?.consumerWitness?.ok !== true) {
+        throw new Error(`liquid/fire GPU consumer rejected source: ${compositionWitness?.consumerWitness?.status}`);
+      }
+      if (!(compositionWitness.consumerWitness.acceptedContacts > 0)) throw new Error('liquid/fire composition accepted no sparse contacts');
+      if (!(compositionWitness.consumerWitness.touchedCells > 0)) throw new Error('liquid/fire composition touched no Pyro cells');
+      if (!(compositionWitness.consumerWitness.removedHeat > 0)) throw new Error('liquid/fire composition removed no local heat');
+      if (!(compositionWitness.consumerWitness.removedFlame > 0)) throw new Error('liquid/fire composition removed no local flame');
+      if (!(compositionWitness.consumerWitness.addedVapor > 0)) throw new Error('liquid/fire composition added no local vapor');
+    }
 
     phase = 'read_debug_state';
     if (!lastDebugState) throw new Error('missing kaminosFingerFluidBenchDebugState');
@@ -423,14 +463,15 @@ async function main() {
     if (interfaceCarrier.contactRecordCount < 64) throw new Error(`interface carrier lacks material contact coverage: ${JSON.stringify(interfaceCarrier)}`);
     if (interfaceCarrier.minimumContactSupportAlignment < -0.001) throw new Error(`interface carrier contains a support-facing contact normal: ${JSON.stringify(interfaceCarrier)}`);
     const liquidFireContactDescriptor = lastDebugState.runtime?.liquidFireContactDescriptor;
-    if (liquidFireContactDescriptor?.schema !== 'kaminos.liquid-fire-contact-descriptor.v0') throw new Error(`liquid/fire contact descriptor schema mismatch: ${liquidFireContactDescriptor?.schema}`);
+    if (liquidFireContactDescriptor?.schema !== 'kaminos.liquid-fire-contact-descriptor.v1') throw new Error(`liquid/fire contact descriptor schema mismatch: ${liquidFireContactDescriptor?.schema}`);
     if (!liquidFireContactDescriptor.valid || !liquidFireContactDescriptor.complete) throw new Error(`liquid/fire contact descriptor was not sealed: ${JSON.stringify(liquidFireContactDescriptor)}`);
     if (liquidFireContactDescriptor.capacity !== lastDebugState.runtime.particleCount || liquidFireContactDescriptor.candidateCapMode !== 'uncapped_exact_particle_population_capacity') throw new Error(`liquid/fire contact capacity is capped or misidentified: ${JSON.stringify(liquidFireContactDescriptor)}`);
     if (liquidFireContactDescriptor.overflowCount !== 0) throw new Error(`liquid/fire contact descriptor overflowed: ${JSON.stringify(liquidFireContactDescriptor)}`);
-    if (liquidFireContactDescriptor.sourceCount !== liquidFireContactDescriptor.transformedCount + liquidFireContactDescriptor.rejectedCount) throw new Error(`liquid/fire contact accounting mismatch: ${JSON.stringify(liquidFireContactDescriptor)}`);
+    if (liquidFireContactDescriptor.malformedCount !== 0) throw new Error(`liquid/fire contact descriptor contains malformed source records: ${JSON.stringify(liquidFireContactDescriptor)}`);
+    if (liquidFireContactDescriptor.sourceCount !== liquidFireContactDescriptor.packedCount + liquidFireContactDescriptor.rejectedCount) throw new Error(`liquid/fire contact accounting mismatch: ${JSON.stringify(liquidFireContactDescriptor)}`);
     if (liquidFireContactDescriptor.sourceCount !== interfaceCarrier.activeCount) throw new Error(`public contact source count does not reconcile with dense interface carrier: ${JSON.stringify({ liquidFireContactDescriptor, interfaceCarrier })}`);
     if (liquidFireContactDescriptor.contactCount !== interfaceCarrier.contactRecordCount) throw new Error(`public contact count does not reconcile with dense contact census: ${JSON.stringify({ liquidFireContactDescriptor, interfaceCarrier })}`);
-    if (liquidFireContactDescriptor.transformedCount !== liquidFireContactDescriptor.contactCount) throw new Error(`identity transform rejected real liquid contacts: ${JSON.stringify(liquidFireContactDescriptor)}`);
+    if (liquidFireContactDescriptor.packedCount !== liquidFireContactDescriptor.contactCount) throw new Error(`source-space packing rejected real liquid contacts: ${JSON.stringify(liquidFireContactDescriptor)}`);
     if (liquidFireContactDescriptor.writeTick > liquidFireContactDescriptor.diagnosticsStepCount || liquidFireContactDescriptor.writeTick < liquidFireContactDescriptor.diagnosticsStepCount - 1) throw new Error(`liquid/fire contact write tick is stale or impossible: ${JSON.stringify(liquidFireContactDescriptor)}`);
     if (!Array.isArray(interfaceCarrier.sampleRecords) || interfaceCarrier.sampleRecords.length < 4) throw new Error(`interface carrier sampleRecords missing: ${JSON.stringify(interfaceCarrier)}`);
     const sampleIds = new Set();
