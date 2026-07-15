@@ -7,11 +7,12 @@ import { join } from 'node:path';
 
 const witness = readFileSync(new URL('../tools/sam-semantic-mask-workbench-witness.mjs', import.meta.url), 'utf8');
 
-for (const argument of ['url', 'out', 'report', 'debug-port', 'timeout-ms', 'negative-control', 'negative-out']) {
+for (const argument of ['url', 'out', 'report', 'debug-port', 'timeout-ms', 'prompt', 'expect-empty', 'negative-control', 'negative-out']) {
   assert.match(witness, new RegExp(`['"]${argument}['"]`), `witness must expose --${argument}`);
 }
 assert.match(witness, /api\/sam3-workbench-route/, 'witness must collect server route registration evidence');
 assert.match(witness, /run-segmentation/, 'witness must activate the operator control rather than calling a hidden test hook');
+assert.match(witness, /prompt-input[^]*dispatchEvent/, 'caller prompt must be written through the visible workbench input');
 assert.match(witness, /workbench-status/, 'witness must observe the human-facing status surface');
 assert.match(witness, /button\s*&&\s*!button\.disabled/, 'witness initialization must tolerate the page before its controls exist');
 assert.match(witness, /source-canvas/, 'witness must inspect source canvas pixels');
@@ -20,6 +21,8 @@ assert.match(witness, /mask-canvas/, 'witness must inspect raw mask canvas pixel
 assert.match(witness, /Page\.captureScreenshot/, 'witness must preserve the visible browser output');
 assert.match(witness, /await settleForVisualCapture\(\)/, 'witness must allow the browser compositor to settle before visual capture');
 assert.match(witness, /actual-webgpu-readback/, 'witness must reject non-GPU output authority');
+assert.match(witness, /output\.promptText\s*!==\s*values\.prompt/, 'witness must reject runtime prompt identity drift');
+assert.match(witness, /values\[['"]expect-empty['"]\][^]*selectedCandidateCount\s*!==\s*0[^]*foregroundPixelCount\s*!==\s*0/, 'expected-empty witness must reject any retained candidate or foreground pixels');
 assert.match(witness, /run-negative-control/, 'optional negative witness must activate the visible operator control');
 assert.match(witness, /negativeControl/, 'report must preserve negative-control output separately from the positive witness');
 assert.match(witness, /Different from positive|Empty as expected/, 'negative control must fail unless it differs from the positive mask or selects nothing');

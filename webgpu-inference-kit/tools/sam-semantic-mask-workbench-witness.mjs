@@ -11,6 +11,8 @@ const { values } = parseArgs({
     'report': { type: 'string', default: '/tmp/sam3-semantic-mask-workbench.json' },
     'debug-port': { type: 'string', default: '9596' },
     'timeout-ms': { type: 'string' },
+    'prompt': { type: 'string' },
+    'expect-empty': { type: 'boolean', default: false },
     'negative-control': { type: 'boolean', default: false },
     'negative-out': { type: 'string' },
     'chrome': { type: 'string', default: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
@@ -35,6 +37,8 @@ const report = {
   schema: 'kaminos.sam3-semantic-mask-workbench-witness.v0',
   status: 'running',
   requestedUrl: requestedUrl.href,
+  requestedPrompt: values.prompt ?? null,
+  expectEmpty: values['expect-empty'],
   effectiveUrl: null,
   routeRegistration: null,
   workbench: null,
@@ -149,6 +153,7 @@ function canvasInspectionExpression() {
         verificationState: output.verificationState,
         effectiveRouteId: output.effectiveRouteId,
         receiptChain: output.receiptChain,
+        promptText: output.promptText,
         selectedCandidateCount: output.selectedCandidateCount,
         selectedMaskIndex: output.selectedMaskIndex,
         selectedScore: output.selectedScore,
@@ -213,6 +218,15 @@ try {
   await cdp.request('Runtime.enable');
   await waitUntil(async () => evaluate(cdp, `(() => { const button = document.getElementById('run-segmentation'); return document.readyState === 'complete' && button && !button.disabled; })()`), 'workbench initialization');
   report.effectiveUrl = await evaluate(cdp, 'window.location.href');
+  if (values.prompt !== undefined) {
+    const visiblePrompt = await evaluate(cdp, `(() => {
+      const input = document.getElementById('prompt-input');
+      input.value = ${JSON.stringify(values.prompt)};
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return input.value;
+    })()`);
+    if (visiblePrompt !== values.prompt) throw new Error('caller prompt did not reach the visible workbench input');
+  }
 
   report.failurePhase = 'workbench-run';
   const clicked = await evaluate(cdp, `(() => { const button = document.getElementById('run-segmentation'); button.click(); return true; })()`);
@@ -233,6 +247,10 @@ try {
   const { output, canvases } = report.visualEvidence;
   if (output?.outputAuthority !== 'actual-webgpu-readback') throw new Error(`output authority is ${output?.outputAuthority || 'missing'}`);
   if (output.verificationState !== 'not-attached') throw new Error(`dynamic verification state is ${output.verificationState || 'missing'}`);
+  if (values.prompt !== undefined && output.promptText !== values.prompt) throw new Error(`runtime prompt identity drift: ${output.promptText || 'missing'}`);
+  if (values['expect-empty'] && (output.selectedCandidateCount !== 0 || output.foregroundPixelCount !== 0)) {
+    throw new Error(`expected empty output retained ${output.selectedCandidateCount} candidates and ${output.foregroundPixelCount} foreground pixels`);
+  }
   if (!Array.isArray(output.receiptChain) || output.receiptChain.length < 10) throw new Error('composition receipt chain is incomplete');
   if (canvases.source.nonTransparentPixels === 0 || canvases.overlay.nonTransparentPixels === 0 || canvases.mask.nonTransparentPixels === 0) {
     throw new Error('one or more visible canvases are blank');
