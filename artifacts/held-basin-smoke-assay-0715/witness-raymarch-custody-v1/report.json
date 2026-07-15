@@ -1,0 +1,370 @@
+{
+  "schema": "kaminos.held-smoke-assay-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "startedAt": "2026-07-15T14:38:14.950Z",
+  "completedAt": "2026-07-15T14:38:37.305Z",
+  "requestedUrl": "http://127.0.0.1:18715/held-basin-smoke-assay.html?comparison=competence&assay_manifest=./artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json&assay_manifest_sha256=3f698a27a65f293e531c8c63e85667289a7470c787780f23ebe6cc046b138e40&manifest_sha256=553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+  "requestedRoute": "held-smoke-u-b-d-competence-cockpit-v0",
+  "effectiveRoute": "held-smoke-u-b-d-competence-cockpit-v0",
+  "source": {
+    "comparisonAuthority": "dense-competence-independent-viewports-v0",
+    "mountRequested": "./artifacts/operator-live-basin-0715/viewer-manifest.json",
+    "mountEffective": "http://127.0.0.1:18715/artifacts/operator-live-basin-0715/viewer-manifest.json",
+    "mountRegistered": true,
+    "manifestSha256Requested": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+    "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+    "assayManifestRequested": "./artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+    "assayManifestEffective": "http://127.0.0.1:18715/artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+    "assayManifestSha256Requested": "3f698a27a65f293e531c8c63e85667289a7470c787780f23ebe6cc046b138e40",
+    "assayManifestSha256Effective": "3f698a27a65f293e531c8c63e85667289a7470c787780f23ebe6cc046b138e40",
+    "cameraIdentity": "sha256:24600dbb7f6b677ea45f82e78f198701cdf0dfde586a2e8d15a60c37030d6994",
+    "fluidSha256Requested": "9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20"
+  },
+  "children": {
+    "a": {
+      "status": "running",
+      "requestedRoute": "webgpu-held-smoke-assay-v0",
+      "effectiveRoute": "webgpu-held-smoke-assay-v0",
+      "requestedProductIndex": 0,
+      "effectiveProductIndex": 0,
+      "frameCount": 211,
+      "error": null
+    },
+    "b": {
+      "status": "running",
+      "requestedRoute": "webgpu-held-smoke-assay-v0",
+      "effectiveRoute": "webgpu-held-smoke-assay-v0",
+      "requestedProductIndex": 1,
+      "effectiveProductIndex": 1,
+      "frameCount": 211,
+      "error": null
+    },
+    "d": {
+      "status": "running",
+      "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "compositionRequested": "smoke-raymarch-only-v0",
+      "compositionEffective": "smoke-raymarch-only-v0",
+      "comparisonProfileRequested": "dense-splat-competence-v0",
+      "comparisonProfileEffective": "dense-splat-competence-v0",
+      "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+      "fluidChannelStatistics": {
+        "smokeDensity": {
+          "channelIndex": 4,
+          "sampleCount": 4096000,
+          "nonZeroCount": 3900122,
+          "min": 0,
+          "max": 1.8062666654586792,
+          "sum": 1858452.360901263,
+          "mean": 0.45372372092315993
+        }
+      },
+      "renderBindingIdentity": {
+        "identity": "checksum-verified-imported-fluid-raymarch-binding-v0",
+        "fluidReadIndex": 0,
+        "fluidSha256": "9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20",
+        "importSessionId": "full-field-import-mrm6qgb0-am2a8qgw",
+        "bindGroupAuthority": "bindGroups[currentFluid]-binding-1-v0"
+      },
+      "renderTargetPixelEvidence": {
+        "width": 306,
+        "height": 1742,
+        "pixelCount": 533052,
+        "nonBackgroundPixelCount": 172017,
+        "backgroundRgba": [
+          2,
+          1,
+          1,
+          255
+        ],
+        "luminanceMean": 29.677472845451405,
+        "luminanceStdDev": 42.563436086074404,
+        "luminanceRange": 104.83160000000001
+      },
+      "featureCaptureSmokeAuthority": {
+        "sampleCount": 533052,
+        "nonZeroCount": 171651,
+        "max": 135,
+        "sum": 15561516,
+        "mean": 29.193241935120778
+      },
+      "error": null
+    }
+  },
+  "browser": {
+    "identity": "kaminos-held-smoke-assay-single-cdp-browser-v0",
+    "mode": "launched-owned",
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "chromePort": 19432,
+    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-held-smoke-assay-chrome-d3GQ40",
+    "keepBrowserOpen": false,
+    "windowSize": "1600,1000"
+  },
+  "captureConfig": {
+    "settleMs": 2200,
+    "loadTimeoutMs": 240000,
+    "noHiddenFrameCap": true
+  },
+  "runtime": {
+    "initial": {
+      "schema": "kaminos.held-smoke-assay-cockpit.v0",
+      "status": "running",
+      "comparisonMode": "competence",
+      "experimentIdentity": "dense-splat-competence-floor-v0",
+      "failurePhase": null,
+      "error": null,
+      "requested": {
+        "a": {
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "manifest": "./artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+          "productIndex": 0
+        },
+        "b": {
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "manifest": "./artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+          "productIndex": 1
+        },
+        "d": {
+          "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+          "composition": "smoke-raymarch-only-v0",
+          "comparisonProfile": "dense-splat-competence-v0"
+        }
+      },
+      "source": {
+        "comparisonAuthority": "dense-competence-independent-viewports-v0",
+        "mountRequested": "./artifacts/operator-live-basin-0715/viewer-manifest.json",
+        "mountEffective": "http://127.0.0.1:18715/artifacts/operator-live-basin-0715/viewer-manifest.json",
+        "mountRegistered": true,
+        "manifestSha256Requested": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+        "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+        "assayManifestRequested": "./artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+        "assayManifestEffective": "http://127.0.0.1:18715/artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+        "assayManifestSha256Requested": "3f698a27a65f293e531c8c63e85667289a7470c787780f23ebe6cc046b138e40",
+        "assayManifestSha256Effective": "3f698a27a65f293e531c8c63e85667289a7470c787780f23ebe6cc046b138e40",
+        "cameraIdentity": "sha256:24600dbb7f6b677ea45f82e78f198701cdf0dfde586a2e8d15a60c37030d6994",
+        "fluidSha256Requested": "9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20"
+      },
+      "children": {
+        "a": {
+          "status": "running",
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "effectiveRoute": "webgpu-held-smoke-assay-v0",
+          "requestedProductIndex": 0,
+          "effectiveProductIndex": 0,
+          "frameCount": 146,
+          "error": null
+        },
+        "b": {
+          "status": "running",
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "effectiveRoute": "webgpu-held-smoke-assay-v0",
+          "requestedProductIndex": 1,
+          "effectiveProductIndex": 1,
+          "frameCount": 146,
+          "error": null
+        },
+        "d": {
+          "status": "running",
+          "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+          "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+          "compositionRequested": "smoke-raymarch-only-v0",
+          "compositionEffective": "smoke-raymarch-only-v0",
+          "comparisonProfileRequested": "dense-splat-competence-v0",
+          "comparisonProfileEffective": "dense-splat-competence-v0",
+          "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+          "fluidChannelStatistics": {
+            "smokeDensity": {
+              "channelIndex": 4,
+              "sampleCount": 4096000,
+              "nonZeroCount": 3900122,
+              "min": 0,
+              "max": 1.8062666654586792,
+              "sum": 1858452.360901263,
+              "mean": 0.45372372092315993
+            }
+          },
+          "renderBindingIdentity": {
+            "identity": "checksum-verified-imported-fluid-raymarch-binding-v0",
+            "fluidReadIndex": 0,
+            "fluidSha256": "9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20",
+            "importSessionId": "full-field-import-mrm6qgb0-am2a8qgw",
+            "bindGroupAuthority": "bindGroups[currentFluid]-binding-1-v0"
+          },
+          "renderTargetPixelEvidence": {
+            "width": 306,
+            "height": 1742,
+            "pixelCount": 533052,
+            "nonBackgroundPixelCount": 172017,
+            "backgroundRgba": [
+              2,
+              1,
+              1,
+              255
+            ],
+            "luminanceMean": 29.677472845451405,
+            "luminanceStdDev": 42.563436086074404,
+            "luminanceRange": 104.83160000000001
+          },
+          "featureCaptureSmokeAuthority": {
+            "sampleCount": 533052,
+            "nonZeroCount": 171651,
+            "max": 135,
+            "sum": 15561516,
+            "mean": 29.193241935120778
+          },
+          "error": null
+        }
+      },
+      "lastObservedAt": "2026-07-15T14:38:34.471Z"
+    },
+    "final": {
+      "schema": "kaminos.held-smoke-assay-cockpit.v0",
+      "status": "running",
+      "comparisonMode": "competence",
+      "experimentIdentity": "dense-splat-competence-floor-v0",
+      "failurePhase": null,
+      "error": null,
+      "requested": {
+        "a": {
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "manifest": "./artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+          "productIndex": 0
+        },
+        "b": {
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "manifest": "./artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+          "productIndex": 1
+        },
+        "d": {
+          "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+          "composition": "smoke-raymarch-only-v0",
+          "comparisonProfile": "dense-splat-competence-v0"
+        }
+      },
+      "source": {
+        "comparisonAuthority": "dense-competence-independent-viewports-v0",
+        "mountRequested": "./artifacts/operator-live-basin-0715/viewer-manifest.json",
+        "mountEffective": "http://127.0.0.1:18715/artifacts/operator-live-basin-0715/viewer-manifest.json",
+        "mountRegistered": true,
+        "manifestSha256Requested": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+        "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+        "assayManifestRequested": "./artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+        "assayManifestEffective": "http://127.0.0.1:18715/artifacts/held-basin-smoke-assay-0715/held-smoke-competence-source.json",
+        "assayManifestSha256Requested": "3f698a27a65f293e531c8c63e85667289a7470c787780f23ebe6cc046b138e40",
+        "assayManifestSha256Effective": "3f698a27a65f293e531c8c63e85667289a7470c787780f23ebe6cc046b138e40",
+        "cameraIdentity": "sha256:24600dbb7f6b677ea45f82e78f198701cdf0dfde586a2e8d15a60c37030d6994",
+        "fluidSha256Requested": "9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20"
+      },
+      "children": {
+        "a": {
+          "status": "running",
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "effectiveRoute": "webgpu-held-smoke-assay-v0",
+          "requestedProductIndex": 0,
+          "effectiveProductIndex": 0,
+          "frameCount": 211,
+          "error": null
+        },
+        "b": {
+          "status": "running",
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "effectiveRoute": "webgpu-held-smoke-assay-v0",
+          "requestedProductIndex": 1,
+          "effectiveProductIndex": 1,
+          "frameCount": 211,
+          "error": null
+        },
+        "d": {
+          "status": "running",
+          "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+          "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+          "compositionRequested": "smoke-raymarch-only-v0",
+          "compositionEffective": "smoke-raymarch-only-v0",
+          "comparisonProfileRequested": "dense-splat-competence-v0",
+          "comparisonProfileEffective": "dense-splat-competence-v0",
+          "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+          "fluidChannelStatistics": {
+            "smokeDensity": {
+              "channelIndex": 4,
+              "sampleCount": 4096000,
+              "nonZeroCount": 3900122,
+              "min": 0,
+              "max": 1.8062666654586792,
+              "sum": 1858452.360901263,
+              "mean": 0.45372372092315993
+            }
+          },
+          "renderBindingIdentity": {
+            "identity": "checksum-verified-imported-fluid-raymarch-binding-v0",
+            "fluidReadIndex": 0,
+            "fluidSha256": "9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20",
+            "importSessionId": "full-field-import-mrm6qgb0-am2a8qgw",
+            "bindGroupAuthority": "bindGroups[currentFluid]-binding-1-v0"
+          },
+          "renderTargetPixelEvidence": {
+            "width": 306,
+            "height": 1742,
+            "pixelCount": 533052,
+            "nonBackgroundPixelCount": 172017,
+            "backgroundRgba": [
+              2,
+              1,
+              1,
+              255
+            ],
+            "luminanceMean": 29.677472845451405,
+            "luminanceStdDev": 42.563436086074404,
+            "luminanceRange": 104.83160000000001
+          },
+          "featureCaptureSmokeAuthority": {
+            "sampleCount": 533052,
+            "nonZeroCount": 171651,
+            "max": 135,
+            "sum": 15561516,
+            "mean": 29.193241935120778
+          },
+          "error": null
+        }
+      },
+      "lastObservedAt": "2026-07-15T14:38:36.671Z"
+    },
+    "runtimeExceptionCount": 0
+  },
+  "frame": {
+    "path": "held-smoke-competence.png",
+    "byteLength": 482776,
+    "sha256": "5abf7c7df7161aa3ca4c151c74ccf707671f57e7a64a656f6ae635a0c7776e23",
+    "width": 3200,
+    "height": 1826,
+    "luminanceMean": 113.86793887169426,
+    "luminanceStdDev": 73.02287735743457,
+    "nonUniformPixelCount": 5590669,
+    "panelEvidence": {
+      "dSmokeProbe": {
+        "bounds": [
+          2304,
+          493,
+          3072,
+          767
+        ],
+        "pixelCount": 210432,
+        "luminanceMean": 22.75142662427024,
+        "luminanceStdDev": 37.27117455250438,
+        "edgeMean": 0.2266804733727972
+      }
+    }
+  },
+  "falseClosureChecks": {
+    "rejectsWrongOrFallbackChildRoute": true,
+    "rejectsUnregisteredOrSubstitutedMount": true,
+    "rejectsWrongEffectiveSourceDigest": true,
+    "rejectsPartialChildLoading": true,
+    "rejectsMissingOrBlankOutput": true,
+    "rejectsChecksumValidButSmokeEmptyImport": true,
+    "rejectsImportedFluidBindingDrift": true,
+    "rejectsSceneOnlyPixelsWithoutShaderSmokeAuthority": true,
+    "preservesFailurePhaseBeforePrimaryOutput": true
+  },
+  "claimBoundary": "dense-splat-competence-floor-v0: static same-source U dense lift versus B learned selector and D raymarch. This tests the splat representation ceiling before sparsification; it does not prove neural temporal smoke decode."
+}

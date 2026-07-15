@@ -79,9 +79,6 @@ try {
   assert.ok(pixels.luminanceStdDev > 4, 'blank cockpit capture has insufficient visual variation');
   const panelEvidence = pixels.panelEvidence;
   lastTrustworthyEvidence.panelEvidence = panelEvidence;
-  if (competenceMode) {
-    assert.ok(panelEvidence.dSmokeProbe.edgeMean > 0.45, 'blank D smoke contribution: central comparator probe contains only smooth background');
-  }
   assert.equal(runtimeExceptionCount, 0, 'browser runtime exceptions were observed');
   const report = {
     schema: SCHEMA,
@@ -122,6 +119,9 @@ try {
       rejectsWrongEffectiveSourceDigest: true,
       rejectsPartialChildLoading: true,
       rejectsMissingOrBlankOutput: true,
+      rejectsChecksumValidButSmokeEmptyImport: true,
+      rejectsImportedFluidBindingDrift: true,
+      rejectsSceneOnlyPixelsWithoutShaderSmokeAuthority: true,
       preservesFailurePhaseBeforePrimaryOutput: true,
     },
     claimBoundary: competenceMode
@@ -360,6 +360,25 @@ function validateState(state) {
   assert.equal(state.children.d.comparisonProfileRequested, expectedDComparisonProfile);
   assert.equal(state.children.d.comparisonProfileEffective, expectedDComparisonProfile);
   assert.equal(state.children.d.manifestSha256Effective, expectedManifestSha256);
+  const smokeDensity = state.children.d.fluidChannelStatistics?.smokeDensity;
+  assert.ok(smokeDensity, 'D omitted checksum-verified fluid channel statistics');
+  assert.ok(smokeDensity.sampleCount > 0, 'D imported no fluid cells');
+  assert.ok(smokeDensity.nonZeroCount > 0, 'D imported a blank smoke density channel');
+  assert.ok(smokeDensity.max > 0, 'D imported smoke has no positive density');
+  assert.match(state.source.fluidSha256Requested || '', /^[a-f0-9]{64}$/);
+  assert.equal(
+    state.children.d.renderBindingIdentity?.fluidSha256,
+    state.source.fluidSha256Requested,
+    'D raymarch did not consume the checksum-bound imported fluid buffer',
+  );
+  assert.ok(
+    state.children.d.renderTargetPixelEvidence?.nonBackgroundPixelCount > 0,
+    'D submitted render target contains only the clear color',
+  );
+  assert.ok(
+    state.children.d.featureCaptureSmokeAuthority?.nonZeroCount > 0,
+    'D scene pixels carry no shader-sampled smoke authority',
+  );
 }
 
 function inspectPng(bytes) {

@@ -136,6 +136,10 @@
       splatEncoded: null,
       splatApplied: null,
       residualApplied: null,
+      fluidChannelStatistics: null,
+      renderBindingIdentity: null,
+      renderTargetPixelEvidence: null,
+      featureCaptureSmokeAuthority: null,
     };
 
     window.__kaminosHeldFieldViewer = {
@@ -307,6 +311,10 @@
       if (finish?.ok !== true || finish.status !== 'applied') {
         throw new Error(`field-import-finish-rejected:${JSON.stringify(finish)}`);
       }
+      const smokeDensity = finish.fluidChannelStatistics?.smokeDensity;
+      if (!smokeDensity || smokeDensity.nonZeroCount <= 0 || smokeDensity.max <= 0) {
+        throw new Error(`held-import-smoke-density-blank:${JSON.stringify(smokeDensity || null)}`);
+      }
       return { ...finish, transfers: { fluid: fluidTransfer, front: frontTransfer } };
     }
 
@@ -374,11 +382,22 @@
         },
         now: manifest.sampleNowMs,
         sameStateCaptureId: `${manifest.captureId}:${compositionRequested}`,
+        includePixelEvidence: true,
+        includeFeatureRgba: true,
       });
       const compositionEffective = receipt?.boundarySplatCompositionEffective;
       if (receipt?.ok !== true) throw new Error(`held-render-rejected:${JSON.stringify(receipt)}`);
       if (compositionEffective !== compositionRequested) {
         throw new Error(`composition-substitution:${compositionRequested}/${compositionEffective || 'missing'}`);
+      }
+      if (!receipt.renderTargetPixelEvidence || receipt.renderTargetPixelEvidence.nonBackgroundPixelCount <= 0) {
+        throw new Error(`held-render-target-blank:${JSON.stringify(receipt.renderTargetPixelEvidence || null)}`);
+      }
+      if (!receipt.featureCaptureSmokeAuthority || receipt.featureCaptureSmokeAuthority.nonZeroCount <= 0) {
+        throw new Error(`held-raymarch-smoke-authority-blank:${JSON.stringify(receipt.featureCaptureSmokeAuthority || null)}`);
+      }
+      if (receipt.renderBindingIdentity?.fluidSha256 !== importReceipt.fluidSha256) {
+        throw new Error(`held-render-fluid-binding-drift:${receipt.renderBindingIdentity?.fluidSha256 || 'missing'}/${importReceipt.fluidSha256}`);
       }
       renderReceipt = receipt;
       state.status = 'running';
@@ -399,6 +418,10 @@
       state.splatEncoded = receipt.splatEncoded;
       state.splatApplied = receipt.splatApplied;
       state.residualApplied = receipt.residualApplied;
+      state.fluidChannelStatistics = importReceipt.fluidChannelStatistics;
+      state.renderBindingIdentity = receipt.renderBindingIdentity;
+      state.renderTargetPixelEvidence = receipt.renderTargetPixelEvidence;
+      state.featureCaptureSmokeAuthority = receipt.featureCaptureSmokeAuthority;
       setStatus(
         'Checksum-verified held field',
         `${compositionEffective} | raymarch ${receipt.raymarchApplied ? receipt.raymarchFireAuthority > 0 ? 'full-fire applied' : 'smoke-only applied' : 'off'} | splats ${receipt.splatApplied ? 'fire-sheet applied' : 'off'} | step ${manifest.initialSimStepCount}`,

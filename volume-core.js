@@ -9489,6 +9489,91 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return bytes;
   }
 
+  function summarizeHeldFluidChannelStatistics(bytes) {
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength % (16 * Float32Array.BYTES_PER_ELEMENT) !== 0) {
+      throw new Error('held-fluid-statistics-layout-mismatch');
+    }
+    const values = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT);
+    let min = Infinity;
+    let max = -Infinity;
+    let sum = 0;
+    let nonZeroCount = 0;
+    let sampleCount = 0;
+    for (let index = 4; index < values.length; index += 16) {
+      const value = values[index];
+      if (!Number.isFinite(value)) throw new Error(`held-fluid-smoke-density-nonfinite:${sampleCount}`);
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+      sum += value;
+      if (Math.abs(value) > 1e-6) nonZeroCount += 1;
+      sampleCount += 1;
+    }
+    return {
+      smokeDensity: {
+        channelIndex: 4,
+        sampleCount,
+        nonZeroCount,
+        min: sampleCount ? min : 0,
+        max: sampleCount ? max : 0,
+        sum,
+        mean: sampleCount ? sum / sampleCount : 0,
+      },
+    };
+  }
+
+  function summarizeHeldRenderPixels(rgba, width, height) {
+    if (!(rgba instanceof Uint8Array) || rgba.byteLength !== width * height * 4) {
+      throw new Error('held-render-pixel-layout-mismatch');
+    }
+    const background = [rgba[0] || 0, rgba[1] || 0, rgba[2] || 0];
+    let nonBackgroundPixelCount = 0;
+    let luminanceSum = 0;
+    let luminanceSquared = 0;
+    let luminanceMin = Infinity;
+    let luminanceMax = -Infinity;
+    for (let index = 0; index < rgba.length; index += 4) {
+      const luminance = rgba[index] * 0.2126 + rgba[index + 1] * 0.7152 + rgba[index + 2] * 0.0722;
+      luminanceSum += luminance;
+      luminanceSquared += luminance * luminance;
+      luminanceMin = Math.min(luminanceMin, luminance);
+      luminanceMax = Math.max(luminanceMax, luminance);
+      if (
+        Math.abs(rgba[index] - background[0]) > 2
+        || Math.abs(rgba[index + 1] - background[1]) > 2
+        || Math.abs(rgba[index + 2] - background[2]) > 2
+      ) nonBackgroundPixelCount += 1;
+    }
+    const pixelCount = width * height;
+    const luminanceMean = luminanceSum / Math.max(1, pixelCount);
+    return {
+      width,
+      height,
+      pixelCount,
+      nonBackgroundPixelCount,
+      backgroundRgba: [...background, rgba[3] || 0],
+      luminanceMean,
+      luminanceStdDev: Math.sqrt(Math.max(0, luminanceSquared / Math.max(1, pixelCount) - luminanceMean * luminanceMean)),
+      luminanceRange: pixelCount ? luminanceMax - luminanceMin : 0,
+    };
+  }
+
+  function summarizeHeldFeatureSmokeAuthority(rgba) {
+    if (!(rgba instanceof Uint8Array) || rgba.byteLength % 4 !== 0) {
+      throw new Error('held-feature-pixel-layout-mismatch');
+    }
+    let max = 0;
+    let sum = 0;
+    let nonZeroCount = 0;
+    const sampleCount = rgba.byteLength / 4;
+    for (let index = 3; index < rgba.length; index += 4) {
+      const value = rgba[index];
+      max = Math.max(max, value);
+      sum += value;
+      if (value > 0) nonZeroCount += 1;
+    }
+    return { sampleCount, nonZeroCount, max, sum, mean: sum / Math.max(1, sampleCount) };
+  }
+
   function fullFieldImportFailure(failurePhase, reason, extra = {}) {
     const failed = {
       schema: FULL_FIELD_IMPORT_IDENTITY,
@@ -9663,6 +9748,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         actualFrontSha256,
       });
     }
+    const fluidChannelStatistics = summarizeHeldFluidChannelStatistics(upload.fluid.bytes);
     device.queue.writeBuffer(fluidBuffers[0], 0, upload.fluid.bytes);
     device.queue.writeBuffer(fluidBuffers[1], 0, upload.fluid.bytes);
     device.queue.writeBuffer(frontBuffers[0], 0, upload.front.bytes);
@@ -9707,6 +9793,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       frontByteLength: upload.front.byteLength,
       fluidChunkCount: upload.fluid.chunkCount,
       frontChunkCount: upload.front.chunkCount,
+      fluidChannelStatistics,
+      fluidReadBindingIdentity: {
+        identity: 'checksum-verified-imported-fluid-read-buffer-v0',
+        fluidReadIndex: currentFluid,
+        fluidSha256: actualFluidSha256,
+        bindGroupAuthority: 'bindGroups[currentFluid]-binding-1-v0',
+      },
       pressureState: 'zeroed-before-first-receiver-step',
       pingPongState: 'both-read-write-buffers-identical',
       temporalHistory: 'reset',
@@ -12289,6 +12382,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         : 'diagnostic-raymarch-full-selected-field-authority-v0';
       let raymarchFireAuthority = explicitCompositionRoute ? compositionDefinition.raymarchFireAuthority : 1;
       let featureCaptureSourcePassApplied = false;
+      let renderTargetPixelEvidence = null;
       let sourcePassEncodeMs = null;
       let residualPassEncodeMs = null;
       if (explicitCompositionRoute) {
@@ -12371,12 +12465,43 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
         featureCaptureSourcePassApplied = true;
       }
+      let renderTargetReadback = null;
+      let renderTargetBytesPerRow = null;
+      if (options.includePixelEvidence === true) {
+        const unpaddedBytesPerRow = state.width * 4;
+        renderTargetBytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
+        renderTargetReadback = device.createBuffer({
+          label: 'kaminos held frozen render-target evidence',
+          size: renderTargetBytesPerRow * state.height,
+          usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        encoder.copyTextureToBuffer(
+          { texture: currentTexture },
+          { buffer: renderTargetReadback, bytesPerRow: renderTargetBytesPerRow, rowsPerImage: state.height },
+          { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+        );
+      }
       device.queue.submit([encoder.finish()]);
       raymarchApplied = raymarchEncoded;
       splatApplied = splatEncoded;
       if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
       if (device.queue?.onSubmittedWorkDone) {
         await device.queue.onSubmittedWorkDone();
+      }
+      if (renderTargetReadback) {
+        try {
+          await renderTargetReadback.mapAsync(GPUMapMode.READ);
+          const mapped = new Uint8Array(renderTargetReadback.getMappedRange());
+          const rgba = new Uint8Array(state.width * state.height * 4);
+          for (let y = 0; y < state.height; y += 1) {
+            const sourceStart = y * renderTargetBytesPerRow;
+            rgba.set(mapped.subarray(sourceStart, sourceStart + state.width * 4), y * state.width * 4);
+          }
+          renderTargetPixelEvidence = summarizeHeldRenderPixels(rgba, state.width, state.height);
+          renderTargetReadback.unmap();
+        } finally {
+          renderTargetReadback.destroy();
+        }
       }
       const featureCapture = featureCaptureSourcePassApplied && browserResidualFeatureTexture
         ? await readTextureRgba8(
@@ -12386,7 +12511,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           'kaminos residual shader-material-authority feature readback'
         )
         : null;
+      const featureCaptureSmokeAuthority = featureCapture
+        ? summarizeHeldFeatureSmokeAuthority(Uint8Array.from(featureCapture.rgba))
+        : null;
       const canvasRect = canvas.getBoundingClientRect();
+      const importedFluidReceipt = importedFieldCustody ? state.fullFieldImportReceipt : null;
       return {
         ok: true,
         sampleAuthority: 'render-only-frozen-sim-state',
@@ -12404,6 +12533,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         residualApplied,
         residualSourcePassEncodeMs: sourcePassEncodeMs,
         residualPassEncodeMs,
+        renderTargetPixelEvidence,
         featureCapture: featureCapture ? {
           ...featureCapture,
           featureAuthority: BROWSER_RESIDUAL_FEATURE_AUTHORITY,
@@ -12413,7 +12543,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           source: 'browserResidualFeatureTexture',
           sourcePassApplied: featureCaptureSourcePassApplied,
         } : null,
+        featureCaptureSmokeAuthority,
         featureCaptureSourcePassApplied,
+        renderBindingIdentity: {
+          identity: importedFieldCustody
+            ? 'checksum-verified-imported-fluid-raymarch-binding-v0'
+            : 'live-fluid-raymarch-binding-v0',
+          fluidReadIndex: currentFluid,
+          fluidSha256: importedFluidReceipt?.fluidSha256 || null,
+          importSessionId: importedFluidReceipt?.sessionId || null,
+          bindGroupAuthority: 'bindGroups[currentFluid]-binding-1-v0',
+        },
         sameStateCaptureId,
         baseFrameCount,
         baseSimStepCount,

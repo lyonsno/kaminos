@@ -178,11 +178,12 @@
         assayManifestSha256Requested,
         assayManifestSha256Effective: null,
         cameraIdentity: null,
+        fluidSha256Requested: null,
       },
       children: {
         a: { status: 'loading', requestedRoute: HELD_SPLAT_ROUTE, effectiveRoute: null, requestedProductIndex: 0, effectiveProductIndex: null, frameCount: 0, error: null },
         b: { status: 'loading', requestedRoute: HELD_SPLAT_ROUTE, effectiveRoute: null, requestedProductIndex: 1, effectiveProductIndex: null, frameCount: 0, error: null },
-        d: { status: 'loading', requestedRoute: HELD_VIEWER_ROUTE, effectiveRoute: null, compositionRequested: dComposition, compositionEffective: null, comparisonProfileRequested: dComparisonProfile, comparisonProfileEffective: null, manifestSha256Effective: null, error: null },
+        d: { status: 'loading', requestedRoute: HELD_VIEWER_ROUTE, effectiveRoute: null, compositionRequested: dComposition, compositionEffective: null, comparisonProfileRequested: dComparisonProfile, comparisonProfileEffective: null, manifestSha256Effective: null, fluidChannelStatistics: null, renderBindingIdentity: null, renderTargetPixelEvidence: null, featureCaptureSmokeAuthority: null, error: null },
       },
       lastObservedAt: null,
     };
@@ -246,6 +247,10 @@
             comparisonProfileRequested: d.comparisonProfileRequested,
             comparisonProfileEffective: d.comparisonProfileEffective,
             manifestSha256Effective: d.manifestSha256Effective,
+            fluidChannelStatistics: d.fluidChannelStatistics,
+            renderBindingIdentity: d.renderBindingIdentity,
+            renderTargetPixelEvidence: d.renderTargetPixelEvidence,
+            featureCaptureSmokeAuthority: d.featureCaptureSmokeAuthority,
             error: d.error,
           };
         }
@@ -266,6 +271,10 @@
           && state.children.d.compositionEffective === dComposition
           && state.children.d.comparisonProfileEffective === dComparisonProfile
           && state.children.d.manifestSha256Effective === manifestSha256Requested
+          && state.children.d.fluidChannelStatistics?.smokeDensity?.nonZeroCount > 0
+          && state.children.d.renderBindingIdentity?.fluidSha256 === state.source.fluidSha256Requested
+          && state.children.d.renderTargetPixelEvidence?.nonBackgroundPixelCount > 0
+          && state.children.d.featureCaptureSmokeAuthority?.nonZeroCount > 0
           && state.source.mountRegistered;
         if (running) {
           state.status = 'running';
@@ -291,6 +300,8 @@
         state.source.mountEffective = new URL(mountRequested, location.href).href;
         state.source.mountRegistered = true;
         const manifest = JSON.parse(new TextDecoder().decode(bytes));
+        state.source.fluidSha256Requested = manifest.fluid?.sha256 || null;
+        if (!/^[a-f0-9]{64}$/.test(state.source.fluidSha256Requested || '')) throw new Error('held-source-fluid-sha256-required');
         state.failurePhase = 'assay-manifest-admission';
         if (!/^[a-f0-9]{64}$/.test(assayManifestSha256Requested)) throw new Error('assay-manifest-sha256-required');
         const assayResponse = await fetch(new URL(assayManifest, location.href), { cache: 'no-store' });

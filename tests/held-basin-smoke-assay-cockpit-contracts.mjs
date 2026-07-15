@@ -29,6 +29,10 @@ assert.match(cockpit, /dense-splat-competence-floor-v0/, 'cockpit exposes the de
 assert.match(cockpit, /dense-competence-independent-viewports-v0/, 'competence mode carries its narrower comparison authority');
 assert.match(cockpit, /U Dense occupied-bin lift/, 'competence mode visibly identifies the dense upper-bound route');
 assert.match(cockpit, /comparisonMode/, 'cockpit records whether it is rendering the original assay or competence mode');
+assert.match(cockpit, /fluidChannelStatistics/, 'cockpit propagates checksum-verified held smoke material statistics');
+assert.match(cockpit, /renderBindingIdentity/, 'cockpit propagates the exact fluid binding consumed by D');
+assert.match(cockpit, /renderTargetPixelEvidence/, 'cockpit propagates native post-submit D target evidence');
+assert.match(cockpit, /featureCaptureSmokeAuthority/, 'cockpit propagates shader-sampled D smoke authority');
 assert.match(cockpit, /assay\.source\?\.manifestIdentity/, 'cockpit proves A/B and D share the same held source identity');
 assert.match(cockpit, /id="a-frame"/, 'Route A gets an independent centered viewport');
 assert.match(cockpit, /id="b-frame"/, 'Route B gets an independent centered viewport');
@@ -52,7 +56,11 @@ assert.match(witness, /dense-splat-competence-v0/, 'witness verifies the exact d
 assert.match(witness, /comparisonProfileEffective/, 'witness rejects a substituted D transfer profile');
 assert.match(witness, /panelEvidence/, 'witness records panel-local visual evidence instead of relying on whole-page nonblankness');
 assert.match(witness, /dSmokeProbe[\s\S]*edgeMean/, 'witness measures local smoke contribution inside D');
-assert.match(witness, /blank D smoke contribution/, 'competence evidence fails loud when D is only smooth background');
+assert.match(witness, /fluidChannelStatistics[\s\S]*smokeDensity[\s\S]*nonZeroCount/, 'witness requires nonzero smoke in the admitted held source');
+assert.match(witness, /renderBindingIdentity[\s\S]*fluidSha256/, 'witness requires D to consume the checksum-bound imported buffer');
+assert.match(witness, /renderTargetPixelEvidence[\s\S]*nonBackgroundPixelCount/, 'witness requires native D target pixels');
+assert.match(witness, /featureCaptureSmokeAuthority[\s\S]*nonZeroCount/, 'witness requires direct shader smoke-authority evidence');
+assert.doesNotMatch(witness, /panelEvidence\.dSmokeProbe\.edgeMean\s*>/, 'smooth smoke cannot fail solely because it lacks a hard screenshot edge');
 assert.match(witness, /mountRegistered/, 'witness rejects an unregistered held-source mount');
 assert.match(witness, /failurePhase/, 'pre-capture failures retain their phase');
 assert.match(witness, /lastTrustworthyEvidence/, 'pre-capture failures retain partial evidence');
