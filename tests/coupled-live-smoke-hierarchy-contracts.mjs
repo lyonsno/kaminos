@@ -27,6 +27,31 @@ const { buildPhaseMatchedHybridSmokePlan } = await import(
 const { assessLiveCoupledSmokeMotion } = await import(
   new URL('../smoke-splat-motion-source.mjs', import.meta.url)
 );
+const {
+  SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY,
+  SMOKE_SPLAT_GPU_PRODUCT_SCHEMA,
+  SMOKE_SPLAT_PACKING_IDENTITY,
+} = await import(new URL('../smoke-splat-gpu-product.mjs', import.meta.url));
+
+function genericProductFields({ capacity = 3, activeCount = 3 } = {}) {
+  return {
+    schema: SMOKE_SPLAT_GPU_PRODUCT_SCHEMA,
+    producerAuthority: COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY,
+    compilerIdentity: 'test-live-smoke-compiler-v0',
+    packedByteLength: capacity * 16 * Float32Array.BYTES_PER_ELEMENT,
+    capacity,
+    activeCount,
+    representation: {
+      requestedIdentity: 'test-packed-smoke-v0',
+      effectiveIdentity: 'test-packed-smoke-v0',
+      fallbackReason: null,
+      packingIdentity: SMOKE_SPLAT_PACKING_IDENTITY,
+      activeRecordsPackedFirst: true,
+      outputWasTruncated: false,
+    },
+    draw: { authority: SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY, mode: 'direct' },
+  };
+}
 
 assert.equal(
   COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY,
@@ -133,6 +158,7 @@ function compileCurrent(current) {
     destroy() { this.destroyed = true; },
   };
   const product = {
+    ...genericProductFields(),
     identity: `owned:${token.generation}:${token.retainedHistoryEpoch}:${token.writeTick}`,
     authority: COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY,
     ownership: COUPLED_LIVE_SMOKE_PRODUCT_OWNERSHIP,
@@ -151,6 +177,16 @@ const archive = createCoupledLiveSmokeHierarchyArchive({ device, compileCurrent 
 const first = archive.capture(descriptor());
 assert.equal(first.status, 'warming');
 assert.equal(first.consecutiveProductCount, 1);
+assert.deepEqual(first.productDraws, [{
+  identity: 'owned:4:7:10',
+  requestedRepresentation: 'test-packed-smoke-v0',
+  effectiveRepresentation: 'test-packed-smoke-v0',
+  fallbackReason: null,
+  capacity: 3,
+  activeCount: 3,
+  drawAuthority: SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY,
+  drawMode: 'direct',
+}]);
 assert.throws(
   () => archive.getConsecutiveProducts(),
   error => error?.report?.failurePhase === 'consecutive-history-resolution',
@@ -237,6 +273,7 @@ assert.equal(compiled.at(-1).packedBuffer.destroyed, true);
 assert.equal(archive.debugState().status, 'disposed');
 
 const livePlanProducts = [20, 21].map(writeTick => ({
+  ...genericProductFields(),
   identity: `live:${writeTick}`,
   authority: COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY,
   ownership: COUPLED_LIVE_SMOKE_PRODUCT_OWNERSHIP,
@@ -416,6 +453,43 @@ assert.deepEqual(renderer.debugState().coverage, {
   fine: SPATIAL_STRATA_HYBRID_SMOKE_LIVE_FINE_COVERAGE,
 });
 assert.deepEqual(renderer.debugState().productWriteTicks, [20, 21]);
+assert.equal(renderer.debugState().drawAuthority, SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY);
+assert.equal(renderer.debugState().drawMode, 'direct');
+assert.deepEqual(
+  renderer.debugState().plan.productUploads.map(upload => ({
+    capacity: upload.capacity,
+    activeCount: upload.activeCount,
+    requestedRepresentation: upload.requestedRepresentation,
+    effectiveRepresentation: upload.effectiveRepresentation,
+    fallbackReason: upload.fallbackReason,
+  })),
+  [20, 21].map(() => ({
+    capacity: 3,
+    activeCount: 3,
+    requestedRepresentation: 'test-packed-smoke-v0',
+    effectiveRepresentation: 'test-packed-smoke-v0',
+    fallbackReason: null,
+  })),
+);
+const activeDrawCalls = [];
+const texture = { createView() { return {}; } };
+renderer.encodeSpatialStrataSmoke({
+  beginRenderPass() {
+    return {
+      setPipeline() {},
+      setBindGroup() {},
+      draw(vertexCount, instanceCount) { activeDrawCalls.push([vertexCount, instanceCount]); },
+      end() {},
+    };
+  },
+}, {
+  hybridSplatDepthMoments: texture,
+  frontColor: texture,
+  frontInterval: texture,
+  backColor: texture,
+  backInterval: texture,
+});
+assert.deepEqual(activeDrawCalls, [[6, 6]], 'renderer submits active records times flame instances');
 
 const replacedBuffers = activeLiveProducts.map(product => product.packedBuffer);
 activeLiveProducts = activeLiveProducts.map((product, index) => ({
@@ -499,6 +573,12 @@ const compiler = createCoupledLiveSmokeHierarchyCompiler({
 });
 const compiledProduct = compiler.compileCurrent(compilerDescriptor);
 assert.equal(compiledProduct.splatCount, 72);
+assert.equal(compiledProduct.capacity, 72);
+assert.equal(compiledProduct.activeCount, 72);
+assert.equal(compiledProduct.draw.authority, SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY);
+assert.equal(compiledProduct.representation.requestedIdentity, 'fixed-grid-spatial-strata-smoke-splats-v0');
+assert.equal(compiledProduct.representation.effectiveIdentity, 'fixed-grid-spatial-strata-smoke-splats-v0');
+assert.equal(compiledProduct.representation.fallbackReason, null);
 assert.deepEqual(compilerPassCalls.filter(call => call[0] === 'bindGroup'), [
   ['bindGroup', 0, [0, 2]],
   ['bindGroup', 0, [1, 2]],

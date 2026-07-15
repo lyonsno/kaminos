@@ -7,6 +7,13 @@ import {
   COUPLED_PHASE_STATE_SCHEMA,
   COUPLED_PHASE_STATE_SOCKET_IDENTITY,
 } from './coupled-smoke-domain.mjs';
+import {
+  SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY,
+  SMOKE_SPLAT_GPU_PRODUCT_SCHEMA,
+  SMOKE_SPLAT_PACKING_IDENTITY,
+  destroySmokeSplatGpuProduct,
+  validateSmokeSplatGpuProduct,
+} from './smoke-splat-gpu-product.mjs';
 
 export const COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY = 'live-coupled-dense-state-owned-hierarchy-v0';
 export const COUPLED_LIVE_SMOKE_PRODUCT_OWNERSHIP = 'renderer-owned-destroy-on-evict-v0';
@@ -519,7 +526,7 @@ export function createCoupledLiveSmokeHierarchyCompiler({
 
     return {
       identity: `coupled-live-smoke-product:${tokenIdentity(phaseToken)}:${pipelines.key}`,
-      schema: 'kaminos.coupled-live-smoke-hierarchy-product.v0',
+      schema: SMOKE_SPLAT_GPU_PRODUCT_SCHEMA,
       authority: COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY,
       producerAuthority: COUPLED_LIVE_SMOKE_HIERARCHY_AUTHORITY,
       compilerIdentity: COUPLED_LIVE_SMOKE_COMPILER_IDENTITY,
@@ -534,15 +541,26 @@ export function createCoupledLiveSmokeHierarchyCompiler({
       },
       packedBuffer,
       packedByteLength: splatCount * PACKED_SPLAT_BYTES,
+      capacity: splatCount,
+      activeCount: splatCount,
       splatCount,
       hierarchyCounts: { coarse: coarseCount, fine: fineCount, total: splatCount },
       representation: {
+        requestedIdentity: 'fixed-grid-spatial-strata-smoke-splats-v0',
+        effectiveIdentity: 'fixed-grid-spatial-strata-smoke-splats-v0',
+        fallbackReason: null,
+        packingIdentity: SMOKE_SPLAT_PACKING_IDENTITY,
+        activeRecordsPackedFirst: true,
         nearOutputGrid: effectiveNearOutputGrid,
         farOutputGrid: effectiveFarOutputGrid,
         outputWasTruncated: false,
         sourceBuffersRetained: false,
         overlapAuthority: 'near-authoritative-far-overlap-suppressed-v0',
         nearOccupancyThreshold: effectiveNearOccupancyThreshold,
+      },
+      draw: {
+        authority: SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY,
+        mode: 'direct',
       },
     };
   }
@@ -567,7 +585,7 @@ export function createCoupledLiveSmokeHierarchyCompiler({
 }
 
 function destroyProduct(product) {
-  product?.packedBuffer?.destroy?.();
+  destroySmokeSplatGpuProduct(product);
 }
 
 function validateProduct(product, device, token) {
@@ -578,9 +596,9 @@ function validateProduct(product, device, token) {
   if (!sameToken(normalizeToken(product.phaseToken, 'compiled product phase token'), token)) {
     throw new Error('compiled product phase token mismatch');
   }
-  if (!product.packedBuffer?.destroy) throw new Error('compiled product has no owned packed buffer');
-  const total = positiveInteger(product.splatCount, 'compiled product splatCount');
-  if (product.hierarchyCounts?.total !== total) throw new Error('compiled product hierarchy count mismatch');
+  validateSmokeSplatGpuProduct(product, { device });
+  const total = positiveInteger(product.activeCount, 'compiled product activeCount');
+  if (product.splatCount !== total) throw new Error('compiled fixed-grid product splatCount alias mismatch');
   return product;
 }
 
@@ -608,6 +626,16 @@ export function createCoupledLiveSmokeHierarchyArchive({ device, compileCurrent 
       status,
       consecutiveProductCount: products.length,
       productTokens: products.map(product => ({ ...product.phaseToken })),
+      productDraws: products.map(product => ({
+        identity: product.identity,
+        requestedRepresentation: product.representation.requestedIdentity,
+        effectiveRepresentation: product.representation.effectiveIdentity,
+        fallbackReason: product.representation.fallbackReason,
+        capacity: product.capacity,
+        activeCount: product.activeCount,
+        drawAuthority: product.draw.authority,
+        drawMode: product.draw.mode,
+      })),
       newestToken: latestToken() ? { ...latestToken() } : null,
       lastFailure,
     };
