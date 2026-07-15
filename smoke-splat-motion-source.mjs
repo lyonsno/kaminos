@@ -3,6 +3,12 @@ import {
   validateSmokeSplatGpuProduct,
 } from './smoke-splat-gpu-product.mjs';
 
+export {
+  STATE_BEARING_SMOKE_ASSAY_SCHEMA,
+  validateStateBearingSmokeAssay,
+  writeStateBearingSmokeAssayReport,
+} from './state-bearing-smoke-assay.mjs';
+
 export const SMOKE_SPLAT_MOTION_MANIFEST_SCHEMA = 'kaminos.smoke-splat-motion-source.v0';
 export const SMOKE_SPLAT_MOTION_ROUTE_IDENTITY = 'webgpu-real-field-hierarchical-smoke-motion-v0';
 export const SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY = 'velocity-carried-short-horizon-extrapolation-v0';
