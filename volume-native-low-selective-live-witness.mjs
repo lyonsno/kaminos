@@ -12,7 +12,7 @@ const ROUTE = 'native-low-live-browser-webgpu-inference-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 const MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9';
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
-const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-resident-cue-buffer-lifecycle-stress-v1';
+const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-coarse-source-history-support-front-replacement-v1';
 const WITNESS_CONTRACT_MARKERS = Object.freeze({
   transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
   requestedCalibration: 'native-low-learned-splat-calibration-v0',
@@ -48,6 +48,7 @@ const frontTopologyAblationRequested = new URL(url).searchParams.get('front_topo
 const fixedGateDiscontinuityAssayRequested = new URL(url).searchParams.get('fixed_gate_discontinuity_assay') === '1';
 const candidateHeadBenchmarkRequested = new URL(url).searchParams.get('candidate_head_benchmark') === '1';
 const cueBufferLifecycleStressRequested = new URL(url).searchParams.get('cue_buffer_lifecycle_stress') === '1';
+const coarseSourceHistorySupportFrontRequested = new URL(url).searchParams.get('coarse_source_history_support_front') === '1';
 const vivisectorCandidateHeadTrainedRouteRequested = Boolean(new URL(url).searchParams.get('vivisector_candidate_head_package'))
   || new URL(url).searchParams.get('candidate_head_trained_route') === 'vivisector-width32';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
@@ -153,6 +154,29 @@ try {
       failurePhase = state?.failurePhase || failurePhase;
       throw new Error(state?.lastTrustworthyEvidence?.error || state?.failurePhase || 'native-low live route failed');
     }
+    const replacement = state?.nativeLowCoarseSourceHistorySupportFrontReplacement;
+    const workProfileReady = coarseSourceHistorySupportFrontRequested
+      ? replacement?.denseSupportFrontBypassed === true
+        && state?.nativeLowInferenceWorkProfile?.supportFrontReplacementActive === true
+        && state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity === 'native-low-coarse-source-history-support-front-replacement-v0'
+        && state?.nativeLowInferenceWorkProfile?.residualDispatchMode === 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0'
+      : state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage === 'full-grid-160^3'
+        && state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity === 'native-low-support-positive-residual-dispatch-v0'
+        && state?.nativeLowInferenceWorkProfile?.residualDispatchMode === 'support-positive-indirect-dispatch-args-v0';
+    const headProfileReady = coarseSourceHistorySupportFrontRequested
+      ? state?.headCostTimingAuthority === 'webgpu-timestamp-query-source-delta-only-v0'
+        && state?.nativeLowHeadCostProfile?.values?.length === 2
+        && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
+        && Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) === 0
+        && Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) === 0
+        && Number(replacement?.totalSupportFrontReplacementPlusReceiverGpuMs) >= 0
+      : state?.headCostTimingAuthority === 'webgpu-timestamp-query-stage-split-v0'
+        && Array.isArray(state?.nativeLowHeadCostProfile?.values)
+        && state?.nativeLowHeadCostProfile?.values.length === 6
+        && nativeLowInferenceSumMatches(state?.nativeLowHeadCostProfile);
+    const diagnosticProfilesReady = state?.nativeLowSupportTileProfile?.identity === 'native-low-support-proximal-tile-profile-v0'
+      && state?.nativeLowSourceTileCandidate?.identity === 'native-low-source-proximal-tile-candidate-v0'
+      && state?.nativeLowSourceTileCandidate?.hiddenSupportCap === false;
     if (
       state?.routeIdentity === ROUTE
       && state?.runtimeBuildIdentity === expectedRuntimeBuildIdentity
@@ -182,10 +206,8 @@ try {
       && state?.nativeLowMaterializationProfile?.hiddenSupportCap === false
       && Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0
       && Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0
-      && state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage === 'full-grid-160^3'
-      && state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity === 'native-low-support-positive-residual-dispatch-v0'
+      && workProfileReady
       && state?.nativeLowInferenceWorkProfile?.supportCompactionActive === true
-      && state?.nativeLowInferenceWorkProfile?.residualDispatchMode === 'support-positive-indirect-dispatch-args-v0'
       && state?.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized === true
       && state?.nativeLowInferenceWorkProfile?.residualDispatchIndirect === true
       && state?.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn === false
@@ -196,22 +218,14 @@ try {
       && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups) >= 1
       && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount)
       && state?.nativeLowHeadCostProfile?.identity === 'native-low-head-cost-profile-v0'
-      && state?.headCostTimingAuthority === 'webgpu-timestamp-query-stage-split-v0'
-      && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
-      && Array.isArray(state?.nativeLowHeadCostProfile?.values)
-      && state?.nativeLowHeadCostProfile?.values.length === 6
-      && nativeLowInferenceSumMatches(state?.nativeLowHeadCostProfile)
-      && Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0
-      && Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0
-      && state?.nativeLowSupportTileProfile?.identity === 'native-low-support-proximal-tile-profile-v0'
+      && headProfileReady
+      && diagnosticProfilesReady
       && Number(state?.nativeLowSupportTileProfile?.activeTileCount) >= 0
       && Number(state?.nativeLowSupportTileProfile?.projectedSupportFrontCellCount) >= 0
       && Number(state?.nativeLowSupportTileProfile?.tileProfileReadbackMs) >= 0
-      && state?.nativeLowSourceTileCandidate?.identity === 'native-low-source-proximal-tile-candidate-v0'
       && Number(state?.nativeLowSourceTileCandidate?.candidateTileCount) >= 0
       && Number(state?.nativeLowSourceTileCandidate?.projectedCandidateCellCount) >= 0
       && Number(state?.nativeLowSourceTileCandidate?.supportMissRate) >= 0
-      && state?.nativeLowSourceTileCandidate?.hiddenSupportCap === false
       && state?.nativeLowProductionStageLedger?.identity === 'native-low-production-stage-ledger-v0'
       && state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained === true
       && Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0
@@ -288,10 +302,28 @@ try {
   assert.equal(state?.nativeLowMaterializationProfile?.hiddenSupportCap, false, 'hidden support cap used in materialization profile');
   assert.ok(Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0, 'treatmentRebuildMs missing');
   assert.ok(Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0, 'restoreCopyMs missing');
-  assert.equal(state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage, 'full-grid-160^3', 'support classifier coverage is not full grid');
-  assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity, 'native-low-support-positive-residual-dispatch-v0', 'wrong support compaction identity');
+  if (coarseSourceHistorySupportFrontRequested) {
+    assert.equal(
+      state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage,
+      'coarse-scaffold-plus-source-history-detail-candidates-not-full-grid-160^3',
+      'replacement support classifier coverage mismatch',
+    );
+    assert.equal(
+      state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity,
+      'native-low-coarse-source-history-support-front-replacement-v0',
+      'wrong replacement support compaction identity',
+    );
+    assert.equal(
+      state?.nativeLowInferenceWorkProfile?.residualDispatchMode,
+      'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+      'wrong replacement residual dispatch mode',
+    );
+  } else {
+    assert.equal(state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage, 'full-grid-160^3', 'support classifier coverage is not full grid');
+    assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity, 'native-low-support-positive-residual-dispatch-v0', 'wrong support compaction identity');
+    assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchMode, 'support-positive-indirect-dispatch-args-v0', 'wrong residual dispatch mode');
+  }
   assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionActive, true, 'support compaction was not active');
-  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchMode, 'support-positive-indirect-dispatch-args-v0', 'wrong residual dispatch mode');
   assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized, true, 'residual dispatch args were not finalized');
   assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchIndirect, true, 'residual dispatch did not use indirect args');
   assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn, false, 'residual dispatch still used full-grid early return');
@@ -305,7 +337,32 @@ try {
     'residual dispatch thread count does not cover compacted support',
   );
   assert.equal(state?.nativeLowHeadCostProfile?.identity, 'native-low-head-cost-profile-v0', 'head cost profile missing');
-  assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
+  if (coarseSourceHistorySupportFrontRequested) {
+    const replacement = state?.nativeLowCoarseSourceHistorySupportFrontReplacement;
+    assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-source-delta-only-v0', 'wrong replacement timing authority');
+    assert.equal(replacement?.identity, 'native-low-coarse-source-history-support-front-replacement-v0', 'support/front replacement receipt missing');
+    assert.equal(replacement?.denseSupportFrontBypassed, true, 'dense support/front was not bypassed');
+    assert.equal(replacement?.denseRouteRetainedAsControl, true, 'dense route control was not retained');
+    assert.equal(replacement?.hiddenCandidateCap, false, 'replacement hid a candidate cap');
+    assert.equal(replacement?.fullGridReceiverMaterialization, false, 'replacement materialized a full-grid receiver');
+    assert.equal(replacement?.productionPathCpuReadback, false, 'replacement production path used CPU readback');
+    assert.equal(replacement?.candidateInstanceEquality, true, 'replacement candidate/instance equality failed');
+    assert.equal(replacement?.overflowCount, 0, 'replacement overflowed compact cue records');
+    assert.equal(replacement?.syntheticBenchmarkWeights, false, 'replacement used synthetic benchmark weights as authority');
+    assert.equal(replacement?.syntheticBenchmarkAuthorityRejected, true, 'replacement did not reject synthetic benchmark authority');
+    assert.equal(replacement?.learnedVisualClaim, false, 'replacement made a visual claim before renderer consumption');
+    assert.equal(replacement?.wrongPackageRouteBackendRejected, true, 'replacement package/route/backend rejection receipt missing');
+    assert.ok(Number(replacement?.sourceDeltaAdmissionGpuMs) >= 0, 'replacement source-delta timing missing');
+    assert.ok(Number(replacement?.vivisectorWidth32ReceiverGpuMs) >= 0, 'replacement receiver timing missing');
+    assert.ok(Number(replacement?.totalSupportFrontReplacementPlusReceiverGpuMs) >= 0, 'replacement total timing missing');
+    assert.equal(Number(replacement?.denseSupportFrontControlGpuMs), 660.834167, 'dense support/front control timing missing');
+    assert.equal(Number(replacement?.supportFrontReplacementDecisionBands?.profitableTargetMs), 10, 'replacement profitable target missing');
+    assert.equal(Number(replacement?.supportFrontReplacementDecisionBands?.credibleBreakEvenTargetMs), 15, 'replacement credible target missing');
+    assert.equal(Number(replacement?.supportFrontReplacementDecisionBands?.outerKillBoundaryMs), 24, 'replacement kill boundary missing');
+    assert.equal(state?.nativeLowMaterializationProfile?.fullGridReceiverMaterialization, false, 'replacement materialization profile allowed full-grid receiver');
+  } else {
+    assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
+  }
   assert.equal(state?.runtimeBuildIdentity, expectedRuntimeBuildIdentity, 'runtime build identity mismatch');
   if (vivisectorCandidateHeadTrainedRouteRequested) {
     const receiver = state?.nativeLowVivisectorCandidateHeadPackageReceiver;
@@ -322,8 +379,13 @@ try {
     assert.equal(receiver?.fidelityClaim, false, 'Vivisector package receiver must not claim fidelity');
   }
   assert.ok(Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0, 'sourceDeltaAdmissionGpuMs missing');
-  assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 6, 'head cost profile did not record six timestamp values');
-  assert.ok(nativeLowInferenceSumMatches(state?.nativeLowHeadCostProfile), 'inferenceGpuMs is not the exact sum of source-delta/support-front/residual stages');
+  if (coarseSourceHistorySupportFrontRequested) {
+    assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 2, 'replacement head cost profile did not record two timestamp values');
+    assert.ok(nativeLowSourceDeltaOnlySumMatches(state?.nativeLowHeadCostProfile), 'replacement inferenceGpuMs is not the exact source-delta-only sum');
+  } else {
+    assert.equal(state?.nativeLowHeadCostProfile?.values?.length, 6, 'head cost profile did not record six timestamp values');
+    assert.ok(nativeLowInferenceSumMatches(state?.nativeLowHeadCostProfile), 'inferenceGpuMs is not the exact sum of source-delta/support-front/residual stages');
+  }
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0, 'supportFrontGpuMs missing');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0, 'supportPositiveResidualGpuMs missing');
   assert.equal(state?.nativeLowSupportTileProfile?.identity, 'native-low-support-proximal-tile-profile-v0', 'support-proximal tile profile missing');
@@ -545,6 +607,7 @@ try {
     nativeLowSourceHistoryDetailCandidate: endState.nativeLowSourceHistoryDetailCandidate,
     nativeLowFixedSourceDeltaAdmission: endState.nativeLowFixedSourceDeltaAdmission,
     nativeLowCandidateHeadCostMicrobenchmark: endState.nativeLowCandidateHeadCostMicrobenchmark,
+    nativeLowCoarseSourceHistorySupportFrontReplacement: endState.nativeLowCoarseSourceHistorySupportFrontReplacement,
     nativeLowResidentCueBufferLifecycleStress: endState.nativeLowResidentCueBufferLifecycleStress,
     nativeLowCandidateCueBufferLifecycle: endState.nativeLowCandidateCueBufferLifecycle,
     nativeLowVivisectorCandidateHeadPackageReceiver: endState.nativeLowVivisectorCandidateHeadPackageReceiver,
@@ -552,6 +615,7 @@ try {
     fixedGateDiscontinuityAssayRequested,
     candidateHeadBenchmarkRequested,
     cueBufferLifecycleStressRequested,
+    coarseSourceHistorySupportFrontRequested,
     vivisectorCandidateHeadTrainedRouteRequested,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
@@ -758,6 +822,13 @@ function nativeLowInferenceSumMatches(profile) {
   const total = Number(profile?.inferenceGpuMs);
   if (![sourceDelta, supportFront, residual, total].every(Number.isFinite)) return false;
   return Math.abs(total - (sourceDelta + supportFront + residual)) < 1e-6;
+}
+
+function nativeLowSourceDeltaOnlySumMatches(profile) {
+  const sourceDelta = Number(profile?.sourceDeltaAdmissionGpuMs);
+  const total = Number(profile?.inferenceGpuMs);
+  if (![sourceDelta, total].every(Number.isFinite)) return false;
+  return Math.abs(total - sourceDelta) < 1e-6;
 }
 
 function gitHead() {

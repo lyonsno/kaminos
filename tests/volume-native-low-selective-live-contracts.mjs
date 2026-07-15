@@ -42,7 +42,7 @@ const vivisectorWidth32Generated = readFileSync(vivisectorWidth32GeneratedPath, 
 const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}\n${candidateHeadPackage}\n${vivisectorWidth32Package}\n${vivisectorWidth32Generated}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
-assert.match(combined, /native-low-resident-cue-buffer-lifecycle-stress-v1/, 'route and witness carry fail-loud runtime build identity');
+assert.match(combined, /native-low-coarse-source-history-support-front-replacement-v1/, 'route and witness carry fail-loud runtime build identity');
 assert.match(witness, /expectedRuntimeBuildIdentity[\s\S]*runtimeBuildIdentity[\s\S]*cachedCodeRejection/, 'witness records expected/effective runtime build identity and cached-code rejection');
 assert.match(witness, /user-data-dir[\s\S]*Network\.setCacheDisabled[\s\S]*cacheBustUrl/, 'witness uses a fresh browser profile, disables cache, and cache-busts the route URL');
 assert.match(witness, /servedSourceBundleSha256[\s\S]*fresh-http-served-source-bundle-sha256-v0[\s\S]*runtimeBuildIdentityPresent/, 'witness binds receipt to the HTTP-served source bundle hash and runtime marker');
@@ -187,6 +187,18 @@ assert.match(combined, /above-24ms-current-architecture-failure/, 'trained recei
 assert.match(combined, /failurePhase[\s\S]*vivisector-width32-live-receiver/, 'trained receiver failure phase is durable and specific');
 assert.match(combined, /trainedWeightsUsed:\s*true[\s\S]*syntheticBenchmarkWeights:\s*false/, 'trained receiver cannot be confused with synthetic benchmark weights');
 assert.match(combined, /receiverClaimScope[\s\S]*performance-receiver-only-not-fidelity-or-visual-claim-v0/, 'trained receiver timing does not imply visual/fidelity evidence');
+assert.match(combined, /native-low-coarse-source-history-support-front-replacement-v0/, 'route records dense support/front replacement identity');
+assert.match(combined, /coarse_source_history_support_front[\s\S]*coarseSourceHistorySupportFrontEnabled/, 'route exposes the coarse/source-history support-front replacement switch');
+assert.match(combined, /denseSupportFrontBypassed:\s*true[\s\S]*denseRouteRetainedAsControl:\s*true/, 'replacement path bypasses dense support/front while retaining dense route as control');
+assert.match(combined, /coarseScaffoldAuthority[\s\S]*native-low-coarse-front-scaffold-40\^3-trilinear-v0[\s\S]*sourceHistoryDetailAuthority[\s\S]*native-low-source-history-detail-candidate-v0/, 'replacement path names coarse scaffold and source-history detail authorities');
+assert.match(combined, /supportFrontReplacementGpuMs[\s\S]*sourceDeltaAdmissionGpuMs[\s\S]*vivisectorWidth32ReceiverGpuMs[\s\S]*totalSupportFrontReplacementPlusReceiverGpuMs/, 'replacement path measures source-history admission plus receiver');
+assert.match(combined, /denseSupportFrontControlGpuMs[\s\S]*660\.834167[\s\S]*measuredDenseSupportFrontBypassSavingsMs/, 'replacement path preserves measured dense support/front control and bypass savings');
+assert.match(combined, /supportFrontReplacementDecisionBands[\s\S]*profitableTargetMs[\s\S]*10[\s\S]*credibleBreakEvenTargetMs[\s\S]*15[\s\S]*outerKillBoundaryMs[\s\S]*24/, 'replacement path reports 10/15/24ms product bands');
+assert.match(combined, /hiddenCandidateCap:\s*false[\s\S]*fullGridReceiverMaterialization:\s*false[\s\S]*productionPathCpuReadback:\s*false/, 'replacement path rejects hidden caps, full-grid receiver materialization, and production CPU readback');
+assert.match(combined, /historyEpochValidForAdmission[\s\S]*sourceHistoryResetReason[\s\S]*staleCueHistoryRejected/, 'replacement path rejects stale source-history/cue epochs');
+assert.match(combined, /syntheticBenchmarkWeights:\s*false[\s\S]*syntheticBenchmarkAuthorityRejected:\s*true[\s\S]*learnedVisualClaim:\s*false/, 'replacement path rejects synthetic benchmark authority and visual claims');
+assert.match(combined, /wrongPackageRouteBackendRejected[\s\S]*requestedPackageSha256[\s\S]*effectivePackageSha256[\s\S]*effectiveBackend/, 'replacement path preserves package/route/backend rejection receipts');
+assert.match(combined, /failurePhase[\s\S]*coarse-source-history-support-front-replacement/, 'replacement failures carry a durable specific failure phase');
 assert.match(combined, /native-low-resident-cue-buffer-lifecycle-stress-v0/, 'route records resident cue-buffer lifecycle stress identity');
 assert.match(combined, /cue_buffer_lifecycle_stress[\s\S]*nativeLowResidentCueBufferLifecycleStress/, 'route exposes resident cue-buffer lifecycle stress mode and receipt');
 assert.match(combined, /candidateCueRecordCapacity[\s\S]*candidateCueRecordCapacityBytes[\s\S]*candidateCueRecordAllocationCount[\s\S]*candidateCueRecordReuseCount[\s\S]*candidateCueRecordGrowthCount/, 'cue-buffer lifecycle receipt records capacity, allocation, reuse, and growth counts');

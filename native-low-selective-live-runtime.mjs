@@ -26,7 +26,8 @@ export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-prox
 export const NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK = 'native-low-candidate-head-cost-microbenchmark-v0';
 export const NATIVE_LOW_VIVISECTOR_WIDTH32_LIVE_RECEIVER = 'native-low-vivisector-width32-live-receiver-v0';
 export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
-export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-resident-cue-buffer-lifecycle-stress-v1';
+export const NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT = 'native-low-coarse-source-history-support-front-replacement-v0';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-coarse-source-history-support-front-replacement-v1';
 export const NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY = 'native-low-trained-package-route-registry-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE = 'native-low-transfer-160-to-128-zero-shot-v0';
 export const NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE = 'native-low-transfer-160-to-96-deployment-grid-v0';
@@ -976,6 +977,20 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
     syntheticBenchmarkWeights: false,
     failurePhase: null,
   };
+  let lastCoarseSourceHistorySupportFrontReplacement = {
+    identity: NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT,
+    enabled: false,
+    denseSupportFrontBypassed: false,
+    denseRouteRetainedAsControl: true,
+    hiddenCandidateCap: false,
+    fullGridReceiverMaterialization: false,
+    productionPathCpuReadback: false,
+    syntheticBenchmarkWeights: false,
+    syntheticBenchmarkAuthorityRejected: true,
+    learnedVisualClaim: false,
+    failurePhase: null,
+  };
+  let coarseSourceHistorySupportFrontActive = false;
   let candidateCueRecordReuseCount = 0;
   let candidateCueLifecycleToken = 0;
   let lastCandidateCueBufferLifecycle = {
@@ -1198,6 +1213,41 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
   };
   const makeInferenceWorkProfile = stats => {
     const supportPositiveCount = Number(stats?.supportPositiveCount || 0);
+    if (coarseSourceHistorySupportFrontActive) {
+      const candidateCount = Number(lastSourceHistoryAdmission.uncappedCandidateCount || 0);
+      const candidateDispatchWorkgroups = Math.ceil(candidateCount / RESIDUAL_WORKGROUP_SIZE);
+      return {
+        identity: 'native-low-shared-device-inference-work-profile-v0',
+        supportFrontReplacementActive: true,
+        supportCompactionActive: true,
+        supportCompactionIdentity: NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT,
+        residualDispatchIdentity: 'sourceHistoryDispatchArgs',
+        supportClassifierCoverage: 'coarse-scaffold-plus-source-history-detail-candidates-not-full-grid-160^3',
+        modelEvaluatedCellCount: candidateCount,
+        modelHeadEvaluationCount: candidateCount,
+        supportClassifierEvaluatedCount: 0,
+        frontTopologyEvaluatedCount: 0,
+        supportPositiveCount: candidateCount,
+        supportPrevalence: candidateCount / highCells,
+        supportCompactedCount: candidateCount,
+        residualHeadEvaluatedCount: candidateCount,
+        residualHeadPolicy: 'source-history-detail-candidate-cue-emission-v0',
+        residualDispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        residualDispatchArgsFinalized: true,
+        residualDispatchIndirect: true,
+        residualDispatchFullGridEarlyReturn: false,
+        residualDispatchWorkgroups: candidateDispatchWorkgroups,
+        residualDispatchThreadCount: candidateDispatchWorkgroups * RESIDUAL_WORKGROUP_SIZE,
+        residualWorkgroupSize: RESIDUAL_WORKGROUP_SIZE,
+        dispatchWorkgroups: ['indirect', candidateDispatchWorkgroups],
+        featureCount: selectedModel.features.featureCount,
+        outputHeadCount: 'compact-renderer-facing-cue-record-v0',
+        denseSupportFrontBypassed: true,
+        denseRouteRetainedAsControl: true,
+        hiddenSupportCap: false,
+        hiddenCandidateCap: false,
+      };
+    }
     const residualDispatchWorkgroups = Math.ceil(supportPositiveCount / RESIDUAL_WORKGROUP_SIZE);
     const residualDispatchThreadCount = residualDispatchWorkgroups * RESIDUAL_WORKGROUP_SIZE;
     return {
@@ -1485,6 +1535,35 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
           visualClaim: false,
         };
       }
+      coarseSourceHistorySupportFrontActive = options.coarseSourceHistorySupportFrontEnabled === true;
+      if (coarseSourceHistorySupportFrontActive) {
+        lastCoarseSourceHistorySupportFrontReplacement = {
+          identity: NATIVE_LOW_COARSE_SOURCE_HISTORY_SUPPORT_FRONT_REPLACEMENT,
+          enabled: true,
+          authority: 'coarse-scaffold-plus-fixed-source-history-detail-candidate-measurement-route-v0',
+          coarseSourceHistorySupportFrontEnabled: true,
+          denseSupportFrontBypassed: true,
+          denseRouteRetainedAsControl: true,
+          coarseScaffoldAuthority: 'native-low-coarse-front-scaffold-40^3-trilinear-v0',
+          sourceHistoryDetailAuthority: 'native-low-source-history-detail-candidate-v0',
+          candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+          dispatchIdentity: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+          hiddenCandidateCap: false,
+          fullGridReceiverMaterialization: false,
+          productionPathCpuReadback: false,
+          syntheticBenchmarkWeights: false,
+          syntheticBenchmarkAuthorityRejected: true,
+          learnedVisualClaim: false,
+          activeTreatmentPath: false,
+          rendererConsumption: false,
+          historyEpochValidForAdmission,
+          sourceHistoryResetReason,
+          failurePhase: null,
+        };
+        encodedFrameCount += 1;
+        lastHistoryEpochIdentity = currentHistoryEpochIdentity;
+        return;
+      }
       const bindGroup = device.createBindGroup({
         label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} bind group`,
         layout,
@@ -1610,13 +1689,30 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         selectedNextImplementation: 'fixed-gate-candidate-head-dispatch-with-mohel-warning-under-emitter-shifts',
       };
       lastStats = {
-        supportPositiveCount: Number(values[0] || 0),
-        supportPrevalence: Number(values[0] || 0) / highCells,
-        residualDispatchWorkgroups: Math.ceil(Number(values[0] || 0) / RESIDUAL_WORKGROUP_SIZE),
-        residualDispatchThreadCount: Math.ceil(Number(values[0] || 0) / RESIDUAL_WORKGROUP_SIZE) * RESIDUAL_WORKGROUP_SIZE,
+        supportPositiveCount: coarseSourceHistorySupportFrontActive ? uncappedCandidateCount : Number(values[0] || 0),
+        supportPrevalence: (coarseSourceHistorySupportFrontActive ? uncappedCandidateCount : Number(values[0] || 0)) / highCells,
+        residualDispatchWorkgroups: Math.ceil((coarseSourceHistorySupportFrontActive ? uncappedCandidateCount : Number(values[0] || 0)) / RESIDUAL_WORKGROUP_SIZE),
+        residualDispatchThreadCount: Math.ceil((coarseSourceHistorySupportFrontActive ? uncappedCandidateCount : Number(values[0] || 0)) / RESIDUAL_WORKGROUP_SIZE) * RESIDUAL_WORKGROUP_SIZE,
         highCellCount: highCells,
       };
       lastStats.nativeLowInferenceWorkProfile = makeInferenceWorkProfile(lastStats);
+      if (coarseSourceHistorySupportFrontActive) {
+        const receiverCount = lastVivisectorWidth32Receiver?.candidateCount ?? uncappedCandidateCount;
+        lastCoarseSourceHistorySupportFrontReplacement = {
+          ...lastCoarseSourceHistorySupportFrontReplacement,
+          candidateCount: uncappedCandidateCount,
+          candidateCoverage: uncappedCandidateCoverage,
+          instanceCount: receiverCount,
+          overflowCount: 0,
+          candidateInstanceEquality: receiverCount === uncappedCandidateCount,
+          sourceHistoryDispatchWorkgroups,
+          sourceHistoryDispatchThreadCount: sourceHistoryDispatchWorkgroups * RESIDUAL_WORKGROUP_SIZE,
+          historyEpochValidForAdmission: lastSourceHistoryEpochReceipt.historyEpochValidForAdmission === true,
+          sourceHistoryResetReason: lastSourceHistoryEpochReceipt.sourceHistoryResetReason,
+          staleCueHistoryRejected: lastSourceHistoryEpochReceipt.historyEpochValidForAdmission === true,
+          nativeLowInferenceWorkProfile: lastStats.nativeLowInferenceWorkProfile,
+        };
+      }
       return { ...lastStats, nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission };
     },
     makeCandidateHeadCostMicrobenchmarkReceipt(widthTimings = null, timestampValues = []) {
@@ -1897,6 +1993,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device, tran
         nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission,
         nativeLowCandidateHeadCostMicrobenchmark: lastCandidateHeadBenchmark,
         nativeLowVivisectorWidth32LiveReceiver: lastVivisectorWidth32Receiver,
+        nativeLowCoarseSourceHistorySupportFrontReplacement: lastCoarseSourceHistorySupportFrontReplacement,
         nativeLowCandidateCueBufferLifecycle: lastCandidateCueBufferLifecycle,
         ...lastStats,
       };

@@ -79,7 +79,7 @@
     const CONTRACT_MARKERS = Object.freeze({
       routeIdentity: 'native-low-live-browser-webgpu-inference-v0',
       sharedDeviceRoute: 'native-low-shared-device-buffer-inference-v0',
-      runtimeBuildIdentity: 'native-low-resident-cue-buffer-lifecycle-stress-v1',
+      runtimeBuildIdentity: 'native-low-coarse-source-history-support-front-replacement-v1',
       schema: REPORT_SCHEMA,
       modelIdentity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
       modelSha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
@@ -242,6 +242,36 @@
         },
         failurePhase: 'vivisector-width32-live-receiver',
       },
+      nativeLowCoarseSourceHistorySupportFrontReplacement: {
+        identity: 'native-low-coarse-source-history-support-front-replacement-v0',
+        coarse_source_history_support_front: true,
+        coarseSourceHistorySupportFrontEnabled: true,
+        coarseScaffoldAuthority: 'native-low-coarse-front-scaffold-40^3-trilinear-v0',
+        sourceHistoryDetailAuthority: 'native-low-source-history-detail-candidate-v0',
+        denseSupportFrontBypassed: true,
+        denseRouteRetainedAsControl: true,
+        supportFrontReplacementGpuMs: null,
+        sourceDeltaAdmissionGpuMs: null,
+        vivisectorWidth32ReceiverGpuMs: null,
+        totalSupportFrontReplacementPlusReceiverGpuMs: null,
+        denseSupportFrontControlGpuMs: 660.834167,
+        measuredDenseSupportFrontBypassSavingsMs: null,
+        supportFrontReplacementDecisionBands: { profitableTargetMs: 10, credibleBreakEvenTargetMs: 15, outerKillBoundaryMs: 24 },
+        hiddenCandidateCap: false,
+        fullGridReceiverMaterialization: false,
+        productionPathCpuReadback: false,
+        historyEpochValidForAdmission: false,
+        sourceHistoryResetReason: null,
+        staleCueHistoryRejected: true,
+        syntheticBenchmarkWeights: false,
+        syntheticBenchmarkAuthorityRejected: true,
+        learnedVisualClaim: false,
+        wrongPackageRouteBackendRejected: true,
+        requestedPackageSha256: null,
+        effectivePackageSha256: null,
+        effectiveBackend: 'WebGPU',
+        failurePhase: 'coarse-source-history-support-front-replacement',
+      },
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -265,6 +295,7 @@
     const fixedGateDiscontinuityAssayMode = !native64ManifestMode && params.get('fixed_gate_discontinuity_assay') === '1';
     const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
     const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
+    const coarseSourceHistorySupportFrontEnabled = !native64ManifestMode && params.get('coarse_source_history_support_front') === '1';
     const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
     const requestedTransferRouteId = params.get('native_low_transfer_route') || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
     const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
@@ -331,6 +362,12 @@
       document.querySelector('#controlImage + .pane-label').innerHTML = 'native96Control<span>Untouched native 96^3 simulator, splat-only-v0</span>';
       document.querySelector('#treatmentImage + .pane-label').innerHTML = 'baseline128Trained<span>160->128 zero-shot package applied to native 96 source, splat-only-v0</span>';
       document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = 'candidate96Trained<span>160->96 deployment-grid package applied to the same native 96 source, splat-only-v0</span>';
+    }
+
+    if (coarseSourceHistorySupportFrontEnabled) {
+      title.querySelector('strong').textContent = 'Native control plus sparse support/front replacement timing';
+      title.querySelector('span').textContent = 'Fixed source-history gate + compact width-32 cue receiver; dense support/front/materialization bypassed';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'coarseSourceHistorySupportFrontReplacement<span>Measurement receipt only; compact cues are not renderer-consumed in this slice</span>';
     }
 
     const baseControls = {
@@ -502,7 +539,13 @@
       if (receipt?.visuals?.treatmentObjectUrl) {
         if (lastTreatmentObjectUrl) URL.revokeObjectURL(lastTreatmentObjectUrl);
         lastTreatmentObjectUrl = receipt.visuals.treatmentObjectUrl;
+        treatmentImage.style.visibility = 'visible';
         treatmentImage.src = lastTreatmentObjectUrl;
+      } else if (coarseSourceHistorySupportFrontEnabled) {
+        if (lastTreatmentObjectUrl) URL.revokeObjectURL(lastTreatmentObjectUrl);
+        lastTreatmentObjectUrl = null;
+        treatmentImage.removeAttribute('src');
+        treatmentImage.style.visibility = 'hidden';
       }
       if (receipt?.visuals?.frontTopologyAblatedObjectUrl) {
         if (lastFrontTopologyAblatedObjectUrl) URL.revokeObjectURL(lastFrontTopologyAblatedObjectUrl);
@@ -534,6 +577,7 @@
         transferRouteId: requestedTransferRouteId,
         candidateHeadBenchmarkEnabled: candidateHeadBenchmarkEnabled || cueBufferLifecycleStressMode,
         candidateCueBufferLifecycleStressEnabled: cueBufferLifecycleStressMode,
+        coarseSourceHistorySupportFrontEnabled,
         vivisectorCandidateHeadReceiver: vivisectorWidth32ReceiverProjection,
       };
       const receipt = native64ManifestMode
@@ -1156,6 +1200,7 @@
         nativeLowFixedSourceDeltaAdmission: receipt.nativeLowFixedSourceDeltaAdmission || null,
         nativeLowCandidateHeadCostMicrobenchmark: receipt.nativeLowCandidateHeadCostMicrobenchmark || null,
         nativeLowVivisectorWidth32LiveReceiver: receipt.nativeLowVivisectorWidth32LiveReceiver || runner?.nativeLowVivisectorWidth32LiveReceiver || null,
+        nativeLowCoarseSourceHistorySupportFrontReplacement: receipt.nativeLowCoarseSourceHistorySupportFrontReplacement || runner?.nativeLowCoarseSourceHistorySupportFrontReplacement || null,
         nativeLowResidentCueBufferLifecycleStress: latestCueBufferLifecycleStress,
         nativeLowCandidateCueBufferLifecycle: receipt.nativeLowCandidateCueBufferLifecycle || null,
         nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt,
