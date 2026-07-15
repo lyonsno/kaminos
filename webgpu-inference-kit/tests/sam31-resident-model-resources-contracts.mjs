@@ -102,8 +102,13 @@ assert.equal(
 );
 
 const entryA = { ...artifactA, role: 'patch-embed-projection-weight', dtype: 'float32', shape: [4] };
-const firstSource = new Float32Array(artifactABytes.buffer.slice(0));
-const secondSource = new Float32Array(artifactABytes.buffer.slice(0));
+assert.throws(
+  () => resident.bind(entryA, new Float32Array([9, 9, 9, 9])),
+  /authenticated backing|source custody|source identity/i,
+  'same-length wrong bytes must not acquire an authenticated resident static binding',
+);
+const firstSource = new Float32Array(artifactABytes.buffer, artifactABytes.byteOffset, 4);
+const secondSource = new Float32Array(artifactABytes.buffer, artifactABytes.byteOffset, 4);
 const firstBinding = resident.bind(entryA, firstSource);
 const secondBinding = resident.bind(entryA, secondSource);
 assert.equal(firstBinding.buffer, secondBinding.buffer, 'distinct invocation views must resolve to the exact same live GPU object');

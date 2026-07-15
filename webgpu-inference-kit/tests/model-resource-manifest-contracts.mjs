@@ -107,7 +107,10 @@ const manifest = manifestFor(bundle);
 assert.equal(manifest.schema, 'kaminos.webgpu-model-resource-manifest.v0');
 assert.equal(manifest.identity, `acme/vision-model@0123456789abcdef#sha256:${sha256(bundle)}`);
 assert.equal(manifest.allocations.length, 2);
-assert.equal(manifest.allocations[0].resourceId, `kaminos:model-resource:sha256:${sha256(bundle)}:0:16:${WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst}`);
+assert.match(manifest.allocations[0].resourceId, /^kaminos:model-resource:/);
+assert.match(manifest.allocations[0].resourceId, /acme%2Fvision-model/);
+assert.match(manifest.allocations[0].resourceId, /0123456789abcdef/);
+assert.match(manifest.allocations[0].resourceId, new RegExp(sha256(bundle)));
 assert.equal(Object.isFrozen(manifest), true);
 assert.equal(Object.isFrozen(manifest.allocations), true);
 assert.equal(Object.isFrozen(manifest.allocations[0].tensors[0].shape), true);
@@ -319,6 +322,31 @@ assert.equal(residency.snapshot().activeLeaseCount, 2);
 assert.equal(modelB.release().status, 'released');
 assert.equal(residency.snapshot().activeLeaseCount, 0);
 assert.equal(residency.snapshot().evictionCandidates.length, 2);
+
+const revisionResidency = createWebGpuResourceResidency({ sessionId: 'model-revision-identity' });
+const revisionFactory = createWebGpuResourceFactory({ sessionId: 'model-revision-identity', residency: revisionResidency });
+const revisionRuntimeA = runtimeFixture();
+const revisionRuntimeB = runtimeFixture();
+const revisionManifest = manifestFor(bundle, { revision: 'fedcba9876543210' });
+assert.notEqual(
+  manifest.allocations[0].resourceId,
+  revisionManifest.allocations[0].resourceId,
+  'identical bundle ranges under different authenticated model revisions must not collapse to one resident resource identity',
+);
+const revisionModelA = await loadWebGpuModelResources({
+  manifest,
+  bundle,
+  route: routeFixture({ routeId: 'revision-a', runtime: revisionRuntimeA, residency: revisionResidency, factory: revisionFactory }),
+});
+const revisionModelB = await loadWebGpuModelResources({
+  manifest: revisionManifest,
+  bundle,
+  route: routeFixture({ routeId: 'revision-b', runtime: revisionRuntimeB, residency: revisionResidency, factory: revisionFactory }),
+});
+assert.equal(revisionRuntimeA.created.length + revisionRuntimeB.created.length, 4, 'each revision must materialize its own two semantic allocations');
+assert.notEqual(revisionModelA.allocations[0].buffer, revisionModelB.allocations[0].buffer);
+revisionModelA.release();
+revisionModelB.release();
 
 const mutableSource = Uint8Array.from(bundle);
 const mutationResidency = createWebGpuResourceResidency({ sessionId: 'mutation' });

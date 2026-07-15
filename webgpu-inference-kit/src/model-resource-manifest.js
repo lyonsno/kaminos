@@ -80,8 +80,13 @@ function bundleIdentity(modelId, revision, sha256) {
   return `${modelId}@${revision}#sha256:${sha256}`;
 }
 
-function allocationResourceId(sha256, allocation) {
-  return `kaminos:model-resource:sha256:${sha256}:${allocation.byteOffset}:${allocation.byteLength}:${allocation.usage}`;
+function allocationResourceId(modelId, revision, sha256, allocation) {
+  const semanticIdentity = canonicalJson({
+    allocationId: allocation.allocationId,
+    metadata: allocation.metadata ?? null,
+    tensors: allocation.tensors || [],
+  });
+  return `kaminos:model-resource:${encodeURIComponent(modelId)}@${encodeURIComponent(revision)}:sha256:${sha256}:${allocation.byteOffset}:${allocation.byteLength}:${allocation.usage}:semantic:${encodeURIComponent(semanticIdentity)}`;
 }
 
 function byteView(data) {
@@ -198,7 +203,7 @@ export function validateWebGpuModelResourceManifest(manifest) {
       typeof bundleSha256 === 'string'
       && allocationRangeValid
       && Number.isSafeInteger(allocation.usage)
-      && allocation.resourceId !== allocationResourceId(bundleSha256, allocation)
+      && allocation.resourceId !== allocationResourceId(manifest.modelId, manifest.revision, bundleSha256, allocation)
     ) {
       errors.push(`${prefix}.resourceId must be content-derived from bundle and allocation identity`);
     }
@@ -287,14 +292,14 @@ export function defineWebGpuModelResourceManifest(input = {}) {
   const modelId = input.modelId;
   const revision = input.revision;
   const sha256 = typeof input.bundle?.sha256 === 'string' ? input.bundle.sha256.toLowerCase() : input.bundle?.sha256;
-  const allocations = (input.allocations || []).map(allocation => ({
-    allocationId: allocation.allocationId,
-    resourceId: allocationResourceId(sha256, allocation),
-    byteOffset: allocation.byteOffset,
-    byteLength: allocation.byteLength,
-    usage: allocation.usage,
-    metadata: cloneJson(allocation.metadata ?? null, 'allocation metadata'),
-    tensors: (allocation.tensors || []).map(tensor => {
+  const allocations = (input.allocations || []).map(allocation => {
+    const normalized = {
+      allocationId: allocation.allocationId,
+      byteOffset: allocation.byteOffset,
+      byteLength: allocation.byteLength,
+      usage: allocation.usage,
+      metadata: cloneJson(allocation.metadata ?? null, 'allocation metadata'),
+      tensors: (allocation.tensors || []).map(tensor => {
       const dtype = normalizeDtype(tensor.dtype);
       const shape = Array.isArray(tensor.shape) ? [...tensor.shape] : tensor.shape;
       const elements = tensorElements(shape);
@@ -309,8 +314,13 @@ export function defineWebGpuModelResourceManifest(input = {}) {
         byteLength: tensor.byteLength,
         metadata: cloneJson(tensor.metadata ?? null, 'tensor metadata'),
       };
-    }),
-  }));
+      }),
+    };
+    return {
+      ...normalized,
+      resourceId: allocationResourceId(modelId, revision, sha256, normalized),
+    };
+  });
   const manifest = {
     schema: WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA,
     identity: bundleIdentity(modelId, revision, sha256),
@@ -530,6 +540,11 @@ export async function loadWebGpuModelResources(input = {}) {
           declaredBytes: allocation.byteLength,
           kind: 'model-weight-buffer',
           metadata: {
+            modelId: manifest.modelId,
+            revision: manifest.revision,
+            allocationId: allocation.allocationId,
+            allocationMetadata: allocation.metadata,
+            tensorSemantics: allocation.tensors,
             bundleSha256: manifest.bundle.sha256,
             bundleByteLength: manifest.bundle.byteLength,
             sourceByteOffset: allocation.byteOffset,

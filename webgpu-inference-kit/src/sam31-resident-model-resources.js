@@ -90,6 +90,11 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     if (bytes.byteLength !== artifact.byteLength) throw new Error(`static artifact ${artifact.sha256} byte length mismatch`);
     const effectiveSha256 = `sha256:${await sha256Hex(bytes)}`;
     if (effectiveSha256 !== artifact.sha256) throw new Error(`static artifact ${artifact.sha256} content hash mismatch: ${effectiveSha256}`);
+    item.authenticatedSource = {
+      buffer: bytes.buffer,
+      byteOffset: bytes.byteOffset,
+      byteLength: bytes.byteLength,
+    };
     bundle.set(bytes, item.byteOffset);
   }
 
@@ -99,6 +104,7 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
   const manifest = defineWebGpuModelResourceManifest({
     modelId: model.id || 'facebook/sam3.1',
     revision: model.revision || packageId,
+    metadata: { packageId, kernelProfile: 'sam31-resident-model-owner-v0' },
     bundle: { byteLength: bundle.byteLength, sha256: bundleSha256 },
     allocations: loaded.map((item, index) => ({
       allocationId: `sam31-static-${index}-${artifactHex(item.artifact.sha256).slice(0, 16)}`,
@@ -107,6 +113,9 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
       usage,
       metadata: {
         packageId,
+        modelId: model.id || 'facebook/sam3.1',
+        revision: model.revision || packageId,
+        kernelProfile: 'sam31-resident-model-owner-v0',
         file: item.artifact.file,
         artifactSha256: item.artifact.sha256,
         aliases: cloneJson(item.artifact.aliases || []),
@@ -132,6 +141,7 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
   for (let index = 0; index < loaded.length; index += 1) {
     allocationBySha.set(loaded[index].artifact.sha256, {
       artifact: loaded[index].artifact,
+      authenticatedSource: loaded[index].authenticatedSource,
       allocation: modelLease.allocations[index],
     });
   }
@@ -159,6 +169,15 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
       const byteLength = sourceByteLength(sourceData);
       if (byteLength !== resident.artifact.byteLength || byteLength !== entry.byteLength) {
         throw new Error(`resident tensor byte length mismatch for ${entry.role || entry.file || entry.sha256}`);
+      }
+      const sourceBuffer = sourceData instanceof ArrayBuffer ? sourceData : sourceData.buffer;
+      const sourceByteOffset = sourceData instanceof ArrayBuffer ? 0 : sourceData.byteOffset;
+      if (
+        sourceBuffer !== resident.authenticatedSource.buffer
+        || sourceByteOffset !== resident.authenticatedSource.byteOffset
+        || byteLength !== resident.authenticatedSource.byteLength
+      ) {
+        throw new Error(`resident tensor source custody does not match the authenticated backing store for ${entry.role || entry.file || entry.sha256}`);
       }
       const existing = sourceBindings.get(sourceData);
       if (existing) {
