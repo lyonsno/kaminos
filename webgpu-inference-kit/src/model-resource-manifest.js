@@ -368,7 +368,7 @@ export async function verifyWebGpuModelResourceBundle(manifest, bundle, options 
   });
 }
 
-async function prepareBundle(manifest, bundle, ownership, options = {}) {
+async function prepareBundle(manifest, bundle, ownership, options = {}, internal = {}) {
   const validation = validateWebGpuModelResourceManifest(manifest);
   if (!validation.ok) throw new Error(`invalid WebGPU model resource manifest:\n${validation.errors.join('\n')}`);
   if (ownership !== 'copy' && ownership !== 'transfer') {
@@ -397,7 +397,7 @@ async function prepareBundle(manifest, bundle, ownership, options = {}) {
   const verification = await verifyBundleSnapshot(manifest, bytes, {
     signal: options.signal,
     subtle: options.subtle,
-    byteCustody: options.byteCustody || `loader-owned-${ownership}-before-verification`,
+    byteCustody: internal.byteCustody || `loader-owned-${ownership}-before-verification`,
   });
   const state = {
     identity: manifest.identity,
@@ -494,11 +494,13 @@ export async function loadWebGpuModelResources(input = {}) {
     if (input.bundle?.schema === WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA) {
       throw new Error('model bundle custody handle must be authentic and module-issued');
     }
-    const prepared = await prepareBundle(manifest, input.bundle, 'copy', {
-      signal,
-      subtle: input.subtle,
-      byteCustody: 'loader-owned-snapshot-before-verification',
-    });
+    const prepared = await prepareBundle(
+      manifest,
+      input.bundle,
+      'copy',
+      { signal, subtle: input.subtle },
+      { byteCustody: 'loader-owned-snapshot-before-verification' },
+    );
     try {
       return await loadWebGpuModelResources({ ...input, bundle: prepared });
     } finally {

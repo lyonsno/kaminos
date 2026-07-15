@@ -156,7 +156,10 @@ assert.deepEqual(
 copiedModel.release();
 
 const transferSource = Uint8Array.from(bundle).buffer;
-const transferredBundle = await prepareWebGpuModelResourceBundle(manifest, transferSource, { ownership: 'transfer' });
+const transferredBundle = await prepareWebGpuModelResourceBundle(manifest, transferSource, {
+  ownership: 'transfer',
+  byteCustody: 'caller-forged-label',
+});
 assert.equal(transferSource.byteLength, 0, 'transfer custody must detach caller ArrayBuffer');
 assert.equal(transferredBundle.ownership, 'transfer');
 assert.equal(transferredBundle.verification.byteCustody, 'loader-owned-transfer-before-verification');
