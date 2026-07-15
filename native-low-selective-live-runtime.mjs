@@ -503,6 +503,15 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     compute: { module: finalizeSourceHistoryDispatchShader, entryPoint: 'finalizeSourceHistoryDispatchArgs' },
   });
   let encodedFrameCount = 0;
+  let lastHistoryEpochIdentity = null;
+  let lastSourceHistoryEpochReceipt = {
+    historyEpochIdentity: null,
+    priorHistoryEpochIdentity: null,
+    currentHistoryEpochIdentity: null,
+    historyEpochChanged: false,
+    historyEpochValidForAdmission: false,
+    sourceHistoryResetReason: 'first-frame-no-prior-history',
+  };
   let lastStats = {
     supportPositiveCount: 0,
     supportPrevalence: 0,
@@ -514,6 +523,12 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     sourceDeltaThreshold: SOURCE_DELTA_THRESHOLD,
     sourceDeltaScales: [...SOURCE_DELTA_SCALES],
     sourceHistoryAvailable: false,
+    historyEpochIdentity: null,
+    priorHistoryEpochIdentity: null,
+    currentHistoryEpochIdentity: null,
+    historyEpochChanged: false,
+    historyEpochValidForAdmission: false,
+    sourceHistoryResetReason: 'first-frame-no-prior-history',
     uncappedLowCandidateCount: 0,
     uncappedCandidateCount: 0,
     uncappedCandidateCoverage: 0,
@@ -626,9 +641,25 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     supportCompactionIdentity: NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH,
     buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs },
     encodeFromNativeLow(encoder, sourceFluid, sourceFront, options = {}) {
+      const currentHistoryEpochIdentity = String(options.historyEpochIdentity || 'native-low-source-history-epoch-unspecified-v0');
+      const priorHistoryEpochIdentity = lastHistoryEpochIdentity;
+      const historyEpochChanged = priorHistoryEpochIdentity !== null && priorHistoryEpochIdentity !== currentHistoryEpochIdentity;
+      const historyEpochValidForAdmission = encodedFrameCount > 0 && !historyEpochChanged;
+      const sourceHistoryResetReason = !historyEpochValidForAdmission
+        ? (historyEpochChanged ? 'epoch-changed-first-frame-invalidated' : 'first-frame-no-prior-history')
+        : 'prior-history-valid';
+      lastSourceHistoryEpochReceipt = {
+        historyEpochIdentity: currentHistoryEpochIdentity,
+        priorHistoryEpochIdentity,
+        currentHistoryEpochIdentity,
+        historyEpochChanged,
+        historyEpochValidForAdmission,
+        sourceHistoryResetReason,
+        callerResetReason: options.historyResetReason || null,
+      };
       device.queue.writeBuffer(stats, 0, new Uint32Array(4));
       device.queue.writeBuffer(residualDispatchArgs, 0, new Uint32Array(4));
-      device.queue.writeBuffer(sourceHistoryStats, 0, new Uint32Array([0, 0, 0, encodedFrameCount > 0 ? 1 : 0]));
+      device.queue.writeBuffer(sourceHistoryStats, 0, new Uint32Array([0, 0, 0, historyEpochValidForAdmission ? 1 : 0]));
       device.queue.writeBuffer(sourceHistoryDispatchArgs, 0, new Uint32Array(4));
       const sourceHistoryBindGroup = device.createBindGroup({
         label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission bind group`,
@@ -642,7 +673,17 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
           { binding: 5, resource: { buffer: sourceHistoryStats } },
         ],
       });
-      const sourceHistoryPass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission` });
+      const sourceDeltaAdmissionTimestampWrites = options.stageTimestampWrites?.sourceDeltaAdmission || null;
+      const sourceHistoryPassTimestampWrites = sourceDeltaAdmissionTimestampWrites
+        ? { querySet: sourceDeltaAdmissionTimestampWrites.querySet, beginningOfPassWriteIndex: sourceDeltaAdmissionTimestampWrites.beginningOfPassWriteIndex }
+        : null;
+      const finalizeSourceHistoryTimestampWrites = sourceDeltaAdmissionTimestampWrites
+        ? { querySet: sourceDeltaAdmissionTimestampWrites.querySet, endOfPassWriteIndex: sourceDeltaAdmissionTimestampWrites.endOfPassWriteIndex }
+        : null;
+      const sourceHistoryPass = encoder.beginComputePass({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} fixed source-delta admission`,
+        ...(sourceHistoryPassTimestampWrites ? { timestampWrites: sourceHistoryPassTimestampWrites } : {}),
+      });
       sourceHistoryPass.setPipeline(sourceHistoryAdmissionPipeline);
       sourceHistoryPass.setBindGroup(0, sourceHistoryBindGroup);
       sourceHistoryPass.dispatchWorkgroups(Math.ceil(LOW_GRID / 4), Math.ceil(LOW_GRID / 4), Math.ceil(LOW_GRID / 4));
@@ -655,7 +696,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
           { binding: 1, resource: { buffer: sourceHistoryDispatchArgs } },
         ],
       });
-      const finalizeSourceHistoryPass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize source-delta dispatch args` });
+      const finalizeSourceHistoryPass = encoder.beginComputePass({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize source-delta dispatch args`,
+        ...(finalizeSourceHistoryTimestampWrites ? { timestampWrites: finalizeSourceHistoryTimestampWrites } : {}),
+      });
       finalizeSourceHistoryPass.setPipeline(finalizeSourceHistoryDispatchPipeline);
       finalizeSourceHistoryPass.setBindGroup(0, finalizeSourceHistoryBindGroup);
       finalizeSourceHistoryPass.dispatchWorkgroups(1);
@@ -727,6 +771,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       upsamplePass.dispatchWorkgroups(Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4));
       upsamplePass.end();
       encodedFrameCount += 1;
+      lastHistoryEpochIdentity = currentHistoryEpochIdentity;
     },
     async sampleSupportStats() {
       const values = await readU32Buffer(device, stats, STATS_BYTES, 'native-low shared-device support stats readback');
@@ -750,6 +795,9 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         targetErrorRankingUsed: false,
         sourceChannelCount: 17,
         sourceHistoryAvailable,
+        ...lastSourceHistoryEpochReceipt,
+        sourceHistoryStatsReadbackAuthority: 'diagnostic-only-not-production-candidate-path-v0',
+        productionCandidateNoCpuReadback: true,
         uncappedLowCandidateCount: Number(sourceHistoryValues[0] || 0),
         uncappedCandidateCount,
         uncappedCandidateCoverage: uncappedCandidateCount / highCells,
@@ -759,6 +807,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         heldCoverage: 0.100185,
         heldCandidateCount: 410357,
         heldEnergyCapture: 0.826572,
+        fixedSourceDeltaLongStripSha256: '7c65fc162fbf2c91e7a614ec6e0b37797d31441872d00ced3bbc325a513f8d23',
+        normalBasinCoverageRange: [0.099875, 0.100891],
+        normalBasinCoverageMean: 0.100226,
+        normalBasinCandidateCountRange: [409086, 413249],
         sourceHistoryDispatchArgsFinalized: true,
         sourceHistoryDispatchIndirectReady: true,
         sourceHistoryDispatchWorkgroups,
@@ -965,6 +1017,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         effectiveFeatureCount: SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
         noHiddenCaps: true,
         encodedFrameCount,
+        sourceHistoryEpochReceipt: lastSourceHistoryEpochReceipt,
         nativeLowInferenceWorkProfile,
         nativeLowSupportTileProfile: lastSupportTileProfile,
         nativeLowSourceTileCandidate: lastSourceTileCandidate,

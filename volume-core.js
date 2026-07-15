@@ -5382,6 +5382,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     temporalHistoryValid: false,
     fluidStateResetCount: 0,
     fluidStateResetReason: 'initial',
+    nativeLowSourceHistoryEpochCount: 0,
+    nativeLowSourceHistoryEpochReason: 'initial',
     majorantGrid: majorantGridSize,
     majorantBuilt: false,
     majorantFrameCount: 0,
@@ -7086,6 +7088,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.pressureIterationRequested = normalizePressureIterationCount(controlsSnapshot.pressureIterations, controlsSnapshot.volumeScene);
     state.fluidStateResetCount += 1;
     state.fluidStateResetReason = reason;
+    if (!String(reason).startsWith('native-low-shared-device-')) {
+      state.nativeLowSourceHistoryEpochCount = Number(state.nativeLowSourceHistoryEpochCount || 0) + 1;
+      state.nativeLowSourceHistoryEpochReason = reason;
+    }
     state.fluidStateInitialization = {
       identity: 'fluid-state-initialization-v0',
       skipInitialFluid,
@@ -12842,30 +12848,35 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const values = new BigUint64Array(source.getMappedRange().slice(0));
     source.unmap();
     source.destroy();
-    const invalid = values.length < 4 || values[0] === 0n || values[1] === 0n || values[2] === 0n || values[3] === 0n
-      || values[1] < values[0] || values[3] < values[2];
+    const invalid = values.length < 6
+      || values[0] === 0n || values[1] === 0n || values[2] === 0n || values[3] === 0n || values[4] === 0n || values[5] === 0n
+      || values[1] < values[0] || values[3] < values[2] || values[5] < values[4];
     if (invalid) {
       return {
         identity: 'native-low-head-cost-profile-v0',
         label,
         headCostTimingAuthority: 'timestamp-query-invalid',
+        sourceDeltaAdmissionGpuMs: null,
         supportFrontGpuMs: null,
         supportPositiveResidualGpuMs: null,
         inferenceGpuMs: fallbackMs,
         values: Array.from(values, value => value.toString()),
       };
     }
-    const supportFrontGpuMs = Number(values[1] - values[0]) / 1_000_000;
-    const supportPositiveResidualGpuMs = Number(values[3] - values[2]) / 1_000_000;
+    const sourceDeltaAdmissionGpuMs = Number(values[1] - values[0]) / 1_000_000;
+    const supportFrontGpuMs = Number(values[3] - values[2]) / 1_000_000;
+    const supportPositiveResidualGpuMs = Number(values[5] - values[4]) / 1_000_000;
     return {
       identity: 'native-low-head-cost-profile-v0',
       label,
       headCostTimingAuthority: 'webgpu-timestamp-query-stage-split-v0',
+      sourceDeltaAdmissionGpuMs,
+      sourceDeltaAdmissionStage: 'fixed-source-delta-admission-plus-finalize-v0',
       supportFrontStage: 'full-grid-support-classifier-plus-frontTopology-v0',
       supportPositiveResidualStage: 'support-positive-fuel-visibleFireCarrier-fireLick-v0',
       supportFrontGpuMs,
       supportPositiveResidualGpuMs,
-      inferenceGpuMs: supportFrontGpuMs + supportPositiveResidualGpuMs,
+      inferenceGpuMs: sourceDeltaAdmissionGpuMs + supportFrontGpuMs + supportPositiveResidualGpuMs,
       values: Array.from(values, value => value.toString()),
     };
   }
@@ -12928,7 +12939,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let timestampResolveBuffer = null;
       let timestampWrites = null;
       let stageTimestampWrites = null;
-      const timestampQueryCount = 4;
+      const timestampQueryCount = 6;
       if (timestampSupported) {
         querySet = device.createQuerySet({ type: 'timestamp', count: timestampQueryCount });
         timestampResolveBuffer = device.createBuffer({
@@ -12943,14 +12954,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         });
         timestampWrites = { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 };
         stageTimestampWrites = {
-          supportFront: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
-          supportPositiveResidual: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+          sourceDeltaAdmission: { querySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+          supportFront: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+          supportPositiveResidual: { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 },
         };
       }
       const inferenceStart = performance.now();
       device.pushErrorScope('validation');
       const inferenceEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} inference encoder` });
-      runtime.encodeFromNativeLow(inferenceEncoder, sourceFluid, sourceFront, { timestampWrites, stageTimestampWrites });
+      const historyEpochIdentity = [
+        'native-low-source-history-epoch-v0',
+        `grid-${gridSize}`,
+        `majorant-${sourceMajorantGrid}`,
+        `scene-${controlsSnapshot.volumeScene || 'unknown'}`,
+        `source-reset-${state.nativeLowSourceHistoryEpochCount ?? state.fluidStateResetCount ?? 0}`,
+      ].join(':');
+      const historyResetReason = state.nativeLowSourceHistoryEpochReason || state.fluidStateResetReason || 'unknown';
+      runtime.encodeFromNativeLow(inferenceEncoder, sourceFluid, sourceFront, {
+        timestampWrites,
+        stageTimestampWrites,
+        historyEpochIdentity,
+        historyResetReason,
+      });
       if (querySet && timestampReadback && timestampResolveBuffer) {
         inferenceEncoder.resolveQuerySet(querySet, 0, timestampQueryCount, timestampResolveBuffer, 0);
         inferenceEncoder.copyBufferToBuffer(timestampResolveBuffer, 0, timestampReadback, 0, timestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT);
@@ -12966,6 +12991,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         headCostTimingAuthority: 'queue-onSubmittedWorkDone-wall-proxy-no-stage-split',
         supportFrontGpuMs: null,
         supportPositiveResidualGpuMs: null,
+        sourceDeltaAdmissionGpuMs: null,
         inferenceGpuMs: inferenceWallMs,
       };
       if (timestampReadback) {
@@ -13013,6 +13039,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...nativeLowHeadCostProfile,
         supportCompactionIdentity: nativeLowInferenceWorkProfile?.supportCompactionIdentity || null,
         residualDispatchMode: nativeLowInferenceWorkProfile?.residualDispatchMode || null,
+        sourceDeltaAdmissionGpuMs: nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs ?? null,
         supportClassifierEvaluatedCount: nativeLowInferenceWorkProfile?.supportClassifierEvaluatedCount ?? null,
         frontTopologyEvaluatedCount: nativeLowInferenceWorkProfile?.frontTopologyEvaluatedCount ?? null,
         supportCompactedCount: nativeLowInferenceWorkProfile?.supportCompactedCount ?? null,
@@ -13314,6 +13341,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         currentDenseRouteMeasuredIncrementalMs: learnedTransferIncrementalDenseMs,
         currentDenseRouteMinusDiagnosticReadbackMs: learnedTransferDenseMinusDiagnosticReadbackMs,
         currentDenseRouteStagesMs: {
+          sourceDeltaAdmissionGpuMs: nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs,
           supportSelectionCompactionAndFrontGpuMs: nativeLowHeadCostProfile.supportFrontGpuMs,
           supportPositiveResidualGpuMs: nativeLowHeadCostProfile.supportPositiveResidualGpuMs,
           inferenceGpuMs: inferenceTiming.ms,
@@ -13369,6 +13397,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           currentMeasuredFrameHz: endToEndFrameMs > 0 ? 1000 / endToEndFrameMs : null,
           productionWithoutDebugManifestFetchMs: endToEndFrameMs,
           denseInferenceRetainedMs: inferenceTiming.ms,
+          sourceDeltaAdmissionRetainedMs: nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs,
           denseSupportFrontRetainedMs: nativeLowHeadCostProfile.supportFrontGpuMs,
           denseResidualRetainedMs: nativeLowHeadCostProfile.supportPositiveResidualGpuMs,
           denseReceiverMaterializationRetainedMs: treatmentMaterializeMs,

@@ -116,6 +116,17 @@ assert.match(combined, /fixedSourceDeltaCalibrationSha256[\s\S]*c1b0c1ada36317ee
 assert.match(combined, /sourceDeltaThreshold[\s\S]*0\.5457155704[\s\S]*sourceDeltaScales/, 'fixed source-delta admission records frozen threshold and per-channel scales');
 assert.match(combined, /runtimeTopK:\s*false[\s\S]*dynamicPercentile:\s*false[\s\S]*hiddenCandidateCap:\s*false/, 'fixed source-delta admission forbids runtime top-K, dynamic percentile, and hidden caps');
 assert.match(combined, /uncappedCandidateCount[\s\S]*uncappedCandidateCoverage[\s\S]*mohelWarning/, 'fixed source-delta admission exposes uncapped count/coverage and Mohel warning');
+assert.match(core, /sourceDeltaAdmissionGpuMs[\s\S]*sourceDeltaAdmissionStage[\s\S]*fixed-source-delta-admission-plus-finalize-v0/, 'head-cost profile isolates fixed source-delta admission GPU timing before support/front');
+assert.match(core, /inferenceGpuMs[\s\S]*sourceDeltaAdmissionGpuMs[\s\S]*supportFrontGpuMs[\s\S]*supportPositiveResidualGpuMs/, 'whole inference timing includes source-delta admission plus support/front plus residual spans');
+assert.match(runtime, /sourceDeltaAdmission[\s\S]*timestampWrites/, 'runtime accepts timestamp writes for source-delta admission pass');
+assert.match(combined, /historyEpochIdentity[\s\S]*priorHistoryEpochIdentity[\s\S]*currentHistoryEpochIdentity[\s\S]*historyEpochChanged/, 'fixed source-delta admission records prior/current history epoch identity and epoch-change state');
+assert.match(combined, /sourceHistoryResetReason[\s\S]*epoch-changed-first-frame-invalidated/, 'fixed source-delta admission records reset reason when history epoch changes');
+assert.match(combined, /historyEpochValidForAdmission[\s\S]*sourceHistoryAvailable/, 'source-history availability is gated by epoch-valid prior history, not encoded frame count alone');
+assert.doesNotMatch(runtime, /sourceHistoryAvailable\s*=\s*Number\(sourceHistoryValues\[3\][\s\S]*encodedFrameCount > 0 \? 1 : 0/, 'source-history availability cannot be encodedFrameCount-only after reset or basin change');
+assert.match(combined, /sourceHistoryStatsReadbackAuthority[\s\S]*diagnostic-only-not-production-candidate-path-v0/, 'source-history stats readback is labeled diagnostic-only, not production candidate plumbing');
+assert.match(combined, /productionCandidateNoCpuReadback[\s\S]*true/, 'fixed-gate production candidate path preserves no CPU readback despite diagnostic receipts');
+assert.match(combined, /fixedSourceDeltaLongStripSha256[\s\S]*7c65fc162fbf2c91e7a614ec6e0b37797d31441872d00ced3bbc325a513f8d23/, 'fixed gate receipt records long-strip normal-basin artifact checksum');
+assert.match(combined, /normalBasinCoverageRange[\s\S]*0\.099875[\s\S]*0\.100891[\s\S]*normalBasinCoverageMean[\s\S]*0\.100226/, 'fixed gate receipt records long-strip coverage bounds and mean');
 assert.match(combined, /native-low-front-topology-ablation-v0/, 'route records shared-device learned frontTopology visual ablation');
 assert.match(combined, /fullFrozenTreatmentReference[\s\S]*frontTopologyAblatedTreatment[\s\S]*nativeLowControl/, 'frontTopology ablation keeps native control, full frozen reference, and ablated treatment');
 assert.match(combined, /native-low-nearest-normalized-front-upsampling-no-learned-front-residual-v0/, 'frontTopology ablation labels native-low upsample authority with no learned front residual');

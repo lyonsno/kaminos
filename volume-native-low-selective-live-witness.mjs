@@ -154,6 +154,7 @@ try {
       && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount)
       && state?.nativeLowHeadCostProfile?.identity === 'native-low-head-cost-profile-v0'
       && state?.headCostTimingAuthority === 'webgpu-timestamp-query-stage-split-v0'
+      && Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0
       && Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0
       && Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0
       && state?.nativeLowSupportTileProfile?.identity === 'native-low-support-proximal-tile-profile-v0'
@@ -195,6 +196,8 @@ try {
       && state?.nativeLowFixedSourceDeltaAdmission?.runtimeTopK === false
       && state?.nativeLowFixedSourceDeltaAdmission?.dynamicPercentile === false
       && state?.nativeLowFixedSourceDeltaAdmission?.hiddenCandidateCap === false
+      && state?.nativeLowFixedSourceDeltaAdmission?.sourceHistoryStatsReadbackAuthority === 'diagnostic-only-not-production-candidate-path-v0'
+      && state?.nativeLowFixedSourceDeltaAdmission?.productionCandidateNoCpuReadback === true
       && Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount) >= 0
       && (!frontTopologyAblationRequested
         || (
@@ -257,6 +260,7 @@ try {
   );
   assert.equal(state?.nativeLowHeadCostProfile?.identity, 'native-low-head-cost-profile-v0', 'head cost profile missing');
   assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
+  assert.ok(Number(state?.nativeLowHeadCostProfile?.sourceDeltaAdmissionGpuMs) >= 0, 'sourceDeltaAdmissionGpuMs missing');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0, 'supportFrontGpuMs missing');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0, 'supportPositiveResidualGpuMs missing');
   assert.equal(state?.nativeLowSupportTileProfile?.identity, 'native-low-support-proximal-tile-profile-v0', 'support-proximal tile profile missing');
@@ -301,6 +305,12 @@ try {
   assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.runtimeTopK, false, 'runtime top-K used for fixed source-delta admission');
   assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.dynamicPercentile, false, 'dynamic percentile used for fixed source-delta admission');
   assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.hiddenCandidateCap, false, 'hidden candidate cap used for fixed source-delta admission');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.sourceHistoryStatsReadbackAuthority, 'diagnostic-only-not-production-candidate-path-v0', 'source-history stats readback is not diagnostic-only');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.productionCandidateNoCpuReadback, true, 'production candidate path lost no-CPU-readback receipt');
+  assert.ok(state?.nativeLowFixedSourceDeltaAdmission?.currentHistoryEpochIdentity, 'current history epoch identity missing');
+  assert.ok(Object.hasOwn(state?.nativeLowFixedSourceDeltaAdmission || {}, 'priorHistoryEpochIdentity'), 'prior history epoch identity missing');
+  assert.ok(Object.hasOwn(state?.nativeLowFixedSourceDeltaAdmission || {}, 'historyEpochValidForAdmission'), 'history epoch validity missing');
+  assert.equal(state?.nativeLowFixedSourceDeltaAdmission?.fixedSourceDeltaLongStripSha256, '7c65fc162fbf2c91e7a614ec6e0b37797d31441872d00ced3bbc325a513f8d23', 'fixed source-delta long-strip receipt missing');
   assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount) >= 0, 'uncapped candidate count missing');
   assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCoverage) >= 0, 'uncapped candidate coverage missing');
   if (frontTopologyAblationRequested) {
