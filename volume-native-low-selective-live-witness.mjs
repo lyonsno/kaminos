@@ -127,9 +127,15 @@ try {
       && Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0
       && Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0
       && state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage === 'full-grid-160^3'
+      && state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity === 'native-low-support-positive-residual-dispatch-v0'
+      && state?.nativeLowInferenceWorkProfile?.supportCompactionActive === true
+      && state?.nativeLowInferenceWorkProfile?.residualDispatchMode === 'support-positive-direct-covered-dispatch-v0'
       && state?.nativeLowInferenceWorkProfile?.hiddenSupportCap === false
       && Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0
       && Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0
+      && Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount) >= 0
+      && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups) >= 1
+      && Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount)
       && Number(state?.inferenceGpuMs) >= 0
       && Number(state?.uploadDispatchMs) >= 0
       && Number(state?.endToEndFrameMs) >= 0
@@ -162,9 +168,18 @@ try {
   assert.ok(Number(state?.nativeLowMaterializationProfile?.treatmentRebuildMs) >= 0, 'treatmentRebuildMs missing');
   assert.ok(Number(state?.nativeLowMaterializationProfile?.restoreCopyMs) >= 0, 'restoreCopyMs missing');
   assert.equal(state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage, 'full-grid-160^3', 'support classifier coverage is not full grid');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity, 'native-low-support-positive-residual-dispatch-v0', 'wrong support compaction identity');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionActive, true, 'support compaction was not active');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchMode, 'support-positive-direct-covered-dispatch-v0', 'wrong residual dispatch mode');
   assert.equal(state?.nativeLowInferenceWorkProfile?.hiddenSupportCap, false, 'hidden support cap used in inference profile');
   assert.ok(Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0, 'modelEvaluatedCellCount missing');
   assert.ok(Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0, 'residualHeadEvaluatedCount missing');
+  assert.ok(Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount) >= 0, 'supportCompactedCount missing');
+  assert.ok(Number(state?.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups) >= 1, 'residualDispatchWorkgroups missing');
+  assert.ok(
+    Number(state?.nativeLowInferenceWorkProfile?.residualDispatchThreadCount) >= Number(state?.nativeLowInferenceWorkProfile?.supportCompactedCount),
+    'residual dispatch thread count does not cover compacted support',
+  );
 
   const startState = state;
   const observationStartMs = performance.now();
@@ -211,6 +226,11 @@ try {
     treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
     nativeLowInferenceWorkProfile: endState.nativeLowInferenceWorkProfile,
+    supportCompactionIdentity: endState.nativeLowInferenceWorkProfile?.supportCompactionIdentity,
+    supportCompactedCount: endState.nativeLowInferenceWorkProfile?.supportCompactedCount,
+    residualDispatchMode: endState.nativeLowInferenceWorkProfile?.residualDispatchMode,
+    residualDispatchWorkgroups: endState.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups,
+    residualDispatchThreadCount: endState.nativeLowInferenceWorkProfile?.residualDispatchThreadCount,
     requestedBackend: endState.requestedBackend,
     effectiveBackend: endState.effectiveBackend,
     transportMode: endState.transportMode,
