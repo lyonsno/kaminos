@@ -140,6 +140,9 @@ try {
   if (comparisonState?.sameStateCaptureId !== sameStateCaptureId || comparisonState?.rawEvidenceAvailable !== true) {
     throw new Error(`comparison-surface-stale-or-partial:${JSON.stringify(comparisonState)}`);
   }
+  if (!Array.isArray(comparisonState.blindOrder) || comparisonState.blindOrder.length !== 2 || [...comparisonState.blindOrder].sort().join(',') !== '0,1') {
+    throw new Error(`comparison-surface-stale-or-partial:invalid-blind-order:${JSON.stringify(comparisonState?.blindOrder)}`);
+  }
   const comparisonScreenshot = await wsRequest('Page.captureScreenshot', { format: 'png', fromSurface: true });
   const comparisonSurfaceBytes = Buffer.from(comparisonScreenshot.data, 'base64');
   if (comparisonSurfaceBytes.length < 1024 || comparisonSurfaceBytes.readUInt32BE(0) !== 0x89504e47) {
@@ -176,6 +179,7 @@ try {
     sameStateCaptureId,
     controlMode,
     treatmentMode,
+    blindOrder: comparisonState.blindOrder,
     residualGain,
     frozen,
     route: compactState(initialState),

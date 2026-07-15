@@ -10666,6 +10666,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const frameCountBefore = state.frameCount;
     const rows = [];
     cancelAnimationFrame(raf);
+    raf = 0;
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     try {
       for (const count of counts) {
@@ -10798,6 +10799,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const frameCountBefore = state.frameCount;
     const rows = [];
     cancelAnimationFrame(raf);
+    raf = 0;
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     try {
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, boundarySplatPbrScene: 'fire-field' });
@@ -10911,9 +10913,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const controlsBefore = { ...controlsSnapshot };
     const simStepCountBefore = state.simStepCount;
     const frameCountBefore = state.frameCount;
-    const resumeRenderLoopAfterSampling = !boundarySplatWitnessPaused;
+    const resumeRenderLoopAfterSampling = raf !== 0 && !boundarySplatWitnessPaused;
     const rows = [];
     cancelAnimationFrame(raf);
+    raf = 0;
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     try {
       for (const [role, lodMode] of [['control', controlMode], ['treatment', treatmentMode]]) {
@@ -11017,6 +11020,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let draw = null;
     let frozenProfile = null;
     cancelAnimationFrame(raf);
+    raf = 0;
     if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
     try {
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, boundarySplatInstances: 1 });
@@ -11109,6 +11113,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!state.active || !device) return { ok: false, reason: 'inactive' };
     if (!boundarySplatWitnessPaused) return { ok: false, reason: 'witness-frame-not-paused' };
     cancelAnimationFrame(raf);
+    raf = 0;
     boundarySplatWitnessExactDrawState = null;
     boundarySplatWitnessPaused = false;
     raf = requestAnimationFrame(render);
@@ -11342,6 +11347,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.error = err?.message || String(err);
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
+      raf = 0;
       emitStatus({ phase: 'render-error', error: state.error });
     }
   }
@@ -13243,6 +13249,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       .filter(scale => Number.isFinite(scale));
     if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
     cancelAnimationFrame(raf);
+    raf = 0;
     if (device.queue?.onSubmittedWorkDone) {
       await device.queue.onSubmittedWorkDone();
     }
@@ -13279,6 +13286,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       resetTemporalHistory('same-state-render-scale-restore');
       if (options.resumeRenderLoop !== false && state.active) {
         cancelAnimationFrame(raf);
+        raf = 0;
         raf = requestAnimationFrame(render);
       }
     }
@@ -13309,6 +13317,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       .filter(scale => Number.isFinite(scale));
     if (!renderScales.length) return { ok: false, reason: 'missing-render-scales', ...state };
     cancelAnimationFrame(raf);
+    raf = 0;
     if (device.queue?.onSubmittedWorkDone) {
       await device.queue.onSubmittedWorkDone();
     }
@@ -13417,6 +13426,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       resetTemporalHistory('controlled-step-sequence-restore');
       if (options.resumeRenderLoop !== false && state.active) {
         cancelAnimationFrame(raf);
+        raf = 0;
         raf = requestAnimationFrame(render);
       }
     }
@@ -13441,6 +13451,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   async function renderFrozenScaleToCanvas(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     cancelAnimationFrame(raf);
+    raf = 0;
     if (device.queue?.onSubmittedWorkDone) {
       await device.queue.onSubmittedWorkDone();
     }
@@ -13618,6 +13629,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       if (options.resumeRenderLoop === true && state.active) {
         cancelAnimationFrame(raf);
+        raf = 0;
         raf = requestAnimationFrame(render);
       }
     }
@@ -13626,6 +13638,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   function resumeBoundarySplatHistoryHoldoverLoop(options) {
     if (options.resumeRenderLoop === true && state.active) {
       cancelAnimationFrame(raf);
+      raf = 0;
       raf = requestAnimationFrame(render);
     }
   }
@@ -13639,6 +13652,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...noSourceSubmissions };
     cancelAnimationFrame(raf);
+    raf = 0;
     try {
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
       const metadata = await sampleBoundarySplatHistorySlotMetadata();
@@ -13980,6 +13994,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           state.error = null;
           canvas.classList.add('active');
           cancelAnimationFrame(raf);
+          raf = 0;
           raf = requestAnimationFrame(render);
           emitStatus({ phase: 'active' });
         } catch (err) {
@@ -13994,6 +14009,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         state.active = false;
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
+        raf = 0;
         emitStatus({ phase: 'inactive' });
       }
     },

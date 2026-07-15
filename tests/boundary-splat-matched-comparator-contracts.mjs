@@ -31,8 +31,9 @@ assert.match(matchedCostSource, /framePreserved/, 'matched cost evidence must pr
 assert.match(matchedCostSource, /sampleBoundarySplatDrawState\(\)/, 'each cost row must retain fresh physical draw authority');
 assert.match(matchedCostSource, /gpu-indirect-command-buffer-post-submit-readback-v0/, 'matched cost rows must require physical command authority');
 assert.match(matchedCostSource, /controlsSnapshot = controlsBefore/, 'matched cost sampling must restore ambient live controls');
-assert.match(matchedCostSource, /resumeRenderLoopAfterSampling\s*=\s*!boundarySplatWitnessPaused/, 'direct cost sampling must remember whether it owns loop restoration');
+assert.match(matchedCostSource, /resumeRenderLoopAfterSampling\s*=\s*raf\s*!==\s*0\s*&&\s*!boundarySplatWitnessPaused/, 'direct cost sampling must observe an actually scheduled loop and exact-frame custody');
 assert.match(matchedCostSource, /resumeRenderLoopAfterSampling[\s\S]*requestAnimationFrame\(render\)/, 'direct cost sampling must restart only a loop it paused');
+assert.doesNotMatch(coreSource, /cancelAnimationFrame\(raf\);\n(?!\s*raf\s*=\s*0;)/, 'every RAF cancellation must zero its token so loop ownership cannot be inferred from stale ids');
 
 assert.equal(existsSync(witnessUrl), true, 'the Greenroom matched-state comparator witness must exist');
 assert.match(witness, /captureBoundarySplatWitnessFrame/, 'witness must pause one exact live source before either variant');
@@ -76,5 +77,7 @@ assert.match(witness, /Raw A[\s\S]*Raw B/, 'amplified diagnostics must retain di
 assert.match(witness, /class="tag a">A<[\s\S]*class="tag b">B</, 'primary side-by-side view must visibly label the randomized A/B halves');
 assert.match(witness, /capture\.boundarySplatHistoryWriteSlot\s*!==\s*frozen\.historyWriteSlot/, 'each accepted variant must enforce frozen history-slot equality');
 assert.match(witness, /crypto\.getRandomValues/, 'A/B presentation must randomize labels in the browser');
+assert.match(witness, /blindOrder:\s*comparisonState\.blindOrder/, 'the report must retain the effective randomized assignment for later decoding');
+assert.match(witness, /invalid-blind-order/, 'partial or invalid randomized assignment must fail loud');
 
 console.log('boundary splat matched comparator contracts passed');
