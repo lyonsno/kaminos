@@ -305,6 +305,17 @@ async function waitForCdp() {
   throw new Error('Chrome DevTools endpoint did not open');
 }
 
+async function waitForPageTarget() {
+  for (let i = 0; i < 80; i += 1) {
+    const targets = await cdpFetch('/json/list');
+    const page = targets.find(target => target.type === 'page' && target.url.includes('kaminos_volume_smoke=1'))
+      || targets.find(target => target.type === 'page');
+    if (page?.webSocketDebuggerUrl) return page;
+    await delay(125);
+  }
+  throw new Error('No debuggable page target');
+}
+
 async function attachOrLaunchBrowser(url) {
   if (reuseBrowser && await cdpAvailable()) {
     return {
@@ -348,8 +359,8 @@ function browserReceipt(browserSession) {
   };
 }
 
-function closeBrowserSession(browserSession) {
-  if (browserSession?.keepBrowserOpen) return;
+function closeBrowserSession(browserSession, { failed = false } = {}) {
+  if (browserSession?.keepBrowserOpen && !(failed && browserSession.mode === 'launched-shared')) return;
   browserSession?.process?.kill('SIGTERM');
 }
 
@@ -539,6 +550,7 @@ async function main() {
   let renderControlOverrides = {};
   let secondaryRenderControlOverrides = {};
   let browserSession = null;
+  let completed = false;
   let ws = null;
   let begin = null;
   let lastDebugState = null;
@@ -609,10 +621,7 @@ async function main() {
     browserSession = await attachOrLaunchBrowser(url);
     await waitForCdp();
     phase = 'target';
-    const targets = await cdpFetch('/json/list');
-    const page = targets.find(target => target.type === 'page' && target.url.includes('kaminos_volume_smoke=1'))
-      || targets.find(target => target.type === 'page');
-    if (!page?.webSocketDebuggerUrl) throw new Error('No debuggable page target');
+    const page = await waitForPageTarget();
     ws = new WebSocket(page.webSocketDebuggerUrl);
     await waitForWebSocketOpen(ws);
     ws.addEventListener('message', event => {
@@ -916,6 +925,7 @@ async function main() {
         backend: importedRender?.backend || initialFieldImport?.effective?.backend || null,
       };
       writeManifest(manifest);
+      completed = true;
       console.log(JSON.stringify({
         ok: true,
         manifest: manifestPath,
@@ -1025,6 +1035,7 @@ async function main() {
       release,
     };
     writeManifest(manifest);
+    completed = true;
     console.log(JSON.stringify({
       ok: true,
       manifest: manifestPath,
@@ -1072,7 +1083,7 @@ async function main() {
         ws.close();
       } catch {}
     }
-    closeBrowserSession(browserSession);
+    closeBrowserSession(browserSession, { failed: !completed });
   }
 }
 

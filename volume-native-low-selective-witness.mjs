@@ -36,6 +36,11 @@ const targetOrigin = String(args.get('--target-origin') || 'http://127.0.0.1:185
 const viewportSize = String(args.get('--viewport-size') || '1200,1000');
 const renderCanvasSize = String(args.get('--render-canvas-size') || '1000,1000');
 const chunkFloats = String(args.get('--chunk-floats') || '262144');
+const browserCommon = [];
+if (args.has('--debug-port')) browserCommon.push('--debug-port', String(args.get('--debug-port')));
+if (args.has('--user-data-dir')) browserCommon.push('--user-data-dir', String(args.get('--user-data-dir')));
+if (args.has('--reuse-browser')) browserCommon.push('--reuse-browser');
+if (args.has('--keep-browser-open')) browserCommon.push('--keep-browser-open');
 
 function sha256File(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
@@ -180,6 +185,7 @@ try {
     '--render-canvas-size', renderCanvasSize,
     '--chunk-floats', chunkFloats,
     '--settle-ms', '1800',
+    ...browserCommon,
   ];
   commands.push(run('node', [
     ...common(controlManifestPath),
