@@ -194,6 +194,93 @@ async function runMeshAssetLinkScenario(ws) {
   `, { timeoutMs: 45000 });
 }
 
+const DIRECT_ASSET_LINK_SCENARIOS = {
+  splat: {
+    scenario: 'splat-asset-link',
+    evidenceKey: 'splatAssetLink',
+    assetType: 'splat',
+    objectType: 'splat',
+    failed: 'splat asset link failed before registration',
+    missingSchema: 'splat asset link debug state missing schema',
+    wrongType: 'splat asset link debug state used wrong asset type',
+    wrongRoute: 'splat asset link did not preserve requested/effective route identity',
+    wrongRegistration: 'splat asset link did not register the loaded splat as a scene object',
+    missingResource: 'splat asset link registered without a matching browser resource request',
+    missingRow: 'splat asset link registered object missing from scene object list',
+  },
+  image: {
+    scenario: 'image-asset-link',
+    evidenceKey: 'imageAssetLink',
+    assetType: 'image',
+    objectType: 'image',
+    failed: 'image asset link failed before registration',
+    missingSchema: 'image asset link debug state missing schema',
+    wrongType: 'image asset link debug state used wrong asset type',
+    wrongRoute: 'image asset link did not preserve requested/effective route identity',
+    wrongRegistration: 'image asset link did not register the loaded image as a scene object',
+    missingResource: 'image asset link registered without a matching browser resource request',
+    missingRow: 'image asset link registered object missing from scene object list',
+  },
+};
+
+async function runDirectAssetLinkScenario(ws, config) {
+  phase = `scenario-${config.scenario}`;
+  lastEvidence[config.evidenceKey] = await evaluate(ws, `
+    (async () => {
+      const config = ${JSON.stringify(config)};
+      const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+      const waitForAssetLink = async () => {
+        for (let i = 0; i < 160; i++) {
+          const state = window.kaminosAssetSmokeLinkDebugState?.();
+          const objects = window.kaminosSceneObjectDebugState?.() || [];
+          if (state?.status === 'loaded' && state.registeredObjectId && objects.some(object => object.id === state.registeredObjectId)) {
+            return { state, objects };
+          }
+          if (state?.status === 'failed') {
+            throw new Error(config.failed + ': ' + JSON.stringify(state));
+          }
+          await wait(125);
+        }
+        return {
+          state: window.kaminosAssetSmokeLinkDebugState?.() || null,
+          objects: window.kaminosSceneObjectDebugState?.() || [],
+        };
+      };
+      const evidence = await waitForAssetLink();
+      const state = evidence.state;
+      if (!state || state.schema !== 'kaminos.asset-smoke-link.v0') {
+        throw new Error(config.missingSchema + ': ' + JSON.stringify(evidence));
+      }
+      if (state.assetType !== config.assetType) {
+        throw new Error(config.wrongType + ': ' + JSON.stringify(state));
+      }
+      if (!state.requestedRoot || !state.requestedPath || !state.effectiveUrl?.includes('/api/read?')) {
+        throw new Error(config.wrongRoute + ': ' + JSON.stringify(state));
+      }
+      const object = evidence.objects.find(record => record.id === state.registeredObjectId);
+      if (!object || object.type !== config.objectType || object.source !== state.effectiveUrl) {
+        throw new Error(config.wrongRegistration + ': ' + JSON.stringify({ state, object, objects: evidence.objects }));
+      }
+      const resourceNames = performance.getEntriesByType('resource').map(entry => entry.name);
+      const requestedResource = resourceNames.find(name => name.includes('/api/read?') && name.includes('root=' + encodeURIComponent(state.requestedRoot)) && name.includes('path=' + encodeURIComponent(state.requestedPath)));
+      if (!requestedResource) {
+        throw new Error(config.missingResource + ': ' + JSON.stringify({ state, resourceNames }));
+      }
+      const row = [...document.querySelectorAll('[data-scene-object-id]')].find(row => row.dataset.sceneObjectId === state.registeredObjectId);
+      if (!row) {
+        throw new Error(config.missingRow + ': ' + JSON.stringify({ state, rows: [...document.querySelectorAll('[data-scene-object-id]')].map(row => row.dataset.sceneObjectId) }));
+      }
+      return {
+        state,
+        object,
+        requestedResource,
+        rowText: row.textContent.trim(),
+        info: document.getElementById('info-bar')?.textContent?.trim() || null,
+      };
+    })()
+  `, { timeoutMs: 45000 });
+}
+
 async function dispatchMouseClick(ws, point) {
   await wsRequest(ws, 'Input.dispatchMouseEvent', {
     type: 'mousePressed',
@@ -4774,6 +4861,10 @@ try {
     await runStartupEmptyScenario(ws);
   } else if (scenario === 'mesh-asset-link') {
     await runMeshAssetLinkScenario(ws);
+  } else if (scenario === 'splat-asset-link') {
+    await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.splat);
+  } else if (scenario === 'image-asset-link') {
+    await runDirectAssetLinkScenario(ws, DIRECT_ASSET_LINK_SCENARIOS.image);
   } else if (scenario === 'world-chambers-lerms-underhill') {
     await runWorldChambersLermsUnderhillScenario(ws);
   } else if (scenario === 'world-chambers-lerms-underhill-receipt-url') {
