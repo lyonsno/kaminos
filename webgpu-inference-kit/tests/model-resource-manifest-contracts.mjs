@@ -24,6 +24,36 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value != null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function withRecomputedSemanticIds(manifest) {
+  const allocations = manifest.allocations.map(allocation => {
+    const semanticIdentity = canonicalJson({
+      modelId: manifest.modelId,
+      revision: manifest.revision,
+      manifestMetadata: manifest.metadata,
+      allocationId: allocation.allocationId,
+      allocationMetadata: allocation.metadata,
+      tensors: allocation.tensors,
+    });
+    const semanticResourceId = `${allocation.physicalResourceId}:semantic:${encodeURIComponent(semanticIdentity)}`;
+    return {
+      ...allocation,
+      semanticResourceId,
+      resourceId: manifest.resourceSharing.policy === 'content-addressed-physical-dedupe'
+        ? allocation.physicalResourceId
+        : semanticResourceId,
+    };
+  });
+  return { ...manifest, allocations };
+}
+
 function deferred() {
   let resolve;
   let reject;
@@ -450,6 +480,41 @@ assert.throws(
   }),
   /tensor metadata.*finite number|finite number.*tensor metadata/i,
 );
+
+const forgedMalformedManifest = withRecomputedSemanticIds({
+  ...manifest,
+  metadata: { role: undefined },
+  allocations: manifest.allocations.map((allocation, allocationIndex) => ({
+    ...allocation,
+    metadata: allocationIndex === 0 ? { dropped: undefined } : allocation.metadata,
+    tensors: allocation.tensors.map((tensor, tensorIndex) => ({
+      ...tensor,
+      metadata: allocationIndex === 0 && tensorIndex === 0
+        ? { quantizationScale: Number.NaN }
+        : tensor.metadata,
+    })),
+  })),
+});
+const forgedValidation = validateWebGpuModelResourceManifest(forgedMalformedManifest);
+assert.equal(forgedValidation.ok, false, 'public validation must reject forged manifests with lossy semantic metadata');
+assert.match(forgedValidation.errors.join('\n'), /manifest metadata|allocation metadata|tensor metadata/i);
+const forgedRuntime = runtimeFixture();
+const forgedResidency = createWebGpuResourceResidency({ sessionId: 'forged-metadata' });
+await assert.rejects(
+  () => loadWebGpuModelResources({
+    manifest: forgedMalformedManifest,
+    bundle,
+    route: routeFixture({
+      routeId: 'forged-metadata-route',
+      runtime: forgedRuntime,
+      residency: forgedResidency,
+      factory: createWebGpuResourceFactory({ sessionId: 'forged-metadata', residency: forgedResidency }),
+    }),
+  }),
+  /invalid WebGPU model resource manifest|metadata/i,
+);
+assert.equal(forgedRuntime.created.length, 0, 'malformed external metadata must fail before GPU allocation');
+assert.equal(forgedRuntime.writes.length, 0, 'malformed external metadata must fail before GPU upload');
 
 const mutableSource = Uint8Array.from(bundle);
 const mutationResidency = createWebGpuResourceResidency({ sessionId: 'mutation' });

@@ -96,6 +96,16 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
+function validateJsonValue(value, label, errors) {
+  try {
+    cloneJson(value, label);
+    return true;
+  } catch (error) {
+    errors.push(String(error?.message || error));
+    return false;
+  }
+}
+
 function normalizeDtype(dtype) {
   if (!isNonEmptyString(dtype)) return dtype;
   const normalized = dtype.toLowerCase();
@@ -196,6 +206,7 @@ export function validateWebGpuModelResourceManifest(manifest) {
   }
   if (!isNonEmptyString(manifest.modelId)) errors.push('modelId must be a non-empty string');
   if (!isNonEmptyString(manifest.revision)) errors.push('revision must be a non-empty string');
+  const manifestMetadataValid = validateJsonValue(manifest.metadata, 'manifest metadata', errors);
   const resourceSharingPolicy = manifest.resourceSharing?.policy;
   if (!Object.values(WEBGPU_MODEL_RESOURCE_SHARING_POLICIES).includes(resourceSharingPolicy)) {
     errors.push(
@@ -244,6 +255,19 @@ export function validateWebGpuModelResourceManifest(manifest) {
     } else {
       allocationIds.add(allocation.allocationId);
     }
+    const allocationMetadataValid = validateJsonValue(allocation.metadata, `${prefix}.metadata`, errors);
+    let tensorMetadataValid = true;
+    if (Array.isArray(allocation.tensors)) {
+      allocation.tensors.forEach((tensor, tensorIndex) => {
+        if (tensor && typeof tensor === 'object' && !Array.isArray(tensor)) {
+          tensorMetadataValid = validateJsonValue(
+            tensor.metadata,
+            `${prefix}.tensors[${tensorIndex}].metadata`,
+            errors,
+          ) && tensorMetadataValid;
+        }
+      });
+    }
     if (!Number.isSafeInteger(allocation.byteOffset) || allocation.byteOffset < 0) {
       errors.push(`${prefix}.byteOffset must be a non-negative safe integer`);
     }
@@ -280,24 +304,26 @@ export function validateWebGpuModelResourceManifest(manifest) {
       && Number.isSafeInteger(allocation.usage)
     ) {
       const expectedPhysicalResourceId = physicalResourceId(bundleSha256, allocation);
-      const expectedSemanticResourceId = semanticResourceId(
-        manifest.modelId,
-        manifest.revision,
-        manifest.metadata ?? null,
-        expectedPhysicalResourceId,
-        allocation,
-      );
       if (allocation.physicalResourceId !== expectedPhysicalResourceId) {
         errors.push(`${prefix}.physicalResourceId must be content-derived from bundle and allocation bytes`);
       }
-      if (allocation.semanticResourceId !== expectedSemanticResourceId) {
-        errors.push(`${prefix}.semanticResourceId must bind model, revision, manifest, allocation, and tensor semantics`);
-      }
-      const expectedResourceId = resourceSharingPolicy === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe
-        ? expectedPhysicalResourceId
-        : expectedSemanticResourceId;
-      if (allocation.resourceId !== expectedResourceId) {
-        errors.push(`${prefix}.resourceId must match the declared resourceSharing policy`);
+      if (manifestMetadataValid && allocationMetadataValid && tensorMetadataValid) {
+        const expectedSemanticResourceId = semanticResourceId(
+          manifest.modelId,
+          manifest.revision,
+          manifest.metadata,
+          expectedPhysicalResourceId,
+          allocation,
+        );
+        if (allocation.semanticResourceId !== expectedSemanticResourceId) {
+          errors.push(`${prefix}.semanticResourceId must bind model, revision, manifest, allocation, and tensor semantics`);
+        }
+        const expectedResourceId = resourceSharingPolicy === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe
+          ? expectedPhysicalResourceId
+          : expectedSemanticResourceId;
+        if (allocation.resourceId !== expectedResourceId) {
+          errors.push(`${prefix}.resourceId must match the declared resourceSharing policy`);
+        }
       }
     }
     if (!Array.isArray(allocation.tensors) || allocation.tensors.length === 0) {
