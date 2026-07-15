@@ -1,0 +1,792 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-multiref-route-receipts.v1",
+  "generatedAt": "2026-07-15T12:36:49.171Z",
+  "greenroomReceiptAuthority": "/Users/noahlyons/.local/state/gpu-greenroom",
+  "jobCount": 9,
+  "allDoneExitZero": true,
+  "jobs": [
+    {
+      "shape": "prior-shape-0032",
+      "stance": "prior-forward",
+      "referenceSet": "clay-depth",
+      "seed": 715323,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/4ea0e6341688/receipt.json",
+      "receiptSha256": "4de03ccc9ccf4ff4af1a4cb33f3021aa14bdd8d299376874d2015491299459ac",
+      "receipt": {
+        "job_id": "4ea0e6341688",
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/depth.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715323 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784116916.469237,
+        "finished_at": 1784116969.3468108,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/4ea0e6341688/request.json",
+      "requestSha256": "a577622a899d24b61abf0d2d8b3d95c3a384f542201fbc2b3fedd9e033f60cff",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/depth.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "seed": "715323",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "4ea0e6341688",
+        "submitted_at": 1784116916.290588
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+          "sha256": "26c22a0367d56ebd5d579407027cf11bbbc994cb257bb658b5f308d18d2f54c4"
+        },
+        {
+          "role": "depth",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/depth.png",
+          "sha256": "f412d89f0474f4a2051027bbdc812de2e216a08014f5443f4b7e57652963b76a"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt",
+        "canonicalPath": "prompts/prior-forward.txt",
+        "sha256": "c79ef4378f2f0339b3c866020ec1f960a67a3228a95b3ddd94f818a54726878e"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth/output.png",
+        "sha256": "73486303709c57d0aeb55e58e41c69efb0b3247059d975cc5c022ce5d941b657",
+        "bytes": 252416
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 52.9
+    },
+    {
+      "shape": "prior-shape-0032",
+      "stance": "prior-forward",
+      "referenceSet": "clay-normal",
+      "seed": 715323,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/f1b671e82228/receipt.json",
+      "receiptSha256": "a1436b0954de5486f3734523e0a721125520651ed445fb34ca9529680f225eab",
+      "receipt": {
+        "job_id": "f1b671e82228",
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/normal.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715323 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784117346.989289,
+        "finished_at": 1784117402.147052,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/f1b671e82228/request.json",
+      "requestSha256": "e1b1cfb3faf26f3b4e18f8b9b6b5556ad364d78459f64807764ab0d15f248565",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/normal.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt",
+          "seed": "715323",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "f1b671e82228",
+        "submitted_at": 1784117346.38274
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+          "sha256": "26c22a0367d56ebd5d579407027cf11bbbc994cb257bb658b5f308d18d2f54c4"
+        },
+        {
+          "role": "normal",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/normal.png",
+          "sha256": "2e847e8e4972e6cc2126fbdaf2a66f9e09343655cfc4fb48108636e1ba48d88f"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt",
+        "canonicalPath": "prompts/prior-forward.txt",
+        "sha256": "c79ef4378f2f0339b3c866020ec1f960a67a3228a95b3ddd94f818a54726878e"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+        "bytes": 262363
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 55.2
+    },
+    {
+      "shape": "prior-shape-0032",
+      "stance": "prior-forward",
+      "referenceSet": "clay-depth-normal",
+      "seed": 715323,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/de7a9d3679a2/receipt.json",
+      "receiptSha256": "9e8d35a5124d3acfa1fa8b45f36a24e43eca2250e4f88e8fe840310277d99deb",
+      "receipt": {
+        "job_id": "de7a9d3679a2",
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth-normal",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/depth.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/normal.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth-normal/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715323 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784117807.227967,
+        "finished_at": 1784117886.974208,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/de7a9d3679a2/request.json",
+      "requestSha256": "d4b8aa83892f9dac84e4c20a69de558b6109f4481b03b4ba91a3e6519cc80187",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth-normal",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/depth.png",
+          "reference_path_3": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/normal.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt",
+          "seed": "715323",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "de7a9d3679a2",
+        "submitted_at": 1784117346.590385
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/clay.png",
+          "sha256": "26c22a0367d56ebd5d579407027cf11bbbc994cb257bb658b5f308d18d2f54c4"
+        },
+        {
+          "role": "depth",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/depth.png",
+          "sha256": "f412d89f0474f4a2051027bbdc812de2e216a08014f5443f4b7e57652963b76a"
+        },
+        {
+          "role": "normal",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0032/normal.png",
+          "sha256": "2e847e8e4972e6cc2126fbdaf2a66f9e09343655cfc4fb48108636e1ba48d88f"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/prior-forward.txt",
+        "canonicalPath": "prompts/prior-forward.txt",
+        "sha256": "c79ef4378f2f0339b3c866020ec1f960a67a3228a95b3ddd94f818a54726878e"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth-normal/output.png",
+        "sha256": "52ad5cb81bdf046272bbb6808a39aafaee39148a2235fb9f9b3ff1ce70597ecf",
+        "bytes": 259524
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 79.7
+    },
+    {
+      "shape": "prior-shape-0066",
+      "stance": "preserve-gestalt",
+      "referenceSet": "clay-depth",
+      "seed": 715661,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/c287e7029a01/receipt.json",
+      "receiptSha256": "cc3249e79f618a59b497840d6c9f44af4dbd0159c4fd9202f6dd4e76f099228f",
+      "receipt": {
+        "job_id": "c287e7029a01",
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/depth.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715661 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784117552.235065,
+        "finished_at": 1784117645.955201,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/c287e7029a01/request.json",
+      "requestSha256": "5d1170f3795c9f44807052b565b207eccdd5c8718cc34f01b7b569d2b520c83a",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/depth.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+          "seed": "715661",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "c287e7029a01",
+        "submitted_at": 1784117346.460751
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+          "sha256": "10c5e76fe780e535e6137a9fac0079373193f062a0f81ed87c1e4ae19381119c"
+        },
+        {
+          "role": "depth",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/depth.png",
+          "sha256": "412faf51c170f317efe7081225089894cc6da0a5f7d1187b90f5425bf649b29d"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+        "canonicalPath": "prompts/preserve-gestalt.txt",
+        "sha256": "bed63c82d11c51b9b607a3c14b104e4c914ae39528dfc39462104c2036648ffc"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth/output.png",
+        "sha256": "e612ba273586da8adc26f5677bc2683e1eed24161ad7b7bda2c84241a24b971e",
+        "bytes": 279113
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 93.7
+    },
+    {
+      "shape": "prior-shape-0066",
+      "stance": "preserve-gestalt",
+      "referenceSet": "clay-normal",
+      "seed": 715661,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/8f85ea972380/receipt.json",
+      "receiptSha256": "83ee4528ba2d9c71470a7227e9796c466d0c74b73ef2f5e0819a700f1dbc437f",
+      "receipt": {
+        "job_id": "8f85ea972380",
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-normal",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/normal.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-normal/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715661 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784117735.938615,
+        "finished_at": 1784117807.221772,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/8f85ea972380/request.json",
+      "requestSha256": "bdfa0296c49ed6ec0bd947f7f15123aaa060f11decf643e84f9dbf5e9930be69",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-normal",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/normal.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+          "seed": "715661",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "8f85ea972380",
+        "submitted_at": 1784117346.529341
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+          "sha256": "10c5e76fe780e535e6137a9fac0079373193f062a0f81ed87c1e4ae19381119c"
+        },
+        {
+          "role": "normal",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/normal.png",
+          "sha256": "17a334d9f4f2675173eda84f231c8929f63b1342faa0931442b0e1d306f38a40"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+        "canonicalPath": "prompts/preserve-gestalt.txt",
+        "sha256": "bed63c82d11c51b9b607a3c14b104e4c914ae39528dfc39462104c2036648ffc"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-normal/output.png",
+        "sha256": "127aee2928f2f0c02233c48761a64307b82aa10788beb4954b63def070667734",
+        "bytes": 286052
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 71.3
+    },
+    {
+      "shape": "prior-shape-0066",
+      "stance": "preserve-gestalt",
+      "referenceSet": "clay-depth-normal",
+      "seed": 715661,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/278725b863b0/receipt.json",
+      "receiptSha256": "c5753a0061f9b4272792f9db4a00a6355e450f10faa8b78ccc7d63fd28bb6570",
+      "receipt": {
+        "job_id": "278725b863b0",
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/depth.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/normal.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715661 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784117402.150335,
+        "finished_at": 1784117474.29541,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/278725b863b0/request.json",
+      "requestSha256": "a726dac641426277706a07b59661b5b009a2b37732148d0362e475c6425c9a80",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/depth.png",
+          "reference_path_3": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/normal.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+          "seed": "715661",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "278725b863b0",
+        "submitted_at": 1784117346.408349
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/clay.png",
+          "sha256": "10c5e76fe780e535e6137a9fac0079373193f062a0f81ed87c1e4ae19381119c"
+        },
+        {
+          "role": "depth",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/depth.png",
+          "sha256": "412faf51c170f317efe7081225089894cc6da0a5f7d1187b90f5425bf649b29d"
+        },
+        {
+          "role": "normal",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0066/normal.png",
+          "sha256": "17a334d9f4f2675173eda84f231c8929f63b1342faa0931442b0e1d306f38a40"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+        "canonicalPath": "prompts/preserve-gestalt.txt",
+        "sha256": "bed63c82d11c51b9b607a3c14b104e4c914ae39528dfc39462104c2036648ffc"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "sha256": "03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba",
+        "bytes": 288739
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 72.1
+    },
+    {
+      "shape": "prior-shape-0087",
+      "stance": "preserve-gestalt",
+      "referenceSet": "clay-depth",
+      "seed": 715871,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/9f0b87ddc6d4/receipt.json",
+      "receiptSha256": "ca0aadfb9f20ab22de43f7d9e959e115b59d66279d0a69a52f1aadf8e4aa5baa",
+      "receipt": {
+        "job_id": "9f0b87ddc6d4",
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/depth.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715871 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784117474.298223,
+        "finished_at": 1784117552.1250932,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/9f0b87ddc6d4/request.json",
+      "requestSha256": "dd419ee373e115bab72c6875be0628f8e5e06e76362d2b3b5b2004324b61533d",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/depth.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+          "seed": "715871",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "9f0b87ddc6d4",
+        "submitted_at": 1784117346.4338582
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+          "sha256": "eec3b9963e7d70e1c4280f5c1700499759b445f2171efe59c2d9c6b325859a97"
+        },
+        {
+          "role": "depth",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/depth.png",
+          "sha256": "a66ce879788edd50175a3606918d162b0bd621c6022f8ab6212435a40a56448e"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+        "canonicalPath": "prompts/preserve-gestalt.txt",
+        "sha256": "bed63c82d11c51b9b607a3c14b104e4c914ae39528dfc39462104c2036648ffc"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth/output.png",
+        "sha256": "6cf339e644f341916d57ccab259371af4077424100162b8c3900c8b80fc5dc5a",
+        "bytes": 284600
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 77.8
+    },
+    {
+      "shape": "prior-shape-0087",
+      "stance": "preserve-gestalt",
+      "referenceSet": "clay-normal",
+      "seed": 715871,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/2cc0691a35d2/receipt.json",
+      "receiptSha256": "2b25a97bb23e88a462d41067f1ea44dc6aab7f1f2f410e2618c15abe2d2a477c",
+      "receipt": {
+        "job_id": "2cc0691a35d2",
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-normal",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/normal.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-normal/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715871 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784117886.976192,
+        "finished_at": 1784117963.637165,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/2cc0691a35d2/request.json",
+      "requestSha256": "3094983aae9fd1f43a535d9e5af9aae36ecc99c02baa88d48def051f35f38e68",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_2ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-normal",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/normal.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+          "seed": "715871",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "2cc0691a35d2",
+        "submitted_at": 1784117346.6508749
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+          "sha256": "eec3b9963e7d70e1c4280f5c1700499759b445f2171efe59c2d9c6b325859a97"
+        },
+        {
+          "role": "normal",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/normal.png",
+          "sha256": "6f27c43d94ee18f311accc3ec9e46db09a16f488328c78fc350cf24054e89436"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+        "canonicalPath": "prompts/preserve-gestalt.txt",
+        "sha256": "bed63c82d11c51b9b607a3c14b104e4c914ae39528dfc39462104c2036648ffc"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-normal/output.png",
+        "sha256": "b611b2ce80f24a2fce72fb62fda025ca4a51642e9f4fbaa13956aaf2a8b0a412",
+        "bytes": 303473
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 76.7
+    },
+    {
+      "shape": "prior-shape-0087",
+      "stance": "preserve-gestalt",
+      "referenceSet": "clay-depth-normal",
+      "seed": 715871,
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/ffee52b5d263/receipt.json",
+      "receiptSha256": "14899a0a9547b4abd953c848ada91916b4bc646321a14d78c687516c4e98ac9f",
+      "receipt": {
+        "job_id": "ffee52b5d263",
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth-normal",
+        "effective_route": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit --image-paths /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/depth.png /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/normal.png --prompt-file /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth-normal/output.png --metadata --model flux2-klein-9b --quantize 4 --height 512 --width 512 --steps 8 --guidance 1.0 --seed 715871 --mlx-cache-limit-gb 48",
+        "effective_cwd": "/Users/noahlyons/dev/mlx-openai-server",
+        "effective_env": {
+          "TOKENIZERS_PARALLELISM": "false"
+        },
+        "effective_defaults": {
+          "guidance": "1.0",
+          "height": "512",
+          "mlx_cache_limit_gb": "48",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "seed": "42",
+          "steps": "8",
+          "width": "512"
+        },
+        "effective_timeout": 1800,
+        "ignored_params": null,
+        "started_at": 1784117645.962122,
+        "finished_at": 1784117735.9357388,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/ffee52b5d263/request.json",
+      "requestSha256": "50caf8df2e80541df2b29db8e43071a6efd39f6763dedc078c734f6b034d817d",
+      "request": {
+        "job_type": "mflux_flux2_edit_promptfile_3ref",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth-normal",
+        "params": {
+          "reference_path_2": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/depth.png",
+          "reference_path_3": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/normal.png",
+          "prompt_file": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+          "seed": "715871",
+          "model": "flux2-klein-9b",
+          "quantize": "4",
+          "height": "512",
+          "width": "512",
+          "steps": "8",
+          "guidance": "1.0",
+          "mlx_cache_limit_gb": "48"
+        },
+        "job_id": "ffee52b5d263",
+        "submitted_at": 1784117346.49656
+      },
+      "inputs": [
+        {
+          "role": "clay",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/clay.png",
+          "sha256": "eec3b9963e7d70e1c4280f5c1700499759b445f2171efe59c2d9c6b325859a97"
+        },
+        {
+          "role": "depth",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/depth.png",
+          "sha256": "a66ce879788edd50175a3606918d162b0bd621c6022f8ab6212435a40a56448e"
+        },
+        {
+          "role": "normal",
+          "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715/prior-shape-0087/normal.png",
+          "sha256": "6f27c43d94ee18f311accc3ec9e46db09a16f488328c78fc350cf24054e89436"
+        }
+      ],
+      "prompt": {
+        "requestedPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/prompts/preserve-gestalt.txt",
+        "canonicalPath": "prompts/preserve-gestalt.txt",
+        "sha256": "bed63c82d11c51b9b607a3c14b104e4c914ae39528dfc39462104c2036648ffc"
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth-normal/output.png",
+        "sha256": "0fe6b3c56c4dfd2f7649fe1d5a553847a6dd1b9a589e5a86e582731fb60f383f",
+        "bytes": 275550
+      },
+      "routeIdentity": {
+        "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit"
+      },
+      "durationSeconds": 90
+    }
+  ]
+}

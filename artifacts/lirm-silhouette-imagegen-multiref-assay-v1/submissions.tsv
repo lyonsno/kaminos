@@ -1,0 +1,10 @@
+job_id	shape	stance	reference_set	seed	duration_seconds	output_dir
+4ea0e6341688	prior-shape-0032	prior-forward	clay-depth	715323	52.9	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth
+f1b671e82228	prior-shape-0032	prior-forward	clay-normal	715323	55.2	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal
+de7a9d3679a2	prior-shape-0032	prior-forward	clay-depth-normal	715323	79.7	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-depth-normal
+c287e7029a01	prior-shape-0066	preserve-gestalt	clay-depth	715661	93.7	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth
+8f85ea972380	prior-shape-0066	preserve-gestalt	clay-normal	715661	71.3	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-normal
+278725b863b0	prior-shape-0066	preserve-gestalt	clay-depth-normal	715661	72.1	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal
+9f0b87ddc6d4	prior-shape-0087	preserve-gestalt	clay-depth	715871	77.8	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth
+2cc0691a35d2	prior-shape-0087	preserve-gestalt	clay-normal	715871	76.7	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-normal
+ffee52b5d263	prior-shape-0087	preserve-gestalt	clay-depth-normal	715871	90	/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0087-preserve-gestalt-clay-depth-normal

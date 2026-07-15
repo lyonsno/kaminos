@@ -1,0 +1,138 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-multiref-assay.v1",
+  "purpose": "Hold body, prompt stance, seed, model, resolution, steps, and guidance fixed while measuring clay-only, clay-plus-depth, clay-plus-normal, and clay-plus-depth-plus-normal conditioning.",
+  "sourceRoot": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-silhouette-beta01-gestalt4-extrusion-192-20260715",
+  "sourceReceiptHash": "sha256:395d1bd8b360fce33540088302e73f523098977196f8fdfa6f7fe06410a1ce9f",
+  "runtimeRoot": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715",
+  "requestedRoutes": [
+    "gpu-greenroom/mflux_flux2_edit_promptfile_2ref",
+    "gpu-greenroom/mflux_flux2_edit_promptfile_3ref"
+  ],
+  "effectiveRunner": "/Users/noahlyons/dev/mlx-openai-server/.venv/bin/mflux-generate-flux2-edit",
+  "model": "flux2-klein-9b",
+  "quantize": 4,
+  "width": 512,
+  "height": 512,
+  "steps": 8,
+  "guidance": 1,
+  "controls": [
+    {
+      "shape": "prior-shape-0032",
+      "stance": "prior-forward",
+      "referenceSet": "clay",
+      "jobId": "31ad39b0db45",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0032-prior-forward/output.png",
+      "outputSha256": "9875b7206be0860ca79c77c7b5584d81a246db5fe3d7ff00fc018a3daa20c6d2",
+      "inputSha256": "26c22a0367d56ebd5d579407027cf11bbbc994cb257bb658b5f308d18d2f54c4",
+      "promptSha256": "c79ef4378f2f0339b3c866020ec1f960a67a3228a95b3ddd94f818a54726878e",
+      "sourceReceiptManifestPath": "artifacts/lirm-silhouette-imagegen-gestalt-prior-assay-v1/route-receipts.json",
+      "sourceReceiptManifestSha256": "b232c663f93e6db7f6293947f199205cb3171e6958d11d4756490891ee51cd8f"
+    },
+    {
+      "shape": "prior-shape-0066",
+      "stance": "preserve-gestalt",
+      "referenceSet": "clay",
+      "jobId": "5c7acd050127",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0066-preserve-gestalt/output.png",
+      "outputSha256": "f0604bb7e5b911b8dd7ff7b4ffba3349b0a11a1be2e5a8823dd45bbca21d97e2",
+      "inputSha256": "10c5e76fe780e535e6137a9fac0079373193f062a0f81ed87c1e4ae19381119c",
+      "promptSha256": "bed63c82d11c51b9b607a3c14b104e4c914ae39528dfc39462104c2036648ffc",
+      "sourceReceiptManifestPath": "artifacts/lirm-silhouette-imagegen-gestalt-prior-assay-v1/route-receipts.json",
+      "sourceReceiptManifestSha256": "b232c663f93e6db7f6293947f199205cb3171e6958d11d4756490891ee51cd8f"
+    },
+    {
+      "shape": "prior-shape-0087",
+      "stance": "preserve-gestalt",
+      "referenceSet": "clay",
+      "jobId": "6ceeecc90e4e",
+      "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-3stance-20260715/cells/prior-shape-0087-preserve-gestalt/output.png",
+      "outputSha256": "993608e914ad107c7cb8f0133974c97f7a1cd4d89e4bc205ff3cc9aea7c734f0",
+      "inputSha256": "eec3b9963e7d70e1c4280f5c1700499759b445f2171efe59c2d9c6b325859a97",
+      "promptSha256": "bed63c82d11c51b9b607a3c14b104e4c914ae39528dfc39462104c2036648ffc",
+      "sourceReceiptManifestPath": "artifacts/lirm-silhouette-imagegen-gestalt-prior-assay-v1/route-receipts.json",
+      "sourceReceiptManifestSha256": "b232c663f93e6db7f6293947f199205cb3171e6958d11d4756490891ee51cd8f"
+    }
+  ],
+  "matrix": {
+    "shapes": [
+      "prior-shape-0032",
+      "prior-shape-0066",
+      "prior-shape-0087"
+    ],
+    "referenceSets": [
+      "clay",
+      "clay-depth",
+      "clay-normal",
+      "clay-depth-normal"
+    ],
+    "fixedSeedByShape": {
+      "prior-shape-0032": 715323,
+      "prior-shape-0066": 715661,
+      "prior-shape-0087": 715871
+    },
+    "fixedStanceByShape": {
+      "prior-shape-0032": "prior-forward",
+      "prior-shape-0066": "preserve-gestalt",
+      "prior-shape-0087": "preserve-gestalt"
+    }
+  },
+  "rejectedSubmission": {
+    "jobId": "f4c8e072077b",
+    "status": "cancelled",
+    "admittedToMatrix": false,
+    "replacementJobId": "4ea0e6341688",
+    "replacementCell": {
+      "shape": "prior-shape-0032",
+      "referenceSet": "clay-depth"
+    },
+    "reason": "Repeated -p flags retained only mlx_cache_limit_gb; cancelled before dispatch and replaced by 4ea0e6341688."
+  },
+  "routeReceiptManifest": {
+    "path": "route-receipts.json",
+    "sha256": "c506acb8c0a9310a053e845a24a031eed97edaa2f747fe1643a81b8e8e1b76e8",
+    "jobCount": 9,
+    "allDoneExitZero": true
+  },
+  "contactSheet": {
+    "path": "contact-sheet-clay-depth-normal.png",
+    "sha256": "58a7844ac0ea9ed96b7387520de142a631af2785615f51287d4017abe79343c5",
+    "width": 2048,
+    "height": 1536,
+    "layout": "3 rows x 4 columns: single-clay control, clay+depth, clay+normal, clay+depth+normal"
+  },
+  "trellisStage": {
+    "selectedCells": [
+      "prior-shape-0032/clay-normal",
+      "prior-shape-0066/clay-depth-normal"
+    ],
+    "route": "gpu-greenroom/trellis2mlx_fast",
+    "settings": {
+      "seed": 42,
+      "steps": 6,
+      "cascade": false,
+      "targetFaces": 200000,
+      "textureSize": 1024,
+      "simplifyFirst": true
+    },
+    "routeReceiptManifest": {
+      "path": "trellis-stage-receipts.json",
+      "sha256": "935013ddc53e5fe683079618477ade3019104e30e227b859eb56f7aeae716c7f",
+      "jobCount": 10,
+      "allDoneExitZero": true
+    },
+    "contactSheet": {
+      "path": "trellis-contact-sheet-left-front-right-opposite.png",
+      "sha256": "35ae92f4816c8dd0d1b8aead3734ee1cad0644ebf660ee95f043826634de357c",
+      "width": 4400,
+      "height": 1800,
+      "layout": "2 rows x 4 columns: 0032/clay-normal then 0066/clay-depth-normal; left, front, right, opposite"
+    },
+    "visualVerdict": "Both selected cells survive as complete, materially distinct full 3D organisms; 0032 retains permissive anatomical invention while 0066 retains combined-reference armor and quadruped structure."
+  },
+  "acceptance": {
+    "routeIdentity": "Every admitted cell must preserve exact requested references, prompt, seed, model, dimensions, steps, guidance, effective runner, and output hash.",
+    "visual": "Every cell must be one complete coherent organism; compare scaffold event retention, anatomical elaboration, and topology departure by reference set.",
+    "failure": "Reject blank, stale, duplicate, partial, severed, fallback, unreceipted, or malformed-submission output.",
+    "downstream": "Only visually inspected outputs with a material positive delta may become Trellis candidates."
+  }
+}

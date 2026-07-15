@@ -1,0 +1,581 @@
+{
+  "schema": "kaminos.lirm-silhouette-imagegen-multiref-trellis-stage-receipts.v1",
+  "generatedAt": "2026-07-15T13:16:23Z",
+  "greenroomReceiptAuthority": "/Users/noahlyons/.local/state/gpu-greenroom",
+  "jobCount": 10,
+  "allDoneExitZero": true,
+  "jobs": [
+    {
+      "stage": "trellis",
+      "shape": "prior-shape-0032",
+      "referenceSet": "clay-normal",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/1d945dfb0771/receipt.json",
+      "receiptSha256": "c261fbc0743f2c2632ea1290e2657c3240442093c63c65b4000628086de6d2b2",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/1d945dfb0771/request.json",
+      "requestSha256": "8e1453e664d4a917093df53279d0c52fc0a77638d141ab7cafbdcdf0e80f1865",
+      "receipt": {
+        "job_id": "1d945dfb0771",
+        "job_type": "trellis2mlx_fast",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+        "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784119943.677977,
+        "finished_at": 1784120241.5968692,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_fast",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024"
+        },
+        "job_id": "1d945dfb0771",
+        "submitted_at": 1784119689.110738
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0032-prior-forward-clay-normal/output.png",
+        "sha256": "9b937bc6e4a6727f2c420228ca311f240ae271f8cc496bf2b73cb8ba510a3852",
+        "bytes": 262363
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "sha256": "fbb23ebda4be88fb84373183f8f38cf2526785ed6bc920fdc2491e3c9aa06bbf",
+        "bytes": 9410972
+      },
+      "metrics": {
+        "sparseVoxels": 3785,
+        "finalTriangles": 182035
+      }
+    },
+    {
+      "stage": "trellis",
+      "shape": "prior-shape-0066",
+      "referenceSet": "clay-depth-normal",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/3475f77bdec9/receipt.json",
+      "receiptSha256": "e6f6146c5fc6cddea0aa69e1949204c9cba18ef3fe0c6c7015bd1a50c7e53043",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/3475f77bdec9/request.json",
+      "requestSha256": "6da9e2df5d010e7ff68c5491b5426b0c72c23259a7a6f8335ffe6356ba38dfd5",
+      "receipt": {
+        "job_id": "3475f77bdec9",
+        "job_type": "trellis2mlx_fast",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal",
+        "effective_route": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py --image /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png --output /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb --seed 42 --resolution 512 --steps 6 --no-cascade --target-faces 200000 --texture-size 1024 --simplify-first",
+        "effective_cwd": "/Users/noahlyons/dev/trellis2mlx",
+        "effective_env": {
+          "PYTHONPATH": "."
+        },
+        "effective_defaults": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024"
+        },
+        "effective_timeout": null,
+        "ignored_params": null,
+        "started_at": 1784119689.9330401,
+        "finished_at": 1784119943.672162,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "trellis2mlx_fast",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal",
+        "params": {
+          "seed": "42",
+          "steps": "6",
+          "target_faces": "200000",
+          "texture_size": "1024"
+        },
+        "job_id": "3475f77bdec9",
+        "submitted_at": 1784119689.077279
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "sha256": "03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba",
+        "bytes": 288739
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "sha256": "73b96596d6107fcc55dd487a3028b23c9f315043d0210a359bfcaa2e293a7356",
+        "bytes": 9998996
+      },
+      "metrics": {
+        "sparseVoxels": 2440,
+        "finalTriangles": 149066
+      }
+    },
+    {
+      "stage": "blender-witness",
+      "shape": "prior-shape-0066",
+      "referenceSet": "clay-depth-normal",
+      "view": "left",
+      "yaw": "-0.85",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/3f62991fc1e8/receipt.json",
+      "receiptSha256": "8b839aa03beccca7b2ffb55005a364ca4fb2fa7dd6e8b0d351fbb93fdef334bd",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/3f62991fc1e8/request.json",
+      "requestSha256": "180a044741aa1bfeb76bc26833989162277c1a3a2ae292def8c65c14aff77d8f",
+      "receipt": {
+        "job_id": "3f62991fc1e8",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784120474.549381,
+        "finished_at": 1784120477.37049,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
+        },
+        "job_id": "3f62991fc1e8",
+        "submitted_at": 1784120474.342176
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "sha256": "73b96596d6107fcc55dd487a3028b23c9f315043d0210a359bfcaa2e293a7356",
+        "bytes": 9998996
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/left/render.png",
+        "sha256": "2c701c998be809b00975cc193f8f6249c3145ffaef4373c91f99d06efbea94e2",
+        "bytes": 735751
+      }
+    },
+    {
+      "stage": "blender-witness",
+      "shape": "prior-shape-0066",
+      "referenceSet": "clay-depth-normal",
+      "view": "front",
+      "yaw": "0",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/5e80e8ce7400/receipt.json",
+      "receiptSha256": "5bb0a105df2e32d20e41cf9c91f567a07dfebc4210308ca66439e78c63b26e76",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/5e80e8ce7400/request.json",
+      "requestSha256": "7b8efb503a68ad05f59a0a3bd4afbb47558d1d8c38098f3279a06556326cfd58",
+      "receipt": {
+        "job_id": "5e80e8ce7400",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784120477.373255,
+        "finished_at": 1784120479.19737,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
+        },
+        "job_id": "5e80e8ce7400",
+        "submitted_at": 1784120474.374434
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "sha256": "73b96596d6107fcc55dd487a3028b23c9f315043d0210a359bfcaa2e293a7356",
+        "bytes": 9998996
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/front/render.png",
+        "sha256": "b3ae8d51ab0eadfa2517b213da52035176eb4542ce29d3665480dbf0125e1d3a",
+        "bytes": 695908
+      }
+    },
+    {
+      "stage": "blender-witness",
+      "shape": "prior-shape-0066",
+      "referenceSet": "clay-depth-normal",
+      "view": "right",
+      "yaw": "0.85",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/50a40cd6be5b/receipt.json",
+      "receiptSha256": "066b7068b029dec93d3ec9cfb7a4f74943e89c476edad0e1dbd1ad50725a72ec",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/50a40cd6be5b/request.json",
+      "requestSha256": "b312c9ce732e60c5daa655aaabc443ed8baccd8011aec1da0bb3f1662b5ec961",
+      "receipt": {
+        "job_id": "50a40cd6be5b",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784120479.199862,
+        "finished_at": 1784120480.969322,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
+        },
+        "job_id": "50a40cd6be5b",
+        "submitted_at": 1784120474.406584
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "sha256": "73b96596d6107fcc55dd487a3028b23c9f315043d0210a359bfcaa2e293a7356",
+        "bytes": 9998996
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/right/render.png",
+        "sha256": "b67969b04882ce6177c3015657807517436f11f1e6841a46db70701030e6e9f9",
+        "bytes": 746845
+      }
+    },
+    {
+      "stage": "blender-witness",
+      "shape": "prior-shape-0066",
+      "referenceSet": "clay-depth-normal",
+      "view": "opposite",
+      "yaw": "3.141593",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/0a348fb0af3b/receipt.json",
+      "receiptSha256": "609e4bc58698562af214edf12b06b45d296ff67ae421d27bb6ae78371eb7cc68",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/0a348fb0af3b/request.json",
+      "requestSha256": "4a3aadfb30ae6ce45ad0a67fcfb4c49daac3bb630fbf1314f1c4030b384e763c",
+      "receipt": {
+        "job_id": "0a348fb0af3b",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/opposite",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/opposite/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784120480.971375,
+        "finished_at": 1784120482.748672,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/opposite",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
+        },
+        "job_id": "0a348fb0af3b",
+        "submitted_at": 1784120474.4396002
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.glb",
+        "sha256": "73b96596d6107fcc55dd487a3028b23c9f315043d0210a359bfcaa2e293a7356",
+        "bytes": 9998996
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0066-preserve-gestalt-clay-depth-normal/opposite/render.png",
+        "sha256": "747ab9ae1d7b6b6da09b8ba6cd020b757d2f16230489c34f1883d7d44a53e928",
+        "bytes": 666872
+      }
+    },
+    {
+      "stage": "blender-witness",
+      "shape": "prior-shape-0032",
+      "referenceSet": "clay-normal",
+      "view": "left",
+      "yaw": "-0.85",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/28e16624d412/receipt.json",
+      "receiptSha256": "69293ff121b8bd703877f1e1614638e22509f362e161ba6936659310e4656d29",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/28e16624d412/request.json",
+      "requestSha256": "16424ce1888f77a30e873acd4b9ce872e5c73e0bcadb17004591d12578fffb22",
+      "receipt": {
+        "job_id": "28e16624d412",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/left",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/left/render.png -0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784120673.230828,
+        "finished_at": 1784120675.229674,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/left",
+        "params": {
+          "yaw": "-0.85",
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
+        },
+        "job_id": "28e16624d412",
+        "submitted_at": 1784120672.8414872
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "sha256": "fbb23ebda4be88fb84373183f8f38cf2526785ed6bc920fdc2491e3c9aa06bbf",
+        "bytes": 9410972
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/left/render.png",
+        "sha256": "fb0c9ad5426f1f4d0618f5c225f84c0033bb89527de9ec38d72af87aa84ab61e",
+        "bytes": 697644
+      }
+    },
+    {
+      "stage": "blender-witness",
+      "shape": "prior-shape-0032",
+      "referenceSet": "clay-normal",
+      "view": "front",
+      "yaw": "0",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/d2655b375b88/receipt.json",
+      "receiptSha256": "93a50d05f33080abcab0d0bb80a41e69edb077d34597a2650895956df97af95e",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/d2655b375b88/request.json",
+      "requestSha256": "a4299f5ca5490b80fed3b84dd3d3e8b7c34c75c1215875f746faa3928604a95a",
+      "receipt": {
+        "job_id": "d2655b375b88",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/front",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/front/render.png 0 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784120675.232772,
+        "finished_at": 1784120677.283943,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/front",
+        "params": {
+          "yaw": "0",
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
+        },
+        "job_id": "d2655b375b88",
+        "submitted_at": 1784120672.87336
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "sha256": "fbb23ebda4be88fb84373183f8f38cf2526785ed6bc920fdc2491e3c9aa06bbf",
+        "bytes": 9410972
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/front/render.png",
+        "sha256": "6b3df0a5c65e2b74f6e63e37979ee7963d9b2733ba6a34a6b13169d7d5a01056",
+        "bytes": 711269
+      }
+    },
+    {
+      "stage": "blender-witness",
+      "shape": "prior-shape-0032",
+      "referenceSet": "clay-normal",
+      "view": "right",
+      "yaw": "0.85",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/55d97aad0574/receipt.json",
+      "receiptSha256": "7b20d75437d22496846bc55c9c1ee78e40dcfdd24586ba3bb518df7f0889a6c1",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/55d97aad0574/request.json",
+      "requestSha256": "078cca497042b6a24195c1ef58d37693160c44533b32448d03cbd62bb51a0b0a",
+      "receipt": {
+        "job_id": "55d97aad0574",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/right",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/right/render.png 0.85 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784120677.287201,
+        "finished_at": 1784120680.362868,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/right",
+        "params": {
+          "yaw": "0.85",
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
+        },
+        "job_id": "55d97aad0574",
+        "submitted_at": 1784120672.9058518
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "sha256": "fbb23ebda4be88fb84373183f8f38cf2526785ed6bc920fdc2491e3c9aa06bbf",
+        "bytes": 9410972
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/right/render.png",
+        "sha256": "1c7a3a81b2b502ade2f0746c311ca3d7803771fc3ea6c57c63b3c17b6e094aca",
+        "bytes": 708554
+      }
+    },
+    {
+      "stage": "blender-witness",
+      "shape": "prior-shape-0032",
+      "referenceSet": "clay-normal",
+      "view": "opposite",
+      "yaw": "3.141593",
+      "receiptPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/5988a0889068/receipt.json",
+      "receiptSha256": "7f77425b95055e960d492522e48fae03c9b432244b683a76160c0cb3797cdca5",
+      "requestPath": "/Users/noahlyons/.local/state/gpu-greenroom/done/5988a0889068/request.json",
+      "requestSha256": "6f5c2ea857ccb6094c72a5ade881e7c3b7c19ba1f12fa2b62125fa2dca8728c6",
+      "receipt": {
+        "job_id": "5988a0889068",
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "status": "done",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/opposite",
+        "effective_route": "/Applications/Blender.app/Contents/MacOS/Blender --background --factory-startup --python /private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py -- /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb /Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/opposite/render.png 3.141593 0.2",
+        "effective_cwd": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714",
+        "effective_env": {},
+        "effective_defaults": {
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py",
+          "yaw": "0.0",
+          "pitch": "0.2"
+        },
+        "effective_timeout": 300,
+        "ignored_params": null,
+        "started_at": 1784120680.366445,
+        "finished_at": 1784120682.696795,
+        "exit_code": 0,
+        "failure_phase": null,
+        "error_message": null,
+        "warnings": null
+      },
+      "request": {
+        "job_type": "kaminos_blender_glb_witness_molten_0715",
+        "input_path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "output_dir": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/opposite",
+        "params": {
+          "yaw": "3.141593",
+          "pitch": "0.2",
+          "witness_script": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/generator-basin-fanout-20260710/witness/blender_glb_witness.py"
+        },
+        "job_id": "5988a0889068",
+        "submitted_at": 1784120672.937834
+      },
+      "input": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis/prior-shape-0032-prior-forward-clay-normal/output.glb",
+        "sha256": "fbb23ebda4be88fb84373183f8f38cf2526785ed6bc920fdc2491e3c9aa06bbf",
+        "bytes": 9410972
+      },
+      "output": {
+        "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/trellis-witness/prior-shape-0032-prior-forward-clay-normal/opposite/render.png",
+        "sha256": "44cfc6ca1ac790838c38025431162ba1699f7780f2806a02f8dd24918506d896",
+        "bytes": 675380
+      }
+    }
+  ]
+}
