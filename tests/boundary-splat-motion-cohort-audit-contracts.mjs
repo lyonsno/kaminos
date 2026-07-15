@@ -226,6 +226,7 @@ envelopeComparisonWitness.configuration = {
 };
 envelopeComparisonWitness.source = {
   audit: { sha256: 'a'.repeat(64) },
+  envelopeAudit: { sha256: '0'.repeat(64) },
   manifest: { sha256: 'b'.repeat(64) },
   legacy: {
     predictions: { sha256: 'c'.repeat(64) },
@@ -293,6 +294,36 @@ envelopeComparisonWitness.claimBoundary = 'Offline same-raster diagnostic only; 
 assert.doesNotThrow(
   () => cohortAudit.validateMotionCohortWitness(envelopeComparisonWitness),
   'paired recurrence witness must preserve both accepted routes and a truly frozen control',
+);
+const maskedMovingEnvelopeControl = structuredClone(envelopeComparisonWitness);
+maskedMovingEnvelopeControl.emphasis = structuredClone(validWitness.emphasis);
+maskedMovingEnvelopeControl.roleEvidence.control[1].sha256 = 'e'.repeat(64);
+delete maskedMovingEnvelopeControl.controlFrameIdentity;
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(maskedMovingEnvelopeControl),
+  /emphasis|control frame identity/i,
+  'four-role comparison cannot use changing target-derived emphasis to counterfeit a frozen control',
+);
+const missingEnvelopeAudit = structuredClone(envelopeComparisonWitness);
+delete missingEnvelopeAudit.source.envelopeAudit;
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(missingEnvelopeAudit),
+  /envelope audit/i,
+  'the envelope role must remain bound to its independently generated audit artifact',
+);
+const counterfeitLegacyRoute = structuredClone(envelopeComparisonWitness);
+counterfeitLegacyRoute.source.legacy.greenroomReceipt.effectiveRoute = 'python transport --support-budget-mode one-step-ratio-counterfeit';
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(counterfeitLegacyRoute),
+  /route identity/i,
+  'a mode substring embedded in a different effective token must not carry route authority',
+);
+const duplicateEnvelopeRoute = structuredClone(envelopeComparisonWitness);
+duplicateEnvelopeRoute.source.envelope.greenroomReceipt.effectiveRoute = 'python transport --support-budget-mode training-episode-envelope --support-budget-mode one-step-ratio';
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(duplicateEnvelopeRoute),
+  /route identity/i,
+  'duplicated mode flags must fail rather than defer to undocumented parser precedence',
 );
 const missingEnvelopeStep = structuredClone(envelopeComparisonWitness);
 missingEnvelopeStep.supportBudgetComparison.envelope.steps.pop();

@@ -42,6 +42,16 @@ function isSha256(value) {
   return /^[0-9a-f]{64}$/i.test(String(value));
 }
 
+function routeHasExactOption(route, option, expectedValue) {
+  const tokens = String(route).trim().split(/\s+/).filter(Boolean);
+  const values = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index] === option) values.push(tokens[index + 1]);
+    else if (tokens[index].startsWith(`${option}=`)) values.push(tokens[index].slice(option.length + 1));
+  }
+  return values.length === 1 && values[0] === expectedValue;
+}
+
 async function loadFloatArtifact(artifact, stride, label, authority = null) {
   if (artifact?.strideFloats !== stride || artifact?.dtype !== 'float32-le') {
     throw new Error(`${label} must be float32-le stride-${stride}`);
@@ -144,6 +154,9 @@ export function validateMotionCohortWitness(witness) {
   const rawProductView = emphasis?.authority === 'raw-product-view-no-cohort-attenuation-v0';
   const diagnosticView = emphasis?.authority === 'exact-motion-cohort-static-attenuation-v0';
   const envelopeComparison = witness.configuration?.authority === 'legacy-vs-training-episode-envelope-recurrence-v0';
+  if (envelopeComparison && !rawProductView) {
+    throw new Error('recurrent envelope witness must use raw full-opacity emphasis');
+  }
   if (
     (!rawProductView && !diagnosticView)
     || (diagnosticView && (
@@ -209,13 +222,14 @@ export function validateMotionCohortWitness(witness) {
     const shared = source?.sharedIdentity;
     if (
       !isSha256(source?.manifest?.sha256)
+      || !isSha256(source?.envelopeAudit?.sha256)
       || !isSha256(shared?.occupancyModelSha256)
       || !isSha256(shared?.destinationStateModelSha256)
       || !isSha256(shared?.trainingManifestSha256)
       || typeof shared?.inferenceFrameZero?.referenceFrameId !== 'string'
       || !Number.isInteger(shared?.inferenceFrameZero?.count)
       || shared.inferenceFrameZero.count <= 0
-    ) throw new Error('recurrent envelope shared identity or frame zero mismatch');
+    ) throw new Error('recurrent envelope shared identity, envelope audit, or frame zero mismatch');
     for (const [role, mode] of [['legacy', 'one-step-ratio'], ['envelope', 'training-episode-envelope']]) {
       const identity = source?.[role];
       const receipt = identity?.greenroomReceipt;
@@ -225,7 +239,7 @@ export function validateMotionCohortWitness(witness) {
         || !isSha256(receipt?.sha256)
         || typeof receipt.jobId !== 'string' || receipt.jobId.length === 0
         || receipt.status !== 'done' || receipt.exitCode !== 0
-        || typeof receipt.effectiveRoute !== 'string' || !receipt.effectiveRoute.includes(`--support-budget-mode ${mode}`)
+        || !routeHasExactOption(receipt.effectiveRoute, '--support-budget-mode', mode)
         || identity?.backend?.backend !== 'mlx'
         || !/^Device\(gpu,\s*\d+\)$/i.test(String(identity.backend.device))
         || identity.backend.fallbackReason !== null
@@ -1029,7 +1043,7 @@ export async function writeRecurrentEnvelopeWitness(
       if (
         receipt.status !== 'done' || receipt.exit_code !== 0 || receipt.failure_phase !== null
         || typeof receipt.job_id !== 'string' || !receipt.job_id
-        || typeof receipt.effective_route !== 'string' || !receipt.effective_route.includes(`--support-budget-mode ${mode}`)
+        || !routeHasExactOption(receipt.effective_route, '--support-budget-mode', mode)
       ) throw new Error(`${role} Greenroom receipt mismatch`);
     }
     const sharedKeys = [
