@@ -26,6 +26,7 @@ let playbackState = null;
 let visualActivity = null;
 let controlBounds = null;
 let handleEvidence = null;
+let historyEvidence = null;
 const networkResponses = [];
 const consoleEvents = [];
 
@@ -53,6 +54,7 @@ function writeReport(extra = {}) {
     visualActivity,
     controlBounds,
     handleEvidence,
+    historyEvidence,
     debugState,
     playbackState,
     consoleEvents,
@@ -165,6 +167,8 @@ function verifyDebugState(state) {
   if (!state.decodedSha256 || state.decodedSha256 !== state.downloadSha256) throw new Error('download/decode hashes are absent or unequal');
   if (state.featureFrame?.index === undefined) throw new Error('decoded audio feature frame missing');
   if (state.materialFrame?.featureAuthority !== 'decoded-audio-clock-frame-v0') throw new Error(`material feature authority mismatch: ${state.materialFrame?.featureAuthority}`);
+  if (state.materialFrame?.stateAuthority !== 'bounded-pulp-routed-material-history-v0') throw new Error(`material state authority mismatch: ${state.materialFrame?.stateAuthority}`);
+  if (!Array.isArray(state.materialFrame?.materialFlows) || state.materialFrame.materialFlows.length === 0) throw new Error('Pulp-routed material flows missing');
   if (state.spatialization?.spatializationAuthority !== 'material-stage-atoms-v0') throw new Error(`spatialization authority mismatch: ${state.spatialization?.spatializationAuthority}`);
 }
 
@@ -238,7 +242,7 @@ async function main() {
     controlBounds = await evaluate(ws, `(() => {
       const rail = document.querySelector('.instrument-rail').getBoundingClientRect();
       const viewport = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
-      const controls = ['stage-atoms-coupling', 'stage-atoms-memory', 'stage-atoms-depth', 'stage-atoms-play', 'stage-atoms-seek'].map(id => {
+      const controls = ['stage-atoms-coupling', 'stage-atoms-memory', 'stage-atoms-depth', 'stage-atoms-reset', 'stage-atoms-history-a', 'stage-atoms-history-b', 'stage-atoms-play', 'stage-atoms-seek'].map(id => {
         const rect = document.getElementById(id).getBoundingClientRect();
         const inViewport = rect.left >= viewport.left && rect.top >= viewport.top && rect.right <= viewport.right && rect.bottom <= viewport.bottom;
         const inRail = id === 'stage-atoms-play' || id === 'stage-atoms-seek'
@@ -293,6 +297,52 @@ async function main() {
       }
     })()`);
     await delay(160);
+
+    phase = 'exercise_reversed_histories';
+    await evaluate(ws, `window.kaminosStageAtomsApplyHistoryPath('A')`);
+    await delay(100);
+    const historyA = await evaluate(ws, `(() => ({
+      controls: window.kaminosStageAtomsDebugState.controls,
+      imprint: window.kaminosStageAtomsDebugState.materialHistory.imprint,
+      fields: window.kaminosStageAtomsDebugState.materialFrame.materialAtoms.map(atom => atom.field),
+      flows: window.kaminosStageAtomsDebugState.materialFrame.materialFlows,
+      emitters: window.kaminosStageAtomsDebugState.spatialization.emitters,
+    }))()`);
+    await evaluate(ws, `window.kaminosStageAtomsResetMaterialState()`);
+    await evaluate(ws, `window.kaminosStageAtomsApplyHistoryPath('B')`);
+    await delay(100);
+    const historyB = await evaluate(ws, `(() => ({
+      controls: window.kaminosStageAtomsDebugState.controls,
+      imprint: window.kaminosStageAtomsDebugState.materialHistory.imprint,
+      fields: window.kaminosStageAtomsDebugState.materialFrame.materialAtoms.map(atom => atom.field),
+      flows: window.kaminosStageAtomsDebugState.materialFrame.materialFlows,
+      emitters: window.kaminosStageAtomsDebugState.spatialization.emitters,
+    }))()`);
+    const memoryA = historyA.fields.map(field => field.feedbackMemory);
+    const memoryB = historyB.fields.map(field => field.feedbackMemory);
+    const spatialA = historyA.emitters.map(emitter => emitter.send);
+    const spatialB = historyB.emitters.map(emitter => emitter.send);
+    const stateDistance = historyA.fields.reduce((sum, field, index) => (
+      sum + ['excitation', 'feedbackMemory', 'coherence', 'refractory']
+        .reduce((fieldSum, key) => fieldSum + Math.abs(field[key] - historyB.fields[index][key]), 0)
+    ), 0);
+    const spatialDistance = spatialA.reduce((sum, send, index) => (
+      sum + ['direct', 'reverb', 'spread']
+        .reduce((fieldSum, key) => fieldSum + Math.abs(send[key] - spatialB[index][key]), 0)
+    ), 0);
+    historyEvidence = {
+      pathA: { controls: historyA.controls, imprint: historyA.imprint, memory: memoryA, flows: historyA.flows, sends: spatialA },
+      pathB: { controls: historyB.controls, imprint: historyB.imprint, memory: memoryB, flows: historyB.flows, sends: spatialB },
+      identicalFinalControls: JSON.stringify(historyA.controls) === JSON.stringify(historyB.controls),
+      identicalSourceWindow: historyA.imprint.startFeatureIndex === historyB.imprint.startFeatureIndex && historyA.imprint.endFeatureIndex === historyB.imprint.endFeatureIndex,
+      stateDistance,
+      spatialDistance,
+      retainedStateChanged: stateDistance > 0.12 && JSON.stringify(historyA.flows) !== JSON.stringify(historyB.flows),
+      spatializationChanged: spatialDistance > 0.05,
+    };
+    if (!historyEvidence.identicalFinalControls || !historyEvidence.identicalSourceWindow || !historyEvidence.retainedStateChanged || !historyEvidence.spatializationChanged) {
+      throw new Error(`reversed histories collapsed or ended at different controls: ${JSON.stringify(historyEvidence)}`);
+    }
 
     phase = 'exercise_audio_handle';
     const playRect = await evaluate(ws, `(() => {

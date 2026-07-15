@@ -155,6 +155,64 @@ assert.deepEqual(
   'spatialization must read the material frame, not raw audio features supplied at the final stage',
 );
 
+function runMaterialHistory(controlHistory) {
+  let previousMaterialFrame = null;
+  for (const [index, materialControls] of controlHistory.entries()) {
+    previousMaterialFrame = simulateStageMaterialFrame(stage, {
+      t: index * 0.05,
+      dt: 0.05,
+      previousMaterialFrame,
+      materialControls,
+      audioFeatures: {
+        energy: 0.64,
+        onsetStrength: index % 4 === 0 ? 0.78 : 0.12,
+        recurrenceConfidence: 0.71,
+        spectralCentroid: 0.46,
+      },
+    });
+  }
+  return previousMaterialFrame;
+}
+
+const finalMaterialControls = { coupling: 1, memory: 1, depth: 1 };
+const pathAFrame = runMaterialHistory([
+  ...Array.from({ length: 18 }, () => ({ coupling: 1.8, memory: 0.2, depth: 1 })),
+  ...Array.from({ length: 18 }, () => ({ coupling: 0.35, memory: 1.8, depth: 1 })),
+  ...Array.from({ length: 2 }, () => finalMaterialControls),
+]);
+const pathBFrame = runMaterialHistory([
+  ...Array.from({ length: 18 }, () => ({ coupling: 0.35, memory: 1.8, depth: 1 })),
+  ...Array.from({ length: 18 }, () => ({ coupling: 1.8, memory: 0.2, depth: 1 })),
+  ...Array.from({ length: 2 }, () => finalMaterialControls),
+]);
+
+assert.deepEqual(pathAFrame.materialControls, finalMaterialControls, 'path A receipts the shared final controls');
+assert.deepEqual(pathBFrame.materialControls, finalMaterialControls, 'path B receipts the shared final controls');
+assert.notDeepEqual(
+  pathAFrame.materialAtoms.map(atom => atom.field.feedbackMemory),
+  pathBFrame.materialAtoms.map(atom => atom.field.feedbackMemory),
+  'reversed gestures must leave different bounded regional memory at identical final controls',
+);
+const materialStateDistance = pathAFrame.materialAtoms.reduce((sum, atom, index) => {
+  const other = pathBFrame.materialAtoms[index];
+  return sum + ['excitation', 'feedbackMemory', 'coherence', 'refractory']
+    .reduce((fieldSum, key) => fieldSum + Math.abs(atom.field[key] - other.field[key]), 0);
+}, 0);
+assert.ok(materialStateDistance > 0.12, `history distance must be material, received ${materialStateDistance}`);
+const pathASpatial = spatializeFromStageMaterial(pathAFrame);
+const pathBSpatial = spatializeFromStageMaterial(pathBFrame);
+assert.notDeepEqual(
+  pathASpatial.emitters,
+  pathBSpatial.emitters,
+  'history-bearing material organization must alter the spatial-audio projection',
+);
+const spatialSendDistance = pathASpatial.emitters.reduce((sum, emitter, index) => {
+  const other = pathBSpatial.emitters[index];
+  return sum + ['direct', 'reverb', 'spread']
+    .reduce((fieldSum, key) => fieldSum + Math.abs(emitter.send[key] - other.send[key]), 0);
+}, 0);
+assert.ok(spatialSendDistance > 0.05, `history-derived send distance must be material, received ${spatialSendDistance}`);
+
 let rawAudioOnlyFailure;
 assert.throws(
   () => buildStageAtomsWitness({

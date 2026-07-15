@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Stage Atoms</title>
+  <title>Material Circuit</title>
   <style>
     :root {
       color-scheme: dark;
@@ -67,10 +67,27 @@
     .rail-section { padding: 0 0 22px; margin: 0 0 22px; border-bottom: 1px solid rgba(245, 242, 233, 0.12); }
     .rail-section:last-child { border-bottom: 0; }
     .rail-kicker { margin: 0 0 14px; color: #8e9697; font-size: 9px; text-transform: uppercase; }
+    .rail-heading { display: flex; align-items: center; justify-content: space-between; margin: 0 0 14px; }
+    .rail-heading .rail-kicker { margin: 0; }
+    .icon-button {
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(245, 242, 233, 0.24);
+      border-radius: 4px;
+      background: transparent;
+      color: #c9cecc;
+      cursor: pointer;
+      font-size: 17px;
+      line-height: 1;
+    }
     .handle { display: grid; grid-template-columns: 1fr 42px; gap: 7px 10px; align-items: center; margin: 0 0 18px; }
     .handle label { color: #e4e0d7; font-size: 12px; }
     .handle output { color: #fff0a8; font-variant-numeric: tabular-nums; font-size: 11px; text-align: right; }
     .handle input { grid-column: 1 / -1; width: 100%; accent-color: #ff806e; }
+    .history-control { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 4px; border: 1px solid rgba(245, 242, 233, 0.22); border-radius: 4px; overflow: hidden; }
+    .history-control button { height: 31px; border: 0; background: #1b2023; color: #b9c0bf; cursor: pointer; font-size: 10px; text-transform: uppercase; }
+    .history-control button + button { border-left: 1px solid rgba(245, 242, 233, 0.18); }
+    .history-control button[data-active="true"] { background: #77e6d5; color: #101216; }
     .clock-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin: 0 0 11px; font-size: 10px; }
     .clock-row span { color: #7d8587; text-transform: uppercase; }
     .clock-row strong { color: #d5d9d7; font-variant-numeric: tabular-nums; font-weight: 600; }
@@ -138,8 +155,11 @@
       .instrument-rail { top: auto; right: 0; bottom: 84px; left: 0; width: 100%; height: 210px; display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 16px; padding: 14px 16px; border-left: 0; border-top: 1px solid rgba(245, 242, 233, 0.14); }
       .rail-section { border-bottom: 0; border-right: 1px solid rgba(245, 242, 233, 0.12); padding: 0 12px 0 0; margin: 0; overflow: hidden; }
       .rail-section:last-child { border-right: 0; }
-      .handle { margin-bottom: 7px; }
+      .handle { gap: 1px 6px; margin-bottom: 4px; }
       .handle input { height: 12px; }
+      .rail-heading { margin-bottom: 6px; }
+      .icon-button { width: 24px; height: 24px; }
+      .history-control button { height: 25px; }
       .feature-grid { gap: 7px; }
       .feature strong { font-size: 12px; }
       .transport { height: 84px; grid-template-columns: 42px 1fr; padding: 0 16px; gap: 12px; }
@@ -152,7 +172,7 @@
   <main id="stage-atoms-shell">
     <canvas id="stage-atoms-canvas" aria-label="Material soundstage"></canvas>
     <header class="stage-header">
-      <div class="stage-title"><h1>Stage Atoms</h1><p>Pulp graph / neural material</p></div>
+      <div class="stage-title"><h1>Material Circuit</h1><p>Pulp graph / retained material</p></div>
       <div class="authority-strip">
         <div class="authority" data-stage-source-authority data-state="pending"><span>Source</span><strong>checking</strong></div>
         <div class="authority" data-stage-route-authority data-state="pending"><span>Route</span><strong>checking</strong></div>
@@ -162,10 +182,11 @@
     </header>
     <aside class="instrument-rail">
       <section class="rail-section">
-        <p class="rail-kicker">Material handles</p>
+        <div class="rail-heading"><p class="rail-kicker">Material handles</p><button class="icon-button" id="stage-atoms-reset" type="button" title="Clear retained material state" aria-label="Clear retained material state">&#8634;</button></div>
         <div class="handle"><label for="stage-atoms-coupling">Coupling</label><output id="stage-atoms-coupling-value">1.00</output><input id="stage-atoms-coupling" type="range" min="0" max="2" step="0.01" value="1"></div>
         <div class="handle"><label for="stage-atoms-memory">Memory</label><output id="stage-atoms-memory-value">1.00</output><input id="stage-atoms-memory" type="range" min="0" max="2" step="0.01" value="1"></div>
         <div class="handle"><label for="stage-atoms-depth">Stage depth</label><output id="stage-atoms-depth-value">1.00</output><input id="stage-atoms-depth" type="range" min="0" max="1.5" step="0.01" value="1"></div>
+        <div class="history-control" aria-label="Gesture history imprint"><button id="stage-atoms-history-a" type="button" title="Imprint coupling then memory">Path A</button><button id="stage-atoms-history-b" type="button" title="Imprint memory then coupling">Path B</button></div>
       </section>
       <section class="rail-section">
         <p class="rail-kicker">Clock boundary</p>
@@ -174,12 +195,12 @@
         <div class="clock-row"><span>Feature</span><strong id="stage-atoms-feature-frame">0 / 0</strong></div>
       </section>
       <section class="rail-section">
-        <p class="rail-kicker">Decoded state</p>
+        <p class="rail-kicker">Signal / material</p>
         <div class="feature-grid">
           <div class="feature"><span>Energy</span><strong id="feature-energy">0.00</strong></div>
           <div class="feature"><span>Onset</span><strong id="feature-onset">0.00</strong></div>
-          <div class="feature"><span>Memory</span><strong id="feature-recurrence">0.00</strong></div>
-          <div class="feature"><span>Centroid</span><strong id="feature-centroid">0.00</strong></div>
+          <div class="feature"><span>Retained</span><strong id="material-memory">0.00</strong></div>
+          <div class="feature"><span>Coherence</span><strong id="material-coherence">0.00</strong></div>
         </div>
       </section>
     </aside>

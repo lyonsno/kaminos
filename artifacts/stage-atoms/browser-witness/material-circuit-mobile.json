@@ -1,0 +1,1025 @@
+{
+  "schema": "kaminos.stage-atoms-browser-witness.v0",
+  "requestedUrl": "http://127.0.0.1:8137/stage-atoms-browser.html",
+  "effectiveUrl": "http://127.0.0.1:8137/stage-atoms-browser.html",
+  "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+  "debugPort": 9523,
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "browserVersion": {
+    "Browser": "Chrome/150.0.7871.115",
+    "Protocol-Version": "1.3",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/150.0.0.0 Safari/537.36",
+    "V8-Version": "15.0.245.15",
+    "WebKit-Version": "537.36 (@25f5b661e5b08141ec24b17d1ce96c5ceb5828da)",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9523/devtools/browser/233a82a4-1ae0-40e0-9728-90a829d9e06d"
+  },
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "settleMs": 900,
+  "phase": null,
+  "primaryOutputWritten": true,
+  "outputPath": "/private/tmp/kaminos-pulp-stage-atoms-0715/artifacts/stage-atoms/browser-witness/material-circuit-mobile.png",
+  "reportPath": "/private/tmp/kaminos-pulp-stage-atoms-0715/artifacts/stage-atoms/browser-witness/material-circuit-mobile.json",
+  "networkResponses": [
+    {
+      "url": "http://127.0.0.1:8137/stage-atoms-browser.html",
+      "status": 200,
+      "mimeType": "text/html",
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    },
+    {
+      "url": "http://127.0.0.1:8137/stage-atoms-browser.mjs",
+      "status": 200,
+      "mimeType": "text/javascript",
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    },
+    {
+      "url": "http://127.0.0.1:8137/stage-atoms-core.mjs",
+      "status": 200,
+      "mimeType": "text/javascript",
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    },
+    {
+      "url": "http://127.0.0.1:8137/artifacts/stage-atoms/ccmixter-geppetto-decoded-stage-atoms-witness.json",
+      "status": 200,
+      "mimeType": "application/json",
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    },
+    {
+      "url": "http://127.0.0.1:8137/artifacts/stage-atoms/local-audio/coruscate-geppetto-dry-main.mp3",
+      "status": 200,
+      "mimeType": "audio/mpeg",
+      "fromDiskCache": false,
+      "fromServiceWorker": false
+    }
+  ],
+  "visualActivity": {
+    "width": 390,
+    "height": 844,
+    "activePixels": 13624,
+    "coloredPixels": 8617
+  },
+  "controlBounds": {
+    "rail": {
+      "left": 0,
+      "top": 550,
+      "right": 390,
+      "bottom": 760
+    },
+    "controls": [
+      {
+        "id": "stage-atoms-coupling",
+        "rect": {
+          "left": 18,
+          "top": 613,
+          "right": 127.25,
+          "bottom": 625
+        },
+        "inViewport": true,
+        "inRail": true
+      },
+      {
+        "id": "stage-atoms-memory",
+        "rect": {
+          "left": 18,
+          "top": 649,
+          "right": 127.25,
+          "bottom": 661
+        },
+        "inViewport": true,
+        "inRail": true
+      },
+      {
+        "id": "stage-atoms-depth",
+        "rect": {
+          "left": 18,
+          "top": 700,
+          "right": 127.25,
+          "bottom": 712
+        },
+        "inViewport": true,
+        "inRail": true
+      },
+      {
+        "id": "stage-atoms-reset",
+        "rect": {
+          "left": 101.25,
+          "top": 565,
+          "right": 125.25,
+          "bottom": 589
+        },
+        "inViewport": true,
+        "inRail": true
+      },
+      {
+        "id": "stage-atoms-history-a",
+        "rect": {
+          "left": 17,
+          "top": 719,
+          "right": 70.125,
+          "bottom": 744
+        },
+        "inViewport": true,
+        "inRail": true
+      },
+      {
+        "id": "stage-atoms-history-b",
+        "rect": {
+          "left": 71.125,
+          "top": 719,
+          "right": 124.25,
+          "bottom": 744
+        },
+        "inViewport": true,
+        "inRail": true
+      },
+      {
+        "id": "stage-atoms-play",
+        "rect": {
+          "left": 16,
+          "top": 780.5,
+          "right": 60,
+          "bottom": 824.5
+        },
+        "inViewport": true,
+        "inRail": true
+      },
+      {
+        "id": "stage-atoms-seek",
+        "rect": {
+          "left": 132,
+          "top": 794.5,
+          "right": 316,
+          "bottom": 810.5
+        },
+        "inViewport": true,
+        "inRail": true
+      }
+    ],
+    "outOfBounds": []
+  },
+  "handleEvidence": {
+    "before": {
+      "controls": {
+        "coupling": 1,
+        "memory": 1,
+        "depth": 1
+      },
+      "totalHeat": 2.575624,
+      "totalFeedbackMemory": 0.65,
+      "emitterPan": [
+        -1,
+        0.105,
+        -0.225,
+        1
+      ]
+    },
+    "after": {
+      "controls": {
+        "coupling": 0.35,
+        "memory": 0.4,
+        "depth": 0.5
+      },
+      "totalHeat": 2.2723500000000003,
+      "totalFeedbackMemory": 0.677122,
+      "emitterPan": [
+        -0.5,
+        0.0525,
+        -0.1125,
+        0.5
+      ]
+    },
+    "materialChanged": true,
+    "spatializationChanged": true
+  },
+  "historyEvidence": {
+    "pathA": {
+      "controls": {
+        "coupling": 1,
+        "memory": 1,
+        "depth": 1
+      },
+      "imprint": {
+        "path": "A",
+        "authority": "decoded-feature-history-plus-operator-control-order-v0",
+        "steps": 38,
+        "startFeatureIndex": 760,
+        "endFeatureIndex": 797,
+        "finalControls": {
+          "coupling": 1,
+          "memory": 1,
+          "depth": 1
+        }
+      },
+      "memory": [
+        0.146807,
+        0.95159,
+        0.927306,
+        0.212815
+      ],
+      "flows": [
+        {
+          "sourceId": "1",
+          "destinationId": "filter.cutoff",
+          "kind": "Audio",
+          "feedback": false,
+          "activity": 0.085426,
+          "coherenceTransfer": 0.239797
+        },
+        {
+          "sourceId": "filter.cutoff",
+          "destinationId": "delay.feedback",
+          "kind": "Automation",
+          "feedback": false,
+          "activity": 0.111862,
+          "coherenceTransfer": 0.223821
+        },
+        {
+          "sourceId": "delay.feedback",
+          "destinationId": "filter.cutoff",
+          "kind": "Audio",
+          "feedback": true,
+          "activity": 0.19627,
+          "coherenceTransfer": 0.342963
+        },
+        {
+          "sourceId": "delay.feedback",
+          "destinationId": "4",
+          "kind": "Audio",
+          "feedback": false,
+          "activity": 0.223108,
+          "coherenceTransfer": 0.476337
+        }
+      ],
+      "sends": [
+        {
+          "pan": -1,
+          "direct": 0.0867,
+          "reverb": 0.159646,
+          "spread": 0.311751,
+          "lowpassHz": 17181
+        },
+        {
+          "pan": 0.105,
+          "direct": 0.251962,
+          "reverb": 0.635525,
+          "spread": 0.684143,
+          "lowpassHz": 12094
+        },
+        {
+          "pan": -0.225,
+          "direct": 0.226279,
+          "reverb": 0.654954,
+          "spread": 0.675652,
+          "lowpassHz": 11048
+        },
+        {
+          "pan": 1,
+          "direct": 0.270621,
+          "reverb": 0.195232,
+          "spread": 0.405048,
+          "lowpassHz": 16672
+        }
+      ]
+    },
+    "pathB": {
+      "controls": {
+        "coupling": 1,
+        "memory": 1,
+        "depth": 1
+      },
+      "imprint": {
+        "path": "B",
+        "authority": "decoded-feature-history-plus-operator-control-order-v0",
+        "steps": 38,
+        "startFeatureIndex": 760,
+        "endFeatureIndex": 797,
+        "finalControls": {
+          "coupling": 1,
+          "memory": 1,
+          "depth": 1
+        }
+      },
+      "memory": [
+        0.142284,
+        0.945839,
+        0.919941,
+        0.209986
+      ],
+      "flows": [
+        {
+          "sourceId": "1",
+          "destinationId": "filter.cutoff",
+          "kind": "Audio",
+          "feedback": false,
+          "activity": 0.108569,
+          "coherenceTransfer": 0.286088
+        },
+        {
+          "sourceId": "filter.cutoff",
+          "destinationId": "delay.feedback",
+          "kind": "Automation",
+          "feedback": false,
+          "activity": 0.140233,
+          "coherenceTransfer": 0.283456
+        },
+        {
+          "sourceId": "delay.feedback",
+          "destinationId": "filter.cutoff",
+          "kind": "Audio",
+          "feedback": true,
+          "activity": 0.222649,
+          "coherenceTransfer": 0.405306
+        },
+        {
+          "sourceId": "delay.feedback",
+          "destinationId": "4",
+          "kind": "Audio",
+          "feedback": false,
+          "activity": 0.253094,
+          "coherenceTransfer": 0.562925
+        }
+      ],
+      "sends": [
+        {
+          "pan": -1,
+          "direct": 0.111648,
+          "reverb": 0.156945,
+          "spread": 0.32666,
+          "lowpassHz": 17243
+        },
+        {
+          "pan": 0.105,
+          "direct": 0.328679,
+          "reverb": 0.630352,
+          "spread": 0.732215,
+          "lowpassHz": 12345
+        },
+        {
+          "pan": -0.225,
+          "direct": 0.263398,
+          "reverb": 0.6496,
+          "spread": 0.702183,
+          "lowpassHz": 11243
+        },
+        {
+          "pan": 1,
+          "direct": 0.314068,
+          "reverb": 0.191389,
+          "spread": 0.434837,
+          "lowpassHz": 16926
+        }
+      ]
+    },
+    "identicalFinalControls": true,
+    "identicalSourceWindow": true,
+    "stateDistance": 0.9742550000000001,
+    "spatialDistance": 0.31860299999999997,
+    "retainedStateChanged": true,
+    "spatializationChanged": true
+  },
+  "debugState": {
+    "schema": "kaminos.stage-atoms-browser-debug.v0",
+    "status": "live",
+    "requestedRoute": "stage-atoms-pulp-shaped-material-spatializer-v0",
+    "effectiveRoute": "stage-atoms-pulp-shaped-material-spatializer-v0",
+    "requestedSource": "./artifacts/stage-atoms/ccmixter-geppetto-decoded-stage-atoms-witness.json",
+    "effectiveSource": "http://127.0.0.1:8137/artifacts/stage-atoms/ccmixter-geppetto-decoded-stage-atoms-witness.json",
+    "sourceAuthority": "decoded-local-audio-file",
+    "decodedSha256": "86ce0263c7cc43c6c6cfa77faa12091442cd9715d1de451c8fd94153478b63f9",
+    "downloadSha256": "86ce0263c7cc43c6c6cfa77faa12091442cd9715d1de451c8fd94153478b63f9",
+    "browserAudioSha256": "86ce0263c7cc43c6c6cfa77faa12091442cd9715d1de451c8fd94153478b63f9",
+    "browserAudioEffectiveSource": "http://127.0.0.1:8137/artifacts/stage-atoms/local-audio/coruscate-geppetto-dry-main.mp3",
+    "fallbackAuthority": "none",
+    "audioClock": {
+      "authority": "webaudio-context-plus-transport-offset",
+      "timeSeconds": 38,
+      "paused": true
+    },
+    "simulationClock": {
+      "authority": "request-animation-frame-performance-now",
+      "timeSeconds": 1.4207,
+      "frameNumber": 160
+    },
+    "clockBoundary": "decoded feature frame selected by AudioContext currentTime plus transport offset; render sampled by performance.now()",
+    "representativeSelection": {
+      "authority": "strongest-onset-frame",
+      "requestedTimeSeconds": null,
+      "effectiveTimeSeconds": 38,
+      "frameIndex": 760,
+      "featureClockAuthority": "decoded-pcm-sample-clock"
+    },
+    "controls": {
+      "coupling": 1,
+      "memory": 1,
+      "depth": 1
+    },
+    "materialHistory": {
+      "stateAuthority": "bounded-pulp-routed-material-history-v0",
+      "resetCount": 0,
+      "imprint": null
+    },
+    "featureFrame": {
+      "index": 760,
+      "t": 38,
+      "energy": 1,
+      "onsetStrength": 1,
+      "recurrenceConfidence": 0,
+      "spectralCentroid": 0.035692
+    },
+    "materialFrame": {
+      "schema": "kaminos.material-stage-frame.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "t": 38,
+      "featureAuthority": "decoded-audio-clock-frame-v0",
+      "dt": 0.05,
+      "materialControls": {
+        "coupling": 1,
+        "memory": 1,
+        "depth": 1
+      },
+      "audioFeatures": {
+        "energy": 1,
+        "onsetStrength": 1,
+        "recurrenceConfidence": 0,
+        "spectralCentroid": 0.035692
+      },
+      "materialAuthority": "stage-atoms-plus-lawful-audio-v0",
+      "stateAuthority": "bounded-pulp-routed-material-history-v0",
+      "sourceAccess": {
+        "schema": "kaminos.stage-audio-source-access.v0",
+        "sourceKind": "ccmixter",
+        "trackId": "ccmixter:70553:file:127740",
+        "title": "Geppetto V4 (Pell + Stems) - Dry Main Acapella",
+        "artist": "Coruscate",
+        "license": "CC BY 2.5",
+        "attribution": "Coruscate - Geppetto V4 (Pell + Stems) - Dry Main Acapella - CC BY 2.5 - https://ccmixter.org/files/Coruscate/70553",
+        "downloadUrl": "https://ccmixter.org/content/Coruscate/Coruscate_-_Geppetto_V4_(Pell_Stems).mp3",
+        "sourcePageUrl": "https://ccmixter.org/files/Coruscate/70553",
+        "localPath": "/private/tmp/kaminos-pulp-stage-atoms-0715/artifacts/stage-atoms/local-audio/coruscate-geppetto-dry-main.mp3",
+        "receiptWarnings": [],
+        "accessClass": "open_transformable",
+        "analysisAllowed": true,
+        "transformAllowed": true,
+        "syncAllowed": true,
+        "publicDemoAllowed": true,
+        "analysisScope": "public_demo_with_attribution"
+      },
+      "materialAtoms": [
+        {
+          "id": "1",
+          "label": "Input",
+          "position": [
+            -1,
+            0,
+            0.35
+          ],
+          "field": {
+            "excitation": 0.7636,
+            "feedbackMemory": 0,
+            "occlusion": 0.018511,
+            "heat": 0.524704,
+            "coupling": 0.66,
+            "coherence": 0,
+            "refractory": 0.16,
+            "incomingFlux": 0
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "position": [
+            0.105,
+            0,
+            0.293333
+          ],
+          "field": {
+            "excitation": 0.830944,
+            "feedbackMemory": 0.283333,
+            "occlusion": 0.373111,
+            "heat": 0.672904,
+            "coupling": 0.8064,
+            "coherence": 0.056667,
+            "refractory": 0.16,
+            "incomingFlux": 0
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "position": [
+            -0.225,
+            0,
+            -0.233333
+          ],
+          "field": {
+            "excitation": 0.935488,
+            "feedbackMemory": 0.366667,
+            "occlusion": 0.507711,
+            "heat": 0.799312,
+            "coupling": 0.7728,
+            "coherence": 0.073333,
+            "refractory": 0.16,
+            "incomingFlux": 0
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "position": [
+            1,
+            0,
+            -0.35
+          ],
+          "field": {
+            "excitation": 0.7636,
+            "feedbackMemory": 0,
+            "occlusion": 0.018511,
+            "heat": 0.578704,
+            "coupling": 0.66,
+            "coherence": 0,
+            "refractory": 0.16,
+            "incomingFlux": 0
+          }
+        }
+      ],
+      "materialFlows": [
+        {
+          "sourceId": "1",
+          "destinationId": "filter.cutoff",
+          "kind": "Audio",
+          "feedback": false,
+          "activity": 0.615767,
+          "coherenceTransfer": 0
+        },
+        {
+          "sourceId": "filter.cutoff",
+          "destinationId": "delay.feedback",
+          "kind": "Automation",
+          "feedback": false,
+          "activity": 0.269704,
+          "coherenceTransfer": 0.0238
+        },
+        {
+          "sourceId": "delay.feedback",
+          "destinationId": "filter.cutoff",
+          "kind": "Audio",
+          "feedback": true,
+          "activity": 0.543152,
+          "coherenceTransfer": 0.0528
+        },
+        {
+          "sourceId": "delay.feedback",
+          "destinationId": "4",
+          "kind": "Audio",
+          "feedback": false,
+          "activity": 0.617422,
+          "coherenceTransfer": 0.073333
+        }
+      ],
+      "receipts": [
+        {
+          "kind": "audio_source_access",
+          "accessClass": "open_transformable",
+          "analysisAllowed": true,
+          "trackId": "ccmixter:70553:file:127740"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "1",
+          "bindingAuthority": "pulp-graph-runtime-node",
+          "positionAuthority": "pulp-graph-level-layout"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "filter.cutoff",
+          "bindingAuthority": "pulp-design-ir-param-key",
+          "positionAuthority": "pulp-design-ir-rect"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "delay.feedback",
+          "bindingAuthority": "pulp-design-ir-param-key",
+          "positionAuthority": "pulp-design-ir-rect"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "4",
+          "bindingAuthority": "pulp-graph-runtime-node",
+          "positionAuthority": "pulp-graph-level-layout"
+        }
+      ]
+    },
+    "spatialization": {
+      "schema": "kaminos.material-spatialization.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "spatializationAuthority": "material-stage-atoms-v0",
+      "rawAudioFeatureUse": "ignored_after_material_frame",
+      "emitters": [
+        {
+          "id": "1",
+          "label": "Input",
+          "position": [
+            -1,
+            0,
+            0.35
+          ],
+          "send": {
+            "pan": -1,
+            "direct": 0.590647,
+            "reverb": 0.084443,
+            "spread": 0.347905,
+            "lowpassHz": 17641
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "position": [
+            0.105,
+            0,
+            0.293333
+          ],
+          "send": {
+            "pan": 0.105,
+            "direct": 0.547934,
+            "reverb": 0.305546,
+            "spread": 0.473529,
+            "lowpassHz": 13940
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "position": [
+            -0.225,
+            0,
+            -0.233333
+          ],
+          "send": {
+            "pan": -0.225,
+            "direct": 0.574615,
+            "reverb": 0.377851,
+            "spread": 0.53698,
+            "lowpassHz": 12579
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "position": [
+            1,
+            0,
+            -0.35
+          ],
+          "send": {
+            "pan": 1,
+            "direct": 0.590647,
+            "reverb": 0.084443,
+            "spread": 0.365185,
+            "lowpassHz": 17641
+          }
+        }
+      ]
+    },
+    "audioGraph": {
+      "authority": "material-spatialization-emitter-sends",
+      "sendCount": 4,
+      "outputRms": 0,
+      "outputPeak": 0
+    },
+    "failure": null
+  },
+  "playbackState": {
+    "schema": "kaminos.stage-atoms-browser-debug.v0",
+    "status": "live",
+    "requestedRoute": "stage-atoms-pulp-shaped-material-spatializer-v0",
+    "effectiveRoute": "stage-atoms-pulp-shaped-material-spatializer-v0",
+    "requestedSource": "./artifacts/stage-atoms/ccmixter-geppetto-decoded-stage-atoms-witness.json",
+    "effectiveSource": "http://127.0.0.1:8137/artifacts/stage-atoms/ccmixter-geppetto-decoded-stage-atoms-witness.json",
+    "sourceAuthority": "decoded-local-audio-file",
+    "decodedSha256": "86ce0263c7cc43c6c6cfa77faa12091442cd9715d1de451c8fd94153478b63f9",
+    "downloadSha256": "86ce0263c7cc43c6c6cfa77faa12091442cd9715d1de451c8fd94153478b63f9",
+    "browserAudioSha256": "86ce0263c7cc43c6c6cfa77faa12091442cd9715d1de451c8fd94153478b63f9",
+    "browserAudioEffectiveSource": "http://127.0.0.1:8137/artifacts/stage-atoms/local-audio/coruscate-geppetto-dry-main.mp3",
+    "fallbackAuthority": "none",
+    "audioClock": {
+      "authority": "webaudio-context-plus-transport-offset",
+      "timeSeconds": 39.205333333333336,
+      "paused": false
+    },
+    "simulationClock": {
+      "authority": "request-animation-frame-performance-now",
+      "timeSeconds": 4.0828999999999995,
+      "frameNumber": 488
+    },
+    "clockBoundary": "decoded feature frame selected by AudioContext currentTime plus transport offset; render sampled by performance.now()",
+    "representativeSelection": {
+      "authority": "strongest-onset-frame",
+      "requestedTimeSeconds": null,
+      "effectiveTimeSeconds": 38,
+      "frameIndex": 760,
+      "featureClockAuthority": "decoded-pcm-sample-clock"
+    },
+    "controls": {
+      "coupling": 1,
+      "memory": 1,
+      "depth": 1
+    },
+    "materialHistory": {
+      "stateAuthority": "bounded-pulp-routed-material-history-v0",
+      "resetCount": 1,
+      "imprint": {
+        "path": "B",
+        "authority": "decoded-feature-history-plus-operator-control-order-v0",
+        "steps": 38,
+        "startFeatureIndex": 760,
+        "endFeatureIndex": 797,
+        "finalControls": {
+          "coupling": 1,
+          "memory": 1,
+          "depth": 1
+        }
+      }
+    },
+    "featureFrame": {
+      "index": 784,
+      "t": 39.2,
+      "energy": 1,
+      "onsetStrength": 0.155773,
+      "recurrenceConfidence": 0.912353,
+      "spectralCentroid": 0.056124
+    },
+    "materialFrame": {
+      "schema": "kaminos.material-stage-frame.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "t": 39.184,
+      "featureAuthority": "decoded-audio-clock-frame-v0",
+      "dt": 0.05,
+      "materialControls": {
+        "coupling": 1,
+        "memory": 1,
+        "depth": 1
+      },
+      "audioFeatures": {
+        "energy": 1,
+        "onsetStrength": 0.155773,
+        "recurrenceConfidence": 0.912353,
+        "spectralCentroid": 0.056124
+      },
+      "materialAuthority": "stage-atoms-plus-lawful-audio-v0",
+      "stateAuthority": "bounded-pulp-routed-material-history-v0",
+      "sourceAccess": {
+        "schema": "kaminos.stage-audio-source-access.v0",
+        "sourceKind": "ccmixter",
+        "trackId": "ccmixter:70553:file:127740",
+        "title": "Geppetto V4 (Pell + Stems) - Dry Main Acapella",
+        "artist": "Coruscate",
+        "license": "CC BY 2.5",
+        "attribution": "Coruscate - Geppetto V4 (Pell + Stems) - Dry Main Acapella - CC BY 2.5 - https://ccmixter.org/files/Coruscate/70553",
+        "downloadUrl": "https://ccmixter.org/content/Coruscate/Coruscate_-_Geppetto_V4_(Pell_Stems).mp3",
+        "sourcePageUrl": "https://ccmixter.org/files/Coruscate/70553",
+        "localPath": "/private/tmp/kaminos-pulp-stage-atoms-0715/artifacts/stage-atoms/local-audio/coruscate-geppetto-dry-main.mp3",
+        "receiptWarnings": [],
+        "accessClass": "open_transformable",
+        "analysisAllowed": true,
+        "transformAllowed": true,
+        "syncAllowed": true,
+        "publicDemoAllowed": true,
+        "analysisScope": "public_demo_with_attribution"
+      },
+      "materialAtoms": [
+        {
+          "id": "1",
+          "label": "Input",
+          "position": [
+            -1,
+            0,
+            0.35
+          ],
+          "field": {
+            "excitation": 0.526286,
+            "feedbackMemory": 0.184583,
+            "occlusion": 0.040611,
+            "heat": 0.456443,
+            "coupling": 0.66,
+            "coherence": 0.333591,
+            "refractory": 0.395388,
+            "incomingFlux": 0
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "position": [
+            0.105,
+            0,
+            0.293333
+          ],
+          "field": {
+            "excitation": 1,
+            "feedbackMemory": 1,
+            "occlusion": 0.412936,
+            "heat": 1,
+            "coupling": 0.8064,
+            "coherence": 0.687432,
+            "refractory": 0.616951,
+            "incomingFlux": 1
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "position": [
+            -0.225,
+            0,
+            -0.233333
+          ],
+          "field": {
+            "excitation": 0.909788,
+            "feedbackMemory": 1,
+            "occlusion": 0.541606,
+            "heat": 0.983949,
+            "coupling": 0.7728,
+            "coherence": 0.60489,
+            "refractory": 0.542826,
+            "incomingFlux": 0.42
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "position": [
+            1,
+            0,
+            -0.35
+          ],
+          "field": {
+            "excitation": 0.942034,
+            "feedbackMemory": 0.253317,
+            "occlusion": 0.05304,
+            "heat": 0.799852,
+            "coupling": 0.66,
+            "coherence": 0.402046,
+            "refractory": 0.55075,
+            "incomingFlux": 0.86905
+          }
+        }
+      ],
+      "materialFlows": [
+        {
+          "sourceId": "1",
+          "destinationId": "filter.cutoff",
+          "kind": "Audio",
+          "feedback": false,
+          "activity": 0.424397,
+          "coherenceTransfer": 0.333591
+        },
+        {
+          "sourceId": "filter.cutoff",
+          "destinationId": "delay.feedback",
+          "kind": "Automation",
+          "feedback": false,
+          "activity": 0.324576,
+          "coherenceTransfer": 0.288721
+        },
+        {
+          "sourceId": "delay.feedback",
+          "destinationId": "filter.cutoff",
+          "kind": "Audio",
+          "feedback": true,
+          "activity": 0.52823,
+          "coherenceTransfer": 0.435521
+        },
+        {
+          "sourceId": "delay.feedback",
+          "destinationId": "4",
+          "kind": "Audio",
+          "feedback": false,
+          "activity": 0.60046,
+          "coherenceTransfer": 0.60489
+        }
+      ],
+      "receipts": [
+        {
+          "kind": "audio_source_access",
+          "accessClass": "open_transformable",
+          "analysisAllowed": true,
+          "trackId": "ccmixter:70553:file:127740"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "1",
+          "bindingAuthority": "pulp-graph-runtime-node",
+          "positionAuthority": "pulp-graph-level-layout"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "filter.cutoff",
+          "bindingAuthority": "pulp-design-ir-param-key",
+          "positionAuthority": "pulp-design-ir-rect"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "delay.feedback",
+          "bindingAuthority": "pulp-design-ir-param-key",
+          "positionAuthority": "pulp-design-ir-rect"
+        },
+        {
+          "kind": "stage_atom_binding",
+          "id": "4",
+          "bindingAuthority": "pulp-graph-runtime-node",
+          "positionAuthority": "pulp-graph-level-layout"
+        }
+      ]
+    },
+    "spatialization": {
+      "schema": "kaminos.material-spatialization.v0",
+      "routeIdentity": "stage-atoms-pulp-shaped-material-spatializer-v0",
+      "spatializationAuthority": "material-stage-atoms-v0",
+      "rawAudioFeatureUse": "ignored_after_material_frame",
+      "emitters": [
+        {
+          "id": "1",
+          "label": "Input",
+          "position": [
+            -1,
+            0,
+            0.35
+          ],
+          "send": {
+            "pan": -1,
+            "direct": 0.440919,
+            "reverb": 0.178346,
+            "spread": 0.430408,
+            "lowpassHz": 16828
+          }
+        },
+        {
+          "id": "filter.cutoff",
+          "label": "Cutoff",
+          "position": [
+            0.105,
+            0,
+            0.293333
+          ],
+          "send": {
+            "pan": 0.105,
+            "direct": 0.758192,
+            "reverb": 0.659105,
+            "spread": 0.863738,
+            "lowpassHz": 11743
+          }
+        },
+        {
+          "id": "delay.feedback",
+          "label": "Feedback Space",
+          "position": [
+            -0.225,
+            0,
+            -0.233333
+          ],
+          "send": {
+            "pan": -0.225,
+            "direct": 0.628244,
+            "reverb": 0.689985,
+            "spread": 0.843744,
+            "lowpassHz": 10674
+          }
+        },
+        {
+          "id": "4",
+          "label": "Output",
+          "position": [
+            1,
+            0,
+            -0.35
+          ],
+          "send": {
+            "pan": 1,
+            "direct": 0.798583,
+            "reverb": 0.214322,
+            "spread": 0.569117,
+            "lowpassHz": 16406
+          }
+        }
+      ]
+    },
+    "audioGraph": {
+      "authority": "material-spatialization-emitter-sends",
+      "sendCount": 4,
+      "outputRms": 0.13053665909815626,
+      "outputPeak": 0.2687370181083679
+    },
+    "failure": null
+  },
+  "consoleEvents": [],
+  "stderrTail": "\nDevTools listening on ws://127.0.0.1:9523/devtools/browser/233a82a4-1ae0-40e0-9728-90a829d9e06d\nTrying to load the allocator multiple times. This is *not* supported.\n[79334:13099095:0715/164743.658180:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[79334:13099095:0715/164743.743152:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n[79334:13099095:0715/164743.743246:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR\n",
+  "ok": true
+}

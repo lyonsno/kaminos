@@ -273,42 +273,141 @@ function audioFeature(features, key, fallback = 0) {
   return clamp(features?.[key] ?? fallback, 0, 1);
 }
 
+function materialControls(controls = {}) {
+  return {
+    coupling: Number(clamp(controls.coupling ?? 1, 0, 2).toFixed(6)),
+    memory: Number(clamp(controls.memory ?? 1, 0, 2).toFixed(6)),
+    depth: Number(clamp(controls.depth ?? 1, 0, 1.5).toFixed(6)),
+  };
+}
+
+function graphAtomMaps(stage) {
+  const atomByGraphId = new Map();
+  for (const atom of stage.atoms || []) {
+    if (atom.graph?.nodeId !== null && atom.graph?.nodeId !== undefined) {
+      atomByGraphId.set(String(atom.graph.nodeId), atom);
+    }
+  }
+  return atomByGraphId;
+}
+
 export function simulateStageMaterialFrame(stage, {
   t = 0,
+  dt = 0.05,
   audioFeatures = {},
   featureAuthority = 'fixture-audio-features-v0',
+  previousMaterialFrame = null,
+  materialControls: requestedMaterialControls = {},
 } = {}) {
   const energy = audioFeature(audioFeatures, 'energy');
   const onsetStrength = audioFeature(audioFeatures, 'onsetStrength');
   const recurrenceConfidence = audioFeature(audioFeatures, 'recurrenceConfidence');
   const spectralCentroid = audioFeature(audioFeatures, 'spectralCentroid');
+  const controls = materialControls(requestedMaterialControls);
+  const boundedDt = clamp(dt, 0, 0.25);
+  const previousAtoms = new Map(
+    (previousMaterialFrame?.materialAtoms || []).map(atom => [String(atom.id), atom]),
+  );
+  const atomByGraphId = graphAtomMaps(stage);
+  const incomingByAtomId = new Map((stage.atoms || []).map(atom => [String(atom.id), []]));
+
+  for (const connection of stage.sourceGraph?.connections || []) {
+    const source = atomByGraphId.get(String(connection.sourceNode ?? connection.source_node ?? ''));
+    const destination = atomByGraphId.get(String(connection.destNode ?? connection.dest_node ?? ''));
+    if (!source || !destination) continue;
+    incomingByAtomId.get(String(destination.id))?.push({ connection, source });
+  }
 
   const materialAtoms = (stage.atoms || []).map(atom => {
     const confidence = clamp(atom.confidence, 0, 1);
     const feedbackBoost = atom.graph.feedbackIncoming ? 0.2 : 0;
     const automationBoost = atom.graph.automationIncoming ? 0.12 : 0;
-    const excitation = clamp(
-      energy * (0.28 + atom.materialRegion.coupling * 0.46) +
+    const effectiveCoupling = clamp(atom.materialRegion.coupling * controls.coupling, 0, 1.6);
+    const previous = previousAtoms.get(String(atom.id));
+    const previousField = previous?.field || {};
+    let incomingActivity = 0;
+    let incomingMemory = 0;
+    let incomingCoherence = 0;
+
+    for (const { connection, source } of incomingByAtomId.get(String(atom.id)) || []) {
+      const sourceField = previousAtoms.get(String(source.id))?.field;
+      if (!sourceField) continue;
+      const kind = String(connection.kind || 'Audio').toLowerCase();
+      const routeWeight = connection.feedback ? 0.78 : kind === 'automation' ? 0.42 : 1;
+      incomingActivity += (finiteNumber(sourceField.excitation) * 0.68 + finiteNumber(sourceField.heat) * 0.32) * routeWeight;
+      incomingMemory += finiteNumber(sourceField.feedbackMemory) * routeWeight;
+      incomingCoherence += finiteNumber(sourceField.coherence) * routeWeight;
+    }
+
+    const baseExcitation = clamp(
+      energy * (0.28 + effectiveCoupling * 0.46) +
       onsetStrength * 0.18 +
       automationBoost,
       0,
       1,
     );
-    const feedbackMemory = clamp(
+    const baseFeedbackMemory = clamp(
       recurrenceConfidence * (atom.graph.feedbackIncoming ? 0.72 : 0.22) +
       atom.graph.latencySamples / 768 +
       feedbackBoost,
       0,
       1,
     );
-    const occlusion = clamp(
-      atom.materialRegion.occlusionSeed +
-      spectralCentroid * 0.16 +
-      (1 - confidence) * 0.12,
+    const hasHistory = Boolean(previous);
+    const retention = hasHistory ? clamp(0.08 + controls.memory * 0.4, 0.08, 0.88) : 0;
+    const refractory = hasHistory
+      ? clamp(
+        finiteNumber(previousField.refractory) * (0.68 + controls.memory * 0.08) +
+        onsetStrength * 0.16 +
+        finiteNumber(previousField.excitation) * 0.1,
+        0,
+        1,
+      )
+      : clamp(onsetStrength * 0.16, 0, 1);
+    const routedExcitation = incomingActivity * (0.1 + effectiveCoupling * 0.3) * (0.5 + boundedDt * 10);
+    const excitation = clamp(
+      baseExcitation * (1 - retention) +
+      finiteNumber(previousField.excitation) * retention +
+      routedExcitation -
+      finiteNumber(previousField.refractory) * 0.07,
       0,
       1,
     );
-    const heat = clamp(excitation * 0.72 + feedbackMemory * 0.24 + atom.materialRegion.propagation * 0.18, 0, 1);
+    const feedbackMemory = clamp(
+      baseFeedbackMemory * (1 - retention) +
+      finiteNumber(previousField.feedbackMemory) * retention +
+      incomingMemory * effectiveCoupling * (atom.graph.feedbackIncoming ? 0.14 : 0.055),
+      0,
+      1,
+    );
+    const coherenceTarget = clamp(
+      recurrenceConfidence * (0.16 + effectiveCoupling * 0.36) +
+      incomingCoherence * effectiveCoupling * 0.18 +
+      (atom.graph.feedbackIncoming ? feedbackMemory * 0.2 : 0),
+      0,
+      1,
+    );
+    const coherence = clamp(
+      coherenceTarget * (1 - retention) + finiteNumber(previousField.coherence) * retention,
+      0,
+      1,
+    );
+    const occlusion = clamp(
+      atom.materialRegion.occlusionSeed +
+      spectralCentroid * 0.16 +
+      (1 - confidence) * 0.12 +
+      refractory * 0.08,
+      0,
+      1,
+    );
+    const heat = clamp(
+      excitation * 0.64 +
+      feedbackMemory * 0.2 +
+      coherence * 0.14 +
+      atom.materialRegion.propagation * 0.18,
+      0,
+      1,
+    );
     return {
       id: atom.id,
       label: atom.label,
@@ -318,16 +417,49 @@ export function simulateStageMaterialFrame(stage, {
         feedbackMemory: Number(feedbackMemory.toFixed(6)),
         occlusion: Number(occlusion.toFixed(6)),
         heat: Number(heat.toFixed(6)),
-        coupling: Number(atom.materialRegion.coupling.toFixed(6)),
+        coupling: Number(effectiveCoupling.toFixed(6)),
+        coherence: Number(coherence.toFixed(6)),
+        refractory: Number(refractory.toFixed(6)),
+        incomingFlux: Number(clamp(incomingActivity, 0, 1).toFixed(6)),
       },
     };
   });
+
+  const materialById = new Map(materialAtoms.map(atom => [String(atom.id), atom]));
+  const materialFlows = [];
+  for (const connection of stage.sourceGraph?.connections || []) {
+    const source = atomByGraphId.get(String(connection.sourceNode ?? connection.source_node ?? ''));
+    const destination = atomByGraphId.get(String(connection.destNode ?? connection.dest_node ?? ''));
+    if (!source || !destination) continue;
+    const sourceField = materialById.get(String(source.id))?.field;
+    const destinationField = materialById.get(String(destination.id))?.field;
+    const kind = String(connection.kind || 'Audio');
+    const routeWeight = connection.feedback ? 0.72 : kind.toLowerCase() === 'automation' ? 0.42 : 1;
+    materialFlows.push({
+      sourceId: source.id,
+      destinationId: destination.id,
+      kind,
+      feedback: Boolean(connection.feedback),
+      activity: Number(clamp(
+        finiteNumber(sourceField?.excitation) * finiteNumber(destinationField?.coupling) * routeWeight,
+        0,
+        1,
+      ).toFixed(6)),
+      coherenceTransfer: Number(clamp(
+        finiteNumber(sourceField?.coherence) * routeWeight,
+        0,
+        1,
+      ).toFixed(6)),
+    });
+  }
 
   return {
     schema: MATERIAL_STAGE_FRAME_SCHEMA,
     routeIdentity: stage.routeIdentity || STAGE_ATOMS_ROUTE_IDENTITY,
     t: finiteNumber(t, 0),
     featureAuthority,
+    dt: Number(boundedDt.toFixed(6)),
+    materialControls: controls,
     audioFeatures: {
       energy: Number(energy.toFixed(6)),
       onsetStrength: Number(onsetStrength.toFixed(6)),
@@ -335,8 +467,10 @@ export function simulateStageMaterialFrame(stage, {
       spectralCentroid: Number(spectralCentroid.toFixed(6)),
     },
     materialAuthority: 'stage-atoms-plus-lawful-audio-v0',
+    stateAuthority: 'bounded-pulp-routed-material-history-v0',
     sourceAccess: stage.sourceAccess,
     materialAtoms,
+    materialFlows,
     receipts: [
       {
         kind: 'audio_source_access',
@@ -359,10 +493,10 @@ export function spatializeFromStageMaterial(materialFrame, _options = {}) {
     .filter(atom => atom.field.heat > 0.04 || atom.field.feedbackMemory > 0.1)
     .map(atom => {
       const pan = clamp(atom.position[0], -1, 1);
-      const direct = clamp(atom.field.excitation * (1 - atom.field.occlusion * 0.45), 0, 1);
+      const direct = clamp(atom.field.excitation * (1 - atom.field.occlusion * 0.45) * (0.78 + atom.field.coherence * 0.22), 0, 1);
       const reverb = clamp(0.08 + atom.field.feedbackMemory * 0.48 + atom.field.occlusion * 0.24, 0, 1);
-      const spread = clamp(0.18 + atom.field.heat * 0.38 + atom.field.feedbackMemory * 0.28, 0, 1);
-      const lowpass = Math.round(18000 - atom.field.occlusion * 9800 - atom.field.feedbackMemory * 1800);
+      const spread = clamp(0.18 + atom.field.heat * 0.32 + atom.field.feedbackMemory * 0.24 + atom.field.coherence * 0.18, 0, 1);
+      const lowpass = Math.round(18000 - atom.field.occlusion * 9000 - atom.field.feedbackMemory * 1800 - atom.field.refractory * 1200);
       return {
         id: atom.id,
         label: atom.label,

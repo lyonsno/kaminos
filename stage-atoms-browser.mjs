@@ -12,6 +12,11 @@ const canvas = document.querySelector('#stage-atoms-canvas');
 const context = canvas.getContext('2d');
 const playButton = document.querySelector('#stage-atoms-play');
 const seek = document.querySelector('#stage-atoms-seek');
+const resetButton = document.querySelector('#stage-atoms-reset');
+const historyButtons = {
+  A: document.querySelector('#stage-atoms-history-a'),
+  B: document.querySelector('#stage-atoms-history-b'),
+};
 const stateNode = document.querySelector('#stage-atoms-state');
 const failureNode = document.querySelector('#stage-atoms-failure');
 const sourceAuthorityNode = document.querySelector('[data-stage-source-authority]');
@@ -31,8 +36,8 @@ const nodes = {
   featureFrame: document.querySelector('#stage-atoms-feature-frame'),
   energy: document.querySelector('#feature-energy'),
   onset: document.querySelector('#feature-onset'),
-  recurrence: document.querySelector('#feature-recurrence'),
-  centroid: document.querySelector('#feature-centroid'),
+  materialMemory: document.querySelector('#material-memory'),
+  materialCoherence: document.querySelector('#material-coherence'),
   time: document.querySelector('#stage-atoms-time'),
   duration: document.querySelector('#stage-atoms-duration'),
 };
@@ -59,6 +64,9 @@ const runtime = {
   playing: false,
   visualStartedAt: performance.now(),
   frameNumber: 0,
+  lastMaterialFeatureIndex: null,
+  materialResetCount: 0,
+  historyImprint: null,
   sourceRequested: REPORT_URL,
   sourceEffective: null,
   representativeSelection: null,
@@ -81,17 +89,11 @@ async function sha256Hex(buffer) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function controlledStage() {
-  const couplingScale = Number(controls.coupling.value);
+function currentMaterialControls() {
   return {
-    ...runtime.stage,
-    atoms: runtime.stage.atoms.map(atom => ({
-      ...atom,
-      materialRegion: {
-        ...atom.materialRegion,
-        coupling: Math.max(0, Math.min(1, atom.materialRegion.coupling * couplingScale)),
-      },
-    })),
+    coupling: Number(controls.coupling.value),
+    memory: Number(controls.memory.value),
+    depth: Number(controls.depth.value),
   };
 }
 
@@ -102,26 +104,108 @@ function featureFrameAt(timeSeconds) {
   return runtime.frames[index];
 }
 
-function materialStateAt(timeSeconds) {
-  const sourceFrame = featureFrameAt(timeSeconds);
-  if (!sourceFrame) return null;
-  const audioFeatures = {
-    ...sourceFrame,
-    recurrenceConfidence: Math.max(0, Math.min(1, sourceFrame.recurrenceConfidence * Number(controls.memory.value))),
-  };
-  const materialFrame = simulateStageMaterialFrame(controlledStage(), {
-    t: timeSeconds,
-    audioFeatures,
-    featureAuthority: FEATURE_AUTHORITY,
-  });
+function depthSpatialization(materialFrame, depth) {
   const spatialization = spatializeFromStageMaterial(materialFrame);
-  const depth = Number(controls.depth.value);
   spatialization.emitters = spatialization.emitters.map(emitter => ({
     ...emitter,
     position: [emitter.position[0] * depth, emitter.position[1], emitter.position[2] * depth],
     send: { ...emitter.send, pan: Math.max(-1, Math.min(1, emitter.send.pan * depth)) },
   }));
+  return spatialization;
+}
+
+function materialStateAt(timeSeconds, {
+  previousMaterialFrame = runtime.materialFrame,
+  materialControls = currentMaterialControls(),
+  forceAdvance = false,
+} = {}) {
+  const sourceFrame = featureFrameAt(timeSeconds);
+  if (!sourceFrame) return null;
+  const shouldAdvance = forceAdvance || !previousMaterialFrame || sourceFrame.index !== runtime.lastMaterialFeatureIndex;
+  const materialFrame = shouldAdvance
+    ? simulateStageMaterialFrame(runtime.stage, {
+      t: timeSeconds,
+      dt: 1 / runtime.report.lastTrustworthyEvidence.audioInput.featureClock.rateHz,
+      audioFeatures: sourceFrame,
+      featureAuthority: FEATURE_AUTHORITY,
+      previousMaterialFrame,
+      materialControls,
+    })
+    : previousMaterialFrame;
+  const spatialization = depthSpatialization(materialFrame, materialControls.depth);
+  if (shouldAdvance) runtime.lastMaterialFeatureIndex = sourceFrame.index;
   return { sourceFrame, materialFrame, spatialization };
+}
+
+function setControlValues(values) {
+  for (const [name, value] of Object.entries(values)) {
+    controls[name].value = String(value);
+    document.querySelector(`#stage-atoms-${name}-value`).value = Number(value).toFixed(2);
+  }
+}
+
+function setActiveHistory(pathName = null) {
+  for (const [name, button] of Object.entries(historyButtons)) {
+    button.dataset.active = String(name === pathName);
+  }
+}
+
+function resetMaterialState() {
+  runtime.materialFrame = null;
+  runtime.spatialization = null;
+  runtime.lastMaterialFeatureIndex = null;
+  runtime.historyImprint = null;
+  runtime.materialResetCount += 1;
+  setActiveHistory();
+  if (runtime.status === 'live') {
+    const state = materialStateAt(audioClockTime(), { forceAdvance: true });
+    runtime.materialFrame = state.materialFrame;
+    runtime.spatialization = state.spatialization;
+    updateAudioSends(state.spatialization);
+  }
+}
+
+function applyHistoryPath(pathName) {
+  if (runtime.status !== 'live' || !historyButtons[pathName]) return null;
+  const rate = runtime.report.lastTrustworthyEvidence.audioInput.featureClock.rateHz;
+  const phaseA = { coupling: 1.8, memory: 0.2, depth: 1 };
+  const phaseB = { coupling: 0.35, memory: 1.8, depth: 1 };
+  const finalControls = { coupling: 1, memory: 1, depth: 1 };
+  const phases = pathName === 'A' ? [phaseA, phaseB] : [phaseB, phaseA];
+  const sequence = [
+    ...Array.from({ length: 18 }, () => phases[0]),
+    ...Array.from({ length: 18 }, () => phases[1]),
+    ...Array.from({ length: 2 }, () => finalControls),
+  ];
+  const startTime = runtime.representativeSelection?.effectiveTimeSeconds ?? audioClockTime();
+  let previousMaterialFrame = null;
+  let sourceFrame = featureFrameAt(startTime);
+  for (const [step, materialControls] of sequence.entries()) {
+    sourceFrame = featureFrameAt(startTime + step / rate) || sourceFrame;
+    previousMaterialFrame = simulateStageMaterialFrame(runtime.stage, {
+      t: sourceFrame.timeSeconds,
+      dt: 1 / rate,
+      audioFeatures: sourceFrame,
+      featureAuthority: FEATURE_AUTHORITY,
+      previousMaterialFrame,
+      materialControls,
+    });
+  }
+  setControlValues(finalControls);
+  runtime.materialFrame = previousMaterialFrame;
+  runtime.spatialization = depthSpatialization(previousMaterialFrame, finalControls.depth);
+  runtime.lastMaterialFeatureIndex = featureFrameAt(startTime).index;
+  runtime.historyImprint = {
+    path: pathName,
+    authority: 'decoded-feature-history-plus-operator-control-order-v0',
+    steps: sequence.length,
+    startFeatureIndex: featureFrameAt(startTime).index,
+    endFeatureIndex: sourceFrame.index,
+    finalControls,
+  };
+  setActiveHistory(pathName);
+  updateAudioSends(runtime.spatialization);
+  return runtime.historyImprint;
 }
 
 function ensureAudioGraph() {
@@ -291,9 +375,14 @@ function drawStage(timeSeconds) {
     if (!from || !to) continue;
     const a = stagePoint(from.stage.position, width, height);
     const b = stagePoint(to.stage.position, width, height);
-    const pulse = 0.4 + 0.6 * Math.sin(timeSeconds * 3 + Number(connection.sourceNode));
-    context.strokeStyle = connection.feedback ? `rgba(255,128,110,${0.18 + pulse * 0.22})` : `rgba(119,230,213,${0.09 + pulse * 0.12})`;
-    context.lineWidth = connection.feedback ? 2 : 1;
+    const materialFlow = runtime.materialFrame.materialFlows?.find(flow => (
+      String(flow.sourceId) === String(from.id) && String(flow.destinationId) === String(to.id)
+    ));
+    const activity = materialFlow?.activity || 0;
+    const pulse = 0.65 + 0.35 * Math.sin(timeSeconds * (2 + activity * 4) + Number(connection.sourceNode));
+    const alpha = 0.06 + activity * 0.72 * pulse;
+    context.strokeStyle = connection.feedback ? `rgba(255,128,110,${alpha})` : `rgba(119,230,213,${alpha})`;
+    context.lineWidth = 1 + activity * 6 + (connection.feedback ? 1 : 0);
     context.setLineDash(connection.feedback ? [7, 8] : []);
     context.beginPath();
     context.moveTo(a.x, a.y);
@@ -329,7 +418,7 @@ function drawStage(timeSeconds) {
     context.globalAlpha = 1;
     const particleCount = 10 + Math.round(heat * 18 + atom.field.feedbackMemory * 10);
     for (let particle = 0; particle < particleCount; particle += 1) {
-      const phase = particle * 2.399 + timeSeconds * (0.4 + atom.field.coupling * 1.3);
+      const phase = particle * 2.399 * (1 - atom.field.coherence * 0.78) + timeSeconds * (0.4 + atom.field.coupling * 1.3);
       const radial = radius * (0.18 + ((particle * 37) % 83) / 100);
       const x = Math.cos(phase) * radial;
       const y = Math.sin(phase * 1.13) * radial * 0.5 - Math.sin(timeSeconds * 2.1 + particle) * heat * 13;
@@ -346,7 +435,7 @@ function drawStage(timeSeconds) {
     context.fillStyle = '#747c7e';
     context.font = '9px ui-monospace, monospace';
     const authorityText = sourceAtom?.materialRegion.bindingAuthority === 'pulp-design-ir-param-key' ? 'DESIGNIR' : 'GRAPH';
-    context.fillText(`${authorityText} / ${atom.field.heat.toFixed(2)}`, point.x - radius, point.y + radius * 0.7 + 32);
+    context.fillText(`${authorityText}  E${atom.field.excitation.toFixed(2)}  M${atom.field.feedbackMemory.toFixed(2)}  C${atom.field.coherence.toFixed(2)}`, point.x - radius, point.y + radius * 0.7 + 32);
   }
 }
 
@@ -357,8 +446,10 @@ function updateReadouts(sourceFrame, visualSeconds) {
   nodes.featureFrame.textContent = `${sourceFrame.index + 1} / ${runtime.frames.length}`;
   nodes.energy.textContent = sourceFrame.energy.toFixed(2);
   nodes.onset.textContent = sourceFrame.onsetStrength.toFixed(2);
-  nodes.recurrence.textContent = sourceFrame.recurrenceConfidence.toFixed(2);
-  nodes.centroid.textContent = sourceFrame.spectralCentroid.toFixed(2);
+  const atoms = runtime.materialFrame?.materialAtoms || [];
+  const divisor = Math.max(1, atoms.length);
+  nodes.materialMemory.textContent = (atoms.reduce((sum, atom) => sum + atom.field.feedbackMemory, 0) / divisor).toFixed(2);
+  nodes.materialCoherence.textContent = (atoms.reduce((sum, atom) => sum + atom.field.coherence, 0) / divisor).toFixed(2);
   nodes.time.textContent = formatTime(audioTime);
   nodes.duration.textContent = formatTime(runtime.audioBuffer?.duration);
   seek.value = runtime.audioBuffer?.duration ? String(audioTime / runtime.audioBuffer.duration) : '0';
@@ -387,6 +478,11 @@ function publishDebug(sourceFrame, visualSeconds) {
       coupling: Number(controls.coupling.value),
       memory: Number(controls.memory.value),
       depth: Number(controls.depth.value),
+    },
+    materialHistory: {
+      stateAuthority: runtime.materialFrame?.stateAuthority || null,
+      resetCount: runtime.materialResetCount,
+      imprint: runtime.historyImprint,
     },
     featureFrame: sourceFrame,
     materialFrame: runtime.materialFrame,
@@ -497,13 +593,32 @@ seek.addEventListener('input', () => {
   const wasPlaying = runtime.playing;
   if (wasPlaying) stopBufferSource({ preserveTime: false });
   runtime.transportOffsetSeconds = Number(seek.value) * runtime.audioBuffer.duration;
+  resetMaterialState();
   if (wasPlaying) startBufferSource();
 });
 
+resetButton.addEventListener('click', resetMaterialState);
+for (const [pathName, button] of Object.entries(historyButtons)) {
+  button.addEventListener('click', () => applyHistoryPath(pathName));
+}
+
 for (const [name, input] of Object.entries(controls)) {
   const output = document.querySelector(`#stage-atoms-${name}-value`);
-  input.addEventListener('input', () => { output.value = Number(input.value).toFixed(2); });
+  input.addEventListener('input', () => {
+    output.value = Number(input.value).toFixed(2);
+    runtime.historyImprint = null;
+    setActiveHistory();
+    if (runtime.status === 'live') {
+      const state = materialStateAt(audioClockTime(), { forceAdvance: true });
+      runtime.materialFrame = state.materialFrame;
+      runtime.spatialization = state.spatialization;
+      updateAudioSends(state.spatialization);
+    }
+  });
 }
+
+window.kaminosStageAtomsApplyHistoryPath = applyHistoryPath;
+window.kaminosStageAtomsResetMaterialState = resetMaterialState;
 
 requestAnimationFrame(frame);
 boot().catch(fail);

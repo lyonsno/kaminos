@@ -22,6 +22,11 @@ assert.match(html, /id="stage-atoms-seek"/, 'route exposes an audio-clock seek h
 assert.match(html, /id="stage-atoms-coupling"/, 'route exposes an interior coupling handle');
 assert.match(html, /id="stage-atoms-memory"/, 'route exposes a recurrence-memory handle');
 assert.match(html, /id="stage-atoms-depth"/, 'route exposes a spatial-depth handle');
+assert.match(html, /id="stage-atoms-reset"/, 'route exposes a retained-state reset handle');
+assert.match(html, /id="stage-atoms-history-a"/, 'route exposes history A as an operator handle');
+assert.match(html, /id="stage-atoms-history-b"/, 'route exposes history B as an operator handle');
+assert.match(html, /id="material-memory"/, 'route exposes retained regional memory beside decoded drive');
+assert.match(html, /id="material-coherence"/, 'route exposes population coherence beside decoded drive');
 assert.match(html, /data-stage-source-authority/, 'operator surface exposes source authority');
 assert.match(html, /data-stage-route-authority/, 'operator surface exposes route authority');
 assert.match(html, /data-stage-fallback-authority/, 'operator surface exposes fallback authority');
@@ -29,6 +34,10 @@ assert.match(html, /data-stage-fallback-authority/, 'operator surface exposes fa
 assert.match(source, /ccmixter-geppetto-decoded-stage-atoms-witness\.json/, 'browser consumes the decoded witness report');
 assert.match(source, /coruscate-geppetto-dry-main\.mp3/, 'browser consumes the local verified audio cache');
 assert.match(source, /simulateStageMaterialFrame/, 'browser derives current material state from Stage Atoms');
+assert.match(source, /previousMaterialFrame/, 'browser advances from retained material state instead of recomputing stateless frames');
+assert.match(source, /materialFlows/, 'browser renders activity from lawful Pulp-routed material transfer');
+assert.match(source, /applyHistoryPath/, 'browser provides reproducible reversed histories at identical final controls');
+assert.match(source, /resetMaterialState/, 'browser lets the operator clear retained organization explicitly');
 assert.match(source, /spatializeFromStageMaterial/, 'browser derives audio placement from current material state');
 assert.match(source, /decodeAudioData/, 'browser decodes the verified source bytes into its live audio clock substrate');
 assert.match(source, /createBufferSource/, 'browser transport uses recreatable WebAudio buffer sources');
@@ -53,6 +62,7 @@ assert.match(witness, /controlBounds/, 'witness rejects controls clipped outside
 assert.match(witness, /fallbackAuthority/, 'witness rejects hidden fallback authority');
 assert.match(witness, /outputRms/, 'witness requires measurable post-spatialization output');
 assert.match(witness, /handleEvidence/, 'witness proves live handles change material and spatial state');
+assert.match(witness, /historyEvidence/, 'witness rejects collapse between reversed histories at identical final controls');
 assert.match(witness, /primaryOutputWritten/, 'witness records whether its screenshot landed');
 assert.match(witness, /effectiveUrl/, 'witness records the effective browser route');
 
