@@ -84,6 +84,7 @@ const {
   summarizeSam3FinitePhaseOutputs,
   summarizeSam3LayerParityCheckpoint,
   normalizeSam3ExpectedLayerCheckpoints,
+  summarizeSam3PhaseParityCheckpoints,
   stableSam3Gelu,
   validateRouteDefinition,
 } = await import('../src/index.js');
@@ -100,6 +101,19 @@ assert.throws(
 assert.throws(
   () => normalizeSam3ExpectedLayerCheckpoints([{ layerIndex: 8, hiddenStates: new Float32Array(1) }], [0, 7]),
   /layer 8.*not executed/,
+);
+
+const phaseParity = summarizeSam3PhaseParityCheckpoints(
+  { layerNorm1: new Float32Array([1, 2]).buffer, mlpHidden: new Float32Array([3, 4]).buffer },
+  { layerNorm1: new Float32Array([1.25, 2]), mlpHidden: new Float32Array([3, 3.5]) },
+);
+assert.deepEqual(phaseParity.map(checkpoint => ({ phase: checkpoint.phase, maxAbsDiff: checkpoint.maxAbsDiff })), [
+  { phase: 'layerNorm1', maxAbsDiff: 0.25 },
+  { phase: 'mlpHidden', maxAbsDiff: 0.5 },
+]);
+assert.throws(
+  () => summarizeSam3PhaseParityCheckpoints({ layerNorm1: new Float32Array(1).buffer }, { mlpHidden: new Float32Array(1) }),
+  /expected phase checkpoint mlpHidden was not read back/,
 );
 
 const dispatchShape = {

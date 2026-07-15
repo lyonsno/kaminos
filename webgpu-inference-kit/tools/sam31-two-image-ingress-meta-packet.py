@@ -45,6 +45,7 @@ def parse_args():
     parser.add_argument("--frame-1", default=str(DEFAULT_SOURCE_ROOT / "assets/videos/0001/1.jpg"))
     parser.add_argument("--resolution", type=int, default=28)
     parser.add_argument("--diagnostic-vit-layers", default="")
+    parser.add_argument("--diagnostic-vit-phase-layer", type=int)
     return parser.parse_args()
 
 
@@ -293,6 +294,7 @@ def write_failure_receipt(args, error: Exception):
             "frames": [str(Path(args.frame_0).resolve()), str(Path(args.frame_1).resolve())],
             "resolution": args.resolution,
             "diagnosticVitLayers": args.diagnostic_vit_layers,
+            "diagnosticVitPhaseLayer": args.diagnostic_vit_phase_layer,
         },
         "expected": {"modelRevision": HF_REVISION, "checkpointSha256": CHECKPOINT_SHA256, "sourceCommit": SOURCE_COMMIT},
         "primaryOutputWritten": False,
@@ -309,12 +311,15 @@ def main():
     source_root = Path(args.source_root).resolve()
     frame_paths = [Path(args.frame_0).resolve(), Path(args.frame_1).resolve()]
     diagnostic_vit_layers = parse_diagnostic_vit_layers(args.diagnostic_vit_layers)
+    diagnostic_vit_phase_layer = args.diagnostic_vit_phase_layer
     out_dir.mkdir(parents=True, exist_ok=True)
     invalidate_primary_outputs(out_dir)
 
     FAILURE_PHASE = "identity-validation"
     if args.resolution <= 0 or args.resolution % 14:
         raise ValueError("resolution must be a positive multiple of the SAM3.1 patch size 14")
+    if diagnostic_vit_phase_layer is not None and diagnostic_vit_phase_layer not in diagnostic_vit_layers:
+        raise ValueError("diagnostic ViT phase layer must also appear in --diagnostic-vit-layers")
     if not checkpoint.is_file():
         raise FileNotFoundError(f"official checkpoint not found: {checkpoint}")
     for frame in frame_paths:
@@ -377,6 +382,17 @@ def main():
     ]
     for layer_index in diagnostic_vit_layers:
         hooks.append(trunk.blocks[layer_index].register_forward_hook(capture_vit_layer(layer_index)))
+    if diagnostic_vit_phase_layer is not None:
+        block = trunk.blocks[diagnostic_vit_phase_layer]
+        def capture_vit_phase(phase):
+            return lambda _module, _inputs, output: captures.__setitem__(f"vit-phase-{phase}", output.detach().clone())
+        hooks.extend([
+            block.norm1.register_forward_hook(capture_vit_phase("layerNorm1")),
+            block.attn.proj.register_forward_hook(capture_vit_phase("projected")),
+            block.norm2.register_forward_hook(capture_vit_phase("layerNorm2")),
+            block.mlp.act.register_forward_hook(capture_vit_phase("mlpHidden")),
+            block.mlp.fc2.register_forward_hook(capture_vit_phase("mlpOut")),
+        ])
     outputs = []
     FAILURE_PHASE = "official-two-image-execution"
     torch.set_num_threads(min(8, max(1, torch.get_num_threads())))
@@ -395,6 +411,7 @@ def main():
                 "prefix": captures["prefix"],
                 "backbone": captures["backbone"],
                 "diagnostic_layers": {layer_index: captures[f"vit-layer-{layer_index}"] for layer_index in diagnostic_vit_layers},
+                "diagnostic_phases": {phase: captures[f"vit-phase-{phase}"] for phase in ("layerNorm1", "projected", "layerNorm2", "mlpHidden", "mlpOut")} if diagnostic_vit_phase_layer is not None else {},
                 "interactive": [item.tensors for item in interactive],
                 "interactive_pos": interactive_pos,
                 "propagation": [item.tensors for item in propagation],
@@ -418,6 +435,8 @@ def main():
         add_tensor(tensors, out_dir, f"frame-{frame_index}-vit-backbone-hidden-states", output["backbone"].permute(0, 2, 3, 1), "B,H,W,C")
         for layer_index in diagnostic_vit_layers:
             add_tensor(tensors, out_dir, f"frame-{frame_index}-vit-layer-{layer_index}-hidden-states", output["diagnostic_layers"][layer_index], "B,H,W,C")
+        for phase, value in output["diagnostic_phases"].items():
+            add_tensor(tensors, out_dir, f"frame-{frame_index}-vit-layer-{diagnostic_vit_phase_layer}-phase-{phase}", value, "B,H,W,C")
         if frame_index == 0:
             for level, value in enumerate(output["interactive"]):
                 add_tensor(tensors, out_dir, f"frame-0-interactive-feature-{level}", value.permute(0, 2, 3, 1), "B,H,W,C")
@@ -484,6 +503,7 @@ def main():
         },
         "sourceImages": source_images,
         "diagnosticVitLayers": diagnostic_vit_layers,
+        "diagnosticVitPhaseLayer": diagnostic_vit_phase_layer,
         "shape": shape,
         "routeIds": ROUTE_IDS,
         "execution": {
@@ -539,6 +559,7 @@ def main():
         "routeIds": ROUTE_IDS,
         "checkpointAudit": checkpoint_audit,
         "diagnosticVitLayers": diagnostic_vit_layers,
+        "diagnosticVitPhaseLayer": diagnostic_vit_phase_layer,
         "primaryOutputWritten": True,
         "outputs": {
             "tensorManifest": str(manifest_path),

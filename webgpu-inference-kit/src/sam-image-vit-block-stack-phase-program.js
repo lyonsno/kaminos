@@ -996,6 +996,18 @@ export function summarizeSam3FinitePhaseOutputs(outputs) {
   }));
 }
 
+export function summarizeSam3PhaseParityCheckpoints(outputs, expected) {
+  if (!outputs || typeof outputs !== 'object' || Array.isArray(outputs)) throw new Error('phase checkpoint outputs must be an object');
+  if (!expected || typeof expected !== 'object' || Array.isArray(expected)) throw new Error('expected phase checkpoints must be an object');
+  return Object.entries(expected).map(([phase, expectedValues]) => {
+    if (!(phase in outputs)) throw new Error(`expected phase checkpoint ${phase} was not read back`);
+    if (!(expectedValues instanceof Float32Array)) throw new TypeError(`expected phase checkpoint ${phase} must be a Float32Array`);
+    const actualValues = new Float32Array(outputs[phase]);
+    const parity = summarizeSam3LayerParityCheckpoint(0, false, expectedValues, actualValues);
+    return { phase, elementCount: parity.elementCount, maxAbsDiff: parity.maxAbsDiff };
+  });
+}
+
 export function normalizeSam3ExpectedLayerCheckpoints(checkpoints, executedLayerIndexes) {
   if (!Array.isArray(checkpoints) || checkpoints.length === 0) {
     throw new Error('expectedLayerCheckpoints must be a non-empty array');
@@ -1026,6 +1038,10 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
   const expectedLayerCheckpoints = input.expectedLayerCheckpoints == null
     ? null
     : normalizeSam3ExpectedLayerCheckpoints(input.expectedLayerCheckpoints, weights.layers.map(layer => layer.layerIndex));
+  const expectedPhaseCheckpoints = input.expectedPhaseCheckpoints ?? null;
+  if (expectedPhaseCheckpoints && !Number.isInteger(input.validateFinitePhaseLayerIndex)) {
+    throw new Error('expectedPhaseCheckpoints require validateFinitePhaseLayerIndex');
+  }
 
   const runtime = await createWebGpuInferenceRuntime({
     routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
@@ -1249,7 +1265,10 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
     const programRun = await runtime.runProgram(program);
     if (input.validateFinitePhaseLayerIndex === layer.layerIndex) {
       const phaseEvidence = summarizeSam3FinitePhaseOutputs(programRun.outputs);
-      finitePhaseCheckpoints.push({ layerIndex: layer.layerIndex, phases: phaseEvidence });
+      const parity = expectedPhaseCheckpoints
+        ? summarizeSam3PhaseParityCheckpoints(programRun.outputs, expectedPhaseCheckpoints)
+        : [];
+      finitePhaseCheckpoints.push({ layerIndex: layer.layerIndex, phases: phaseEvidence, parity });
       const firstNonFinitePhase = phaseEvidence.find(checkpoint => checkpoint.nonFiniteCount > 0);
       if (firstNonFinitePhase) {
         runtime.dispose();

@@ -20,7 +20,14 @@ assert.match(ingressExporterSource, /--diagnostic-vit-layers/, 'pinned ingress e
 assert.match(ingressExporterSource, /trunk\.blocks\[layer_index\]\.register_forward_hook/, 'diagnostic checkpoints must come from official Meta ViT block execution');
 assert.match(ingressExporterSource, /frame-\{frame_index\}-vit-layer-\{layer_index\}-hidden-states/, 'diagnostic checkpoint roles must preserve frame and layer identity');
 assert.match(ingressExporterSource, /"diagnosticVitLayers": diagnostic_vit_layers/, 'the authenticated manifest must declare the effective selected layer list');
+assert.match(ingressExporterSource, /--diagnostic-vit-phase-layer/, 'pinned ingress export must accept one selected official phase layer');
+assert.match(ingressExporterSource, /block\.attn\.proj\.register_forward_hook/, 'official attention projection output must anchor pre-MLP phase parity');
+assert.match(ingressExporterSource, /block\.mlp\.act\.register_forward_hook/, 'official post-GELU MLP output must anchor the first two-dimensional phase');
+assert.match(ingressExporterSource, /frame-\{frame_index\}-vit-layer-\{diagnostic_vit_phase_layer\}-phase-\{phase\}/, 'phase checkpoint roles must preserve frame, layer, and phase identity');
+assert.match(ingressExporterSource, /"diagnosticVitPhaseLayer": diagnostic_vit_phase_layer/, 'the authenticated manifest must declare the effective phase-layer selection');
 assert.match(backboneSource, /expectedLayerCheckpoints:\s*expectedLayerCheckpoints/, 'browser backbone must bind selected source checkpoints into the WebGPU block stack');
+assert.match(backboneSource, /expectedPhaseCheckpoints:\s*expectedPhaseCheckpoints/, 'browser backbone must bind selected official phase checkpoints into the WebGPU block stack');
+assert.match(backboneSource, /parity\.vitPhases = Object\.fromEntries/, 'browser evidence must preserve numeric phase parity under the existing tolerance gate');
 assert.match(backboneSource, /parity\.vitLayers = Object\.fromEntries/, 'browser evidence must preserve per-layer numeric parity without diagnostic metadata contamination');
 
 const spatialPositions = resolveSam31SpatialPositionEmbeddings({

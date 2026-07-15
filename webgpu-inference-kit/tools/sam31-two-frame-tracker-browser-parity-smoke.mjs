@@ -32,12 +32,18 @@ const reusePacket = args.get('--reuse-packet') === '1';
 const verifyOnly = args.get('--verify-only') === '1';
 const requestedCommit = args.get('--commit') || null;
 const diagnosticVitLayers = args.get('--diagnostic-vit-layers') || null;
+const diagnosticVitPhaseLayer = args.get('--diagnostic-vit-phase-layer') || null;
 const requestedDiagnosticVitLayers = diagnosticVitLayers == null
   ? []
   : diagnosticVitLayers.split(',').map(value => Number(value.trim()));
 if (requestedDiagnosticVitLayers.some(layerIndex => !Number.isInteger(layerIndex) || layerIndex < 0 || layerIndex >= 32)
     || new Set(requestedDiagnosticVitLayers).size !== requestedDiagnosticVitLayers.length) {
   throw new Error('--diagnostic-vit-layers must be a unique comma-separated subset of 0..31');
+}
+const requestedDiagnosticVitPhaseLayer = diagnosticVitPhaseLayer == null ? null : Number(diagnosticVitPhaseLayer);
+if (requestedDiagnosticVitPhaseLayer !== null
+    && (!Number.isInteger(requestedDiagnosticVitPhaseLayer) || !requestedDiagnosticVitLayers.includes(requestedDiagnosticVitPhaseLayer))) {
+  throw new Error('--diagnostic-vit-phase-layer must name one layer requested by --diagnostic-vit-layers');
 }
 const episodeMode = packageMode ? 'two-image' : args.get('--episode-mode') || 'propagation-decoder';
 if (!['propagation-decoder', 'mask-conditioning', 'two-image'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
@@ -188,6 +194,9 @@ function writeReport(extra = {}) {
   const effectiveDiagnosticVitLayers = packetAuthority?.packets?.ingress?.diagnosticVitLayers
     ?? lastState?.manifest?.diagnosticVitLayers
     ?? null;
+  const effectiveDiagnosticVitPhaseLayer = packetAuthority?.packets?.ingress?.diagnosticVitPhaseLayer
+    ?? lastState?.manifest?.diagnosticVitPhaseLayer
+    ?? null;
   const value = {
     schema: REPORT_SCHEMA,
     ok: false,
@@ -208,6 +217,11 @@ function writeReport(extra = {}) {
       effective: effectiveDiagnosticVitLayers,
       passed: effectiveDiagnosticVitLayers != null
         && JSON.stringify(requestedDiagnosticVitLayers) === JSON.stringify(effectiveDiagnosticVitLayers),
+    },
+    diagnosticVitPhaseLayer: {
+      requested: requestedDiagnosticVitPhaseLayer,
+      effective: effectiveDiagnosticVitPhaseLayer,
+      passed: requestedDiagnosticVitPhaseLayer === effectiveDiagnosticVitPhaseLayer,
     },
     packageAuthority,
     metaPreprocessEvidence: callerInputEntries.map(entry => entry.metaPreprocessEvidence),
@@ -359,6 +373,7 @@ function generatePackets() {
       toolArgs.push('--frame-1', args.get('--frame-1') || join(sourceRoot, 'assets', 'videos', '0001', '1.jpg'));
       toolArgs.push('--resolution', args.get('--resolution') || '28');
       if (diagnosticVitLayers) toolArgs.push('--diagnostic-vit-layers', diagnosticVitLayers);
+      if (diagnosticVitPhaseLayer) toolArgs.push('--diagnostic-vit-phase-layer', diagnosticVitPhaseLayer);
     }
     if (name === 'episode') {
       toolArgs.push('--frame0-mode', isTwoImage ? 'mask-conditioning' : episodeMode);
@@ -469,6 +484,9 @@ async function main() {
         if (isTwoImage && diagnosticVitLayers
             && JSON.stringify(packetAuthority.packets.ingress.diagnosticVitLayers) !== JSON.stringify(requestedDiagnosticVitLayers)) {
           throw new Error(`requested diagnostic ViT layers do not match effective ingress packet: ${JSON.stringify(requestedDiagnosticVitLayers)} != ${JSON.stringify(packetAuthority.packets.ingress.diagnosticVitLayers)}`);
+        }
+        if (isTwoImage && requestedDiagnosticVitPhaseLayer !== packetAuthority.packets.ingress.diagnosticVitPhaseLayer) {
+          throw new Error(`requested diagnostic ViT phase layer does not match effective ingress packet: ${requestedDiagnosticVitPhaseLayer} != ${packetAuthority.packets.ingress.diagnosticVitPhaseLayer}`);
         }
       } catch (error) {
         packetAuthority = { passed: false, error: String(error?.message || error) };

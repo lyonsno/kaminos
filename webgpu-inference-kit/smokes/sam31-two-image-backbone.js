@@ -246,6 +246,14 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
         return { layerIndex, hiddenStates: await loadFloat32(entry) };
       }))
     : null;
+  const expectedPhaseCheckpoints = verificationAttached && manifest.diagnosticVitPhaseLayer != null
+    ? Object.fromEntries(await Promise.all(['layerNorm1', 'projected', 'layerNorm2', 'mlpHidden', 'mlpOut'].map(async phase => {
+        const role = `frame-${frameIndex}-vit-layer-${manifest.diagnosticVitPhaseLayer}-phase-${phase}`;
+        const entry = tensorsByRole.get(role);
+        if (!entry) throw new Error(`selected ViT phase checkpoint tensor missing: ${role}`);
+        return [phase, await loadFloat32(entry)];
+      })))
+    : null;
 
   update(`frame-${frameIndex}-vit-block-stack`);
   const stackRoute = createSam3ImageVitBlockStackPhaseProgramRouteDefinition({ model, kernel: kernel('sam3-image-vit-block-stack-phase-program-v0', commit) });
@@ -255,13 +263,15 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'sam3-image-vit-block-stack-weights': { artifactId: 'sam31-two-image:block-stack-weights', sha256: blockWeightsHash },
     }, { 'vit-block-stack-hidden-states': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:vit-backbone`, invocationTag), shape: [1, manifest.shape.patchHeight, manifest.shape.patchWidth, manifest.shape.visionHiddenSize] } }, {}, requestIds),
     route: stackRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: navigator.userAgent,
-    model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, expectedLayerCheckpoints: expectedLayerCheckpoints, includeReadback: true, validateFiniteCheckpoints: true,
+    model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, expectedLayerCheckpoints: expectedLayerCheckpoints, expectedPhaseCheckpoints: expectedPhaseCheckpoints, includeReadback: true, validateFiniteCheckpoints: true, validateFinitePhaseLayerIndex: manifest.diagnosticVitPhaseLayer,
   });
   const backboneHiddenStates = new Float32Array(stackResult.debugReadback.vitBlockStackHiddenStates);
   parity.vitBackbone = await compareExpected(backboneHiddenStates, tensorsByRole.get(`frame-${frameIndex}-vit-backbone-hidden-states`), loadFloat32, verificationAttached);
   parity.vitLayers = Object.fromEntries(stackResult.finiteCheckpoints
     .filter(checkpoint => checkpoint.maxAbsDiff != null)
     .map(checkpoint => [String(checkpoint.layerIndex), checkpoint.maxAbsDiff]));
+  parity.vitPhases = Object.fromEntries((stackResult.finitePhaseCheckpoints.find(checkpoint => checkpoint.layerIndex === manifest.diagnosticVitPhaseLayer)?.parity || [])
+    .map(checkpoint => [checkpoint.phase, checkpoint.maxAbsDiff]));
   receipts.push(stackResult.receipt); routes.push(stackRoute.routeId);
   return { backboneHiddenStates, backboneOutput: routeOutput(stackResult, 'vit-block-stack-hidden-states'), receipts, routes, parity, source };
 }
@@ -408,7 +418,7 @@ export async function runSam31TwoImageBackbone({
   const parityMaximum = maximumSam31ParityValue(maximums);
   const routeChainPassed = receipts.every((receipt, index) => receipt.status === 'real' && receipt.fallbackReason == null && receipt.effectiveRouteId === requestedRouteIds[index]);
   const tolerances = manifest.tolerances;
-  const parityPassed = !verificationAttached || (backbones.every(frame => frame.parity.pixelValues <= tolerances.pixelValuesMaxAbsDiff && frame.parity.patchEmbeddings <= tolerances.patchEmbeddingsMaxAbsDiff && frame.parity.vitPrefix <= tolerances.vitPrefixMaxAbsDiff && frame.parity.vitBackbone <= tolerances.vitBackboneMaxAbsDiff && Object.values(frame.parity.vitLayers).every(value => value <= tolerances.vitBackboneMaxAbsDiff))
+  const parityPassed = !verificationAttached || (backbones.every(frame => frame.parity.pixelValues <= tolerances.pixelValuesMaxAbsDiff && frame.parity.patchEmbeddings <= tolerances.patchEmbeddingsMaxAbsDiff && frame.parity.vitPrefix <= tolerances.vitPrefixMaxAbsDiff && frame.parity.vitBackbone <= tolerances.vitBackboneMaxAbsDiff && Object.values(frame.parity.vitLayers).every(value => value <= tolerances.vitBackboneMaxAbsDiff) && Object.values(frame.parity.vitPhases).every(value => value <= tolerances.vitBackboneMaxAbsDiff))
     && Object.values(interactive.parity).every(value => value <= (value === interactive.parity.position2 ? tolerances.positionMaxAbsDiff : tolerances.neckMaxAbsDiff))
     && propagation.every(neck => Object.entries(neck.parity).every(([name, value]) => value <= (name === 'position2' ? tolerances.positionMaxAbsDiff : tolerances.neckMaxAbsDiff)))
     && [frame0High, frame1High].every(item => Object.values(item.parity).every(value => value <= tolerances.highResolutionMaxAbsDiff)));

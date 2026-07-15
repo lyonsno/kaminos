@@ -29,6 +29,11 @@ assert.match(
 );
 assert.match(
   driverSource,
+  /args\.get\('--diagnostic-vit-phase-layer'\)[\s\S]*?toolArgs\.push\('--diagnostic-vit-phase-layer', diagnosticVitPhaseLayer\)/,
+  'the browser witness must propagate one selected phase layer only into fresh ingress generation',
+);
+assert.match(
+  driverSource,
   /name === 'pointer' && isTwoImage[\s\S]*?toolArgs\.push\('--ingress-dir', packetDirs\.ingress, '--expected-ingress-manifest-sha256', ingressDigest\)/,
   'fresh two-image generation must bind the pointer exporter to the generated ingress directory and digest',
 );
@@ -92,7 +97,7 @@ async function writePacket(name, { reference = pinnedReference, manifestSchema =
   return digest;
 }
 
-async function writeIngressPacket(diagnosticVitLayers = []) {
+async function writeIngressPacket(diagnosticVitLayers = [], diagnosticVitPhaseLayer = null) {
   const authority = SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY;
   const directory = join(packetDir, 'ingress');
   await mkdir(directory, { recursive: true });
@@ -114,6 +119,13 @@ async function writeIngressPacket(diagnosticVitLayers = []) {
   for (const frameIndex of [0, 1]) {
     for (const layerIndex of diagnosticVitLayers) {
       tensors.push({ role: `frame-${frameIndex}-vit-layer-${layerIndex}-hidden-states`, sha256: `sha256:${String(layerIndex + frameIndex + 1).repeat(64).slice(0, 64)}` });
+    }
+  }
+  if (diagnosticVitPhaseLayer !== null) {
+    for (const frameIndex of [0, 1]) {
+      for (const phase of ['layerNorm1', 'projected', 'layerNorm2', 'mlpHidden', 'mlpOut']) {
+        tensors.push({ role: `frame-${frameIndex}-vit-layer-${diagnosticVitPhaseLayer}-phase-${phase}`, sha256: `sha256:${String(frameIndex + phase.length).repeat(64).slice(0, 64)}` });
+      }
     }
   }
   const manifest = {
@@ -143,6 +155,7 @@ async function writeIngressPacket(diagnosticVitLayers = []) {
     },
     sourceImages,
     diagnosticVitLayers,
+    diagnosticVitPhaseLayer,
     tensors,
   };
   const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
@@ -176,7 +189,7 @@ function imageIngressFor(ingressDigest, ingressManifest, bindings = null) {
 const digests = {};
 for (const name of ['decoder', 'memory', 'temporal', 'episode']) digests[name] = await writePacket(name);
 
-function verifyOnly(report, expected = digests, episodeMode = 'propagation-decoder', diagnosticVitLayers = null) {
+function verifyOnly(report, expected = digests, episodeMode = 'propagation-decoder', diagnosticVitLayers = null, diagnosticVitPhaseLayer = null) {
   const command = [driver.pathname,
     '--packet-dir', packetDir,
     '--report', report,
@@ -193,6 +206,7 @@ function verifyOnly(report, expected = digests, episodeMode = 'propagation-decod
   if (episodeMode !== 'propagation-decoder') command.push('--expected-pointer-manifest-sha256', expected.pointer);
   if (episodeMode === 'two-image') command.push('--expected-ingress-manifest-sha256', expected.ingress);
   if (diagnosticVitLayers) command.push('--diagnostic-vit-layers', diagnosticVitLayers);
+  if (diagnosticVitPhaseLayer !== null) command.push('--diagnostic-vit-phase-layer', String(diagnosticVitPhaseLayer));
   return spawnSync(process.execPath, command, { cwd: root.pathname, encoding: 'utf8', timeout: 10000 });
 }
 
@@ -260,7 +274,7 @@ const wrongIdentity = verifyOnly(wrongIdentityReportPath, { ...digests, episode:
 assert.notEqual(wrongIdentity.status, 0, 'an externally pinned packet must still fail the wrong Meta source identity');
 assert.match(JSON.parse(await readFile(wrongIdentityReportPath, 'utf8')).error, /episode.*source\.commit/);
 
-const ingressPacket = await writeIngressPacket([0, 7]);
+const ingressPacket = await writeIngressPacket([0, 7], 0);
 const missingDiagnosticManifest = {
   ...ingressPacket.manifest,
   tensors: ingressPacket.manifest.tensors.filter(entry => entry.role !== 'frame-1-vit-layer-7-hidden-states'),
@@ -275,6 +289,21 @@ await assert.rejects(
     expectedManifestSha256: missingDiagnosticDigest,
   }),
   /diagnostic checkpoint tensor missing.*frame-1-vit-layer-7-hidden-states/,
+);
+const missingPhaseManifest = {
+  ...ingressPacket.manifest,
+  tensors: ingressPacket.manifest.tensors.filter(entry => entry.role !== 'frame-1-vit-layer-0-phase-mlpOut'),
+};
+const missingPhaseText = `${JSON.stringify(missingPhaseManifest, null, 2)}\n`;
+const missingPhaseDigest = `sha256:${createHash('sha256').update(missingPhaseText).digest('hex')}`;
+await assert.rejects(
+  verifySam31TwoImageIngressPacketAuthority({
+    manifestText: missingPhaseText,
+    manifest: missingPhaseManifest,
+    referenceReceipt: { ok: true, schema: SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY.receiptSchema, boundary: SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY.boundary, routeIds: SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY.routeIds, outputs: { tensorManifestSha256: missingPhaseDigest } },
+    expectedManifestSha256: missingPhaseDigest,
+  }),
+  /diagnostic phase tensor missing.*frame-1-vit-layer-0-phase-mlpOut/,
 );
 const validImageIngress = imageIngressFor(ingressPacket.digest, ingressPacket.manifest);
 const twoImageEpisodeDigest = await writePacket('episode', { authorityName: 'twoImageEpisode', overrides: { imageIngress: validImageIngress } });
@@ -303,7 +332,7 @@ const twoImagePointerDigest = await writePacket('pointer', { overrides: {
 } });
 const twoImageDigests = { ...digests, ingress: ingressPacket.digest, episode: twoImageEpisodeDigest, pointer: twoImagePointerDigest };
 const twoImageReportPath = join(packetDir, 'two-image-report.json');
-const twoImage = verifyOnly(twoImageReportPath, twoImageDigests, 'two-image', '0,7');
+const twoImage = verifyOnly(twoImageReportPath, twoImageDigests, 'two-image', '0,7', 0);
 assert.equal(twoImage.status, 0, twoImage.stderr || twoImage.stdout);
 const twoImageReport = JSON.parse(await readFile(twoImageReportPath, 'utf8'));
 assert.equal(twoImageReport.packetAuthority.packets.episode.ingressBindingsPassed, true);
@@ -312,6 +341,7 @@ assert.equal(twoImageReport.packetAuthority.packets.pointer.ingressBindingsPasse
 assert.equal(twoImageReport.packetAuthority.packets.pointer.ingressBindingCount, 3);
 assert.deepEqual(twoImageReport.packetAuthority.packets.ingress.diagnosticVitLayers, [0, 7]);
 assert.deepEqual(twoImageReport.diagnosticVitLayers, { requested: [0, 7], effective: [0, 7], passed: true });
+assert.deepEqual(twoImageReport.diagnosticVitPhaseLayer, { requested: 0, effective: 0, passed: true });
 
 const falseBindings = { ...validImageIngress.bindings, frame0PropagationPosition: `sha256:${'0'.repeat(64)}` };
 const falseEpisodeDigest = await writePacket('episode', { authorityName: 'twoImageEpisode', overrides: { imageIngress: imageIngressFor(ingressPacket.digest, ingressPacket.manifest, falseBindings) } });

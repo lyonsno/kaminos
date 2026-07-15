@@ -330,6 +330,26 @@ export async function verifySam31TwoImageIngressPacketAuthority({ manifestText, 
       throw new Error(`ingress diagnostic checkpoint tensor is undeclared: ${role}`);
     }
   }
+  const diagnosticVitPhaseLayer = manifest.diagnosticVitPhaseLayer ?? null;
+  const diagnosticPhaseNames = ['layerNorm1', 'projected', 'layerNorm2', 'mlpHidden', 'mlpOut'];
+  if (diagnosticVitPhaseLayer !== null
+      && (!Number.isInteger(diagnosticVitPhaseLayer) || !diagnosticVitLayers.includes(diagnosticVitPhaseLayer))) {
+    throw new Error('ingress packet authority rejected invalid diagnosticVitPhaseLayer');
+  }
+  if (diagnosticVitPhaseLayer !== null) {
+    for (const frameIndex of [0, 1]) {
+      for (const phase of diagnosticPhaseNames) {
+        const role = `frame-${frameIndex}-vit-layer-${diagnosticVitPhaseLayer}-phase-${phase}`;
+        if (!tensorRoles.has(role)) throw new Error(`ingress diagnostic phase tensor missing: ${role}`);
+      }
+    }
+  }
+  for (const role of tensorRoles) {
+    const match = /^frame-[01]-vit-layer-(\d+)-phase-(.+)$/.exec(role);
+    if (match && (Number(match[1]) !== diagnosticVitPhaseLayer || !diagnosticPhaseNames.includes(match[2]))) {
+      throw new Error(`ingress diagnostic phase tensor is undeclared: ${role}`);
+    }
+  }
   return {
     passed: true,
     name: 'ingress',
@@ -344,6 +364,7 @@ export async function verifySam31TwoImageIngressPacketAuthority({ manifestText, 
     checkpointSha256: manifest.reference.checkpoint.sha256,
     sourceCommit: manifest.reference.source.commit,
     diagnosticVitLayers,
+    diagnosticVitPhaseLayer,
     sourceImages: manifest.sourceImages.map(image => ({ frameIndex: image.frameIndex, originalSha256: image.originalSha256, rgbaSha256: image.rgbaSha256 })),
   };
 }
