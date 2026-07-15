@@ -42,6 +42,11 @@
   </div>
   <iframe id="basin" title="Kaminos exact selective-head live basin"></iframe>
   <script type="module">
+    import {
+      validateVolumeSettingsPresetDocument,
+      validateVolumeSettingsPresetVisualTarget,
+    } from './volume-settings-preset-contract.mjs';
+
     const ROUTE_IDENTITY = 'exact-basin-selective-head-live-v0';
     const WARMUP_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
     const ANCHOR_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
@@ -79,6 +84,8 @@
       ? { ok: true, authority: warmupAuthority, completedSteps: 0, importedAnchor: false }
       : null;
     let warmupError = warmupParamValid ? null : `invalid warmup_steps: ${JSON.stringify(warmupParam)}`;
+    const sourceSettingsPresetRequestedId = params.get('settings_preset') || null;
+    let sourceSettingsPresetReceipt = null;
     const basin = document.getElementById('basin');
     const status = document.getElementById('status');
     document.getElementById('assay-source').textContent = warmupTarget === 0
@@ -136,7 +143,28 @@
     for (const [key, value] of params) {
       if (key.startsWith('volume_')) basinQuery.set(key, value);
     }
-    basin.src = `./?${basinQuery}`;
+    if (params.has('settings_preset_authority') && !sourceSettingsPresetRequestedId) {
+      warmupError ||= 'settings preset authority was requested without a settings preset id';
+    }
+    if (sourceSettingsPresetRequestedId && !warmupError) {
+      try {
+        const [artifactResponse, schemaResponse] = await Promise.all([
+          fetch(`/artifacts/volume-captures/${encodeURIComponent(sourceSettingsPresetRequestedId)}.json`, { cache: 'no-store' }),
+          fetch('/volume-settings-preset-schema-v1.json', { cache: 'no-store' }),
+        ]);
+        if (!artifactResponse.ok) throw new Error(`settings preset artifact load failed (${artifactResponse.status})`);
+        if (!schemaResponse.ok) throw new Error(`settings preset schema load failed (${schemaResponse.status})`);
+        sourceSettingsPresetReceipt = validateVolumeSettingsPresetDocument(
+          await artifactResponse.json(),
+          sourceSettingsPresetRequestedId,
+          await schemaResponse.json(),
+        );
+        validateVolumeSettingsPresetVisualTarget(sourceSettingsPresetReceipt, params);
+      } catch (error) {
+        warmupError = `settings preset visual admission failed: ${error?.message || String(error)}`;
+      }
+    }
+    if (!warmupError) basin.src = `./?${basinQuery}`;
 
     function prototype() {
       return basin.contentWindow?.__kaminosVolumePrototype || null;
@@ -193,6 +221,9 @@
         requestedRole,
         requestedComposition,
         sourceCaptureId: params.get('basin_capture') || null,
+        sourceSettingsPresetRequestedId,
+        sourceSettingsPresetId: sourceSettingsPresetReceipt?.presetId || null,
+        sourceSettingsPresetAuthority: sourceSettingsPresetReceipt?.sourcePresetAuthority || null,
         warmupAuthority,
         warmupTarget,
         warmupComplete,
@@ -221,7 +252,7 @@
 
     async function initializeWarmup() {
       if (warmupStarted) return;
-      if (!warmupParamValid) throw new Error(warmupError);
+      if (warmupError) throw new Error(warmupError);
       const started = performance.now();
       while (!prototype()?.debugState?.()?.active) {
         if (performance.now() - started > 120000) throw new Error('exact basin did not activate before replay warmup');
@@ -274,7 +305,11 @@
       const pass = state.selectiveHeadLivePassReceipt || {};
       status.classList.toggle('bad', Boolean(fallback || state.error));
       status.textContent = [
-        state.sourceCaptureId ? `capture: ${state.sourceCaptureId}` : 'capture: direct route',
+        state.sourceSettingsPresetId
+          ? `settings preset: ${state.sourceSettingsPresetId} (${state.sourceSettingsPresetAuthority})`
+          : (state.sourceSettingsPresetRequestedId
+              ? `settings preset rejected: ${state.sourceSettingsPresetRequestedId}`
+              : (state.sourceCaptureId ? `legacy capture: ${state.sourceCaptureId}` : 'source: direct route')),
         state.warmupAuthority === 'fresh-live-settings-no-anchor-v0'
           ? 'fresh settings live: no anchor imported'
           : (state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`),

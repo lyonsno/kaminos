@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Settings Preset</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #050607; color: #edf4f5; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #050607; }
+    main { width: min(680px, calc(100vw - 32px)); border: 1px solid #314149; border-radius: 6px; padding: 20px; background: #0b1012; }
+    strong { display: block; font-size: 18px; }
+    #status { margin-top: 8px; color: #9eb0b5; font: 13px/1.5 "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
+    #status.failed { color: #ff9d8d; }
+  </style>
+</head>
+<body>
+  <main>
+    <strong>Loading volume settings preset</strong>
+    <div id="status">Validating exact controls...</div>
+  </main>
+  <script type="module">
+    import {
+      buildVolumeSettingsPresetTarget,
+      buildVolumeSettingsPresetVisualTarget,
+      validateVolumeSettingsPresetDocument,
+    } from './volume-settings-preset-contract.mjs';
+
+    const status = document.getElementById('status');
+    const params = new URLSearchParams(location.search);
+    const presetId = params.get('preset');
+    const view = params.get('view');
+
+    async function loadPreset() {
+      if (!presetId) throw new Error('settings preset id is required');
+      const [response, schemaResponse] = await Promise.all([
+        fetch(`/api/volume-capture?id=${encodeURIComponent(presetId)}`, { cache: 'no-store' }),
+        fetch('/volume-settings-preset-schema-v1.json', { cache: 'no-store' }),
+      ]);
+      const [artifact, schema] = await Promise.all([response.json(), schemaResponse.json()]);
+      if (!response.ok) throw new Error(artifact.error || `settings preset lookup failed: ${response.status}`);
+      if (!schemaResponse.ok) throw new Error(`settings preset schema lookup failed: ${schemaResponse.status}`);
+      const receipt = validateVolumeSettingsPresetDocument(artifact, presetId, schema);
+      const target = view
+        ? buildVolumeSettingsPresetVisualTarget(receipt, location.origin, view)
+        : buildVolumeSettingsPresetTarget(receipt, location.origin);
+      status.textContent = `${presetId} | ${receipt.sourcePresetAuthority} | ${receipt.routeVolumeEntries.length} exact volume settings | ${view || 'ordinary-live'} view`;
+      location.replace(target);
+    }
+
+    loadPreset().catch(error => {
+      status.classList.add('failed');
+      status.textContent = `SETTINGS PRESET LOAD FAILED | ${error?.message || error}`;
+      console.error('KAMINOS SETTINGS PRESET LOAD FAILED', error);
+    });
+  </script>
+</body>
+</html>

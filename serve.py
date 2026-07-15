@@ -11,11 +11,87 @@ import sys
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import urlparse, parse_qs, parse_qsl, urlencode
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
 ROOT = Path(__file__).parent.resolve()
 VOLUME_CAPTURE_DIR = ROOT / "artifacts" / "volume-captures"
+VOLUME_SETTINGS_PRESET_SCHEMA_PATH = ROOT / "volume-settings-preset-schema-v1.json"
+
+
+def _settings_preset_route_value(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return str(value)
+
+
+def validate_volume_settings_preset_payload(payload, schema=None):
+    schema = schema or json.loads(VOLUME_SETTINGS_PRESET_SCHEMA_PATH.read_text())
+    if schema.get("identity") != "kaminos-volume-settings-preset-schema-v1":
+        raise ValueError("settings preset canonical schema identity mismatch")
+    if payload.get("identity") != "kaminos-volume-settings-preset-v1" or payload.get("kind") != "settings-preset":
+        raise ValueError("settings preset identity mismatch")
+    if payload.get("schemaIdentity") != schema.get("identity"):
+        raise ValueError("settings preset schema identity mismatch")
+
+    allowed_fields = set(schema.get("allowedNativePresetFields") or [])
+    unexpected_fields = sorted(set(payload) - allowed_fields)
+    if unexpected_fields:
+        raise ValueError(f"settings preset contains fields outside its canonical schema: {','.join(unexpected_fields)}")
+
+    dom_controls = payload.get("domControls")
+    expected_controls = schema.get("controls") or []
+    if not isinstance(dom_controls, dict) or payload.get("controlCount") != len(expected_controls) or len(dom_controls) != len(expected_controls):
+        raise ValueError(f"settings preset requires exactly {len(expected_controls)} canonical controls")
+    expected_by_key = {entry["key"]: entry for entry in expected_controls}
+    if set(dom_controls) != set(expected_by_key):
+        raise ValueError("settings preset control inventory does not match the canonical schema")
+
+    routed_values = {}
+    for key, descriptor in dom_controls.items():
+        expected = expected_by_key[key]
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"settings preset control descriptor is invalid: {key}")
+        if (
+            descriptor.get("param") != expected.get("param")
+            or str(descriptor.get("tagName") or "").upper() != str(expected.get("tagName") or "").upper()
+            or str(descriptor.get("type") or "").lower() != str(expected.get("type") or "").lower()
+        ):
+            raise ValueError(f"settings preset control inventory mismatch for {key}")
+        routed_values[expected["param"]] = _settings_preset_route_value(
+            descriptor.get("rawValue") if "rawValue" in descriptor else descriptor.get("value")
+        )
+
+    exclusions = payload.get("stateExclusions") or {}
+    if any(exclusions.get(field) is not True for field in schema.get("excludedStateFields") or []):
+        raise ValueError("settings preset must explicitly exclude runtime and replay state")
+    if any(field in payload for field in schema.get("forbiddenPresetFields") or []):
+        raise ValueError("settings preset must not contain runtime, renderer, camera, or replay state")
+
+    route = payload.get("route")
+    if not isinstance(route, str) or not route:
+        raise ValueError("settings preset requires an exact control route")
+    route_entries = parse_qsl(urlparse(route).query, keep_blank_values=True)
+    route_values = {}
+    for key, value in route_entries:
+        if key in route_values:
+            raise ValueError(f"settings preset route duplicates parameter {key}")
+        route_values[key] = value
+    activation = schema.get("activationParam") or {}
+    if route_values.pop(activation.get("key"), None) != activation.get("value"):
+        raise ValueError("settings preset route omitted the native volume activation gate")
+    for key, expected_value in routed_values.items():
+        if route_values.pop(key, None) != expected_value:
+            raise ValueError(f"settings preset route/control mismatch for {key}")
+    for key in schema.get("routeExtraParams") or []:
+        if key not in route_values:
+            raise ValueError(f"settings preset route omitted metadata parameter {key}")
+        route_values.pop(key)
+    if route_values:
+        raise ValueError(f"settings preset route contains unexpected parameters: {','.join(sorted(route_values))}")
+    return True
 
 # Directories the browse API can access
 SCENES_DIR = ROOT / "scenes"
@@ -1061,6 +1137,13 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "capture payload must be a JSON object"}, 400)
             return
 
+        if payload.get("kind") == "settings-preset":
+            try:
+                validate_volume_settings_preset_payload(payload)
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                self.send_json({"error": str(error)}, 400)
+                return
+
         if payload.get("kind") == "prototype-basin":
             scene_authority = payload.get("sceneAuthority") or {}
             requested_smoke = payload.get("requestedSmoke") or {}
@@ -1094,16 +1177,25 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
         path = self.volume_capture_path_for_id(capture_id)
         relative_path = str(path.relative_to(ROOT))
         smoke_url = f"/volume-basin-smoke.html?capture={capture_id}" if payload.get("kind") == "prototype-basin" else None
+        preset_url = f"/volume-settings-preset.html?preset={capture_id}" if payload.get("kind") == "settings-preset" else None
+        witness_command = (
+            f"node volume-settings-preset-witness.mjs --url "
+            f"http://127.0.0.1:{PORT}{preset_url}"
+            if preset_url else
+            f"node volume-witness.mjs --capture {relative_path}"
+        )
         document = {
             "identity": "kaminos-volume-agent-capture-artifact-v1",
             "captureId": capture_id,
             "writtenAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "artifactRelativePath": relative_path,
-            "witnessCommand": f"node volume-witness.mjs --capture {relative_path}",
+            "witnessCommand": witness_command,
             "capture": payload,
         }
         if smoke_url:
             document["smokeUrl"] = smoke_url
+        if preset_url:
+            document["presetUrl"] = preset_url
         path.write_text(json.dumps(document, indent=2))
         self.send_json({
             "ok": True,
@@ -1112,6 +1204,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "path": str(path),
             "witnessCommand": document["witnessCommand"],
             "smokeUrl": smoke_url,
+            "presetUrl": preset_url,
             "document": document,
         })
 

@@ -968,13 +968,13 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
       <div class="field"><span class="field-key">Render</span><span class="field-val" id="volume-canonical-render-mode-state">default</span></div>
       <div class="field"><span class="field-key">Motion</span><span class="field-val" id="volume-canonical-motion-mode-state">animated</span></div>
       <div class="field"><span class="field-key">Content</span><span class="field-val" id="volume-canonical-content-mode-state">smoke</span></div>
-      <div class="field"><span class="field-key">Agent Capture</span><span class="field-val" id="volume-agent-capture-state">writes artifacts/volume-captures</span></div>
+      <div class="field"><span class="field-key">Settings Preset</span><span class="field-val" id="volume-agent-capture-state">writes artifacts/volume-captures</span></div>
       <div class="volume-actions">
         <button class="btn" id="volume-toggle">Enable</button>
         <button class="btn" id="volume-fit-camera">Frame</button>
         <button class="btn" id="volume-agent-camera-save">Save Agent Camera</button>
         <button class="btn" id="volume-agent-view-save">Save Agent View + Settings</button>
-        <button class="btn" id="volume-basin-capture-smoke">Save Basin + Open Smoke</button>
+        <button class="btn" id="volume-settings-preset-save">Save Settings Preset + Open Live</button>
         <button class="btn" id="volume-basin-copy">Copy Basin</button>
         <button class="btn" id="volume-basin-restore">Restore Last</button>
         <button class="btn" id="volume-basin-warm-cap">Warm Cap</button>
@@ -11995,7 +11995,6 @@ const VOLUME_BASIN_ROUTE_FIELDS = [
 ];
 
 function formatVolumeBasinRouteValue(value) {
-  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
   return String(value ?? '');
 }
 
@@ -12022,7 +12021,7 @@ function volumeDomControlParamFromId(id) {
 function readVolumeDomControlValue(el) {
   if (!el) return null;
   if (el.type === 'checkbox') return Boolean(el.checked);
-  if (el.type === 'color' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
+  if (['color', 'text', 'url', 'search', 'password'].includes(el.type) || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return el.value;
   const numericValue = Number(el.value);
   return Number.isFinite(numericValue) ? numericValue : el.value;
 }
@@ -12031,8 +12030,7 @@ function readVolumeDomControls() {
   const controls = {};
   const fields = document.querySelectorAll('#sidebar input[id^="volume-"], #sidebar select[id^="volume-"], #sidebar textarea[id^="volume-"]');
   for (const el of fields) {
-    const key = volumeDomControlKeyFromId(el.id);
-    controls[key] = {
+    controls[el.id] = {
       id: el.id,
       param: volumeDomControlParamFromId(el.id),
       tagName: el.tagName,
@@ -12045,23 +12043,25 @@ function readVolumeDomControls() {
 
 function buildVolumeAgentCaptureRoute(domControls = readVolumeDomControls()) {
   const url = new URL(window.location.href);
+  const sourceQualityReason = url.searchParams.get('volume_quality_reason') || 'agent-view-capture';
   url.search = '';
   url.searchParams.set('kaminos_volume_smoke', '1');
   for (const entry of Object.values(domControls)) {
-    if (!entry?.param || entry.tagName === 'TEXTAREA') continue;
+    if (!entry?.param) continue;
     if (entry.value === undefined || entry.value === null) continue;
     url.searchParams.set(entry.param, formatVolumeBasinRouteValue(entry.value));
   }
-  url.searchParams.set('volume_quality_reason', 'agent-view-capture');
+  url.searchParams.set('volume_quality_reason', sourceQualityReason);
   return url.toString();
 }
 
 function buildVolumeAgentCapture(kind = 'view') {
   const domControls = readVolumeDomControls();
+  const settingsPreset = kind === 'settings-preset';
   const controlsSnapshot = kind === 'camera' ? null : readVolumeControls();
   const debugState = window.__kaminosVolumePrototype?.debugState?.() || null;
-  const sceneReceipt = volumeSceneReceipt(domControls.volumeScene?.value || controlsSnapshot?.volumeScene);
-  const runtimeContext = kind === 'prototype-basin' ? {} : {
+  const sceneReceipt = volumeSceneReceipt(domControls['volume-scene']?.value || controlsSnapshot?.volumeScene);
+  const runtimeContext = settingsPreset ? {} : {
     href: window.location.href,
     camera: window.kaminosCameraDebugState?.() || null,
     volumeDebugState: debugState,
@@ -12072,15 +12072,15 @@ function buildVolumeAgentCapture(kind = 'view') {
     },
   };
   return {
-    identity: 'kaminos-volume-agent-capture-v1',
+    identity: settingsPreset ? 'kaminos-volume-settings-preset-v1' : 'kaminos-volume-agent-capture-v1',
     kind,
+    ...(settingsPreset ? { schemaIdentity: 'kaminos-volume-settings-preset-schema-v1' } : {}),
     savedAt: new Date().toISOString(),
     route: buildVolumeAgentCaptureRoute(domControls),
     domControls: kind === 'camera' ? {} : domControls,
     controlCount: kind === 'camera' ? 0 : Object.keys(domControls).length,
-    controls: controlsSnapshot,
-    sceneAuthority: sceneReceipt,
-    stateExclusions: kind === 'prototype-basin' ? {
+    ...(settingsPreset ? {} : { controls: controlsSnapshot, sceneAuthority: sceneReceipt }),
+    stateExclusions: settingsPreset ? {
       fluidField: true,
       frontField: true,
       boundarySidecar: true,
@@ -12089,15 +12089,10 @@ function buildVolumeAgentCapture(kind = 'view') {
       pressureState: true,
       replayState: true,
     } : null,
-    requestedSmoke: kind === 'prototype-basin' ? {
-      route: 'exact-basin-selective-head-live-v0',
-      role: 'truthHigh',
-      composition: 'splat-only-v0',
-      warmupSteps: 0,
-      initializationAuthority: 'fresh-live-settings-no-anchor-v0',
-    } : null,
     ...runtimeContext,
-    note: 'Replay with node volume-witness.mjs --capture <artifact>; captures write under artifacts/volume-captures.',
+    note: settingsPreset
+      ? 'Exact editable volume controls only; no simulation, renderer, camera, or replay state.'
+      : 'Replay with node volume-witness.mjs --capture <artifact>; captures write under artifacts/volume-captures.',
   };
 }
 
@@ -12124,53 +12119,32 @@ async function saveVolumeAgentCapture(kind = 'view') {
   }
 }
 
-async function saveVolumePrototypeBasinSmoke() {
+async function saveVolumeSettingsPresetAndOpen() {
   const state = document.getElementById('volume-agent-capture-state');
-  const sceneReceipt = volumeSceneReceipt(document.getElementById('volume-scene')?.value);
-  const controls = readVolumeControls();
-  if (sceneReceipt.status !== 'prototype') {
-    const message = `${sceneReceipt.effective} is ${sceneReceipt.status}; use ${sceneReceipt.supersededBy} for prototype basin capture`;
-    if (state) state.textContent = `capture blocked: ${message}`;
-    setInfo(`Volume basin capture blocked: ${message}`);
-    return null;
-  }
-  if (controls.boundarySplatMode !== 'learned') {
-    const message = `splat-only smoke requires learned boundary splats; current mode is ${controls.boundarySplatMode}`;
-    if (state) state.textContent = `capture blocked: ${message}`;
-    setInfo(`Volume basin capture blocked: ${message}`);
-    return null;
-  }
-  if (Number(controls.resolution) !== 160) {
-    const message = `selective-head smoke requires the exact 160^3 integration grid; current grid is ${controls.resolution}^3`;
-    if (state) state.textContent = `capture blocked: ${message}`;
-    setInfo(`Volume basin capture blocked: ${message}`);
-    return null;
-  }
-
-  const smokeWindow = window.open('about:blank', '_blank');
-  if (smokeWindow) {
-    smokeWindow.document.title = 'Kaminos Basin Smoke';
-    smokeWindow.document.body.textContent = 'Saving exact basin settings...';
+  const liveWindow = window.open('about:blank', '_blank');
+  if (liveWindow) {
+    liveWindow.document.title = 'Kaminos Settings Preset';
+    liveWindow.document.body.textContent = 'Saving exact volume settings...';
   }
   try {
-    const result = await saveVolumeAgentCapture('prototype-basin');
-    if (!result?.smokeUrl) throw new Error('capture response omitted durable smoke route');
-    if (!smokeWindow) throw new Error(`fresh smoke window blocked; route: ${result.smokeUrl}`);
-    smokeWindow.location.replace(new URL(result.smokeUrl, window.location.origin).toString());
-    if (state) state.textContent = `${result.relativePath} -> ${result.smokeUrl}`;
+    const result = await saveVolumeAgentCapture('settings-preset');
+    if (!result?.presetUrl) throw new Error('settings preset response omitted its durable live route');
+    if (!liveWindow) throw new Error(`live settings window blocked; route: ${result.presetUrl}`);
+    liveWindow.location.replace(new URL(result.presetUrl, window.location.origin).toString());
+    if (state) state.textContent = `${result.relativePath} -> ${result.presetUrl}`;
     return result;
   } catch (error) {
-    smokeWindow?.close();
-    if (state) state.textContent = `capture failed: ${error.message || error}`;
-    setInfo(`Volume basin capture failed: ${error.message || error}`);
+    liveWindow?.close();
+    if (state) state.textContent = `preset failed: ${error.message || error}`;
+    setInfo(`Volume settings preset failed: ${error.message || error}`);
     return null;
   }
 }
-window.__kaminosSaveVolumePrototypeBasinSmoke = saveVolumePrototypeBasinSmoke;
-const basinCaptureCommandButton = document.getElementById('volume-basin-capture-smoke');
-if (basinCaptureCommandButton) {
-  basinCaptureCommandButton.addEventListener('click', () => void saveVolumePrototypeBasinSmoke());
-  basinCaptureCommandButton.dataset.commandWired = 'true';
+window.__kaminosSaveVolumeSettingsPresetAndOpen = saveVolumeSettingsPresetAndOpen;
+const settingsPresetCommandButton = document.getElementById('volume-settings-preset-save');
+if (settingsPresetCommandButton) {
+  settingsPresetCommandButton.addEventListener('click', () => void saveVolumeSettingsPresetAndOpen());
+  settingsPresetCommandButton.dataset.commandWired = 'true';
 }
 
 function saveVolumeBasinSnapshot(reason = 'control-change') {
@@ -16976,18 +16950,10 @@ function refreshVolumeReadout() {
   document.getElementById('volume-scene-authority').textContent = sceneReceipt.status === 'prototype'
     ? `${sceneReceipt.status} / ${sceneReceipt.authority}`
     : `${sceneReceipt.status} -> ${sceneReceipt.supersededBy}`;
-  const basinCaptureButton = document.getElementById('volume-basin-capture-smoke');
-  if (basinCaptureButton) {
-    const learnedSplatsActive = s.controls?.boundarySplatMode === 'learned';
-    const selectiveGridActive = Number(s.simGrid) === 160;
-    basinCaptureButton.disabled = sceneReceipt.status !== 'prototype' || !learnedSplatsActive || !selectiveGridActive;
-    basinCaptureButton.title = sceneReceipt.status !== 'prototype'
-      ? `${sceneReceipt.effective} is superseded by ${sceneReceipt.supersededBy}`
-      : !learnedSplatsActive
-        ? 'Select learned boundary splats before opening a splat-only smoke'
-        : selectiveGridActive
-      ? 'Write exact settings and open a fresh splat-only selective-head smoke'
-      : 'Select the exact 160^3 grid before opening a selective-head smoke';
+  const settingsPresetButton = document.getElementById('volume-settings-preset-save');
+  if (settingsPresetButton) {
+    settingsPresetButton.disabled = false;
+    settingsPresetButton.title = 'Write every current volume control and open those settings in a fresh live prototype';
   }
   document.getElementById('volume-render-source-orientation').textContent = s.minimalPlumeProof?.canonicalRenderSourceOrientation || 'unverified';
   document.getElementById('volume-canonical-render-mode-state').textContent = canonicalPlumeReadoutActive ? (s.canonicalPlumeControls?.renderMode || 'default') : 'scene';
@@ -17185,6 +17151,9 @@ async function initKaminosVolumeRoute() {
   if (params.has('volume_quality_reason')) {
     routedVolumeQualityReason = normalizeVolumeQualityReason(params.get('volume_quality_reason'));
   }
+  if (params.has('volume_look_library_json')) {
+    document.getElementById('volume-look-library-json').value = params.get('volume_look_library_json');
+  }
   const routeResolution = parseInt(params.get('volume_resolution') || '', 10);
   if ([32, 48, 64, 96, 128, 160].includes(routeResolution)) {
     document.getElementById('volume-resolution').value = String(routeResolution);
@@ -17235,8 +17204,10 @@ async function initKaminosVolumeRoute() {
   if (['shell', 'inspect', 'off', 'stock'].includes(routeFireRenderMode)) {
     document.getElementById('volume-fire-render-mode').value = routeFireRenderMode;
   }
-  const routeShellInspectMode = (params.get('volume_shell_inspect') || '').toLowerCase().replace(/-/g, '_');
-  if (['shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence'].includes(routeShellInspectMode)) {
+  const routeShellInspectMode = (params.get('volume_shell_inspect_mode') ?? params.get('volume_shell_inspect') ?? '').toLowerCase().replace(/-/g, '_');
+  if (params.has('volume_shell_inspect_mode') && routeShellInspectMode === '') {
+    document.getElementById('volume-shell-inspect-mode').value = '';
+  } else if (['shell', 'thermal', 'reaction', 'front', 'edge', 'core', 'curl', 'divergence'].includes(routeShellInspectMode)) {
     document.getElementById('volume-shell-inspect-mode').value = routeShellInspectMode;
   }
   for (const [param, id, min, max] of [

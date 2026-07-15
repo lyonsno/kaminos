@@ -12,6 +12,7 @@ from serve import KaminosHandler
 from serve import build_display_metadata, build_output_display_metadata
 from serve import list_greenroom_output_files, resolve_greenroom_output_dir
 from serve import list_asset_entries
+from serve import validate_volume_settings_preset_payload
 
 
 def test_http_status_404_log_does_not_crash():
@@ -596,6 +597,65 @@ def test_pipeline_run_rejects_excluded_api_read_roots():
             BROWSE_ROOTS.update(previous_browse)
 
 
+def test_volume_settings_preset_server_admission_matches_exact_schema():
+    root = Path(__file__).resolve().parents[1]
+    document = json.loads((root / "artifacts/volume-captures/20260715-082845-operator-original-live-basin-settings.json").read_text())
+    legacy = document["capture"]
+    payload = {
+        "identity": "kaminos-volume-settings-preset-v1",
+        "kind": "settings-preset",
+        "schemaIdentity": "kaminos-volume-settings-preset-schema-v1",
+        "savedAt": legacy["savedAt"],
+        "route": legacy["route"],
+        "domControls": {
+            key: {
+                "id": entry["id"],
+                "param": entry["param"],
+                "tagName": entry["tagName"],
+                "type": entry["type"],
+                "value": entry["value"],
+            }
+            for key, entry in legacy["domControls"].items()
+        },
+        "controlCount": legacy["controlCount"],
+        "stateExclusions": legacy["exclusions"],
+        "note": "settings only",
+    }
+    textarea = next(entry for entry in payload["domControls"].values() if entry["param"] == "volume_look_library_json")
+    parsed = serve.urlparse(payload["route"])
+    route_entries = serve.parse_qsl(parsed.query, keep_blank_values=True)
+    route_entries.append((textarea["param"], str(textarea["value"])))
+    payload["route"] = parsed._replace(query=serve.urlencode(route_entries)).geturl()
+    assert validate_volume_settings_preset_payload(payload) is True
+
+    route_mismatch = json.loads(json.dumps(payload))
+    route_mismatch["domControls"]["volume-density"]["value"] = 999
+    try:
+        validate_volume_settings_preset_payload(route_mismatch)
+    except ValueError as error:
+        assert "route/control mismatch" in str(error)
+    else:
+        raise AssertionError("server admission accepted a route/control mismatch")
+
+    fake_inventory = json.loads(json.dumps(payload))
+    fake_inventory["domControls"]["volume-density"]["param"] = "volume_fake_density"
+    try:
+        validate_volume_settings_preset_payload(fake_inventory)
+    except ValueError as error:
+        assert "inventory mismatch" in str(error)
+    else:
+        raise AssertionError("server admission accepted a fake control inventory")
+
+    smuggled_state = json.loads(json.dumps(payload))
+    smuggled_state["simulationState"] = {"forged": True}
+    try:
+        validate_volume_settings_preset_payload(smuggled_state)
+    except ValueError as error:
+        assert "outside its canonical schema" in str(error)
+    else:
+        raise AssertionError("server admission accepted an unknown runtime-state field")
+
+
 if __name__ == "__main__":
     test_http_status_404_log_does_not_crash()
     test_forge_host_registry_snapshot_preserves_endpoint_identity()
@@ -616,3 +676,4 @@ if __name__ == "__main__":
     test_pipeline_run_resolves_api_read_source_and_returns_bundle()
     test_pipeline_run_rejects_sources_outside_declared_roots()
     test_pipeline_run_rejects_excluded_api_read_roots()
+    test_volume_settings_preset_server_admission_matches_exact_schema()

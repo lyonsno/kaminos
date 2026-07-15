@@ -11,19 +11,80 @@ assert.ok(existsSync(reactionFrontAtlasWitnessPath), 'reaction-front atlas witne
 const reactionFrontAtlasWitness = readFileSync(reactionFrontAtlasWitnessPath, 'utf8');
 const sceneOntologyPath = join(root, 'volume-scene-ontology.mjs');
 const basinSmokePagePath = join(root, 'volume-basin-smoke.html');
-const basinSmokeWitnessPath = join(root, 'volume-basin-smoke-witness.mjs');
+const settingsPresetPagePath = join(root, 'volume-settings-preset.html');
+const settingsPresetWitnessPath = join(root, 'volume-settings-preset-witness.mjs');
+const settingsPresetContractPath = join(root, 'volume-settings-preset-contract.mjs');
+const settingsPresetSchemaPath = join(root, 'volume-settings-preset-schema-v1.json');
 assert.ok(existsSync(sceneOntologyPath), 'Volume scene authority lives in one shared ontology module');
-assert.ok(existsSync(basinSmokePagePath), 'Volume cockpit has a generic capture-backed fresh-smoke loader');
-assert.ok(existsSync(basinSmokeWitnessPath), 'One-action basin capture has a reusable browser witness');
+assert.ok(existsSync(basinSmokePagePath), 'Legacy basin smoke links have a compatibility redirect');
+assert.ok(existsSync(settingsPresetPagePath), 'Volume cockpit has a capture-backed settings-preset loader');
+assert.ok(existsSync(settingsPresetWitnessPath), 'One-action settings persistence has a reusable browser witness');
+assert.ok(existsSync(settingsPresetContractPath), 'Settings loader has executable artifact admission');
+assert.ok(existsSync(settingsPresetSchemaPath), 'Settings loader has a canonical control inventory');
 const sceneOntology = readFileSync(sceneOntologyPath, 'utf8');
 const basinSmokePage = readFileSync(basinSmokePagePath, 'utf8');
-const basinSmokeWitness = readFileSync(basinSmokeWitnessPath, 'utf8');
+const settingsPresetPage = readFileSync(settingsPresetPagePath, 'utf8');
+const settingsPresetWitness = readFileSync(settingsPresetWitnessPath, 'utf8');
+const settingsPresetContract = readFileSync(settingsPresetContractPath, 'utf8');
+const settingsPresetSchema = JSON.parse(readFileSync(settingsPresetSchemaPath, 'utf8'));
 const corePath = join(root, 'volume-core.js');
 assert.ok(existsSync(corePath), 'volume-core.js exists');
 const core = readFileSync(corePath, 'utf8');
 const topologyShellLabBlock = core.match(/let curlActivity = smoothstep[\s\S]*?let inspectShellMask =/)?.[0] || '';
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
+
+const formatVolumeBasinRouteValueSource = index.match(/function formatVolumeBasinRouteValue\(value\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(formatVolumeBasinRouteValueSource, 'volume capture exposes a named route-value serializer');
+const formatVolumeBasinRouteValue = Function(`return (${formatVolumeBasinRouteValueSource})`)();
+assert.equal(
+  formatVolumeBasinRouteValue(0.550993236027056),
+  '0.550993236027056',
+  'basin recapture preserves exact high-precision slider values instead of rounding them',
+);
+
+const readVolumeDomControlValueSource = index.match(/function readVolumeDomControlValue\(el\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(readVolumeDomControlValueSource, 'volume capture exposes a named DOM-value reader');
+const readVolumeDomControlValue = Function(`return (${readVolumeDomControlValueSource})`)();
+assert.equal(
+  readVolumeDomControlValue({ type: 'text', tagName: 'INPUT', value: '', checked: false }),
+  '',
+  'empty text controls remain empty strings instead of silently becoming numeric zero',
+);
+assert.match(
+  index,
+  /function readVolumeDomControls\(\)[\s\S]*controls\[el\.id\]\s*=\s*\{/,
+  'native settings presets key controls by stable DOM id to match the canonical inventory',
+);
+assert.match(
+  index,
+  /params\.get\('volume_shell_inspect_mode'\)/,
+  'route loading reads the same shell-inspect parameter name emitted by capture',
+);
+assert.match(
+  index,
+  /sourceQualityReason[\s\S]*volume_quality_reason/,
+  'recapture preserves the source settings provenance instead of overwriting it with a generic capture label',
+);
+assert.match(
+  settingsPresetPage,
+  /validateVolumeSettingsPresetDocument/,
+  'the short preset loader delegates admission to the shared behavioral contract',
+);
+assert.equal(settingsPresetSchema.identity, 'kaminos-volume-settings-preset-schema-v1');
+assert.equal(settingsPresetSchema.controlCount, 191, 'canonical schema fixes the complete control count');
+assert.equal(settingsPresetSchema.controls.length, 191, 'canonical schema enumerates every counted control');
+assert.match(settingsPresetContract, /schema\.forbiddenPresetFields[\s\S]*settings preset contains forbidden runtime or replay state/, 'shared admission rejects forbidden replay/runtime payload fields');
+assert.match(
+  settingsPresetContract,
+  /legacy-dom-settings-promoted-v0/,
+  'settings-only promotion is reported rather than impersonating a native prototype capture',
+);
+assert.match(
+  settingsPresetWitness,
+  /sourcePresetAuthority/,
+  'one-action witness preserves the effective preset authority in its durable receipt',
+);
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
 assert.match(index, /kaminos_volume_smoke/, 'URL route gate names the volume smoke prototype');
 assert.match(index, /volume_primitive_fixture/, 'URL route can seed a saved volume primitive fixture');
@@ -60,12 +121,17 @@ assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*raySteps:\s*
 assert.match(index, /id="volume-agent-camera-save"/, 'Volume cockpit exposes durable camera capture for agent replay');
 assert.match(index, /id="volume-agent-view-save"/, 'Volume cockpit exposes durable camera-plus-settings capture for agent replay');
 assert.match(index, /Save Agent View \+ Settings/, 'Volume cockpit labels the full replay capture path distinctly from camera-only capture');
-assert.match(index, /id="volume-basin-capture-smoke"/, 'Volume cockpit exposes one-action durable basin capture and fresh smoke');
-assert.match(index, /Save Basin \+ Open Smoke/, 'Volume cockpit names the one-action durable smoke command directly');
-assert.match(index, /basinCaptureCommandButton\.dataset\.commandWired = 'true'/, 'Volume cockpit reports when the basin command listener is actually wired');
-assert.match(basinSmokeWitness, /element\.dataset\.commandWired !== 'true'/, 'Basin smoke witness rejects a button that is visible before its command is wired');
+assert.match(index, /id="volume-settings-preset-save"/, 'Volume cockpit exposes one-action durable settings persistence and live loading');
+assert.match(
+  index,
+  /Save Settings Preset \+ Open Live/,
+  'Volume cockpit names settings persistence without implying field or renderer capture',
+);
+assert.doesNotMatch(index, /Save Basin \+ Open Smoke/, 'Settings persistence no longer presents itself as renderer smoke capture');
+assert.match(index, /settingsPresetCommandButton\.dataset\.commandWired = 'true'/, 'Volume cockpit reports when the preset command listener is actually wired');
+assert.match(settingsPresetWitness, /element\.dataset\.commandWired !== 'true'/, 'Settings witness rejects a button that is visible before its command is wired');
 assert.ok(
-  index.indexOf("basinCaptureCommandButton.dataset.commandWired = 'true'") < index.indexOf('function refreshVolumeReadout()'),
+  index.indexOf("settingsPresetCommandButton.dataset.commandWired = 'true'") < index.indexOf('function refreshVolumeReadout()'),
   'Basin command wiring must precede heavyweight volume runtime/readout settlement',
 );
 assert.match(index, /id="volume-scene-authority"/, 'Volume cockpit exposes current scene authority beside the scene selector');
@@ -73,13 +139,11 @@ assert.match(index, /Tall plume \(prototype\)/, 'Tall plume is visibly the proto
 assert.match(index, /Compact plume \(superseded\)/, 'Compact plume remains visibly compatibility-only');
 assert.match(index, /Canonical plume \(superseded\)/, 'Canonical plume remains visibly compatibility-only');
 assert.match(index, /Bonfire plume \(superseded\)/, 'Bonfire plume remains visibly compatibility-only');
-assert.match(index, /saveVolumePrototypeBasinSmoke/, 'One-action basin smoke uses a named durable orchestration path');
-assert.match(index, /stateExclusions:[\s\S]*fluidField:\s*true[\s\S]*replayState:\s*true/, 'Basin capture records that runtime fields and replay state are excluded');
-assert.match(index, /const runtimeContext = kind === 'prototype-basin'\s*\? \{\}\s*:\s*\{[\s\S]*volumeDebugState:[\s\S]*viewport:/, 'Prototype-basin artifacts omit runtime, camera, and viewport context instead of merely claiming exclusion');
-assert.match(index, /requestedSmoke:[\s\S]*role:\s*'truthHigh'[\s\S]*composition:\s*'splat-only-v0'[\s\S]*warmupSteps:\s*0/, 'Basin capture records the requested fresh renderer identity');
-assert.match(index, /sceneReceipt\.status !== 'prototype'/, 'One-action basin smoke rejects superseded scenes before writing an authoritative capture');
-assert.match(index, /controls\.boundarySplatMode !== 'learned'/, 'One-action splat smoke rejects prototype scenes whose learned splat path is off');
-assert.match(index, /Number\(controls\.resolution\) !== 160/, 'One-action selective-head smoke rejects grids outside its exact 160^3 integration ABI');
+assert.match(index, /saveVolumeSettingsPresetAndOpen/, 'One-action settings persistence uses a named durable orchestration path');
+assert.match(index, /stateExclusions:[\s\S]*fluidField:\s*true[\s\S]*replayState:\s*true/, 'Settings preset records that runtime fields and replay state are excluded');
+assert.match(index, /const runtimeContext = settingsPreset \? \{\} : \{[\s\S]*volumeDebugState:[\s\S]*viewport:/, 'Settings preset omits runtime, camera, and viewport context instead of merely claiming exclusion');
+const settingsSaveBlock = index.match(/async function saveVolumeSettingsPresetAndOpen\(\) \{[\s\S]*?\n\}/)?.[0] || '';
+assert.doesNotMatch(settingsSaveBlock, /sceneReceipt|boundarySplatMode|resolution/, 'Settings persistence has no scene, renderer, or grid admission gate');
 assert.match(index, /artifacts\/volume-captures/, 'Volume cockpit names the on-disk capture directory instead of requiring clipboard handoff');
 assert.match(index, /saveVolumeAgentCapture/, 'Volume cockpit has a named capture writer path for agents');
 assert.match(index, /readVolumeDomControls/, 'Volume capture reads all live DOM volume controls, not only curated look fields');
@@ -87,43 +151,33 @@ assert.match(index, /buildVolumeAgentCaptureRoute/, 'Volume capture serializes a
 assert.match(serve, /\/api\/volume-capture/, 'Local server exposes a volume capture write endpoint');
 assert.match(serve, /handle_volume_capture/, 'Local server handles durable volume capture writes explicitly');
 assert.match(serve, /volume-captures/, 'Local server writes volume captures under artifacts/volume-captures');
-assert.match(serve, /volume-basin-smoke\.html\?capture=/, 'Saved prototype-basin artifacts persist a generic fresh-smoke route');
-assert.match(serve, /boundarySplatMode[\s\S]*learned/, 'Server rejects prototype-basin artifacts that cannot satisfy their requested splat-only composition');
-assert.match(serve, /resolution[\s\S]*160/, 'Server rejects prototype-basin artifacts outside the selective-head integration grid');
-assert.match(serve, /str\(\(\(payload\.get\("domControls"\)[\s\S]*\.get\("value"\)\)\)\s*!=\s*"160"/, 'Server accepts the DOM serializer string representation of the exact 160 grid');
-assert.match(serve, /forbidden_runtime_fields[\s\S]*volumeDebugState[\s\S]*if any\(field in payload/, 'Server rejects prototype-basin payloads that smuggle runtime context behind exclusion flags');
+assert.match(serve, /payload\.get\("kind"\) == "settings-preset"/, 'Server gives settings presets an explicit write contract');
+assert.match(serve, /validate_volume_settings_preset_payload/, 'Server runs one exact settings-preset admission helper before writing');
+assert.match(serve, /volume-settings-preset\.html\?preset=/, 'Saved settings presets receive a short ordinary-live loader route');
+assert.match(serve, /settings preset requires exactly/, 'Server rejects incomplete settings presets');
+assert.match(serve, /settings preset must not contain runtime, renderer, camera, or replay state/, 'Server rejects settings payloads that smuggle runtime context behind exclusion flags');
+assert.match(serve, /volume-settings-preset-witness\.mjs --url/, 'Settings preset writes return the settings witness rather than the replay-capture witness');
 assert.match(sceneOntology, /DEFAULT_VOLUME_SCENE\s*=\s*'tall_plume'/, 'Unsupported or missing scene requests default to the sole prototype');
 assert.match(sceneOntology, /tall_plume:[\s\S]*status:\s*'prototype'/, 'Scene ontology grants prototype authority only to tall plume');
 for (const scene of ['compact_plume', 'canonical_plume', 'bonfire_plume']) {
   assert.match(sceneOntology, new RegExp(`${scene}:[\\s\\S]*?status:\\s*'superseded'[\\s\\S]*?supersededBy:\\s*'tall_plume'`), `${scene} is explicitly superseded by tall_plume`);
 }
 assert.match(sceneOntology, /fallbackReason:[\s\S]*unsupported-volume-scene/, 'Scene normalization reports unsupported substitution instead of hiding it');
-assert.match(basinSmokePage, /capture\.sceneAuthority\?\.status !== 'prototype'/, 'Fresh-smoke loader rejects captures without prototype scene authority');
-assert.match(basinSmokePage, /capture\.requestedSmoke\?\.role !== 'truthHigh'/, 'Fresh-smoke loader requires the capture contract truthHigh role');
-assert.match(basinSmokePage, /capture\.requestedSmoke\?\.composition !== 'splat-only-v0'/, 'Fresh-smoke loader requires the capture contract splat-only composition');
-assert.doesNotMatch(basinSmokePage, /params\.get\('role'\)|params\.get\('composition'\)/, 'Fresh-smoke loader cannot override durable renderer identity from its query string');
-assert.match(basinSmokePage, /volume_boundary_splat_mode'\) !== 'learned'/, 'Fresh-smoke loader rejects settings that cannot apply the requested splat pass');
-assert.match(basinSmokePage, /volume_resolution'\) !== '160'/, 'Fresh-smoke loader rejects settings outside the exact selective-head grid');
-assert.match(basinSmokePage, /key\.startsWith\('volume_'\)/, 'Fresh-smoke loader forwards exact captured volume controls into the wrapper');
-assert.match(basinSmokePage, /target\.searchParams\.set\('role', requestedRole\)/, 'Fresh-smoke loader preserves requested renderer role');
-assert.match(basinSmokePage, /target\.searchParams\.set\('composition', requestedComposition\)/, 'Fresh-smoke loader preserves requested renderer composition');
-assert.match(basinSmokePage, /target\.searchParams\.set\('warmup_steps', '0'\)/, 'Fresh-smoke loader explicitly requests a fresh live simulation without a field anchor');
-assert.match(basinSmokePage, /target\.searchParams\.set\('basin_capture', captureId\)/, 'Fresh-smoke wrapper receives durable source-capture identity');
-assert.match(basinSmokePage, /status\.classList\.add\('failed'\)/, 'Fresh-smoke loader fails visibly instead of presenting fallback as authority');
-assert.match(basinSmokeWitness, /failurePhase/, 'Basin smoke witness records its exact failure phase');
-assert.match(basinSmokeWitness, /sourceCaptureId/, 'Basin smoke witness verifies durable capture identity at the effective wrapper');
-assert.match(basinSmokeWitness, /selectiveHeadLivePassReceipt/, 'Basin smoke witness verifies effective renderer pass application');
-assert.match(basinSmokeWitness, /continuousSimStepDelta/, 'Basin smoke witness rejects static output');
-assert.match(basinSmokeWitness, /window\.__kaminosSaveVolumePrototypeBasinSmoke\(\)/, 'Basin smoke witness invokes the exact UI command implementation');
-assert.match(basinSmokeWitness, /awaitPromise:\s*true/, 'Basin smoke witness waits for the command persistence receipt before following its popup');
-assert.match(basinSmokeWitness, /commandResult\.smokeUrl/, 'Basin smoke witness rejects command completion without a durable smoke route');
-assert.match(basinSmokeWitness, /screenshotBytes\.length > 1000/, 'Basin smoke witness rejects missing or partial visual output');
-assert.match(basinSmokeWitness, /Object\.hasOwn\(captureDocument\.capture, 'volumeDebugState'\)/, 'Basin smoke witness verifies runtime debug state is absent from the durable capture');
-assert.match(basinSmokeWitness, /rejectPending/, 'Basin smoke witness rejects outstanding CDP calls when a socket dies');
-assert.match(basinSmokeWitness, /CDP call timed out/, 'Basin smoke witness bounds individual CDP calls so pre-output failure still writes a report');
-assert.match(basinSmokeWitness, /visibleColorPixelCount/, 'Basin smoke witness requires visible colored renderer pixels outside cockpit chrome');
-assert.match(basinSmokeWitness, /status:\s*'failed'/, 'Basin smoke witness writes a durable report when it fails before output');
-assert.match(basinSmokeWitness, /state\?\.status === 'failed'/, 'Basin smoke witness stops immediately when the effective wrapper fails');
+assert.doesNotMatch(settingsPresetContract, /volume_scene'\)|volume_boundary_splat_mode'\)|volume_resolution'\)/, 'Settings admission is independent of scene, renderer, and grid values');
+assert.match(settingsPresetContract, /new URL\('\/', origin\)/, 'Settings target opens the ordinary live prototype');
+const ordinarySettingsTargetBlock = settingsPresetContract.match(/export function buildVolumeSettingsPresetTarget[\s\S]*?\n\}/)?.[0] || '';
+assert.doesNotMatch(ordinarySettingsTargetBlock, /target\.searchParams\.set\('role'|target\.searchParams\.set\('composition'|warmup_steps/, 'Ordinary settings target does not invent renderer assay parameters');
+assert.match(settingsPresetPage, /status\.classList\.add\('failed'\)/, 'Settings loader fails visibly instead of presenting fallback as authority');
+assert.match(settingsPresetWitness, /failurePhase/, 'Settings witness records its exact failure phase');
+assert.match(settingsPresetWitness, /sourcePresetId/, 'Settings witness verifies durable preset identity at the live target');
+assert.match(settingsPresetWitness, /continuousSimStepDelta/, 'Settings witness rejects static live output');
+assert.match(settingsPresetWitness, /visualAuthority:\s*'not-evaluated-settings-persistence-only'/, 'Settings witness does not present ordinary-route screenshots as renderer evidence');
+assert.match(settingsPresetWitness, /window\.__kaminosSaveVolumeSettingsPresetAndOpen\(\)/, 'Settings witness invokes the exact UI command implementation');
+assert.match(settingsPresetWitness, /awaitPromise:\s*true/, 'Settings witness waits for the persistence receipt before following its popup');
+assert.match(settingsPresetWitness, /commandResult\.presetUrl/, 'Settings witness rejects command completion without a durable live route');
+assert.match(settingsPresetWitness, /commandDiagnostic[\s\S]*volume-agent-capture-state/, 'Settings witness preserves the operator-visible save failure when the command returns no artifact');
+assert.match(settingsPresetWitness, /'volumeDebugState'[\s\S]*Object\.hasOwn\(presetDocument\.capture, field\)/, 'Settings witness verifies runtime debug state is absent from the durable preset');
+assert.match(settingsPresetWitness, /status:\s*'failed'/, 'Settings witness writes a durable report when it fails before output');
 assert.match(volumeWitness, /--capture/, 'Volume witness accepts a saved capture path for replay');
 assert.match(volumeWitness, /isCaptureReplay/, 'Volume witness reports whether it replayed a saved capture');
 assert.match(volumeWitness, /kaminosSetCameraDebugPose/, 'Volume witness reapplies saved camera poses for capture replay');

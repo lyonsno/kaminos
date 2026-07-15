@@ -15,7 +15,9 @@ const ROLE_AUTHORITIES = Object.freeze({
 });
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
-const expectedComposition = new URL(url).searchParams.get('composition') || 'smoke-raymarch-under-splats-v0';
+const requestedParams = new URL(url).searchParams;
+const expectedComposition = requestedParams.get('composition')
+  || (requestedParams.get('view') === 'splat-only' ? 'splat-only-v0' : 'smoke-raymarch-under-splats-v0');
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-selective-head-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-selective-head-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
@@ -33,12 +35,14 @@ class CdpSocket {
       this.socket = new WebSocket(this.url);
       this.socket.addEventListener('open', resolveOpen, { once: true });
       this.socket.addEventListener('error', reject, { once: true });
+      this.socket.addEventListener('close', () => this.rejectPending(new Error('CDP socket closed')));
       this.socket.addEventListener('message', event => {
         const message = JSON.parse(event.data);
         if (!message.id) return;
         const pending = this.pending.get(message.id);
         if (!pending) return;
         this.pending.delete(message.id);
+        clearTimeout(pending.timer);
         if (message.error) pending.reject(new Error(message.error.message));
         else pending.resolve(message.result);
       });
@@ -47,9 +51,20 @@ class CdpSocket {
   call(method, params = {}) {
     return new Promise((resolveCall, reject) => {
       const id = this.nextId++;
-      this.pending.set(id, { resolve: resolveCall, reject });
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`CDP call timed out: ${method}`));
+      }, timeoutMs);
+      this.pending.set(id, { resolve: resolveCall, reject, timer });
       this.socket.send(JSON.stringify({ id, method, params }));
     });
+  }
+  rejectPending(error) {
+    for (const pending of this.pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.pending.clear();
   }
   close() { this.socket?.close(); }
 }
@@ -129,6 +144,10 @@ try {
   assert.equal(endState?.fallbackReason, null, 'selective route fell back during observation');
   assert.equal(endState?.compositionFallbackReason, null, 'selective composition fell back during observation');
   assert.equal(endState?.boundarySplatFallbackReason, null, 'splat route fell back during observation');
+  if (requestedParams.has('settings_preset')) {
+    assert.equal(endState?.sourceSettingsPresetId, requestedParams.get('settings_preset'), 'visual route did not validate its requested settings preset');
+    assert.equal(endState?.sourceSettingsPresetAuthority, requestedParams.get('settings_preset_authority'), 'visual route did not derive its requested settings authority');
+  }
   failurePhase = 'capture';
   const capture = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   writeFileSync(out, Buffer.from(capture.data, 'base64'));
@@ -139,6 +158,8 @@ try {
     failurePhase: null,
     requestedUrl: url,
     effectiveRoute: endState.routeIdentity,
+    sourceSettingsPresetId: endState.sourceSettingsPresetId,
+    sourceSettingsPresetAuthority: endState.sourceSettingsPresetAuthority,
     requestedRole: endState.requestedRole,
     effectiveRole: endState.effectiveRole,
     roleAuthority: endState.roleAuthority,
