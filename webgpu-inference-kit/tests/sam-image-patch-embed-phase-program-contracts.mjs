@@ -42,6 +42,7 @@ const {
   WEBGPU_BUFFER_USAGE,
   SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
   createRouteInvocationRequest,
+  createSam3ImagePatchEmbedDispatchPlan,
   createSam3ImagePatchEmbedPhaseProgramCpuOracle,
   createSam3ImagePatchEmbedPhaseProgramRouteDefinition,
   runSam3ImagePatchEmbedPhaseProgramRoute,
@@ -55,6 +56,16 @@ assert.equal(route.routeId, SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID);
 assert.deepEqual(route.requiredInputRoles, ['source-image', 'pixel-values', 'sam3-image-patch-embed-weights']);
 assert.deepEqual(route.requiredOutputRoles, ['patch-embeddings']);
 assert.equal(validateRouteDefinition(route).ok, true);
+
+const nativeDispatch = createSam3ImagePatchEmbedDispatchPlan({
+  shape: { batch: 1, imageHeight: 1008, imageWidth: 1008, imageChannels: 3, patchSize: 14, patchHeight: 72, patchWidth: 72, hiddenSize: 1024 },
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.equal(nativeDispatch.patchConv2dStride.logicalInvocations, 5_308_416, 'native patch embedding must preserve its complete logical output domain');
+assert.deepEqual(nativeDispatch.patchConv2dStride.dispatch, [288, 288], 'native patch embedding must tile 82,944 workgroups across legal WebGPU dimensions');
+assert.ok(nativeDispatch.patchConv2dStride.dispatch.every(count => count <= 65_535), 'every native patch-embedding dispatch dimension must respect the effective device limit');
+assert.match(routeSource, /@builtin\(num_workgroups\)\s+dispatch_grid/, 'patch embedding WGSL must receive the multidimensional dispatch grid');
+assert.match(routeSource, /gid\.x\s*\+\s*gid\.y\s*\*\s*dispatch_grid\.x\s*\*\s*64u/, 'patch embedding WGSL must reconstruct the uncapped linear invocation index');
 
 const oracle = createSam3ImagePatchEmbedPhaseProgramCpuOracle({
   pixelValues: new Float32Array([

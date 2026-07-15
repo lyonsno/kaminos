@@ -4,7 +4,7 @@ import {
   createRouteWorkerResult,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { createLinearDispatch, WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -52,8 +52,13 @@ struct VitPrefixDims {
 @group(0) @binding(2) var<uniform> dims: VitPrefixDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x
+    + gid.y * dispatch_grid.x * 64u
+    + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.patch_tokens * dims.hidden_size) { return; }
   let channel = index % dims.hidden_size;
   let token = index / dims.hidden_size;
@@ -84,8 +89,13 @@ struct VitPrefixDims {
 @group(0) @binding(3) var<uniform> dims: VitPrefixDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x
+    + gid.y * dispatch_grid.x * 64u
+    + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_values) { return; }
   let position_index = index % (dims.patch_tokens * dims.hidden_size);
   patch_plus_position[index] = patch_embeddings[index] + tiled_position_embeddings[position_index];
@@ -293,8 +303,22 @@ export function createSam3ImageVitPrefixPhaseProgramRouteDefinition(input = {}) 
   });
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
+export function createSam3ImageVitPrefixDispatchPlan(input = {}) {
+  const shape = normalizeShape(input.shape);
+  const maxWorkgroupsPerDimension = input.maxWorkgroupsPerDimension ?? 65_535;
+  const entry = logicalInvocations => ({
+    logicalInvocations,
+    dispatch: createLinearDispatch(logicalInvocations, {
+      workgroupSize: 64,
+      maxWorkgroupsPerDimension,
+    }),
+  });
+  const elementwiseValues = shape.patchTokens * shape.hiddenSize;
+  return {
+    tilePositionEmbeddings: entry(elementwiseValues),
+    addPositionEmbeddings: entry(shape.batch * elementwiseValues),
+    vitPrefixLayernorm: entry(shape.batch * shape.patchTokens),
+  };
 }
 
 export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
@@ -305,7 +329,10 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
   const weightsArtifact = roleArtifact(input.request.inputs, 'sam3-image-vit-prefix-weights');
   const { shape, patchEmbeddings, positionEmbeddings, layerNormWeight, layerNormBias } = validateImageVitPrefixInputs(input.tensors || {});
   const totalValues = shape.batch * shape.patchTokens * shape.hiddenSize;
-  const totalTokens = shape.batch * shape.patchTokens;
+  const dispatchPlan = createSam3ImageVitPrefixDispatchPlan({
+    shape,
+    maxWorkgroupsPerDimension: input.device?.limits?.maxComputeWorkgroupsPerDimension,
+  });
 
   const runtime = await createWebGpuInferenceRuntime({
     routeId: SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
@@ -401,9 +428,9 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
       },
     },
     phases: [
-      { name: 'tile-position-embeddings', kernel: 'tilePositionEmbeddings', dispatch: [workgroups(shape.patchTokens * shape.hiddenSize)], yieldAfter: true },
-      { name: 'add-position-embeddings', kernel: 'addPositionEmbeddings', dispatch: [workgroups(totalValues)], yieldAfter: true },
-      { name: 'vit-prefix-layernorm', kernel: 'vitPrefixLayernorm', dispatch: [workgroups(totalTokens)], yieldAfter: true },
+      { name: 'tile-position-embeddings', kernel: 'tilePositionEmbeddings', dispatch: dispatchPlan.tilePositionEmbeddings.dispatch, yieldAfter: true },
+      { name: 'add-position-embeddings', kernel: 'addPositionEmbeddings', dispatch: dispatchPlan.addPositionEmbeddings.dispatch, yieldAfter: true },
+      { name: 'vit-prefix-layernorm', kernel: 'vitPrefixLayernorm', dispatch: dispatchPlan.vitPrefixLayernorm.dispatch, yieldAfter: true },
       { name: 'readback-vit-prefix-hidden-states', readbacks: [{ name: 'vitPrefixHiddenStates', tensor: 'vitPrefixHiddenStates' }] },
     ],
     metadata: { routeId: SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID, layout: 'B,H,W,C', positionEmbeddingRule: 'tiling (repeating), not interpolation' },

@@ -46,6 +46,7 @@ assert.match(smokeJs, /backboneLayerNormWeightSha256/, 'browser smoke must prese
 
 const {
   SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitPrefixDispatchPlan,
   createSam3ImageVitPrefixPhaseProgramCpuOracle,
   createSam3ImageVitPrefixPhaseProgramRouteDefinition,
   validateRouteDefinition,
@@ -58,6 +59,23 @@ assert.equal(route.routeId, SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID);
 assert.deepEqual(route.requiredInputRoles, ['source-image', 'patch-embeddings', 'sam3-image-vit-prefix-weights']);
 assert.deepEqual(route.requiredOutputRoles, ['vit-prefix-hidden-states']);
 assert.equal(validateRouteDefinition(route).ok, true);
+
+const nativeDispatch = createSam3ImageVitPrefixDispatchPlan({
+  shape: { batch: 1, patchHeight: 72, patchWidth: 72, hiddenSize: 1024, pretrainGridSize: 24 },
+  maxWorkgroupsPerDimension: 65_535,
+});
+assert.equal(nativeDispatch.tilePositionEmbeddings.logicalInvocations, 5_308_416, 'native position tiling must preserve its complete logical output domain');
+assert.equal(nativeDispatch.addPositionEmbeddings.logicalInvocations, 5_308_416, 'native position addition must preserve its complete logical output domain');
+assert.deepEqual(nativeDispatch.tilePositionEmbeddings.dispatch, [288, 288], 'native position tiling must tile 82,944 workgroups across legal WebGPU dimensions');
+assert.deepEqual(nativeDispatch.addPositionEmbeddings.dispatch, [288, 288], 'native position addition must tile 82,944 workgroups across legal WebGPU dimensions');
+assert.deepEqual(nativeDispatch.vitPrefixLayernorm.dispatch, [81], 'native prefix LayerNorm remains within one-dimensional dispatch capacity');
+assert.ok(
+  [nativeDispatch.tilePositionEmbeddings, nativeDispatch.addPositionEmbeddings, nativeDispatch.vitPrefixLayernorm]
+    .every(entry => entry.dispatch.every(count => count <= 65_535)),
+  'every native ViT-prefix dispatch dimension must respect the effective device limit',
+);
+assert.equal((routeSource.match(/@builtin\(num_workgroups\)\s+dispatch_grid/g) || []).length, 2, 'both elementwise ViT-prefix kernels must receive the multidimensional dispatch grid');
+assert.equal((routeSource.match(/gid\.x\s*\+\s*gid\.y\s*\*\s*dispatch_grid\.x\s*\*\s*64u/g) || []).length, 2, 'both elementwise ViT-prefix kernels must reconstruct the uncapped linear invocation index');
 
 const oracle = createSam3ImageVitPrefixPhaseProgramCpuOracle({
   patchEmbeddings: new Float32Array([

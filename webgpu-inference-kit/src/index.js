@@ -232,6 +232,7 @@ export {
 
 export {
   SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImagePatchEmbedDispatchPlan,
   createSam3ImagePatchEmbedPhaseProgramCpuOracle,
   createSam3ImagePatchEmbedPhaseProgramRouteDefinition,
   createSam3ImagePatchEmbedPhaseProgramRouteReceipt,
@@ -240,6 +241,7 @@ export {
 
 export {
   SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID,
+  createSam3ImageVitPrefixDispatchPlan,
   createSam3ImageVitPrefixPhaseProgramCpuOracle,
   createSam3ImageVitPrefixPhaseProgramRouteDefinition,
   createSam3ImageVitPrefixPhaseProgramRouteReceipt,

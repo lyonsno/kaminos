@@ -4,7 +4,7 @@ import {
   createRouteWorkerResult,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { createLinearDispatch, WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -55,8 +55,13 @@ struct PatchEmbedDims {
 @group(0) @binding(3) var<uniform> dims: PatchEmbedDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x
+    + gid.y * dispatch_grid.x * 64u
+    + gid.z * dispatch_grid.x * dispatch_grid.y * 64u;
   if (index >= dims.total_values) { return; }
   let out_channel = index % dims.hidden_size;
   let token = (index / dims.hidden_size) % (dims.patch_height * dims.patch_width);
@@ -235,8 +240,18 @@ export function createSam3ImagePatchEmbedPhaseProgramRouteDefinition(input = {})
   });
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
+export function createSam3ImagePatchEmbedDispatchPlan(input = {}) {
+  const shape = normalizeShape(input.shape);
+  const logicalInvocations = shape.batch * shape.patchHeight * shape.patchWidth * shape.hiddenSize;
+  return {
+    patchConv2dStride: {
+      logicalInvocations,
+      dispatch: createLinearDispatch(logicalInvocations, {
+        workgroupSize: 64,
+        maxWorkgroupsPerDimension: input.maxWorkgroupsPerDimension ?? 65_535,
+      }),
+    },
+  };
 }
 
 export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
@@ -247,6 +262,10 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
   const weightsArtifact = roleArtifact(input.request.inputs, 'sam3-image-patch-embed-weights');
   const { shape, pixelValues, projection } = validateImagePatchEmbedInputs(input.tensors || {});
   const totalValues = shape.batch * shape.patchHeight * shape.patchWidth * shape.hiddenSize;
+  const dispatchPlan = createSam3ImagePatchEmbedDispatchPlan({
+    shape,
+    maxWorkgroupsPerDimension: input.device?.limits?.maxComputeWorkgroupsPerDimension,
+  });
 
   const runtime = await createWebGpuInferenceRuntime({
     routeId: SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
@@ -318,7 +337,7 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
       },
     },
     phases: [
-      { name: 'patch-conv2d-stride', kernel: 'patchConv2dStride', dispatch: [workgroups(totalValues)], yieldAfter: true },
+      { name: 'patch-conv2d-stride', kernel: 'patchConv2dStride', dispatch: dispatchPlan.patchConv2dStride.dispatch, yieldAfter: true },
       { name: 'readback-patch-embeddings', readbacks: [{ name: 'patchEmbeddings', tensor: 'patchEmbeddings' }] },
     ],
     metadata: { routeId: SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID, weightLayout: 'out,kH,kW,in' },
