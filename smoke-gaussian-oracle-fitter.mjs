@@ -10,6 +10,10 @@ export const SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY = 'smoke-gaussian-oracle-static-
 const EXPECTED_ROUTE = 'native-3d-compute-fluid-raymarch-v0';
 const EXPECTED_PROTOTYPE = 'kaminos-volume-prototype-v0';
 const EXPECTED_EXPORT_IDENTITY = 'full-grid-fluid-front-boundary-sidecars-v0';
+const HELD_REPLAY_SCHEMA = 'kaminos.volume.operator-basin-replay.v0';
+const HELD_INITIALIZATION_AUTHORITY = 'offline-high-truth-held-render-only-v0';
+const HELD_FILTER_IDENTITY = 'phase-aligned-held-render-application-v0';
+const HELD_LAYOUT_IDENTITY = 'x-fastest-zyx-c-interleaved-v0';
 const CHANNEL = Object.freeze(Object.fromEntries(KAMINOS_FLUID_CHANNEL_ORDER.map((name, index) => [name, index])));
 
 function sha256(bytes) {
@@ -26,6 +30,119 @@ function resolveArtifactPath(manifestPath, artifactPath) {
   return isAbsolute(artifactPath) ? artifactPath : resolve(dirname(manifestPath), artifactPath);
 }
 
+function requireFiniteArray(value, length, label) {
+  if (!Array.isArray(value) || value.length !== length || !value.every(item => typeof item === 'number' && Number.isFinite(item))) {
+    throw new Error(`${label} must contain ${length} finite numbers`);
+  }
+  return value;
+}
+
+function validateHeldArtifact(artifact, { kind, shape, channelOrder }) {
+  if (!artifact || artifact.kind !== kind || artifact.dtype !== 'float32' || artifact.byteOrder !== 'little-endian') {
+    throw new Error(`held ${kind} artifact is missing or incompatible`);
+  }
+  if (!sameArray(artifact.shape, shape)) throw new Error(`held ${kind} shape mismatch`);
+  if (!sameArray(artifact.channelOrder, channelOrder)) throw new Error(`held ${kind} channel order mismatch`);
+  const expectedFloatCount = shape.reduce((product, value) => product * value, 1);
+  if (artifact.floatCount !== expectedFloatCount || artifact.byteLength !== expectedFloatCount * Float32Array.BYTES_PER_ELEMENT) {
+    throw new Error(`held ${kind} length mismatch`);
+  }
+  if (typeof artifact.url !== 'string' || artifact.url.length === 0) throw new Error(`held ${kind} URL is missing`);
+  if (typeof artifact.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(artifact.sha256)) throw new Error(`held ${kind} sha256 is invalid`);
+  return artifact;
+}
+
+async function loadHeldTeacherFrame({ manifestPath, manifestBytes, manifest, expectedManifestSha256 }) {
+  const manifestSha = sha256(manifestBytes);
+  if (typeof expectedManifestSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(expectedManifestSha256)) {
+    throw new Error('held replay requires an exact requested manifest sha256');
+  }
+  if (manifestSha !== expectedManifestSha256) {
+    throw new Error(`requested manifest sha256 mismatch: ${manifestSha} != ${expectedManifestSha256}`);
+  }
+  if (manifest.status !== 'captured' || manifest.failurePhase !== null) throw new Error('held replay manifest is not a complete capture');
+  if (typeof manifest.captureId !== 'string' || manifest.captureId.trim().length === 0) throw new Error('held replay captureId is missing');
+  if (manifest.initializationAuthority !== HELD_INITIALIZATION_AUTHORITY
+    || manifest.filterIdentity !== HELD_FILTER_IDENTITY
+    || manifest.layoutIdentity !== HELD_LAYOUT_IDENTITY) {
+    throw new Error('held replay field authority or layout mismatch');
+  }
+  const source = manifest.source || {};
+  if (source.identity !== 'operator-live-evolved-basin-v0') throw new Error('held replay source identity mismatch');
+  if (source.effectiveRoute !== EXPECTED_ROUTE) throw new Error(`wrong effective route: ${source.effectiveRoute || '(missing)'}`);
+  if (typeof source.backend !== 'string' || !source.backend.startsWith('WebGPU:')) throw new Error(`wrong backend: ${source.backend || '(missing)'}`);
+  const grid = manifest.grid;
+  if (!Number.isInteger(grid) || grid <= 0) throw new Error(`held replay grid is invalid: ${grid}`);
+  if (!Number.isInteger(manifest.initialSimStepCount) || manifest.initialSimStepCount < 0) {
+    throw new Error(`held replay sim step is invalid: ${manifest.initialSimStepCount}`);
+  }
+  const camera = manifest.camera || {};
+  requireFiniteArray(camera.position, 3, 'held camera position');
+  requireFiniteArray(camera.target, 3, 'held camera target');
+  requireFiniteArray(camera.projectionMatrix, 16, 'held camera projectionMatrix');
+  requireFiniteArray(camera.matrixWorldInverse, 16, 'held camera matrixWorldInverse');
+
+  const fluid = validateHeldArtifact(manifest.fluid, {
+    kind: 'fluid',
+    shape: [grid, grid, grid, KAMINOS_FLUID_CHANNEL_ORDER.length],
+    channelOrder: KAMINOS_FLUID_CHANNEL_ORDER,
+  });
+  validateHeldArtifact(manifest.front, {
+    kind: 'front',
+    shape: [grid, grid, grid, 1],
+    channelOrder: ['frontTopology'],
+  });
+  validateHeldArtifact(manifest.boundary, {
+    kind: 'boundary',
+    shape: [grid, grid, grid, 4],
+    channelOrder: ['support', 'coverage', 'ridge', 'footprint'],
+  });
+
+  if (typeof source.sourceCaptureManifest !== 'string' || source.sourceCaptureManifest.length === 0
+    || typeof source.sourceCaptureManifestSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(source.sourceCaptureManifestSha256)) {
+    throw new Error('held replay source capture identity is missing');
+  }
+  const sourceCapturePath = resolveArtifactPath(manifestPath, source.sourceCaptureManifest);
+  const sourceCaptureBytes = await readFile(sourceCapturePath);
+  const sourceCaptureSha = sha256(sourceCaptureBytes);
+  if (sourceCaptureSha !== source.sourceCaptureManifestSha256) {
+    throw new Error(`source capture sha256 mismatch: ${sourceCaptureSha} != ${source.sourceCaptureManifestSha256}`);
+  }
+
+  const fluidPath = resolveArtifactPath(manifestPath, fluid.url);
+  const bytes = await readFile(fluidPath);
+  if (bytes.byteLength !== fluid.byteLength) throw new Error('held fluid byte length mismatch');
+  const fluidSha = sha256(bytes);
+  if (fluidSha !== fluid.sha256) throw new Error(`held fluid sha256 mismatch: ${fluidSha} != ${fluid.sha256}`);
+  const worldSpace = {
+    coordinateFrame: 'kaminos-normalized-volume-local-v0',
+    transformAuthority: 'operator-basin-normalized-volume-domain-v0',
+    bounds: { minimum: [-1, -1, -1], maximum: [1, 1, 1] },
+  };
+  const normalizedManifest = {
+    ...manifest,
+    effectiveRoute: source.effectiveRoute,
+    prototypeIdentity: EXPECTED_PROTOTYPE,
+    backend: source.backend,
+    worldSpace,
+  };
+  return {
+    manifestPath,
+    manifestIdentity: `sha256:${manifestSha}`,
+    fluidPath,
+    fluidIdentity: `sha256:${fluidSha}`,
+    manifest: normalizedManifest,
+    field: new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / Float32Array.BYTES_PER_ELEMENT),
+    grid,
+    worldSpace,
+    sourceSchema: HELD_REPLAY_SCHEMA,
+    captureId: manifest.captureId,
+    simStepCount: manifest.initialSimStepCount,
+    sourceCaptureIdentity: `sha256:${sourceCaptureSha}`,
+    cameraIdentity: `sha256:${sha256(Buffer.from(JSON.stringify(camera)))}`,
+  };
+}
+
 function requirePositiveIntegerBudget(value) {
   const budget = Number(value);
   if (!Number.isInteger(budget) || budget <= 0) throw new Error(`positive integer budget required, got ${value}`);
@@ -38,9 +155,12 @@ function normalizeBudgets(budgets) {
   return Array.from(new Set(normalized)).sort((left, right) => left - right);
 }
 
-async function loadTeacherFrame(manifestPath) {
+async function loadTeacherFrame(manifestPath, expectedManifestSha256) {
   const manifestBytes = await readFile(manifestPath);
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
+  if (manifest.schema === HELD_REPLAY_SCHEMA) {
+    return loadHeldTeacherFrame({ manifestPath, manifestBytes, manifest, expectedManifestSha256 });
+  }
   if (manifest.schema !== 'kaminos.volume.full-grid-field-export.v0'
     || manifest.identity !== EXPECTED_EXPORT_IDENTITY
     || manifest.status !== 'captured'
@@ -83,6 +203,11 @@ async function loadTeacherFrame(manifestPath) {
     field,
     grid,
     worldSpace,
+    sourceSchema: manifest.schema,
+    captureId: null,
+    simStepCount: replay.simStepCount,
+    sourceCaptureIdentity: manifest.sourceCapture?.manifestSha256 || null,
+    cameraIdentity: null,
   };
 }
 
@@ -425,6 +550,7 @@ async function fitBudget({ samples, budget, maxIterations, cellSize, bounds, out
 
 export async function fitSmokeGaussianOracleFrame({
   manifestPath,
+  expectedManifestSha256,
   outDir,
   budgets = [8, 16, 32, 64],
   maxIterations = 12,
@@ -436,7 +562,7 @@ export async function fitSmokeGaussianOracleFrame({
   const iterations = Math.max(1, Math.floor(Number(maxIterations) || 12));
   const threshold = Math.max(0, Number(densityThreshold) || 0);
   await mkdir(outDir, { recursive: true });
-  const frame = await loadTeacherFrame(resolve(manifestPath));
+  const frame = await loadTeacherFrame(resolve(manifestPath), expectedManifestSha256);
   const smoke = extractSmokeSamples(frame, threshold);
   const budgetCurve = [];
   for (const budget of requestedBudgets) {
@@ -458,6 +584,11 @@ export async function fitSmokeGaussianOracleFrame({
     teacher: {
       manifestPath: frame.manifestPath,
       manifestIdentity: frame.manifestIdentity,
+      sourceSchema: frame.sourceSchema,
+      captureId: frame.captureId,
+      simStepCount: frame.simStepCount,
+      sourceCaptureIdentity: frame.sourceCaptureIdentity,
+      cameraIdentity: frame.cameraIdentity,
       fluidPath: frame.fluidPath,
       fluidIdentity: frame.fluidIdentity,
       effectiveRoute: frame.manifest.effectiveRoute,
@@ -509,6 +640,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const args = parseArgs(process.argv.slice(2));
   const manifestPath = args.get('--manifest');
   const outDir = args.get('--out-dir');
+  const expectedManifestSha256 = args.get('--manifest-sha256');
   const budgets = String(args.get('--budgets') || '8,16,32,64')
     .split(',')
     .map(value => Number(value.trim()))
@@ -518,6 +650,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     const report = await fitSmokeGaussianOracleFrame({
       manifestPath,
+      expectedManifestSha256,
       outDir,
       budgets,
       maxIterations,
