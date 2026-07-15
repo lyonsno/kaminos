@@ -18,6 +18,19 @@ const MODEL_SCHEMA = 'kaminos-boundary-splat-phase-transport-model-v0';
 const REFERENCE_SPLAT_AUTHORITY = 'intercepted-live-boundary-splat-buffer-post-compaction-v0';
 const PREDICTION_SPLAT_AUTHORITY = 'learned-local-grid-transport-plus-residual-churn-v0';
 const WITNESS_SCHEMA = 'kaminos-boundary-splat-motion-cohort-witness-v0';
+const RECURRENT_ENVELOPE_AUTHORITY = 'legacy-vs-training-episode-envelope-recurrence-v0';
+const PHYSICAL_ENERGY_ENVELOPE_AUTHORITY = 'legacy-vs-training-episode-envelope-physical-energy-v1';
+const PHYSICAL_SPLAT_ATTRIBUTE_ORDER = Object.freeze([
+  'splat.support',
+  'splat.color.r', 'splat.color.g', 'splat.color.b',
+  'splat.opacity', 'splat.shape.x', 'splat.shape.y',
+  'splat.ridge', 'splat.fireSignal',
+]);
+const PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY = Object.freeze({
+  authority: 'candidate-splat-physical-visible-energy-weighted-loss-v1',
+  visibleEnergyChannels: Object.freeze({ color: Object.freeze([17, 18, 19]), opacity: 20 }),
+  splatAttributeOrder: PHYSICAL_SPLAT_ATTRIBUTE_ORDER,
+});
 
 function parseArgs(argv) {
   const result = new Map();
@@ -50,6 +63,28 @@ function routeHasExactOption(route, option, expectedValue) {
     else if (tokens[index].startsWith(`${option}=`)) values.push(tokens[index].slice(option.length + 1));
   }
   return values.length === 1 && values[0] === expectedValue;
+}
+
+function physicalVisibleEnergyLossIdentity(model) {
+  const losses = [model?.training?.distribution?.loss, model?.training?.loss];
+  const output = model?.output;
+  if (
+    model?.schema !== 'kaminos-boundary-splat-phase-destination-state-model-v0'
+    || model.status !== 'completed'
+    || model.route?.backend !== 'mlx'
+    || !/^Device\(gpu,\s*\d+\)$/i.test(String(model.route?.device))
+    || model.route?.fallbackReason !== null
+    || output?.authority !== 'candidate-16-plus-nonposition-splat-9-donor-residual-v0'
+    || output.attributeCount !== 25
+    || !Array.isArray(output.attributeOrder)
+    || output.attributeOrder.length !== 25
+    || JSON.stringify(output.attributeOrder.slice(16)) !== JSON.stringify(PHYSICAL_SPLAT_ATTRIBUTE_ORDER)
+    || losses.some(loss => (
+      loss?.authority !== PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY.authority
+      || JSON.stringify(loss.visibleEnergyChannels) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY.visibleEnergyChannels)
+    ))
+  ) throw new Error('destination state model physical visible-energy loss identity mismatch');
+  return PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY;
 }
 
 async function loadFloatArtifact(artifact, stride, label, authority = null) {
@@ -153,7 +188,9 @@ export function validateMotionCohortWitness(witness) {
   const emphasis = witness.emphasis;
   const rawProductView = emphasis?.authority === 'raw-product-view-no-cohort-attenuation-v0';
   const diagnosticView = emphasis?.authority === 'exact-motion-cohort-static-attenuation-v0';
-  const envelopeComparison = witness.configuration?.authority === 'legacy-vs-training-episode-envelope-recurrence-v0';
+  const envelopeComparison = [RECURRENT_ENVELOPE_AUTHORITY, PHYSICAL_ENERGY_ENVELOPE_AUTHORITY]
+    .includes(witness.configuration?.authority);
+  const physicalEnergyComparison = witness.configuration?.authority === PHYSICAL_ENERGY_ENVELOPE_AUTHORITY;
   if (envelopeComparison && !rawProductView) {
     throw new Error('recurrent envelope witness must use raw full-opacity emphasis');
   }
@@ -230,6 +267,10 @@ export function validateMotionCohortWitness(witness) {
       || !Number.isInteger(shared?.inferenceFrameZero?.count)
       || shared.inferenceFrameZero.count <= 0
     ) throw new Error('recurrent envelope shared identity, envelope audit, or frame zero mismatch');
+    if (
+      physicalEnergyComparison
+      && JSON.stringify(shared.destinationStateTrainingLoss) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY)
+    ) throw new Error('recurrent envelope physical visible-energy loss identity mismatch');
     for (const [role, mode] of [['legacy', 'one-step-ratio'], ['envelope', 'training-episode-envelope']]) {
       const identity = source?.[role];
       const receipt = identity?.greenroomReceipt;
@@ -1104,11 +1145,24 @@ export async function writeRecurrentEnvelopeWitness(
     if (
       legacyReport.model.sha256 !== envelopeReport.model?.sha256
       || legacyReport.destinationStateModel.sha256 !== envelopeReport.destinationStateModel?.sha256
+      || legacyReport.destinationStateModel.path !== envelopeReport.destinationStateModel?.path
       || legacyReport.modelTrainingManifest.sha256 !== envelopeReport.modelTrainingManifest?.sha256
       || JSON.stringify(legacyPredictions.temporal) !== JSON.stringify(envelopePredictions.temporal)
       || legacyPredictions.frames?.length !== envelopePredictions.frames?.length
       || legacyPredictions.frames.some((frame, index) => frame.referenceFrameId !== envelopePredictions.frames[index]?.referenceFrameId)
     ) throw new Error('recurrent envelope pair does not share corpus/model/time identity');
+    const destinationStateModelPath = resolve(String(legacyReport.destinationStateModel.path));
+    const destinationStateModelBytes = await readFile(destinationStateModelPath);
+    const destinationStateModelSha256 = sha256(destinationStateModelBytes);
+    if (destinationStateModelSha256 !== legacyReport.destinationStateModel.sha256) {
+      throw new Error('destination state model byte/hash mismatch');
+    }
+    const destinationStateModel = JSON.parse(destinationStateModelBytes.toString('utf8'));
+    const destinationStateTrainingLoss = physicalVisibleEnergyLossIdentity(destinationStateModel);
+    if (
+      destinationStateModel.trainingManifest?.sha256 !== legacyReport.destinationStateModel.trainingManifest?.sha256
+      || destinationStateModel.evaluationManifest?.sha256 !== legacyReport.destinationStateModel.evaluationManifest?.sha256
+    ) throw new Error('destination state model corpus identity mismatch');
     const frameCount = legacyPredictions.frames.length - 1;
     const cadenceMs = legacyPredictions.temporal.controlledStepDeltaMs;
     const legacyBudget = supportBudgetEvidence(legacyReport, 'one-step-ratio', frameCount);
@@ -1125,7 +1179,9 @@ export async function writeRecurrentEnvelopeWitness(
       legacyPredictionsSha256,
       envelopePredictionsSha256,
       occupancyModelSha256: legacyReport.model.sha256,
-      destinationStateModelSha256: legacyReport.destinationStateModel.sha256,
+      destinationStateModelPath,
+      destinationStateModelSha256,
+      destinationStateTrainingLoss,
       trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
       inferenceFrameZero: frameZero,
       frameCount,
@@ -1222,7 +1278,7 @@ export async function writeRecurrentEnvelopeWitness(
       schema: WITNESS_SCHEMA,
       status: 'completed',
       configuration: {
-        authority: 'legacy-vs-training-episode-envelope-recurrence-v0',
+        authority: PHYSICAL_ENERGY_ENVELOPE_AUTHORITY,
         witnessMode: 'raw-recurrent-envelope-comparison',
       },
       source: {
@@ -1243,7 +1299,8 @@ export async function writeRecurrentEnvelopeWitness(
         },
         sharedIdentity: {
           occupancyModelSha256: legacyReport.model.sha256,
-          destinationStateModelSha256: legacyReport.destinationStateModel.sha256,
+          destinationStateModelSha256,
+          destinationStateTrainingLoss,
           trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
           inferenceFrameZero: frameZero,
         },

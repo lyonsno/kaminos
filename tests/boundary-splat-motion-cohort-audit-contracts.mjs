@@ -344,6 +344,36 @@ assert.throws(
   /route identity/i,
   'duplicated mode flags must fail rather than defer to undocumented parser precedence',
 );
+const physicalEnergyEnvelopeWitness = structuredClone(envelopeComparisonWitness);
+physicalEnergyEnvelopeWitness.configuration.authority = 'legacy-vs-training-episode-envelope-physical-energy-v1';
+physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTrainingLoss = {
+  authority: 'candidate-splat-physical-visible-energy-weighted-loss-v1',
+  visibleEnergyChannels: { color: [17, 18, 19], opacity: 20 },
+  splatAttributeOrder: [
+    'splat.support',
+    'splat.color.r', 'splat.color.g', 'splat.color.b',
+    'splat.opacity', 'splat.shape.x', 'splat.shape.y',
+    'splat.ridge', 'splat.fireSignal',
+  ],
+};
+assert.doesNotThrow(
+  () => cohortAudit.validateMotionCohortWitness(physicalEnergyEnvelopeWitness),
+  'the physical-energy witness must bind the corrected effective loss and physical splat ordering',
+);
+const staleDestinationLoss = structuredClone(physicalEnergyEnvelopeWitness);
+staleDestinationLoss.source.sharedIdentity.destinationStateTrainingLoss.authority = 'candidate-splat-visible-energy-weighted-loss-v0';
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(staleDestinationLoss),
+  /physical visible-energy loss identity/i,
+  'an old destination-state objective must not masquerade as the corrected physical-energy experiment',
+);
+const counterfeitDestinationChannels = structuredClone(physicalEnergyEnvelopeWitness);
+counterfeitDestinationChannels.source.sharedIdentity.destinationStateTrainingLoss.visibleEnergyChannels.opacity = 22;
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(counterfeitDestinationChannels),
+  /physical visible-energy loss identity/i,
+  'a corrected authority token cannot hide stale effective channel indices',
+);
 const missingEnvelopeStep = structuredClone(envelopeComparisonWitness);
 missingEnvelopeStep.supportBudgetComparison.envelope.steps.pop();
 assert.throws(() => cohortAudit.validateMotionCohortWitness(missingEnvelopeStep), /budget.*step/i);
