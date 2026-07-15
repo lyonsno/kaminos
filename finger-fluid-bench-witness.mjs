@@ -227,6 +227,17 @@ async function main() {
     if (lastDebugState.runtime?.freeSurfaceContract !== 'wgsl-neighbor-free-surface-cohesion-v0') throw new Error(`free-surface contract mismatch: ${lastDebugState.runtime?.freeSurfaceContract}`);
     if (lastDebugState.runtime?.restStateContract !== 'wgsl-support-aware-persistent-rest-state-v0') throw new Error(`rest-state contract mismatch: ${lastDebugState.runtime?.restStateContract}`);
     if (lastDebugState.runtime?.supportTransportContract !== 'wgsl-support-tangential-transport-v0') throw new Error(`support-transport contract mismatch: ${lastDebugState.runtime?.supportTransportContract}`);
+    if (lastDebugState.runtime?.topologyContract !== 'wgsl-four-neighbor-topology-retention-v0') throw new Error(`topology contract mismatch: ${lastDebugState.runtime?.topologyContract}`);
+    if (lastDebugState.runtime?.particleShiftContract !== 'wgsl-opt-in-support-tangential-particle-shift-v0') throw new Error(`particle-shift contract mismatch: ${lastDebugState.runtime?.particleShiftContract}`);
+    const requestedRoute = new URL(url);
+    const requestedColorMode = requestedRoute.searchParams.get('finger_fluid_color_mode') || 'phase';
+    const requestedParticleShiftStrength = Number(requestedRoute.searchParams.get('finger_fluid_particle_shift') ?? 0);
+    const effectiveColorMode = lastDebugState.runtime?.effectiveColorMode;
+    const effectiveParticleShiftStrength = lastDebugState.runtime?.effectiveParticleShiftStrength;
+    if (requestedColorMode !== effectiveColorMode) throw new Error(`silent color-mode fallback rejected: ${JSON.stringify({ requestedColorMode, effectiveColorMode })}`);
+    if (requestedParticleShiftStrength !== effectiveParticleShiftStrength) throw new Error(`silent particle-shift fallback rejected: ${JSON.stringify({ requestedParticleShiftStrength, effectiveParticleShiftStrength })}`);
+    if (effectiveParticleShiftStrength === 0 && lastDebugState.runtime?.particleShiftPassCount !== 0) throw new Error(`zero-strength route dispatched hidden particle shifting: ${lastDebugState.runtime?.particleShiftPassCount}`);
+    if (effectiveParticleShiftStrength > 0 && lastDebugState.runtime?.particleShiftPassCount < lastDebugState.runtime.stepCount * 2) throw new Error(`enabled particle shifting missed required passes: ${JSON.stringify({ particleShiftPassCount: lastDebugState.runtime?.particleShiftPassCount, stepCount: lastDebugState.runtime?.stepCount })}`);
     if (lastDebugState.runtime?.playgroundContract !== 'wgsl-shared-multi-regime-toy-playground-v0') throw new Error(`playground contract mismatch: ${lastDebugState.runtime?.playgroundContract}`);
     if (!lastDebugState.runtime?.playground?.rendered || lastDebugState.runtime.playground.supportGeometryCount < 300) {
       throw new Error(`shared playground geometry is missing from the operator viewport: ${JSON.stringify(lastDebugState.runtime?.playground)}`);
@@ -243,6 +254,7 @@ async function main() {
     if (!Number.isSafeInteger(lastDebugState.runtime?.freeSurfaceClassificationPassCount) || lastDebugState.runtime.freeSurfaceClassificationPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing free-surface classification passes: ${lastDebugState.runtime?.freeSurfaceClassificationPassCount}`);
     if (!Number.isSafeInteger(lastDebugState.runtime?.surfaceCohesionPassCount) || lastDebugState.runtime.surfaceCohesionPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing surface cohesion passes: ${lastDebugState.runtime?.surfaceCohesionPassCount}`);
     if (!Number.isSafeInteger(lastDebugState.runtime?.interfaceCompactionPassCount) || lastDebugState.runtime.interfaceCompactionPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing interface compaction passes: ${lastDebugState.runtime?.interfaceCompactionPassCount}`);
+    if (!Number.isSafeInteger(lastDebugState.runtime?.topologyMeasurementPassCount) || lastDebugState.runtime.topologyMeasurementPassCount < lastDebugState.runtime.stepCount) throw new Error(`missing topology measurement passes: ${lastDebugState.runtime?.topologyMeasurementPassCount}`);
     if (lastDebugState.runtime?.directRenderFrameCount < 20) throw new Error(`missing direct GPU render frames: ${lastDebugState.runtime?.directRenderFrameCount}`);
     const activeExtent3d = lastDebugState.runtime?.diagnostics?.activeExtent3d;
     if (!activeExtent3d || activeExtent3d.size?.length !== 3) throw new Error('missing activeExtent3d diagnostics');
@@ -257,6 +269,22 @@ async function main() {
     const maxVorticity = lastDebugState.runtime?.diagnostics?.maxVorticity;
     if (!Number.isFinite(averageVorticity) || averageVorticity <= 0.001 || !Number.isFinite(maxVorticity) || maxVorticity <= averageVorticity || maxVorticity >= 4095) {
       throw new Error(`neighbor-derived vorticity evidence is absent or saturated: ${JSON.stringify({ averageVorticity, maxVorticity })}`);
+    }
+    const averageNeighborRetention = lastDebugState.runtime?.diagnostics?.averageNeighborRetention;
+    const averageNeighborRetentionAge = lastDebugState.runtime?.diagnostics?.averageNeighborRetentionAge;
+    const movingLockedParticleCount = lastDebugState.runtime?.diagnostics?.movingLockedParticleCount;
+    const neighborRetentionHistogram = lastDebugState.runtime?.diagnostics?.neighborRetentionHistogram;
+    if (!Array.isArray(neighborRetentionHistogram) || neighborRetentionHistogram.length !== 4 || neighborRetentionHistogram.reduce((sum, count) => sum + count, 0) !== lastDebugState.runtime.particleCount) {
+      throw new Error(`topology histogram does not account for the exact particle population: ${JSON.stringify({ neighborRetentionHistogram, particleCount: lastDebugState.runtime?.particleCount })}`);
+    }
+    if (!Number.isFinite(averageNeighborRetention) || averageNeighborRetention <= 0.05 || averageNeighborRetention > 1.001) {
+      throw new Error(`nearest-neighbor retention evidence is absent or malformed: ${JSON.stringify({ averageNeighborRetention })}`);
+    }
+    if (!Number.isFinite(averageNeighborRetentionAge) || averageNeighborRetentionAge <= 0.05) {
+      throw new Error(`nearest-neighbor retention age did not accumulate: ${JSON.stringify({ averageNeighborRetentionAge })}`);
+    }
+    if (!Number.isSafeInteger(movingLockedParticleCount) || movingLockedParticleCount < 32) {
+      throw new Error(`moving topology-lock population is not materially observable: ${JSON.stringify({ movingLockedParticleCount })}`);
     }
     const surfaceParticleRatio = lastDebugState.runtime?.diagnostics?.surfaceParticleRatio;
     const averageSurfaceFactor = lastDebugState.runtime?.diagnostics?.averageSurfaceFactor;

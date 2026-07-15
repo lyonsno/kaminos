@@ -2643,6 +2643,8 @@ import {
 } from './finger-fluid-bench-core.js';
 import {
   createWebGPUFingerFluidSolver,
+  resolveFingerFluidColorMode,
+  resolveFingerFluidParticleShiftStrength,
 } from './finger-fluid-webgpu-core.js';
 
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -2761,6 +2763,19 @@ let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
 let fingerFluidBenchDiagnosticsRequestedAt = Number.NEGATIVE_INFINITY;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
+let fingerFluidBenchConfig = null;
+
+function fingerFluidBenchConfigFromRoute(params = new URLSearchParams(window.location.search)) {
+  const requestedColorMode = params.get('finger_fluid_color_mode') || 'phase';
+  const requestedParticleShiftStrength = Number(params.get('finger_fluid_particle_shift') ?? 0);
+  return {
+    schema: 'kaminos.finger-fluid-bench.route-config.v0',
+    requestedColorMode,
+    effectiveColorMode: resolveFingerFluidColorMode(requestedColorMode),
+    requestedParticleShiftStrength,
+    effectiveParticleShiftStrength: resolveFingerFluidParticleShiftStrength(requestedParticleShiftStrength),
+  };
+}
 let fingerFluidBenchState = createFingerFluidBenchState({
   status: 'idle',
   viewport: { width: 0, height: 0 },
@@ -9779,6 +9794,10 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     ...fingerFluidBenchCamera,
   });
   const gpuState = fingerFluidBenchSolver.getDebugState();
+  gpuState.requestedColorMode = fingerFluidBenchConfig.requestedColorMode;
+  gpuState.effectiveColorMode = gpuState.colorMode;
+  gpuState.requestedParticleShiftStrength = fingerFluidBenchConfig.requestedParticleShiftStrength;
+  gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
   if (now - fingerFluidBenchDiagnosticsRequestedAt > 1800) {
     fingerFluidBenchDiagnosticsRequestedAt = now;
     fingerFluidBenchSolver.requestDiagnostics().then(() => {
@@ -9803,6 +9822,12 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
     freeSurfaceContract: gpuState.freeSurfaceContract,
     restStateContract: gpuState.restStateContract,
     supportTransportContract: gpuState.supportTransportContract,
+    topologyContract: gpuState.topologyContract,
+    particleShiftContract: gpuState.particleShiftContract,
+    particleShiftStrength: gpuState.particleShiftStrength,
+    particleShiftPassCount: gpuState.particleShiftPassCount,
+    colorMode: gpuState.colorMode,
+    config: fingerFluidBenchConfig,
     playgroundContract: gpuState.playgroundContract,
     interfaceCarrierSchema: gpuState.interfaceCarrierSchema,
     obstacleContract: gpuState.obstacleContract,
@@ -9830,9 +9855,29 @@ async function startFingerFluidBench() {
   fingerFluidBenchRunning = true;
   if (!fingerFluidBenchSolverPromise) {
     const canvas = document.getElementById('finger-fluid-bench-canvas');
+    try {
+      fingerFluidBenchConfig = fingerFluidBenchConfigFromRoute();
+    } catch (error) {
+      fingerFluidBenchState = createFingerFluidBenchState({
+        status: 'error',
+        solverBackend: 'config_rejected',
+        renderBackend: 'config_rejected',
+        downgrades: [`finger_fluid_route_config_rejected:${error.message || String(error)}`],
+      });
+      fingerFluidBenchState.runtime = { available: false, configError: error.message || String(error) };
+      updateFingerFluidBenchReadout();
+      return;
+    }
     fingerFluidBenchState = createFingerFluidBenchState({ status: 'loading', solverBackend: 'loading', renderBackend: 'loading' });
     updateFingerFluidBenchReadout();
-    fingerFluidBenchSolverPromise = createWebGPUFingerFluidSolver({ canvas, particleCount: 24576, densityIterations: 3, substeps: 1 });
+    fingerFluidBenchSolverPromise = createWebGPUFingerFluidSolver({
+      canvas,
+      particleCount: 24576,
+      densityIterations: 3,
+      substeps: 1,
+      colorMode: fingerFluidBenchConfig.effectiveColorMode,
+      particleShiftStrength: fingerFluidBenchConfig.effectiveParticleShiftStrength,
+    });
     fingerFluidBenchSolver = await fingerFluidBenchSolverPromise;
     if (!fingerFluidBenchSolver.available) {
       fingerFluidBenchState = createFingerFluidBenchState({

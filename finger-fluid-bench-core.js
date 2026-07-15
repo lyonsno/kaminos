@@ -7,6 +7,8 @@ export const KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY = 'wgsl-shared-multi-regim
 export const KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY = 'kaminos.liquid-interface-carrier.v0';
 export const KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY = 'wgsl-support-aware-persistent-rest-state-v0';
 export const KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY = 'wgsl-support-tangential-transport-v0';
+export const KAMINOS_FINGER_FLUID_TOPOLOGY_IDENTITY = 'wgsl-four-neighbor-topology-retention-v0';
+export const KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_IDENTITY = 'wgsl-opt-in-support-tangential-particle-shift-v0';
 
 export const KAMINOS_FINGER_FLUID_DOWGRADES = [
   'kaminos_native_synthetic_fluid_not_lerms_source_truth',
@@ -64,6 +66,10 @@ export function createFingerFluidBenchState(options = {}) {
       freeSurfaceCohesion: options.freeSurfaceContract || 'wgsl-neighbor-free-surface-cohesion-v0',
       restStateContract: options.restStateContract || KAMINOS_FINGER_FLUID_REST_STATE_IDENTITY,
       supportTransportContract: options.supportTransportContract || KAMINOS_FINGER_FLUID_SUPPORT_TRANSPORT_IDENTITY,
+      topologyContract: options.topologyContract || KAMINOS_FINGER_FLUID_TOPOLOGY_IDENTITY,
+      particleShiftContract: options.particleShiftContract || KAMINOS_FINGER_FLUID_PARTICLE_SHIFT_IDENTITY,
+      particleShiftStrength: finite(options.particleShiftStrength, 0),
+      particleShiftPassCount: nonNegativeInteger(options.particleShiftPassCount, 0),
       playgroundContract: options.playgroundContract || KAMINOS_FINGER_FLUID_PLAYGROUND_IDENTITY,
       interfaceCarrierSchema: options.interfaceCarrierSchema || KAMINOS_FINGER_FLUID_INTERFACE_CARRIER_IDENTITY,
       stepCount: nonNegativeInteger(options.stepCount, 0),
@@ -85,6 +91,7 @@ export function createFingerFluidBenchState(options = {}) {
       supportGeometryCount: nonNegativeInteger(options.supportGeometryCount, 0),
       directRenderFrameCount: nonNegativeInteger(options.directRenderFrameCount, 0),
       finalFingerJuiceRenderer: false,
+      colorMode: options.colorMode || 'phase',
     },
     visual: {
       viewport: viewportOrDefault(options.viewport),
@@ -95,6 +102,7 @@ export function createFingerFluidBenchState(options = {}) {
       activeExtent3d: options.activeExtent3d || null,
     },
     playground: options.playground || null,
+    config: options.config || null,
     playgroundZoneDiagnostics: options.playgroundZoneDiagnostics || null,
     interfaceCarrier: options.interfaceCarrier || null,
     downgrades,
