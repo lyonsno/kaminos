@@ -37,6 +37,7 @@ const targetOrigin = String(args.get('--target-origin') || 'http://127.0.0.1:185
 const viewportSize = String(args.get('--viewport-size') || '1200,1000');
 const renderCanvasSize = String(args.get('--render-canvas-size') || '1000,1000');
 const chunkFloats = String(args.get('--chunk-floats') || '262144');
+const renderWarmupCount = 2;
 const browserCommon = [];
 if (args.has('--debug-port')) browserCommon.push('--debug-port', String(args.get('--debug-port')));
 if (args.has('--user-data-dir')) browserCommon.push('--user-data-dir', String(args.get('--user-data-dir')));
@@ -83,6 +84,20 @@ function validateRender(render, label, expectedGrid, sameNativeStateIdentity) {
     throw new Error(`${label} did not apply the requested splat-only renderer`);
   }
   if (render.importedRender?.backend !== 'WebGPU:apple') throw new Error(`${label} used an unsupported backend`);
+  if (!Array.isArray(render.renderWarmups) || render.renderWarmups.length !== renderWarmupCount) {
+    throw new Error(`${label} render capacity warmup receipt mismatch`);
+  }
+  const candidateCount = render.importedRender?.boundarySplatCandidateCount;
+  const instanceCount = render.importedRender?.boundarySplatInstanceCount;
+  const overflowCount = render.importedRender?.boundarySplatOverflowCount;
+  if (!Number.isInteger(candidateCount) || candidateCount < 0
+    || !Number.isInteger(instanceCount) || instanceCount < 0
+    || !Number.isInteger(overflowCount) || overflowCount < 0) {
+    throw new Error(`${label} render lacks trustworthy splat capacity counts`);
+  }
+  if (overflowCount !== 0 || candidateCount !== instanceCount) {
+    throw new Error(`${label} render capacity clipped candidates: ${JSON.stringify({ candidateCount, instanceCount, overflowCount })}`);
+  }
   return {
     requestedComposition: render.importedRender.boundarySplatCompositionRequested,
     effectiveComposition: render.importedRender.boundarySplatCompositionEffective,
@@ -91,6 +106,18 @@ function validateRender(render, label, expectedGrid, sameNativeStateIdentity) {
     backend: render.importedRender.backend,
     grid: expectedGrid,
     sameNativeStateIdentity,
+    renderCapacity: {
+      warmupCountRequested: renderWarmupCount,
+      warmupCountObserved: render.renderWarmups.length,
+      candidateCount,
+      instanceCount,
+      overflowCount,
+      capacity: Number.isInteger(render.importedRender?.boundarySplatCapacity)
+        ? render.importedRender.boundarySplatCapacity
+        : null,
+      complete: true,
+      warmups: render.renderWarmups,
+    },
     image: {
       path: render.importedRender.path,
       byteLength: statSync(render.importedRender.path).size,
@@ -196,6 +223,7 @@ try {
     '--render-canvas-size', renderCanvasSize,
     '--chunk-floats', chunkFloats,
     '--settle-ms', '1800',
+    '--render-warmup-count', '2',
     ...browserCommon,
   ];
   commands.push(run('node', [

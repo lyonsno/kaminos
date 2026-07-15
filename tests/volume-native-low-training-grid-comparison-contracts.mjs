@@ -60,6 +60,14 @@ function application(name, trainedLowGrid, crossGridApplication) {
   });
 }
 function witness(name, applicationPath, treatmentImage, overrides = {}) {
+  const completeRender = {
+    warmupCountRequested: 2,
+    warmupCountObserved: 2,
+    candidateCount: 204800,
+    instanceCount: 204800,
+    overflowCount: 0,
+    complete: true,
+  };
   return writeJson(`${name}.witness.json`, {
     schema: 'kaminos.volume.native-low-selective-witness.v0',
     status: 'captured',
@@ -74,8 +82,18 @@ function witness(name, applicationPath, treatmentImage, overrides = {}) {
       ...overrides,
     },
     roles: {
-      nativeLowControl: { grid: 96, sameNativeStateIdentity: stateIdentity, image: image(`${name}.control`) },
-      nativeLowSelectivePredicted: { grid: 160, sameNativeStateIdentity: stateIdentity, image: treatmentImage },
+      nativeLowControl: {
+        grid: 96,
+        sameNativeStateIdentity: stateIdentity,
+        renderCapacity: completeRender,
+        image: image(`${name}.control`),
+      },
+      nativeLowSelectivePredicted: {
+        grid: 160,
+        sameNativeStateIdentity: stateIdentity,
+        renderCapacity: completeRender,
+        image: treatmentImage,
+      },
     },
     sources: {
       nativeManifest: { path: native, sha256: sha256(readFileSync(native)) },
@@ -122,5 +140,27 @@ const failedReport = JSON.parse(readFileSync(join(failedDir, 'manifest.json'), '
 assert.equal(failedReport.status, 'failed');
 assert.equal(failedReport.failurePhase, 'input-validation');
 assert.match(failedReport.error, /raymarch/i);
+
+const clippedWitnessPath = witness('clipped', candidateApplication, image('clipped.treatment'));
+const clippedWitness = JSON.parse(readFileSync(clippedWitnessPath, 'utf8'));
+clippedWitness.roles.nativeLowSelectivePredicted.renderCapacity = {
+  warmupCountRequested: 2,
+  warmupCountObserved: 2,
+  candidateCount: 201852,
+  instanceCount: 131072,
+  overflowCount: 70780,
+  complete: false,
+};
+writeFileSync(clippedWitnessPath, `${JSON.stringify(clippedWitness, null, 2)}\n`);
+const clippedDir = join(fixture, 'clipped-failed');
+const clipped = spawnSync('node', [
+  ...args.slice(0, -1), clippedDir,
+  '--candidate-witness-manifest', clippedWitnessPath,
+], { encoding: 'utf8' });
+assert.notEqual(clipped.status, 0, 'capacity-clipped treatment must fail closed');
+const clippedReport = JSON.parse(readFileSync(join(clippedDir, 'manifest.json'), 'utf8'));
+assert.equal(clippedReport.status, 'failed');
+assert.equal(clippedReport.failurePhase, 'input-validation');
+assert.match(clippedReport.error, /overflow|candidate|instance|capacity/i);
 
 console.log('native-low training-grid comparison contracts passed');

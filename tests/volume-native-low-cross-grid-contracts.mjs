@@ -73,6 +73,21 @@ assert.match(
   'the treatment receipt must be validated from the treatment render rather than the control render',
 );
 assert.match(
+  witness,
+  /'--render-warmup-count',\s*'2'/,
+  'the visual witness must settle dynamic splat capacity before evidence capture',
+);
+assert.match(
+  witness,
+  /boundarySplatOverflowCount/,
+  'the visual witness must inspect splat overflow rather than accepting clipped learned support',
+);
+assert.match(
+  witness,
+  /candidateCount\s*!==\s*instanceCount/,
+  'the visual witness must reject candidate and rendered instance count disagreement',
+);
+assert.match(
   exporter,
   /NATIVE_LOW_CROSS_GRID_SELECTIVE_AUTHORITY/,
   'the held-field importer recognizes the explicit cross-grid treatment authority',

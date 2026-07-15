@@ -207,6 +207,7 @@ function validateWitness(value, application, nativeDescriptor, label) {
   ), `${label} application manifest checksum mismatch`);
   for (const role of ['nativeLowControl', 'nativeLowSelectivePredicted']) {
     require(value.roles?.[role]?.sameNativeStateIdentity === application.sameNativeStateIdentity, `${label} ${role} state mismatch`);
+    validateRenderCapacity(value.roles?.[role]?.renderCapacity, `${label} ${role}`);
     validateImage(value.roles?.[role]?.image, `${label} ${role}`);
   }
   return {
@@ -214,6 +215,17 @@ function validateWitness(value, application, nativeDescriptor, label) {
     control: value.roles.nativeLowControl,
     treatment: value.roles.nativeLowSelectivePredicted,
   };
+}
+
+function validateRenderCapacity(receipt, label) {
+  require(receipt && typeof receipt === 'object', `${label} render capacity receipt is missing`);
+  require(receipt.warmupCountRequested === 2, `${label} capacity warmup request mismatch`);
+  require(receipt.warmupCountObserved === 2, `${label} capacity warmup receipt mismatch`);
+  require(Number.isInteger(receipt.candidateCount) && receipt.candidateCount >= 0, `${label} candidate count is invalid`);
+  require(Number.isInteger(receipt.instanceCount) && receipt.instanceCount >= 0, `${label} instance count is invalid`);
+  require(receipt.overflowCount === 0, `${label} render overflowed ${receipt.overflowCount} candidates`);
+  require(receipt.candidateCount === receipt.instanceCount, `${label} candidate and instance counts disagree`);
+  require(receipt.complete === true, `${label} render capacity is not complete`);
 }
 
 function validateImage(descriptor, label) {
