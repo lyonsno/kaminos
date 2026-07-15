@@ -59,6 +59,33 @@ const SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES = Object.freeze({
   lowPhaseAligned: 'phase-aligned-low-field-control-v0',
   selectiveFullResidual: 'learned-selective-full-residual-composition-v0',
 });
+const SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION = 'smoke-raymarch-under-splats-v0';
+const SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS = Object.freeze({
+  'splat-only-v0': {
+    raymarch: false,
+    splat: true,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'splat-fire-authority-learned-boundary-sheets-v0',
+  },
+  'raymarch-only-v0': {
+    raymarch: true,
+    splat: false,
+    raymarchFireAuthority: 1,
+    compositionAuthority: 'diagnostic-raymarch-full-selected-field-authority-v0',
+  },
+  'smoke-raymarch-under-splats-v0': {
+    raymarch: true,
+    splat: true,
+    raymarchFireAuthority: 0,
+    compositionAuthority: 'smoke-raymarch-authority-broad-smoke-only-v0+splat-fire-authority-learned-boundary-sheets-v0',
+  },
+  'full-raymarch-under-splats-diagnostic-v0': {
+    raymarch: true,
+    splat: true,
+    raymarchFireAuthority: 1,
+    compositionAuthority: 'diagnostic-full-fire-raymarch-under-splats-duplicate-fire-authority-v0',
+  },
+});
 const SELECTIVE_HEAD_LIVE_REPLAY_ANCHOR_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
@@ -133,6 +160,68 @@ function normalizeSelectiveHeadLiveRole(value) {
 
 function selectiveHeadLiveRoleAuthority(role) {
   return SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES[normalizeSelectiveHeadLiveRole(role)];
+}
+
+function normalizeSelectiveHeadLiveRenderComposition(value) {
+  const normalized = String(value || SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION).trim();
+  if (Object.hasOwn(SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS, normalized)) return normalized;
+  if (normalized === 'raymarch-under-splats-v0' || normalized === 'hybrid') return 'full-raymarch-under-splats-diagnostic-v0';
+  if (normalized === 'smoke-hybrid') return 'smoke-raymarch-under-splats-v0';
+  if (normalized === 'splat-only') return 'splat-only-v0';
+  if (normalized === 'raymarch-only') return 'raymarch-only-v0';
+  return SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION;
+}
+
+function selectiveHeadLiveRenderCompositionRequest(rawValue) {
+  const raw = rawValue == null || rawValue === ''
+    ? SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION
+    : String(rawValue);
+  const requested = normalizeSelectiveHeadLiveRenderComposition(raw);
+  const canonicalOrAlias = raw === requested
+    || raw === 'raymarch-under-splats-v0'
+    || raw === 'hybrid'
+    || raw === 'smoke-hybrid'
+    || raw === 'splat-only'
+    || raw === 'raymarch-only';
+  return {
+    raw,
+    requested,
+    fallbackReason: canonicalOrAlias ? null : `unsupported-selective-head-live-composition:${raw}`,
+    definition: SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS[requested],
+  };
+}
+
+function selectiveHeadLiveRenderCompositionAuthority(composition) {
+  return SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS[normalizeSelectiveHeadLiveRenderComposition(composition)]?.compositionAuthority || 'unavailable';
+}
+
+function makeSelectiveHeadLivePassReceipt({
+  composition,
+  raymarchEncoded = false,
+  raymarchApplied = false,
+  splatEncoded = false,
+  splatApplied = false,
+  fallbackReason = null,
+} = {}) {
+  const effectiveComposition = normalizeSelectiveHeadLiveRenderComposition(composition);
+  const definition = SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS[effectiveComposition];
+  return {
+    identity: 'selective-head-live-render-pass-receipt-v0',
+    composition: effectiveComposition,
+    compositionAuthority: definition.compositionAuthority,
+    raymarchAuthority: definition.raymarchFireAuthority > 0
+      ? 'diagnostic-raymarch-selected-fields-fire-smoke-v0'
+      : 'smoke-raymarch-authority-broad-smoke-only-v0',
+    splatAuthority: definition.splat
+      ? 'splat-fire-authority-learned-boundary-sheets-v0'
+      : 'off',
+    raymarchFireAuthority: definition.raymarchFireAuthority,
+    raymarchEncoded,
+    raymarchApplied,
+    splatEncoded,
+    splatApplied,
+    fallbackReason,
+  };
 }
 
 function normalizeScalarActivityCueGridSize(value, fallback = DEFAULT_GRID_SIZE) {
@@ -985,6 +1074,7 @@ struct Uniforms {
   boundary_fire_display: vec4<f32>,
   boundary_sidecar_controls: vec4<f32>,
   boundary_sidecar_display: vec4<f32>,
+  selective_live_render_controls: vec4<f32>,
   oracle_activity_controls: vec4<f32>,
   oracle_activity_controls2: vec4<f32>,
   previousViewProj: mat4x4<f32>,
@@ -3820,6 +3910,8 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
   let boundaryFireSootYellowing = clamp(u.boundary_fire_color.z, 0.0, 2.0);
   let boundaryFireThermalWarmth = clamp(u.boundary_fire_color.w, 0.0, 2.0);
   let boundaryFireLuma = clamp(u.boundary_fire_display.x, 0.0, 5.0);
+  let selectiveRaymarchSmokeOnlyPartition = clamp(u.selective_live_render_controls.x, 0.0, 1.0);
+  let selectiveRaymarchFireAuthority = 1.0 - selectiveRaymarchSmokeOnlyPartition;
   let canonicalSmokeContent = 1.0 - minimalPlumeRenderScene * step(0.5, canonicalContentMode) * (1.0 - step(1.5, canonicalContentMode));
   let canonicalFireContent = minimalPlumeRenderScene * step(0.5, canonicalContentMode);
   let canonicalFireRenderContent = mix(1.0, canonicalFireContent, minimalPlumeRenderScene);
@@ -4204,7 +4296,8 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
       + boundaryCandidate * inspectBoundaryMask
       + boundaryCandidate * inspectBoundaryFireMask;
     let inspectAlpha = clamp(inspectSignal * rayStepOpacity * 0.55, 0.0, 0.28);
-    let fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
+    var fireAlpha = stockRenderMode * stockFireAlpha + shellRenderMode * shellAlpha + inspectRenderMode * inspectAlpha;
+    fireAlpha = fireAlpha * selectiveRaymarchFireAuthority;
     var alpha = clamp(smokeAlpha + fireAlpha, 0.0, 0.18);
     let materialSignals = materialTemporalSignals(alpha, smokeAlpha, fireAlpha, temp, microTextureSignal, interfaceShred, fireLick, majorantEdge, interest, trans);
     let materialTemporal = materialTemporalClassificationFromSignals(materialSignals);
@@ -4595,14 +4688,14 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         * (0.22 + pyroRadianceFreshFireGate * 0.72 + pyroRadianceFireEdgeEvent * 0.36 + pyroRawFireMix * 0.18),
       0.0,
       4.0
-    );
+    ) * selectiveRaymarchFireAuthority;
     let pyroFlowAlphaBoost = clamp(
       pyroFlowSignal * (0.18 + pyroFlowShear * 0.32 + pyroRawFireMix * 0.14 + fireMix * 0.08)
         + pyroFlowSpikeSignal * (0.10 + pyroFlowTeeth * 0.12),
       0.0,
       2.8
-    );
-    let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4);
+    ) * selectiveRaymarchFireAuthority;
+    let pyroBiteAlphaBoost = clamp(pyroEdgeBreakup * (0.40 + fireMix * 0.80), 0.0, 2.4) * selectiveRaymarchFireAuthority;
     let pyroFoldExtinctionBoost = clamp(pyroSmokeFoldSignal * (0.34 + smoke * 0.85 + rawExtinction * 0.55), 0.0, 2.8);
     let pyroWakeAlphaBoost = clamp(pyroWakeSignal * (0.22 + smoke * 0.62 + rawExtinction * 0.36), 0.0, 2.1);
     let pyroOwnedFireAlphaBoost = clamp(
@@ -4610,7 +4703,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         * (0.32 + pyroSpatialEnergy * 0.44 + flameDetail * 0.18 + fireLick * 0.14),
       0.0,
       2.4
-    );
+    ) * selectiveRaymarchFireAuthority;
     alpha = clamp(
       alpha
         + pyroBiteAlphaBoost * rayStepOpacity * 0.080
@@ -4619,7 +4712,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
         + pyroOwnedFireAlphaBoost * rayStepOpacity * 0.070
         + pyroRadianceAlphaBoost * rayStepOpacity * 0.130
         + pyroFlowAlphaBoost * rayStepOpacity * 0.075
-        + pyroFlowRadianceBoost * rayStepOpacity * 0.045,
+        + pyroFlowRadianceBoost * selectiveRaymarchFireAuthority * rayStepOpacity * 0.045,
       0.0,
       0.28
     );
@@ -4648,7 +4741,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(
       local,
       pyroFlamePaintColor,
-      clamp(pyroFlamePaintSignal * mix(0.28, 0.92, 1.0 - pyroStockMix), 0.0, 0.95)
+      clamp(pyroFlamePaintSignal * selectiveRaymarchFireAuthority * mix(0.28, 0.92, 1.0 - pyroStockMix), 0.0, 0.95)
     );
     let pyroFlowHeat = clamp(pyroFlowTopology + pyroRawFireMix * 0.28 + pyroFlowShear * 0.22, 0.0, 1.0);
     let pyroFlowColor = mix(
@@ -4736,7 +4829,7 @@ fn raymarchVolume(in: VSOut) -> RaymarchResult {
     local = mix(local, oracleDisplayColor, oracleDisplay * smoothstep(0.015, 0.72, oracleDisplayCue));
     let pressureTierOverlay = pressureTierDebugOverlayColor(y);
     local = mix(local, pressureTierOverlay.rgb, pressureTierOverlay.a);
-    color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility + shellSmokeBacklight + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
+    color = color + trans * (alpha * local + stockRenderMode * fireAlpha * pyroStockFireVisibility * radianceEmission * mix(0.82, 0.62, bonfireRenderScene) + smokeBacklight * pyroStockFireVisibility * selectiveRaymarchFireAuthority + shellSmokeBacklight * selectiveRaymarchFireAuthority + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma * rayStepOpacity * selectiveRaymarchFireAuthority * mix(mix(0.080, 0.030, pyroRadianceSpill), mix(0.012, 0.030, pyroRadianceSpill), 1.0 - pyroRadianceFireSourceWeight));
     let residualFeatureWeight = trans * rayStepOpacity;
     let residualRadianceLuma = max(dot(radianceEmission + pyroRadianceColor * pyroRadianceBoost * pyroRadianceLuma, vec3<f32>(0.2126, 0.7152, 0.0722)), 0.0);
     residualRadianceAuthority = residualRadianceAuthority + residualFeatureWeight * clamp(residualRadianceLuma * 0.30 + pyroRadianceBoost * 0.75 + pyroFireRadianceEvent * 0.40, 0.0, 4.0);
@@ -5098,7 +5191,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   const invViewProj = new THREE.Matrix4();
   const viewProj = new THREE.Matrix4();
   const previousViewProj = new THREE.Matrix4();
-  const uniforms = new Float32Array(340);
+  const uniforms = new Float32Array(344);
   let controlsSnapshot = applyRuntimeQualityControls(getControls());
   let gridSize = normalizeGridSize(controlsSnapshot.resolution);
   let majorantGridSize = normalizeMajorantGridSize(controlsSnapshot.majorantGrid);
@@ -5123,6 +5216,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     selectiveHeadLiveRole: normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole),
     selectiveHeadLiveEffectiveRole: 'off',
     selectiveHeadLiveRoleAuthority: SELECTIVE_HEAD_LIVE_ROLE_AUTHORITIES.off,
+    selectiveHeadLiveCompositionRequestedRaw: controlsSnapshot.selectiveHeadLiveRenderComposition || SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+    selectiveHeadLiveCompositionRequested: SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+    selectiveHeadLiveCompositionEffective: 'off',
+    selectiveHeadLiveCompositionAuthority: 'off',
+    selectiveHeadLiveCompositionFallbackReason: null,
+    selectiveHeadLivePassReceipt: makeSelectiveHeadLivePassReceipt({
+      composition: SELECTIVE_HEAD_LIVE_DEFAULT_RENDER_COMPOSITION,
+    }),
     selectiveHeadLiveRouteIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
     selectiveHeadLiveModelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
     selectiveHeadLiveModelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
@@ -7875,20 +7976,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uniforms[310] = clampFinite(boundarySidecarControls.stepWidth ?? controlsSnapshot.boundarySidecarWidth, 0, 2, 0.75);
     uniforms[311] = clampFinite(boundarySidecarControls.ridgeGain ?? controlsSnapshot.boundarySidecarRidge, 0, 2, 1);
     uniforms[312] = boundarySidecarViewValue(boundarySidecarViewName);
+    const selectiveCompositionRequest = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
+    const selectiveCompositionDefinition = selectiveCompositionRequest.definition;
     uniforms[313] = 0;
     uniforms[314] = 0;
     uniforms[315] = 0;
+    uniforms[316] = 1 - selectiveCompositionDefinition.raymarchFireAuthority;
+    uniforms[317] = selectiveCompositionDefinition.raymarch ? 1 : 0;
+    uniforms[318] = selectiveCompositionDefinition.splat ? 1 : 0;
+    uniforms[319] = 0;
     const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
     const externalCueActive = oracleActivityCueUpload.status === 'uploaded' && oracleActivityCueUpload.externalCueCellCount > 0;
-    uniforms[316] = scalarActivityReceiver.enabled;
-    uniforms[317] = scalarActivityReceiver.curlNoiseGain;
-    uniforms[318] = scalarActivityReceiver.vorticityGain;
-    uniforms[319] = scalarActivityReceiver.materialGain;
-    uniforms[320] = scalarActivityReceiver.display;
-    uniforms[321] = externalCueActive ? 1 : 0;
-    uniforms[322] = oracleActivityCueUpload.grid || 0;
-    uniforms[323] = oracleActivityCueUpload.externalCueCellCount || 0;
-    uniforms.set(previousViewProj.elements, 324);
+    uniforms[320] = scalarActivityReceiver.enabled;
+    uniforms[321] = scalarActivityReceiver.curlNoiseGain;
+    uniforms[322] = scalarActivityReceiver.vorticityGain;
+    uniforms[323] = scalarActivityReceiver.materialGain;
+    uniforms[324] = scalarActivityReceiver.display;
+    uniforms[325] = externalCueActive ? 1 : 0;
+    uniforms[326] = oracleActivityCueUpload.grid || 0;
+    uniforms[327] = oracleActivityCueUpload.externalCueCellCount || 0;
+    uniforms.set(previousViewProj.elements, 328);
     device.queue.writeBuffer(uniformBuffer, 0, uniforms);
     state.gridOverlay = controlsSnapshot.gridOverlay || 0;
     state.lookFreeze = lookFreeze;
@@ -9012,6 +9119,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return true;
   }
 
+  function updateSelectiveHeadLiveCompositionState() {
+    const request = selectiveHeadLiveRenderCompositionRequest(controlsSnapshot.selectiveHeadLiveRenderComposition);
+    const effective = state.selectiveHeadLiveEffectiveRole === 'off' ? 'off' : request.requested;
+    state.selectiveHeadLiveCompositionRequestedRaw = request.raw;
+    state.selectiveHeadLiveCompositionRequested = request.requested;
+    state.selectiveHeadLiveCompositionEffective = effective;
+    state.selectiveHeadLiveCompositionAuthority = effective === 'off'
+      ? 'off'
+      : selectiveHeadLiveRenderCompositionAuthority(request.requested);
+    state.selectiveHeadLiveCompositionFallbackReason = request.fallbackReason;
+    return {
+      ...request,
+      effective,
+      definition: effective === 'off'
+        ? { raymarch: false, splat: false, raymarchFireAuthority: 0, compositionAuthority: 'off' }
+        : request.definition,
+    };
+  }
+
+  function recordSelectiveHeadLivePassReceipt(receipt) {
+    state.selectiveHeadLivePassReceipt = makeSelectiveHeadLivePassReceipt(receipt);
+    if (state.selectiveHeadLiveCompositionEffective !== 'off') {
+      state.volumeReconstructionStyle = state.selectiveHeadLiveCompositionEffective;
+    }
+    return state.selectiveHeadLivePassReceipt;
+  }
+
   function encodeHistoryCopy(encoder, sourceTexture) {
     if (!historyTexture || state.width < 1 || state.height < 1) return;
     encoder.copyTextureToTexture(
@@ -9060,33 +9194,53 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       encodeBoundarySplats(encoder, { computeBindGroup: selectiveSplat });
       const currentTexture = context.getCurrentTexture();
       if (boundarySplatRequested()) {
-        const selectiveHybrid = state.selectiveHeadLiveEffectiveRole !== 'off';
-        if (selectiveHybrid) {
+        const composition = updateSelectiveHeadLiveCompositionState();
+        let raymarchEncoded = false;
+        let raymarchApplied = false;
+        let splatEncoded = false;
+        let splatApplied = false;
+        if (composition.definition.raymarch) {
           encodeDraw(
             encoder,
             currentTexture.createView(),
-            'kaminos selective-head live raymarch-under-splats pass',
+            `kaminos selective-head live ${composition.effective} raymarch pass`,
             pipeline,
             { bindGroup: selectiveRender },
           );
+          raymarchEncoded = true;
+          raymarchApplied = true;
         }
-        const splatApplied = encodeBoundarySplatDraw(
-          encoder,
-          currentTexture.createView(),
-          boundarySplatRenderPipeline,
-          { loadOp: selectiveHybrid ? 'load' : 'clear' },
-        );
-        if (!splatApplied) {
+        if (composition.definition.splat) {
+          splatEncoded = encodeBoundarySplatDraw(
+            encoder,
+            currentTexture.createView(),
+            boundarySplatRenderPipeline,
+            { loadOp: raymarchApplied ? 'load' : 'clear' },
+          );
+          splatApplied = splatEncoded;
+        }
+        if (composition.definition.splat && !splatApplied) {
           encodeDraw(
             encoder,
             currentTexture.createView(),
-            'kaminos boundary splat explicit fallback raymarch',
+            'kaminos selective-head live explicit fallback raymarch',
             pipeline,
             { bindGroup: selectiveRender },
           );
-          state.volumeReconstructionStyle = 'boundary-splat-fallback-raymarch';
-          emitStatus({ phase: 'boundary-splat-fallback', reason: state.boundarySplatFallbackReason });
+          raymarchEncoded = true;
+          raymarchApplied = true;
+          state.selectiveHeadLiveCompositionFallbackReason = state.boundarySplatFallbackReason || 'boundary-splat-route-unavailable';
+          state.volumeReconstructionStyle = 'selective-head-live-fallback-raymarch';
+          emitStatus({ phase: 'selective-head-live-composition-fallback', reason: state.selectiveHeadLiveCompositionFallbackReason });
         }
+        recordSelectiveHeadLivePassReceipt({
+          composition: composition.effective === 'off' ? composition.requested : composition.effective,
+          raymarchEncoded,
+          raymarchApplied,
+          splatEncoded,
+          splatApplied,
+          fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+        });
         recordBrowserResidualCost({ applied: false });
       } else if (browserResidualCanApply()) {
         const sourceEncodeStart = performance.now();
@@ -11082,41 +11236,68 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodeBoundarySidecar(encoder, { readBindGroup: sampleSelectiveHeadLiveFields?.sidecar || null });
     encodeBoundarySplats(encoder, { computeBindGroup: sampleSelectiveHeadLiveFields?.splat || null });
     if (boundarySplatRequested()) {
-      const selectiveHybrid = state.selectiveHeadLiveEffectiveRole !== 'off';
-      if (selectiveHybrid) {
+      const composition = updateSelectiveHeadLiveCompositionState();
+      let raymarchEncoded = false;
+      let raymarchApplied = false;
+      let splatEncoded = false;
+      let splatApplied = false;
+      if (composition.definition.raymarch) {
         encodeDraw(
           encoder,
           frameTexture.createView(),
-          'kaminos selective-head controlled readback raymarch-under-splats',
+          `kaminos selective-head controlled readback ${composition.effective} raymarch`,
           readbackPipeline,
           { bindGroup: sampleSelectiveHeadLiveFields?.render || null },
         );
+        raymarchEncoded = true;
+        raymarchApplied = true;
       }
-      const splatApplied = encodeBoundarySplatDraw(
-        encoder,
-        frameTexture.createView(),
-        boundarySplatReadbackPipeline,
-        { loadOp: selectiveHybrid ? 'load' : 'clear' },
-      );
-      if (!splatApplied) {
-        if (!selectiveHybrid) {
-          buffer.destroy();
-          const validationError = await device.popErrorScope();
-          return {
-            ok: false,
-            reason: 'boundary-splat-readback-route-unavailable',
-            validationError: validationError?.message || null,
-            boundarySplatFallbackReason: state.boundarySplatFallbackReason,
-            boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
-            boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
-            boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
-            boundarySplatTimestampStatus: state.boundarySplatTimestampStatus,
-            boundarySplatGpuProfile: state.boundarySplatGpuProfile,
-            boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
-            boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
-          };
-        }
+      if (composition.definition.splat) {
+        splatEncoded = encodeBoundarySplatDraw(
+          encoder,
+          frameTexture.createView(),
+          boundarySplatReadbackPipeline,
+          { loadOp: raymarchApplied ? 'load' : 'clear' },
+        );
+        splatApplied = splatEncoded;
       }
+      if (composition.definition.splat && !splatApplied) {
+        buffer.destroy();
+        const validationError = await device.popErrorScope();
+        return {
+          ok: false,
+          reason: 'boundary-splat-readback-route-unavailable',
+          validationError: validationError?.message || null,
+          selectiveHeadLiveCompositionRequestedRaw: state.selectiveHeadLiveCompositionRequestedRaw,
+          selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+          selectiveHeadLiveCompositionEffective: 'unavailable',
+          selectiveHeadLiveCompositionFallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-readback-route-unavailable',
+          selectiveHeadLivePassReceipt: makeSelectiveHeadLivePassReceipt({
+            composition: composition.requested,
+            raymarchEncoded,
+            raymarchApplied,
+            splatEncoded,
+            splatApplied: false,
+            fallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-readback-route-unavailable',
+          }),
+          boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+          boundarySplatRendererIdentity: state.boundarySplatRendererIdentity,
+          boundarySplatAttributeModelIdentity: state.boundarySplatAttributeModelIdentity,
+          boundarySplatSourceAuthority: state.boundarySplatSourceAuthority,
+          boundarySplatTimestampStatus: state.boundarySplatTimestampStatus,
+          boundarySplatGpuProfile: state.boundarySplatGpuProfile,
+          boundarySplatCopyBytesThisFrame: state.boundarySplatCopyBytesThisFrame,
+          boundarySplatCopyDisposition: state.boundarySplatCopyDisposition,
+        };
+      }
+      recordSelectiveHeadLivePassReceipt({
+        composition: composition.effective === 'off' ? composition.requested : composition.effective,
+        raymarchEncoded,
+        raymarchApplied,
+        splatEncoded,
+        splatApplied,
+        fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+      });
       encodeBoundarySplatTelemetry(encoder, true);
     } else {
       encodeDraw(encoder, frameTexture.createView(), 'kaminos volume one-off readback pass', readbackPipeline);
@@ -11844,22 +12025,28 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
     cancelAnimationFrame(raf);
     const frameIndex = Math.max(0, Math.floor(Number(options.frameIndex) || 0));
+    const advanceSim = options.advanceSim !== false;
+    const presentToCanvas = options.presentToCanvas === true;
     const startNow = Number.isFinite(Number(options.startNow)) ? Number(options.startNow) : performance.now();
     const stepDeltaMs = Math.max(0, Number.isFinite(Number(options.stepDeltaMs)) ? Number(options.stepDeltaMs) : 1000 / 30);
     const sampleNow = startNow + frameIndex * stepDeltaMs;
     updateUniforms(sampleNow);
-    ensureFrameTexture();
+    if (!presentToCanvas) ensureFrameTexture();
     const bytesPerPixel = 4;
     const unpaddedBytesPerRow = state.width * bytesPerPixel;
     const bytesPerRow = Math.ceil(unpaddedBytesPerRow / 256) * 256;
-    const readback = device.createBuffer({
+    const readback = presentToCanvas ? null : device.createBuffer({
       label: 'kaminos selective-head-live-lean-frame-readback-v0',
       size: bytesPerRow * state.height,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     });
+    const targetView = presentToCanvas ? context.getCurrentTexture().createView() : frameTexture.createView();
+    const targetRaymarchPipeline = presentToCanvas ? pipeline : readbackPipeline;
+    const targetSplatPipeline = presentToCanvas ? boundarySplatRenderPipeline : boundarySplatReadbackPipeline;
     device.pushErrorScope('validation');
     const encoder = device.createCommandEncoder({ label: `kaminos selective-head live frame ${frameIndex}` });
-    encodeSim(encoder);
+    const beforeSimStepCount = state.simStepCount;
+    if (advanceSim) encodeSim(encoder);
     encodeSelectiveHeadLiveFields(encoder);
     const selectiveMajorant = selectiveHeadLiveRoleGroups('majorant');
     const selectiveSidecar = selectiveHeadLiveRoleGroups('sidecar');
@@ -11868,60 +12055,106 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     encodeMajorant(encoder, { readBindGroup: selectiveMajorant, force: true });
     encodeBoundarySidecar(encoder, { readBindGroup: selectiveSidecar });
     encodeBoundarySplats(encoder, { computeBindGroup: selectiveSplat });
-    const selectiveHybrid = state.selectiveHeadLiveEffectiveRole !== 'off';
-    if (selectiveHybrid) {
+    const composition = updateSelectiveHeadLiveCompositionState();
+    let raymarchEncoded = false;
+    let raymarchApplied = false;
+    let splatEncoded = false;
+    let splatApplied = false;
+    if (composition.definition.raymarch) {
       encodeDraw(
         encoder,
-        frameTexture.createView(),
-        'kaminos selective-head controlled readback raymarch-under-splats',
-        readbackPipeline,
+        targetView,
+        `kaminos selective-head controlled ${presentToCanvas ? 'canvas' : 'readback'} ${composition.effective} raymarch`,
+        targetRaymarchPipeline,
         { bindGroup: selectiveRender },
       );
+      raymarchEncoded = true;
+      raymarchApplied = true;
     }
-    const splatApplied = encodeBoundarySplatDraw(
-      encoder,
-      frameTexture.createView(),
-      boundarySplatReadbackPipeline,
-      { loadOp: selectiveHybrid ? 'load' : 'clear' },
-    );
-    if (!splatApplied && !selectiveHybrid) {
-      readback.destroy();
+    if (composition.definition.splat) {
+      splatEncoded = encodeBoundarySplatDraw(
+        encoder,
+        targetView,
+        targetSplatPipeline,
+        { loadOp: raymarchApplied ? 'load' : 'clear' },
+      );
+      splatApplied = splatEncoded;
+    }
+    if (composition.definition.splat && !splatApplied) {
+      readback?.destroy();
       await device.popErrorScope();
-      return { ok: false, reason: 'boundary-splat-readback-route-unavailable' };
+      return {
+        ok: false,
+        reason: 'boundary-splat-readback-route-unavailable',
+        selectiveHeadLiveCompositionRequestedRaw: state.selectiveHeadLiveCompositionRequestedRaw,
+        selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+        selectiveHeadLiveCompositionEffective: 'unavailable',
+        selectiveHeadLiveCompositionFallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-readback-route-unavailable',
+        selectiveHeadLivePassReceipt: makeSelectiveHeadLivePassReceipt({
+          composition: composition.requested,
+          raymarchEncoded,
+          raymarchApplied,
+          splatEncoded,
+          splatApplied: false,
+          fallbackReason: state.boundarySplatFallbackReason || 'boundary-splat-readback-route-unavailable',
+        }),
+      };
     }
-    encoder.copyTextureToBuffer(
-      { texture: frameTexture },
-      { buffer: readback, bytesPerRow, rowsPerImage: state.height },
-      { width: state.width, height: state.height, depthOrArrayLayers: 1 },
-    );
+    const selectiveHeadLivePassReceipt = recordSelectiveHeadLivePassReceipt({
+      composition: composition.effective === 'off' ? composition.requested : composition.effective,
+      raymarchEncoded,
+      raymarchApplied,
+      splatEncoded,
+      splatApplied,
+      fallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+    });
+    if (!presentToCanvas) {
+      encoder.copyTextureToBuffer(
+        { texture: frameTexture },
+        { buffer: readback, bytesPerRow, rowsPerImage: state.height },
+        { width: state.width, height: state.height, depthOrArrayLayers: 1 },
+      );
+    }
     device.queue.submit([encoder.finish()]);
     const validationError = await device.popErrorScope();
     if (validationError) {
-      readback.destroy();
+      readback?.destroy();
       return { ok: false, reason: `lean-frame-readback-validation:${validationError.message || String(validationError)}` };
     }
-    await readback.mapAsync(GPUMapMode.READ);
-    const padded = new Uint8Array(readback.getMappedRange());
-    const rgba = new Uint8Array(unpaddedBytesPerRow * state.height);
-    for (let row = 0; row < state.height; row += 1) {
-      rgba.set(padded.subarray(row * bytesPerRow, row * bytesPerRow + unpaddedBytesPerRow), row * unpaddedBytesPerRow);
+    let rgba = null;
+    if (!presentToCanvas) {
+      await readback.mapAsync(GPUMapMode.READ);
+      const padded = new Uint8Array(readback.getMappedRange());
+      rgba = new Uint8Array(unpaddedBytesPerRow * state.height);
+      for (let row = 0; row < state.height; row += 1) {
+        rgba.set(padded.subarray(row * bytesPerRow, row * bytesPerRow + unpaddedBytesPerRow), row * unpaddedBytesPerRow);
+      }
+      readback.unmap();
+      readback.destroy();
     }
-    readback.unmap();
-    readback.destroy();
     state.frameCount += 1;
     return {
       ok: true,
-      sequenceAuthority: 'frame-locked-consecutive-simulation-steps-v0',
-      imageAuthority: 'selective-head-live-lean-frame-readback-v0',
+      sequenceAuthority: advanceSim ? 'frame-locked-consecutive-simulation-steps-v0' : 'same-state-selective-render-composition-v0',
+      imageAuthority: presentToCanvas ? 'selective-head-live-presented-canvas-composition-v0' : 'selective-head-live-lean-frame-readback-v0',
+      advanceSim,
+      presentToCanvas,
       frameIndex,
       width: state.width,
       height: state.height,
-      rgba: Array.from(rgba),
+      rgba: rgba ? Array.from(rgba) : null,
       simStepCount: state.simStepCount,
+      beforeSimStepCount,
       frameCount: state.frameCount,
       effectiveRole: state.selectiveHeadLiveEffectiveRole,
       requestedRole: state.selectiveHeadLiveRole,
       roleAuthority: state.selectiveHeadLiveRoleAuthority,
+      selectiveHeadLiveCompositionRequestedRaw: state.selectiveHeadLiveCompositionRequestedRaw,
+      selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+      selectiveHeadLiveCompositionEffective: state.selectiveHeadLiveCompositionEffective,
+      selectiveHeadLiveCompositionAuthority: state.selectiveHeadLiveCompositionAuthority,
+      selectiveHeadLiveCompositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+      selectiveHeadLivePassReceipt,
       modelIdentity: state.selectiveHeadLiveModelIdentity,
       routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
       fallbackReason: state.selectiveHeadLiveFallbackReason,
@@ -12492,7 +12725,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.volumeResidualStrength = normalizeBrowserResidualStrength(controlsSnapshot.volumeResidualStrength);
       state.volumeResidualFeatureDebug = normalizeBrowserResidualFeatureDebug(controlsSnapshot.volumeResidualFeatureDebug);
       state.volumeResidualFeatureDebugMode = state.volumeResidualFeatureDebug ? 'residual-feature-debug-false-color-v0' : 'off';
+      const selectiveCompositionRequest = selectiveHeadLiveRenderCompositionRequest(
+        controlsSnapshot.selectiveHeadLiveRenderComposition ?? state.selectiveHeadLiveCompositionRequestedRaw,
+      );
       state.selectiveHeadLiveRole = normalizeSelectiveHeadLiveRole(controlsSnapshot.selectiveHeadLiveRole);
+      state.selectiveHeadLiveCompositionRequestedRaw = selectiveCompositionRequest.raw;
+      state.selectiveHeadLiveCompositionRequested = selectiveCompositionRequest.requested;
+      state.selectiveHeadLiveCompositionAuthority = selectiveHeadLiveRenderCompositionAuthority(selectiveCompositionRequest.requested);
+      state.selectiveHeadLiveCompositionFallbackReason = selectiveCompositionRequest.fallbackReason;
       state.boundarySplatMode = normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode);
       state.boundarySplatRadius = normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius);
       state.boundarySplatSharpness = normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness);
@@ -12540,6 +12780,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         fallbackReason: state.selectiveHeadLiveFallbackReason,
       };
     },
+    setSelectiveHeadLiveRenderComposition(composition) {
+      const request = selectiveHeadLiveRenderCompositionRequest(composition);
+      controlsSnapshot = { ...controlsSnapshot, selectiveHeadLiveRenderComposition: request.requested };
+      updateSelectiveHeadLiveCompositionState();
+      resetTemporalHistory('selective-head-live-render-composition-change');
+      return {
+        requestedCompositionRaw: request.raw,
+        requestedComposition: request.requested,
+        effectiveComposition: state.selectiveHeadLiveCompositionEffective,
+        compositionAuthority: state.selectiveHeadLiveCompositionAuthority,
+        compositionFallbackReason: request.fallbackReason,
+        routeIdentity: SELECTIVE_HEAD_LIVE_ROUTE,
+      };
+    },
     setSelectiveHeadLiveCapturePaused(paused) {
       selectiveHeadLiveCapturePaused = Boolean(paused);
       state.selectiveHeadLiveCapturePaused = selectiveHeadLiveCapturePaused;
@@ -12580,6 +12834,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         roleAuthority: state.selectiveHeadLiveRoleAuthority,
         fallbackReason: state.selectiveHeadLiveFallbackReason,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+        selectiveHeadLiveCompositionRequested: state.selectiveHeadLiveCompositionRequested,
+        selectiveHeadLiveCompositionEffective: state.selectiveHeadLiveCompositionEffective,
+        selectiveHeadLiveCompositionAuthority: state.selectiveHeadLiveCompositionAuthority,
+        selectiveHeadLiveCompositionFallbackReason: state.selectiveHeadLiveCompositionFallbackReason,
+        selectiveHeadLivePassReceipt: state.selectiveHeadLivePassReceipt,
       };
     },
     loadSelectiveHeadLiveReplayAnchor,
