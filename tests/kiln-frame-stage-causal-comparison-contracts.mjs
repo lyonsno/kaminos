@@ -27,6 +27,17 @@ function stage(stageName, startMs, endMs, authority = 'fixture-authority') {
 
 function ledger({ firingId, mode }) {
   const holdover = mode === 'bounded-history-holdover';
+  const mainPageEvents = [0, 16, 80, 96].map((timestampMs, sampleIndex) => ({
+    ...stage('main-page-raf', timestampMs, timestampMs, 'foreground-main-page-request-animation-frame'),
+    detail: { sampleIndex },
+  }));
+  const sampledLiveQueueDrain = {
+    ...stage('queue-drain', 20, 60, 'existing-sampled-webgpu-on-submitted-work-done-host-await-not-gpu-exclusive'),
+    detail: {
+      frameId: `${firingId}:1`,
+      sampledEveryTwelveFrames: true,
+    },
+  };
   return {
     schema: 'kaminos.kiln-frame-stage-ledger.v0',
     status: 'complete',
@@ -39,7 +50,7 @@ function ledger({ firingId, mode }) {
       timeOriginEpochMs: origin,
     },
     frameCount: 3,
-    eventCount: 4,
+    eventCount: 5,
     frames: [
       {
         frameId: `${firingId}:1`,
@@ -73,15 +84,12 @@ function ledger({ firingId, mode }) {
         stages: [stage('live-source-encode', 81, 85), stage('hybrid-smoke-encode', 85, 86)],
       },
     ],
-    events: [0, 16, 80, 96].map((timestampMs, sampleIndex) => ({
-      ...stage('main-page-raf', timestampMs, timestampMs, 'foreground-main-page-request-animation-frame'),
-      detail: { sampleIndex },
-    })),
+    events: [...mainPageEvents, sampledLiveQueueDrain],
     failures: [],
     pathCounts: holdover
       ? { live: 2, holdover: 1, fallback: 0 }
       : { live: 3, holdover: 0, fallback: 0 },
-    mohelIndicator: { uncappedFrames: true, frameCount: 3, eventCount: 4 },
+    mohelIndicator: { uncappedFrames: true, frameCount: 3, eventCount: 5 },
   };
 }
 
@@ -141,6 +149,11 @@ assert.equal(comparison.runs.live.disruptions.length, 1);
 assert.equal(comparison.runs.live.disruptions[0].durationMs, 64);
 assert.ok(comparison.runs.live.disruptionOverlap.sharpDutyFraction > 0.9);
 assert.ok(comparison.runs.holdover.disruptionOverlap.sharpDutyFraction > 0.9);
+assert.equal(
+  comparison.runs.live.disruptionOverlap.holdoverSyncDurationMs,
+  0,
+  'a sampled queue drain attached to a live frame must not impersonate holdover-only synchronization',
+);
 assert.ok(comparison.runs.holdover.disruptionOverlap.holdoverSyncFraction > 0.8);
 assert.equal(comparison.findings.sharedSharpDuty.status, 'supported');
 assert.equal(comparison.findings.holdoverSync.status, 'additive');
