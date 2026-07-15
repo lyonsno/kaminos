@@ -68,6 +68,9 @@ def requested_cli_value(argv, option):
     for index, value in enumerate(argv):
         if value == option and index + 1 < len(argv) and not argv[index + 1].startswith("--"):
             return argv[index + 1]
+        prefix = f"{option}="
+        if value.startswith(prefix):
+            return value[len(prefix):]
     return None
 
 

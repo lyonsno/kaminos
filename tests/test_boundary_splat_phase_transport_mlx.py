@@ -1111,22 +1111,38 @@ class TransportDatasetContracts(unittest.TestCase):
 
     def test_unsupported_inference_mode_writes_durable_argument_failure_report(self):
         with tempfile.TemporaryDirectory() as directory:
-            out_dir = Path(directory) / "bad-mode"
-            argv = [
-                str(MODULE_PATH),
-                "--manifest", str(Path(directory) / "not-read.json"),
-                "--out-dir", str(out_dir),
-                "--inference-mode", "alternating_anchor",
-            ]
-            with patch.object(sys, "argv", argv), patch("sys.stderr"):
-                with self.assertRaises(SystemExit):
-                    MODULE.main()
-            report = json.loads((out_dir / "training-report.json").read_text(encoding="utf8"))
-            self.assertEqual(report["status"], "failed")
-            self.assertEqual(report["failurePhase"], "argument-validation")
-            self.assertEqual(report["lastTrustworthy"]["requestedInferenceMode"], "alternating_anchor")
-            self.assertEqual(report["lastTrustworthy"]["requestedOutDir"], str(out_dir))
-            self.assertEqual(report["lastTrustworthy"]["requestedManifestPath"], str(Path(directory) / "not-read.json"))
+            manifest_path = Path(directory) / "not-read.json"
+            cases = {
+                "split": lambda out_dir: [
+                    "--manifest", str(manifest_path), "--out-dir", str(out_dir),
+                    "--inference-mode", "alternating_anchor",
+                ],
+                "equals": lambda out_dir: [
+                    f"--manifest={manifest_path}", f"--out-dir={out_dir}",
+                    "--inference-mode=alternating_anchor",
+                ],
+                "mixed-manifest": lambda out_dir: [
+                    f"--manifest={manifest_path}", "--out-dir", str(out_dir),
+                    "--inference-mode", "alternating_anchor",
+                ],
+                "mixed-mode": lambda out_dir: [
+                    "--manifest", str(manifest_path), "--out-dir", str(out_dir),
+                    "--inference-mode=alternating_anchor",
+                ],
+            }
+            for label, arguments in cases.items():
+                with self.subTest(label=label):
+                    out_dir = Path(directory) / f"bad-mode-{label}"
+                    argv = [str(MODULE_PATH), *arguments(out_dir)]
+                    with patch.object(sys, "argv", argv), patch("sys.stderr"):
+                        with self.assertRaises(SystemExit):
+                            MODULE.main()
+                    report = json.loads((out_dir / "training-report.json").read_text(encoding="utf8"))
+                    self.assertEqual(report["status"], "failed")
+                    self.assertEqual(report["failurePhase"], "argument-validation")
+                    self.assertEqual(report["lastTrustworthy"]["requestedInferenceMode"], "alternating_anchor")
+                    self.assertEqual(report["lastTrustworthy"]["requestedOutDir"], str(out_dir))
+                    self.assertEqual(report["lastTrustworthy"]["requestedManifestPath"], str(manifest_path))
 
     def test_eulerian_composer_honors_absolute_support_budget_before_birth_admission(self):
         source = frame([
