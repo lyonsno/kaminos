@@ -107,7 +107,28 @@ assert.equal(
   'the assembled full model bundle must transfer custody instead of retaining a second full-size loader copy',
 );
 
-const entryA = { ...artifactA, role: 'patch-embed-projection-weight', dtype: 'float32', shape: [4] };
+const entryA = { ...artifactA, role: 'patch-embed-projection-weight', dtype: 'float32', shape: [1, 4, 1, 1] };
+const fakeFileEntry = { ...entryA, file: 'invocation/fake-equal-bytes.bin' };
+assert.throws(
+  () => resident.loadFloat32(fakeFileEntry),
+  /declared static artifact|semantic membership|alias/i,
+  'same-SHA bytes from a fabricated file must not receive a resident-owned source view',
+);
+assert.throws(
+  () => resident.bind(fakeFileEntry, new Float32Array(artifactABytes.buffer)),
+  /declared static artifact|semantic membership|alias/i,
+  'same-SHA bytes from a fabricated file must not bind as model-owned residency',
+);
+assert.throws(
+  () => resident.loadFloat32({ ...entryA, role: 'invocation-owned-equal-bytes' }),
+  /declared static artifact|semantic membership|alias/i,
+  'a fabricated same-byte role must not impersonate a declared model alias',
+);
+assert.throws(
+  () => resident.loadFloat32({ ...entryA, packetName: 'pointer' }),
+  /declared static artifact|semantic membership|alias/i,
+  'an explicit packet identity must agree with the authenticated alias declaration',
+);
 const persistentBackingReload = await packageRuntime.loadFloat32(entryA);
 assert.throws(
   () => resident.bind(entryA, persistentBackingReload),
@@ -130,6 +151,29 @@ assert.equal(resident.residentTensorResolver({ sourceData: firstSource }), first
 assert.equal(resident.residentTensorResolver({ sourceData: secondSource }), secondBinding);
 assert.equal(resident.evidence().bindingCount, 2);
 
+const logicalMatrixBinding = resident.residentTensorResolver({
+  name: 'sam31.high-resolution.s0.weight',
+  sourceData: firstSource,
+  dtype: 'f32',
+  shape: [1, 4],
+  usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+});
+assert.notEqual(logicalMatrixBinding, firstBinding, 'a logical reshape must receive a binding carrying the module-owned shape');
+assert.equal(logicalMatrixBinding.buffer, firstBinding.buffer, 'a logical reshape must preserve the exact resident GPU object');
+assert.equal(logicalMatrixBinding.sourceData, firstSource, 'a logical reshape must preserve authenticated source identity');
+assert.deepEqual(logicalMatrixBinding.shape, [1, 4]);
+assert.equal(logicalMatrixBinding.byteLength, firstBinding.byteLength);
+assert.throws(
+  () => resident.residentTensorResolver({
+    name: 'sam31.high-resolution.s0.weight',
+    sourceData: firstSource,
+    dtype: 'f32',
+    shape: [1, 3],
+  }),
+  /logical shape|byte length|element count/i,
+  'a logical resident view must not claim a shape whose element count disagrees with its authenticated bytes',
+);
+
 const authenticatedSubview = firstSource.subarray(1);
 const subviewBinding = resident.residentTensorResolver({
   name: 'sam31.absolute-position.without-cls',
@@ -142,7 +186,7 @@ assert.equal(subviewBinding.buffer, firstBinding.buffer, 'an authenticated packa
 assert.equal(subviewBinding.bufferOffset, 4, 'an authenticated package subview must bind the exact byte offset');
 assert.equal(subviewBinding.byteLength, authenticatedSubview.byteLength);
 assert.equal(subviewBinding.sourceData, authenticatedSubview);
-assert.equal(resident.evidence().bindingCount, 3);
+assert.equal(resident.evidence().bindingCount, 4, 'logical reshapes and authenticated subviews must each remain visible in evidence');
 
 assert.throws(
   () => resident.bind({ ...entryA, sha256: `sha256:${'0'.repeat(64)}` }, new Float32Array(4)),

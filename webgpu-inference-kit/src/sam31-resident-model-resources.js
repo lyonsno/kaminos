@@ -42,6 +42,33 @@ function sourceShape(entry, sourceData) {
   return [sourceByteLength(sourceData)];
 }
 
+function dtypeByteLength(dtype) {
+  if (dtype === 'f32' || dtype === 'u32' || dtype === 'i32') return 4;
+  if (dtype === 'f16' || dtype === 'u16' || dtype === 'i16') return 2;
+  if (dtype === 'u8' || dtype === 'i8') return 1;
+  throw new Error(`resident tensor dtype ${dtype} does not have a known byte length`);
+}
+
+function requireLogicalShape(shape, dtype, byteLength, name) {
+  if (!Array.isArray(shape) || shape.length === 0) throw new Error(`resident tensor logical shape is required for ${name}`);
+  let elements = 1;
+  for (const dimension of shape) {
+    if (!Number.isSafeInteger(dimension) || dimension <= 0) {
+      throw new Error(`resident tensor logical shape must contain positive safe integers for ${name}`);
+    }
+    elements *= dimension;
+    if (!Number.isSafeInteger(elements)) throw new Error(`resident tensor logical shape element count is unsafe for ${name}`);
+  }
+  if (elements * dtypeByteLength(dtype) !== byteLength) {
+    throw new Error(`resident tensor logical shape byte length mismatch for ${name}`);
+  }
+  return [...shape];
+}
+
+function equalShape(left, right) {
+  return left.length === right.length && left.every((dimension, index) => dimension === right[index]);
+}
+
 async function sha256Hex(bytes) {
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
   return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
@@ -152,6 +179,7 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
   }
 
   const sourceBindings = new WeakMap();
+  const logicalBindings = new WeakMap();
   const bindingEvidence = [];
   const bufferIds = new WeakMap();
   let nextBufferId = 1;
@@ -161,11 +189,24 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     return bufferIds.get(buffer);
   }
 
-  function authenticatedView(entry, Type) {
-    if (released) throw new Error('SAM 3.1 resident model resources are released');
+  function declaredResident(entry) {
     requireObject(entry, 'resident tensor entry');
     const resident = allocationBySha.get(entry.sha256);
     if (!resident) throw new Error(`unknown static artifact is not resident: ${entry.sha256 || '<missing>'}`);
+    const aliases = Array.isArray(resident.artifact.aliases) ? resident.artifact.aliases : [];
+    const aliasDeclared = typeof entry.role === 'string' && entry.role.length > 0
+      && aliases.some(alias => alias?.role === entry.role
+        && (entry.packetName == null || alias.packetName === entry.packetName)
+        && (entry.kind == null || alias.kind === entry.kind));
+    if (entry.file !== resident.artifact.file || !aliasDeclared) {
+      throw new Error(`resident tensor entry is not a declared static artifact alias: ${entry.role || entry.file || entry.sha256}`);
+    }
+    return resident;
+  }
+
+  function authenticatedView(entry, Type) {
+    if (released) throw new Error('SAM 3.1 resident model resources are released');
+    const resident = declaredResident(entry);
     if (entry.byteLength !== resident.artifact.byteLength) {
       throw new Error(`resident tensor byte length mismatch for ${entry.role || entry.file || entry.sha256}`);
     }
@@ -189,9 +230,7 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     },
     bind(entry, sourceData) {
       if (released) throw new Error('SAM 3.1 resident model resources are released');
-      requireObject(entry, 'resident tensor entry');
-      const resident = allocationBySha.get(entry.sha256);
-      if (!resident) throw new Error(`unknown static artifact is not resident: ${entry.sha256 || '<missing>'}`);
+      const resident = declaredResident(entry);
       const byteLength = sourceByteLength(sourceData);
       if (byteLength !== resident.artifact.byteLength || byteLength !== entry.byteLength) {
         throw new Error(`resident tensor byte length mismatch for ${entry.role || entry.file || entry.sha256}`);
@@ -241,7 +280,39 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
       if (released) throw new Error('SAM 3.1 resident model resources are released');
       if (!tensorInput.sourceData || (typeof tensorInput.sourceData !== 'object' && typeof tensorInput.sourceData !== 'function')) return null;
       const existing = sourceBindings.get(tensorInput.sourceData);
-      if (existing) return existing;
+      if (existing) {
+        if (!Array.isArray(tensorInput.shape) || tensorInput.shape.length === 0) return existing;
+        const dtype = normalizeDtype(tensorInput.dtype || existing.dtype, tensorInput.sourceData);
+        const shape = requireLogicalShape(
+          tensorInput.shape,
+          dtype,
+          existing.byteLength,
+          tensorInput.name || '<unnamed>',
+        );
+        if (dtype === existing.dtype && equalShape(shape, existing.shape)) return existing;
+        const key = `${dtype}:${shape.join(',')}`;
+        let byLogicalShape = logicalBindings.get(tensorInput.sourceData);
+        if (!byLogicalShape) {
+          byLogicalShape = new Map();
+          logicalBindings.set(tensorInput.sourceData, byLogicalShape);
+        }
+        if (byLogicalShape.has(key)) return byLogicalShape.get(key);
+        const binding = Object.freeze({ ...existing, dtype, shape });
+        byLogicalShape.set(key, binding);
+        bindingEvidence.push({
+          sequence: bindingEvidence.length + 1,
+          role: tensorInput.name || null,
+          artifactSha256: binding.artifactSha256,
+          byteLength: binding.byteLength,
+          bufferOffset: binding.bufferOffset,
+          dtype: binding.dtype,
+          shape: [...binding.shape],
+          resourceId: binding.resourceId,
+          allocationId: binding.allocationId,
+          liveBufferId: bufferId(binding.buffer),
+        });
+        return binding;
+      }
       if (!ArrayBuffer.isView(tensorInput.sourceData)) return null;
       const candidates = (authenticatedByBuffer.get(tensorInput.sourceData.buffer) || []).filter(candidate => {
         const sourceStart = tensorInput.sourceData.byteOffset;
@@ -254,11 +325,20 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
       if (candidates.length > 1) throw new Error(`resident tensor source range is ambiguous for ${tensorInput.name || '<unnamed>'}`);
       const resident = candidates[0];
       const bufferOffset = tensorInput.sourceData.byteOffset - resident.authenticatedSource.byteOffset;
+      const dtype = normalizeDtype(tensorInput.dtype, tensorInput.sourceData);
+      const shape = requireLogicalShape(
+        Array.isArray(tensorInput.shape) && tensorInput.shape.length > 0
+          ? tensorInput.shape
+          : sourceShape({}, tensorInput.sourceData),
+        dtype,
+        tensorInput.sourceData.byteLength,
+        tensorInput.name || '<unnamed>',
+      );
       const binding = Object.freeze({
         buffer: resident.allocation.buffer,
         bufferOffset,
-        dtype: normalizeDtype(tensorInput.dtype, tensorInput.sourceData),
-        shape: Array.isArray(tensorInput.shape) ? [...tensorInput.shape] : sourceShape({}, tensorInput.sourceData),
+        dtype,
+        shape,
         byteLength: tensorInput.sourceData.byteLength,
         usage: resident.allocation.usage,
         paddingReserved: true,
