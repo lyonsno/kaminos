@@ -34,6 +34,7 @@ assert.match(exporter, /boundary splat color\/opacity source field mismatch/, 'e
 assert.match(exporter, /boundary splat color\/opacity survival binding mismatch/, 'exporter requires the exact survival manifest and mask used during training');
 assert.match(exporter, /boundary splat color\/opacity values must be finite and inside channel ranges/, 'exporter rejects non-finite or out-of-range dense attributes before browser launch');
 assert.match(exporter, /boundary-splat-color-opacity-gain-mismatch/, 'exporter fails loud when requested attributes are not effective');
+assert.match(exporter, /main\(\)\s*\.then\(\(\) => process\.exit\(0\)\)/, 'completed exporter terminates after finally closes CDP resources');
 
 const fixtureDir = await mkdtemp(join(tmpdir(), 'kaminos-color-opacity-render-contract-'));
 const invalidManifestPath = join(fixtureDir, 'invalid-color-opacity.json');
