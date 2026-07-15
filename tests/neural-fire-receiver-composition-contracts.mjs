@@ -21,7 +21,37 @@ assert.match(
   'native receiver attachment authority is decided by a deterministic exported contract',
 );
 
-const { resolveBoundarySplatReceiverAttachmentAuthority } = await import('../volume-core.js');
+const {
+  resolveBoundarySplatReceiverAttachmentAuthority,
+  resolveNativeSplatReceiverPipelineDisposition,
+} = await import('../volume-core.js');
+
+const nativePipelineControls = {
+  boundarySplatMode: 'learned',
+  boundarySplatComposition: 'splat-only',
+  nativeSplatReceiverAttachments: true,
+};
+assert.equal(
+  resolveNativeSplatReceiverPipelineDisposition(nativePipelineControls),
+  'skip-ordinary-pipelines-native-splat-receiver',
+  'native splat-only receiver composition has an explicit pipeline disposition',
+);
+assert.equal(
+  resolveNativeSplatReceiverPipelineDisposition({
+    ...nativePipelineControls,
+    boundarySplatComposition: 'hybrid-smoke',
+  }),
+  'ordinary-render-pipelines-required',
+  'a live transition to hybrid smoke requires the pipeline family omitted by native startup',
+);
+assert.equal(
+  resolveNativeSplatReceiverPipelineDisposition({
+    ...nativePipelineControls,
+    boundarySplatMode: 'off',
+  }),
+  'ordinary-render-pipelines-required',
+  'turning boundary splats off requires an ordinary raymarch pipeline',
+);
 
 const validSnapshot = {
   producerActive: true,
@@ -217,19 +247,29 @@ assert.match(
   'the receiver independently rejects inactive or stale producer snapshots instead of trusting producer status alone',
 );
 
+const renderPipelineConfigurationSource = core.slice(
+  core.indexOf('function configureRenderPipelinesForCurrentRoute'),
+  core.indexOf('function rebuildFluidState'),
+);
+assert.match(
+  renderPipelineConfigurationSource,
+  /const nativeSplatReceiverRoute = boundarySplatNativeReceiverAttachmentsRequested\(\)/,
+  'pipeline construction records whether the current route is a native splat receiver route',
+);
+assert.match(
+  renderPipelineConfigurationSource,
+  /if \(!nativeSplatReceiverRoute\)\s*\{[\s\S]*native-3d-compute-fluid-raymarch-v0/,
+  'the monolithic volume raymarch pipeline is not instantiated on the native splat receiver route',
+);
+
 const fluidRebuildSource = core.slice(
   core.indexOf('function rebuildFluidState'),
   core.indexOf('async function ensureGpu'),
 );
 assert.match(
   fluidRebuildSource,
-  /const nativeSplatReceiverRoute = boundarySplatNativeReceiverAttachmentsRequested\(\)/,
-  'pipeline construction records whether the current route is a native splat receiver route',
-);
-assert.match(
-  fluidRebuildSource,
-  /if \(!nativeSplatReceiverRoute\)\s*\{[\s\S]*native-3d-compute-fluid-raymarch-v0/,
-  'the monolithic volume raymarch pipeline is not instantiated on the native splat receiver route',
+  /configureRenderPipelinesForCurrentRoute\(reason\)/,
+  'full fluid rebuilds delegate render-pipeline route selection to the live route configurator',
 );
 
 const renderLoopSource = core.slice(
@@ -314,6 +354,16 @@ assert.match(
   volumeControlLifecycleSource,
   /gpuInitialized[\s\S]{0,180}rebuildFluidState/,
   'control-driven fluid rebuilds wait for initialized bind-group layouts and pipelines',
+);
+assert.match(
+  volumeControlLifecycleSource,
+  /previousPipelineDisposition[\s\S]*nextPipelineDisposition[\s\S]*gpuInitialized[\s\S]*configureRenderPipelinesForCurrentRoute\('control-route-transition'\)/,
+  'live native-to-ordinary route changes reconfigure omitted render pipelines without requiring a grid change',
+);
+assert.match(
+  core,
+  /function encodeDraw\([^)]*\)[\s\S]{0,220}if \(!targetPipeline\) throw new Error\('volume-render-pipeline-unavailable-for-effective-route'\)/,
+  'ordinary rendering fails explicitly before attempting a null WebGPU pipeline bind',
 );
 
 const primitiveLifecycleSource = core.slice(

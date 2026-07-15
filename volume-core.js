@@ -190,6 +190,15 @@ export function resolveBoundarySplatReceiverAttachmentAuthority(snapshot = {}) {
   };
 }
 
+export function resolveNativeSplatReceiverPipelineDisposition(controls = {}) {
+  const nativeSplatReceiverRoute = normalizeBoundarySplatMode(controls.boundarySplatMode) !== 'off'
+    && normalizeBoundarySplatComposition(controls.boundarySplatComposition) === 'splat-only'
+    && controls.nativeSplatReceiverAttachments === true;
+  return nativeSplatReceiverRoute
+    ? 'skip-ordinary-pipelines-native-splat-receiver'
+    : 'ordinary-render-pipelines-required';
+}
+
 export async function requestKaminosSharedWebGpuDevice() {
   if (!navigator.gpu) throw new Error('WebGPU unavailable');
   const adapter = await navigator.gpu.requestAdapter({
@@ -6562,6 +6571,7 @@ export function createKaminosVolumePrototype({
     nativeSplatReceiverAttachmentsFreshnessIdentity: NATIVE_SPLAT_RECEIVER_ATTACHMENT_FRESHNESS_IDENTITY,
     nativeSplatReceiverAttachmentsFreshnessHorizonMs: NATIVE_SPLAT_RECEIVER_ATTACHMENT_FRESHNESS_HORIZON_MS,
     raymarchPipelineDisposition: 'uninitialized',
+    renderPipelineConfigurationReason: 'uninitialized',
     hybridSplatSmokeCompositorIdentity: HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
     hybridSplatSmokeApproximation: HYBRID_SPLAT_SMOKE_APPROXIMATION,
     splatDepthConditionedSmokeSplit: 'per-pixel-transformed-splat-depth-raymarch-split-v1',
@@ -8110,6 +8120,69 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
+  function configureRenderPipelinesForCurrentRoute(reason = 'render-pipeline-configuration') {
+    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
+    const nativeSplatReceiverRoute = boundarySplatNativeReceiverAttachmentsRequested();
+    state.nativeSplatReceiverAttachmentsRequested = nativeSplatReceiverRoute;
+    invalidateNativeSplatReceiverAttachments(
+      nativeSplatReceiverRoute
+        ? 'native-attachment-route-awaiting-frame'
+        : 'native-attachment-route-inactive',
+    );
+    if (!nativeSplatReceiverRoute) {
+      const makePipeline = (targetFormat, label) => device.createRenderPipeline({
+        label,
+        layout: pipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: { module: shader, entryPoint: 'fs', constants: renderPipelineConstants, targets: [{ format: targetFormat }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+      readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
+      browserResidualSourcePipeline = device.createRenderPipeline({
+        label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
+        layout: pipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: {
+          module: shader,
+          entryPoint: 'fsResidualSource',
+          constants: renderPipelineConstants,
+          targets: [{ format: 'rgba8unorm' }, { format: 'rgba8unorm' }],
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+      hybridSmokePipeline = device.createRenderPipeline({
+        label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} ${gridSize}^3`,
+        layout: hybridSmokePipelineLayout,
+        vertex: { module: shader, entryPoint: 'vs' },
+        fragment: {
+          module: shader,
+          entryPoint: 'fsHybridSmoke',
+          constants: renderPipelineConstants,
+          targets: [0, 1, 2, 3].map(() => ({ format: 'rgba16float' })),
+        },
+        primitive: { topology: 'triangle-list' },
+      });
+      browserResidualPipeline = device.createRenderPipeline({
+        label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
+        layout: browserResidualPipelineLayout,
+        vertex: { module: browserResidualShader, entryPoint: 'vs' },
+        fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
+        primitive: { topology: 'triangle-list' },
+      });
+      state.raymarchPipelineDisposition = 'created';
+    } else {
+      pipeline = null;
+      readbackPipeline = null;
+      browserResidualSourcePipeline = null;
+      hybridSmokePipeline = null;
+      browserResidualPipeline = null;
+      state.raymarchPipelineDisposition = 'skipped-native-splat-receiver-route';
+    }
+    state.renderPipelineConfigurationReason = reason;
+    return state.raymarchPipelineDisposition;
+  }
+
   function rebuildFluidState(nextGridSize = gridSize, nextMajorantGridSize = majorantGridSize, reason = 'grid-rebuilt') {
     gridSize = normalizeGridSize(nextGridSize);
     majorantGridSize = normalizeMajorantGridSize(nextMajorantGridSize);
@@ -8164,61 +8237,9 @@ export function createKaminosVolumePrototype({
         receiverGrid: gridSize,
       };
     }
-    const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
     const computePipelineConstants = { GRID: gridSize };
     const majorantPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
-    const nativeSplatReceiverRoute = boundarySplatNativeReceiverAttachmentsRequested();
-    state.nativeSplatReceiverAttachmentsRequested = nativeSplatReceiverRoute;
-    if (!nativeSplatReceiverRoute) {
-      const makePipeline = (targetFormat, label) => device.createRenderPipeline({
-        label,
-        layout: pipelineLayout,
-        vertex: { module: shader, entryPoint: 'vs' },
-        fragment: { module: shader, entryPoint: 'fs', constants: renderPipelineConstants, targets: [{ format: targetFormat }] },
-        primitive: { topology: 'triangle-list' },
-      });
-      pipeline = makePipeline(format, `kaminos volume canvas native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
-      readbackPipeline = makePipeline('rgba8unorm', `kaminos volume readback native-3d-compute-fluid-raymarch-v0 ${gridSize}^3`);
-      browserResidualSourcePipeline = device.createRenderPipeline({
-        label: `kaminos volume browser residual shader-material-authority source ${gridSize}^3`,
-        layout: pipelineLayout,
-        vertex: { module: shader, entryPoint: 'vs' },
-        fragment: {
-          module: shader,
-          entryPoint: 'fsResidualSource',
-          constants: renderPipelineConstants,
-          targets: [{ format: 'rgba8unorm' }, { format: 'rgba8unorm' }],
-        },
-        primitive: { topology: 'triangle-list' },
-      });
-      hybridSmokePipeline = device.createRenderPipeline({
-        label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} ${gridSize}^3`,
-        layout: hybridSmokePipelineLayout,
-        vertex: { module: shader, entryPoint: 'vs' },
-        fragment: {
-          module: shader,
-          entryPoint: 'fsHybridSmoke',
-          constants: renderPipelineConstants,
-          targets: [0, 1, 2, 3].map(() => ({ format: 'rgba16float' })),
-        },
-        primitive: { topology: 'triangle-list' },
-      });
-      browserResidualPipeline = device.createRenderPipeline({
-        label: `kaminos volume browser webgpu-direct-residual postprocess ${gridSize}^3`,
-        layout: browserResidualPipelineLayout,
-        vertex: { module: browserResidualShader, entryPoint: 'vs' },
-        fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
-        primitive: { topology: 'triangle-list' },
-      });
-      state.raymarchPipelineDisposition = 'created';
-    } else {
-      pipeline = null;
-      readbackPipeline = null;
-      browserResidualSourcePipeline = null;
-      hybridSmokePipeline = null;
-      browserResidualPipeline = null;
-      state.raymarchPipelineDisposition = 'skipped-native-splat-receiver-route';
-    }
+    configureRenderPipelinesForCurrentRoute(reason);
     computePipeline = device.createComputePipeline({
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
@@ -10226,9 +10247,8 @@ export function createKaminosVolumePrototype({
   }
 
   function boundarySplatNativeReceiverAttachmentsRequested() {
-    return boundarySplatRequested()
-      && normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition) === 'splat-only'
-      && controlsSnapshot.nativeSplatReceiverAttachments === true;
+    return resolveNativeSplatReceiverPipelineDisposition(controlsSnapshot)
+      === 'skip-ordinary-pipelines-native-splat-receiver';
   }
 
   function currentBoundarySplatBufferIntegrity(overrides = {}) {
@@ -11978,6 +11998,7 @@ export function createKaminosVolumePrototype({
   }
 
   function encodeDraw(encoder, view, label, targetPipeline = pipeline, options = {}) {
+    if (!targetPipeline) throw new Error('volume-render-pipeline-unavailable-for-effective-route');
     const pass = encoder.beginRenderPass({
       label,
       ...(options.timestampWrites ? { timestampWrites: options.timestampWrites } : {}),
@@ -14640,9 +14661,11 @@ export function createKaminosVolumePrototype({
       const previousMajorantGrid = majorantGridSize;
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
+      const previousPipelineDisposition = resolveNativeSplatReceiverPipelineDisposition(controlsSnapshot);
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
       const nextControlSignature = temporalControlSignature(controlsSnapshot);
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
+      const nextPipelineDisposition = resolveNativeSplatReceiverPipelineDisposition(controlsSnapshot);
       if (previousControlSignature !== nextControlSignature) {
         resetTemporalHistory('control-change');
       }
@@ -14658,6 +14681,8 @@ export function createKaminosVolumePrototype({
         rebuildFluidState(requestedGrid, requestedMajorantGrid);
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
+      } else if (gpuInitialized && previousPipelineDisposition !== nextPipelineDisposition) {
+        configureRenderPipelinesForCurrentRoute('control-route-transition');
       } else {
         gridSize = requestedGrid;
         majorantGridSize = requestedMajorantGrid;
