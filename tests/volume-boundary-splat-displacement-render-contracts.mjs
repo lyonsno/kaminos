@@ -7,6 +7,8 @@ const exporter = await readFile(new URL('../volume-full-grid-field-export.mjs', 
 
 assert.match(core, /BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY\s*=\s*'validation-selected-vacancy-gated-offset-class-grid-v0'/, 'runtime names the displacement cue authority');
 assert.match(core, /BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION_IDENTITY\s*=\s*'render-only-vacancy-gated-one-cell-splat-displacement-v0'/, 'runtime names the displacement application');
+assert.match(core, /function scalarActivityCueChannelOrderForAuthority\(cueAuthority\)[\s\S]*cueAuthority\s*===\s*BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY[\s\S]*\['boundarySplatOffsetClassNormalized'\][\s\S]*\['fireFlowVisibilityCarrier'\]/, 'scalar transport resolves an exact channel order from the admitted cue authority');
+assert.match(core, /const expectedChannelOrder\s*=\s*scalarActivityCueChannelOrderForAuthority\(cueAuthority\)[\s\S]*JSON\.stringify\(payload\.channelOrder\)\s*!==\s*JSON\.stringify\(expectedChannelOrder\)/, 'browser import validates the payload against its authority-specific channel order');
 assert.match(core, /splatDisplacementEnabled:\s*clampFinite\(snapshot\.oracleActivitySplatDisplacement,\s*0,\s*1,\s*0\)/, 'displacement is explicit, bounded, and inert by default');
 assert.match(core, /activityControls:\s*vec4<f32>/, 'existing splat controls carry the displacement mode without a new full-grid copy');
 assert.match(core, /fn boundarySplatDecodedOffset[\s\S]*scalarActivityCue\[boundarySplatCellIndex\(cell\)\][\s\S]*26\.0[\s\S]*vec3<i32>/, 'compute pass decodes one of 27 bounded offset classes from the uploaded scalar grid');

@@ -57,6 +57,13 @@ const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'frozen-earlier-replay-constant-residual-scale-derived-carrier-v0',
   BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY,
 ]);
+
+function scalarActivityCueChannelOrderForAuthority(cueAuthority) {
+  if (cueAuthority === BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY) {
+    return ['boundarySplatOffsetClassNormalized'];
+  }
+  return ['fireFlowVisibilityCarrier'];
+}
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
 const SCALAR_ACTIVITY_CUE_DISPLAY_IDENTITY = 'scalar-activity-cue-isolated-raymarch-display-v0';
@@ -9479,11 +9486,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!/^[a-f0-9]{64}$/i.test(String(payload.sha256 || ''))) {
       return scalarActivityCueImportFailure('begin', 'sha256-missing');
     }
-    if (JSON.stringify(payload.channelOrder) !== JSON.stringify(['fireFlowVisibilityCarrier'])) {
-      return scalarActivityCueImportFailure('begin', 'channel-order-mismatch');
-    }
     if (!SCALAR_ACTIVITY_CUE_AUTHORITIES.has(cueAuthority)) {
       return scalarActivityCueImportFailure('begin', 'cue-authority-mismatch', { requestedCueAuthority: cueAuthority || null });
+    }
+    const expectedChannelOrder = scalarActivityCueChannelOrderForAuthority(cueAuthority);
+    if (JSON.stringify(payload.channelOrder) !== JSON.stringify(expectedChannelOrder)) {
+      return scalarActivityCueImportFailure('begin', 'channel-order-mismatch', {
+        identity: String(payload.applicationIdentity || FIRE_FLOW_VISIBILITY_CARRIER_APPLICATION_IDENTITY),
+        requestedCueAuthority: cueAuthority,
+        requestedChannelOrder: payload.channelOrder || null,
+        expectedChannelOrder,
+      });
     }
     debugScalarActivityCueImportUpload = {
       sessionId: `scalar-activity-cue-import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
