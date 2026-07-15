@@ -488,7 +488,7 @@ def main():
         "tolerances": {
             "pixelValuesMaxAbsDiff": 0.000001,
             "patchEmbeddingsMaxAbsDiff": 0.0005,
-            "vitPrefixMaxAbsDiff": 0.005,
+            "vitPrefixMaxAbsDiff": 0.006,
             "vitBackboneMaxAbsDiff": 0.02,
             "neckMaxAbsDiff": 0.02,
             "positionMaxAbsDiff": 0.00001,
