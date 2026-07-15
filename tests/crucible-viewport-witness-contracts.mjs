@@ -396,6 +396,18 @@ const strictCadence = classifyCadenceAcceptance({
 });
 assert.equal(strictCadence.status, 'failed');
 assert.equal(strictCadence.blocking, true, 'uncaptured runs must retain strict cadence acceptance');
+const diagnosticCadence = classifyCadenceAcceptance({
+  captureInFlight: false,
+  diagnoseCadenceFailures: true,
+  failures: cadenceFailures,
+});
+assert.equal(diagnosticCadence.status, 'diagnostic-failures-preserved');
+assert.equal(diagnosticCadence.blocking, false, 'explicit diagnostic runs must continue without erasing cadence failures');
+assert.deepEqual(
+  diagnosticCadence.failures,
+  cadenceFailures,
+  'diagnostic continuation must retain every strict cadence failure',
+);
 assert.equal(
   classifyCadenceAcceptance({ captureInFlight: false, failures: [] }).status,
   'accepted',
@@ -828,6 +840,7 @@ for (const [pattern, message] of [
   [/--flame-continuity/, 'Witness must accept an explicit flame continuity policy instead of inheriting a UI default'],
   [/--expected-webgpu-kit-version/, 'Witness must require the effective source-locked WebGPU kit package identity'],
   [/--capture-in-flight/, 'Transient visual capture must be explicit so ordinary cadence witnesses remain unperturbed'],
+  [/--diagnose-cadence-failures/, 'Cadence-failure diagnosis must be an explicit non-smoke continuation mode'],
   [/--replay-cast-report/, 'Witness must expose an explicit real-output replay path for terminal layout verification'],
   [/receiptReportPath:\s*replayResult\.receipt\?\.reportPath[\s\S]*receiptReportPath !== state\.replayedCast\.reportPath/, 'Replay witness must verify the persisted Crucible receipt retained the source pipeline report path'],
   [/kaminosCrucibleViewportReplayRealCast[\s\S]*setTimeout\(resolve,\s*240\)[\s\S]*completedWorkroom/, 'Replay geometry must settle past the workroom posture transition before toolbar clearance is judged'],

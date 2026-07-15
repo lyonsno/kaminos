@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--diagnose-cadence-failures] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -45,6 +45,7 @@ const requestedSourceAssetId = args.get('source-asset-id') || null;
 const requestedFirePresentation = args.get('fire-presentation') || 'full-volume';
 const requestedFlameContinuity = args.get('flame-continuity') || 'live-every-frame';
 const captureInFlight = args.has('capture-in-flight');
+const diagnoseCadenceFailures = args.has('diagnose-cadence-failures');
 const requireFrameStageLedger = args.has('require-frame-stage-ledger');
 const outParts = path.parse(out);
 const inFlightOut = args.get('in-flight-out')
@@ -318,7 +319,7 @@ async function captureViewportPng(ws, outputPath) {
   return png;
 }
 
-function classifyCadenceAcceptance({ captureInFlight, failures }) {
+function classifyCadenceAcceptance({ captureInFlight, diagnoseCadenceFailures = false, failures }) {
   const retainedFailures = Array.isArray(failures) ? failures : [];
   if (captureInFlight) {
     return {
@@ -326,6 +327,14 @@ function classifyCadenceAcceptance({ captureInFlight, failures }) {
       blocking: false,
       failures: retainedFailures,
       reason: 'CDP visual capture may perturb foreground cadence; use an uncaptured run for performance acceptance.',
+    };
+  }
+  if (diagnoseCadenceFailures && retainedFailures.length) {
+    return {
+      status: 'diagnostic-failures-preserved',
+      blocking: false,
+      failures: retainedFailures,
+      reason: 'Explicit diagnostic continuation preserves strict cadence failures and cannot satisfy cadence acceptance.',
     };
   }
   return {
@@ -1823,6 +1832,7 @@ try {
     }
     state.fullRoute.cadenceAcceptance = classifyCadenceAcceptance({
       captureInFlight,
+      diagnoseCadenceFailures,
       failures: cadenceFailures,
     });
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
