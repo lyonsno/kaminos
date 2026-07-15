@@ -12331,6 +12331,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           radius: normalizeBoundarySplatRadius(controlsBefore.boundarySplatRadius),
           sharpness: normalizeBoundarySplatSharpness(controlsBefore.boundarySplatSharpness),
         },
+        controlConditioning: {
+          identity: 'boundary-splat-emitter-lifecycle-conditioning-v0',
+          authority: 'effective-runtime-controls-frozen-sim-state-v0',
+          sameStateCaptureId,
+          simStepCount: capturedBaseSimStepCount,
+          values: {
+            inputRadius: clampFinite(controlsBefore.inputRadius, 0.08, 0.7, 0.24),
+            flowRate: clampFinite(controlsBefore.flowRate, 0, 2.5, 0.3),
+            fireScale: clampFinite(controlsBefore.fireScale, 0.35, 1.3, 0.86),
+            reactionFuelScale: normalizeReactionFuelScale(controlsBefore.reactionFuelScale),
+            lifecycleEffect: normalizeLifecycleEffect(controlsBefore.lifecycleEffect),
+            lifecycleT: normalizeLifecycleT(controlsBefore.lifecycleT),
+            quenchVapor: normalizeQuenchVapor(controlsBefore.quenchVapor),
+          },
+        },
         candidates: {
           ...candidateSample.boundarySplatSupervisionCapture,
           rendererIdentity: candidateSample.boundarySplatRendererIdentity,

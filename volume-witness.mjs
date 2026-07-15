@@ -2842,6 +2842,7 @@ async function captureBoundarySplatSupervisionArtifacts(ws, outputDir, replayedC
         camera: capture.camera,
         replayedCamera,
         splatControls: capture.splatControls,
+        controlConditioning: capture.controlConditioning,
         stepReceipt,
         candidates: {
           path: candidatePath,

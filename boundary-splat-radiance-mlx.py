@@ -19,6 +19,13 @@ from boundary_splat_native_sidecar import (
     native_sidecar_pyramid_channels,
     native_sidecar_pyramid_feature_names,
 )
+from boundary_splat_conditioning import (
+    EMITTER_LIFECYCLE_CONDITION_AUTHORITY,
+    EMITTER_LIFECYCLE_CONDITION_IDENTITY,
+    EMITTER_LIFECYCLE_CONDITION_ORDER,
+    EMITTER_LIFECYCLE_CONDITION_RANGES,
+    resolve_emitter_lifecycle_condition,
+)
 
 
 SCHEMA = "kaminos.boundary-splat-radiance-training.v0"
@@ -32,6 +39,7 @@ SPARSE_GRID_MODEL_SCHEMA = "kaminos-boundary-splat-sparse-grid-residual-v0"
 OPTICAL_DECODER_SCHEMA = "kaminos-boundary-splat-screen-residual-unet-v0"
 OPTICAL_INPUT_AUTHORITY = "screen-rgb-luma-gradient-v0"
 PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY = "candidate-attached-native-fields-weight-normalized-screen-projection-v0"
+EMITTER_LIFECYCLE_OPTICAL_INPUT_AUTHORITY = "broadcast-effective-emitter-lifecycle-controls-v0"
 FLOW_DEBUG_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
 PARTIAL_FLOW_DEBUG_AUTHORITY = "display-only-linear-mix-v0"
 BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER = [
@@ -180,7 +188,7 @@ def load_native_sidecar(manifest_path, frame, label):
     }
 
 
-def load_corpus(manifest_value, require_native_sidecar=False):
+def load_corpus(manifest_value, require_native_sidecar=False, require_control_conditioning=False):
     manifest_path = Path(manifest_value).resolve()
     manifest_bytes = manifest_path.read_bytes()
     manifest = json.loads(manifest_bytes)
@@ -233,6 +241,7 @@ def load_corpus(manifest_value, require_native_sidecar=False):
         if not np.isfinite(radius) or radius <= 0 or not np.isfinite(sharpness) or sharpness <= 0:
             raise ValueError(f"{label} splat controls must be positive and finite")
         native_sidecar = load_native_sidecar(manifest_path, frame, label) if require_native_sidecar else None
+        control_condition = resolve_emitter_lifecycle_condition(frame, label) if require_control_conditioning else None
         frames.append({
             "id": frame["id"],
             "sameStateCaptureId": frame["sameStateCaptureId"],
@@ -256,6 +265,8 @@ def load_corpus(manifest_value, require_native_sidecar=False):
             "radius": radius,
             "sharpness": sharpness,
             "nativeSidecar": native_sidecar,
+            "controlConditioning": frame.get("controlConditioning"),
+            "controlCondition": np.asarray(control_condition, dtype=np.float32) if control_condition is not None else None,
         })
     if not frames:
         raise ValueError("corpus must contain at least one frame")
@@ -421,8 +432,8 @@ class ScreenResidualUnet(nn.Module):
         upsampled = upsampled[:, :skip.shape[1], :skip.shape[2], :]
         return decoder(mx.concatenate([upsampled, skip], axis=-1))
 
-    def __call__(self, base_prediction, projected_features=None):
-        inputs = screen_decoder_inputs(base_prediction, projected_features)[None, :, :, :]
+    def __call__(self, base_prediction, projected_features=None, control_condition=None):
+        inputs = screen_decoder_inputs(base_prediction, projected_features, control_condition)[None, :, :, :]
         encoded0 = self.encoder0(inputs)
         encoded1 = self.encoder1(nn.gelu(self.down1(encoded0)))
         encoded2 = self.encoder2(nn.gelu(self.down2(encoded1)))
@@ -943,7 +954,7 @@ def project_native_feature_planes(geometry, attributes):
     return normalized_features.reshape(geometry["height"], geometry["width"], normalized_features.shape[1])
 
 
-def screen_decoder_inputs(base_prediction, projected_features=None):
+def screen_decoder_inputs(base_prediction, projected_features=None, control_condition=None):
     luma = base_prediction[:, :, 0] * 0.2126 + base_prediction[:, :, 1] * 0.7152 + base_prediction[:, :, 2] * 0.0722
     horizontal = mx.abs(luma[:, 1:] - luma[:, :-1])
     vertical = mx.abs(luma[1:, :] - luma[:-1, :])
@@ -953,6 +964,12 @@ def screen_decoder_inputs(base_prediction, projected_features=None):
     inputs = mx.concatenate([base_prediction, luma[:, :, None], gradient[:, :, None]], axis=2)
     if projected_features is not None:
         inputs = mx.concatenate([inputs, projected_features], axis=2)
+    if control_condition is not None:
+        condition = mx.array(control_condition, dtype=base_prediction.dtype)
+        if condition.ndim != 1 or condition.shape[0] != len(EMITTER_LIFECYCLE_CONDITION_ORDER):
+            raise ValueError("emitter lifecycle control condition has the wrong shape")
+        condition_plane = mx.broadcast_to(condition[None, None, :], (base_prediction.shape[0], base_prediction.shape[1], condition.shape[0]))
+        inputs = mx.concatenate([inputs, condition_plane], axis=2)
     return inputs
 
 
@@ -1064,10 +1081,10 @@ def evaluate_frame_set(model, geometries, frames, indices, lower, span, depth_bi
     return rows
 
 
-def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes, geometries, frames, indices, edge_weight, output_dir, stage):
+def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes, optical_control_conditions, geometries, frames, indices, edge_weight, output_dir, stage):
     rows = []
     for frame_index in indices:
-        prediction = decoder(base_predictions[frame_index], optical_feature_planes[frame_index])
+        prediction = decoder(base_predictions[frame_index], optical_feature_planes[frame_index], optical_control_conditions[frame_index])
         mx.eval(prediction)
         preview_path = output_dir / f"preview-{stage}-frame-{frame_index:03d}.png"
         target_path = output_dir / f"preview-target-frame-{frame_index:03d}.png"
@@ -1227,6 +1244,7 @@ def parse_args():
     parser.add_argument("--freeze-base", type=int, choices=[0, 1], default=0)
     parser.add_argument("--optical-decoder", choices=["none", "screen-unet"], default="none")
     parser.add_argument("--optical-feature-mode", choices=["screen-only", "projected-native"], default="screen-only")
+    parser.add_argument("--optical-condition-mode", choices=["none", "emitter-lifecycle"], default="none")
     parser.add_argument("--optical-channels", type=int, default=8)
     parser.add_argument("--optical-residual-scale", type=float, default=1.0)
     parser.add_argument("--partial-flow-debug-gain", type=float, default=0.0)
@@ -1259,7 +1277,11 @@ def main():
             raise ValueError("base-path freezing requires an explicit residual spatial mixer")
         feature_names = context_feature_names(args.context_mode, frequencies)
         phase = "corpus"
-        corpus = load_corpus(args.corpus, require_native_sidecar=args.context_mode == "native-sidecar-pyramid")
+        corpus = load_corpus(
+            args.corpus,
+            require_native_sidecar=args.context_mode == "native-sidecar-pyramid",
+            require_control_conditioning=args.optical_condition_mode == "emitter-lifecycle",
+        )
         frame_split = resolve_frame_splits(
             [frame["id"] for frame in corpus["frames"]],
             args.train_frame_indices,
@@ -1279,6 +1301,8 @@ def main():
             raise ValueError("optical decoding and pre-raster spatial mixing are separate experimental families")
         if args.optical_decoder == "none" and args.optical_feature_mode != "screen-only":
             raise ValueError("projected-native optical features require an optical decoder")
+        if args.optical_decoder == "none" and args.optical_condition_mode != "none":
+            raise ValueError("emitter lifecycle conditioning requires an optical decoder")
         if args.partial_flow_debug_gain != 0.0:
             missing_flow_debug = [
                 frame["id"]
@@ -1356,9 +1380,11 @@ def main():
         optical_decoder = None
         base_predictions = None
         optical_feature_planes = None
+        optical_control_conditions = None
         if args.optical_decoder == "screen-unet":
             base_predictions = []
             optical_feature_planes = []
+            optical_control_conditions = []
             for geometry in geometries:
                 base_prediction, base_attributes = render_frame(model, geometry, lower, span, args.depth_bins)
                 base_prediction = mx.stop_gradient(base_prediction)
@@ -1372,7 +1398,15 @@ def main():
                 if projected_features is not None:
                     mx.eval(projected_features)
                 optical_feature_planes.append(projected_features)
-            optical_input_channels = 5 + (len(FEATURES) if args.optical_feature_mode == "projected-native" else 0)
+            optical_control_conditions = [
+                frame["controlCondition"] if args.optical_condition_mode == "emitter-lifecycle" else None
+                for frame in corpus["frames"]
+            ]
+            optical_input_channels = (
+                5
+                + (len(FEATURES) if args.optical_feature_mode == "projected-native" else 0)
+                + (len(EMITTER_LIFECYCLE_CONDITION_ORDER) if args.optical_condition_mode == "emitter-lifecycle" else 0)
+            )
             optical_decoder = ScreenResidualUnet(optical_input_channels, args.optical_channels, args.optical_residual_scale)
             mx.eval(optical_decoder.parameters())
         initial_radius = [mx.array(attributes[:, 4:6]) for attributes in initial_attributes]
@@ -1397,6 +1431,7 @@ def main():
                 optical_decoder,
                 base_predictions,
                 optical_feature_planes,
+                optical_control_conditions,
                 geometries,
                 corpus["frames"],
                 frame_split["evaluationIndices"],
@@ -1456,7 +1491,11 @@ def main():
             def loss_fn(active_decoder):
                 total = mx.array(0.0)
                 for frame_index in frame_split["trainIndices"]:
-                    prediction = active_decoder(base_predictions[frame_index], optical_feature_planes[frame_index])
+                    prediction = active_decoder(
+                        base_predictions[frame_index],
+                        optical_feature_planes[frame_index],
+                        optical_control_conditions[frame_index],
+                    )
                     total = total + image_loss(prediction, geometries[frame_index]["target"], args.edge_weight)
                 return total / len(frame_split["trainIndices"])
 
@@ -1503,6 +1542,7 @@ def main():
                 optical_decoder,
                 base_predictions,
                 optical_feature_planes,
+                optical_control_conditions,
                 geometries,
                 corpus["frames"],
                 frame_split["evaluationIndices"],
@@ -1560,6 +1600,8 @@ def main():
                 if args.optical_feature_mode == "projected-native"
                 else OPTICAL_INPUT_AUTHORITY
             )
+            if args.optical_condition_mode == "emitter-lifecycle":
+                optical_input_authority = f"{optical_input_authority}+{EMITTER_LIFECYCLE_OPTICAL_INPUT_AUTHORITY}"
             model_receipt = {
                 "path": str(model_path),
                 "schema": OPTICAL_DECODER_SCHEMA,
@@ -1567,6 +1609,11 @@ def main():
                 "authority": "screen-global-multiscale-residual-unet-v0",
                 "inputAuthority": optical_input_authority,
                 "featureMode": args.optical_feature_mode,
+                "conditionMode": args.optical_condition_mode,
+                "conditionIdentity": EMITTER_LIFECYCLE_CONDITION_IDENTITY if args.optical_condition_mode == "emitter-lifecycle" else None,
+                "conditionAuthority": EMITTER_LIFECYCLE_CONDITION_AUTHORITY if args.optical_condition_mode == "emitter-lifecycle" else None,
+                "conditionOrder": list(EMITTER_LIFECYCLE_CONDITION_ORDER) if args.optical_condition_mode == "emitter-lifecycle" else [],
+                "conditionRanges": EMITTER_LIFECYCLE_CONDITION_RANGES if args.optical_condition_mode == "emitter-lifecycle" else {},
                 "inputChannels": optical_decoder.input_channels,
                 "baseChannels": args.optical_channels,
                 "residualScale": args.optical_residual_scale,
@@ -1674,10 +1721,13 @@ def main():
                 "spatialMixing": args.spatial_mixing,
                 "opticalDecoder": args.optical_decoder,
                 "opticalFeatureMode": args.optical_feature_mode if optical_decoder is not None else None,
+                "opticalConditionMode": args.optical_condition_mode if optical_decoder is not None else None,
+                "opticalConditionIdentity": EMITTER_LIFECYCLE_CONDITION_IDENTITY if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else None,
+                "opticalConditionAuthority": EMITTER_LIFECYCLE_CONDITION_AUTHORITY if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else None,
+                "opticalConditionOrder": list(EMITTER_LIFECYCLE_CONDITION_ORDER) if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else [],
+                "opticalConditionRanges": EMITTER_LIFECYCLE_CONDITION_RANGES if optical_decoder is not None and args.optical_condition_mode == "emitter-lifecycle" else {},
                 "opticalInputAuthority": (
-                    PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY
-                    if optical_decoder is not None and args.optical_feature_mode == "projected-native"
-                    else OPTICAL_INPUT_AUTHORITY if optical_decoder is not None else None
+                    model_receipt["inputAuthority"] if optical_decoder is not None else None
                 ),
                 "opticalBaseFrozen": optical_decoder is not None,
                 "opticalChannels": args.optical_channels if optical_decoder is not None else None,

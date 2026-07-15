@@ -15,6 +15,8 @@ export {
 
 export const BOUNDARY_SPLAT_SUPERVISION_SCHEMA = 'kaminos-boundary-splat-supervision-corpus-v0';
 export const BOUNDARY_SPLAT_STRUCTURAL_SUPERVISION_IDENTITY = 'native-boundary-sidecar-structural-supervision-v0';
+export const BOUNDARY_SPLAT_CONTROL_CONDITIONING_IDENTITY = 'boundary-splat-emitter-lifecycle-conditioning-v0';
+export const BOUNDARY_SPLAT_CONTROL_CONDITIONING_AUTHORITY = 'effective-runtime-controls-frozen-sim-state-v0';
 
 const BOUNDARY_SPLAT_STRUCTURAL_STRUCTURE_CHANNELS = ['support', 'coverage', 'ridge', 'footprint'];
 const BOUNDARY_SPLAT_STRUCTURAL_META_CHANNELS = ['proximity', 'normalX', 'normalY', 'normalZ'];
@@ -33,6 +35,22 @@ function finiteArray(values, expectedLength, label) {
   if (!Array.isArray(values) || values.length !== expectedLength || values.some(value => typeof value !== 'number' || !Number.isFinite(value))) {
     throw new Error(`${label} must contain ${expectedLength} finite values`);
   }
+}
+
+function validateControlConditioning(frame, label) {
+  const conditioning = frame.controlConditioning;
+  if (!conditioning || typeof conditioning !== 'object') throw new Error(`${label} control conditioning is missing`);
+  if (conditioning.identity !== BOUNDARY_SPLAT_CONTROL_CONDITIONING_IDENTITY) throw new Error(`${label} control conditioning identity is invalid`);
+  if (conditioning.authority !== BOUNDARY_SPLAT_CONTROL_CONDITIONING_AUTHORITY) throw new Error(`${label} control conditioning authority is invalid`);
+  if (conditioning.sameStateCaptureId !== frame.sameStateCaptureId) throw new Error(`${label} control conditioning same-state identity does not match the frame`);
+  if (conditioning.simStepCount !== frame.simStepCount) throw new Error(`${label} control conditioning simulator step does not match the frame`);
+  const values = conditioning.values;
+  if (!values || typeof values !== 'object') throw new Error(`${label} control conditioning values are missing`);
+  for (const key of ['inputRadius', 'flowRate', 'fireScale', 'reactionFuelScale', 'lifecycleT', 'quenchVapor']) {
+    if (typeof values[key] !== 'number' || !Number.isFinite(values[key])) throw new Error(`${label} control conditioning ${key} must be finite`);
+  }
+  if (!['none', 'snuff'].includes(values.lifecycleEffect)) throw new Error(`${label} control conditioning lifecycleEffect is invalid`);
+  return conditioning;
 }
 
 function artifactPath(manifestPath, value) {
@@ -134,6 +152,12 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
       || typeof frame.splatControls.sharpness !== 'number' || !Number.isFinite(frame.splatControls.sharpness) || frame.splatControls.sharpness <= 0) {
       throw new Error(`${label} splat controls must carry positive finite radius and sharpness`);
     }
+    const controlConditioning = frame.controlConditioning != null
+      ? validateControlConditioning(frame, label)
+      : null;
+    if (options.requireControlConditioning === true && controlConditioning == null) {
+      throw new Error(`${label} control conditioning is required by this invocation`);
+    }
 
     const candidateArtifact = await validateArtifact(manifestPath, frame.candidates, `${label} candidate`);
     if (frame.candidates.dtype !== 'float32-le' || frame.candidates.strideFloats !== BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_STRIDE_FLOATS || !Number.isInteger(frame.candidates.count) || frame.candidates.count <= 0) {
@@ -217,6 +241,7 @@ export async function validateBoundarySplatSupervisionCorpus(manifestFile, optio
       structurePath: structureArtifact?.path || null,
       metaPath: metaArtifact?.path || null,
       structuralSupervisionIdentity: frame.structuralSupervision?.identity || null,
+      controlConditioning,
       candidateCount: frame.candidates.count,
     });
   }

@@ -41,8 +41,8 @@ assert.match(
 );
 assert.match(
   script,
-  /active_decoder\(base_predictions\[frame_index\],\s*optical_feature_planes\[frame_index\]\)/,
-  'the training objective actually consumes the projected native planes',
+  /active_decoder\(\s*base_predictions\[frame_index\],\s*optical_feature_planes\[frame_index\],\s*optical_control_conditions\[frame_index\],\s*\)/,
+  'the training objective consumes projected native planes and the explicit per-frame condition vector',
 );
 assert.doesNotMatch(
   script,
@@ -71,7 +71,7 @@ assert.match(
 );
 assert.match(
   script,
-  /"opticalInputAuthority"\s*:\s*\([\s\S]*PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY[\s\S]*OPTICAL_INPUT_AUTHORITY/,
+  /"opticalInputAuthority"\s*:\s*\(\s*model_receipt\["inputAuthority"\]/,
   'training receipts preserve the exact mode-dependent optical input authority',
 );
 assert.match(

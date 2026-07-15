@@ -75,6 +75,10 @@ assert.match(script, /"evaluationFrameIds"/, 'training receipts preserve the exa
 assert.match(script, /"evaluationFrames"/, 'radiance receipts preserve per-frame held-out optical metrics and previews');
 assert.match(script, /"trainingLossTrace"\s*:\s*training_losses/, 'optimization traces contain only the selected training-frame objective');
 assert.match(script, /"evaluationLossAuthority"\s*:\s*"held-out-frame-mean-v0"/, 'explicit holdout receipts label evaluation loss separately from the optimizer trace');
+assert.match(script, /--optical-condition-mode/, 'optical decoder exposes explicit global conditioning rather than inferring emitter regime accidentally');
+assert.match(script, /EMITTER_LIFECYCLE_CONDITION_IDENTITY/, 'mixed-width conditioning requires exact effective emitter and lifecycle custody');
+assert.match(script, /EMITTER_LIFECYCLE_CONDITION_ORDER/, 'model receipts preserve the emitter and lifecycle condition order');
+assert.match(script, /EMITTER_LIFECYCLE_CONDITION_AUTHORITY/, 'conditioning authority is tied to effective controls on the frozen simulator state');
 assert.doesNotMatch(
   script,
   /partial flow-debug witness requires an image-bearing optical or sparse-grid decoder/,

@@ -99,6 +99,21 @@ try {
         viewport: [640, 480],
       },
       splatControls: { radius: 0.8, sharpness: 6.5 },
+      controlConditioning: {
+        identity: 'boundary-splat-emitter-lifecycle-conditioning-v0',
+        authority: 'effective-runtime-controls-frozen-sim-state-v0',
+        sameStateCaptureId: 'same-state-000',
+        simStepCount: 144,
+        values: {
+          inputRadius: 0.24,
+          flowRate: 1.7,
+          fireScale: 1.1,
+          reactionFuelScale: 1,
+          lifecycleEffect: 'none',
+          lifecycleT: 0,
+          quenchVapor: 0,
+        },
+      },
       candidates: { path: candidatePath, bytes: candidateBytes.length, sha256: hash(candidateBytes), count: 2, strideFloats: 19, dtype: 'float32-le' },
       target: { path: targetPath, bytes: targetBytes.length, sha256: hash(targetBytes), authority: 'gpu-rgba8-raymarch-readback-frozen-sim-state', rendererIdentity: 'native-3d-compute-fluid-raymarch-v0', decomposition: 'candidate-support-gated-unit-gain-direct-flame-native-raymarch-v0' },
       structuralSupervision: {
@@ -139,7 +154,23 @@ try {
   assert.equal(valid.structuralFrameCount, 1);
   assert.equal(valid.frames[0].structurePath, structurePath);
   assert.equal(valid.frames[0].metaPath, metaPath);
+  assert.equal(valid.frames[0].controlConditioning.values.inputRadius, 0.24);
   assert.match(valid.corpusIdentity, /^sha256:[a-f0-9]{64}$/);
+
+  const missingControlConditioning = structuredClone(manifest);
+  delete missingControlConditioning.frames[0].controlConditioning;
+  await writeFile(manifestPath, JSON.stringify(missingControlConditioning));
+  const legacyUnconditioned = await validate();
+  assert.equal(legacyUnconditioned.frames[0].controlConditioning, null);
+  await assert.rejects(
+    () => validateBoundarySplatSupervisionCorpus(manifestPath, { expectedGrid: 1, requireControlConditioning: true }),
+    /control conditioning/i,
+  );
+
+  const wrongControlState = structuredClone(manifest);
+  wrongControlState.frames[0].controlConditioning.sameStateCaptureId = 'different-state';
+  await writeFile(manifestPath, JSON.stringify(wrongControlState));
+  await assert.rejects(validate, /control conditioning.*same-state/i);
 
   const fallback = structuredClone(manifest);
   fallback.frames[0].fallbackReason = 'raymarch-substitution';
