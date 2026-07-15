@@ -448,6 +448,114 @@ class TransportDatasetContracts(unittest.TestCase):
                         predict_step=predict_step,
                     )
 
+    def test_rollout_seed_loader_binds_model_corpus_objective_and_hidden_size(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest_bytes = b'{"schema":"test-corpus"}\n'
+            manifest_receipt = {
+                "path": str(root / "corpus.json"),
+                "bytes": len(manifest_bytes),
+                "sha256": MODULE.sha256_bytes(manifest_bytes),
+            }
+            model_document = frozen_model_document(hidden_size=3)
+            model_document["manifest"] = dict(manifest_receipt)
+            model_document["training"] = {
+                "objectiveFamily": MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+            }
+            model_document["calibration"]["destinationDeath"] = {
+                "authority": "training-eulerian-source-death-margin-f1-v0",
+                "threshold": 0.25,
+                "precision": 0.5,
+                "recall": 0.5,
+            }
+            model_path = root / "seed-model.json"
+            model_bytes = json.dumps(model_document, sort_keys=True).encode("utf8")
+            model_path.write_bytes(model_bytes)
+            model_sha256 = MODULE.sha256_bytes(model_bytes)
+
+            bundle = MODULE.load_rollout_seed_model(
+                model_path,
+                model_sha256,
+                manifest_receipt,
+                MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+                requested_hidden_size=3,
+            )
+            self.assertEqual(bundle["receipt"]["sha256"], model_sha256)
+            self.assertEqual(bundle["receipt"]["trainingManifestSha256"], manifest_receipt["sha256"])
+            self.assertEqual(bundle["receipt"]["hiddenSize"], 3)
+            self.assertEqual(bundle["receipt"]["normalizationAuthority"], "frozen-seed-model-input-normalization-v0")
+            np.testing.assert_array_equal(bundle["inputMean"], np.zeros(64, dtype=np.float32))
+            np.testing.assert_array_equal(bundle["inputScale"], np.ones(64, dtype=np.float32))
+
+            hostile_cases = [
+                ({"expected_sha256": "f" * 64}, "byte/hash mismatch"),
+                ({"manifest_receipt": {**manifest_receipt, "sha256": "e" * 64}}, "training manifest identity mismatch"),
+                ({"objective_family": MODULE.LEGACY_OBJECTIVE_FAMILY}, "Eulerian occupancy objective"),
+                ({"requested_hidden_size": 4}, "hidden size mismatch"),
+            ]
+            for overrides, error_pattern in hostile_cases:
+                arguments = {
+                    "model_path": model_path,
+                    "expected_sha256": model_sha256,
+                    "manifest_receipt": manifest_receipt,
+                    "objective_family": MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+                    "requested_hidden_size": 3,
+                }
+                arguments.update(overrides)
+                with self.subTest(overrides=overrides):
+                    with self.assertRaisesRegex(ValueError, error_pattern):
+                        MODULE.load_rollout_seed_model(**arguments)
+
+    def test_transport_training_exposure_combines_exact_and_recurrent_authorities(self):
+        docs = [
+            {"id": f"frame-{index}", "controlledStepFrameIndex": index}
+            for index in range(13)
+        ]
+        training_pairs = [
+            (docs[index], docs[index + 1])
+            for index in (0, 1, 2, 3, 4, 10, 11)
+        ]
+        frames = {
+            doc["id"]: frame([((0.0, 0.0, 0.0), float(doc["controlledStepFrameIndex"]))])
+            for doc in docs
+        }
+
+        def predict_step(source, _source_reference_frame_id, _rollout_depth):
+            return source, {
+                "compositionAuthority": "test-frozen-seed-recurrent-support-v0",
+                "predictedCount": len(source["keys"]),
+            }
+
+        datasets, pair_reports, rollout_exposure = MODULE.build_transport_training_exposure(
+            training_pairs,
+            frames,
+            grid_step=1.0,
+            objective_family=MODULE.EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY,
+            predict_step=predict_step,
+        )
+        self.assertEqual(len(datasets), 12)
+        self.assertEqual(len(pair_reports), 12)
+        self.assertEqual(rollout_exposure["authority"], "exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0")
+        self.assertEqual(rollout_exposure["exactPairCount"], 7)
+        self.assertEqual(rollout_exposure["recurrentPairCount"], 5)
+        self.assertIsNone(rollout_exposure["sampleCap"])
+        self.assertEqual(
+            [row["sourceAuthority"] for row in pair_reports].count("exact-corpus-frame-grid-identity-v0"),
+            7,
+        )
+        self.assertEqual(
+            [row["sourceAuthority"] for row in pair_reports].count("frozen-seed-model-induced-eulerian-support-v0"),
+            5,
+        )
+        self.assertFalse({"frame-6", "frame-7", "frame-8", "frame-9"} & {
+            frame_id
+            for row in pair_reports
+            for frame_id in (
+                row.get("sourceFrameId", row.get("sourceReferenceFrameId")),
+                row["targetFrameId"],
+            )
+        })
+
     def test_eulerian_sampler_spends_equal_batch_on_each_destination_cohort(self):
         cohorts = np.asarray([
             cohort

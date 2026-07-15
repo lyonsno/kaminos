@@ -647,6 +647,78 @@ def build_frozen_seed_eulerian_exposure(training_pairs, frames, grid_step, predi
     }
 
 
+def build_transport_training_exposure(
+    training_pairs,
+    frames,
+    grid_step,
+    objective_family,
+    predict_step=None,
+):
+    if not training_pairs:
+        raise ValueError("transport training exposure requires exact training pairs")
+    datasets = []
+    pair_reports = []
+    for left, right in training_pairs:
+        dataset = (
+            build_eulerian_pair_dataset(frames[left["id"]], frames[right["id"]], grid_step)
+            if objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
+            else build_pair_dataset(frames[left["id"]], frames[right["id"]], grid_step)
+        )
+        datasets.append(dataset)
+        pair_reports.append({
+            "sourceAuthority": "exact-corpus-frame-grid-identity-v0",
+            "targetAuthority": "exact-next-corpus-frame-grid-identity-v0",
+            "sourceFrameId": left["id"],
+            "targetFrameId": right["id"],
+            **{
+                key: value
+                for key, value in dataset["correspondence"].items()
+                if key != "matches" and key not in ("births", "deaths")
+            },
+            "carrierSampleCount": len(dataset["carrierLabels"]),
+            "sourceCount": len(frames[left["id"]]["keys"]),
+            "targetCount": len(frames[right["id"]]["keys"]),
+            "birthSampleCount": len(dataset["birthLabels"]),
+            "birthPositiveCount": int(np.sum(dataset["birthLabels"])),
+            "carrierCohorts": dataset["cohortCounts"],
+            "sampleCap": None,
+            **(
+                {"unsupportedBirthCount": dataset["unsupportedBirthCount"]}
+                if objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
+                else {}
+            ),
+        })
+    if predict_step is None:
+        return datasets, pair_reports, None
+    if objective_family != EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+        raise ValueError("frozen-seed recurrent exposure requires the Eulerian occupancy objective")
+    recurrent_datasets, recurrent_receipt = build_frozen_seed_eulerian_exposure(
+        training_pairs,
+        frames,
+        grid_step,
+        predict_step,
+    )
+    recurrent_reports = []
+    for dataset, receipt in zip(recurrent_datasets, recurrent_receipt["pairs"]):
+        recurrent_reports.append({
+            **receipt,
+            "carrierSampleCount": len(dataset["carrierLabels"]),
+            "birthSampleCount": len(dataset["birthLabels"]),
+            "birthPositiveCount": int(np.sum(dataset["birthLabels"])),
+            "carrierCohorts": dataset["cohortCounts"],
+        })
+    datasets.extend(recurrent_datasets)
+    pair_reports.extend(recurrent_reports)
+    return datasets, pair_reports, {
+        "authority": "exact-plus-frozen-seed-recurrent-eulerian-support-exposure-v0",
+        "exactPairCount": len(training_pairs),
+        "recurrentPairCount": len(recurrent_datasets),
+        "pairCount": len(datasets),
+        "sampleCap": None,
+        "recurrent": recurrent_receipt,
+    }
+
+
 def build_destination_state_dataset(source, target, grid_step, radius_cells=1, state_cohorts=None):
     eulerian = build_eulerian_pair_dataset(source, target, grid_step, radius_cells)
     state_cohorts = tuple(state_cohorts or DESTINATION_STATE_COHORTS)
@@ -1250,6 +1322,73 @@ def hydrate_frozen_model_document(document):
         target.bias = mx.array(np.asarray(layer["bias"], dtype=np.float32))
     mx.eval(model.parameters())
     return model, validated["mean"], validated["scale"]
+
+
+def load_rollout_seed_model(
+    model_path,
+    expected_sha256,
+    manifest_receipt,
+    objective_family,
+    requested_hidden_size,
+):
+    if objective_family != EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+        raise ValueError("rollout seed model requires the Eulerian occupancy objective")
+    if (
+        not isinstance(expected_sha256, str)
+        or len(expected_sha256) != 64
+        or any(character not in "0123456789abcdefABCDEF" for character in expected_sha256)
+    ):
+        raise ValueError("rollout seed model expected SHA-256 is malformed")
+    model_path = Path(model_path).resolve()
+    model_bytes = model_path.read_bytes()
+    model_sha256 = sha256_bytes(model_bytes)
+    if model_sha256.lower() != expected_sha256.lower():
+        raise ValueError("rollout seed model byte/hash mismatch")
+    document = json.loads(model_bytes)
+    validated = validate_frozen_model_document(document)
+    if validated["objectiveFamily"] != EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+        raise ValueError("rollout seed model requires the Eulerian occupancy objective")
+    training_manifest = document.get("manifest", {})
+    if (
+        not isinstance(training_manifest, dict)
+        or not isinstance(training_manifest.get("path"), str)
+        or not training_manifest["path"]
+        or not isinstance(training_manifest.get("bytes"), int)
+        or isinstance(training_manifest.get("bytes"), bool)
+        or training_manifest["bytes"] < 1
+        or not isinstance(training_manifest.get("sha256"), str)
+        or len(training_manifest["sha256"]) != 64
+    ):
+        raise ValueError("rollout seed model training manifest identity is malformed")
+    if (
+        training_manifest["bytes"] != manifest_receipt.get("bytes")
+        or training_manifest["sha256"].lower() != str(manifest_receipt.get("sha256", "")).lower()
+    ):
+        raise ValueError("rollout seed model training manifest identity mismatch")
+    if (
+        not isinstance(requested_hidden_size, int)
+        or isinstance(requested_hidden_size, bool)
+        or requested_hidden_size != validated["hiddenSize"]
+    ):
+        raise ValueError("rollout seed model hidden size mismatch")
+    model, input_mean, input_scale = hydrate_frozen_model_document(document)
+    return {
+        "model": model,
+        "document": document,
+        "inputMean": input_mean,
+        "inputScale": input_scale,
+        "receipt": {
+            "authority": "byte-hash-bound-frozen-eulerian-rollout-seed-v0",
+            "path": str(model_path),
+            "bytes": len(model_bytes),
+            "sha256": model_sha256,
+            "schema": MODEL_SCHEMA,
+            "trainingManifestSha256": training_manifest["sha256"],
+            "objectiveFamily": validated["objectiveFamily"],
+            "hiddenSize": validated["hiddenSize"],
+            "normalizationAuthority": "frozen-seed-model-input-normalization-v0",
+        },
+    }
 
 
 def validate_frozen_destination_state_model_document(document):
@@ -2047,6 +2186,8 @@ def parse_args():
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--model", default="")
+    parser.add_argument("--rollout-seed-model", default="")
+    parser.add_argument("--rollout-seed-model-sha256", default="")
     parser.add_argument("--state-model", default="")
     parser.add_argument("--state-recurrence-mode", choices=STATE_RECURRENCE_MODES, default="coupled")
     parser.add_argument("--support-budget-mode", choices=SUPPORT_BUDGET_MODES, default="one-step-ratio")
@@ -2084,6 +2225,12 @@ def main():
     try:
         if args.holdout_steps < 1 or args.hidden_size < 1 or args.epochs < 1 or args.batch_size < 1:
             raise ValueError("holdout, model, epoch, and batch dimensions must be positive")
+        if bool(args.rollout_seed_model) != bool(args.rollout_seed_model_sha256):
+            raise ValueError("rollout seed model path and expected SHA-256 must be supplied together")
+        if args.rollout_seed_model and args.model:
+            raise ValueError("rollout seed model is valid only during training")
+        if args.rollout_seed_model and args.objective_family != EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY:
+            raise ValueError("rollout seed model requires the Eulerian occupancy objective")
         if args.state_model and not args.model:
             raise ValueError("destination-state model is valid only during frozen transport inference")
         if args.support_budget_mode != "one-step-ratio" and not args.model:
@@ -2141,6 +2288,22 @@ def main():
             "bytes": len(manifest_bytes),
             "sha256": sha256_bytes(manifest_bytes),
         }
+        rollout_seed_bundle = None
+        if args.rollout_seed_model:
+            failure_phase = "rollout-seed-model-validation"
+            rollout_seed_bundle = load_rollout_seed_model(
+                args.rollout_seed_model,
+                args.rollout_seed_model_sha256,
+                manifest_receipt,
+                args.objective_family,
+                args.hidden_size,
+            )
+            last_trustworthy.update({
+                "rolloutSeedModelPath": rollout_seed_bundle["receipt"]["path"],
+                "rolloutSeedModelSha256": rollout_seed_bundle["receipt"]["sha256"],
+                "rolloutSeedTrainingManifestSha256": rollout_seed_bundle["receipt"]["trainingManifestSha256"],
+                "rolloutSeedNormalizationAuthority": rollout_seed_bundle["receipt"]["normalizationAuthority"],
+            })
         if args.model:
             failure_phase = "frozen-model-validation"
             model_path = Path(args.model).resolve()
@@ -2343,30 +2506,39 @@ def main():
             print(json.dumps(report, indent=2))
             return
         failure_phase = "dataset-construction"
-        datasets = []
-        pair_reports = []
-        for left, right in training_pairs:
-            dataset = (
-                build_eulerian_pair_dataset(frames[left["id"]], frames[right["id"]], grid_step)
-                if args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
-                else build_pair_dataset(frames[left["id"]], frames[right["id"]], grid_step)
-            )
-            datasets.append(dataset)
-            pair_reports.append({
-                "sourceFrameId": left["id"], "targetFrameId": right["id"],
-                **{key: value for key, value in dataset["correspondence"].items() if key != "matches" and key not in ("births", "deaths")},
-                "carrierSampleCount": len(dataset["carrierLabels"]),
-                "sourceCount": len(frames[left["id"]]["keys"]),
-                "targetCount": len(frames[right["id"]]["keys"]),
-                "birthSampleCount": len(dataset["birthLabels"]),
-                "birthPositiveCount": int(np.sum(dataset["birthLabels"])),
-                "carrierCohorts": dataset["cohortCounts"],
-                **(
-                    {"unsupportedBirthCount": dataset["unsupportedBirthCount"]}
-                    if args.objective_family == EULERIAN_OCCUPANCY_OBJECTIVE_FAMILY
-                    else {}
-                ),
-            })
+        seed_predict_step = None
+        if rollout_seed_bundle is not None:
+            seed_document = rollout_seed_bundle["document"]
+
+            def seed_predict_step(source, _source_reference_frame_id, _rollout_depth):
+                return recurrent_predict(
+                    rollout_seed_bundle["model"],
+                    source,
+                    grid_step,
+                    rollout_seed_bundle["inputMean"],
+                    rollout_seed_bundle["inputScale"],
+                    seed_document["calibration"]["birth"],
+                    seed_document["calibration"]["targetSupport"],
+                    args.batch_size,
+                    destination_death_calibration=seed_document["calibration"]["destinationDeath"],
+                )
+
+        datasets, pair_reports, rollout_exposure = build_transport_training_exposure(
+            training_pairs,
+            frames,
+            grid_step,
+            args.objective_family,
+            seed_predict_step,
+        )
+        last_trustworthy.update({
+            "trainingExposureAuthority": (
+                rollout_exposure["authority"]
+                if rollout_exposure is not None
+                else "exact-adjacent-corpus-pairs-only-v0"
+            ),
+            "trainingExposurePairCount": len(pair_reports),
+            "trainingExposureSampleCap": None,
+        })
         carrier_inputs = np.concatenate([dataset["carrierInputs"] for dataset in datasets])
         carrier_labels = np.concatenate([dataset["carrierLabels"] for dataset in datasets])
         carrier_cohorts = np.concatenate([dataset["carrierCohorts"] for dataset in datasets])
@@ -2378,10 +2550,16 @@ def main():
             else None
         )
         raw_carrier_inputs = carrier_inputs
-        all_inputs = np.concatenate((carrier_inputs, birth_inputs))
-        input_mean = np.mean(all_inputs, axis=0, dtype=np.float64).astype(np.float32)
-        input_scale = np.std(all_inputs, axis=0, dtype=np.float64).astype(np.float32)
-        input_scale[input_scale < 1e-6] = 1.0
+        if rollout_seed_bundle is not None:
+            input_mean = rollout_seed_bundle["inputMean"].copy()
+            input_scale = rollout_seed_bundle["inputScale"].copy()
+            normalization_authority = "frozen-seed-model-input-normalization-v0"
+        else:
+            all_inputs = np.concatenate((carrier_inputs, birth_inputs))
+            input_mean = np.mean(all_inputs, axis=0, dtype=np.float64).astype(np.float32)
+            input_scale = np.std(all_inputs, axis=0, dtype=np.float64).astype(np.float32)
+            input_scale[input_scale < 1e-6] = 1.0
+            normalization_authority = "combined-training-population-channel-standardization-v0"
         carrier_inputs = ((carrier_inputs - input_mean) / input_scale).astype(np.float32)
         birth_inputs = ((birth_inputs - input_mean) / input_scale).astype(np.float32)
         class_counts = np.bincount(carrier_labels, minlength=DEATH_CLASS + 1).astype(np.float32)
@@ -2408,7 +2586,11 @@ def main():
         failure_phase = "model-training"
         rng = np.random.default_rng(args.seed)
         mx.random.seed(args.seed)
-        model = TransportModel(args.hidden_size)
+        model = (
+            rollout_seed_bundle["model"]
+            if rollout_seed_bundle is not None
+            else TransportModel(args.hidden_size)
+        )
         mx.eval(model.parameters())
         optimizer = optim.AdamW(learning_rate=args.learning_rate, weight_decay=args.weight_decay)
         loss_and_grad = nn.value_and_grad(model, weighted_loss)
@@ -2472,7 +2654,9 @@ def main():
             "manifest": manifest_receipt,
             "input": {
                 "authority": INPUT_AUTHORITY, "featureCount": 64, "candidateFeatureCount": 16,
-                "directionalOccupancyCount": 27, "mean": input_mean.tolist(), "scale": input_scale.tolist(),
+                "directionalOccupancyCount": 27,
+                "normalizationAuthority": normalization_authority,
+                "mean": input_mean.tolist(), "scale": input_scale.tolist(),
             },
             "architecture": {
                 "authority": ARCHITECTURE_AUTHORITY,
@@ -2499,6 +2683,26 @@ def main():
                 "seed": args.seed,
                 "losses": losses,
                 "objectiveFamily": args.objective_family,
+                "initializationAuthority": (
+                    "frozen-seed-model-weights-v0"
+                    if rollout_seed_bundle is not None
+                    else "seeded-random-initialization-v0"
+                ),
+                "requestedHiddenSize": args.hidden_size,
+                "effectiveHiddenSize": int(model.trunk_a.weight.shape[0]),
+                "calibrationPopulationAuthority": (
+                    "exact-plus-frozen-seed-recurrent-exposure-v0"
+                    if rollout_exposure is not None
+                    else "exact-adjacent-training-pairs-v0"
+                ),
+                **(
+                    {
+                        "rolloutSeedModel": rollout_seed_bundle["receipt"],
+                        "rolloutExposure": rollout_exposure,
+                    }
+                    if rollout_seed_bundle is not None
+                    else {}
+                ),
                 "carrierSamplingAuthority": (
                     "uniform-with-replacement-across-q1-q4-transported-death-v0"
                     if args.objective_family == MOTION_BALANCED_OBJECTIVE_FAMILY
@@ -2609,6 +2813,14 @@ def main():
             "model": {"path": str(model_path), "sha256": sha256_bytes(model_path.read_bytes())},
             "predictions": {"path": str(prediction_path), "sha256": sha256_bytes(prediction_path.read_bytes())},
             "trainingPairs": pair_reports,
+            **(
+                {
+                    "rolloutSeedModel": rollout_seed_bundle["receipt"],
+                    "rolloutExposure": rollout_exposure,
+                }
+                if rollout_seed_bundle is not None
+                else {}
+            ),
             "calibration": model_artifact["calibration"],
             "holdoutMetrics": holdout_metrics,
             "rolloutGate": summarize_rollout_gate(holdout_metrics),
