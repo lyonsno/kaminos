@@ -42,6 +42,8 @@
   </div>
   <iframe id="basin" title="Kaminos exact selective-head live basin"></iframe>
   <script type="module">
+    import { installVolumeRuntimeForwarders } from './volume-selective-head-wrapper-runtime.mjs';
+
     const ROUTE_IDENTITY = 'exact-basin-selective-head-live-v0';
     const WARMUP_AUTHORITY = 'checksum-bound-exact-basin-step96-field-anchor-v0';
     const ANCHOR_FLUID_SHA256 = 'd58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb94ac1';
@@ -80,6 +82,7 @@
       : null;
     let warmupError = warmupParamValid ? null : `invalid warmup_steps: ${JSON.stringify(warmupParam)}`;
     const basin = document.getElementById('basin');
+    installVolumeRuntimeForwarders(window, basin);
     const status = document.getElementById('status');
     document.getElementById('assay-source').textContent = warmupTarget === 0
       ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
@@ -141,13 +144,6 @@
     function prototype() {
       return basin.contentWindow?.__kaminosVolumePrototype || null;
     }
-
-    Object.defineProperty(window, '__kaminosVolumePrototype', {
-      get: () => basin.contentWindow?.__kaminosVolumePrototype || null,
-    });
-    Object.defineProperty(window, '__kaminosVolumeBridge', {
-      get: () => basin.contentWindow?.__kaminosVolumeBridge || null,
-    });
 
     function setRole(role) {
       if (!roles.includes(role)) return;

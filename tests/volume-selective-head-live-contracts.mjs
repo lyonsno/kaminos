@@ -92,13 +92,8 @@ assert.match(page, /Continuous same-history live assay/);
 assert.match(page, /window\.__kaminosSelectiveHeadLive/);
 assert.match(
   page,
-  /Object\.defineProperty\(window,\s*'__kaminosVolumePrototype',[\s\S]*get:\s*\(\)\s*=>\s*basin\.contentWindow\?\.__kaminosVolumePrototype\s*\|\|\s*null/,
-  'exact same-origin wrapper dynamically forwards the native volume prototype expected by generic witnesses',
-);
-assert.match(
-  page,
-  /Object\.defineProperty\(window,\s*'__kaminosVolumeBridge',[\s\S]*get:\s*\(\)\s*=>\s*basin\.contentWindow\?\.__kaminosVolumeBridge\s*\|\|\s*null/,
-  'exact same-origin wrapper dynamically forwards the native renderer bridge expected by generic witnesses',
+  /import\s*\{\s*installVolumeRuntimeForwarders\s*\}\s*from\s*['"]\.\/volume-selective-head-wrapper-runtime\.mjs['"][\s\S]*installVolumeRuntimeForwarders\(window,\s*basin\)/,
+  'exact wrapper installs the executable same-origin runtime-forwarding contract for generic witnesses',
 );
 assert.doesNotMatch(
   page,
