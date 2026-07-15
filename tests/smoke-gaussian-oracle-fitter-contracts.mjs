@@ -9,9 +9,15 @@ const fitterUrl = new URL('../smoke-gaussian-oracle-fitter.mjs', import.meta.url
 const {
   SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY,
   fitSmokeGaussianOracleFrame,
+  loadChecksumBoundSmokeTeacherFrame,
 } = await import(fitterUrl);
 
 assert.equal(SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY, 'smoke-gaussian-oracle-static-fit-v0');
+assert.equal(
+  typeof loadChecksumBoundSmokeTeacherFrame,
+  'function',
+  'held smoke producers share the same checksum-bound source admission path',
+);
 
 const channels = [
   'velocityX', 'velocityY', 'velocityZ', 'densityCarrier',

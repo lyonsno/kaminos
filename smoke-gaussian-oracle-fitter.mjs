@@ -155,7 +155,7 @@ function normalizeBudgets(budgets) {
   return Array.from(new Set(normalized)).sort((left, right) => left - right);
 }
 
-async function loadTeacherFrame(manifestPath, expectedManifestSha256) {
+export async function loadChecksumBoundSmokeTeacherFrame(manifestPath, expectedManifestSha256) {
   const manifestBytes = await readFile(manifestPath);
   const manifest = JSON.parse(manifestBytes.toString('utf8'));
   if (manifest.schema === HELD_REPLAY_SCHEMA) {
@@ -562,7 +562,7 @@ export async function fitSmokeGaussianOracleFrame({
   const iterations = Math.max(1, Math.floor(Number(maxIterations) || 12));
   const threshold = Math.max(0, Number(densityThreshold) || 0);
   await mkdir(outDir, { recursive: true });
-  const frame = await loadTeacherFrame(resolve(manifestPath), expectedManifestSha256);
+  const frame = await loadChecksumBoundSmokeTeacherFrame(resolve(manifestPath), expectedManifestSha256);
   const smoke = extractSmokeSamples(frame, threshold);
   const budgetCurve = [];
   for (const budget of requestedBudgets) {
