@@ -425,11 +425,33 @@ function validateSlotMetadata(metadata, requestedDepth) {
 }
 
 function validateCost(cost) {
-  if (cost?.identity !== 'boundary-splat-pbr-cost-ladder-v0' || cost?.simulatorCount !== 1) {
+  const exactSampling = Array.isArray(cost?.counts)
+    && cost.counts.length === 1
+    && Number(cost.counts[0]) === 100
+    && Number(cost.warmupSamples) === warmupSamples
+    && Number(cost.steadySamples) === steadySamples;
+  if (cost?.identity !== 'boundary-splat-pbr-cost-ladder-v0'
+    || cost?.ok !== true
+    || cost?.authority !== 'serial-same-browser-gpu-timestamp-query-frozen-live-simulator-v0'
+    || cost?.simulatorPreserved !== true
+    || Number(cost?.addedSimulationPasses) !== 0
+    || cost?.effectiveRoute !== EFFECTIVE_ROUTE
+    || cost?.backend !== 'WebGPU:apple'
+    || cost?.sourceAuthority !== SOURCE_AUTHORITY
+    || cost?.rendererIdentity !== RENDERER
+    || cost?.modelIdentity !== MODEL
+    || cost?.pbrSceneIdentity !== PBR_SCENE
+    || cost?.phaseSourceIdentity !== PHASE_SOURCE
+    || !exactSampling) {
     throw new Error(`gpu-work-evidence-invalid:${JSON.stringify(cost)}`);
   }
   const row = cost.rows?.find(item => Number(item.requestedInstanceCount) === 100);
-  if (!row || row.fallbackReason || Number(row.overflowCount) > 0) {
+  if (!row
+    || row.fallbackReason !== null
+    || row.overflowCount !== 0
+    || row.candidateCopyBytes !== 0
+    || row.timestampStatus !== 'available'
+    || row.indirectCommandAgreement !== true) {
     throw new Error(`gpu-work-row-invalid:${JSON.stringify(row)}`);
   }
 }

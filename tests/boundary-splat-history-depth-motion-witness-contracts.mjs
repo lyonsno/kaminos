@@ -33,6 +33,73 @@ assert.match(witness, /pageId/, 'one page target identity must span every depth'
 assert.match(witness, /CDP debug port already in use before launch/, 'witness must refuse a stale browser endpoint before launch');
 assert.doesNotMatch(witness, /slice\(0,\s*\d+\)/, 'caller-requested frame/depth flow must not be silently capped');
 
+const validateCostSource = witness.match(/function validateCost\(cost\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(validateCostSource, 'cost validator must remain directly contract-testable');
+const validateCost = Function(
+  'EFFECTIVE_ROUTE',
+  'RENDERER',
+  'MODEL',
+  'SOURCE_AUTHORITY',
+  'PBR_SCENE',
+  'PHASE_SOURCE',
+  'warmupSamples',
+  'steadySamples',
+  `${validateCostSource}; return validateCost;`,
+)(
+  'native-3d-compute-fluid-raymarch-v0',
+  'live-boundary-sidecar-learned-attribute-splats-v0',
+  'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472',
+  'live-baked-sidecar-plus-fluid-material-v0',
+  'boundary-splat-pbr-fire-field-v0',
+  'age-sweep-history',
+  3,
+  12,
+);
+const currentCostEvidence = {
+  identity: 'boundary-splat-pbr-cost-ladder-v0',
+  ok: true,
+  authority: 'serial-same-browser-gpu-timestamp-query-frozen-live-simulator-v0',
+  counts: [100],
+  warmupSamples: 3,
+  steadySamples: 12,
+  simulatorPreserved: true,
+  addedSimulationPasses: 0,
+  pbrSceneIdentity: 'boundary-splat-pbr-fire-field-v0',
+  effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+  backend: 'WebGPU:apple',
+  sourceAuthority: 'live-baked-sidecar-plus-fluid-material-v0',
+  rendererIdentity: 'live-boundary-sidecar-learned-attribute-splats-v0',
+  modelIdentity: 'sha256:22284e5b930ef893e3c874ed1bd9efd077a16f29f14002155afe072f262ac472',
+  phaseSourceIdentity: 'age-sweep-history',
+  rows: [{
+    requestedInstanceCount: 100,
+    overflowCount: 0,
+    candidateCopyBytes: 0,
+    fallbackReason: null,
+    timestampStatus: 'available',
+    indirectCommandAgreement: true,
+  }],
+};
+assert.doesNotThrow(
+  () => validateCost(currentCostEvidence),
+  'current frozen-live-simulator cost authority must not be rejected for omitting obsolete simulatorCount',
+);
+for (const [label, mutate] of [
+  ['simulator replacement', evidence => { evidence.simulatorPreserved = false; }],
+  ['added simulation pass', evidence => { evidence.addedSimulationPasses = 1; }],
+  ['substituted sample count', evidence => { evidence.steadySamples = 8; }],
+  ['candidate copy', evidence => { evidence.rows[0].candidateCopyBytes = 16; }],
+  ['missing candidate copy proof', evidence => { delete evidence.rows[0].candidateCopyBytes; }],
+  ['missing overflow proof', evidence => { delete evidence.rows[0].overflowCount; }],
+  ['missing fallback proof', evidence => { delete evidence.rows[0].fallbackReason; }],
+  ['missing timestamp', evidence => { evidence.rows[0].timestampStatus = 'unavailable'; }],
+  ['indirect disagreement', evidence => { evidence.rows[0].indirectCommandAgreement = false; }],
+]) {
+  const evidence = structuredClone(currentCostEvidence);
+  mutate(evidence);
+  assert.throws(() => validateCost(evidence), /gpu-work-/, `${label} must not pass GPU work validation`);
+}
+
 const invalidRoot = mkdtempSync(join(tmpdir(), 'kaminos-history-depth-invalid-'));
 const invalidReport = join(invalidRoot, 'nested', 'report.json');
 const invalid = spawnSync(process.execPath, [
