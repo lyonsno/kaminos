@@ -170,12 +170,40 @@ async function runMeshAssetLinkScenario(ws) {
       if (!state.requestedRoot || !state.requestedPath || !state.effectiveUrl?.includes('/api/read?')) {
         throw new Error('mesh asset link did not preserve requested/effective route identity: ' + JSON.stringify(state));
       }
+      const requestedParams = new URLSearchParams(location.search);
+      const expectedRoot = requestedParams.get('mesh_root');
+      const expectedPath = requestedParams.get('mesh_path');
+      const effectiveRoute = new URL(state.effectiveUrl, location.href);
+      const effectiveKeys = [...effectiveRoute.searchParams.keys()].sort();
+      if (
+        !expectedRoot ||
+        !expectedPath ||
+        state.requestedRoot !== expectedRoot ||
+        state.requestedPath !== expectedPath ||
+        effectiveRoute.pathname !== '/api/read' ||
+        effectiveRoute.searchParams.get('root') !== expectedRoot ||
+        effectiveRoute.searchParams.get('path') !== expectedPath ||
+        effectiveKeys.length !== 2 ||
+        effectiveKeys[0] !== 'path' ||
+        effectiveKeys[1] !== 'root'
+      ) {
+        throw new Error('mesh asset link used the wrong requested route identity: ' + JSON.stringify({ expectedRoot, expectedPath, state, effectiveUrl: effectiveRoute.href }));
+      }
       const object = evidence.objects.find(record => record.id === state.registeredObjectId);
       if (!object || object.type !== 'glb' || object.source !== state.effectiveUrl) {
         throw new Error('mesh asset link did not register the loaded GLB as a scene object: ' + JSON.stringify({ state, object, objects: evidence.objects }));
       }
       const resourceNames = performance.getEntriesByType('resource').map(entry => entry.name);
-      const requestedResource = resourceNames.find(name => name.includes('/api/read?') && name.includes('root=' + encodeURIComponent(state.requestedRoot)) && name.includes('path=' + encodeURIComponent(state.requestedPath)));
+      const requestedResource = resourceNames.find(name => {
+        const resourceUrl = new URL(name, location.href);
+        const resourceKeys = [...resourceUrl.searchParams.keys()].sort();
+        return resourceUrl.pathname === '/api/read' &&
+          resourceUrl.searchParams.get('root') === expectedRoot &&
+          resourceUrl.searchParams.get('path') === expectedPath &&
+          resourceKeys.length === 2 &&
+          resourceKeys[0] === 'path' &&
+          resourceKeys[1] === 'root';
+      });
       if (!requestedResource) {
         throw new Error('mesh asset link registered without a matching browser resource request: ' + JSON.stringify({ state, resourceNames }));
       }
@@ -204,6 +232,9 @@ const DIRECT_ASSET_LINK_SCENARIOS = {
     missingSchema: 'splat asset link debug state missing schema',
     wrongType: 'splat asset link debug state used wrong asset type',
     wrongRoute: 'splat asset link did not preserve requested/effective route identity',
+    rootParam: 'splat_root',
+    pathParam: 'splat_path',
+    wrongRequestedRoute: 'splat asset link used the wrong requested route identity',
     wrongRegistration: 'splat asset link did not register the loaded splat as a scene object',
     missingResource: 'splat asset link registered without a matching browser resource request',
     missingRow: 'splat asset link registered object missing from scene object list',
@@ -217,6 +248,9 @@ const DIRECT_ASSET_LINK_SCENARIOS = {
     missingSchema: 'image asset link debug state missing schema',
     wrongType: 'image asset link debug state used wrong asset type',
     wrongRoute: 'image asset link did not preserve requested/effective route identity',
+    rootParam: 'image_root',
+    pathParam: 'image_path',
+    wrongRequestedRoute: 'image asset link used the wrong requested route identity',
     wrongRegistration: 'image asset link did not register the loaded image as a scene object',
     missingResource: 'image asset link registered without a matching browser resource request',
     missingRow: 'image asset link registered object missing from scene object list',
@@ -257,12 +291,40 @@ async function runDirectAssetLinkScenario(ws, config) {
       if (!state.requestedRoot || !state.requestedPath || !state.effectiveUrl?.includes('/api/read?')) {
         throw new Error(config.wrongRoute + ': ' + JSON.stringify(state));
       }
+      const requestedParams = new URLSearchParams(location.search);
+      const expectedRoot = requestedParams.get(config.rootParam);
+      const expectedPath = requestedParams.get(config.pathParam);
+      const effectiveRoute = new URL(state.effectiveUrl, location.href);
+      const effectiveKeys = [...effectiveRoute.searchParams.keys()].sort();
+      if (
+        !expectedRoot ||
+        !expectedPath ||
+        state.requestedRoot !== expectedRoot ||
+        state.requestedPath !== expectedPath ||
+        effectiveRoute.pathname !== '/api/read' ||
+        effectiveRoute.searchParams.get('root') !== expectedRoot ||
+        effectiveRoute.searchParams.get('path') !== expectedPath ||
+        effectiveKeys.length !== 2 ||
+        effectiveKeys[0] !== 'path' ||
+        effectiveKeys[1] !== 'root'
+      ) {
+        throw new Error(config.wrongRequestedRoute + ': ' + JSON.stringify({ expectedRoot, expectedPath, state, effectiveUrl: effectiveRoute.href }));
+      }
       const object = evidence.objects.find(record => record.id === state.registeredObjectId);
       if (!object || object.type !== config.objectType || object.source !== state.effectiveUrl) {
         throw new Error(config.wrongRegistration + ': ' + JSON.stringify({ state, object, objects: evidence.objects }));
       }
       const resourceNames = performance.getEntriesByType('resource').map(entry => entry.name);
-      const requestedResource = resourceNames.find(name => name.includes('/api/read?') && name.includes('root=' + encodeURIComponent(state.requestedRoot)) && name.includes('path=' + encodeURIComponent(state.requestedPath)));
+      const requestedResource = resourceNames.find(name => {
+        const resourceUrl = new URL(name, location.href);
+        const resourceKeys = [...resourceUrl.searchParams.keys()].sort();
+        return resourceUrl.pathname === '/api/read' &&
+          resourceUrl.searchParams.get('root') === expectedRoot &&
+          resourceUrl.searchParams.get('path') === expectedPath &&
+          resourceKeys.length === 2 &&
+          resourceKeys[0] === 'path' &&
+          resourceKeys[1] === 'root';
+      });
       if (!requestedResource) {
         throw new Error(config.missingResource + ': ' + JSON.stringify({ state, resourceNames }));
       }
