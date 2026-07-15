@@ -1,3 +1,8 @@
+import {
+  SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY,
+  validateSmokeSplatGpuProduct,
+} from './smoke-splat-gpu-product.mjs';
+
 export const SMOKE_SPLAT_MOTION_MANIFEST_SCHEMA = 'kaminos.smoke-splat-motion-source.v0';
 export const SMOKE_SPLAT_MOTION_ROUTE_IDENTITY = 'webgpu-real-field-hierarchical-smoke-motion-v0';
 export const SMOKE_SPLAT_MOTION_TEMPORAL_AUTHORITY = 'velocity-carried-short-horizon-extrapolation-v0';
@@ -271,17 +276,24 @@ function prepareProductUpload(product, fineLodFraction) {
     if (fineLodFraction !== 1) {
       throw new Error('live GPU product fine LOD requires a dedicated GPU repack and cannot be applied implicitly');
     }
-    const total = requireInteger(product?.hierarchyCounts?.total, 'live GPU product total count');
+    validateSmokeSplatGpuProduct(product, { device: product.device });
+    const total = requireInteger(product?.activeCount, 'live GPU product active count');
+    const capacity = requireInteger(product?.capacity, 'live GPU product capacity');
     const coarse = requireInteger(product?.hierarchyCounts?.coarse, 'live GPU product coarse count');
     const fine = requireInteger(product?.hierarchyCounts?.fine, 'live GPU product fine count');
-    if (total <= 0 || coarse < 0 || fine < 0 || coarse + fine !== total || product.splatCount !== total) {
+    if (coarse < 0 || fine < 0 || coarse + fine !== total) {
       throw new Error('live GPU product hierarchy counts are inconsistent');
     }
     return {
       productIdentity: requireIdentity(product.identity, 'live GPU product identity'),
       selectedIndices: null,
       selectedCount: total,
-      sourceCount: total,
+      sourceCount: capacity,
+      capacity,
+      activeCount: total,
+      requestedRepresentation: product.representation.requestedIdentity,
+      effectiveRepresentation: product.representation.effectiveIdentity,
+      fallbackReason: product.representation.fallbackReason,
       coarseCount: coarse,
       fineCount: fine,
       sourceExtinctionMass: null,
@@ -292,6 +304,8 @@ function prepareProductUpload(product, fineLodFraction) {
       packedBuffer: product.packedBuffer,
       productDevice: product.device,
       productOwnership: product.ownership,
+      drawAuthority: product.draw.authority,
+      drawMode: product.draw.mode,
     };
   }
   const selectedIndices = selectSmokeSplatIndices(product, { fineLodFraction });
@@ -317,6 +331,11 @@ function prepareProductUpload(product, fineLodFraction) {
     selectedIndices,
     selectedCount: selectedIndices.length,
     sourceCount: product.splats.length,
+    capacity: product.splats.length,
+    activeCount: selectedIndices.length,
+    requestedRepresentation: product.producerKind ?? product.producerAuthority ?? 'offline-packed-product-v0',
+    effectiveRepresentation: product.producerKind ?? product.producerAuthority ?? 'offline-packed-product-v0',
+    fallbackReason: null,
     coarseCount: coarseIndices.length,
     fineCount: selectedIndices.length - coarseIndices.length,
     sourceExtinctionMass: sourceMass,
@@ -432,6 +451,16 @@ export function buildPhaseMatchedHybridSmokePlan({
   });
 
   const maxSelectedProductCount = Math.max(...productUploads.map(upload => upload.selectedCount));
+  const drawAuthorities = new Set(productUploads.map(upload => upload.drawAuthority ?? SMOKE_SPLAT_DIRECT_DRAW_AUTHORITY));
+  const drawModes = new Set(productUploads.map(upload => upload.drawMode ?? 'direct'));
+  if (drawAuthorities.size !== 1 || drawModes.size !== 1) {
+    throw new Error('hybrid smoke products must share one draw authority and mode');
+  }
+  const drawAuthority = [...drawAuthorities][0];
+  const drawMode = [...drawModes][0];
+  if (drawMode !== 'direct') {
+    throw new Error('indirect smoke products require a renderer-owned instance-count draw plan');
+  }
   const drawInstanceCount = maxSelectedProductCount * instanceBindings.length;
   if (!Number.isSafeInteger(drawInstanceCount) || drawInstanceCount > 0xffffffff) {
     throw new RangeError(`requested uncapped hybrid draw exceeds WebGPU draw instance address space: ${drawInstanceCount}`);
@@ -449,6 +478,8 @@ export function buildPhaseMatchedHybridSmokePlan({
     uniqueProductCount: productUploads.length,
     fineLodFraction,
     maxSelectedProductCount,
+    drawAuthority,
+    drawMode,
     drawInstanceCount,
     rejectedExtinctionMass: productUploads.reduce((sum, upload) => sum + upload.rejectedExtinctionMass, 0),
     productUploads,
