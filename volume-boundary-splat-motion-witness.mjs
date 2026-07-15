@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, resolve } from 'node:path';
+import { basename, relative, resolve } from 'node:path';
 import { inflateSync as zlibInflateSync } from 'node:zlib';
 
 const SCHEMA = 'kaminos.volume.boundary-splat-motion-witness.v0';
@@ -18,6 +18,7 @@ const REJECTED_LEARNED_MODELS = new Set([
 const SPLAT_SOURCE_AUTHORITY = 'live-baked-sidecar-plus-fluid-material-v0';
 const SOURCE_AUTHORITY = SPLAT_SOURCE_AUTHORITY;
 const RAYMARCH_RENDERER = 'matched-raymarch';
+const RAYMARCH_RECONSTRUCTION = 'native-resolution';
 
 const args = parseArgs(process.argv.slice(2));
 const requestedRoute = String(args.get('--url') || '');
@@ -30,6 +31,8 @@ const settleMs = Math.max(0, Number(args.get('--settle-ms') || 2500));
 const frameCount = Math.max(2, Math.floor(Number(args.get('--frames') || 6)));
 const stepMs = Math.max(1, Number(args.get('--step-ms') || 2000));
 const wallStepMs = Math.max(0, Number(args.get('--wall-step-ms') || 0));
+const projectedAreaSweepRequested = args.has('--projected-area-sweep');
+const projectedAreaFactors = parsePositiveNumberList(args.get('--projected-area-factors') || '0.9,1.15,1.5,2,2.7');
 const keepBrowserOpen = args.has('--keep-browser-open');
 const userDataDir = resolve(String(args.get('--user-data-dir') || mkdtempSync(`${tmpdir()}/kaminos-splat-motion-chrome-`)));
 
@@ -88,6 +91,10 @@ try {
   const staticSequence = await captureSequence(staticCamera);
   failurePhase = 'grazing-camera-capture';
   const grazingSequence = await captureSequence(grazingCamera);
+  failurePhase = 'projected-area-sweep';
+  const projectedAreaSweep = projectedAreaSweepRequested
+    ? await captureProjectedAreaSweep(staticCamera.pose)
+    : null;
   failurePhase = 'false-closure-validation';
   const report = {
     schema: SCHEMA,
@@ -115,18 +122,23 @@ try {
       wallStepMs,
       staticCameraDurationMs: (frameCount - 1) * stepMs,
       grazingCameraDurationMs: (frameCount - 1) * stepMs,
+      projectedAreaSweepRequested,
+      projectedAreaFactors,
     },
     frozenDeterminism: computeFrozenDeterminism(staticSequence.frames[0]),
     analyticLearnedComparison: summarizeAnalyticLearnedComparison([...staticSequence.frames, ...grazingSequence.frames]),
     staticCamera: staticSequence,
     grazingCamera: grazingSequence,
+    projectedAreaSweep,
     candidateChurn: summarizeCandidateChurn([...staticSequence.frames, ...grazingSequence.frames]),
     birthDeathTelemetry: summarizeBirthDeath([...staticSequence.frames, ...grazingSequence.frames]),
     inspectedArtifacts: [
       staticSequence.contactSheet || null,
       grazingSequence.contactSheet || null,
+      projectedAreaSweep?.comparisonHtml || null,
       ...staticSequence.frames.flatMap(frame => frame.captures.map(capture => capture.image.path)),
       ...grazingSequence.frames.flatMap(frame => frame.captures.map(capture => capture.image.path)),
+      ...(projectedAreaSweep?.rungs || []).flatMap(rung => rung.captures.map(capture => capture.image.path)),
     ].filter(Boolean),
     falseClosureChecks: {
       rejectsFallbackRoutes: true,
@@ -183,6 +195,12 @@ function parseArgs(argv) {
     }
   }
   return map;
+}
+
+function parsePositiveNumberList(value) {
+  const numbers = String(value).split(',').map(Number).filter(number => Number.isFinite(number) && number > 0);
+  if (numbers.length < 3) throw new Error('--projected-area-factors requires at least three positive comma-separated values');
+  return numbers;
 }
 
 function defaultChromePath() {
@@ -425,6 +443,109 @@ async function captureSequence(config) {
   return sequence;
 }
 
+async function captureProjectedAreaSweep(basePose) {
+  const sweepDir = resolve(outDir, 'projectedAreaSweep');
+  mkdirSync(sweepDir, { recursive: true });
+  const frameEval = await wsRequest('Runtime.evaluate', {
+    expression: `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
+      controlledStepFrameIndex: 0,
+      advanceSim: false,
+      sameBrowserSessionId: null,
+      startNow: null,
+      stepDeltaMs: stepMs,
+      renderScales: [1],
+      includeRgba: false,
+      compactSamples: true,
+      resumeRenderLoop: false,
+    })})`,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  const frame = frameEval.result.value;
+  if (frame?.ok !== true || frame.sequenceAuthority !== 'controlled-step-sequence-v0') {
+    throw new Error(`projected-area frozen-state capture failed: ${JSON.stringify(frame)}`);
+  }
+  const scaleSet = frame.scaleSet;
+  const rungs = [];
+  for (let rungIndex = 0; rungIndex < projectedAreaFactors.length; rungIndex += 1) {
+    const cameraDistanceFactor = projectedAreaFactors[rungIndex];
+    const pose = scaleCameraDistance(basePose, cameraDistanceFactor);
+    const camera = await setCameraPose(pose);
+    const rungDir = resolve(sweepDir, `rung-${String(rungIndex + 1).padStart(2, '0')}`);
+    mkdirSync(rungDir, { recursive: true });
+    const analytic = await captureRenderer({
+      frameDir: rungDir,
+      frameIndex: rungIndex,
+      scaleSet,
+      camera,
+      requestedRenderer: 'analytic-splat',
+      boundarySplatMode: 'analytic',
+    });
+    const learned = await captureRenderer({
+      frameDir: rungDir,
+      frameIndex: rungIndex,
+      scaleSet,
+      camera,
+      requestedRenderer: 'learned-splat',
+      boundarySplatMode: 'learned',
+    });
+    const raymarch = await captureRenderer({
+      frameDir: rungDir,
+      frameIndex: rungIndex,
+      scaleSet,
+      camera,
+      requestedRenderer: RAYMARCH_RENDERER,
+      boundarySplatMode: 'off',
+    });
+    const analyticBandwidth = compareStructuralBandwidth(raymarch.image.path, analytic.image.path);
+    const learnedBandwidth = compareStructuralBandwidth(raymarch.image.path, learned.image.path);
+    rungs.push({
+      rungIndex,
+      cameraDistanceFactor,
+      authority: 'same-state-camera-distance-sweep-v0',
+      sameBrowserSessionId: frame.sameBrowserSessionId,
+      sameStateCaptureId: scaleSet.sameStateCaptureId,
+      baseFrameCount: scaleSet.baseFrameCount,
+      baseSimStepCount: scaleSet.baseSimStepCount,
+      camera,
+      projectedSupport: learnedBandwidth.projectedSupport,
+      gradientRetention: {
+        analytic: analyticBandwidth.gradientRetention,
+        learned: learnedBandwidth.gradientRetention,
+      },
+      laplacianRetention: {
+        analytic: analyticBandwidth.laplacianRetention,
+        learned: learnedBandwidth.laplacianRetention,
+      },
+      structuralComparisons: {
+        analytic: analyticBandwidth,
+        learned: learnedBandwidth,
+      },
+      captures: [analytic, learned, raymarch],
+    });
+  }
+  await setCameraPose(basePose);
+  const sweep = {
+    identity: 'boundary-splat-projected-area-structural-bandwidth-v0',
+    authority: 'same-state-camera-distance-sweep-v0',
+    sameBrowserSessionId: frame.sameBrowserSessionId,
+    sameStateCaptureId: scaleSet.sameStateCaptureId,
+    baseFrameCount: scaleSet.baseFrameCount,
+    baseSimStepCount: scaleSet.baseSimStepCount,
+    factors: projectedAreaFactors,
+    rungs,
+  };
+  sweep.comparisonHtml = writeProjectedAreaComparisonHtml(sweep);
+  return sweep;
+}
+
+function scaleCameraDistance(pose, factor) {
+  return {
+    position: pose.position.map((value, index) => pose.target[index] + (value - pose.target[index]) * factor),
+    target: [...pose.target],
+  };
+}
+
 async function captureRenderer({ frameDir, frameIndex, scaleSet, camera, requestedRenderer, boundarySplatMode }) {
   const canvasEval = await wsRequest('Runtime.evaluate', {
     expression: `window.__kaminosVolumePrototype.renderFrozenScaleToCanvas(${JSON.stringify({
@@ -565,8 +686,13 @@ function validateCapture(capture) {
       throw new Error('candidate-copy disagreement: missing copy disposition');
     }
   }
-  if (capture.requestedRenderer === RAYMARCH_RENDERER && capture.effectiveRenderer === SPLAT_RENDERER) {
-    throw new Error('renderer disagreement: matched raymarch capture resolved to analytic splat');
+  if (capture.requestedRenderer === RAYMARCH_RENDERER) {
+    if (capture.effectiveRenderer !== RAYMARCH_RECONSTRUCTION) {
+      throw new Error(`renderer disagreement: requested matched raymarch but effective renderer was ${capture.effectiveRenderer}`);
+    }
+    if (capture.canvasCapture.boundarySplatMode !== 'off') {
+      throw new Error(`renderer disagreement: matched raymarch retained boundary splat mode ${capture.canvasCapture.boundarySplatMode}`);
+    }
   }
 }
 
@@ -604,6 +730,155 @@ function rejectFalseClosure(report) {
   if (report.candidateChurn.maxAbsDelta <= 0 && report.staticCamera.motionEnergy.maxMeanAbsDiff <= 0.1) {
     throw new Error('cached or static output rejected: sequence did not move in candidates or pixels');
   }
+  if (report.projectedAreaSweep) validateProjectedAreaSweep(report.projectedAreaSweep);
+}
+
+function validateProjectedAreaSweep(sweep) {
+  if (sweep.rungs.length < 3) throw new Error('projected-area renderer set incomplete: fewer than three size rungs');
+  const stateIds = new Set();
+  const diameters = [];
+  for (const rung of sweep.rungs) {
+    const analytic = rung.captures.find(capture => capture.requestedRenderer === 'analytic-splat');
+    const learned = rung.captures.find(capture => capture.requestedRenderer === 'learned-splat');
+    const raymarch = rung.captures.find(capture => capture.requestedRenderer === RAYMARCH_RENDERER);
+    if (!analytic || !learned || !raymarch) {
+      throw new Error(`projected-area renderer set incomplete at rung ${rung.rungIndex}`);
+    }
+    for (const capture of rung.captures) {
+      validateCapture(capture);
+      stateIds.add(capture.canvasCapture.sameStateCaptureId);
+      if (
+        capture.canvasCapture.sameStateCaptureId !== sweep.sameStateCaptureId
+        || capture.canvasCapture.sameStateCaptureId !== rung.sameStateCaptureId
+        || capture.canvasCapture.baseFrameCount !== sweep.baseFrameCount
+        || capture.canvasCapture.baseFrameCount !== rung.baseFrameCount
+        || capture.canvasCapture.baseSimStepCount !== sweep.baseSimStepCount
+        || capture.canvasCapture.baseSimStepCount !== rung.baseSimStepCount
+      ) {
+        throw new Error(`projected-area state disagreement at rung ${rung.rungIndex}: ${JSON.stringify({
+          capture: capture.requestedRenderer,
+          captureState: capture.canvasCapture.sameStateCaptureId,
+          sweepState: sweep.sameStateCaptureId,
+          captureFrame: capture.canvasCapture.baseFrameCount,
+          sweepFrame: sweep.baseFrameCount,
+          captureSimStep: capture.canvasCapture.baseSimStepCount,
+          sweepSimStep: sweep.baseSimStepCount,
+        })}`);
+      }
+    }
+    if (stateIds.size > 1 || rung.sameStateCaptureId !== sweep.sameStateCaptureId) {
+      throw new Error(`projected-area state disagreement at rung ${rung.rungIndex}`);
+    }
+    if (!Number.isFinite(rung.projectedSupport?.diameterPx) || rung.projectedSupport.diameterPx <= 0) {
+      throw new Error(`projected-area support missing at rung ${rung.rungIndex}`);
+    }
+    if (!Number.isFinite(rung.gradientRetention.learned) || !Number.isFinite(rung.laplacianRetention.learned)) {
+      throw new Error(`projected-area structural metrics missing at rung ${rung.rungIndex}`);
+    }
+    diameters.push(rung.projectedSupport.diameterPx);
+  }
+  const minimum = Math.min(...diameters);
+  const maximum = Math.max(...diameters);
+  if (minimum <= 0 || maximum / minimum < 1.5) {
+    throw new Error(`projected-area support did not vary materially: ${JSON.stringify(diameters)}`);
+  }
+}
+
+function writeProjectedAreaComparisonHtml(sweep) {
+  const path = resolve(outDir, 'projected-area-support-bandwidth.html');
+  const cards = sweep.rungs.map(rung => {
+    const captures = Object.fromEntries(rung.captures.map(capture => [capture.requestedRenderer, capture]));
+    const variants = ['matched-raymarch', 'learned-splat', 'analytic-splat'];
+    const first = captures[variants[0]];
+    const buttons = variants.map((variant, index) => (
+      `<button type="button" data-variant="${variant}"${index === 0 ? ' class="active"' : ''}>${variant}</button>`
+    )).join('');
+    const sources = Object.fromEntries(variants.map(variant => [
+      variant,
+      relative(outDir, captures[variant].image.path),
+    ]));
+    return `<section class="rung" data-sources='${escapeHtml(JSON.stringify(sources))}'>
+      <header>
+        <h2>Rung ${rung.rungIndex + 1} · camera ×${rung.cameraDistanceFactor}</h2>
+        <p>${Math.round(rung.projectedSupport.diameterPx)} px support diameter · learned gradient ${formatRatio(rung.gradientRetention.learned)} · learned Laplacian ${formatRatio(rung.laplacianRetention.learned)}</p>
+        <nav class="variants">${buttons}</nav>
+        <nav class="inspection">
+          <button type="button" data-inspection-mode="fit" class="active">Fit</button>
+          <button type="button" data-inspection-mode="native">1:1 pixels</button>
+          <a class="source-link" href="${escapeHtml(relative(outDir, first.image.path))}" target="_blank" rel="noreferrer">Open source PNG</a>
+        </nav>
+      </header>
+      <div class="viewport fit"><img src="${escapeHtml(relative(outDir, first.image.path))}" alt="Projected-area rung ${rung.rungIndex + 1}"></div>
+    </section>`;
+  }).join('\n');
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaminos projected-area structural bandwidth</title>
+<style>
+  :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background: #08090b; color: #f4f5f7; }
+  body { margin: 0; padding: 20px; }
+  main { display: grid; gap: 28px; }
+  .rung { border: 1px solid #30343c; background: #111318; padding: 16px; border-radius: 12px; }
+  h1, h2, p { margin: 0 0 10px; }
+  header { margin-bottom: 14px; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  button { border: 1px solid #4a5260; background: #1c2028; color: inherit; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+  button.active { background: #ff6a2a; border-color: #ff9b70; color: #090909; }
+  .source-link { color: #ffb08c; padding: 8px 4px; }
+  .viewport { height: 82vh; overflow: auto; background: #000; display: flex; align-items: center; justify-content: center; }
+  .viewport.fit img { display: block; width: 100%; height: 100%; object-fit: contain; image-rendering: auto; }
+  .viewport.native { align-items: flex-start; justify-content: flex-start; }
+  .viewport.native img { width: auto; height: auto; max-width: none; max-height: none; object-fit: none; image-rendering: auto; }
+</style>
+</head>
+<body>
+<h1>Same-state projected-area structural bandwidth</h1>
+<p>One frozen simulator state; only camera distance changes. Toggle full-resolution matched raymarch, learned splat, and analytic splat captures.</p>
+<main>${cards}</main>
+<script>
+for (const rung of document.querySelectorAll('.rung')) {
+  const sources = JSON.parse(rung.dataset.sources);
+  const image = rung.querySelector('img');
+  const sourceLink = rung.querySelector('.source-link');
+  for (const button of rung.querySelectorAll('[data-variant]')) {
+    button.addEventListener('click', () => {
+      for (const peer of rung.querySelectorAll('[data-variant]')) peer.classList.toggle('active', peer === button);
+      image.src = sources[button.dataset.variant];
+      image.alt = button.dataset.variant;
+      sourceLink.href = sources[button.dataset.variant];
+    });
+  }
+  const viewport = rung.querySelector('.viewport');
+  for (const button of rung.querySelectorAll('[data-inspection-mode]')) {
+    button.addEventListener('click', () => {
+      for (const peer of rung.querySelectorAll('[data-inspection-mode]')) peer.classList.toggle('active', peer === button);
+      viewport.classList.toggle('fit', button.dataset.inspectionMode === 'fit');
+      viewport.classList.toggle('native', button.dataset.inspectionMode === 'native');
+    });
+  }
+}
+</script>
+</body>
+</html>`;
+  writeFileSync(path, html);
+  return path;
+}
+
+function formatRatio(value) {
+  return Number.isFinite(value) ? `${value.toFixed(3)}×` : 'n/a';
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
 }
 
 function summarizeAnalyticLearnedComparison(frames) {
@@ -785,7 +1060,148 @@ function measureScreenshot(buffer) {
     samples,
     litPixels,
     meanLuma: samples ? totalLuma / samples : 0,
+    projectedSupport: measureProjectedFireSupport(png),
   };
+}
+
+function compareStructuralBandwidth(referencePath, candidatePath) {
+  const reference = parsePngRgba(readBuffer(referencePath));
+  const candidate = parsePngRgba(readBuffer(candidatePath));
+  const width = Math.min(reference.width, candidate.width);
+  const height = Math.min(reference.height, candidate.height);
+  const referenceLuma = pngLumaPlane(reference, width, height);
+  const candidateLuma = pngLumaPlane(candidate, width, height);
+  const mask = fireSupportMask(reference, width, height);
+  const projectedSupport = summarizeSupportMask(mask, width, height);
+  const referenceMean = maskedMean(referenceLuma, mask);
+  const candidateMean = maskedMean(candidateLuma, mask);
+  let referenceGradient = 0;
+  let candidateGradient = 0;
+  let referenceLaplacian = 0;
+  let candidateLaplacian = 0;
+  let samples = 0;
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const index = y * width + x;
+      if (!mask[index]) continue;
+      referenceGradient += sobelMagnitude(referenceLuma, width, x, y) / Math.max(1, referenceMean);
+      candidateGradient += sobelMagnitude(candidateLuma, width, x, y) / Math.max(1, candidateMean);
+      referenceLaplacian += Math.abs(laplacian(referenceLuma, width, x, y)) / Math.max(1, referenceMean);
+      candidateLaplacian += Math.abs(laplacian(candidateLuma, width, x, y)) / Math.max(1, candidateMean);
+      samples += 1;
+    }
+  }
+  const referenceGradientMean = samples ? referenceGradient / samples : 0;
+  const candidateGradientMean = samples ? candidateGradient / samples : 0;
+  const referenceLaplacianMean = samples ? referenceLaplacian / samples : 0;
+  const candidateLaplacianMean = samples ? candidateLaplacian / samples : 0;
+  return {
+    authority: 'matched-raymarch-support-normalized-structural-bandwidth-v0',
+    projectedSupport,
+    samples,
+    referenceMeanLuma: referenceMean,
+    candidateMeanLuma: candidateMean,
+    referenceGradientMean,
+    candidateGradientMean,
+    gradientRetention: referenceGradientMean > 0 ? candidateGradientMean / referenceGradientMean : null,
+    referenceLaplacianMean,
+    candidateLaplacianMean,
+    laplacianRetention: referenceLaplacianMean > 0 ? candidateLaplacianMean / referenceLaplacianMean : null,
+  };
+}
+
+function pngLumaPlane(png, width = png.width, height = png.height) {
+  const values = new Float32Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const row = png.rows[y];
+    for (let x = 0; x < width; x += 1) {
+      const index = x * png.channels;
+      values[y * width + x] = 0.2126 * row[index] + 0.7152 * row[index + 1] + 0.0722 * row[index + 2];
+    }
+  }
+  return values;
+}
+
+function fireSupportMask(png, width = png.width, height = png.height) {
+  const mask = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    const row = png.rows[y];
+    for (let x = 0; x < width; x += 1) {
+      const index = x * png.channels;
+      const red = row[index];
+      const green = row[index + 1];
+      const blue = row[index + 2];
+      const maximum = Math.max(red, green, blue);
+      const minimum = Math.min(red, green, blue);
+      const luma = 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+      if (luma > 16 && (maximum - minimum > 7 || luma > 55)) mask[y * width + x] = 1;
+    }
+  }
+  return mask;
+}
+
+function measureProjectedFireSupport(png) {
+  return summarizeSupportMask(fireSupportMask(png), png.width, png.height);
+}
+
+function summarizeSupportMask(mask, width, height) {
+  let count = 0;
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!mask[y * width + x]) continue;
+      count += 1;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  const supportWidth = count ? maxX - minX + 1 : 0;
+  const supportHeight = count ? maxY - minY + 1 : 0;
+  return {
+    authority: 'colored-fire-screen-support-mask-v0',
+    pixelCount: count,
+    pixelFraction: width * height ? count / (width * height) : 0,
+    bounds: count ? { minX, minY, maxX, maxY, width: supportWidth, height: supportHeight } : null,
+    diameterPx: Math.hypot(supportWidth, supportHeight),
+    boundingAreaPx: supportWidth * supportHeight,
+  };
+}
+
+function maskedMean(values, mask) {
+  let total = 0;
+  let count = 0;
+  for (let index = 0; index < mask.length; index += 1) {
+    if (!mask[index]) continue;
+    total += values[index];
+    count += 1;
+  }
+  return count ? total / count : 0;
+}
+
+function sobelMagnitude(values, width, x, y) {
+  const top = (y - 1) * width;
+  const middle = y * width;
+  const bottom = (y + 1) * width;
+  const gx = (
+    -values[top + x - 1] + values[top + x + 1]
+    - 2 * values[middle + x - 1] + 2 * values[middle + x + 1]
+    - values[bottom + x - 1] + values[bottom + x + 1]
+  );
+  const gy = (
+    -values[top + x - 1] - 2 * values[top + x] - values[top + x + 1]
+    + values[bottom + x - 1] + 2 * values[bottom + x] + values[bottom + x + 1]
+  );
+  return Math.hypot(gx, gy) * 0.125;
+}
+
+function laplacian(values, width, x, y) {
+  const index = y * width + x;
+  return values[index - 1] + values[index + 1] + values[index - width] + values[index + width] - 4 * values[index];
 }
 
 function imageDiff(pathA, pathB) {
