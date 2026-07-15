@@ -89,6 +89,13 @@ assert.match(combined, /native-low-source-proximal-tile-candidate-v0/, 'route re
 assert.match(combined, /sourceFrontThreshold[\s\S]*sourceTileDilation[\s\S]*candidateTileCount[\s\S]*projectedCandidateCellCount/, 'source-proximal candidate records threshold, dilation, tile count, and projected cell count');
 assert.match(combined, /supportMissedByCandidateCount[\s\S]*supportMissRate[\s\S]*candidateCapturesAllDenseSupport/, 'source-proximal candidate records dense support misses instead of hiding a support cap');
 assert.match(witness, /nativeLowSourceTileCandidate[\s\S]*supportMissRate[\s\S]*hiddenSupportCap[\s\S]*false/, 'witness preserves source-proximal candidate miss accounting');
+assert.match(combined, /native-low-learned-transfer-break-even-ledger-v0/, 'route records learned-transfer break-even economics instead of generic interactivity');
+assert.match(combined, /outerKillBoundaryMs[\s\S]*credibleBreakEvenTargetMs[\s\S]*profitableTargetMs/, 'break-even ledger records 24ms, 15ms, and 10ms thresholds');
+assert.match(combined, /native160StepMsCommon[\s\S]*native128StepMsCommon[\s\S]*incrementalAdvantageWindowMs/, 'break-even ledger records native 160 vs native 128 comparison');
+assert.match(combined, /dense278MbRouteDisposition[\s\S]*fidelity-control-only[\s\S]*not-production-candidate/, 'dense receiver route is demoted to fidelity/control only');
+assert.match(combined, /gpuResidentDirectSparseRequirement[\s\S]*noJsVisibleDenseArrays[\s\S]*noCpuReadback[\s\S]*noFull160Materialization/, 'ledger requires GPU-resident sparse route without JS dense arrays, readback, or full materialization');
+assert.match(combined, /denseSupportFrontDependencyKilledByBudget[\s\S]*skeletonPlausibleUnder24ms/, 'ledger records whether dense support/front dependency is killed by the 24ms boundary');
+assert.match(witness, /nativeLowBreakEvenBudgetLedger[\s\S]*outerKillBoundaryMs[\s\S]*skeletonPlausibleUnder24ms/, 'witness preserves learned-transfer break-even budget ledger');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');

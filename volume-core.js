@@ -13125,6 +13125,74 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const renderPairMs = treatmentRenderMs + controlRenderMs;
       const endToEndFrameMs = performance.now() - startedAt;
       const projectedWithoutDenseReceiverCopyMs = Math.max(0, endToEndFrameMs - treatmentCopyMs);
+      const learnedTransferIncrementalDenseMs = Math.max(0, inferenceTiming.ms + supportStatsMs + nativeLowSupportTileProfile.tileProfileReadbackMs + nativeLowSourceTileCandidate.candidateReadbackMs + treatmentMaterializeMs);
+      const learnedTransferDenseMinusDiagnosticReadbackMs = Math.max(
+        0,
+        learnedTransferIncrementalDenseMs - nativeLowSupportTileProfile.tileProfileReadbackMs - nativeLowSourceTileCandidate.candidateReadbackMs,
+      );
+      const outerKillBoundaryMs = 24;
+      const credibleBreakEvenTargetMs = 15;
+      const profitableTargetMs = 10;
+      const denseSupportFrontDependencyKilledByBudget = Number(nativeLowHeadCostProfile.supportFrontGpuMs ?? inferenceTiming.ms) > outerKillBoundaryMs;
+      const nativeLowBreakEvenBudgetLedger = {
+        identity: 'native-low-learned-transfer-break-even-ledger-v0',
+        authority: 'operator-corrected-native160-minus-native128-economics-v0',
+        comparison: 'native-128-step-plus-learned-transfer-vs-native-160-step',
+        native160StepMsCommon: 24,
+        native160StepMsObservedRange: [24, 40],
+        native128StepMsCommon: 16.5,
+        native128StepMsObservedRange: [16, 17],
+        incrementalAdvantageWindowMs: {
+          commonEstimate: 7.5,
+          fuzzyRange: [7, 23],
+        },
+        outerKillBoundaryMs,
+        credibleBreakEvenTargetMs,
+        profitableTargetMs,
+        dense278MbRouteDisposition: 'fidelity-control-only-not-production-candidate',
+        gpuResidentDirectSparseRequirement: {
+          required: true,
+          reuseExistingSupportFrontAuthority: true,
+          compactActiveOrSupportAdjacentCellsOrTiles: true,
+          smallestViableF16HeadRequired: true,
+          emitCompactSplatRendererCuesDirectly: true,
+          noJsVisibleDenseArrays: true,
+          noCpuReadback: true,
+          noFull160Materialization: true,
+        },
+        currentDenseRouteMeasuredIncrementalMs: learnedTransferIncrementalDenseMs,
+        currentDenseRouteMinusDiagnosticReadbackMs: learnedTransferDenseMinusDiagnosticReadbackMs,
+        currentDenseRouteStagesMs: {
+          supportSelectionCompactionAndFrontGpuMs: nativeLowHeadCostProfile.supportFrontGpuMs,
+          supportPositiveResidualGpuMs: nativeLowHeadCostProfile.supportPositiveResidualGpuMs,
+          inferenceGpuMs: inferenceTiming.ms,
+          supportStatsReadbackMs: supportStatsMs,
+          supportTileReadbackMs: nativeLowSupportTileProfile.tileProfileReadbackMs,
+          sourceTileCandidateReadbackMs: nativeLowSourceTileCandidate.candidateReadbackMs,
+          receiverDecodeWriteMs: treatmentMaterializeMs,
+          receiverCopyMs: treatmentCopyMs,
+        },
+        candidatePathScope: {
+          excludesOrdinaryLowGridSim: true,
+          excludesCommonRendererOnlyIfIdentical: true,
+          includesSupportSelectionCompaction: true,
+          includesInference: true,
+          includesReceiverDecodeWrite: true,
+          includesSynchronizationAndReadback: true,
+        },
+        denseSupportFrontDependencyKilledByBudget,
+        skeletonPlausibleUnder24ms: !denseSupportFrontDependencyKilledByBudget && learnedTransferDenseMinusDiagnosticReadbackMs <= outerKillBoundaryMs,
+        skeletonPlausibleUnder15ms: !denseSupportFrontDependencyKilledByBudget && learnedTransferDenseMinusDiagnosticReadbackMs <= credibleBreakEvenTargetMs,
+        skeletonPlausibleUnder10ms: !denseSupportFrontDependencyKilledByBudget && learnedTransferDenseMinusDiagnosticReadbackMs <= profitableTargetMs,
+        decision: denseSupportFrontDependencyKilledByBudget
+          ? 'architecture-anti-evidence-dense-support-front-alone-exceeds-24ms-kill-boundary'
+          : learnedTransferDenseMinusDiagnosticReadbackMs > outerKillBoundaryMs
+            ? 'architecture-anti-evidence-current-skeleton-exceeds-24ms-kill-boundary'
+            : 'budget-plausible-requires-direct-sparse-implementation',
+        selectedNextArchitecture: denseSupportFrontDependencyKilledByBudget
+          ? 'smallest-viable-f16-sparse-head-or-native-low-adapter-required'
+          : 'gpu-resident-direct-sparse-output-candidate',
+      };
       const nativeLowProductionStageLedger = {
         identity: 'native-low-production-stage-ledger-v0',
         authority: 'measured-live-shared-device-stage-ledger-with-sparse-output-projection-v0',
@@ -13199,6 +13267,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           candidateCapturesAllDenseSupport: nativeLowSourceTileCandidate.candidateCapturesAllDenseSupport,
           hiddenSupportCap: nativeLowSourceTileCandidate.hiddenSupportCap,
         },
+        learnedTransferBreakEven: nativeLowBreakEvenBudgetLedger,
         simulationSteppingReceipt,
         currentSourceFrameConsumption,
         stalePredictionRejection,
@@ -13271,6 +13340,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         controlRenderMs,
         nativeLowMaterializationProfile,
         nativeLowProductionStageLedger,
+        nativeLowBreakEvenBudgetLedger,
         endToEndFrameMs,
         stageTiming: {
           nativeStepMs,

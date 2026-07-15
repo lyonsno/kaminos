@@ -154,6 +154,11 @@ try {
       && Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0
       && state?.nativeLowProductionStageLedger?.debugManifestTransportExcluded?.excluded === true
       && state?.nativeLowProductionStageLedger?.dense160ReceiverWriteAvoidanceCandidate?.status === 'projection-not-implemented'
+      && state?.nativeLowBreakEvenBudgetLedger?.identity === 'native-low-learned-transfer-break-even-ledger-v0'
+      && Number(state?.nativeLowBreakEvenBudgetLedger?.outerKillBoundaryMs) === 24
+      && Number(state?.nativeLowBreakEvenBudgetLedger?.credibleBreakEvenTargetMs) === 15
+      && Number(state?.nativeLowBreakEvenBudgetLedger?.profitableTargetMs) === 10
+      && typeof state?.nativeLowBreakEvenBudgetLedger?.skeletonPlausibleUnder24ms === 'boolean'
       && state?.simulationSteppingReceipt?.simStepDelta === 1
       && state?.currentSourceFrameConsumption?.encodedFrameDelta === 1
       && state?.stalePredictionRejection?.repeatedStaticPrediction === false
@@ -219,6 +224,11 @@ try {
   assert.ok(Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0, 'dense receiver write bytes missing');
   assert.equal(state?.nativeLowProductionStageLedger?.debugManifestTransportExcluded?.excluded, true, 'debug manifest transport was not excluded from live ledger');
   assert.equal(state?.nativeLowProductionStageLedger?.dense160ReceiverWriteAvoidanceCandidate?.status, 'projection-not-implemented', 'sparse receiver candidate projection status missing');
+  assert.equal(state?.nativeLowBreakEvenBudgetLedger?.identity, 'native-low-learned-transfer-break-even-ledger-v0', 'learned-transfer break-even ledger missing');
+  assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.outerKillBoundaryMs), 24, 'outer kill boundary must be 24ms');
+  assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.credibleBreakEvenTargetMs), 15, 'credible break-even target must be 15ms');
+  assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.profitableTargetMs), 10, 'profitable target must be 10ms');
+  assert.equal(typeof state?.nativeLowBreakEvenBudgetLedger?.skeletonPlausibleUnder24ms, 'boolean', '24ms plausibility decision missing');
   assert.equal(state?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator did not step exactly once for this model frame');
   assert.equal(state?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model did not consume exactly one current source frame');
   assert.equal(state?.stalePredictionRejection?.repeatedStaticPrediction, false, 'stale prediction was not rejected');
@@ -271,6 +281,7 @@ try {
     treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
     nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
+    nativeLowBreakEvenBudgetLedger: endState.nativeLowBreakEvenBudgetLedger,
     nativeLowSupportTileProfile: endState.nativeLowSupportTileProfile,
     nativeLowSourceTileCandidate: endState.nativeLowSourceTileCandidate,
     supportTileProjection: {
