@@ -289,6 +289,9 @@ export function createForegroundBudgetGovernor(input = {}) {
     const priorIdentity = state.episodeIdentities.get(observation.episodeId);
     if (priorIdentity) {
       if (priorIdentity.firingId !== observation.firingId) {
+        state.consecutivePressureWindows = 0;
+        state.consecutiveHealthyWindows = 0;
+        state.pressureKey = null;
         return makeDecision({
           state,
           observation,
@@ -298,6 +301,9 @@ export function createForegroundBudgetGovernor(input = {}) {
         });
       }
       if (priorIdentity.evidenceFingerprint !== evidenceFingerprint) {
+        state.consecutivePressureWindows = 0;
+        state.consecutiveHealthyWindows = 0;
+        state.pressureKey = null;
         return makeDecision({
           state,
           observation,

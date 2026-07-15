@@ -245,6 +245,42 @@ const changedEvidenceDecision = identityGovernor.observe(observation({
 assert.equal(changedEvidenceDecision.status, 'held-invalid-evidence');
 assert.ok(changedEvidenceDecision.failures.includes('episode-evidence-mismatch'));
 assert.equal(changedEvidenceDecision.schedulerChanged, false);
+
+for (const mismatchCase of [
+  {
+    label: 'firing',
+    mismatchObservation: observation({
+      episodeId: 'hysteresis-firing-episode',
+      observationFiringId: 'other-firing',
+    }),
+  },
+  {
+    label: 'evidence',
+    mismatchObservation: observation({
+      episodeId: 'hysteresis-evidence-episode',
+      maxFrameGapMs: 121,
+    }),
+  },
+]) {
+  const replayGovernor = governor();
+  const episodeId = `hysteresis-${mismatchCase.label}-episode`;
+  const firstPressure = replayGovernor.observe(observation({ episodeId }));
+  assert.equal(firstPressure.status, 'accumulating-pressure');
+  assert.equal(firstPressure.consecutivePressureWindows, 1);
+
+  const mismatch = replayGovernor.observe(mismatchCase.mismatchObservation);
+  assert.equal(mismatch.status, 'held-invalid-evidence');
+  assert.ok(mismatch.failures.includes(`episode-${mismatchCase.label}-mismatch`));
+
+  const afterMismatch = replayGovernor.observe(observation({
+    episodeId: `hysteresis-${mismatchCase.label}-next`,
+  }));
+  assert.equal(afterMismatch.status, 'accumulating-pressure');
+  assert.equal(afterMismatch.consecutivePressureWindows, 1);
+  assert.equal(afterMismatch.schedulerChanged, false);
+  assert.equal(afterMismatch.revision, 0);
+}
+
 assert.equal(identityGovernor.snapshot().retainedDecisionCount, 1);
 assert.equal(identityGovernor.forgetEpisode('same-episode'), true);
 assert.equal(identityGovernor.snapshot().retainedDecisionCount, 0);
