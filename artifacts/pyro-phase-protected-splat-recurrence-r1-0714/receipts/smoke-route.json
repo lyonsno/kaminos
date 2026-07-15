@@ -1,0 +1,24 @@
+{
+  "schema": "kaminos-contextual-visual-smoke-route-v0",
+  "status": "completed",
+  "requestedRoute": "http://127.0.0.1:18218/artifacts/pyro-phase-protected-splat-recurrence-r1-0714/inspection-guide.html",
+  "effectiveRoute": "http://127.0.0.1:18218/artifacts/pyro-phase-protected-splat-recurrence-r1-0714/inspection-guide.html",
+  "httpStatus": 200,
+  "mountState": "mounted-from-owning-worktree",
+  "repoRoot": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "browser": "Google Chrome headless, one process, fresh dedicated profile",
+  "viewport": {
+    "width": 1920,
+    "height": 1800
+  },
+  "settleMs": 4000,
+  "inspection": {
+    "path": "inspection-guide-smoke.png",
+    "bothVideosLoaded": true,
+    "roleLabelsVisible": true,
+    "contextBeforeImages": true,
+    "overlapObserved": false,
+    "blankOutputObserved": false,
+    "researchVerdictFromScreenshot": false
+  }
+}
