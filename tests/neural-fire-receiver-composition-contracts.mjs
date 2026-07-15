@@ -24,6 +24,12 @@ assert.match(
 const { resolveBoundarySplatReceiverAttachmentAuthority } = await import('../volume-core.js');
 
 const validSnapshot = {
+  producerActive: true,
+  attachmentsEffective: true,
+  attachmentFallbackReason: null,
+  producedAtMs: 1_200,
+  nowMs: 1_240,
+  freshnessHorizonMs: 500,
   compositionEffective: 'splat-only',
   splatLayerIdentity: 'premultiplied-hdr-splat-radiance-alpha-linear-depth-moments-v0',
   smokeLayerIdentity: null,
@@ -55,6 +61,33 @@ assert.equal(accepted.historyAllocationGeneration, 7);
 assert.equal(accepted.fallbackAuthority, false);
 assert.equal(accepted.cpuReadbackAuthority, false);
 assert.equal(accepted.canvasAuthority, false);
+
+assert.deepEqual(
+  resolveBoundarySplatReceiverAttachmentAuthority({
+    ...validSnapshot,
+    producerActive: false,
+  }).reason,
+  'native-attachment-producer-inactive',
+  'a stopped producer must invalidate its last GPU attachment handles immediately',
+);
+assert.deepEqual(
+  resolveBoundarySplatReceiverAttachmentAuthority({
+    ...validSnapshot,
+    attachmentsEffective: false,
+    attachmentFallbackReason: 'native-attachment-producer-render-error',
+  }).reason,
+  'native-attachment-producer-render-error',
+  'the authority resolver must preserve a producer-side invalidation reason instead of resurrecting old textures',
+);
+assert.deepEqual(
+  resolveBoundarySplatReceiverAttachmentAuthority({
+    ...validSnapshot,
+    producedAtMs: 1_200,
+    nowMs: 1_701,
+  }).reason,
+  'native-attachment-producer-stale',
+  'an active producer whose attachment cadence has stopped must fail closed after its declared freshness horizon',
+);
 
 assert.deepEqual(
   resolveBoundarySplatReceiverAttachmentAuthority({
@@ -167,6 +200,21 @@ assert.match(
   core,
   /function encodeBoundarySplatReceiverAttachments\(encoder\)/,
   'splat-only rendering exports the selected learned flame into native receiver attachments',
+);
+assert.match(
+  core,
+  /function invalidateNativeSplatReceiverAttachments\(reason\)/,
+  'the producer has one explicit invalidation path for stop, route failure, and render failure',
+);
+assert.match(
+  core,
+  /setActive\(active\)[\s\S]*invalidateNativeSplatReceiverAttachments\('native-attachment-producer-inactive'\)/,
+  'stopping the volume invalidates native attachment authority before a receiver can sample the old textures',
+);
+assert.match(
+  page,
+  /attachments\?\.producerActive === true[\s\S]*attachmentFreshnessAgeMs[\s\S]*native-attachment-producer-stale/,
+  'the receiver independently rejects inactive or stale producer snapshots instead of trusting producer status alone',
 );
 
 const fluidRebuildSource = core.slice(

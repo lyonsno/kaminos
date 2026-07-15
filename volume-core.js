@@ -31,6 +31,8 @@ const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute
 const HYBRID_SMOKE_RENDERER_IDENTITY = 'native-3d-compute-fluid-raymarch-smoke-only-v0';
 const BOUNDARY_SPLAT_INSTANCE_DESCRIPTOR_IDENTITY = 'boundary-splat-instance-descriptor-v0';
 const NATIVE_SPLAT_RECEIVER_ATTACHMENTS_IDENTITY = 'gpu-splat-radiance-coverage-depth-moments-v0';
+const NATIVE_SPLAT_RECEIVER_ATTACHMENT_FRESHNESS_IDENTITY = 'producer-encode-monotonic-clock-500ms-v0';
+const NATIVE_SPLAT_RECEIVER_ATTACHMENT_FRESHNESS_HORIZON_MS = 500;
 const SHARED_WEBGPU_DEVICE_IDENTITY = 'kaminos-three-volume-shared-webgpu-device-v0';
 const BOUNDARY_SPLAT_FIELD_LAYOUT_IDENTITY = 'boundary-splat-composed-field-v0';
 const BOUNDARY_SPLAT_PBR_FIRE_FIELD_IDENTITY = 'boundary-splat-pbr-fire-field-v0';
@@ -97,6 +99,29 @@ function rejectedReceiverAttachmentAuthority(reason, snapshot = {}) {
 }
 
 export function resolveBoundarySplatReceiverAttachmentAuthority(snapshot = {}) {
+  if (snapshot.producerActive !== true) {
+    return rejectedReceiverAttachmentAuthority('native-attachment-producer-inactive', snapshot);
+  }
+  if (snapshot.attachmentsEffective !== true) {
+    return rejectedReceiverAttachmentAuthority(
+      snapshot.attachmentFallbackReason || 'native-attachment-producer-not-effective',
+      snapshot,
+    );
+  }
+  const producedAtMs = Number(snapshot.producedAtMs);
+  const nowMs = Number(snapshot.nowMs);
+  const freshnessHorizonMs = Number(snapshot.freshnessHorizonMs);
+  if (!Number.isFinite(producedAtMs) || producedAtMs <= 0) {
+    return rejectedReceiverAttachmentAuthority('native-attachment-producer-frame-unavailable', snapshot);
+  }
+  if (
+    Number.isFinite(nowMs)
+    && Number.isFinite(freshnessHorizonMs)
+    && freshnessHorizonMs > 0
+    && nowMs - producedAtMs > freshnessHorizonMs
+  ) {
+    return rejectedReceiverAttachmentAuthority('native-attachment-producer-stale', snapshot);
+  }
   const compositionEffective = snapshot.compositionEffective;
   if (compositionEffective !== 'splat-only' && compositionEffective !== 'hybrid-smoke') {
     return rejectedReceiverAttachmentAuthority('native-splat-attachment-composition-not-effective', snapshot);
@@ -155,6 +180,10 @@ export function resolveBoundarySplatReceiverAttachmentAuthority(snapshot = {}) {
     selectorPolicyIdentity: snapshot.selectorPolicyIdentity ?? null,
     historyRingIdentity: snapshot.historyRingIdentity ?? null,
     historyAllocationIdentity: snapshot.historyAllocationIdentity ?? null,
+    producerActive: true,
+    producedAtMs,
+    freshnessHorizonMs,
+    freshnessIdentity: snapshot.freshnessIdentity ?? null,
     fallbackAuthority: false,
     cpuReadbackAuthority: false,
     canvasAuthority: false,
@@ -6529,6 +6558,9 @@ export function createKaminosVolumePrototype({
     nativeSplatReceiverAttachmentsEffective: false,
     nativeSplatReceiverAttachmentsFallbackReason: null,
     nativeSplatReceiverAttachmentsFrameCount: 0,
+    nativeSplatReceiverAttachmentsProducedAtMs: null,
+    nativeSplatReceiverAttachmentsFreshnessIdentity: NATIVE_SPLAT_RECEIVER_ATTACHMENT_FRESHNESS_IDENTITY,
+    nativeSplatReceiverAttachmentsFreshnessHorizonMs: NATIVE_SPLAT_RECEIVER_ATTACHMENT_FRESHNESS_HORIZON_MS,
     raymarchPipelineDisposition: 'uninitialized',
     hybridSplatSmokeCompositorIdentity: HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY,
     hybridSplatSmokeApproximation: HYBRID_SPLAT_SMOKE_APPROXIMATION,
@@ -8928,6 +8960,7 @@ export function createKaminosVolumePrototype({
   }
 
   function destroyNativeSplatReceiverTextures() {
+    invalidateNativeSplatReceiverAttachments('native-attachment-textures-destroyed');
     hybridSplatColorTexture?.destroy();
     hybridSplatMomentsTexture?.destroy();
     hybridSplatColorTexture = null;
@@ -10762,6 +10795,12 @@ export function createKaminosVolumePrototype({
     return true;
   }
 
+  function invalidateNativeSplatReceiverAttachments(reason) {
+    state.nativeSplatReceiverAttachmentsEffective = false;
+    state.nativeSplatReceiverAttachmentsFallbackReason = reason;
+    state.nativeSplatReceiverAttachmentsProducedAtMs = null;
+  }
+
   function encodeBoundarySplatReceiverAttachments(encoder) {
     if (!boundarySplatNativeReceiverAttachmentsRequested()) return false;
     state.nativeSplatReceiverAttachmentsRequested = true;
@@ -10771,9 +10810,9 @@ export function createKaminosVolumePrototype({
       || !boundarySplatRenderBindGroup
       || !ensureNativeSplatReceiverTextures()
     ) {
-      state.nativeSplatReceiverAttachmentsEffective = false;
-      state.nativeSplatReceiverAttachmentsFallbackReason = state.boundarySplatFallbackReason
-        || 'native-splat-receiver-attachment-gpu-route-unavailable';
+      invalidateNativeSplatReceiverAttachments(
+        state.boundarySplatFallbackReason || 'native-splat-receiver-attachment-gpu-route-unavailable',
+      );
       return false;
     }
     const pass = encoder.beginRenderPass({
@@ -10792,6 +10831,7 @@ export function createKaminosVolumePrototype({
     state.nativeSplatReceiverAttachmentsEffective = true;
     state.nativeSplatReceiverAttachmentsFallbackReason = null;
     state.nativeSplatReceiverAttachmentsFrameCount = state.frameCount + 1;
+    state.nativeSplatReceiverAttachmentsProducedAtMs = performance.now();
     return true;
   }
 
@@ -12097,6 +12137,7 @@ export function createKaminosVolumePrototype({
       if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
     } catch (err) {
       state.active = false;
+      invalidateNativeSplatReceiverAttachments('native-attachment-producer-render-error');
       state.error = err?.message || String(err);
       canvas.classList.remove('active');
       cancelAnimationFrame(raf);
@@ -14792,6 +14833,7 @@ export function createKaminosVolumePrototype({
           emitStatus({ phase: 'active' });
         } catch (err) {
           state.active = false;
+          invalidateNativeSplatReceiverAttachments('native-attachment-producer-error');
           state.error = err?.message || String(err);
           state.backend = 'unavailable';
           canvas.classList.remove('active');
@@ -14800,6 +14842,7 @@ export function createKaminosVolumePrototype({
         }
       } else {
         state.active = false;
+        invalidateNativeSplatReceiverAttachments('native-attachment-producer-inactive');
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
         emitStatus({ phase: 'inactive' });
@@ -14822,6 +14865,13 @@ export function createKaminosVolumePrototype({
     receiverLightAttachments() {
       const extent = `${state.width}x${state.height}`;
       const authority = resolveBoundarySplatReceiverAttachmentAuthority({
+        producerActive: state.active,
+        attachmentsEffective: state.nativeSplatReceiverAttachmentsEffective,
+        attachmentFallbackReason: state.nativeSplatReceiverAttachmentsFallbackReason,
+        producedAtMs: state.nativeSplatReceiverAttachmentsProducedAtMs,
+        nowMs: performance.now(),
+        freshnessHorizonMs: state.nativeSplatReceiverAttachmentsFreshnessHorizonMs,
+        freshnessIdentity: state.nativeSplatReceiverAttachmentsFreshnessIdentity,
         compositionEffective: state.boundarySplatCompositionEffective,
         splatLayerIdentity: state.hybridSplatLayer?.identity,
         smokeLayerIdentity: state.hybridSmokeLayer?.identity,
@@ -14861,6 +14911,10 @@ export function createKaminosVolumePrototype({
         requested: state.nativeSplatReceiverAttachmentsRequested,
         effective: state.nativeSplatReceiverAttachmentsEffective,
         attachmentFallbackReason: state.nativeSplatReceiverAttachmentsFallbackReason,
+        producerActive: state.active,
+        producedAtMs: state.nativeSplatReceiverAttachmentsProducedAtMs,
+        freshnessHorizonMs: state.nativeSplatReceiverAttachmentsFreshnessHorizonMs,
+        freshnessIdentity: state.nativeSplatReceiverAttachmentsFreshnessIdentity,
       };
     },
     beginFireEpisode(options) {

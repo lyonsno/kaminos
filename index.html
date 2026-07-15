@@ -19856,6 +19856,10 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     attachmentReason: 'volume-producer-not-initialized',
     attachmentGeneration: 0,
     attachmentFrameCount: 0,
+    attachmentProducedAtMs: null,
+    attachmentFreshnessAgeMs: null,
+    attachmentFreshnessHorizonMs: null,
+    attachmentFreshnessIdentity: null,
     attachmentPhaseSourceIdentity: null,
     attachmentRendererIdentity: null,
     attachmentModelIdentity: null,
@@ -19926,6 +19930,10 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     state.attachmentReason = null;
     state.attachmentGeneration = attachments.textureGeneration;
     state.attachmentFrameCount = attachments.frameCount;
+    state.attachmentProducedAtMs = attachments.producedAtMs;
+    state.attachmentFreshnessAgeMs = Math.max(0, performance.now() - attachments.producedAtMs);
+    state.attachmentFreshnessHorizonMs = attachments.freshnessHorizonMs;
+    state.attachmentFreshnessIdentity = attachments.freshnessIdentity;
     state.attachmentPhaseSourceIdentity = attachments.phaseSourceIdentity;
     state.attachmentRendererIdentity = attachments.rendererIdentity;
     state.attachmentModelIdentity = attachments.attributeModelIdentity;
@@ -19973,7 +19981,25 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
         return false;
       }
       const attachments = volumePrototype?.receiverLightAttachments?.();
-      const nativeAttachmentsEffective = attachments?.status === 'effective'
+      const attachmentFreshnessAgeMs = Number.isFinite(Number(attachments?.producedAtMs))
+        ? Math.max(0, performance.now() - Number(attachments.producedAtMs))
+        : Number.POSITIVE_INFINITY;
+      const attachmentFreshnessHorizonMs = Number(attachments?.freshnessHorizonMs);
+      const attachmentFresh = Number.isFinite(attachmentFreshnessHorizonMs)
+        && attachmentFreshnessHorizonMs > 0
+        && attachmentFreshnessAgeMs <= attachmentFreshnessHorizonMs;
+      const attachmentFrameRegressed = Number(attachments?.textureGeneration) === state.attachmentGeneration
+        && Number(attachments?.frameCount) < state.attachmentFrameCount;
+      state.attachmentFreshnessAgeMs = attachmentFreshnessAgeMs;
+      state.attachmentFreshnessHorizonMs = Number.isFinite(attachmentFreshnessHorizonMs)
+        ? attachmentFreshnessHorizonMs
+        : null;
+      state.attachmentFreshnessIdentity = attachments?.freshnessIdentity ?? null;
+      const nativeAttachmentsEffective = attachments?.producerActive === true
+        && attachmentFreshnessAgeMs <= attachmentFreshnessHorizonMs
+        && attachmentFresh
+        && !attachmentFrameRegressed
+        && attachments?.status === 'effective'
         && attachments.identity === TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE
         && attachments.device === sharedGpu.device
         && attachments.radianceTexture
@@ -19981,7 +20007,14 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
       if (nativeAttachmentsEffective) {
         bindNativeAttachments(attachments);
       } else {
-        bindBlackAttachments(attachments?.reason || 'native-receiver-attachments-unavailable');
+        const rejectionReason = attachments?.producerActive !== true
+          ? 'native-attachment-producer-inactive'
+          : (!attachmentFresh
+            ? 'native-attachment-producer-stale'
+            : (attachmentFrameRegressed
+              ? 'native-attachment-frame-regressed'
+              : (attachments?.reason || 'native-receiver-attachments-unavailable')));
+        bindBlackAttachments(rejectionReason);
       }
       const previousTarget = renderer.getRenderTarget();
       const previousClearColor = renderer.getClearColor(new THREE.Color());
