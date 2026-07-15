@@ -174,5 +174,10 @@ assert.match(
   /"frameSizes"\s*:\s*\[\[geometry\["width"\],\s*geometry\["height"\]\]\s+for\s+geometry\s+in\s+geometries\]/,
   'render receipts preserve variable candidate-local frame dimensions instead of laundering the first frame as global',
 );
+assert.match(
+  script,
+  /candidate-flame-bounds[\s\S]{0,800}long_edge_scale\s*=\s*render_width\s*\/\s*max\(roi_width,\s*roi_height\)[\s\S]{0,500}render_width_effective\s*=\s*max\(16,\s*round\(roi_width\s*\*\s*long_edge_scale\)\)[\s\S]{0,300}render_height\s*=\s*max\(16,\s*round\(roi_height\s*\*\s*long_edge_scale\)\)/,
+  'candidate-local rendering treats the requested size as a bounded long-edge budget instead of allocating unbounded portrait tensors',
+);
 
 console.log('boundary splat optical decoder contracts passed');

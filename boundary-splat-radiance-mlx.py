@@ -905,7 +905,14 @@ def build_sparse_geometry(frame, render_width, depth_bins, max_radius, context_m
     x0, y0, x1, y1 = roi["sourceBounds"]
     roi_width = x1 - x0
     roi_height = y1 - y0
-    render_height = max(16, round(render_width * roi_height / roi_width))
+    if optical_roi_mode == "candidate-flame-bounds":
+        long_edge_scale = render_width / max(roi_width, roi_height)
+        render_width_effective = max(16, round(roi_width * long_edge_scale))
+        render_height = max(16, round(roi_height * long_edge_scale))
+    else:
+        render_width_effective = render_width
+        render_height = max(16, round(render_width * roi_height / roi_width))
+    render_width = render_width_effective
     roi["outputSize"] = [render_width, render_height]
     source_offset = np.asarray([x0, y0], dtype=np.float32)
     source_to_render = np.asarray([render_width / roi_width, render_height / roi_height], dtype=np.float32)
