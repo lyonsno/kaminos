@@ -76,6 +76,13 @@ assert.equal(manifest.claims.twoDistinctRawImagesComposed, true);
 assert.equal(manifest.claims.distinctInteractiveAndPropagationFeatures, true);
 assert.equal(manifest.claims.packetOwnsImageEmbeddingsAtBrowserRuntime, false);
 assert.equal(manifest.fixture.sourceFeaturesSynthetic, false);
+assert.deepEqual(manifest.tolerances, {
+  decoderMaxAbsDiff: 0.0015,
+  maskConditioningMaxAbsDiff: 0.0,
+  memoryMaxAbsDiff: 0.0008,
+  bankMaxAbsDiff: 0.0002,
+  conditionedMaxAbsDiff: 0.0002,
+}, 'measured temporal budgets must not relax memory, decoder, or exact mask-conditioning parity');
 
 const queryHeight = ingressManifest.shape.patchHeight;
 const queryWidth = ingressManifest.shape.patchWidth;
