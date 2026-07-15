@@ -118,10 +118,24 @@ def parse_frame_indices(value, frame_count, label):
     return indices
 
 
-def resolve_frame_splits(frame_ids, train_value, evaluation_value):
+def resolve_frame_splits(frame_ids, train_value, evaluation_value, memorization_oracle=False):
     frame_count = len(frame_ids)
     if frame_count <= 0:
         raise ValueError("frame split requires at least one corpus frame")
+    if memorization_oracle:
+        if train_value is None or evaluation_value is None:
+            raise ValueError("optical memorization oracle requires explicit training and evaluation frame indices")
+        train_indices = parse_frame_indices(train_value, frame_count, "train-frame-indices")
+        evaluation_indices = parse_frame_indices(evaluation_value, frame_count, "eval-frame-indices")
+        if len(train_indices) != 1 or train_indices != evaluation_indices:
+            raise ValueError("optical memorization oracle requires one identical training and evaluation frame index")
+        return {
+            "authority": "explicit-single-frame-memorization-oracle-v0",
+            "trainIndices": train_indices,
+            "evaluationIndices": evaluation_indices,
+            "trainFrameIds": [frame_ids[train_indices[0]]],
+            "evaluationFrameIds": [frame_ids[evaluation_indices[0]]],
+        }
     if (train_value is None and evaluation_value is None) or (train_value == "all" and evaluation_value == "all"):
         indices = list(range(frame_count))
         return {
@@ -147,6 +161,13 @@ def resolve_frame_splits(frame_ids, train_value, evaluation_value):
         "trainFrameIds": [frame_ids[index] for index in train_indices],
         "evaluationFrameIds": [frame_ids[index] for index in evaluation_indices],
     }
+
+
+def evaluation_loss_authority(frame_split):
+    return {
+        "explicit-disjoint-frame-holdout-v0": "held-out-frame-mean-v0",
+        "explicit-single-frame-memorization-oracle-v0": "same-frame-memorization-oracle-v0",
+    }.get(frame_split["authority"], "train-frame-mean-v0")
 
 
 def load_native_sidecar(manifest_path, frame, label):
@@ -1358,6 +1379,7 @@ def parse_args():
     parser.add_argument("--partial-flow-debug-gain", type=float, default=0.0)
     parser.add_argument("--train-frame-indices")
     parser.add_argument("--eval-frame-indices")
+    parser.add_argument("--optical-memorization-oracle", action="store_true")
     parser.add_argument("--candidate-table-oracle", action="store_true")
     parser.add_argument("--probe-only", action="store_true")
     return parser.parse_args()
@@ -1394,8 +1416,14 @@ def main():
             [frame["id"] for frame in corpus["frames"]],
             args.train_frame_indices,
             args.eval_frame_indices,
+            args.optical_memorization_oracle,
         )
-        if args.optical_decoder == "screen-unet" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
+        if args.optical_memorization_oracle and args.optical_decoder != "screen-unet":
+            raise ValueError("optical memorization oracle requires the screen-unet decoder")
+        if args.optical_decoder == "screen-unet" and frame_split["authority"] not in (
+            "explicit-disjoint-frame-holdout-v0",
+            "explicit-single-frame-memorization-oracle-v0",
+        ):
             raise ValueError("screen-unet requires an explicit disjoint frame holdout")
         if args.spatial_mixing == "sparse-grid-residual" and frame_split["authority"] != "explicit-disjoint-frame-holdout-v0":
             raise ValueError("sparse-grid-residual requires an explicit disjoint frame holdout")
@@ -1563,11 +1591,7 @@ def main():
             "frameSplitAuthority": frame_split["authority"],
             "trainFrameIds": frame_split["trainFrameIds"],
             "evaluationFrameIds": frame_split["evaluationFrameIds"],
-            "evaluationLossAuthority": (
-                "held-out-frame-mean-v0"
-                if frame_split["authority"] == "explicit-disjoint-frame-holdout-v0"
-                else "train-frame-mean-v0"
-            ),
+            "evaluationLossAuthority": evaluation_loss_authority(frame_split),
             "initialPixelLoss": initial_pixel_loss,
             "initialEdgeLoss": initial_edge_loss,
             "initialLoss": initial_loss,
@@ -1849,6 +1873,7 @@ def main():
                 "opticalBaseFrozen": optical_decoder is not None,
                 "opticalChannels": args.optical_channels if optical_decoder is not None else None,
                 "opticalResidualScale": args.optical_residual_scale if optical_decoder is not None else None,
+                "opticalMemorizationOracle": args.optical_memorization_oracle,
                 "partialFlowDebugRequestedGain": args.partial_flow_debug_gain,
                 "partialFlowDebugEffectiveGain": args.partial_flow_debug_gain if partial_flow_debug_witnesses else 0.0,
                 "messageSize": message_size,
@@ -1856,7 +1881,7 @@ def main():
                 "structuralAdjacencyAuthority": "exact-26-neighbor-source-grid-adjacency-v0" if args.spatial_mixing == "sparse-grid-residual" else None,
                 "structuralMixingRounds": model.mixing_rounds if args.spatial_mixing == "sparse-grid-residual" else None,
                 "frameSplitAuthority": frame_split["authority"],
-                "evaluationLossAuthority": "held-out-frame-mean-v0" if frame_split["authority"] == "explicit-disjoint-frame-holdout-v0" else "train-frame-mean-v0",
+                "evaluationLossAuthority": evaluation_loss_authority(frame_split),
                 "trainFrameIndices": frame_split["trainIndices"],
                 "trainFrameIds": frame_split["trainFrameIds"],
                 "evaluationFrameIndices": frame_split["evaluationIndices"],

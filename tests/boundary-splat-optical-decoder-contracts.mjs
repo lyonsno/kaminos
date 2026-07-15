@@ -86,6 +86,26 @@ assert.match(
 );
 assert.match(
   script,
+  /--optical-memorization-oracle/,
+  'the optical decoder exposes an explicit same-frame capacity oracle instead of laundering memorization into held-out evidence',
+);
+assert.match(
+  script,
+  /explicit-single-frame-memorization-oracle-v0/,
+  'memorization receipts carry a distinct frame-split authority',
+);
+assert.match(
+  script,
+  /optical memorization oracle requires one identical training and evaluation frame index/,
+  'the memorization oracle rejects multi-frame or accidentally disjoint custody',
+);
+assert.match(
+  script,
+  /same-frame-memorization-oracle-v0/,
+  'same-frame oracle loss cannot masquerade as held-out evaluation loss',
+);
+assert.match(
+  script,
   /--partial-flow-debug-gain/,
   'optical evaluation exposes the operator-requested partial flow-debug witness gain',
 );
