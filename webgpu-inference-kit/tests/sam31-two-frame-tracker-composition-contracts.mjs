@@ -45,7 +45,7 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   browser,
-  /shape: \[1, 2, 2, 256\]|queryHeight: 2, queryWidth: 2, queryTokens: 4|shape: \[1, 20, 256\]/,
+  /shape: \[1, 2, 2, 256\]|queryHeight: 2, queryWidth: 2, queryTokens: 4|shape: \[1, 20, 256\]|bank\.memory\.length === 20 \* 256/,
   'the direct browser transaction must not retain fixed 28px memory, attention, or temporal request geometry',
 );
 for (const token of [

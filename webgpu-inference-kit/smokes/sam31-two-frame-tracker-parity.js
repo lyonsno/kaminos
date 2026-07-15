@@ -618,7 +618,7 @@ async function runInvocation(packageRoot = null, invocationIndex = 0, execution 
     && JSON.stringify(trackerStateSnapshot.bridgeDebt) === JSON.stringify(expectedBridgeDebt)
     && trackerStateSnapshot.claims.browserNativeMaskConditioning === isMaskConditioned
     && pointerDigestPassed;
-  const stateTransitionPassed = (!verificationAttached || (episode.stateTransition.frame0AppearingObjectCount > 0 && episode.stateTransition.frame0AbsentObjectCount > 0)) && suppressionPassed && persistentStatePassed && plan.spatialFrames.length === 1 && plan.pointerFrames.length === 1 && bank.memory.length === 20 * 256;
+  const stateTransitionPassed = (!verificationAttached || (episode.stateTransition.frame0AppearingObjectCount > 0 && episode.stateTransition.frame0AbsentObjectCount > 0)) && suppressionPassed && persistentStatePassed && plan.spatialFrames.length === 1 && plan.pointerFrames.length === 1 && bank.memory.length === episode.shape.batch * episode.shape.memoryTokens * episode.shape.channels;
   const frame0Tolerance = verificationAttached ? (isMaskConditioned ? episode.tolerances.maskConditioningMaxAbsDiff : episode.tolerances.decoderMaxAbsDiff) : null;
   const pointerParityPassed = !verificationAttached || !isMaskConditioned || maximums.frame0InteractivePointer <= pointerManifest.tolerances.webGpuFinalMaxAbsDiff;
   const frame0ProducerParityPassed = !verificationAttached || (isMaskConditioned
