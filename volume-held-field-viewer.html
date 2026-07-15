@@ -86,6 +86,12 @@
     let renderReceipt = null;
     let compositionRequested = null;
     let failurePhase = null;
+    let mountedCanvas = null;
+    let renderInFlight = null;
+    let queuedRenderReason = null;
+    let interactionRaf = 0;
+    let lastCameraSignature = null;
+    let lastViewportSignature = null;
 
     const state = {
       routeIdentity: ROUTE_IDENTITY,
@@ -113,11 +119,23 @@
       splatEncoded: null,
       splatApplied: null,
       residualApplied: null,
+      boundarySplatCandidateCount: null,
+      boundarySplatInstanceCount: null,
+      boundarySplatOverflowCount: null,
+      boundarySplatPopulationComplete: null,
+      boundarySplatInitialOverflowCount: null,
+      boundarySplatCapacityRetryCount: null,
+      cameraInteractionAuthority: 'orbit-controls-event-plus-polled-held-rerender-v0',
+      cameraRevision: 0,
+      renderRevision: 0,
+      lastRenderReason: null,
+      viewportEffective: null,
     };
 
     window.__kaminosHeldFieldViewer = {
       debugState: () => structuredClone(state),
-      setComposition: value => renderComposition(value),
+      setComposition: value => requestHeldRender('operator-composition-request', value),
+      rerender: reason => requestHeldRender(reason || 'operator-held-rerender', compositionRequested, { cameraChanged: true }),
     };
 
     function setStatus(title, detail, kind = 'loading') {
@@ -318,43 +336,102 @@
     function mountCanvas() {
       const canvas = prototype.canvasElement();
       const innerDocument = basin.contentDocument;
-      innerDocument.body.appendChild(canvas);
+      if (canvas.parentElement !== innerDocument.body) innerDocument.body.appendChild(canvas);
       Object.assign(canvas.style, {
         position: 'fixed', inset: '0', zIndex: '2147483647',
         width: '100vw', height: '100vh', display: 'block',
-        visibility: 'visible', opacity: '1', transform: 'none', pointerEvents: 'auto',
+        visibility: 'visible', opacity: '1', transform: 'none', pointerEvents: 'none',
       });
+      mountedCanvas = canvas;
       return canvas;
     }
 
-    async function renderComposition(nextComposition) {
+    function effectiveCamera() {
+      return basin.contentWindow?.kaminosCameraDebugState?.() || null;
+    }
+
+    function roundedSignature(values) {
+      return Array.isArray(values)
+        ? values.map(value => Number.isFinite(Number(value)) ? Number(value).toFixed(6) : String(value)).join(',')
+        : 'missing';
+    }
+
+    function cameraSignature(camera) {
+      if (!camera) return 'missing';
+      return [
+        roundedSignature(camera.position),
+        roundedSignature(camera.target),
+        roundedSignature(camera.projectionMatrix),
+      ].join('|');
+    }
+
+    function viewportReceipt() {
+      const rect = basin.getBoundingClientRect();
+      const inner = basin.contentWindow;
+      return {
+        width: Math.max(1, Math.round(rect.width)),
+        height: Math.max(1, Math.round(rect.height)),
+        innerWidth: Math.max(1, Math.round(Number(inner?.innerWidth) || 0)),
+        innerHeight: Math.max(1, Math.round(Number(inner?.innerHeight) || 0)),
+        devicePixelRatio: Number(inner?.devicePixelRatio) || 1,
+      };
+    }
+
+    function viewportSignature(viewport) {
+      return `${viewport.width}x${viewport.height}:${viewport.innerWidth}x${viewport.innerHeight}@${viewport.devicePixelRatio}`;
+    }
+
+    function completeSplatPopulation(receipt) {
+      const candidateCount = Number(receipt?.boundarySplatCandidateCount);
+      const instanceCount = Number(receipt?.boundarySplatInstanceCount);
+      const overflowCount = Number(receipt?.boundarySplatOverflowCount);
+      return Number.isFinite(candidateCount)
+        && Number.isFinite(instanceCount)
+        && Number.isFinite(overflowCount)
+        && candidateCount > 0
+        && instanceCount === candidateCount
+        && overflowCount === 0;
+    }
+
+    async function renderComposition(nextComposition, options = {}) {
       if (!manifest || !prototype || !importReceipt) throw new Error('held-field-not-imported');
       if (!COMPOSITIONS.has(nextComposition)) throw new Error(`unsupported-composition:${nextComposition}`);
-      compositionRequested = nextComposition;
-      state.compositionRequested = compositionRequested;
+      const requestedComposition = nextComposition;
+      compositionRequested = requestedComposition;
+      state.compositionRequested = requestedComposition;
       updateCompositionButtons();
       setButtonsEnabled(false);
       failurePhase = 'held-render';
       failure.classList.remove('visible');
       mountCanvas();
-      cameraReceipt = basin.contentWindow.kaminosSetCameraDebugPose(manifest.camera);
+      cameraReceipt = options.applyCapturedCamera === true
+        ? basin.contentWindow.kaminosSetCameraDebugPose(manifest.camera)
+        : effectiveCamera();
       const receipt = await prototype.renderFrozenScaleToCanvas({
         fullFieldImportSessionId: importReceipt.sessionId,
         renderScale: 1,
-        boundarySplatComposition: compositionRequested,
+        boundarySplatComposition: requestedComposition,
         controlOverrides: {
           ...manifest.controls,
           boundarySidecarSource: 'override',
           selectiveHeadLiveRole: 'truthHigh',
-          selectiveHeadLiveRenderComposition: compositionRequested,
+          selectiveHeadLiveRenderComposition: requestedComposition,
         },
         now: manifest.sampleNowMs,
-        sameStateCaptureId: `${manifest.captureId}:${compositionRequested}`,
+        sameStateCaptureId: `${manifest.captureId}:${requestedComposition}`,
       });
       const compositionEffective = receipt?.boundarySplatCompositionEffective;
       if (receipt?.ok !== true) throw new Error(`held-render-rejected:${JSON.stringify(receipt)}`);
-      if (compositionEffective !== compositionRequested) {
-        throw new Error(`composition-substitution:${compositionRequested}/${compositionEffective || 'missing'}`);
+      if (compositionEffective !== requestedComposition) {
+        throw new Error(`composition-substitution:${requestedComposition}/${compositionEffective || 'missing'}`);
+      }
+      const boundarySplatPopulationComplete = receipt.splatApplied ? completeSplatPopulation(receipt) : null;
+      if (receipt.splatApplied && boundarySplatPopulationComplete !== true) {
+        throw new Error(`incomplete-splat-population:${JSON.stringify({
+          candidateCount: receipt.boundarySplatCandidateCount,
+          instanceCount: receipt.boundarySplatInstanceCount,
+          overflowCount: receipt.boundarySplatOverflowCount,
+        })}`);
       }
       renderReceipt = receipt;
       state.status = 'running';
@@ -371,18 +448,93 @@
       state.splatEncoded = receipt.splatEncoded;
       state.splatApplied = receipt.splatApplied;
       state.residualApplied = receipt.residualApplied;
+      state.boundarySplatCandidateCount = receipt.boundarySplatCandidateCount;
+      state.boundarySplatInstanceCount = receipt.boundarySplatInstanceCount;
+      state.boundarySplatOverflowCount = receipt.boundarySplatOverflowCount;
+      state.boundarySplatPopulationComplete = boundarySplatPopulationComplete;
+      state.boundarySplatInitialOverflowCount = receipt.boundarySplatInitialOverflowCount;
+      state.boundarySplatCapacityRetryCount = receipt.boundarySplatCapacityRetryCount;
+      state.cameraEffective = effectiveCamera();
+      state.cameraRevision += options.cameraChanged ? 1 : 0;
+      state.renderRevision += 1;
+      state.lastRenderReason = options.reason || 'requested';
+      state.viewportEffective = viewportReceipt();
       setStatus(
-        'Checksum-verified held field',
-        `${compositionEffective} | raymarch ${receipt.raymarchApplied ? receipt.raymarchFireAuthority > 0 ? 'full-fire applied' : 'smoke-only applied' : 'off'} | splats ${receipt.splatApplied ? 'fire-sheet applied' : 'off'} | step ${manifest.initialSimStepCount}`,
+        'Checksum-verified interactive held field',
+        `${compositionEffective} | raymarch ${receipt.raymarchApplied ? receipt.raymarchFireAuthority > 0 ? 'full-fire applied' : 'smoke-only applied' : 'off'} | splats ${receipt.splatApplied ? `${receipt.boundarySplatInstanceCount}/${receipt.boundarySplatCandidateCount} complete${receipt.boundarySplatCapacityRetryCount ? ` after ${receipt.boundarySplatCapacityRetryCount} capacity retry` : ''}` : 'off'} | camera ${state.cameraRevision} | step ${manifest.initialSimStepCount}`,
         'running',
       );
       setButtonsEnabled(true);
       return window.__kaminosHeldFieldViewer.debugState();
     }
 
+    function requestHeldRender(reason, nextComposition = compositionRequested, options = {}) {
+      if (!COMPOSITIONS.has(nextComposition)) return Promise.reject(new Error(`unsupported-composition:${nextComposition}`));
+      compositionRequested = nextComposition;
+      state.compositionRequested = compositionRequested;
+      updateCompositionButtons();
+      queuedRenderReason = { reason, options };
+      if (renderInFlight) return renderInFlight;
+      renderInFlight = (async () => {
+        while (queuedRenderReason) {
+          const request = queuedRenderReason;
+          queuedRenderReason = null;
+          await renderComposition(compositionRequested, { ...request.options, reason: request.reason });
+        }
+      })().finally(() => {
+        renderInFlight = null;
+        if (queuedRenderReason) requestHeldRender(queuedRenderReason.reason).catch(error => fail(failurePhase || 'held-rerender', error));
+      });
+      return renderInFlight;
+    }
+
+    function pollHeldInteraction() {
+      interactionRaf = requestAnimationFrame(pollHeldInteraction);
+      if (state.status !== 'running' || !mountedCanvas) return;
+      const camera = effectiveCamera();
+      const viewport = viewportReceipt();
+      const nextCameraSignature = cameraSignature(camera);
+      const nextViewportSignature = viewportSignature(viewport);
+      const cameraChanged = lastCameraSignature !== null && nextCameraSignature !== lastCameraSignature;
+      const viewportChanged = lastViewportSignature !== null && nextViewportSignature !== lastViewportSignature;
+      lastCameraSignature = nextCameraSignature;
+      lastViewportSignature = nextViewportSignature;
+      if (!cameraChanged && !viewportChanged) return;
+      requestHeldRender(
+        cameraChanged && viewportChanged ? 'camera-and-viewport-change' : cameraChanged ? 'camera-change' : 'viewport-change',
+        compositionRequested,
+        { cameraChanged },
+      ).catch(error => fail(failurePhase || 'held-interaction', error));
+    }
+
+    function requestInteractiveRender(event) {
+      if (state.status !== 'running') return;
+      if (event?.type === 'pointermove' && Number(event.buttons) === 0) return;
+      const reason = event?.type === 'resize' ? 'viewport-change' : `camera-${event?.type || 'interaction'}`;
+      requestHeldRender(reason, compositionRequested, { cameraChanged: reason !== 'viewport-change' })
+        .catch(error => fail(failurePhase || 'held-interaction', error));
+    }
+
+    function installHeldInteractionListeners() {
+      const innerDocument = basin.contentDocument;
+      const innerWindow = basin.contentWindow;
+      innerDocument.addEventListener('pointermove', requestInteractiveRender);
+      innerDocument.addEventListener('pointerup', requestInteractiveRender);
+      innerDocument.addEventListener('wheel', requestInteractiveRender);
+      innerWindow.addEventListener('resize', requestInteractiveRender);
+    }
+
+    function startHeldInteraction() {
+      cancelAnimationFrame(interactionRaf);
+      lastCameraSignature = cameraSignature(effectiveCamera());
+      lastViewportSignature = viewportSignature(viewportReceipt());
+      installHeldInteractionListeners();
+      interactionRaf = requestAnimationFrame(pollHeldInteraction);
+    }
+
     for (const button of compositionButtons) {
       button.addEventListener('click', () => {
-        renderComposition(button.dataset.composition).catch(error => fail(failurePhase || 'composition-switch', error));
+        requestHeldRender('composition-switch', button.dataset.composition).catch(error => fail(failurePhase || 'composition-switch', error));
       });
     }
     setButtonsEnabled(false);
@@ -410,7 +562,8 @@
         throw new Error(`held-state-advance-rejected:${JSON.stringify(advanceReceipt)}`);
       }
       state.advanceReceipt = advanceReceipt;
-      await renderComposition(compositionRequested);
+      await renderComposition(compositionRequested, { applyCapturedCamera: true, reason: 'initial-held-render' });
+      startHeldInteraction();
     } catch (error) {
       fail(failurePhase || 'initialization', error);
     }

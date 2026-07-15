@@ -10,5 +10,8 @@ assert.match(frozen, /compositionDefinition\.raymarch[\s\S]*encodeDraw\(encoder,
 assert.match(frozen, /compositionDefinition\.splat[\s\S]*encodeBoundarySplatDraw\([\s\S]*loadOp:\s*raymarchEncoded\s*\?\s*'load'\s*:\s*'clear'/, 'frozen render composites requested splats over any requested raymarch pass');
 assert.match(frozen, /compositionAuthority[\s\S]*raymarchFireAuthority/, 'frozen render reports smoke-only versus full-fire raymarch authority');
 assert.match(frozen, /compositionRequest\.fallbackReason[\s\S]*unsupported-boundary-splat-composition/, 'unsupported identities fail before any pass is encoded');
+assert.match(frozen, /boundarySplatInitialOverflowCount/, 'frozen render preserves first-submit overflow evidence instead of laundering the truncated frame');
+assert.match(frozen, /frozen-boundary-splat-capacity-retry/, 'frozen render retries after telemetry-driven capacity growth before presenting splat authority');
+assert.match(frozen, /boundarySplatCapacityRetryCount/, 'frozen render reports whether capacity growth required a second complete submission');
 
 console.log('volume frozen composition contracts: ok');

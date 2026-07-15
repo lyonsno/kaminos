@@ -25,10 +25,21 @@ assert.match(viewer, /finishDebugBoundarySidecarOverride/, 'viewer requires chec
 assert.match(viewer, /advanceDebugImportedFieldSteps[\s\S]*steps:\s*0/, 'viewer holds imported state without simulation advance');
 assert.match(viewer, /kaminosSetCameraDebugPose/, 'viewer applies the captured camera position and target');
 assert.match(viewer, /renderFrozenScaleToCanvas/, 'viewer renders from the held import session');
-assert.match(viewer, /compositionEffective\s*!==\s*compositionRequested/, 'viewer rejects silent composition substitution');
+assert.match(viewer, /compositionEffective\s*!==\s*requestedComposition/, 'viewer rejects silent composition substitution against the render-local request identity');
 assert.match(viewer, /raymarchEncoded[\s\S]*raymarchApplied[\s\S]*splatEncoded[\s\S]*splatApplied/, 'viewer receipt exposes exact pass encoding and application');
 assert.match(viewer, /compositionAuthority:\s*null[\s\S]*raymarchFireAuthority:\s*null/, 'viewer state exposes composition and raymarch fire authority independently from pass application');
 assert.match(viewer, /state\.compositionAuthority\s*=\s*receipt\.compositionAuthority[\s\S]*state\.raymarchFireAuthority\s*=\s*receipt\.raymarchFireAuthority/, 'viewer records effective authority from the submitted frozen-render receipt');
 assert.match(viewer, /window\.__kaminosHeldFieldViewer/, 'viewer exposes an operator-readable requested/effective debug receipt');
+assert.match(viewer, /pointerEvents:\s*'none'/, 'held canvas must leave pointer events available to the iframe OrbitControls target');
+assert.doesNotMatch(viewer, /pointerEvents:\s*'auto'/, 'held canvas must not intercept camera gestures above OrbitControls');
+assert.match(viewer, /kaminosCameraDebugState/, 'viewer observes the effective interactive camera instead of treating the captured pose as permanently frozen');
+assert.match(viewer, /requestAnimationFrame\(pollHeldInteraction\)/, 'viewer polls camera and viewport settlement while simulation remains held');
+assert.match(viewer, /addEventListener\('pointermove',\s*requestInteractiveRender\)/, 'viewer rerenders directly from OrbitControls drag events instead of depending only on animation-frame polling');
+assert.match(viewer, /addEventListener\('wheel',\s*requestInteractiveRender\)/, 'viewer rerenders directly from OrbitControls zoom events');
+assert.match(viewer, /addEventListener\('resize',\s*requestInteractiveRender\)/, 'viewer rerenders directly when the iframe viewport changes');
+assert.match(viewer, /lastCameraSignature[\s\S]*lastViewportSignature/, 'viewer distinguishes camera movement from viewport settlement when scheduling held rerenders');
+assert.match(viewer, /boundarySplatCandidateCount:\s*null[\s\S]*boundarySplatInstanceCount:\s*null[\s\S]*boundarySplatOverflowCount:\s*null/, 'viewer exposes the complete splat population receipt');
+assert.match(viewer, /boundarySplatPopulationComplete/, 'viewer reports whether candidate, instance, and overflow counts prove a complete submitted splat population');
+assert.match(viewer, /state\.boundarySplatInitialOverflowCount\s*=\s*receipt\.boundarySplatInitialOverflowCount[\s\S]*state\.boundarySplatCapacityRetryCount\s*=\s*receipt\.boundarySplatCapacityRetryCount/, 'viewer preserves the recovered first-submit overflow and retry instead of showing only the successful final count');
 
 console.log('volume held-field viewer contracts: ok');

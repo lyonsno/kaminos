@@ -12285,6 +12285,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let featureCaptureSourcePassApplied = false;
       let sourcePassEncodeMs = null;
       let residualPassEncodeMs = null;
+      let boundarySplatInitialOverflowCount = 0;
+      let boundarySplatCapacityRetryCount = 0;
       if (explicitCompositionRoute) {
         if (compositionDefinition.splat && !boundarySplatRequested()) {
           return {
@@ -12372,6 +12374,95 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       if (device.queue?.onSubmittedWorkDone) {
         await device.queue.onSubmittedWorkDone();
       }
+      if (compositionDefinition.splat && Number(state.boundarySplatOverflowCount) > 0) {
+        boundarySplatInitialOverflowCount = Number(state.boundarySplatOverflowCount);
+        const candidateCount = Number(state.boundarySplatCandidateCount);
+        if (!Number.isFinite(candidateCount) || boundarySplatCapacity < candidateCount) {
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-capacity-growth-unavailable',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+            boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+            boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+            boundarySplatCapacity,
+            boundarySplatInitialOverflowCount,
+            boundarySplatCapacityRetryCount,
+            raymarchEncoded,
+            splatEncoded,
+            raymarchApplied,
+            splatApplied: false,
+          };
+        }
+        updateUniforms(fixedNow);
+        const retryEncoder = device.createCommandEncoder({ label: 'kaminos frozen-boundary-splat-capacity-retry' });
+        encodeBoundarySplats(retryEncoder);
+        const retryTexture = context.getCurrentTexture();
+        let retryRaymarchEncoded = false;
+        if (compositionDefinition.raymarch) {
+          encodeDraw(
+            retryEncoder,
+            retryTexture.createView(),
+            `kaminos frozen ${boundarySplatCompositionRequested} capacity-retry raymarch pass`,
+          );
+          retryRaymarchEncoded = true;
+        }
+        const retrySplatEncoded = encodeBoundarySplatDraw(
+          retryEncoder,
+          retryTexture.createView(),
+          boundarySplatRenderPipeline,
+          { loadOp: retryRaymarchEncoded ? 'load' : 'clear' },
+        );
+        if (!retrySplatEncoded) {
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-capacity-retry-unavailable',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+            boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+            boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+            boundarySplatCapacity,
+            boundarySplatInitialOverflowCount,
+            boundarySplatCapacityRetryCount,
+            raymarchEncoded,
+            splatEncoded: false,
+            raymarchApplied,
+            splatApplied: false,
+          };
+        }
+        encodeBoundarySplatTelemetry(retryEncoder, true);
+        device.queue.submit([retryEncoder.finish()]);
+        boundarySplatCapacityRetryCount += 1;
+        raymarchEncoded = raymarchEncoded || retryRaymarchEncoded;
+        splatEncoded = retrySplatEncoded;
+        raymarchApplied = raymarchEncoded;
+        splatApplied = splatEncoded;
+        if (boundarySplatTelemetryCopyPending) await resolveBoundarySplatTelemetry();
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        if (Number(state.boundarySplatOverflowCount) > 0) {
+          return {
+            ok: false,
+            reason: 'boundary-splat-frozen-capacity-retry-overflow',
+            boundarySplatCompositionRequestedRaw,
+            boundarySplatCompositionRequested,
+            boundarySplatCompositionEffective: 'unavailable',
+            boundarySplatCandidateCount: state.boundarySplatCandidateCount,
+            boundarySplatInstanceCount: state.boundarySplatInstanceCount,
+            boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+            boundarySplatCapacity,
+            boundarySplatInitialOverflowCount,
+            boundarySplatCapacityRetryCount,
+            raymarchEncoded,
+            splatEncoded,
+            raymarchApplied,
+            splatApplied: false,
+          };
+        }
+      }
       const featureCapture = featureCaptureSourcePassApplied && browserResidualFeatureTexture
         ? await readTextureRgba8(
           browserResidualFeatureTexture,
@@ -12444,6 +12535,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatInstanceCount: state.boundarySplatInstanceCount,
         boundarySplatCandidateCount: state.boundarySplatCandidateCount,
         boundarySplatOverflowCount: state.boundarySplatOverflowCount,
+        boundarySplatCapacity,
+        boundarySplatInitialOverflowCount,
+        boundarySplatCapacityRetryCount,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
       };
     } finally {
