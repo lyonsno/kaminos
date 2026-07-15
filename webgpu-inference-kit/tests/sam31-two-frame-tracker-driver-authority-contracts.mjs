@@ -11,6 +11,16 @@ const driver = new URL('../tools/sam31-two-frame-tracker-browser-parity-smoke.mj
 const driverSource = await readFile(driver, 'utf8');
 assert.match(driverSource, /args\.get\('--user-data-dir'\)/, 'the browser witness must accept a caller-owned profile for reusable package storage');
 assert.match(driverSource, /userDataDir,/, 'the durable report must expose the effective browser profile path');
+assert.match(
+  driverSource,
+  /const completedInvocations = lastState\.invocations\?\.length > 0 \? lastState\.invocations : \[lastState\]/,
+  'commit identity collection must fall back to the completed direct invocation when its invocations list is empty',
+);
+assert.match(
+  driverSource,
+  /\.map\(receipt => receipt\.kernel\?\.commit \?\? null\)\.filter\(Boolean\)/,
+  'commit identity collection must ignore receipts that do not carry a kernel commit',
+);
 assert.match(driverSource, /args\.get\('--static-backing'\)/, 'the browser witness must expose retained-memory versus OPFS package storage');
 assert.match(
   driverSource,

@@ -491,9 +491,10 @@ async function main() {
       await delay(250);
     }
     if (lastState?.status !== 'passed') throw new Error(lastState?.error || `browser ended in ${lastState?.status}`);
-    const effectiveCommits = [...new Set((lastState.invocations || [lastState])
+    const completedInvocations = lastState.invocations?.length > 0 ? lastState.invocations : [lastState];
+    const effectiveCommits = [...new Set(completedInvocations
       .flatMap(invocation => invocation.receipts || [])
-      .map(receipt => receipt.kernel?.commit ?? null))];
+      .map(receipt => receipt.kernel?.commit ?? null).filter(Boolean))];
     const commitIdentityPassed = requestedCommit == null
       ? true
       : effectiveCommits.length === 1 && effectiveCommits[0] === requestedCommit;
