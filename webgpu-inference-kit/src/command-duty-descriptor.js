@@ -83,21 +83,25 @@ export function createWebGpuCommandDutyDescriptor(input = {}) {
   };
 }
 
-function normalizeObservedDuty(row, identity, dutyIds) {
-  if (!isPlainObject(row)) throw new TypeError('observed duty rows must be objects');
-  const descriptor = row.descriptor;
-  if (descriptor?.schema !== WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA) {
-    throw new TypeError('observed duty descriptor schema is invalid');
+export function normalizeWebGpuCommandDutyDescriptor(input = {}) {
+  if (input?.schema !== WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA) {
+    throw new TypeError('command duty descriptor schema is invalid');
   }
-  const normalizedDescriptor = createWebGpuCommandDutyDescriptor(descriptor);
-  const boundary = descriptor.submissionBoundary;
+  const normalized = createWebGpuCommandDutyDescriptor(input);
+  const boundary = input.submissionBoundary;
   if (!isPlainObject(boundary)
     || boundary.interruptible !== false
     || boundary.canSplitBefore !== true
     || boundary.canSplitAfter !== true
     || boundary.authority !== 'submitted-command-buffer-non-preemptible') {
-    throw new TypeError('observed duty submission boundary is invalid');
+    throw new TypeError('command duty submission boundary is invalid');
   }
+  return normalized;
+}
+
+function normalizeObservedDuty(row, identity, dutyIds) {
+  if (!isPlainObject(row)) throw new TypeError('observed duty rows must be objects');
+  const normalizedDescriptor = normalizeWebGpuCommandDutyDescriptor(row.descriptor);
   if (normalizedDescriptor.routeId !== identity.routeId) throw new Error('command duty route identity mismatch');
   if (normalizedDescriptor.runId !== identity.runId) throw new Error('command duty run identity mismatch');
   if (normalizedDescriptor.clockId !== identity.clockId) throw new Error('command duty clock identity mismatch');

@@ -293,6 +293,22 @@ for (const [label, mutate, failure] of [
   assert.ok(decision.failures.includes(failure));
 }
 
+for (const [label, mutate] of [
+  ['preemption-claim', descriptor => { descriptor.interruptible = true; }],
+  ['missing-control-unit', descriptor => { descriptor.chunkControl.unit = ''; }],
+]) {
+  const commandDuty = commandDutyObservation(commandIdentity);
+  mutate(commandDuty.duties[0].descriptor);
+  const decision = governor({ phaseControlMap: {} }).observe(observation({
+    episodeId: `portable-raw-${label}`,
+    executionIdentity: commandIdentity,
+    commandDuty,
+  }));
+  assert.equal(decision.status, 'held-invalid-evidence');
+  assert.ok(decision.failures.includes('command-duty-descriptor-invalid'));
+  assert.equal(decision.schedulerChanged, false);
+}
+
 for (const [label, duty, failure] of [
   ['current', commandDutyObservation({ ...commandIdentity, current: 4 }), 'command-duty-control-current-mismatch'],
   [
@@ -329,6 +345,29 @@ const donatedForUncontrollableDuty = uncontrollableGovernor.observe(observation(
 assert.equal(donatedForUncontrollableDuty.status, 'adjusted');
 assert.equal(donatedForUncontrollableDuty.action, 'increase-yield-budget');
 assert.equal(donatedForUncontrollableDuty.effectiveScheduler.yieldMs, 8);
+
+const portableDenominatorGovernor = governor({ phaseControlMap: {} });
+const oversizedLegacyHost = hostCorrelation({
+  foregroundGapDurationMs: 1_020,
+  sharpCoveredDurationMs: 1_000,
+  hostCoveredDurationMs: 10,
+  uncoveredDurationMs: 10,
+});
+for (const episodeId of ['portable-denominator-a', 'portable-denominator-b']) {
+  portableDenominatorGovernor.observe(observation({
+    episodeId,
+    executionIdentity: commandIdentity,
+    commandDuty: commandDutyObservation(commandIdentity),
+    host: oversizedLegacyHost,
+  }));
+}
+const portableDenominatorDecision = portableDenominatorGovernor.snapshot();
+assert.equal(
+  portableDenominatorDecision.scheduler.phaseChunkSize.spnFusionOutputItems,
+  4,
+  'portable duty dominance must use its own uncapped overlap total, not legacy SHARP coverage',
+);
+assert.equal(portableDenominatorDecision.scheduler.yieldMs, 4);
 
 const firstHealthyWindow = chunkGovernor.observe(observation({ episodeId: 'healthy-a', maxFrameGapMs: 36 }));
 assert.equal(firstHealthyWindow.status, 'maintaining');

@@ -1,6 +1,6 @@
 import {
-  WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
   WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
+  normalizeWebGpuCommandDutyDescriptor,
 } from './command-duty-descriptor.js';
 
 export const FOREGROUND_BUDGET_GOVERNOR_SCHEMA = 'kaminos.foreground-budget-governor-decision.v0';
@@ -155,11 +155,10 @@ function validateCommandDutyObservation(observation, state, failures) {
   let foregroundOverlapDurationMs = 0;
   const dutyIds = new Set();
   for (const row of profile.duties) {
-    const descriptor = row?.descriptor;
-    if (descriptor?.schema !== WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA
-      || !isNonEmptyString(descriptor?.dutyId)
-      || !isNonEmptyString(descriptor?.phase)
-      || !['compute', 'copy', 'render', 'mixed'].includes(descriptor?.kind)) {
+    let descriptor;
+    try {
+      descriptor = normalizeWebGpuCommandDutyDescriptor(row?.descriptor);
+    } catch {
       failures.push('command-duty-descriptor-invalid');
       continue;
     }
@@ -169,14 +168,6 @@ function validateCommandDutyObservation(observation, state, failures) {
       || descriptor.runId !== profileIdentity?.runId
       || descriptor.clockId !== profileIdentity?.clockId) {
       failures.push('command-duty-descriptor-identity-mismatch');
-    }
-    const boundary = descriptor.submissionBoundary;
-    if (!isPlainObject(boundary)
-      || boundary.interruptible !== false
-      || boundary.canSplitBefore !== true
-      || boundary.canSplitAfter !== true
-      || boundary.authority !== 'submitted-command-buffer-non-preemptible') {
-      failures.push('command-duty-boundary-invalid');
     }
     if (!isFiniteNonNegative(row?.observedDurationMs)
       || !isFiniteNonNegative(row?.foregroundOverlapDurationMs)
@@ -537,8 +528,11 @@ export function createForegroundBudgetGovernor(input = {}) {
     const leaderOverlapDurationMs = commandDutyLeader?.foregroundOverlapDurationMs
       ?? sharpLeader?.overlapDurationMs
       ?? 0;
-    const leaderFraction = totals.sharpCoveredDurationMs > 0
-      ? leaderOverlapDurationMs / totals.sharpCoveredDurationMs
+    const leaderTotalDurationMs = commandDutyLeader
+      ? observation.commandDutyObservation.totals.foregroundOverlapDurationMs
+      : totals.sharpCoveredDurationMs;
+    const leaderFraction = leaderTotalDurationMs > 0
+      ? leaderOverlapDurationMs / leaderTotalDurationMs
       : 0;
     const phaseControl = commandDutyLeader?.descriptor.chunkControl?.controlId
       || (sharpLeader ? (state.phaseControlMap[sharpLeader.phase] || sharpLeader.phase) : null);
