@@ -672,6 +672,25 @@ function makeDenseLeaf(source, indices) {
   return { indices, ...moment };
 }
 
+export function chooseLegalWeightedSplitCut(counts, masses, leafCount) {
+  const totalMass = masses.reduce((sum, value) => sum + value, 0);
+  let candidateCount = 0;
+  let candidateMass = 0;
+  let minimumImbalance = Infinity;
+  let selected = null;
+  for (let coordinate = 0; coordinate < counts.length - 1; coordinate += 1) {
+    candidateCount += counts[coordinate];
+    candidateMass += masses[coordinate];
+    if (candidateCount <= 0 || candidateCount >= leafCount) continue;
+    const imbalance = Math.abs(candidateMass - totalMass / 2);
+    if (imbalance < minimumImbalance) {
+      minimumImbalance = imbalance;
+      selected = { cut: coordinate, leftCount: candidateCount, leftMass: candidateMass };
+    }
+  }
+  return selected;
+}
+
 function splitDenseLeaf(source, leaf) {
   const { grid, field } = source.frame;
   const stride = KAMINOS_FLUID_CHANNEL_ORDER.length;
@@ -697,7 +716,6 @@ function splitDenseLeaf(source, leaf) {
   for (const axis of axisOrder) {
     const counts = new Uint32Array(grid);
     const masses = new Float64Array(grid);
-    let totalMass = 0;
     for (const cellIndex of leaf.indices) {
       const coordinate = cellCoordinates(cellIndex, grid)[axis];
       const weight = source.structureGradientGain > 0
@@ -705,38 +723,10 @@ function splitDenseLeaf(source, leaf) {
         : field[cellIndex * stride + CHANNEL.smokeDensity];
       counts[coordinate] += 1;
       masses[coordinate] += weight;
-      totalMass += weight;
     }
-    let leftCount = 0;
-    let leftMass = 0;
-    let cut = -1;
-    if (source.structureGradientGain > 0) {
-      let candidateCount = 0;
-      let candidateMass = 0;
-      let minimumImbalance = Infinity;
-      for (let coordinate = 0; coordinate < grid - 1; coordinate += 1) {
-        candidateCount += counts[coordinate];
-        candidateMass += masses[coordinate];
-        if (candidateCount <= 0 || candidateCount >= leaf.indices.length) continue;
-        const imbalance = Math.abs(candidateMass - totalMass / 2);
-        if (imbalance < minimumImbalance) {
-          minimumImbalance = imbalance;
-          cut = coordinate;
-          leftCount = candidateCount;
-          leftMass = candidateMass;
-        }
-      }
-    } else {
-      for (let coordinate = 0; coordinate < grid - 1; coordinate += 1) {
-        leftCount += counts[coordinate];
-        leftMass += masses[coordinate];
-        if (leftCount > 0 && leftCount < leaf.indices.length && leftMass >= totalMass / 2) {
-          cut = coordinate;
-          break;
-        }
-      }
-    }
-    if (cut < 0) continue;
+    const selected = chooseLegalWeightedSplitCut(counts, masses, leaf.indices.length);
+    if (!selected) continue;
+    const { cut, leftCount } = selected;
     const left = new Int32Array(leftCount);
     const right = new Int32Array(leaf.indices.length - leftCount);
     let leftIndex = 0;

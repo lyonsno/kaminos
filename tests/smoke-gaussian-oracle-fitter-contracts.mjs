@@ -8,10 +8,20 @@ import { tmpdir } from 'node:os';
 const fitterUrl = new URL('../smoke-gaussian-oracle-fitter.mjs', import.meta.url);
 const {
   SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY,
+  chooseLegalWeightedSplitCut,
   fitSmokeGaussianOracleFrame,
 } = await import(fitterUrl);
 
 assert.equal(SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY, 'smoke-gaussian-oracle-static-fit-v0');
+assert.deepEqual(
+  chooseLegalWeightedSplitCut(
+    Uint32Array.from([1, 19]),
+    Float64Array.from([1, 19]),
+    20,
+  ),
+  { cut: 0, leftCount: 1, leftMass: 1 },
+  'a terminal-heavy leaf must use its nearest legal cut instead of failing when half-mass lies at the last coordinate',
+);
 
 const channels = [
   'velocityX', 'velocityY', 'velocityZ', 'densityCarrier',

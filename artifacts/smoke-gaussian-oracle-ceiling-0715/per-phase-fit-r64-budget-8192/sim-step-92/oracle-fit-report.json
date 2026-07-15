@@ -1,0 +1,545 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-static-fit-report.v0",
+  "identity": "smoke-gaussian-oracle-static-fit-v0",
+  "status": "passed",
+  "createdAt": "2026-07-15T13:17:37.194Z",
+  "teacher": {
+    "manifestPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v5-r64-c256k-threeframe/sim-step-92.manifest.json",
+    "manifestIdentity": "sha256:c2a6398f43301535f4bdc3a4f9685440fb0f3031e063a114117d9d6eeca825e7",
+    "sourceSchema": "kaminos.volume.full-grid-field-export.v0",
+    "captureId": null,
+    "simStepCount": 92,
+    "sourceCaptureIdentity": null,
+    "cameraIdentity": null,
+    "camera": null,
+    "fluidPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v5-r64-c256k-threeframe/sim-step-92.fluid.f32",
+    "fluidIdentity": "sha256:991cde704859d061626f0bdd2461438c1162fb2601577d4ded20be76029fa841",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "grid": 64,
+    "worldSpace": {
+      "coordinateFrame": "kaminos-volume-world-v0",
+      "transformAuthority": "native-volume-grid-world-transform-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "activeSmokeVoxelCount": 23200,
+    "totalSmokeExtinction": 640.0375779885154,
+    "maxSmokeDensity": 0.5497344732284546
+  },
+  "requestedBudgets": [
+    8192
+  ],
+  "hiddenBudgetCapApplied": false,
+  "optimizer": {
+    "identity": "recursive-weighted-moment-split-v0",
+    "maxIterations": 0,
+    "densityThreshold": 0.000001,
+    "positionAuthority": "continuous-mass-weighted-world-centroids",
+    "covarianceAuthority": "cluster-smoke-density-weighted-world-covariance",
+    "sampleSelectionAuthority": "all-voxels-above-explicit-density-threshold-no-subsampling-v0",
+    "structureGradientGain": null,
+    "allocationAuthority": "smoke-density-mass-weighted-sse-v0",
+    "gradientDiagnostics": null
+  },
+  "warmStart": null,
+  "costs": {
+    "authority": "cpu-wall-clock-performance-now-v0",
+    "sourceLoadAndValidateMs": 11.796875,
+    "optimizerAndProductBuildMs": 266.193541,
+    "totalMs": 277.990416
+  },
+  "budgetCurve": [
+    {
+      "requestedBudget": 8192,
+      "activeGaussianCount": 8192,
+      "iterationCount": 0,
+      "splitCount": 8191,
+      "totalAssignedExtinction": 640.0375779885154,
+      "massWeightedSse": 0.01812183195860083,
+      "structureWeightedSse": 0.01812183195860083,
+      "meanSquaredErrorPerExtinction": 0.00002831369997923153,
+      "extinctionAccounting": {
+        "teacherTotalExtinction": 640.0375779885154,
+        "representedExtinction": 640.0375779885154,
+        "absoluteError": 0,
+        "relativeError": 0
+      },
+      "covariance": {
+        "axisSystem": "jacobi-eigenbasis-3x3-v0",
+        "minRadius": 0.009021097956087902,
+        "maxRadius": 0.04242228098049937,
+        "maxEigenValue": 0.0017996499235884388
+      },
+      "support": {
+        "supportLeakageGaussianCount": 55,
+        "supportLeakageFraction": 0.0067138671875,
+        "maxThreeSigmaDiameter": 0.2545336858829962
+      },
+      "artifact": {
+        "path": "artifacts/smoke-gaussian-oracle-ceiling-0715/per-phase-fit-r64-budget-8192/sim-step-92/budget-8192.gaussians.f32",
+        "sha256": "sha256:271e0ec5b0a9e6616ad551e54860f0e78e7a18676e64143688ccae5d04041572",
+        "byteLength": 917504,
+        "dtype": "float32",
+        "byteOrder": "little-endian",
+        "shape": [
+          8192,
+          28
+        ],
+        "channelOrder": [
+          "positionX",
+          "positionY",
+          "positionZ",
+          "covXX",
+          "covXY",
+          "covXZ",
+          "covYY",
+          "covYZ",
+          "covZZ",
+          "axis0X",
+          "axis0Y",
+          "axis0Z",
+          "axis1X",
+          "axis1Y",
+          "axis1Z",
+          "axis2X",
+          "axis2Y",
+          "axis2Z",
+          "radius0",
+          "radius1",
+          "radius2",
+          "extinctionMass",
+          "densityWitness",
+          "temperatureWitness",
+          "velocityX",
+          "velocityY",
+          "velocityZ",
+          "sourceVoxelCount"
+        ]
+      },
+      "preview": [
+        {
+          "position": [
+            -0.4305110581075712,
+            0.8689556111049104,
+            -0.078125
+          ],
+          "covariance": [
+            0.00024792750112204165,
+            0.00002999852154017546,
+            0,
+            0.00023560006991829585,
+            0,
+            0.00008138020833333333
+          ],
+          "eigenValues": [
+            0.0002723889824112443,
+            0.0002111385886290932,
+            0.00008138020833333333
+          ],
+          "orientation": [
+            [
+              0.7750041577242651,
+              0.631956134166053,
+              0
+            ],
+            [
+              0.631956134166053,
+              -0.7750041577242651,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.016504211050857424,
+            0.014530608680612565,
+            0.009021097956087902
+          ],
+          "extinctionMass": 0.004664250020368854,
+          "densityWitness": 0.0016064692495382424,
+          "temperatureWitness": 0.000008287023155559119,
+          "velocityWitness": [
+            -0.03620049282428246,
+            0.01883045887619124,
+            -0.023206986850940043
+          ],
+          "sourceVoxelCount": 9
+        },
+        {
+          "position": [
+            -0.4290773341278512,
+            0.869158022161005,
+            -0.109375
+          ],
+          "covariance": [
+            0.00020363947871762655,
+            0.00002842835050309578,
+            0,
+            0.00023384347317201293,
+            -1.3877787807814457e-17,
+            0.00008138020833333333
+          ],
+          "eigenValues": [
+            0.0002509321800777991,
+            0.00018655077181184033,
+            0.00008138020833333333
+          ],
+          "orientation": [
+            [
+              0.5151982325959923,
+              0.8570710478892434,
+              0
+            ],
+            [
+              0.8570710478892434,
+              -0.5151982325959923,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.01584083899538781,
+            0.013658359045355352,
+            0.009021097956087902
+          ],
+          "extinctionMass": 0.006491882781574532,
+          "densityWitness": 0.0023684891891192716,
+          "temperatureWitness": 0.000013502830373330469,
+          "velocityWitness": [
+            -0.045084672261383706,
+            0.028148216111008192,
+            -0.030596450005447615
+          ],
+          "sourceVoxelCount": 9
+        },
+        {
+          "position": [
+            -0.4278947270479916,
+            0.7826543981515847,
+            -0.035776767349185064
+          ],
+          "covariance": [
+            0.00018221337853327468,
+            -0.000016590115402337346,
+            0.000004875004218262563,
+            0.00024216829083190117,
+            -0.000020529960597707314,
+            0.00022364900236635172
+          ],
+          "eigenValues": [
+            0.0002590321978400291,
+            0.00021107392476022178,
+            0.00017792454913127665
+          ],
+          "orientation": [
+            [
+              0.21224072132735017,
+              -0.8322670289120885,
+              0.5121381344874556
+            ],
+            [
+              -0.13843081418661607,
+              0.4931869905904707,
+              0.8588384609435848
+            ],
+            [
+              0.9673627995194339,
+              0.25317619338745084,
+              0.010537039800789766
+            ]
+          ],
+          "radii": [
+            0.016094477246559737,
+            0.014528383418681576,
+            0.01333883612356328
+          ],
+          "extinctionMass": 0.014137233476617439,
+          "densityWitness": 0.002716470977786631,
+          "temperatureWitness": 0.00011718085735562325,
+          "velocityWitness": [
+            -0.01949806696744219,
+            0.006525770569593082,
+            0.0007523479108045283
+          ],
+          "sourceVoxelCount": 16
+        },
+        {
+          "position": [
+            -0.4278075084186124,
+            0.828125,
+            -0.1184125633390716
+          ],
+          "covariance": [
+            0.0001704234294200857,
+            0,
+            -0.000024909787749827217,
+            0.00008138020833333333,
+            0,
+            0.0002575448549820593
+          ],
+          "eigenValues": [
+            0.00026416415040881464,
+            0.00016380413399333035,
+            0.00008138020833333333
+          ],
+          "orientation": [
+            [
+              -0.2568180360246897,
+              0,
+              0.9664597748341217
+            ],
+            [
+              0.9664597748341217,
+              0,
+              0.2568180360246897
+            ],
+            [
+              0,
+              1,
+              0
+            ]
+          ],
+          "radii": [
+            0.01625312740394336,
+            0.01279859890743242,
+            0.009021097956087902
+          ],
+          "extinctionMass": 0.00732777054372491,
+          "densityWitness": 0.00299705553107619,
+          "temperatureWitness": 0.00004592705153023893,
+          "velocityWitness": [
+            -0.04120740827367884,
+            0.019139820816259725,
+            -0.024291029303067938
+          ],
+          "sourceVoxelCount": 10
+        },
+        {
+          "position": [
+            -0.42733578339922057,
+            0.7862581365320155,
+            -0.078125
+          ],
+          "covariance": [
+            0.0001626176133781021,
+            -0.000019888923835142958,
+            0,
+            0.00021905919347664504,
+            0,
+            0.00008138020833333333
+          ],
+          "eigenValues": [
+            0.00022536349984034798,
+            0.00015631330701439917,
+            0.00008138020833333333
+          ],
+          "orientation": [
+            [
+              -0.30215946796121046,
+              0.9532573922720968,
+              0
+            ],
+            [
+              0.9532573922720968,
+              0.30215946796121046,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.015012111771511294,
+            0.012502532024130118,
+            0.009021097956087902
+          ],
+          "extinctionMass": 0.00944507181066001,
+          "densityWitness": 0.0036975012178449445,
+          "temperatureWitness": 0.0001620534180428682,
+          "velocityWitness": [
+            -0.029800848653357682,
+            0.005711249703459328,
+            -0.006315343887546547
+          ],
+          "sourceVoxelCount": 7
+        },
+        {
+          "position": [
+            -0.4257621487254796,
+            0.47094042945913295,
+            -0.015625
+          ],
+          "covariance": [
+            0.00011730734682177668,
+            5.091801968393206e-7,
+            0,
+            0.00023934264378455694,
+            0,
+            0.00008138020833333333
+          ],
+          "eigenValues": [
+            0.0002393447682515427,
+            0.00011730522235479094,
+            0.00008138020833333333
+          ],
+          "orientation": [
+            [
+              0.0041722920637361485,
+              0.9999912959515872,
+              0
+            ],
+            [
+              0.9999912959515872,
+              -0.0041722920637361485,
+              0
+            ],
+            [
+              0,
+              0,
+              1
+            ]
+          ],
+          "radii": [
+            0.015470771417467931,
+            0.010830753545104373,
+            0.009021097956087902
+          ],
+          "extinctionMass": 0.006231373396985873,
+          "densityWitness": 0.0025085169694517937,
+          "temperatureWitness": 0.006401147022111977,
+          "velocityWitness": [
+            -0.011542222507258455,
+            -0.0013018608348994755,
+            -0.002520837703679347
+          ],
+          "sourceVoxelCount": 6
+        },
+        {
+          "position": [
+            -0.42564228544480837,
+            0.2179770117271319,
+            -0.03814038769588231
+          ],
+          "covariance": [
+            0.00011389053895335954,
+            -4.979933126286751e-7,
+            -0.0000010339508472768932,
+            0.00024354311413001678,
+            0.000002747052447181139,
+            0.00019666318240043343
+          ],
+          "eigenValues": [
+            0.0002437059298662967,
+            0.00019651493922712883,
+            0.0001138759663903842
+          ],
+          "orientation": [
+            [
+              -0.0042946410838302675,
+              0.9982846659376462,
+              0.05838905558170301
+            ],
+            [
+              0.012139346090710875,
+              0.05843733722638732,
+              -0.9982172678802843
+            ],
+            [
+              0.9999170927304178,
+              0.0035781799356114255,
+              0.012369490446148865
+            ]
+          ],
+          "radii": [
+            0.015611083558366367,
+            0.01401837862333333,
+            0.010671268265318055
+          ],
+          "extinctionMass": 0.007014601669197873,
+          "densityWitness": 0.0016721677040767748,
+          "temperatureWitness": 0.0048946563323702735,
+          "velocityWitness": [
+            -0.012141947361230305,
+            0.0006051518541150315,
+            -0.0025903987696436754
+          ],
+          "sourceVoxelCount": 12
+        },
+        {
+          "position": [
+            -0.4255483405838165,
+            0.8675393146465781,
+            -0.1458258831393281
+          ],
+          "covariance": [
+            0.00010880273098656801,
+            0.000015122796024447105,
+            -0.000009875245623069961,
+            0.00019789428642624785,
+            0.00001658161450920903,
+            0.00015203445028638338
+          ],
+          "eigenValues": [
+            0.0002046542337994807,
+            0.00015108045433745768,
+            0.00010299677956226083
+          ],
+          "orientation": [
+            [
+              0.12177114935609852,
+              0.952990422107783,
+              0.2774545774632742
+            ],
+            [
+              0.29899389470825394,
+              0.23133084328355039,
+              -0.9257908467212833
+            ],
+            [
+              0.9464536111778983,
+              -0.19569184018898364,
+              0.25676889525751556
+            ]
+          ],
+          "radii": [
+            0.014305741288010234,
+            0.012291478932067439,
+            0.010148732904272376
+          ],
+          "extinctionMass": 0.004264437058054682,
+          "densityWitness": 0.0014423880066129725,
+          "temperatureWitness": 0.000005217531220174316,
+          "velocityWitness": [
+            -0.03542796886097092,
+            0.024257293749573184,
+            -0.029322103251987787
+          ],
+          "sourceVoxelCount": 15
+        }
+      ]
+    }
+  ],
+  "reportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/per-phase-fit-r64-budget-8192/sim-step-92/oracle-fit-report.json",
+  "reportIdentity": "sha256:fe9e2b8a3389ee03fc473abaa122e83833ab054e28274d51beb7aabeba2c865c"
+}
