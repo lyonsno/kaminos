@@ -1,0 +1,28 @@
+{
+  "schema": "kaminos-pyro-phase-response-anchor-comparison-v0",
+  "status": "completed",
+  "baseline": "generation-two",
+  "candidate": "protected-anchored-online-rollout-h12-w1",
+  "gate": {
+    "authority": "predeclared-response-anchor-recurrent-gate-v0",
+    "requirements": [
+      "energy improves in every aggregate and late cohort",
+      "late transported and birth state do not regress",
+      "transported and birth persistent-loss steps do not move earlier"
+    ],
+    "passed": true
+  },
+  "cohorts": {
+    "stable-q1": {"aggregate": {"generationTwoState": 0.8639038911191714, "anchoredState": 0.8463077305899361, "generationTwoEnergy": 0.4758757371284264, "anchoredEnergy": 0.4789643482327895}, "late49Through63": {"generationTwoState": 0.8865880753009582, "anchoredState": 0.8522410745376412, "generationTwoEnergy": 0.440313420163552, "anchoredEnergy": 0.4409298987576872}, "persistentLoss": {"generationTwo": null, "anchored": null}},
+    "stable-q2": {"aggregate": {"generationTwoState": 0.8862433218148117, "anchoredState": 0.8828828828623361, "generationTwoEnergy": 0.32171427988064644, "anchoredEnergy": 0.32986694884241885}, "late49Through63": {"generationTwoState": 0.9073711205974142, "anchoredState": 0.8974322600004845, "generationTwoEnergy": 0.2965041805155848, "anchoredEnergy": 0.3042487464955893}, "persistentLoss": {"generationTwo": null, "anchored": null}},
+    "stable-q3": {"aggregate": {"generationTwoState": 0.8847816964291085, "anchoredState": 0.8845616272442525, "generationTwoEnergy": 0.27868233267454284, "anchoredEnergy": 0.28806852042002884}, "late49Through63": {"generationTwoState": 0.9202953004493066, "anchoredState": 0.9163159212983619, "generationTwoEnergy": 0.2567425560850865, "anchoredEnergy": 0.2661412221270622}, "persistentLoss": {"generationTwo": null, "anchored": null}},
+    "stable-q4": {"aggregate": {"generationTwoState": 0.9323406198877421, "anchoredState": 0.9310511063383021, "generationTwoEnergy": 0.23555077024699395, "anchoredEnergy": 0.2437923664437283}, "late49Through63": {"generationTwoState": 0.9872154340297778, "anchoredState": 0.9838430307458543, "generationTwoEnergy": 0.2145979022248665, "anchoredEnergy": 0.22335176834290707}, "persistentLoss": {"generationTwo": null, "anchored": null}},
+    "transported": {"aggregate": {"generationTwoState": 0.9383608571532154, "anchoredState": 0.9367757588139901, "generationTwoEnergy": 0.18821731011459886, "anchoredEnergy": 0.19501356561531658}, "late49Through63": {"generationTwoState": 1.0143490532840995, "anchoredState": 1.0090373182952703, "generationTwoEnergy": 0.19755324414870534, "anchoredEnergy": 0.2058794299428134}, "persistentLoss": {"generationTwo": 58, "anchored": 58}},
+    "birth": {"aggregate": {"generationTwoState": 0.9638138727097, "anchoredState": 0.964002819597536, "generationTwoEnergy": 0.18581256403010918, "anchoredEnergy": 0.19294401576039963}, "late49Through63": {"generationTwoState": 1.0415200358870276, "anchoredState": 1.037722102605544, "generationTwoEnergy": 0.20354411889396873, "anchoredEnergy": 0.21249934743173346}, "persistentLoss": {"generationTwo": 58, "anchored": 58}}
+  },
+  "isolatedRasterPsnrDb": {
+    "beauty": {"generationTwoAll": 14.305862, "anchoredAll": 14.374841, "generationTwoLate49Through63": 14.470845, "anchoredLate49Through63": 14.558301},
+    "debugGain0625": {"generationTwoAll": 13.235758, "anchoredAll": 13.273546, "generationTwoLate49Through63": 13.401824, "anchoredLate49Through63": 13.445981}
+  },
+  "claimBoundary": "One held-out basin, protected exact occupancy, fixed transport, isolated splat raster; not analytical-raymarch error or runtime integration."
+}

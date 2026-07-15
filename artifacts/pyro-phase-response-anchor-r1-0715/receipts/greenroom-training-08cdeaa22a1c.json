@@ -1,0 +1,39 @@
+{
+  "job_id": "08cdeaa22a1c",
+  "job_type": "kaminos_phase_destination_state_anchored_online_rollout_mlx_train",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-destination-state-anchored-online-h12-w1-r1-0715",
+  "effective_route": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-state-residual-mlx.py --training-manifest /private/tmp/kaminos-phase-lag-crosswind-train-r1-0714/phase-corpus.json --evaluation-manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --out-dir /private/tmp/kaminos-phase-destination-state-anchored-online-h12-w1-r1-0715 --hidden-size 128 --epochs 8 --batch-size 4096 --learning-rate 0.0005 --weight-decay 0.0001 --seed 713 --training-mode protected-anchored-online-rollout --rollout-seed-model /private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-rollout-generation-two-r1-0715/receipts/gen2-model.json --response-anchor-model /private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-rollout-generation-two-r1-0715/receipts/gen2-model.json --response-anchor-weight 1.0 --rollout-horizon 12 --predicted-input-fraction 0.625 --candidate-loss-weight 0.1 --splat-loss-weight 1.0 --energy-loss-weight 0.25",
+  "effective_cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "evaluation_manifest": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+    "rollout_seed_model": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-rollout-generation-two-r1-0715/receipts/gen2-model.json",
+    "response_anchor_model": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713/artifacts/pyro-phase-rollout-generation-two-r1-0715/receipts/gen2-model.json",
+    "response_anchor_weight": "1.0",
+    "hidden_size": "128",
+    "epochs": "8",
+    "batch_size": "4096",
+    "learning_rate": "0.0005",
+    "weight_decay": "0.0001",
+    "seed": "713",
+    "rollout_horizon": "12",
+    "predicted_input_fraction": "0.625",
+    "candidate_loss_weight": "0.1",
+    "splat_loss_weight": "1.0",
+    "energy_loss_weight": "0.25"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784111451.597002,
+  "finished_at": 1784111805.416642,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}
