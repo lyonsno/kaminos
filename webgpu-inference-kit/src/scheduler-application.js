@@ -27,6 +27,13 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function normalizeError(error) {
+  return {
+    name: isNonEmptyString(error?.name) ? error.name : 'Error',
+    message: isNonEmptyString(error?.message) ? error.message : String(error),
+  };
+}
+
 function stableSerialize(value) {
   if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
   if (isPlainObject(value)) {
@@ -213,7 +220,8 @@ export function createWebGpuSchedulerApplication(input = {}) {
     const schedulerChanged = invocationState.revision !== previousSchedulerRevision;
     const boundary = deepFreeze({
       schema: WEBGPU_SCHEDULER_BOUNDARY_SCHEMA,
-      status: schedulerChanged ? 'updated' : 'maintained',
+      status: 'pending-encode-validation',
+      uptakeStatus: schedulerChanged ? 'updated' : 'maintained',
       sequence: state.boundaries.length + 1,
       routeId: state.routeId,
       invocationId: invocation.invocationId,
@@ -232,11 +240,62 @@ export function createWebGpuSchedulerApplication(input = {}) {
       effectiveYieldMs: invocationState.scheduler.yieldMs,
       effectivePhaseChunkSize: clone(invocationState.scheduler.phaseChunkSize),
       metadata: clone(boundaryInput.metadata || {}),
-      applicationAuthority: 'pre-encoding-safe-boundary-no-submission-claim-no-submitted-work-preemption',
+      encodingStatus: 'not-validated',
+      submissionStatus: 'not-claimed',
+      failure: null,
+      applicationAuthority: 'pending-pre-encoding-boundary-no-submission-claim-no-submitted-work-preemption',
     });
     invocationState.boundaryCount += 1;
+    invocationState.boundaryIndexes.set(boundaryId, state.boundaries.length);
     state.boundaries.push(clone(boundary));
     return boundary;
+  }
+
+  function settleInvocationBoundary(invocation, settlementInput = {}) {
+    if (!state.activeInvocations.has(invocation)) {
+      throw new Error('unknown invocation or invocation already ended');
+    }
+    if (!isPlainObject(settlementInput)) throw new Error('scheduler boundary settlement must be an object');
+    const boundaryId = settlementInput.boundaryId;
+    if (!isNonEmptyString(boundaryId)) throw new Error('boundaryId must be a non-empty string');
+    const invocationState = state.invocationStates.get(invocation);
+    const boundaryIndex = invocationState?.boundaryIndexes.get(boundaryId);
+    if (!Number.isInteger(boundaryIndex)) throw new Error(`unknown scheduler boundary ${boundaryId}`);
+    const boundary = state.boundaries[boundaryIndex];
+    if (boundary.status !== 'pending-encode-validation') {
+      throw new Error(`scheduler boundary ${boundaryId} is already settled`);
+    }
+
+    let settled;
+    if (settlementInput.status === 'encoded') {
+      settled = {
+        ...boundary,
+        status: 'encoded',
+        encodingStatus: 'encoded',
+        failure: null,
+        applicationAuthority: 'encoded-duty-boundary-no-submission-claim-no-submitted-work-preemption',
+      };
+    } else if (settlementInput.status === 'failed-before-encode') {
+      if (!isNonEmptyString(settlementInput.phase)) {
+        throw new Error('failed scheduler boundary settlement requires a failure phase');
+      }
+      settled = {
+        ...boundary,
+        status: 'failed-before-encode',
+        encodingStatus: 'failed',
+        submissionStatus: 'not-submitted',
+        failure: {
+          phase: settlementInput.phase,
+          error: normalizeError(settlementInput.error),
+        },
+        applicationAuthority: 'failed-pre-encoding-boundary-no-submission-claim-no-submitted-work-preemption',
+      };
+    } else {
+      throw new Error('scheduler boundary settlement status must be encoded or failed-before-encode');
+    }
+    const frozen = deepFreeze(settled);
+    state.boundaries[boundaryIndex] = clone(frozen);
+    return frozen;
   }
 
   function beginInvocation(invocationInput = {}) {
@@ -250,6 +309,7 @@ export function createWebGpuSchedulerApplication(input = {}) {
       revision: state.revision,
       scheduler: clone(state.scheduler),
       boundaryIds: new Set(),
+      boundaryIndexes: new Map(),
       boundaryCount: 0,
     };
     let invocation;
@@ -274,6 +334,9 @@ export function createWebGpuSchedulerApplication(input = {}) {
       refreshAtBoundary(boundaryInput = {}) {
         return refreshInvocationAtBoundary(invocation, boundaryInput);
       },
+      settleBoundary(settlementInput = {}) {
+        return settleInvocationBoundary(invocation, settlementInput);
+      },
     });
     state.activeInvocations.add(invocation);
     state.activeInvocationIds.add(invocation.invocationId);
@@ -285,14 +348,28 @@ export function createWebGpuSchedulerApplication(input = {}) {
     if (!state.activeInvocations.has(invocation)) {
       throw new Error('unknown invocation or invocation already ended');
     }
+    const invocationState = state.invocationStates.get(invocation);
+    for (const [boundaryId, boundaryIndex] of invocationState.boundaryIndexes) {
+      if (state.boundaries[boundaryIndex].status === 'pending-encode-validation') {
+        settleInvocationBoundary(invocation, {
+          boundaryId,
+          status: 'failed-before-encode',
+          phase: 'invocation-ended-before-boundary-settlement',
+          error: new Error('invocation ended before scheduler boundary encoding was settled'),
+        });
+      }
+    }
     state.activeInvocations.delete(invocation);
     state.activeInvocationIds.delete(invocation.invocationId);
-    const invocationState = state.invocationStates.get(invocation);
+    const invocationBoundaries = [...invocationState.boundaryIndexes.values()]
+      .map(index => state.boundaries[index]);
     return {
       invocationId: invocation.invocationId,
       schedulerRevision: invocation.schedulerRevision,
       effectiveSchedulerRevision: invocationState.revision,
       boundaryCount: invocationState.boundaryCount,
+      encodedBoundaryCount: invocationBoundaries.filter(row => row.status === 'encoded').length,
+      failedBoundaryCount: invocationBoundaries.filter(row => row.status === 'failed-before-encode').length,
       activeInvocationCount: state.activeInvocations.size,
     };
   }

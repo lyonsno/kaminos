@@ -312,6 +312,11 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
     throw new Error('queue.submit must be available for tensor readback');
   }
 
+  const staging = runtime.createBuffer({
+    label: options.stagingLabel || `${tensor.name || 'tensor'}.readback`,
+    size: alignedSize,
+    usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
+  });
   const preparedCommandDuty = runtime.prepareCommandDuty({
     ...(options.commandDuty || {}),
     phase: options.commandDuty?.phase || `${tensor.name || 'tensor'}.readback`,
@@ -322,27 +327,32 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
       tensorName: tensor.name || null,
     },
   }, options.schedulerInvocation || null);
-
-  const staging = runtime.createBuffer({
-    label: options.stagingLabel || `${tensor.name || 'tensor'}.readback`,
-    size: alignedSize,
-    usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
-  });
-  const commandBuffer = await runOptionalHostPhase(
-    runtime,
-    WEBGPU_HOST_PHASE.commandEncoding,
-    () => {
-      const encoder = runtime.device.createCommandEncoder({
-        label: options.encoderLabel || `${tensor.name || 'tensor'}.readback.encoder`,
-      });
-      if (typeof encoder.copyBufferToBuffer !== 'function') {
-        throw new Error('command encoder must support copyBufferToBuffer for tensor readback');
-      }
-      encoder.copyBufferToBuffer(tensor.buffer, sourceOffset, staging, 0, alignedSize);
-      return encoder.finish();
-    },
-    { detail: { operation: 'tensor-readback-copy', tensor: tensor.name || null } },
-  );
+  let commandBuffer;
+  try {
+    commandBuffer = await runOptionalHostPhase(
+      runtime,
+      WEBGPU_HOST_PHASE.commandEncoding,
+      () => {
+        const encoder = runtime.device.createCommandEncoder({
+          label: options.encoderLabel || `${tensor.name || 'tensor'}.readback.encoder`,
+        });
+        if (typeof encoder.copyBufferToBuffer !== 'function') {
+          throw new Error('command encoder must support copyBufferToBuffer for tensor readback');
+        }
+        encoder.copyBufferToBuffer(tensor.buffer, sourceOffset, staging, 0, alignedSize);
+        return encoder.finish();
+      },
+      { detail: { operation: 'tensor-readback-copy', tensor: tensor.name || null } },
+    );
+  } catch (error) {
+    runtime.settleCommandDuty(preparedCommandDuty, {
+      status: 'failed-before-encode',
+      phase: 'command-encoding',
+      error,
+    });
+    throw error;
+  }
+  runtime.settleCommandDuty(preparedCommandDuty, { status: 'encoded' });
   await runOptionalHostPhase(
     runtime,
     WEBGPU_HOST_PHASE.queueSubmission,
@@ -494,6 +504,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
   }
   let invocationSequence = 0;
   let commandDutySequence = 0;
+  const preparedCommandDutyInvocations = new WeakMap();
 
   function prepareCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
     const descriptor = clone(descriptorInput || {});
@@ -535,6 +546,26 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       ...(descriptor.metadata || {}),
       ...(schedulerBoundary ? { schedulerBoundary: clone(schedulerBoundary) } : {}),
     };
+    if (schedulerBoundary) preparedCommandDutyInvocations.set(descriptor, schedulerInvocation);
+    return descriptor;
+  }
+
+  function settleCommandDuty(descriptor, settlementInput = {}) {
+    if (!descriptor || typeof descriptor !== 'object') {
+      throw new Error('prepared command duty descriptor must be an object');
+    }
+    const invocation = preparedCommandDutyInvocations.get(descriptor);
+    if (!invocation) return descriptor;
+    if (typeof invocation.settleBoundary !== 'function') {
+      throw new Error('scheduler invocation cannot settle a prepared command duty boundary');
+    }
+    const boundaryId = descriptor.metadata?.schedulerBoundary?.boundaryId;
+    const settled = invocation.settleBoundary({
+      ...settlementInput,
+      boundaryId,
+    });
+    descriptor.metadata.schedulerBoundary = clone(settled);
+    preparedCommandDutyInvocations.delete(descriptor);
     return descriptor;
   }
 
@@ -605,6 +636,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     schedulerApplication,
     admissionCoordinator,
     prepareCommandDuty,
+    settleCommandDuty,
 
     getShaderModule(label, code, descriptor) {
       return resourceCaches.getShaderModule(label, code, descriptor);
@@ -709,6 +741,11 @@ export async function createWebGpuInferenceRuntime(input = {}) {
             return invocation.refreshAtBoundary(boundaryInput);
           },
         } : {}),
+        ...(invocation.settleBoundary ? {
+          settleBoundary(settlementInput = {}) {
+            return invocation.settleBoundary(settlementInput);
+          },
+        } : {}),
         async yieldToBrowser(metadata = {}) {
           return performYield(metadata, invocation);
         },
@@ -778,28 +815,60 @@ export async function createWebGpuInferenceRuntime(input = {}) {
               operation: 'kernel-dispatch',
             },
           }, options.schedulerInvocation || null);
-      const dispatchInput = typeof options.dispatch === 'function'
-        ? options.dispatch({
-            schedulerInvocation: options.schedulerInvocation || null,
-            commandDuty: clone(preparedCommandDuty),
-          })
-        : options.dispatch;
-      if (!Array.isArray(dispatchInput) || dispatchInput.length < 1 || dispatchInput.length > 3) {
-        throw new Error('dispatch must be an array with 1 to 3 dimensions');
+      let dispatchInput;
+      try {
+        dispatchInput = typeof options.dispatch === 'function'
+          ? options.dispatch({
+              schedulerInvocation: options.schedulerInvocation || null,
+              commandDuty: clone(preparedCommandDuty),
+            })
+          : options.dispatch;
+      } catch (error) {
+        if (preparedCommandDuty) runtime.settleCommandDuty(preparedCommandDuty, {
+          status: 'failed-before-encode',
+          phase: 'dispatch-resolution',
+          error,
+        });
+        throw error;
       }
-      const dispatch = [
-        dispatchInput[0],
-        dispatchInput[1] ?? 1,
-        dispatchInput[2] ?? 1,
-      ];
-      for (const dim of dispatch) {
-        if (!Number.isInteger(dim) || dim < 1) throw new Error('dispatch dimensions must be positive integers');
+      let dispatch;
+      try {
+        if (!Array.isArray(dispatchInput) || dispatchInput.length < 1 || dispatchInput.length > 3) {
+          throw new Error('dispatch must be an array with 1 to 3 dimensions');
+        }
+        dispatch = [
+          dispatchInput[0],
+          dispatchInput[1] ?? 1,
+          dispatchInput[2] ?? 1,
+        ];
+        for (const dim of dispatch) {
+          if (!Number.isInteger(dim) || dim < 1) throw new Error('dispatch dimensions must be positive integers');
+        }
+      } catch (error) {
+        if (preparedCommandDuty) runtime.settleCommandDuty(preparedCommandDuty, {
+          status: 'failed-before-encode',
+          phase: 'dispatch-validation',
+          error,
+        });
+        throw error;
       }
       if (typeof device.createCommandEncoder !== 'function') {
-        throw new Error('device.createCommandEncoder must be available');
+        const error = new Error('device.createCommandEncoder must be available');
+        if (preparedCommandDuty) runtime.settleCommandDuty(preparedCommandDuty, {
+          status: 'failed-before-encode',
+          phase: 'encoding-precondition',
+          error,
+        });
+        throw error;
       }
       if (options.submit !== false && typeof queue.submit !== 'function') {
-        throw new Error('queue.submit must be available');
+        const error = new Error('queue.submit must be available');
+        if (preparedCommandDuty) runtime.settleCommandDuty(preparedCommandDuty, {
+          status: 'failed-before-encode',
+          phase: 'encoding-precondition',
+          error,
+        });
+        throw error;
       }
 
       const stageName = options.stage || kernelDefinition.name;
@@ -813,29 +882,40 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       };
 
       return runtime.runStage(stageName, async stage => {
-        const commandBuffer = await runOptionalHostPhase(
-          runtime,
-          WEBGPU_HOST_PHASE.commandEncoding,
-          () => {
-            const encoder = device.createCommandEncoder({
-              label: options.encoderLabel || `${kernelDefinition.name}.encoder`,
-            });
-            const pass = encoder.beginComputePass({
-              label: options.passLabel || `${kernelDefinition.name}.compute-pass`,
-            });
-            pass.setPipeline(kernelDefinition.pipeline);
-            pass.setBindGroup(0, kernelDefinition.bindGroup);
-            pass.dispatchWorkgroups(...dispatch);
-            pass.end();
-            return encoder.finish();
-          },
-          { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name, dispatch } },
-        );
+        let commandBuffer;
+        try {
+          commandBuffer = await runOptionalHostPhase(
+            runtime,
+            WEBGPU_HOST_PHASE.commandEncoding,
+            () => {
+              const encoder = device.createCommandEncoder({
+                label: options.encoderLabel || `${kernelDefinition.name}.encoder`,
+              });
+              const pass = encoder.beginComputePass({
+                label: options.passLabel || `${kernelDefinition.name}.compute-pass`,
+              });
+              pass.setPipeline(kernelDefinition.pipeline);
+              pass.setBindGroup(0, kernelDefinition.bindGroup);
+              pass.dispatchWorkgroups(...dispatch);
+              pass.end();
+              return encoder.finish();
+            },
+            { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name, dispatch } },
+          );
+        } catch (error) {
+          if (preparedCommandDuty) runtime.settleCommandDuty(preparedCommandDuty, {
+            status: 'failed-before-encode',
+            phase: 'command-encoding',
+            error,
+          });
+          throw error;
+        }
         if (options.submit !== false) {
           preparedCommandDuty.metadata = {
             ...preparedCommandDuty.metadata,
             ...metadata,
           };
+          runtime.settleCommandDuty(preparedCommandDuty, { status: 'encoded' });
           await runOptionalHostPhase(
             runtime,
             WEBGPU_HOST_PHASE.queueSubmission,

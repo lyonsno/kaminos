@@ -142,7 +142,8 @@ const liveBoundary = invocation.refreshAtBoundary({
   position: 'before-encode',
 });
 assert.equal(liveBoundary.schema, WEBGPU_SCHEDULER_BOUNDARY_SCHEMA);
-assert.equal(liveBoundary.status, 'updated');
+assert.equal(liveBoundary.status, 'pending-encode-validation');
+assert.equal(liveBoundary.uptakeStatus, 'updated');
 assert.equal(liveBoundary.routeId, routeId);
 assert.equal(liveBoundary.invocationId, 'sharp-invocation-a');
 assert.equal(liveBoundary.dutyId, 'sharp-invocation-a:duty-1');
@@ -154,7 +155,7 @@ assert.equal(liveBoundary.scheduler.phaseChunkSize.spnFusionOutputItems, 4);
 assert.equal(liveBoundary.requestedYieldMs, 2);
 assert.equal(liveBoundary.effectiveYieldMs, 2);
 assert.equal(liveBoundary.effectivePhaseChunkSize.spnFusionOutputItems, 4);
-assert.equal(liveBoundary.applicationAuthority, 'pre-encoding-safe-boundary-no-submission-claim-no-submitted-work-preemption');
+assert.equal(liveBoundary.applicationAuthority, 'pending-pre-encoding-boundary-no-submission-claim-no-submitted-work-preemption');
 assert.equal(invocation.schedulerRevision, 1);
 assert.equal(invocation.getControl('spnFusionOutputItems'), 4);
 assert.throws(
@@ -166,9 +167,18 @@ assert.throws(
   }),
   /duplicate scheduler boundary/i,
 );
+const encodedLiveBoundary = invocation.settleBoundary({
+  boundaryId: liveBoundary.boundaryId,
+  status: 'encoded',
+});
+assert.equal(encodedLiveBoundary.status, 'encoded');
+assert.equal(encodedLiveBoundary.encodingStatus, 'encoded');
+assert.equal(encodedLiveBoundary.submissionStatus, 'not-claimed');
 const endedLiveInvocation = guarded.endInvocation(invocation);
 assert.equal(endedLiveInvocation.effectiveSchedulerRevision, 1);
 assert.equal(endedLiveInvocation.boundaryCount, 1);
+assert.equal(endedLiveInvocation.encodedBoundaryCount, 1);
+assert.equal(endedLiveInvocation.failedBoundaryCount, 0);
 assert.equal(guarded.snapshot().activeInvocationCount, 0);
 assert.throws(() => guarded.endInvocation(invocation), /already ended|unknown invocation/i);
 assert.throws(
@@ -182,6 +192,22 @@ assert.throws(
 );
 const reusedInvocationId = guarded.beginInvocation({ invocationId: 'sharp-invocation-a' });
 guarded.endInvocation(reusedInvocationId);
+
+const abandoned = application();
+const abandonedInvocation = abandoned.beginInvocation({ invocationId: 'abandoned-invocation' });
+abandonedInvocation.refreshAtBoundary({
+  boundaryId: 'abandoned-invocation:boundary-1',
+  dutyId: 'abandoned-invocation:duty-1',
+  phase: 'abandoned-phase',
+  position: 'before-encode',
+});
+const abandonedEnd = abandoned.endInvocation(abandonedInvocation);
+assert.equal(abandonedEnd.encodedBoundaryCount, 0);
+assert.equal(abandonedEnd.failedBoundaryCount, 1);
+const abandonedBoundary = abandoned.snapshot().boundaries[0];
+assert.equal(abandonedBoundary.status, 'failed-before-encode');
+assert.equal(abandonedBoundary.failure.phase, 'invocation-ended-before-boundary-settlement');
+assert.equal(abandonedBoundary.submissionStatus, 'not-submitted');
 
 const nextInvocation = guarded.beginInvocation({ invocationId: 'sharp-invocation-b' });
 assert.equal(nextInvocation.schedulerRevision, 1);
@@ -249,6 +275,7 @@ const parallelABoundary = parallelA.refreshAtBoundary({
   position: 'before-encode',
 });
 assert.equal(parallelABoundary.effectiveSchedulerRevision, 1);
+parallelA.settleBoundary({ boundaryId: parallelABoundary.boundaryId, status: 'encoded' });
 assert.equal(parallelB.schedulerRevision, 0, 'one active invocation refresh must not mutate its sibling');
 parallel.endInvocation(parallelA);
 const parallelRevisionOne = parallel.snapshot().scheduler;
@@ -268,6 +295,7 @@ const parallelBBoundary = parallelB.refreshAtBoundary({
 assert.equal(parallelBBoundary.previousSchedulerRevision, 0);
 assert.equal(parallelBBoundary.effectiveSchedulerRevision, 2);
 assert.equal(parallelBBoundary.effectiveYieldMs, 4);
+parallelB.settleBoundary({ boundaryId: parallelBBoundary.boundaryId, status: 'encoded' });
 parallel.endInvocation(parallelB);
 assert.deepEqual(
   parallel.snapshot().boundaries.map(row => [row.invocationId, row.effectiveSchedulerRevision]),
@@ -404,6 +432,78 @@ await runtime.runInvocation({ invocationId: 'invalid-boundary-invocation' }, asy
   );
 });
 
+const failureKernel = {
+  name: 'scheduler-boundary-failure-kernel',
+  pipeline: {},
+  bindGroup: {},
+  bindings: [],
+};
+const failureDuty = {
+  chunkControl: {
+    controlId: 'spnFusionOutputItems',
+    unit: 'output-item',
+    current: 8,
+    bounds: declaredBounds.phaseChunkSize.spnFusionOutputItems,
+  },
+};
+
+await assert.rejects(
+  runtime.runInvocation({ invocationId: 'throwing-dispatch-invocation' }, context => runtime.runKernel(
+    failureKernel,
+    {
+      stage: 'throwing-dispatch',
+      schedulerInvocation: context,
+      commandDuty: failureDuty,
+      dispatch() { throw new Error('dispatch callback exploded'); },
+    },
+  )),
+  /dispatch callback exploded/i,
+);
+const throwingBoundary = runtime.schedulerSnapshot().boundaries
+  .find(row => row.invocationId === 'throwing-dispatch-invocation');
+assert.equal(throwingBoundary.status, 'failed-before-encode');
+assert.equal(throwingBoundary.failure.phase, 'dispatch-resolution');
+assert.equal(throwingBoundary.submissionStatus, 'not-submitted');
+
+await assert.rejects(
+  runtime.runInvocation({ invocationId: 'invalid-dispatch-invocation' }, context => runtime.runKernel(
+    failureKernel,
+    {
+      stage: 'invalid-dispatch',
+      schedulerInvocation: context,
+      commandDuty: failureDuty,
+      dispatch: [0],
+    },
+  )),
+  /dispatch dimensions must be positive integers/i,
+);
+const invalidDispatchBoundary = runtime.schedulerSnapshot().boundaries
+  .find(row => row.invocationId === 'invalid-dispatch-invocation');
+assert.equal(invalidDispatchBoundary.status, 'failed-before-encode');
+assert.equal(invalidDispatchBoundary.failure.phase, 'dispatch-validation');
+assert.equal(invalidDispatchBoundary.submissionStatus, 'not-submitted');
+
+const createCommandEncoder = device.createCommandEncoder;
+device.createCommandEncoder = undefined;
+await assert.rejects(
+  runtime.runInvocation({ invocationId: 'missing-encoder-invocation' }, context => runtime.runKernel(
+    failureKernel,
+    {
+      stage: 'missing-encoder',
+      schedulerInvocation: context,
+      commandDuty: failureDuty,
+      dispatch: [1],
+    },
+  )),
+  /createCommandEncoder must be available/i,
+);
+device.createCommandEncoder = createCommandEncoder;
+const missingEncoderBoundary = runtime.schedulerSnapshot().boundaries
+  .find(row => row.invocationId === 'missing-encoder-invocation');
+assert.equal(missingEncoderBoundary.status, 'failed-before-encode');
+assert.equal(missingEncoderBoundary.failure.phase, 'encoding-precondition');
+assert.equal(missingEncoderBoundary.submissionStatus, 'not-submitted');
+
 const program = runtime.defineProgram({
   name: 'sharp.guarded-scheduler-program',
   tensors: { readbackOutput },
@@ -503,11 +603,15 @@ assert.deepEqual(
 );
 assert.deepEqual(
   dutyReport.submissions.map(row => ({
+    status: row.descriptor.metadata.schedulerBoundary.status,
+    submissionStatus: row.descriptor.metadata.schedulerBoundary.submissionStatus,
     revision: row.descriptor.metadata.schedulerBoundary.effectiveSchedulerRevision,
     yieldMs: row.descriptor.metadata.schedulerBoundary.effectiveYieldMs,
     dutyId: row.descriptor.metadata.schedulerBoundary.dutyId,
   })),
   dutyReport.submissions.map((row, index) => ({
+    status: 'encoded',
+    submissionStatus: 'not-claimed',
     revision: [0, 1, 1, 1, 1][index],
     yieldMs: 2,
     dutyId: row.descriptor.dutyId,
