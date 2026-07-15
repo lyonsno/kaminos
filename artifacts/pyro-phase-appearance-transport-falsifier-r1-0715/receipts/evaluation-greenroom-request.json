@@ -1,0 +1,12 @@
+{
+  "job_type": "kaminos_phase_appearance_transport_mlx_evaluate",
+  "input_path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-appearance-transport-evaluation-physical-exposure-r2-0715",
+  "params": {
+    "model": "/private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json",
+    "transport_model": "/private/tmp/kaminos-phase-transport-eulerian-rollout-exposure-r1-0715/transport-model.json",
+    "batch_size": "4096"
+  },
+  "job_id": "4612cc92ea92",
+  "submitted_at": 1784153265.47985
+}

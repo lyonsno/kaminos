@@ -1,0 +1,27 @@
+{
+  "job_id": "4612cc92ea92",
+  "job_type": "kaminos_phase_appearance_transport_mlx_evaluate",
+  "status": "done",
+  "input_path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-appearance-transport-evaluation-physical-exposure-r2-0715",
+  "effective_route": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-state-evaluate-mlx.py --model /private/tmp/kaminos-phase-destination-state-physical-energy-anchored-online-h12-w1-r1-0715/destination-state-model.json --transport-model /private/tmp/kaminos-phase-transport-eulerian-rollout-exposure-r1-0715/transport-model.json --evaluation-manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --out-dir /private/tmp/kaminos-phase-appearance-transport-evaluation-physical-exposure-r2-0715 --batch-size 4096",
+  "effective_cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713",
+  "effective_env": {
+    "PYTHONPATH": "."
+  },
+  "effective_defaults": {
+    "batch_size": "4096",
+    "model": "/private/tmp/kaminos-phase-destination-state-anchored-online-h12-w1-r1-0715/destination-state-model.json",
+    "transport_model": "/private/tmp/kaminos-phase-transport-eulerian-full-r1-0714/transport-model.json"
+  },
+  "effective_timeout": null,
+  "ignored_params": null,
+  "started_at": 1784153265.536185,
+  "finished_at": 1784153971.186811,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "warnings": [
+    "volatile_output"
+  ]
+}
