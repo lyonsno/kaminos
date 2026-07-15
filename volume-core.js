@@ -488,8 +488,16 @@ export function boundarySplatHistoryArchiveDecision(options = {}) {
   const allocationGeneration = Math.max(0, Math.floor(Number(options.allocationGeneration) || 0));
   const lastAllocationGeneration = Math.max(0, Math.floor(Number(options.lastArchivedAllocationGeneration) || 0));
   const lastSourceGeneration = Math.max(0, Math.floor(Number(options.lastArchivedSourceCandidateGeneration) || 0));
-  if (allocationGeneration === lastAllocationGeneration && sourceCandidateGeneration <= lastSourceGeneration) {
-    return { archive: false, reason: 'source-generation-already-archived', writeTick, writeSlot };
+  if (allocationGeneration === lastAllocationGeneration) {
+    if (sourceCandidateGeneration <= lastSourceGeneration) {
+      return { archive: false, reason: 'source-generation-already-archived', writeTick, writeSlot };
+    }
+    const lastWriteTick = lastSourceGeneration > 0
+      ? Math.floor((lastSourceGeneration - 1) / historyFrameStride)
+      : -1;
+    if (writeTick <= lastWriteTick) {
+      return { archive: false, reason: 'write-tick-already-archived', writeTick, writeSlot };
+    }
   }
   return { archive: true, reason: 'new-source-candidate-generation', writeTick, writeSlot };
 }
@@ -554,6 +562,282 @@ export function boundarySplatHistoryHoldoverDrawPlan(slot = {}, selection = {}) 
       firstInstance: 0,
     },
   };
+}
+
+function boundarySplatAuthorityToken(value) {
+  if (Number.isFinite(Number(value)) && value !== '') return Number(value).toFixed(6);
+  if (Array.isArray(value)) return `[${value.map(boundarySplatAuthorityToken).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${key}:${boundarySplatAuthorityToken(value[key])}`).join(',')}}`;
+  }
+  return String(value ?? '');
+}
+
+export function boundarySplatReservoirSourceControlSignature(snapshot = {}) {
+  const sourceFields = [
+    'volumeScene',
+    'curl',
+    'microdetail',
+    'interfaceShred',
+    'fireLicks',
+    'projection',
+    'speed',
+    'fireScale',
+    'detailScale',
+    'plumeHeight',
+    'windStrength',
+    'windAngle',
+    'windHeight',
+    'bonfireRecenter',
+    'bonfireLateralDamping',
+    'bonfireShear',
+    'bonfireDetailForces',
+    'bonfireDepinch',
+    'bonfireProjection',
+    'bonfireTemporal',
+    'bonfireInstabilityProbe',
+    'lifecycleEffect',
+    'lifecycleT',
+    'quenchVapor',
+    'inputRadius',
+    'flowRate',
+    'resolution',
+    'oracleActivityCue',
+    'oracleActivityCurlNoise',
+    'oracleActivityVorticity',
+    'oracleActivityMaterial',
+    'pressureStrategy',
+    'pressureIterations',
+    'pressureTierLowerMax',
+    'pressureTierHeroMin',
+    'pressureTierHeroMax',
+    'canonicalSpread',
+    'canonicalCenterline',
+    'canonicalBodyBalance',
+    'canonicalMacroPreset',
+    'canonicalSourceMode',
+    'canonicalMotionMode',
+    'canonicalContentMode',
+    'canonicalSourceY',
+    'canonicalSourceInjection',
+    'canonicalBuoyancy',
+    'reactionFuelScale',
+  ];
+  const shellInspectMode = normalizeShellInspectMode(snapshot.shellInspectMode);
+  const boundaryInspectActive = shellInspectMode === 'boundary' || shellInspectMode === 'boundary_fire';
+  const boundaryControls = snapshot.reactionBoundaryControls || {};
+  const boundaryFireControls = snapshot.reactionBoundaryFireControls || {};
+  const sidecarControls = snapshot.boundarySidecarControls || {};
+  const candidateSidecarAuthority = {
+    shellInspectMode,
+    boundarySidecarSource: normalizeBoundarySidecarSource(snapshot.boundarySidecarSource),
+    blur: clampFinite(sidecarControls.blur ?? snapshot.boundarySidecarBlur, 0, 1, 0.45),
+    ridgeGain: clampFinite(sidecarControls.ridgeGain ?? snapshot.boundarySidecarRidge, 0, 2, 1),
+    supportThermal: boundaryInspectActive
+      ? clampFinite(boundaryControls.supportThermal ?? snapshot.reactionBoundarySupportThermal, 0, 2, 0.10)
+      : clampFinite(snapshot.shellThermal, 0, 2, 0.85),
+    supportReaction: boundaryInspectActive
+      ? clampFinite(boundaryControls.supportReaction ?? snapshot.reactionBoundarySupportReaction, 0, 2, 0.26)
+      : clampFinite(snapshot.shellReaction, 0, 2, 1.10),
+    supportFront: boundaryInspectActive
+      ? clampFinite(boundaryControls.supportFront ?? snapshot.reactionBoundarySupportFront, 0, 2, 1.60)
+      : clampFinite(snapshot.shellFront, 0, 2, 1.25),
+    supportInterface: boundaryInspectActive
+      ? clampFinite(boundaryControls.supportInterface ?? snapshot.reactionBoundarySupportInterface, 0, 2, 1.46)
+      : clampFinite(snapshot.shellEdge, 0, 2, 0.85),
+    fireRidgeGain: clampFinite(boundaryFireControls.ridgeGain ?? snapshot.reactionBoundaryFireRidge, 0, 2, 1.76),
+    fireRidgeCut: clampFinite(boundaryFireControls.ridgeCut ?? snapshot.reactionBoundaryFireRidgeCut, 0, 0.55, 0.040),
+  };
+  return [
+    ...sourceFields.map(field => `${field}:${boundarySplatAuthorityToken(snapshot[field])}`),
+    `candidateSidecar:${boundarySplatAuthorityToken(candidateSidecarAuthority)}`,
+  ].join('|');
+}
+
+export function boundarySplatPrimitiveAuthoritySignature(primitives = []) {
+  const primitive = Array.isArray(primitives) ? primitives[0] : null;
+  if (!primitive || typeof primitive !== 'object') return 'primitive-source:none';
+  const transform = primitive.transform && typeof primitive.transform === 'object' ? primitive.transform : {};
+  const simulation = primitive.simulation && typeof primitive.simulation === 'object' ? primitive.simulation : {};
+  return boundarySplatAuthorityToken({
+    position: Array.isArray(transform.position) ? transform.position.map(Number) : [0, -0.74, 0],
+    sourceRadius: Number(simulation.sourceRadius),
+    flowRate: Number(simulation.flowRate),
+  });
+}
+
+export function boundarySplatScalarActivityCueAuthoritySignature(options = {}) {
+  const grid = Math.max(0, Math.floor(Number(options.grid) || 0));
+  const sourceValues = options.values ?? options.data ?? [];
+  const values = sourceValues instanceof Float32Array ? sourceValues : new Float32Array(sourceValues || []);
+  const bits = new Uint32Array(values.buffer, values.byteOffset, values.length);
+  let hash = 2166136261;
+  hash = Math.imul(hash ^ grid, 16777619) >>> 0;
+  hash = Math.imul(hash ^ values.length, 16777619) >>> 0;
+  for (const value of bits) hash = Math.imul(hash ^ value, 16777619) >>> 0;
+  return `scalar-activity:${grid}:${values.length}:${hash.toString(16).padStart(8, '0')}`;
+}
+
+export function boundarySplatReservoirArchiveProof(options = {}) {
+  const expectedArchiveStates = Math.max(0, Math.floor(Number(options.expectedArchiveStates) || 0));
+  const requestedIntegrationSubsteps = Math.max(0, Math.floor(Number(options.requestedIntegrationSubsteps) || 0));
+  const submittedIntegrationSubsteps = Math.max(0, Math.floor(Number(options.submittedIntegrationSubsteps) || 0));
+  const historyAllocationGeneration = Math.max(0, Math.floor(Number(options.historyAllocationGeneration) || 0));
+  const historyFrameStride = Math.max(1, Math.floor(Number(options.historyFrameStride) || 1));
+  const sourceCandidateGenerationBefore = Math.max(0, Math.floor(Number(options.sourceCandidateGenerationBefore) || 0));
+  const writeTickBefore = sourceCandidateGenerationBefore > 0
+    ? Math.floor((sourceCandidateGenerationBefore - 1) / historyFrameStride)
+    : -1;
+  const metadata = options.metadata && typeof options.metadata === 'object' ? options.metadata : {};
+  const metadataIdentity = 'boundary-splat-history-slot-metadata-readback-v0';
+  const metadataAuthority = 'gpu-archive-slot-metadata-post-queue-completion-readback-v0';
+  const archiveDecisions = Array.isArray(options.archiveDecisions) ? options.archiveDecisions : [];
+  const latestByWriteTick = new Map();
+  for (const decision of archiveDecisions) {
+    if (decision?.archive !== true) continue;
+    const writeTick = Math.floor(Number(decision.writeTick));
+    if (!Number.isFinite(writeTick) || writeTick <= writeTickBefore) continue;
+    latestByWriteTick.set(writeTick, decision);
+  }
+  const distinctDecisions = [...latestByWriteTick.values()];
+  const metadataSlots = Array.isArray(metadata.slots) ? metadata.slots : [];
+  const staleDecisionGeneration = distinctDecisions.some(decision => (
+    Math.floor(Number(decision.historyAllocationGeneration)) !== historyAllocationGeneration
+  ));
+  const provenArchiveStates = distinctDecisions.filter(decision => metadataSlots.some(slot => (
+    slot?.initialized === true
+    && slot?.writeSubmissionCompleted === true
+    && Math.floor(Number(slot.slotIndex)) === Math.floor(Number(decision.writeSlot))
+    && Math.floor(Number(slot.historyAllocationGeneration)) === historyAllocationGeneration
+    && Math.floor(Number(slot.archiveWriteSequence)) === Math.floor(Number(decision.archiveWriteSequence))
+    && Math.floor(Number(slot.sourceCandidateGeneration)) === Math.floor(Number(decision.sourceCandidateGeneration))
+  ))).length;
+  const reasons = [];
+  if (staleDecisionGeneration) reasons.push('archive-decision-allocation-generation-mismatch');
+  if (metadata.ok !== true) reasons.push('gpu-metadata-unavailable');
+  if (metadata.identity !== metadataIdentity || metadata.authority !== metadataAuthority) {
+    reasons.push('gpu-metadata-authority-unverified');
+  }
+  if (Math.floor(Number(metadata.historyAllocationGeneration)) !== historyAllocationGeneration) {
+    reasons.push('gpu-metadata-allocation-generation-mismatch');
+  }
+  if (requestedIntegrationSubsteps !== submittedIntegrationSubsteps) reasons.push('integration-submission-count-mismatch');
+  if (distinctDecisions.length !== expectedArchiveStates) reasons.push('distinct-archive-count-mismatch');
+  if (provenArchiveStates !== expectedArchiveStates) reasons.push('gpu-metadata-does-not-prove-requested-archives');
+  return {
+    identity: 'boundary-splat-truthful-reservoir-archive-proof-v0',
+    ok: reasons.length === 0,
+    reasons,
+    expectedArchiveStates,
+    observedDistinctArchiveStates: distinctDecisions.length,
+    provenArchiveStates,
+  };
+}
+
+export function boundarySplatReservoirClockPlan(options = {}) {
+  const finite = value => Number.isFinite(Number(value));
+  const nonNegative = value => finite(value) ? Math.max(0, Number(value)) : null;
+  const positive = value => finite(value) && Number(value) > 0 ? Number(value) : null;
+  const integer = value => finite(value) ? Math.max(0, Math.floor(Number(value))) : null;
+  const enabled = options.enabled === true;
+  const nowMs = nonNegative(options.nowMs);
+  const lastBurstMs = nonNegative(options.lastBurstMs);
+  const lastPresentationMs = nonNegative(options.lastPresentationMs);
+  const lastSelectionMs = nonNegative(options.lastSelectionMs);
+  const integrationStepMs = positive(options.integrationStepMs);
+  const burstIntervalMs = positive(options.burstIntervalMs);
+  const presentationIntervalMs = positive(options.presentationIntervalMs);
+  const selectionIntervalMs = positive(options.selectionIntervalMs);
+  const historyFrameStride = integer(options.historyFrameStride);
+  const reservoirDepth = integer(options.reservoirDepth);
+  const requestedLeadStates = integer(options.requestedLeadStates);
+  const bufferedStateCount = integer(options.bufferedStateCount);
+  const sourceCandidateGeneration = integer(options.sourceCandidateGeneration);
+  const sourceAuthorityGeneration = integer(options.sourceAuthorityGeneration);
+  const reservoirAuthorityGeneration = integer(options.reservoirAuthorityGeneration);
+  const maximumLeadStates = reservoirDepth === null ? 0 : Math.max(0, reservoirDepth - 1);
+  const refusalReasons = [];
+  if (nowMs === null || lastBurstMs === null || lastPresentationMs === null || lastSelectionMs === null) {
+    refusalReasons.push('clock-time-unavailable');
+  }
+  if (integrationStepMs === null) refusalReasons.push('integration-step-unavailable');
+  if (burstIntervalMs === null) refusalReasons.push('burst-interval-unavailable');
+  if (presentationIntervalMs === null) refusalReasons.push('presentation-interval-unavailable');
+  if (selectionIntervalMs === null) refusalReasons.push('selection-interval-unavailable');
+  if (historyFrameStride === null || historyFrameStride < 1) refusalReasons.push('history-frame-stride-unavailable');
+  if (reservoirDepth === null || reservoirDepth < 2) refusalReasons.push('reservoir-depth-insufficient');
+  if (requestedLeadStates === null) refusalReasons.push('requested-lead-unavailable');
+  else if (requestedLeadStates > maximumLeadStates) refusalReasons.push('requested-lead-exceeds-reservoir-depth');
+  if (bufferedStateCount === null) refusalReasons.push('buffered-state-count-unavailable');
+  else if (bufferedStateCount > maximumLeadStates) refusalReasons.push('buffered-state-count-exceeds-reservoir-depth');
+  if (historyFrameStride !== null && historyFrameStride > 1 && sourceCandidateGeneration === null) {
+    refusalReasons.push('source-candidate-generation-unavailable');
+  }
+  if (sourceAuthorityGeneration === null || reservoirAuthorityGeneration === null) {
+    refusalReasons.push('source-authority-generation-unavailable');
+  }
+  const invalidate = sourceAuthorityGeneration !== null
+    && reservoirAuthorityGeneration !== null
+    && sourceAuthorityGeneration !== reservoirAuthorityGeneration;
+  const invalidationReason = invalidate ? 'source-authority-generation-mismatch' : null;
+  const ok = refusalReasons.length === 0;
+  const burstDue = ok && enabled && nowMs - lastBurstMs >= burstIntervalMs;
+  const presentationDue = ok && enabled && nowMs - lastPresentationMs >= presentationIntervalMs;
+  const selectionDue = ok && enabled && nowMs - lastSelectionMs >= selectionIntervalMs;
+  const expectedArchiveStates = ok && enabled && !invalidate && burstDue
+    ? Math.max(0, requestedLeadStates - bufferedStateCount)
+    : 0;
+  let integrationSubsteps = 0;
+  if (expectedArchiveStates > 0 && historyFrameStride === 1) {
+    integrationSubsteps = expectedArchiveStates;
+  } else if (expectedArchiveStates > 0 && historyFrameStride > 1 && sourceCandidateGeneration !== null) {
+    const currentWriteTick = sourceCandidateGeneration > 0
+      ? Math.floor((sourceCandidateGeneration - 1) / historyFrameStride)
+      : -1;
+    const nextWriteTickGeneration = (currentWriteTick + 1) * historyFrameStride + 1;
+    const firstDistinctStateSubsteps = Math.max(1, nextWriteTickGeneration - sourceCandidateGeneration);
+    integrationSubsteps = firstDistinctStateSubsteps + (expectedArchiveStates - 1) * historyFrameStride;
+  }
+  const availableStates = invalidate ? 0 : Math.max(0, (bufferedStateCount || 0) + expectedArchiveStates);
+  const present = ok && enabled && !invalidate && presentationDue;
+  const advanceSelection = present && selectionDue && availableStates > 0;
+  const consumeStates = advanceSelection ? 1 : 0;
+  const nextBufferedStateCount = invalidate ? 0 : Math.max(0, availableStates - consumeStates);
+  return {
+    identity: 'boundary-splat-truthful-reservoir-clock-plan-v0',
+    ok,
+    enabled,
+    refusalReasons,
+    integrationStepMs,
+    burstDue,
+    presentationDue,
+    selectionDue,
+    integrationSubsteps,
+    expectedArchiveStates,
+    present,
+    advanceSelection,
+    consumeStates,
+    bufferedStateCount: bufferedStateCount ?? 0,
+    nextBufferedStateCount,
+    requestedLeadStates: requestedLeadStates ?? 0,
+    maximumLeadStates,
+    invalidate,
+    invalidationReason,
+    exhausted: present && selectionDue && availableStates <= 0,
+  };
+}
+
+export function boundarySplatReservoirAuthorityDecision(options = {}) {
+  if (String(options.previousSourceControlSignature ?? '') !== String(options.nextSourceControlSignature ?? '')) {
+    return { invalidate: true, reason: 'source-control-change' };
+  }
+  if (String(options.previousEmitterSignature ?? '') !== String(options.nextEmitterSignature ?? '')) {
+    return { invalidate: true, reason: 'external-emitter-change' };
+  }
+  if (String(options.previousPrimitiveSignature ?? '') !== String(options.nextPrimitiveSignature ?? '')) {
+    return { invalidate: true, reason: 'volume-primitive-change' };
+  }
+  return { invalidate: false, reason: null };
 }
 
 export function boundarySplatBufferIntegrity(options = {}) {
@@ -6040,6 +6324,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let oracleActivityCueBuffer = null;
   let oracleActivityCueSourceValues = null;
   let oracleActivityCueSourceGrid = null;
+  let lastOracleActivityCueAuthoritySignature = boundarySplatScalarActivityCueAuthoritySignature();
   let oracleActivityCueUpload = {
     status: 'none',
     requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
@@ -6269,6 +6554,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatHistoryAllocationGeneration: 0,
     boundarySplatHistoryAllocationReason: 'runtime-unallocated',
     boundarySplatHistoryAllocatedSlots: 0,
+    boundarySplatReservoirAuthorityGeneration: 0,
+    boundarySplatReservoirInvalidationCount: 0,
+    boundarySplatReservoirInvalidationReason: null,
+    boundarySplatReservoirLastInvalidatedAtMs: null,
+    boundarySplatReservoirArchiveSubsteps: 0,
     boundarySplatHistorySlotMetadataAuthority: 'gpu-archive-slot-metadata-awaiting-completed-readback-v0',
     boundarySplatHistorySlotMetadata: [],
     boundarySplatHistoryArchiveDecision: null,
@@ -6862,6 +7152,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.externalEmitterCount = externalEmitterState.count;
     state.externalEmitterFrameId = externalEmitterState.frameId;
     state.externalEmitterAgeMs = externalEmitterState.count > 0 ? Math.max(0, nowMs - externalEmitterState.timestampMs) : null;
+  }
+
+  function externalEmitterAuthoritySignature(snapshot = externalEmitterState) {
+    const count = Math.max(0, Math.floor(Number(snapshot?.count) || 0));
+    if (count <= 0) return 'off|none|0';
+    const componentCount = Math.min(snapshot.data?.length || 0, count * EXTERNAL_EMITTER_COMPONENTS);
+    return [
+      snapshot.mode,
+      snapshot.coordinateSpace,
+      count,
+      snapshot.frameId ?? '',
+      Array.from(snapshot.data?.subarray?.(0, componentCount) || []).map(value => Number(value).toFixed(6)).join(','),
+    ].join('|');
   }
 
   function resampleScalarActivityCue(values, sourceGrid, targetGrid) {
@@ -7487,6 +7790,57 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySplatHistoryLastArchivedSourceCandidateGeneration = boundarySplatHistoryLastArchivedSourceCandidateGeneration;
   }
 
+  function invalidateBoundarySplatReservoir(reason = 'source-authority-change') {
+    const slotCount = Math.max(
+      1,
+      Math.floor(Number(boundarySplatHistoryAllocation.slotCount)
+        || Number(boundarySplatHistoryDepthPlan?.activeDepth)
+        || requestedBoundarySplatHistoryDepth(controlsSnapshot.boundarySplatHistoryDepth)),
+    );
+    const allocatedSlotCount = Math.max(
+      slotCount,
+      Math.floor(Number(boundarySplatHistoryAllocation.allocatedSlotCount)
+        || Number(boundarySplatHistoryDepthPlan?.allocatedDepth)
+        || slotCount),
+    );
+    boundarySplatHistoryAllocation = nextBoundarySplatHistoryAllocation(boundarySplatHistoryAllocation, {
+      slotCount,
+      allocatedSlotCount,
+      candidateCapacity: boundarySplatCapacity,
+      reason,
+    });
+    boundarySplatHistoryArchiveWriteSequence = 0;
+    boundarySplatHistoryLastArchivedAllocationGeneration = 0;
+    boundarySplatHistoryLastArchivedSourceCandidateGeneration = 0;
+    boundarySplatValidatedHistorySelection = null;
+    state.boundarySplatHistoryEffectiveDepth = 0;
+    state.boundarySplatHistorySlotMetadata = [];
+    state.boundarySplatHistorySlotMetadataAuthority = 'gpu-archive-slot-metadata-invalidated-awaiting-completed-readback-v0';
+    state.boundarySplatHistoryArchiveDecision = null;
+    const historyAllocationGeneration = boundarySplatHistoryAllocation.generation;
+    state.boundarySplatReservoirAuthorityGeneration = historyAllocationGeneration;
+    state.boundarySplatReservoirInvalidationCount += 1;
+    state.boundarySplatReservoirInvalidationReason = reason;
+    state.boundarySplatReservoirLastInvalidatedAtMs = performance.now();
+    if (device && boundarySplatHistoryArchiveControlBuffer) {
+      device.queue.writeBuffer(boundarySplatHistoryArchiveControlBuffer, 0, new Uint32Array(8));
+    }
+    if (device && boundarySplatHistorySlotMetadataBuffer) {
+      device.queue.writeBuffer(
+        boundarySplatHistorySlotMetadataBuffer,
+        0,
+        new Uint32Array(allocatedSlotCount * BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_STRIDE_U32),
+      );
+    }
+    publishBoundarySplatHistoryAllocation();
+    return {
+      identity: 'boundary-splat-truthful-reservoir-invalidation-v0',
+      reason,
+      historyAllocationGeneration,
+      invalidationCount: state.boundarySplatReservoirInvalidationCount,
+    };
+  }
+
   function ensureBoundarySplatBuffers() {
     if (boundarySplatBuffer && boundarySplatDrawBuffer && boundarySplatDrawGroupBuffer && boundarySplatIndirectBuffer && boundarySplatCameraBuffer && boundarySplatInstanceDescriptorBuffer && boundarySplatHistoryBuffer && boundarySplatHistoryArchiveControlBuffer && boundarySplatHistorySlotMetadataBuffer && boundarySplatReadbackBuffer && boundarySplatFeatureBuffer) return;
     const requestedCapacity = boundarySplatCapacity;
@@ -7573,6 +7927,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       candidateCapacity: boundarySplatCapacity,
       reason: 'initial-gpu-allocation',
     });
+    state.boundarySplatReservoirAuthorityGeneration = boundarySplatHistoryAllocation.generation;
     boundarySplatHistoryLastArchivedAllocationGeneration = 0;
     boundarySplatHistoryLastArchivedSourceCandidateGeneration = 0;
     publishBoundarySplatHistoryAllocation();
@@ -7706,6 +8061,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       candidateCapacity: nextCapacity,
       reason: 'candidate-capacity-growth',
     });
+    state.boundarySplatReservoirAuthorityGeneration = boundarySplatHistoryAllocation.generation;
     boundarySplatHistoryLastArchivedAllocationGeneration = 0;
     boundarySplatHistoryLastArchivedSourceCandidateGeneration = 0;
     boundarySplatValidatedHistorySelection = null;
@@ -10163,6 +10519,150 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     hooks.afterIndirectSetup?.();
     state.boundarySplatFallbackReason = null;
     return true;
+  }
+
+  function encodeBoundarySplatReservoirArchiveSubstep(encoder) {
+    encodeSim(encoder);
+    encodeBoundarySidecar(encoder);
+    if (!encodeBoundarySplats(encoder)) {
+      throw new Error(state.boundarySplatFallbackReason || 'boundary-splat-reservoir-archive-unavailable');
+    }
+    state.boundarySplatReservoirArchiveSubsteps += 1;
+    return {
+      identity: 'boundary-splat-truthful-reservoir-archive-substep-v0',
+      simStepCount: state.simStepCount,
+      sourceCandidateGeneration: state.boundarySplatHistoryArchiveDecision?.sourceCandidateGeneration ?? null,
+      archiveDecision: state.boundarySplatHistoryArchiveDecision ? { ...state.boundarySplatHistoryArchiveDecision } : null,
+    };
+  }
+
+  async function runBoundarySplatReservoirArchiveBurst(options = {}) {
+    if (!state.active || !device) {
+      return {
+        identity: 'boundary-splat-truthful-reservoir-archive-burst-v0',
+        ok: false,
+        reason: 'inactive',
+        requestedIntegrationSubsteps: 0,
+        submittedIntegrationSubsteps: 0,
+        archivedStates: 0,
+      };
+    }
+    const integrationSubsteps = Math.floor(Number(options.integrationSubsteps));
+    const integrationStepMs = Number(options.integrationStepMs);
+    const expectedArchiveStates = Math.floor(Number(options.expectedArchiveStates));
+    if (!Number.isInteger(integrationSubsteps) || integrationSubsteps <= 0) {
+      return {
+        identity: 'boundary-splat-truthful-reservoir-archive-burst-v0',
+        ok: false,
+        reason: 'integration-substeps-required',
+        requestedIntegrationSubsteps: Number.isFinite(integrationSubsteps) ? integrationSubsteps : null,
+        submittedIntegrationSubsteps: 0,
+        archivedStates: 0,
+      };
+    }
+    if (!Number.isFinite(integrationStepMs) || integrationStepMs <= 0) {
+      return {
+        identity: 'boundary-splat-truthful-reservoir-archive-burst-v0',
+        ok: false,
+        reason: 'integration-step-ms-required',
+        requestedIntegrationSubsteps: integrationSubsteps,
+        submittedIntegrationSubsteps: 0,
+        archivedStates: 0,
+      };
+    }
+    if (!Number.isInteger(expectedArchiveStates) || expectedArchiveStates <= 0) {
+      return {
+        identity: 'boundary-splat-truthful-reservoir-archive-burst-v0',
+        ok: false,
+        reason: 'expected-archive-states-required',
+        requestedIntegrationSubsteps: integrationSubsteps,
+        submittedIntegrationSubsteps: 0,
+        expectedArchiveStates: Number.isFinite(expectedArchiveStates) ? expectedArchiveStates : null,
+        archivedStates: 0,
+      };
+    }
+    const startedAtMs = performance.now();
+    const baseNowMs = Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : startedAtMs;
+    const sourceSimStepBefore = state.simStepCount;
+    const sourceRenderFrameBefore = state.frameCount;
+    let submittedIntegrationSubsteps = 0;
+    let archiveWriteSubmissions = 0;
+    const archiveDecisions = [];
+    cancelAnimationFrame(raf);
+    raf = 0;
+    try {
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      for (let substepIndex = 0; substepIndex < integrationSubsteps; substepIndex += 1) {
+        updateUniforms(baseNowMs + substepIndex * integrationStepMs);
+        const encoder = device.createCommandEncoder({
+          label: `kaminos truthful reservoir archive-only substep ${substepIndex + 1}/${integrationSubsteps}`,
+        });
+        const receipt = encodeBoundarySplatReservoirArchiveSubstep(encoder);
+        device.queue.submit([encoder.finish()]);
+        submittedIntegrationSubsteps += 1;
+        if (receipt.archiveDecision?.archive === true) archiveWriteSubmissions += 1;
+        archiveDecisions.push(receipt.archiveDecision);
+      }
+      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      const metadata = await sampleBoundarySplatHistorySlotMetadata();
+      const archiveProof = boundarySplatReservoirArchiveProof({
+        metadata,
+        historyAllocationGeneration: boundarySplatHistoryAllocation.generation,
+        historyFrameStride: normalizeBoundarySplatHistoryFrameStride(controlsSnapshot.boundarySplatHistoryFrameStride),
+        sourceCandidateGenerationBefore: sourceSimStepBefore,
+        archiveDecisions,
+        expectedArchiveStates,
+        requestedIntegrationSubsteps: integrationSubsteps,
+        submittedIntegrationSubsteps,
+      });
+      return {
+        identity: 'boundary-splat-truthful-reservoir-archive-burst-v0',
+        ok: archiveProof.ok,
+        reason: archiveProof.ok === true ? null : archiveProof.reasons[0],
+        authority: 'ordinary-stable-sim-substeps-plus-completed-gpu-archive-metadata-v0',
+        requestedIntegrationSubsteps: integrationSubsteps,
+        submittedIntegrationSubsteps,
+        integrationStepMs,
+        expectedArchiveStates,
+        archiveWriteSubmissions,
+        archivedStates: archiveProof.provenArchiveStates,
+        sourceSimStepBefore,
+        sourceSimStepAfter: state.simStepCount,
+        sourceRenderFrameBefore,
+        sourceRenderFrameAfter: state.frameCount,
+        presentationFramesSubmitted: 0,
+        swapchainTexturesAcquired: 0,
+        historyAllocationGeneration: boundarySplatHistoryAllocation.generation,
+        archiveDecisions,
+        metadata,
+        archiveProof,
+        elapsedMs: performance.now() - startedAtMs,
+      };
+    } catch (error) {
+      return {
+        identity: 'boundary-splat-truthful-reservoir-archive-burst-v0',
+        ok: false,
+        reason: 'archive-burst-failed',
+        error: error?.message || String(error),
+        requestedIntegrationSubsteps: integrationSubsteps,
+        submittedIntegrationSubsteps,
+        integrationStepMs,
+        expectedArchiveStates,
+        archiveWriteSubmissions,
+        archivedStates: 0,
+        sourceSimStepBefore,
+        sourceSimStepAfter: state.simStepCount,
+        sourceRenderFrameBefore,
+        sourceRenderFrameAfter: state.frameCount,
+        presentationFramesSubmitted: 0,
+        swapchainTexturesAcquired: 0,
+        historyAllocationGeneration: boundarySplatHistoryAllocation.generation,
+        archiveDecisions,
+        elapsedMs: performance.now() - startedAtMs,
+      };
+    } finally {
+      if (state.active && !raf) raf = requestAnimationFrame(render);
+    }
   }
 
   function encodeBoundarySplatPbrScene(encoder, colorView, depthView, options = {}) {
@@ -14028,9 +14528,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const previousGrid = gridSize;
       const previousMajorantGrid = majorantGridSize;
       const previousControlSignature = lastTemporalControlSignature || temporalControlSignature(controlsSnapshot);
+      const previousReservoirSourceControlSignature = boundarySplatReservoirSourceControlSignature(controlsSnapshot);
       const previousCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       controlsSnapshot = applyRuntimeQualityControls({ ...controlsSnapshot, ...next });
       const nextControlSignature = temporalControlSignature(controlsSnapshot);
+      const nextReservoirSourceControlSignature = boundarySplatReservoirSourceControlSignature(controlsSnapshot);
       const nextCanonicalSourceControlSignature = canonicalSourceControlSignature(controlsSnapshot);
       if (previousControlSignature !== nextControlSignature) {
         resetTemporalHistory('control-change');
@@ -14043,11 +14545,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         && requestedMajorantGrid === previousMajorantGrid
         && normalizeVolumeScene(controlsSnapshot.volumeScene) === 'canonical_plume'
         && previousCanonicalSourceControlSignature !== nextCanonicalSourceControlSignature;
+      const reservoirSourceInvalidationNeeded = device
+        && previousReservoirSourceControlSignature !== nextReservoirSourceControlSignature
+        && requestedGrid === previousGrid
+        && requestedMajorantGrid === previousMajorantGrid
+        && !sourceStateResetNeeded;
       if (device && (requestedGrid !== previousGrid || requestedMajorantGrid !== previousMajorantGrid)) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid);
       } else if (sourceStateResetNeeded) {
         rebuildFluidState(requestedGrid, requestedMajorantGrid, 'canonical-source-control-change');
       } else {
+        if (reservoirSourceInvalidationNeeded) invalidateBoundarySplatReservoir('source-control-change');
         gridSize = requestedGrid;
         majorantGridSize = requestedMajorantGrid;
         state.simGrid = gridSize;
@@ -14147,12 +14655,23 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     setVolumePrimitives(next) {
       const incoming = Array.isArray(next) ? next : [];
-      volumePrimitives = incoming.map(normalizePrimitiveRecord);
+      const previousPrimitiveSignature = boundarySplatPrimitiveAuthoritySignature(volumePrimitives);
+      const nextVolumePrimitives = incoming.map(normalizePrimitiveRecord);
+      const nextPrimitiveSignature = boundarySplatPrimitiveAuthoritySignature(nextVolumePrimitives);
+      volumePrimitives = nextVolumePrimitives;
       publishVolumePrimitiveState();
-      if (device) rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
+      if (device && previousPrimitiveSignature !== nextPrimitiveSignature) {
+        invalidateBoundarySplatReservoir('volume-primitive-change');
+        rebuildFluidState(gridSize, majorantGridSize, 'volume-primitive-change');
+      }
     },
     setExternalEmitters(payload = {}) {
+      const previousEmitterSignature = externalEmitterAuthoritySignature(externalEmitterState);
       externalEmitterState = normalizeExternalEmitters(payload);
+      const nextEmitterSignature = externalEmitterAuthoritySignature(externalEmitterState);
+      if (previousEmitterSignature !== nextEmitterSignature) {
+        invalidateBoundarySplatReservoir('external-emitter-change');
+      }
       updateExternalEmitterDebug();
       writeExternalEmitterBuffer();
       emitStatus({ phase: 'external-emitters' });
@@ -14166,11 +14685,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     },
     setTruthOracleActivityCue(payload = {}) {
       const source = payload && typeof payload === 'object' ? payload : {};
+      const previousCueSignature = lastOracleActivityCueAuthoritySignature;
       const sourceGrid = normalizeScalarActivityCueGridSize(source.grid || source.sourceGrid || gridSize, gridSize);
       const values = source.values || source.data || source.activity || [];
       if (!values || Number(values.length) <= 0) {
         oracleActivityCueSourceValues = null;
         oracleActivityCueSourceGrid = null;
+        const nextCueSignature = boundarySplatScalarActivityCueAuthoritySignature();
+        lastOracleActivityCueAuthoritySignature = nextCueSignature;
+        if (previousCueSignature !== nextCueSignature) invalidateBoundarySplatReservoir('scalar-activity-cue-change');
         oracleActivityCueUpload = {
           status: 'cleared',
           requestedCueAuthority: TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
@@ -14191,6 +14714,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       oracleActivityCueSourceValues = values instanceof Float32Array ? new Float32Array(values) : new Float32Array(values);
       oracleActivityCueSourceGrid = sourceGrid;
+      const nextCueSignature = boundarySplatScalarActivityCueAuthoritySignature({
+        grid: oracleActivityCueSourceGrid,
+        values: oracleActivityCueSourceValues,
+      });
+      lastOracleActivityCueAuthoritySignature = nextCueSignature;
+      if (previousCueSignature !== nextCueSignature) invalidateBoundarySplatReservoir('scalar-activity-cue-change');
       const resampledCue = resampleScalarActivityCue(oracleActivityCueSourceValues, oracleActivityCueSourceGrid, gridSize);
       writeOracleActivityCueBuffer(resampledCue);
       oracleActivityCueUpload = {
@@ -14262,6 +14791,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     sampleBoundarySplatPbrCostLadder,
     sampleBoundarySplatMatchedComparatorCost,
     sampleBoundarySplatLiveCadence,
+    runBoundarySplatReservoirArchiveBurst,
     sampleRenderScaleSet,
     controlledStepFrame,
     controlledStepSequence,

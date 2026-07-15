@@ -56,8 +56,8 @@ assert.deepEqual(boundarySplatHistoryArchiveDecision({
   historyDepth: 4,
   holdover: false,
 }), {
-  archive: true,
-  reason: 'new-source-candidate-generation',
+  archive: false,
+  reason: 'write-tick-already-archived',
   writeTick: 2,
   writeSlot: 2,
 });
