@@ -69,8 +69,12 @@ assert.match(runtime, /supportClassifierCoverage:\s*'full-grid-160\^3'/, 'infere
 assert.match(runtime, /modelEvaluatedCellCount[\s\S]*dispatchWorkgroups[\s\S]*featureCount[\s\S]*outputHeadCount/, 'inference profile records evaluated cells, dispatch workgroups, feature count, and output heads');
 assert.match(runtime, /supportPositiveCount[\s\S]*residualHeadEvaluatedCount/, 'inference profile records support count and residual-head work');
 assert.match(runtime, /supportCompactionActive:\s*true[\s\S]*supportCompactionIdentity[\s\S]*hiddenSupportCap:\s*false/, 'inference profile uses explicit support compaction without hidden support caps');
-assert.match(runtime, /residualDispatchMode:\s*'support-positive-direct-covered-dispatch-v0'/, 'residual heads must dispatch over compacted support positives without indirect backend fallback');
+assert.match(runtime, /native-low-support-positive-indirect-residual-dispatch-v0/, 'residual heads must use finalized indirect dispatch args');
+assert.match(runtime, /dispatchWorkgroupsIndirect/, 'residual heads must dispatch with dispatchWorkgroupsIndirect instead of full-grid early return');
+assert.match(runtime, /residualDispatchFullGridEarlyReturn:\s*false/, 'inference profile rejects full-grid residual early-return launch');
+assert.match(runtime, /residualDispatchArgsFinalized:\s*true[\s\S]*residualDispatchIndirect:\s*true/, 'inference profile records finalized indirect residual dispatch args');
 assert.match(runtime, /supportCompactedCount[\s\S]*residualDispatchWorkgroups[\s\S]*residualDispatchThreadCount/, 'inference profile records compacted support count and residual dispatch size');
+assert.doesNotMatch(runtime, /residualDispatchWorkgroups\s*=\s*Math\.ceil\(highCells \/ RESIDUAL_WORKGROUP_SIZE\)/, 'residual dispatch workgroups cannot be derived from full high grid');
 assert.match(runtime, /supportClassifierEvaluatedCount:\s*highCells[\s\S]*frontTopologyEvaluatedCount:\s*highCells/, 'support-positive residual dispatch keeps full-grid support and front topology coverage');
 assert.match(combined, /native-low-head-cost-profile-v0/, 'shared-device route records measured head-stage cost profile');
 assert.match(core, /nativeLowHeadCostProfile[\s\S]*supportFrontGpuMs[\s\S]*supportPositiveResidualGpuMs/, 'core receipt preserves measured support/front and residual GPU timings');
@@ -159,7 +163,8 @@ assert.match(witness, /treatmentSplatRadianceGain[\s\S]*treatmentSplatOpacityGai
 assert.match(witness, /nativeLowMaterializationProfile[\s\S]*treatmentRebuildMs[\s\S]*restoreCopyMs/, 'witness preserves split materialization timing profile');
 assert.match(witness, /nativeLowInferenceWorkProfile[\s\S]*modelEvaluatedCellCount[\s\S]*residualHeadEvaluatedCount/, 'witness preserves inference work-shape profile');
 assert.match(witness, /supportCompactionIdentity[\s\S]*native-low-support-positive-residual-dispatch-v0/, 'witness preserves support-positive residual dispatch identity');
-assert.match(witness, /residualDispatchMode[\s\S]*support-positive-direct-covered-dispatch-v0/, 'witness preserves support-positive residual dispatch mode');
+assert.match(witness, /residualDispatchMode[\s\S]*support-positive-indirect-dispatch-args-v0/, 'witness preserves support-positive indirect residual dispatch mode');
+assert.match(witness, /residualDispatchArgsFinalized[\s\S]*residualDispatchIndirect[\s\S]*residualDispatchFullGridEarlyReturn/, 'witness preserves finalized indirect residual dispatch fields');
 assert.match(witness, /supportCompactedCount[\s\S]*residualDispatchWorkgroups[\s\S]*residualDispatchThreadCount/, 'witness preserves support-positive residual dispatch work size');
 assert.match(witness, /headCostTimingAuthority[\s\S]*webgpu-timestamp-query-stage-split-v0/, 'witness preserves head-cost timing authority');
 assert.match(native64Witness, /native-low-cross-grid-64-witness-v0/, 'native-64 witness names evidence authority');

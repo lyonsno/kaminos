@@ -11,6 +11,7 @@ export const NATIVE_LOW_INPUT_AUTHORITY = 'native-low-simulator-state-no-synthet
 export const NATIVE_LOW_FEATURE_AUTHORITY = 'full-low-field-plus-spatial-rbf-features-v0';
 export const NATIVE_LOW_TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
 export const NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH = 'native-low-support-positive-residual-dispatch-v0';
+export const NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH = 'native-low-support-positive-indirect-residual-dispatch-v0';
 export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
 
 const LOW_GRID = 128;
@@ -19,6 +20,7 @@ const SLOTS_PER_CELL = 4;
 const FEATURE_COUNT = 185;
 const HIDDEN_WIDTH = 48;
 const STATS_BYTES = 16;
+const INDIRECT_ARGS_BYTES = 16;
 const RESIDUAL_WORKGROUP_SIZE = 64;
 
 function output(channel) {
@@ -204,6 +206,23 @@ fn upsampleNativeFront(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 `;
 
+const FINALIZE_RESIDUAL_DISPATCH_WGSL = `
+const RESIDUAL_WORKGROUP_SIZE: u32 = ${RESIDUAL_WORKGROUP_SIZE}u;
+
+@group(0) @binding(0) var<storage, read_write> stats: array<atomic<u32>>;
+@group(0) @binding(1) var<storage, read_write> residualDispatchArgs: array<u32>;
+
+@compute @workgroup_size(1)
+fn finalizeResidualDispatchArgs() {
+  let supportCount = atomicLoad(&stats[0]);
+  let workgroups = (supportCount + RESIDUAL_WORKGROUP_SIZE - 1u) / RESIDUAL_WORKGROUP_SIZE;
+  residualDispatchArgs[0] = workgroups;
+  residualDispatchArgs[1] = 1u;
+  residualDispatchArgs[2] = 1u;
+  residualDispatchArgs[3] = supportCount;
+}
+`;
+
 async function sha256Hex(bytes) {
   const buffer = bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const digest = await crypto.subtle.digest('SHA-256', buffer);
@@ -266,6 +285,11 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
   const predictedFront = makeBuffer('native-low shared-device predicted front 160^3', highFrontBytes);
   const nativeUpsampleFront = makeBuffer('native-low shared-device native-upsample front 160^3', highFrontBytes);
   const stats = makeBuffer('native-low shared-device support stats', STATS_BYTES);
+  const residualDispatchArgs = makeBuffer(
+    'native-low shared-device finalized residual dispatch args',
+    INDIRECT_ARGS_BYTES,
+    GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+  );
   const model = makeBuffer(`native-low shared-device model ${SELECTIVE_HEAD_LIVE_MODEL.identity}`, modelBytes.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST);
   device.queue.writeBuffer(model, 0, modelBytes);
   const shader = device.createShaderModule({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} WGSL`, code: WGSL });
@@ -304,6 +328,25 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     layout: device.createPipelineLayout({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native front upsample pipeline layout`, bindGroupLayouts: [frontUpsampleLayout] }),
     compute: { module: frontUpsampleShader, entryPoint: 'upsampleNativeFront' },
   });
+  const finalizeResidualDispatchShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize residual dispatch args WGSL`,
+    code: FINALIZE_RESIDUAL_DISPATCH_WGSL,
+  });
+  const finalizeResidualDispatchLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize residual dispatch args layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const finalizeResidualDispatchPipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize residual dispatch args`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize residual dispatch args pipeline layout`,
+      bindGroupLayouts: [finalizeResidualDispatchLayout],
+    }),
+    compute: { module: finalizeResidualDispatchShader, entryPoint: 'finalizeResidualDispatchArgs' },
+  });
   let encodedFrameCount = 0;
   let lastStats = {
     supportPositiveCount: 0,
@@ -312,12 +355,13 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
   };
   const makeInferenceWorkProfile = stats => {
     const supportPositiveCount = Number(stats?.supportPositiveCount || 0);
-    const residualDispatchWorkgroups = Math.ceil(highCells / RESIDUAL_WORKGROUP_SIZE);
+    const residualDispatchWorkgroups = Math.ceil(supportPositiveCount / RESIDUAL_WORKGROUP_SIZE);
     const residualDispatchThreadCount = residualDispatchWorkgroups * RESIDUAL_WORKGROUP_SIZE;
     return {
       identity: 'native-low-shared-device-inference-work-profile-v0',
       supportCompactionActive: true,
       supportCompactionIdentity: NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH,
+      residualDispatchIdentity: NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH,
       supportClassifierCoverage: 'full-grid-160^3',
       modelEvaluatedCellCount: highCells + supportPositiveCount,
       modelHeadEvaluationCount: highCells * 2 + supportPositiveCount * 3,
@@ -328,7 +372,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       supportCompactedCount: supportPositiveCount,
       residualHeadEvaluatedCount: supportPositiveCount * 3,
       residualHeadPolicy: 'frontTopology-full-grid+fuel-visibleFireCarrier-fireLick-support-positive-v0',
-      residualDispatchMode: 'support-positive-direct-covered-dispatch-v0',
+      residualDispatchMode: 'support-positive-indirect-dispatch-args-v0',
+      residualDispatchArgsFinalized: true,
+      residualDispatchIndirect: true,
+      residualDispatchFullGridEarlyReturn: false,
       residualDispatchWorkgroups,
       residualDispatchThreadCount,
       residualWorkgroupSize: RESIDUAL_WORKGROUP_SIZE,
@@ -406,9 +453,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     effectiveFeatureCount: SELECTIVE_HEAD_LIVE_MODEL.features.featureCount,
     noHiddenCaps: true,
     supportCompactionIdentity: NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH,
-    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront },
+    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs },
     encodeFromNativeLow(encoder, sourceFluid, sourceFront, options = {}) {
       device.queue.writeBuffer(stats, 0, new Uint32Array(4));
+      device.queue.writeBuffer(residualDispatchArgs, 0, new Uint32Array(4));
       const bindGroup = device.createBindGroup({
         label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} bind group`,
         layout,
@@ -441,13 +489,26 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       supportPass.setBindGroup(0, bindGroup);
       supportPass.dispatchWorkgroups(Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4), Math.ceil(HIGH_GRID / 4));
       supportPass.end();
+      const finalizeBindGroup = device.createBindGroup({
+        label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize residual dispatch args bind group`,
+        layout: finalizeResidualDispatchLayout,
+        entries: [
+          { binding: 0, resource: { buffer: stats } },
+          { binding: 1, resource: { buffer: residualDispatchArgs } },
+        ],
+      });
+      const finalizePass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} finalize residual dispatch args` });
+      finalizePass.setPipeline(finalizeResidualDispatchPipeline);
+      finalizePass.setBindGroup(0, finalizeBindGroup);
+      finalizePass.dispatchWorkgroups(1);
+      finalizePass.end();
       const residualPass = encoder.beginComputePass({
         label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} support-positive residuals`,
         ...(residualTimestampWrites ? { timestampWrites: residualTimestampWrites } : {}),
       });
       residualPass.setPipeline(residualPipeline);
       residualPass.setBindGroup(0, bindGroup);
-      residualPass.dispatchWorkgroups(Math.ceil((HIGH_GRID ** 3) / RESIDUAL_WORKGROUP_SIZE));
+      residualPass.dispatchWorkgroupsIndirect(residualDispatchArgs, 0);
       residualPass.end();
       const upsampleBindGroup = device.createBindGroup({
         label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native front upsample bind group`,
@@ -469,8 +530,8 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       lastStats = {
         supportPositiveCount: Number(values[0] || 0),
         supportPrevalence: Number(values[0] || 0) / highCells,
-        residualDispatchWorkgroups: Math.ceil(highCells / RESIDUAL_WORKGROUP_SIZE),
-        residualDispatchThreadCount: Math.ceil(highCells / RESIDUAL_WORKGROUP_SIZE) * RESIDUAL_WORKGROUP_SIZE,
+        residualDispatchWorkgroups: Math.ceil(Number(values[0] || 0) / RESIDUAL_WORKGROUP_SIZE),
+        residualDispatchThreadCount: Math.ceil(Number(values[0] || 0) / RESIDUAL_WORKGROUP_SIZE) * RESIDUAL_WORKGROUP_SIZE,
         highCellCount: highCells,
       };
       lastStats.nativeLowInferenceWorkProfile = makeInferenceWorkProfile(lastStats);
@@ -675,6 +736,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       predictedFluid.destroy();
       predictedFront.destroy();
       nativeUpsampleFront.destroy();
+      residualDispatchArgs.destroy();
       stats.destroy();
       model.destroy();
     },

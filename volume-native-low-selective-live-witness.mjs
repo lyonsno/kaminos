@@ -137,7 +137,10 @@ try {
       && state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage === 'full-grid-160^3'
       && state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity === 'native-low-support-positive-residual-dispatch-v0'
       && state?.nativeLowInferenceWorkProfile?.supportCompactionActive === true
-      && state?.nativeLowInferenceWorkProfile?.residualDispatchMode === 'support-positive-direct-covered-dispatch-v0'
+      && state?.nativeLowInferenceWorkProfile?.residualDispatchMode === 'support-positive-indirect-dispatch-args-v0'
+      && state?.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized === true
+      && state?.nativeLowInferenceWorkProfile?.residualDispatchIndirect === true
+      && state?.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn === false
       && state?.nativeLowInferenceWorkProfile?.hiddenSupportCap === false
       && Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0
       && Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0
@@ -227,7 +230,10 @@ try {
   assert.equal(state?.nativeLowInferenceWorkProfile?.supportClassifierCoverage, 'full-grid-160^3', 'support classifier coverage is not full grid');
   assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionIdentity, 'native-low-support-positive-residual-dispatch-v0', 'wrong support compaction identity');
   assert.equal(state?.nativeLowInferenceWorkProfile?.supportCompactionActive, true, 'support compaction was not active');
-  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchMode, 'support-positive-direct-covered-dispatch-v0', 'wrong residual dispatch mode');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchMode, 'support-positive-indirect-dispatch-args-v0', 'wrong residual dispatch mode');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized, true, 'residual dispatch args were not finalized');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchIndirect, true, 'residual dispatch did not use indirect args');
+  assert.equal(state?.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn, false, 'residual dispatch still used full-grid early return');
   assert.equal(state?.nativeLowInferenceWorkProfile?.hiddenSupportCap, false, 'hidden support cap used in inference profile');
   assert.ok(Number(state?.nativeLowInferenceWorkProfile?.modelEvaluatedCellCount) >= 0, 'modelEvaluatedCellCount missing');
   assert.ok(Number(state?.nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount) >= 0, 'residualHeadEvaluatedCount missing');
@@ -371,6 +377,9 @@ try {
     supportCompactionIdentity: endState.nativeLowInferenceWorkProfile?.supportCompactionIdentity,
     supportCompactedCount: endState.nativeLowInferenceWorkProfile?.supportCompactedCount,
     residualDispatchMode: endState.nativeLowInferenceWorkProfile?.residualDispatchMode,
+    residualDispatchArgsFinalized: endState.nativeLowInferenceWorkProfile?.residualDispatchArgsFinalized,
+    residualDispatchIndirect: endState.nativeLowInferenceWorkProfile?.residualDispatchIndirect,
+    residualDispatchFullGridEarlyReturn: endState.nativeLowInferenceWorkProfile?.residualDispatchFullGridEarlyReturn,
     residualDispatchWorkgroups: endState.nativeLowInferenceWorkProfile?.residualDispatchWorkgroups,
     residualDispatchThreadCount: endState.nativeLowInferenceWorkProfile?.residualDispatchThreadCount,
     nativeLowHeadCostProfile: endState.nativeLowHeadCostProfile,
