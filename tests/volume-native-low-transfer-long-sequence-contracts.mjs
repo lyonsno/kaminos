@@ -33,6 +33,7 @@ assert.match(witness, /failurePhase/);
 assert.match(witness, /lastTrustworthyEvidence/);
 assert.match(witness, /Page\.captureScreenshot/);
 assert.match(witness, /ffmpeg/);
+assert.match(witness, /-movflags'[\s\S]*'\+faststart'/, 'MP4 encoder uses the valid faststart movflag');
 assert.match(witness, /operatorPage/);
 assert.match(witness, /Native 96 control/);
 assert.match(witness, /128-trained zero-shot/);
