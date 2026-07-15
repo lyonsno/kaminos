@@ -14,12 +14,16 @@ const source = readFileSync(probePath, 'utf8');
 assert.match(source, /kaminos\.volume\.boundary-splat-displacement-probe\.v0/, 'probe emits a stable report schema');
 assert.match(source, /one-cell-27-class-offset-v0/, 'probe names the bounded 27-class target');
 assert.match(source, /spatial-block-hash-holdout-v0/, 'probe prevents neighboring candidate rows from crossing roles');
+assert.match(source, /one-cell-chebyshev-cross-role-exclusion-v0/, 'probe excludes radius-one label neighborhoods that cross role ownership');
 assert.match(source, /candidate-feature-row-reconstructed-from-exported-field-v0/, 'probe names exact offline feature reconstruction authority');
 assert.match(source, /always-center-offset-control-v0/, 'probe retains the inert center control');
 assert.match(source, /multiclass-ridge-offset-control-v0/, 'probe retains a linear multiclass control');
 assert.match(source, /tiny-softmax-mlp-offset-v0/, 'probe names the nonlinear offset model');
 assert.match(source, /validation-selected-collision-aware-move-gate-v0/, 'probe calibrates collision-safe movement on validation blocks');
 assert.match(source, /vacant-in-original-candidate-set-v0/, 'move gate only targets originally vacant candidate cells');
+assert.match(source, /validation-selected-vacancy-gated-offset-class-grid-v0/, 'probe names the dense displacement output authority');
+assert.match(source, /boundarySplatOffsetClassNormalized/, 'probe emits a renderer-consumable normalized offset class channel');
+assert.match(source, /global-vacancy-election-then-role-slice-v0/, 'probe evaluates every role from one deployment-identical global vacancy election');
 assert.match(source, /postOffsetUniqueOverlap/, 'probe reports collision-aware unique support overlap');
 assert.match(source, /duplicateDestinationCount/, 'probe reports candidate collapse explicitly');
 assert.match(source, /failurePhase/, 'probe writes durable failure-phase reports');
@@ -150,7 +154,7 @@ const run = spawnSync('python3', [
   '--low-manifest', lowManifest,
   '--high-manifest', highManifest,
   '--out-dir', outDir,
-  '--spatial-block-size', '1',
+  '--spatial-block-size', '4',
   '--epochs', '10',
   '--hidden-width', '16',
   '--batch-size', '32',
@@ -170,6 +174,14 @@ assert.ok(report.dataset.offsetHistogram['-1,0,0'] > 0);
 assert.ok(report.dataset.offsetHistogram['0,0,0'] > 0);
 assert.ok(report.split.trainRows > 0 && report.split.validationRows > 0 && report.split.testRows > 0);
 assert.deepEqual(report.split.roleBins, { test: [0, 1], validation: [2, 3], train: [4, 5, 6, 7, 8, 9] });
+assert.equal(report.split.guardBandIdentity, 'one-cell-chebyshev-cross-role-exclusion-v0');
+assert.ok(report.split.guardBandRows > 0, 'fixture exercises guarded cross-role boundaries');
+assert.equal(report.split.crossRoleRadiusOneRowsAfterGuard, 0);
+assert.equal(
+  report.split.activeRows + report.split.guardBandRows,
+  lowIndexes.length,
+  'every candidate is either evaluated or explicitly held out by the guard band',
+);
 for (const model of ['alwaysCenter', 'ridge', 'mlp', 'mlpVacancyGated']) {
   const metrics = report.models[model].test;
   assert.ok(Number.isFinite(metrics.destinationMembershipAccuracy));
@@ -180,7 +192,46 @@ assert.equal(report.models.mlpVacancyGated.test.duplicateDestinationCount, 0);
 assert.equal(report.models.mlpVacancyGated.test.uniqueDestinationCount, report.models.mlpVacancyGated.test.rowCount);
 assert.equal(report.models.mlpVacancyGated.calibration.selectedOn, 'validation');
 assert.equal(report.models.mlpVacancyGated.calibration.testDataUsedForSelection, false);
+assert.equal(report.models.mlpVacancyGated.evaluationAuthority, 'global-vacancy-election-then-role-slice-v0');
+assert.equal(report.models.mlpVacancyGated.gateRoles.all.duplicateDestinationCount, 0);
+assert.equal(report.checkpoint.replay.status, 'verified');
+assert.equal(report.checkpoint.replay.classParity, true);
+assert.equal(report.checkpoint.replay.outputSha256, report.denseOutputs.boundarySplatOffsetClass.sha256);
+assert.equal(report.producer.script.path, probePath);
+assert.match(report.producer.script.sha256, /^[a-f0-9]{64}$/);
+assert.equal(report.producer.arguments.spatial_block_size, 4);
+const displacement = report.denseOutputs.boundarySplatOffsetClass;
+assert.deepEqual(displacement.shape, [grid, grid, grid, 1]);
+assert.deepEqual(displacement.channelOrder, ['boundarySplatOffsetClassNormalized']);
+assert.equal(displacement.authority, 'validation-selected-vacancy-gated-offset-class-grid-v0');
+assert.ok(existsSync(displacement.path), 'probe persists the dense gated displacement grid');
+const displacementBytes = readFileSync(displacement.path);
+assert.equal(displacementBytes.byteLength, cells * Float32Array.BYTES_PER_ELEMENT);
+assert.equal(sha256(displacementBytes), displacement.sha256);
+const displacementValues = new Float32Array(
+  displacementBytes.buffer,
+  displacementBytes.byteOffset,
+  displacementBytes.byteLength / Float32Array.BYTES_PER_ELEMENT,
+);
+assert.ok(displacementValues.every(value => Number.isFinite(value) && value >= 0 && value <= 1));
 assert.ok(existsSync(join(outDir, 'displacement-model.npz')), 'probe persists the fitted displacement model');
+
+const mismatchedManifest = join(fixtureRoot, 'high-mismatched-source.json');
+const mismatched = JSON.parse(readFileSync(highManifest, 'utf8'));
+mismatched.sourceCapture.payloadSha256 = 'b'.repeat(64);
+writeFileSync(mismatchedManifest, `${JSON.stringify(mismatched, null, 2)}\n`);
+const mismatchedOut = join(fixtureRoot, 'probe-mismatched-source');
+const mismatchedRun = spawnSync('python3', [
+  probePath,
+  '--low-manifest', lowManifest,
+  '--high-manifest', mismatchedManifest,
+  '--out-dir', mismatchedOut,
+], { encoding: 'utf8' });
+assert.notEqual(mismatchedRun.status, 0, 'different captured source states fail before training');
+const mismatchedFailure = JSON.parse(readFileSync(join(mismatchedOut, 'manifest.json'), 'utf8'));
+assert.equal(mismatchedFailure.status, 'failed');
+assert.equal(mismatchedFailure.failurePhase, 'input-validation');
+assert.match(mismatchedFailure.error.message, /source state|source capture|payload/i);
 
 const corruptManifest = join(fixtureRoot, 'low-corrupt.json');
 const corrupt = JSON.parse(readFileSync(lowManifest, 'utf8'));

@@ -18,6 +18,7 @@ SCHEMA = "kaminos.volume.boundary-splat-displacement-probe.v0"
 IDENTITY = "one-cell-27-class-offset-v0"
 FEATURE_AUTHORITY = "candidate-feature-row-reconstructed-from-exported-field-v0"
 SPLIT_IDENTITY = "spatial-block-hash-holdout-v0"
+SPLIT_GUARD_IDENTITY = "one-cell-chebyshev-cross-role-exclusion-v0"
 CENTER_CONTROL = "always-center-offset-control-v0"
 FREQUENCY_CONTROL = "train-class-frequency-offset-control-v0"
 RIDGE_IDENTITY = "multiclass-ridge-offset-control-v0"
@@ -25,6 +26,9 @@ MLP_IDENTITY = "tiny-softmax-mlp-offset-v0"
 MOVE_GATE_IDENTITY = "validation-selected-collision-aware-move-gate-v0"
 VACANCY_POLICY = "vacant-in-original-candidate-set-v0"
 GATED_MLP_IDENTITY = "tiny-softmax-mlp-vacancy-gated-offset-v0"
+DISPLACEMENT_GRID_AUTHORITY = "validation-selected-vacancy-gated-offset-class-grid-v0"
+DISPLACEMENT_GRID_CHANNEL = "boundarySplatOffsetClassNormalized"
+GLOBAL_GATE_EVALUATION_AUTHORITY = "global-vacancy-election-then-role-slice-v0"
 FEATURE_ORDER = [
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.smokeDensity", "material.heat", "material.fuel", "material.detail",
@@ -154,7 +158,7 @@ def decode_cells(splats: np.ndarray, grid: int) -> tuple[np.ndarray, np.ndarray]
     return indexes.astype(np.int64), coords.astype(np.int64)
 
 
-def spatial_split(coords: np.ndarray, block_size: int, seed: int) -> tuple[np.ndarray, dict[str, Any]]:
+def spatial_roles(coords: np.ndarray, block_size: int, seed: int) -> np.ndarray:
     block = coords // max(1, int(block_size))
     hashes = (
         (block[:, 0] * np.int64(73856093))
@@ -166,13 +170,46 @@ def spatial_split(coords: np.ndarray, block_size: int, seed: int) -> tuple[np.nd
     roles = np.full(coords.shape[0], 2, dtype=np.int8)
     roles[bins < 2] = 0
     roles[(bins >= 2) & (bins < 4)] = 1
+    return roles
+
+
+def spatial_split(coords: np.ndarray, block_size: int, seed: int, grid: int) -> tuple[np.ndarray, dict[str, Any]]:
+    roles = spatial_roles(coords, block_size, seed)
+    raw_roles = roles.copy()
+    guard = np.zeros(coords.shape[0], dtype=np.bool_)
+    for dx, dy, dz in OFFSETS.tolist():
+        if dx == 0 and dy == 0 and dz == 0:
+            continue
+        neighbors = coords + np.asarray([dx, dy, dz], dtype=np.int64)
+        valid = np.all((neighbors >= 0) & (neighbors < grid), axis=1)
+        neighbor_roles = spatial_roles(neighbors, block_size, seed)
+        guard |= valid & (neighbor_roles != raw_roles)
+    roles[guard] = -1
+
+    cross_role_after_guard = np.zeros(coords.shape[0], dtype=np.bool_)
+    for dx, dy, dz in OFFSETS.tolist():
+        if dx == 0 and dy == 0 and dz == 0:
+            continue
+        neighbors = coords + np.asarray([dx, dy, dz], dtype=np.int64)
+        valid = np.all((neighbors >= 0) & (neighbors < grid), axis=1)
+        neighbor_roles = spatial_roles(neighbors, block_size, seed)
+        cross_role_after_guard |= (roles >= 0) & valid & (neighbor_roles != roles)
     receipt = {
         "identity": SPLIT_IDENTITY,
+        "guardBandIdentity": SPLIT_GUARD_IDENTITY,
         "spatialBlockSize": max(1, int(block_size)),
         "hashConstants": [73856093, 19349663, 83492791],
         "hashSeed": int(seed),
         "roleBins": {"test": [0, 1], "validation": [2, 3], "train": [4, 5, 6, 7, 8, 9]},
-        "roleAuthority": "whole spatial blocks; no neighboring-cell random assignment",
+        "roleAuthority": "whole spatial blocks with one-cell Chebyshev exclusion around cross-role boundaries",
+        "rawRoleRows": {
+            "test": int(np.count_nonzero(raw_roles == 0)),
+            "validation": int(np.count_nonzero(raw_roles == 1)),
+            "train": int(np.count_nonzero(raw_roles == 2)),
+        },
+        "guardBandRows": int(np.count_nonzero(guard)),
+        "activeRows": int(np.count_nonzero(roles >= 0)),
+        "crossRoleRadiusOneRowsAfterGuard": int(np.count_nonzero(cross_role_after_guard)),
         "testRows": int(np.count_nonzero(roles == 0)),
         "validationRows": int(np.count_nonzero(roles == 1)),
         "trainRows": int(np.count_nonzero(roles == 2)),
@@ -180,6 +217,26 @@ def spatial_split(coords: np.ndarray, block_size: int, seed: int) -> tuple[np.nd
     if min(receipt["testRows"], receipt["validationRows"], receipt["trainRows"]) <= 0:
         raise ProbeFailure("dataset-split", "spatial split produced an empty role", receipt)
     return roles, receipt
+
+
+def matched_source_capture(low: dict[str, Any], high: dict[str, Any]) -> dict[str, Any]:
+    low_capture = low["manifest"].get("sourceCapture") or {}
+    high_capture = high["manifest"].get("sourceCapture") or {}
+    if low_capture.get("hashMatches") is not True or high_capture.get("hashMatches") is not True:
+        raise ProbeFailure("input-validation", "low/high source capture does not carry verified hash matches")
+    low_payload = low_capture.get("payloadSha256")
+    high_payload = high_capture.get("payloadSha256")
+    if not isinstance(low_payload, str) or len(low_payload) != 64 or low_payload != high_payload:
+        raise ProbeFailure("input-validation", "low/high source state payload identity differs", {
+            "lowPayloadSha256": low_payload,
+            "highPayloadSha256": high_payload,
+        })
+    return {
+        "authority": "matched-verified-source-capture-payload-v0",
+        "payloadSha256": low_payload,
+        "lowHashMatches": True,
+        "highHashMatches": True,
+    }
 
 
 def build_offset_labels(low_indexes: np.ndarray, coords: np.ndarray, high_indexes: np.ndarray, grid: int) -> tuple[np.ndarray, np.ndarray, dict[str, int]]:
@@ -413,10 +470,12 @@ def calibrate_vacancy_threshold(
     original_occupied: set[int],
     high_set: set[int],
     grid: int,
+    selection_mask: np.ndarray,
 ) -> dict[str, Any]:
     winners = vacancy_winners(source_indexes, coords, raw_classes, probabilities, original_occupied, grid)
+    selected_winners = [winner for winner in winners if bool(selection_mask[winner[2]])]
     grouped: dict[float, list[tuple[float, int, int, int]]] = {}
-    for winner in winners:
+    for winner in selected_winners:
         grouped.setdefault(winner[0], []).append(winner)
     cumulative_delta = 0
     cumulative_moves = 0
@@ -439,7 +498,9 @@ def calibrate_vacancy_threshold(
         "selectionMetric": "postOffsetUniqueOverlap",
         "confidence": "predicted-class probability minus center-class probability",
         "threshold": best_threshold,
-        "validationWinnerCount": len(winners),
+        "arbitrationAuthority": GLOBAL_GATE_EVALUATION_AUTHORITY,
+        "globalWinnerCount": len(winners),
+        "validationWinnerCount": len(selected_winners),
         "validationSelectedMoveCount": best_moves,
         "validationUniqueOverlapDelta": best_delta,
         "noPositiveValidationPolicy": "threshold 2.0 disables all moves",
@@ -550,6 +611,37 @@ def model_receipt(
     return receipt
 
 
+def gate_role_receipts(
+    roles: np.ndarray,
+    raw_classes: np.ndarray,
+    global_gated: np.ndarray,
+    global_winners: list[tuple[float, int, int, int]],
+    threshold: float,
+) -> dict[str, Any]:
+    masks = {
+        "test": roles == 0,
+        "validation": roles == 1,
+        "train": roles == 2,
+        "all": np.ones(roles.size, dtype=np.bool_),
+    }
+    receipts: dict[str, Any] = {}
+    winner_rows = np.asarray([winner[2] for winner in global_winners], dtype=np.int64)
+    for role, mask in masks.items():
+        winner_count = int(np.count_nonzero(mask[winner_rows])) if winner_rows.size else 0
+        accepted = int(np.count_nonzero(global_gated[mask] != CENTER_CLASS))
+        receipts[role] = {
+            "identity": MOVE_GATE_IDENTITY,
+            "evaluationAuthority": GLOBAL_GATE_EVALUATION_AUTHORITY,
+            "vacancyPolicy": VACANCY_POLICY,
+            "threshold": float(threshold),
+            "winnerCount": winner_count,
+            "acceptedMoveCount": accepted,
+            "rejectedProposalCount": int(np.count_nonzero(raw_classes[mask] != CENTER_CLASS) - accepted),
+            "duplicateDestinationCount": 0,
+        }
+    return receipts
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--low-manifest", required=True)
@@ -577,6 +669,7 @@ def main() -> int:
             raise ProbeFailure("input-validation", "low/high candidate grids differ")
         if low["manifest"].get("effectiveRoute") != high["manifest"].get("effectiveRoute"):
             raise ProbeFailure("input-validation", "low/high effective routes differ")
+        source_pair = matched_source_capture(low, high)
         grid = low["grid"]
 
         phase = "dataset-construction"
@@ -584,7 +677,7 @@ def main() -> int:
         high_indexes, _ = decode_cells(high["splats"], grid)
         labels, correctable, offset_histogram = build_offset_labels(low_indexes, low_coords, high_indexes, grid)
         features, feature_receipt = build_features(low, low_indexes, low_coords)
-        roles, split_receipt = spatial_split(low_coords, args.spatial_block_size, args.seed)
+        roles, split_receipt = spatial_split(low_coords, args.spatial_block_size, args.seed, grid)
         train_mask, validation_mask, test_mask = roles == 2, roles == 1, roles == 0
         train_features, normalized, normalization = standardize(
             features[train_mask], features[validation_mask], features[test_mask], features,
@@ -617,16 +710,21 @@ def main() -> int:
         high_set = set(int(value) for value in high_indexes.tolist())
         low_set = set(int(value) for value in low_indexes.tolist())
         calibration = calibrate_vacancy_threshold(
-            low_indexes[validation_mask], low_coords[validation_mask], mlp_predictions["validation"],
-            mlp_probability_rows["validation"], low_set, high_set, grid,
+            low_indexes, low_coords, mlp_predictions["all"],
+            mlp_probability_rows["all"], low_set, high_set, grid, validation_mask,
         )
-        gated_predictions: dict[str, np.ndarray] = {}
-        gate_roles: dict[str, Any] = {}
-        for role, mask in role_masks.items():
-            gated_predictions[role], gate_roles[role] = apply_vacancy_gate(
-                low_indexes[mask], low_coords[mask], mlp_predictions[role], mlp_probability_rows[role],
-                low_set, calibration["threshold"], grid,
-            )
+        global_gated, global_gate = apply_vacancy_gate(
+            low_indexes, low_coords, mlp_predictions["all"], mlp_probability_rows["all"],
+            low_set, calibration["threshold"], grid,
+        )
+        global_winners = vacancy_winners(
+            low_indexes, low_coords, mlp_predictions["all"], mlp_probability_rows["all"], low_set, grid,
+        )
+        gated_predictions = {role: global_gated[mask] for role, mask in role_masks.items()}
+        gate_roles = gate_role_receipts(
+            roles, mlp_predictions["all"], global_gated, global_winners, calibration["threshold"],
+        )
+        gate_roles["all"].update(global_gate)
         center_predictions = {role: np.full(np.count_nonzero(mask), CENTER_CLASS, dtype=np.int64) for role, mask in role_masks.items()}
         counts = np.bincount(labels[train_mask], minlength=27)
         frequency_class = int(np.argmax(counts))
@@ -647,6 +745,7 @@ def main() -> int:
         )
         gated_receipt["calibration"] = calibration
         gated_receipt["gateRoles"] = gate_roles
+        gated_receipt["evaluationAuthority"] = GLOBAL_GATE_EVALUATION_AUTHORITY
         models["mlpVacancyGated"] = gated_receipt
 
         phase = "checkpoint-write"
@@ -666,6 +765,52 @@ def main() -> int:
             moveGateIdentity=np.asarray([MOVE_GATE_IDENTITY]),
             moveGateThreshold=np.asarray([calibration["threshold"]], dtype=np.float32),
         )
+        phase = "checkpoint-replay"
+        with np.load(checkpoint_path, allow_pickle=False) as replay:
+            replay_mean = replay["normalizationMean"].astype(np.float32)
+            replay_std = replay["normalizationStd"].astype(np.float32)
+            replay_features = ((features - replay_mean) / replay_std).astype(np.float32)
+            replay_state = {
+                "w1": replay["mlpW1"].astype(np.float32),
+                "b1": replay["mlpB1"].astype(np.float32),
+                "w2": replay["mlpW2"].astype(np.float32),
+                "b2": replay["mlpB2"].astype(np.float32),
+            }
+            replay_probabilities = mlp_probabilities(replay_features, replay_state)
+            replay_raw = np.argmax(replay_probabilities, axis=1).astype(np.int64)
+            replay_threshold = float(replay["moveGateThreshold"][0])
+        replay_gated, replay_gate = apply_vacancy_gate(
+            low_indexes, low_coords, replay_raw, replay_probabilities, low_set, replay_threshold, grid,
+        )
+        class_parity = bool(np.array_equal(replay_gated, global_gated))
+        if not class_parity:
+            raise ProbeFailure("checkpoint-replay", "serialized checkpoint does not reproduce global gated classes", {
+                "mismatchCount": int(np.count_nonzero(replay_gated != global_gated)),
+            })
+
+        phase = "dense-output-write"
+        displacement_values = np.full(grid ** 3, np.float32(CENTER_CLASS / 26.0), dtype="<f4")
+        displacement_values[low_indexes] = (
+            replay_gated.astype(np.float32) / np.float32(26.0)
+        ).astype("<f4", copy=False)
+        displacement_path = out_dir / "boundary-splat-offset-class-normalized.f32"
+        displacement_bytes = displacement_values.tobytes(order="C")
+        displacement_path.write_bytes(displacement_bytes)
+        displacement_artifact = {
+            "path": str(displacement_path),
+            "sha256": sha256_bytes(displacement_bytes),
+            "byteLength": len(displacement_bytes),
+            "shape": [grid, grid, grid, 1],
+            "channelOrder": [DISPLACEMENT_GRID_CHANNEL],
+            "authority": DISPLACEMENT_GRID_AUTHORITY,
+            "applicationIdentity": MOVE_GATE_IDENTITY,
+            "encoding": "offset class index divided by 26; decode round(value * 26)",
+            "centerClass": CENTER_CLASS,
+            "centerEncodedValue": float(CENTER_CLASS / 26.0),
+            "acceptedMovedCandidateCount": replay_gate["acceptedMoveCount"],
+            "candidateCount": int(low_indexes.size),
+            "nonCandidatePolicy": "center class",
+        }
         checkpoint = {
             "path": str(checkpoint_path),
             "sha256": sha256_file(checkpoint_path),
@@ -673,7 +818,13 @@ def main() -> int:
             "targetDataUsedForTraining": True,
             "targetDataUsedForCalibration": True,
             "targetLabelsUsedForModelSelection": True,
-            "targetSplitAuthority": "train-role exact-high offsets enter fitting; validation exact-high support selects only the vacancy-gate threshold; test remains audit-only",
+            "targetSplitAuthority": "guarded train-role exact-high offsets enter fitting; guarded validation exact-high support selects only the threshold after global arbitration; guarded test remains audit-only",
+            "replay": {
+                "status": "verified",
+                "classParity": class_parity,
+                "globalGateDuplicateDestinationCount": replay_gate["duplicateDestinationCount"],
+                "outputSha256": displacement_artifact["sha256"],
+            },
         }
 
         overlap = len(low_set & high_set)
@@ -685,6 +836,7 @@ def main() -> int:
             "source": {
                 "lowManifest": {"path": str(low_path), "sha256": low["sha256"]},
                 "highManifest": {"path": str(high_path), "sha256": high["sha256"]},
+                "sourcePair": source_pair,
                 "grid": grid,
                 "effectiveRoute": low["manifest"].get("effectiveRoute"),
                 "lowBackend": low["manifest"].get("backend"),
@@ -712,7 +864,14 @@ def main() -> int:
             },
             "split": split_receipt,
             "models": models,
+            "denseOutputs": {
+                "boundarySplatOffsetClass": displacement_artifact,
+            },
             "checkpoint": checkpoint,
+            "producer": {
+                "script": {"path": str(Path(__file__).resolve()), "sha256": sha256_file(Path(__file__).resolve())},
+                "arguments": vars(args),
+            },
             "limitations": [
                 "same-state exact-high support labels enter train-role fitting",
                 "candidate displacement does not add missing candidates or alter learned attributes",
