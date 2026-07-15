@@ -14,6 +14,7 @@ const indexHtml = readFileSync(indexPath, 'utf8');
 
 assert.match(witness, /const scenario\s*=\s*args\.get\('--scenario'\) \|\| 'append-select-remove-keyboard'/, 'witness records an explicit default scenario');
 assert.match(witness, /startup-empty/, 'witness supports an empty-startup scenario');
+assert.match(witness, /mesh-asset-link/, 'witness supports a direct GLB asset smoke-link scenario');
 assert.match(witness, /selected-delete-shortcut/, 'witness supports selected-object Delete shortcut removal');
 assert.match(witness, /save-load-roundtrip/, 'witness supports a browser scene save/load roundtrip scenario');
 assert.match(witness, /transform-inspector/, 'witness supports a selected-object transform inspector scenario');
@@ -68,6 +69,9 @@ assert.match(witness, /Page\.captureScreenshot/, 'witness captures a screenshot 
 assert.match(witness, /siblingPngPath\('-ao-on'\)/, 'AO route witness captures an AO-on screenshot artifact');
 assert.match(witness, /siblingPngPath\('-ao-off'\)/, 'AO route witness captures an AO-off screenshot artifact');
 assert.match(witness, /assertPngScreenshot\(/, 'witness validates screenshot output before claiming visual evidence');
+assert.match(witness, /mesh asset link did not preserve requested\/effective route identity/, 'direct GLB asset witness proves requested and effective route identity');
+assert.match(witness, /mesh asset link did not register the loaded GLB as a scene object/, 'direct GLB asset witness proves the route mounts a registered scene object');
+assert.match(witness, /mesh asset link registered without a matching browser resource request/, 'direct GLB asset witness proves the browser requested the effective asset route');
 assert.match(witness, /default replace did not keep one row/, 'witness proves unchecked imports replace rather than append');
 assert.match(witness, /default replace did not create one explicit demo row before proving replace/, 'witness creates an explicit demo row before proving replace behavior');
 assert.match(witness, /default replace did not complete with a new row/, 'witness waits for unchecked replace to complete instead of accepting a stale single row');
