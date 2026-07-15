@@ -82,6 +82,14 @@ export {
 } from './foreground-budget-governor.js';
 
 export {
+  WEBGPU_HOST_PHASE,
+  WEBGPU_HOST_PHASE_EVENT_BATCH_SCHEMA,
+  WEBGPU_HOST_PHASE_RECORDER_SCHEMA,
+  createWebGpuHostPhaseRecorder,
+  projectWebGpuHostPhaseEvents,
+} from './host-phase-recorder.js';
+
+export {
   SCHEDULER_EVENT_TRACE_SCHEMA,
   SCHEDULER_VERIFICATION_RECEIPT_SCHEMA,
   classifySchedulerVerificationReceipt,

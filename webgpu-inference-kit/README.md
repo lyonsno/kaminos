@@ -4,7 +4,7 @@ Runtime helpers for browser WebGPU inference ports, with route receipts and sche
 
 Use this package when you are porting a model to browser WebGPU and you do not want to rebuild the same boring runtime shell again: device acquisition, adapter/feature identity, shader and pipeline caching, buffer upload/readback helpers, stage timing, cooperative yield hooks, scheduler/backpressure metadata, route envelopes, and receipt validation.
 
-The evidence pieces are not the product center. They are the safety layer that keeps a composed pipeline from mistaking a stub, fallback, stale cache, fixture, partial run, or wrong route for live model output.
+Strict route and run identity travels with the runtime so composed pipelines can distinguish live model output from stale, partial, cached, or fallback results.
 
 ## Install
 
@@ -17,6 +17,7 @@ npm install @kaminos/webgpu-inference-kit
 ```js
 import {
   WEBGPU_BUFFER_USAGE,
+  WEBGPU_HOST_PHASE,
   createWebGpuInferenceRuntime,
 } from "@kaminos/webgpu-inference-kit";
 
@@ -30,6 +31,14 @@ const runtime = await createWebGpuInferenceRuntime({
     commit: import.meta.env?.VITE_GIT_COMMIT ?? null,
   },
   requiredStages: ["encode-image", "decode-mask", "readback-mask"],
+  hostPhases: {
+    runId: crypto.randomUUID(),
+    clock: {
+      clockId: crypto.randomUUID(),
+      source: "performance.now",
+      timeOriginEpochMs: performance.timeOrigin,
+    },
+  },
   yieldMs: 0,
   waitForSubmittedWorkDone: true,
 });
@@ -104,6 +113,7 @@ const maskBytes = programResult.outputs.maskBytes;
 const profile = runtime.finishProfile({
   evidence: { mode: "live", source: "sam3-browser-webgpu-route" },
 });
+const hostPhaseReport = runtime.finishHostPhases();
 ```
 
 That `profile` is the runtime receipt substrate a route can attach to its outputs. It records the effective adapter/device identity, kernel profile, stage timings, required stages, and yield metadata for the run that actually happened.
@@ -114,6 +124,7 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `createWebGpuResourceCaches(device)`: cache shader modules and compute pipelines by label plus descriptor so repeated stage invocations do not rebuild obvious resources.
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
 - `createForegroundBudgetGovernor(input)`: adapt cooperative yield time or named phase chunk sizes from attributed foreground frame pressure while failing closed when route, host, and GPU duty evidence is incomplete or ambiguous.
+- `createWebGpuHostPhaseRecorder(input)`: record uncapped, route/run/clock-bound CPU preprocessing, command encoding, queue submission, readback, presentation, and custom host intervals while preserving failed phases and the last trustworthy interval.
 - `runtime.createBuffer(descriptor)`, `runtime.writeBuffer(buffer, data, ...)`, and `runtime.readBuffer(buffer, options)`: small buffer helpers for model weights, activations, and readback paths.
 - `runtime.createTensor(input)`, `runtime.uploadTensor(tensor, data)`, and `runtime.readTensor(tensor)`: create GPU-backed tensors with dtype, shape, strides, byte-length validation, and upload/readback helpers.
 - `packUniforms(schema, values)` and `runtime.createUniformBuffer(input)`: pack small scalar/vector parameter blocks into WGSL-compatible uniform buffers and update them without hand-rolling offsets.
@@ -123,6 +134,26 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
 - `defineTensorManifest(input)`: normalize model tensor metadata, dtype sizes, byte lengths, offsets, and shapes for browser-loaded weight bundles.
 - `requestBrowserWebGpuDevice(gpu, options)`: request a device using adapter-reported limits without silently imposing smaller caps.
+
+## Host Phases And Foreground Coexistence
+
+When `hostPhases` is configured, the runtime automatically records command encoding, queue submission, and mapped/staged readback around the operations it owns. A model adapter can record work outside those helpers with the same route, run, and clock identity:
+
+```js
+const inputTensor = await runtime.runHostPhase(
+  WEBGPU_HOST_PHASE.cpuPreprocess,
+  () => preprocessImage(sourceImage),
+  { detail: { width: sourceImage.width, height: sourceImage.height } },
+);
+
+await runtime.runHostPhase(
+  WEBGPU_HOST_PHASE.presentation,
+  () => presentProgressiveResult(partialResult),
+  { detail: { iteration } },
+);
+```
+
+`runtime.finishHostPhases()` returns every completed interval with effective route, run, monotonic clock, epoch projection, outcome, and failure identity. `projectWebGpuHostPhaseEvents(report, expectations)` converts a complete snapshot into foreground-correlation events only when the caller's expected route, run, and clock all match. This lets a scheduler distinguish host work from submitted GPU duty without joining unrelated pages or stale runs on timestamps alone.
 
 ## Route Composition Layer
 
@@ -202,12 +233,4 @@ This layer matters because composition without identity is how a browser pipelin
 2. Keep extracting runtime chores only when at least two real routes need them or one port exposes a clearly reusable primitive.
 3. Keep route receipts and scheduler verification strict enough that downstream systems can compose outputs without false authority.
 4. Use MoGE, SHARP, Kimodo, SF3D, and SAM-style segmentation/image-generation ports to discover the next runtime primitives: bind-group layout helpers, uniform packing, tensor views, buffer pools, command submission patterns, tiled attention, and cooperative phase splitting.
-5. Avoid becoming a generic ONNX, LLM, or universal tensor runtime until a concrete browser WebGPU route exposes an advantage we can actually own.
-
-## Non-Goals
-
-- Generic ONNX import parity.
-- Competing with mature browser LLM runtimes without a concrete route-level advantage.
-- Kaminos graph, scene, library, or promotion ownership.
-- Hidden caps below adapter/device capacity without measured justification.
-- Treating fallback, stale output, fixture data, partial output, or missing backend identity as successful live inference.
+5. Expand model and graph coverage where browser-native control over scheduling, memory, kernels, or composition produces a measured advantage.

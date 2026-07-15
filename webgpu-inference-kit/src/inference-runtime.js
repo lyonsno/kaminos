@@ -6,6 +6,10 @@ import {
   WEBGPU_INFERENCE_KIT_VERSION,
 } from './kernel-profile.js';
 import {
+  WEBGPU_HOST_PHASE,
+  createWebGpuHostPhaseRecorder,
+} from './host-phase-recorder.js';
+import {
   createWebGpuRuntimeProfile,
 } from './runtime-profile.js';
 import {
@@ -290,24 +294,47 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
     size: alignedSize,
     usage: WEBGPU_BUFFER_USAGE.mapRead | WEBGPU_BUFFER_USAGE.copyDst,
   });
-  const encoder = runtime.device.createCommandEncoder({
-    label: options.encoderLabel || `${tensor.name || 'tensor'}.readback.encoder`,
-  });
-  if (typeof encoder.copyBufferToBuffer !== 'function') {
-    throw new Error('command encoder must support copyBufferToBuffer for tensor readback');
-  }
-  encoder.copyBufferToBuffer(tensor.buffer, sourceOffset, staging, 0, alignedSize);
-  const commandBuffer = encoder.finish();
-  runtime.queue.submit([commandBuffer]);
-  if (options.waitForSubmittedWorkDone === true && typeof runtime.queue.onSubmittedWorkDone === 'function') {
-    await runtime.queue.onSubmittedWorkDone();
-  }
-  const mapped = await runtime.readBuffer(staging, {
-    mapMode: options.mapMode,
-    offset: 0,
-    size: alignedSize,
-  });
+  const commandBuffer = await runOptionalHostPhase(
+    runtime,
+    WEBGPU_HOST_PHASE.commandEncoding,
+    () => {
+      const encoder = runtime.device.createCommandEncoder({
+        label: options.encoderLabel || `${tensor.name || 'tensor'}.readback.encoder`,
+      });
+      if (typeof encoder.copyBufferToBuffer !== 'function') {
+        throw new Error('command encoder must support copyBufferToBuffer for tensor readback');
+      }
+      encoder.copyBufferToBuffer(tensor.buffer, sourceOffset, staging, 0, alignedSize);
+      return encoder.finish();
+    },
+    { detail: { operation: 'tensor-readback-copy', tensor: tensor.name || null } },
+  );
+  await runOptionalHostPhase(
+    runtime,
+    WEBGPU_HOST_PHASE.queueSubmission,
+    () => runtime.queue.submit([commandBuffer]),
+    { detail: { operation: 'tensor-readback-copy', tensor: tensor.name || null } },
+  );
+  const mapped = await runOptionalHostPhase(
+    runtime,
+    WEBGPU_HOST_PHASE.readback,
+    async () => {
+      if (options.waitForSubmittedWorkDone === true && typeof runtime.queue.onSubmittedWorkDone === 'function') {
+        await runtime.queue.onSubmittedWorkDone();
+      }
+      return readMappedBuffer(staging, {
+        mapMode: options.mapMode,
+        offset: 0,
+        size: alignedSize,
+      });
+    },
+    { detail: { operation: 'tensor-readback-map', tensor: tensor.name || null } },
+  );
   return mapped.slice(0, size);
+}
+
+function runOptionalHostPhase(runtime, phase, fn, options = {}) {
+  return runtime.hostPhases ? runtime.runHostPhase(phase, fn, options) : fn();
 }
 
 function createStageFacade(runtime, stageState) {
@@ -324,6 +351,8 @@ function createStageFacade(runtime, stageState) {
     defineComputeKernel: runtime.defineComputeKernel,
     defineProgram: runtime.defineProgram,
     runProgram: runtime.runProgram,
+    hostPhases: runtime.hostPhases,
+    runHostPhase: runtime.runHostPhase,
     async yieldToBrowser(metadata = {}) {
       const event = await runtime.yieldToBrowser(metadata);
       stageState.yields.push(event);
@@ -371,6 +400,16 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     now,
   });
   const kernel = normalizeKernel(input.kernel);
+  if (input.hostPhases != null && (!input.hostPhases || typeof input.hostPhases !== 'object')) {
+    throw new TypeError('hostPhases must be an object when provided');
+  }
+  const hostPhases = input.hostPhases == null
+    ? null
+    : createWebGpuHostPhaseRecorder({
+        ...input.hostPhases,
+        routeId: input.routeId,
+        now: input.hostPhases.now || now,
+      });
 
   const runtime = {
     schema: WEBGPU_INFERENCE_RUNTIME_SCHEMA,
@@ -383,6 +422,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     kernel,
     profile: stagedProfile,
     caches: resourceCaches,
+    hostPhases,
 
     getShaderModule(label, code, descriptor) {
       return resourceCaches.getShaderModule(label, code, descriptor);
@@ -401,7 +441,12 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     },
 
     readBuffer(buffer, options = {}) {
-      return readMappedBuffer(buffer, options);
+      return runOptionalHostPhase(
+        runtime,
+        WEBGPU_HOST_PHASE.readback,
+        () => readMappedBuffer(buffer, options),
+        { detail: { operation: 'buffer-direct-map', buffer: buffer?.label || buffer?.descriptor?.label || null } },
+      );
     },
 
     createTensor(tensorInput = {}) {
@@ -417,15 +462,20 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       return tensor;
     },
 
-    readTensor(tensor, options = {}) {
+    async readTensor(tensor, options = {}) {
       if (!tensor || typeof tensor !== 'object') throw new Error('tensor must be an object');
       if (!tensor.buffer) throw new Error('tensor must expose buffer');
       if (Number.isInteger(tensor.usage) && (tensor.usage & WEBGPU_BUFFER_USAGE.mapRead) !== 0) {
-        return readMappedBufferSlice(tensor.buffer, {
-          ...options,
-          sourceOffset: options.sourceOffset ?? options.offset ?? tensor.bufferOffset ?? 0,
-          size: options.size ?? tensor.byteLength,
-        });
+        return runOptionalHostPhase(
+          runtime,
+          WEBGPU_HOST_PHASE.readback,
+          () => readMappedBufferSlice(tensor.buffer, {
+            ...options,
+            sourceOffset: options.sourceOffset ?? options.offset ?? tensor.bufferOffset ?? 0,
+            size: options.size ?? tensor.byteLength,
+          }),
+          { detail: { operation: 'tensor-direct-map', tensor: tensor.name || null } },
+        );
       }
       return readBufferViaStaging(runtime, tensor, options);
     },
@@ -451,6 +501,20 @@ export async function createWebGpuInferenceRuntime(input = {}) {
 
     runProgram(program, options = {}) {
       return runWebGpuPhaseProgram(program, { runtime, ...options });
+    },
+
+    runHostPhase(phase, fn, options = {}) {
+      if (!hostPhases) {
+        throw new Error('host phase recording is not configured for this runtime');
+      }
+      return hostPhases.measure(phase, fn, options);
+    },
+
+    finishHostPhases() {
+      if (!hostPhases) {
+        throw new Error('host phase recording is not configured for this runtime');
+      }
+      return hostPhases.finish();
     },
 
     async runKernel(kernelDefinition, options = {}) {
@@ -486,19 +550,31 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       };
 
       return runtime.runStage(stageName, async stage => {
-        const encoder = device.createCommandEncoder({
-          label: options.encoderLabel || `${kernelDefinition.name}.encoder`,
-        });
-        const pass = encoder.beginComputePass({
-          label: options.passLabel || `${kernelDefinition.name}.compute-pass`,
-        });
-        pass.setPipeline(kernelDefinition.pipeline);
-        pass.setBindGroup(0, kernelDefinition.bindGroup);
-        pass.dispatchWorkgroups(...dispatch);
-        pass.end();
-        const commandBuffer = encoder.finish();
+        const commandBuffer = await runOptionalHostPhase(
+          runtime,
+          WEBGPU_HOST_PHASE.commandEncoding,
+          () => {
+            const encoder = device.createCommandEncoder({
+              label: options.encoderLabel || `${kernelDefinition.name}.encoder`,
+            });
+            const pass = encoder.beginComputePass({
+              label: options.passLabel || `${kernelDefinition.name}.compute-pass`,
+            });
+            pass.setPipeline(kernelDefinition.pipeline);
+            pass.setBindGroup(0, kernelDefinition.bindGroup);
+            pass.dispatchWorkgroups(...dispatch);
+            pass.end();
+            return encoder.finish();
+          },
+          { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name, dispatch } },
+        );
         if (options.submit !== false) {
-          queue.submit([commandBuffer]);
+          await runOptionalHostPhase(
+            runtime,
+            WEBGPU_HOST_PHASE.queueSubmission,
+            () => queue.submit([commandBuffer]),
+            { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name } },
+          );
         }
         if (options.yieldAfter === true) {
           await stage.yieldToBrowser({

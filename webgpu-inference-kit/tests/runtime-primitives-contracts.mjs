@@ -159,6 +159,14 @@ const runtime = await createWebGpuInferenceRuntime({
   browser: 'Node fake',
   kernel: { profile: 'sam3-attention-tile-v0' },
   requiredStages: ['mask-attention'],
+  hostPhases: {
+    runId: 'sam3-runtime-primitives-a',
+    clock: {
+      clockId: 'sam3-runtime-primitives-clock-a',
+      source: 'performance.now',
+      timeOriginEpochMs: 1_700_000_000_000,
+    },
+  },
   now,
 });
 
@@ -351,5 +359,22 @@ assert.deepEqual(profile.profile.stageNames, ['mask-attention']);
 assert.equal(profile.profile.stages[0].metadata.kernelName, 'sam3.mask-attention');
 assert.equal(profile.profile.stages[0].metadata.dispatch[0], 8);
 assert.equal(profile.profile.stages[0].metadata.tiles, 64);
+
+const hostPhases = runtime.finishHostPhases();
+assert.deepEqual(
+  hostPhases.intervals.map(interval => interval.phase),
+  [
+    'command-encoding',
+    'queue-submission',
+    'command-encoding',
+    'queue-submission',
+    'readback',
+    'command-encoding',
+    'queue-submission',
+    'readback',
+    'readback',
+  ],
+  'kernel dispatch and both readback routes must emit common runtime host phases',
+);
 
 console.log('runtime primitives contracts passed');
