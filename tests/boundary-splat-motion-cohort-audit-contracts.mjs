@@ -133,6 +133,11 @@ assert.equal(
   'function',
   'witness mode contract must keep raw receipts and guide semantics out of legacy output',
 );
+assert.equal(
+  typeof cohortAudit.writeRecurrentEnvelopeWitness,
+  'function',
+  'audit must expose the accepted legacy/envelope four-role witness writer',
+);
 const legacyModeContract = cohortAudit.motionWitnessModeContract('motion-cohort', 9);
 assert.equal(legacyModeContract.includeControlFrameIdentity, false);
 assert.match(legacyModeContract.guideControlDescription, /copied-current/i);
@@ -140,6 +145,10 @@ const rawModeContract = cohortAudit.motionWitnessModeContract('raw-product-view'
 assert.equal(rawModeContract.includeControlFrameIdentity, true);
 assert.match(rawModeContract.guideControlDescription, /frozen/i);
 assert.match(rawModeContract.guideControlDescription, /9/);
+const envelopeComparisonModeContract = cohortAudit.motionWitnessModeContract('raw-recurrent-envelope-comparison', 9);
+assert.equal(envelopeComparisonModeContract.includeControlFrameIdentity, true);
+assert.deepEqual(envelopeComparisonModeContract.roleNames, ['reference', 'control', 'legacy', 'envelope']);
+assert.match(envelopeComparisonModeContract.guideControlDescription, /frozen/i);
 const validWitness = {
   schema: 'kaminos-boundary-splat-motion-cohort-witness-v0',
   status: 'completed',
@@ -210,6 +219,93 @@ assert.throws(
   /control frame identity/i,
   'a visually moving raw control must fail closure even when its source payload is nominally frozen',
 );
+const envelopeComparisonWitness = structuredClone(rawProductWitness);
+envelopeComparisonWitness.configuration = {
+  authority: 'legacy-vs-training-episode-envelope-recurrence-v0',
+  witnessMode: 'raw-recurrent-envelope-comparison',
+};
+envelopeComparisonWitness.source = {
+  audit: { sha256: 'a'.repeat(64) },
+  manifest: { sha256: 'b'.repeat(64) },
+  legacy: {
+    predictions: { sha256: 'c'.repeat(64) },
+    trainingReport: { sha256: 'd'.repeat(64) },
+    greenroomReceipt: {
+      sha256: 'e'.repeat(64),
+      jobId: 'legacy-job',
+      status: 'done',
+      exitCode: 0,
+      effectiveRoute: 'python transport --support-budget-mode one-step-ratio',
+    },
+    backend: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+  },
+  envelope: {
+    predictions: { sha256: '1'.repeat(64) },
+    trainingReport: { sha256: '2'.repeat(64) },
+    greenroomReceipt: {
+      sha256: '3'.repeat(64),
+      jobId: 'envelope-job',
+      status: 'done',
+      exitCode: 0,
+      effectiveRoute: 'python transport --support-budget-mode training-episode-envelope',
+    },
+    backend: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+  },
+  sharedIdentity: {
+    occupancyModelSha256: '4'.repeat(64),
+    destinationStateModelSha256: '5'.repeat(64),
+    trainingManifestSha256: '6'.repeat(64),
+    inferenceFrameZero: { referenceFrameId: 'frame-0', count: 100 },
+  },
+};
+envelopeComparisonWitness.roles = {
+  reference: 'exact-heldout-full-splat-state-v0',
+  control: 'frozen-current-full-splat-state-v0',
+  legacy: 'one-step-ratio-learned-recurrent-full-splat-state-v0',
+  envelope: 'training-episode-envelope-learned-recurrent-full-splat-state-v0',
+};
+envelopeComparisonWitness.roleEvidence = {
+  reference: [{ step: 1, sha256: '7'.repeat(64) }, { step: 2, sha256: '8'.repeat(64) }],
+  control: [{ step: 1, sha256: '9'.repeat(64) }, { step: 2, sha256: '9'.repeat(64) }],
+  legacy: [{ step: 1, sha256: 'a'.repeat(64) }, { step: 2, sha256: 'b'.repeat(64) }],
+  envelope: [{ step: 1, sha256: 'c'.repeat(64) }, { step: 2, sha256: 'd'.repeat(64) }],
+};
+envelopeComparisonWitness.controlFrameIdentity = {
+  authority: 'pixel-identical-frozen-control-v0',
+  frameCount: 2,
+  uniqueFrameCount: 1,
+  sha256: '9'.repeat(64),
+};
+const budgetSteps = (mode, clamped) => [
+  { step: 1, requested: 101, effective: 101, predictedCount: 101, clamped: false },
+  { step: 2, requested: 102, effective: clamped ? 101 : 102, predictedCount: clamped ? 101 : 102, clamped },
+];
+envelopeComparisonWitness.supportBudgetComparison = {
+  authority: 'paired-recurrent-support-budget-accounting-v0',
+  trainingManifestSha256: '6'.repeat(64),
+  inferenceFrameZero: { referenceFrameId: 'frame-0', count: 100 },
+  legacy: { mode: 'one-step-ratio', steps: budgetSteps('one-step-ratio', false) },
+  envelope: { mode: 'training-episode-envelope', steps: budgetSteps('training-episode-envelope', true) },
+};
+envelopeComparisonWitness.artifact.probe.width = 1280;
+envelopeComparisonWitness.partialFlowDebug.artifact.probe.width = 1280;
+envelopeComparisonWitness.claimBoundary = 'Offline same-raster diagnostic only; no analytical-raymarch claim and no runtime authorization.';
+assert.doesNotThrow(
+  () => cohortAudit.validateMotionCohortWitness(envelopeComparisonWitness),
+  'paired recurrence witness must preserve both accepted routes and a truly frozen control',
+);
+const missingEnvelopeStep = structuredClone(envelopeComparisonWitness);
+missingEnvelopeStep.supportBudgetComparison.envelope.steps.pop();
+assert.throws(() => cohortAudit.validateMotionCohortWitness(missingEnvelopeStep), /budget.*step/i);
+const overBudgetEnvelope = structuredClone(envelopeComparisonWitness);
+overBudgetEnvelope.supportBudgetComparison.envelope.steps[1].predictedCount = 102;
+assert.throws(() => cohortAudit.validateMotionCohortWitness(overBudgetEnvelope), /budget/i);
+const staleEnvelopeFrameZero = structuredClone(envelopeComparisonWitness);
+staleEnvelopeFrameZero.source.sharedIdentity.inferenceFrameZero.referenceFrameId = 'frame-stale';
+assert.throws(() => cohortAudit.validateMotionCohortWitness(staleEnvelopeFrameZero), /frame zero/i);
+const staticEnvelope = structuredClone(envelopeComparisonWitness);
+staticEnvelope.roleEvidence.envelope[1].sha256 = staticEnvelope.roleEvidence.envelope[0].sha256;
+assert.throws(() => cohortAudit.validateMotionCohortWitness(staticEnvelope), /static|moving/i);
 const blankWitness = structuredClone(validWitness);
 blankWitness.artifact.probe.frameCount = 0;
 assert.throws(() => cohortAudit.validateMotionCohortWitness(blankWitness), /frame count/i);
@@ -243,5 +339,44 @@ assert.equal(failedReport.status, 'failed');
 assert.equal(failedReport.failurePhase, 'manifest-validation');
 assert.equal(failedReport.lastTrustworthyEvidence.manifestPath, manifestPath);
 assert.equal(failedReport.lastTrustworthyEvidence.predictionsPath, hostilePredictionPath);
+
+const missingEnvelopeDir = await mkdtemp(join(tmpdir(), 'kaminos-recurrent-envelope-missing-'));
+await assert.rejects(
+  cohortAudit.writeRecurrentEnvelopeWitness(
+    join(missingEnvelopeDir, 'missing-manifest.json'),
+    join(missingEnvelopeDir, 'missing-legacy-predictions.json'),
+    join(missingEnvelopeDir, 'missing-envelope-predictions.json'),
+    {
+      legacyTrainingReport: join(missingEnvelopeDir, 'missing-legacy-report.json'),
+      envelopeTrainingReport: join(missingEnvelopeDir, 'missing-envelope-report.json'),
+      legacyReceipt: join(missingEnvelopeDir, 'missing-legacy-receipt.json'),
+      envelopeReceipt: join(missingEnvelopeDir, 'missing-envelope-receipt.json'),
+      outDir: missingEnvelopeDir,
+    },
+  ),
+  /ENOENT|source/i,
+  'failure before rendering must reject rather than imply an absent or cached witness',
+);
+const missingEnvelopeReport = JSON.parse(await readFile(join(missingEnvelopeDir, 'recurrent-envelope-witness.json'), 'utf8'));
+assert.equal(missingEnvelopeReport.status, 'failed');
+assert.equal(missingEnvelopeReport.failurePhase, 'source-validation');
+const missingEnvelopeCliDir = await mkdtemp(join(tmpdir(), 'kaminos-recurrent-envelope-cli-missing-'));
+const missingEnvelopeCli = spawnSync(process.execPath, [
+  auditPath,
+  '--manifest', join(missingEnvelopeCliDir, 'missing-manifest.json'),
+  '--predictions', join(missingEnvelopeCliDir, 'missing-legacy-predictions.json'),
+  '--envelope-predictions', join(missingEnvelopeCliDir, 'missing-envelope-predictions.json'),
+  '--legacy-training-report', join(missingEnvelopeCliDir, 'missing-legacy-report.json'),
+  '--envelope-training-report', join(missingEnvelopeCliDir, 'missing-envelope-report.json'),
+  '--legacy-receipt', join(missingEnvelopeCliDir, 'missing-legacy-receipt.json'),
+  '--envelope-receipt', join(missingEnvelopeCliDir, 'missing-envelope-receipt.json'),
+  '--out-dir', missingEnvelopeCliDir,
+], { encoding: 'utf8' });
+assert.notEqual(missingEnvelopeCli.status, 0);
+assert.equal(
+  existsSync(join(missingEnvelopeCliDir, 'recurrent-envelope-witness.json')),
+  true,
+  'paired CLI failure must route through the recurrent witness and preserve its failure report',
+);
 
 console.log('boundary splat motion cohort audit contracts passed');

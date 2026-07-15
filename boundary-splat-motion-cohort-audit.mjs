@@ -143,6 +143,7 @@ export function validateMotionCohortWitness(witness) {
   const emphasis = witness.emphasis;
   const rawProductView = emphasis?.authority === 'raw-product-view-no-cohort-attenuation-v0';
   const diagnosticView = emphasis?.authority === 'exact-motion-cohort-static-attenuation-v0';
+  const envelopeComparison = witness.configuration?.authority === 'legacy-vs-training-episode-envelope-recurrence-v0';
   if (
     (!rawProductView && !diagnosticView)
     || (diagnosticView && (
@@ -158,7 +159,12 @@ export function validateMotionCohortWitness(witness) {
       || emphasis.unmatchedAttenuation !== 1
     ))
   ) throw new Error('motion cohort witness emphasis contract mismatch');
-  const expectedRoles = rawProductView ? {
+  const expectedRoles = envelopeComparison ? {
+    reference: 'exact-heldout-full-splat-state-v0',
+    control: 'frozen-current-full-splat-state-v0',
+    legacy: 'one-step-ratio-learned-recurrent-full-splat-state-v0',
+    envelope: 'training-episode-envelope-learned-recurrent-full-splat-state-v0',
+  } : rawProductView ? {
     reference: 'exact-heldout-full-splat-state-v0',
     control: 'frozen-current-full-splat-state-v0',
     predicted: 'learned-recurrent-full-splat-state-v0',
@@ -182,6 +188,78 @@ export function validateMotionCohortWitness(witness) {
       || identity.uniqueFrameCount !== 1
       || identity.sha256 !== hashes[0]
     ) throw new Error('raw product view control frame identity mismatch');
+  }
+  if (envelopeComparison) {
+    if (witness.configuration.witnessMode !== 'raw-recurrent-envelope-comparison') {
+      throw new Error('recurrent envelope witness mode mismatch');
+    }
+    for (const role of ['reference', 'control', 'legacy', 'envelope']) {
+      const evidence = witness.roleEvidence?.[role];
+      if (
+        !Array.isArray(evidence) || evidence.length !== playback.frameCount
+        || evidence.some((frame, index) => frame?.step !== index + 1 || !isSha256(frame.sha256))
+      ) throw new Error(`recurrent envelope ${role} role evidence mismatch`);
+    }
+    for (const role of ['legacy', 'envelope']) {
+      if (new Set(witness.roleEvidence[role].map(frame => frame.sha256)).size <= 1) {
+        throw new Error(`recurrent envelope ${role} role is static rather than moving`);
+      }
+    }
+    const source = witness.source;
+    const shared = source?.sharedIdentity;
+    if (
+      !isSha256(source?.manifest?.sha256)
+      || !isSha256(shared?.occupancyModelSha256)
+      || !isSha256(shared?.destinationStateModelSha256)
+      || !isSha256(shared?.trainingManifestSha256)
+      || typeof shared?.inferenceFrameZero?.referenceFrameId !== 'string'
+      || !Number.isInteger(shared?.inferenceFrameZero?.count)
+      || shared.inferenceFrameZero.count <= 0
+    ) throw new Error('recurrent envelope shared identity or frame zero mismatch');
+    for (const [role, mode] of [['legacy', 'one-step-ratio'], ['envelope', 'training-episode-envelope']]) {
+      const identity = source?.[role];
+      const receipt = identity?.greenroomReceipt;
+      if (
+        !isSha256(identity?.predictions?.sha256)
+        || !isSha256(identity?.trainingReport?.sha256)
+        || !isSha256(receipt?.sha256)
+        || typeof receipt.jobId !== 'string' || receipt.jobId.length === 0
+        || receipt.status !== 'done' || receipt.exitCode !== 0
+        || typeof receipt.effectiveRoute !== 'string' || !receipt.effectiveRoute.includes(`--support-budget-mode ${mode}`)
+        || identity?.backend?.backend !== 'mlx'
+        || !/^Device\(gpu,\s*\d+\)$/i.test(String(identity.backend.device))
+        || identity.backend.fallbackReason !== null
+      ) throw new Error(`recurrent envelope ${role} route identity mismatch`);
+    }
+    const budget = witness.supportBudgetComparison;
+    if (
+      budget?.authority !== 'paired-recurrent-support-budget-accounting-v0'
+      || budget.trainingManifestSha256 !== shared.trainingManifestSha256
+      || budget.inferenceFrameZero?.referenceFrameId !== shared.inferenceFrameZero.referenceFrameId
+      || budget.inferenceFrameZero?.count !== shared.inferenceFrameZero.count
+    ) throw new Error('recurrent envelope budget frame zero identity mismatch');
+    for (const [role, mode] of [['legacy', 'one-step-ratio'], ['envelope', 'training-episode-envelope']]) {
+      const accounting = budget?.[role];
+      if (accounting?.mode !== mode || !Array.isArray(accounting.steps) || accounting.steps.length !== playback.frameCount) {
+        throw new Error(`recurrent envelope ${role} budget step count mismatch`);
+      }
+      for (const [index, step] of accounting.steps.entries()) {
+        if (
+          step?.step !== index + 1
+          || !Number.isInteger(step.requested) || step.requested <= 0
+          || !Number.isInteger(step.effective) || step.effective <= 0
+          || !Number.isInteger(step.predictedCount) || step.predictedCount <= 0
+          || step.predictedCount > step.effective
+          || step.effective > step.requested
+          || step.clamped !== (step.effective !== step.requested)
+        ) throw new Error(`recurrent envelope ${role} budget accounting mismatch at step ${index + 1}`);
+      }
+    }
+    if (
+      typeof witness.claimBoundary !== 'string'
+      || !/offline/i.test(witness.claimBoundary)
+      || !/no runtime|runtime authorization/i.test(witness.claimBoundary)
+    ) throw new Error('recurrent envelope witness claim boundary mismatch');
   }
   const artifact = witness.artifact;
   if (!isSha256(artifact?.sha256) || !Number.isInteger(artifact.bytes) || artifact.bytes <= 0) {
@@ -239,11 +317,13 @@ function probeVideo(path, ffprobe) {
 }
 
 async function encodeComparison(roleDirs, outputPath, fps, frameCount, ffmpeg, ffprobe) {
+  if (!Array.isArray(roleDirs) || roleDirs.length < 2) throw new Error('motion cohort comparison requires at least two roles');
   await mkdir(dirname(outputPath), { recursive: true });
   const args = ['-y'];
   for (const directory of roleDirs) args.push('-framerate', String(fps), '-i', resolve(directory, 'frame-%03d.png'));
+  const inputs = roleDirs.map((_, index) => `[${index}:v]`).join('');
   args.push(
-    '-filter_complex', '[0:v][1:v][2:v]hstack=inputs=3[out]',
+    '-filter_complex', `${inputs}hstack=inputs=${roleDirs.length}[out]`,
     '-map', '[out]', '-frames:v', String(frameCount),
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
     outputPath,
@@ -295,11 +375,16 @@ function motionWitnessGuide(witness, audit) {
 
 export function motionWitnessModeContract(mode, frameCount) {
   const value = String(mode);
-  if (!['motion-cohort', 'raw-product-view'].includes(value)) throw new Error('motion cohort witness mode mismatch');
+  if (!['motion-cohort', 'raw-product-view', 'raw-recurrent-envelope-comparison'].includes(value)) {
+    throw new Error('motion cohort witness mode mismatch');
+  }
   if (!Number.isInteger(frameCount) || frameCount <= 0) throw new Error('motion cohort witness frame count mismatch');
-  const rawProductView = value === 'raw-product-view';
+  const rawProductView = value !== 'motion-cohort';
   return {
     includeControlFrameIdentity: rawProductView,
+    roleNames: value === 'raw-recurrent-envelope-comparison'
+      ? ['reference', 'control', 'legacy', 'envelope']
+      : ['reference', 'control', 'predicted'],
     guideControlDescription: rawProductView
       ? `frozen frame-zero <strong>CONTROL</strong> rendered identically at all ${frameCount} times`
       : 'copied-current <strong>CONTROL</strong>',
@@ -669,7 +754,9 @@ export async function writeMotionCohortWitness(manifestPathValue, predictionsPat
     const candidateScale = audit.normalization?.candidateScale;
     const splatScale = audit.normalization?.splatScale;
     const roleNames = ['reference', 'control', 'predicted'];
-    const labels = ['REFERENCE', 'CONTROL', 'PREDICTED'];
+    const labels = rawProductView
+      ? ['REFERENCE', 'FROZEN', String(options.predictionLabel ?? 'PREDICTED')]
+      : ['REFERENCE', 'CONTROL', 'PREDICTED'];
     const beautyEvidence = Object.fromEntries(roleNames.map(role => [role, []]));
     const debugEvidence = Object.fromEntries(roleNames.map(role => [role, []]));
     for (const surface of ['beauty', 'debug']) {
@@ -811,6 +898,333 @@ export async function writeMotionCohortWitness(manifestPathValue, predictionsPat
   }
 }
 
+function recurrentEnvelopeGuide(report) {
+  const summary = report.metrics.summary;
+  const row = (name, value) => `<tr><th>${name}</th><td>${value.terminalPredictedCount}</td><td>${value.terminalExactCount}</td><td>${value.terminalCountError}</td><td>${value.terminalPredictionIoU.toFixed(6)}</td><td>${value.clampCount}</td><td>${value.firstClampStep ?? 'none'}</td></tr>`;
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recurrent Support Envelope Comparison</title>
+<style>body{margin:0;background:#111;color:#eee;font:15px/1.45 system-ui,sans-serif}main{max-width:1480px;margin:auto;padding:24px}h1,h2{letter-spacing:0}video,img{display:block;width:100%;background:#000;border:1px solid #444}section{margin:28px 0}.roles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.roles div{padding:8px;border-left:4px solid #777}table{border-collapse:collapse;width:100%}th,td{padding:7px;border-bottom:1px solid #444;text-align:right}th:first-child{text-align:left}code{color:#9ee7ff}</style></head>
+<body><main><h1>Does A Training Support Envelope Arrest Recurrent Collapse?</h1>
+<p>This is one complete ${report.playback.simulatorDurationSeconds.toFixed(2)}-second held-out episode at exact simulator cadence. It is a temporal sequence, not a loop. Every role uses the same fixed camera and full splat opacity; no exact-target cohort mask changes visibility.</p>
+<section><h2>Fixed Roles, Left To Right</h2><div class="roles"><div><strong>REFERENCE</strong><br>Exact held-out simulator state at each time.</div><div><strong>FROZEN</strong><br>One frame-zero present-state raster reused byte-identically at all ${report.playback.frameCount} times.</div><div><strong>LEGACY</strong><br>Accepted recurrent prediction with unconstrained one-step-ratio support growth.</div><div><strong>ENVELOPE</strong><br>Accepted recurrent prediction clamped to the frozen model training episode's support-count range.</div></div><video controls muted playsinline preload="metadata" src="recurrent-envelope-comparison.mp4"></video></section>
+<section><h2>Additive Flow Debug, Gain 0.625</h2><p>The same states and cadence receive display-only cohort colors. This panel helps localize transported, born, static, and dying support; it does not alter model state or the beauty witness.</p><video controls muted playsinline preload="metadata" src="recurrent-envelope-debug-comparison.mp4"></video></section>
+<section><h2>Support Outcome</h2><table><thead><tr><th>role</th><th>terminal predicted</th><th>terminal exact</th><th>absolute count error</th><th>prediction IoU</th><th>clamped steps</th><th>first clamp</th></tr></thead><tbody>${row('LEGACY', summary.legacy)}${row('ENVELOPE', summary.envelope)}</tbody></table></section>
+<section><h2>Interpretation Boundary</h2><p>${report.claimBoundary}</p></section></main></body></html>`;
+}
+
+function supportBudgetEvidence(report, mode, frameCount) {
+  const top = report.supportBudget;
+  if (
+    top?.authority !== 'explicit-recurrent-support-budget-mode-v0'
+    || top.mode !== mode
+    || !isSha256(top.trainingManifestSha256)
+    || typeof top.inferenceFrameZero?.referenceFrameId !== 'string'
+    || !Number.isInteger(top.inferenceFrameZero?.count)
+    || !Array.isArray(report.recurrent)
+    || report.recurrent.length !== frameCount
+  ) throw new Error(`${mode} recurrent support budget report mismatch`);
+  const steps = report.recurrent.map((rowValue, index) => {
+    const budget = rowValue.supportBudget;
+    if (
+      rowValue.step !== index + 1
+      || budget?.mode !== mode
+      || budget.trainingManifestSha256 !== top.trainingManifestSha256
+      || budget.inferenceFrameZero?.referenceFrameId !== top.inferenceFrameZero.referenceFrameId
+      || budget.inferenceFrameZero?.count !== top.inferenceFrameZero.count
+      || rowValue.requestedTargetSupportBudget !== budget.requestedBudget
+      || rowValue.targetSupportBudget !== budget.effectiveBudget
+      || rowValue.supportBudgetClamped !== budget.clamped
+    ) throw new Error(`${mode} recurrent support budget identity mismatch at step ${index + 1}`);
+    return {
+      step: rowValue.step,
+      requested: rowValue.requestedTargetSupportBudget,
+      effective: rowValue.targetSupportBudget,
+      predictedCount: rowValue.predictedCount,
+      clamped: rowValue.supportBudgetClamped,
+    };
+  });
+  return { mode, steps };
+}
+
+function recurrentSummary(report) {
+  const terminalBudget = report.recurrent.at(-1);
+  const terminalMetric = report.holdoutMetrics.at(-1);
+  const terminalDrift = report.countDriftGate.steps.at(-1);
+  const clamped = report.recurrent.filter(rowValue => rowValue.supportBudgetClamped);
+  return {
+    terminalPredictedCount: terminalBudget.predictedCount,
+    terminalExactCount: terminalDrift.exactCount,
+    terminalCountError: terminalDrift.predictedCountError,
+    terminalPredictionIoU: terminalMetric.predictionIoU,
+    terminalIdentityIoU: terminalMetric.identityIoU,
+    terminalPredictionToIdentityRatio: terminalMetric.predictionToIdentityRatio,
+    beatsIdentitySteps: report.holdoutMetrics.filter(rowValue => rowValue.beatsIdentity).length,
+    clampCount: clamped.length,
+    firstClampStep: clamped[0]?.step ?? null,
+  };
+}
+
+export async function writeRecurrentEnvelopeWitness(
+  manifestPathValue,
+  legacyPredictionsPathValue,
+  envelopePredictionsPathValue,
+  options = {},
+) {
+  const outDir = resolve(options.outDir ?? '/tmp/kaminos-recurrent-envelope-witness');
+  const sourcePath = (value, label) => resolve(value ?? outDir, value ? '' : `.missing-${label}`);
+  const manifestPath = sourcePath(manifestPathValue, 'manifest');
+  const legacyPredictionsPath = sourcePath(legacyPredictionsPathValue, 'legacy-predictions');
+  const envelopePredictionsPath = sourcePath(envelopePredictionsPathValue, 'envelope-predictions');
+  const legacyTrainingReportPath = sourcePath(options.legacyTrainingReport, 'legacy-training-report');
+  const envelopeTrainingReportPath = sourcePath(options.envelopeTrainingReport, 'envelope-training-report');
+  const legacyReceiptPath = sourcePath(options.legacyReceipt, 'legacy-receipt');
+  const envelopeReceiptPath = sourcePath(options.envelopeReceipt, 'envelope-receipt');
+  const reportPath = resolve(options.report ?? outDir, options.report ? '' : 'recurrent-envelope-witness.json');
+  const width = Math.max(32, Math.floor(Number(options.width ?? 320)));
+  const height = Math.max(32, Math.floor(Number(options.height ?? 240)));
+  const ffmpeg = String(options.ffmpeg ?? 'ffmpeg');
+  const ffprobe = String(options.ffprobe ?? 'ffprobe');
+  let failurePhase = 'source-validation';
+  let lastTrustworthyEvidence = {
+    manifestPath,
+    legacyPredictionsPath,
+    envelopePredictionsPath,
+    legacyTrainingReportPath,
+    envelopeTrainingReportPath,
+    legacyReceiptPath,
+    envelopeReceiptPath,
+    outDir,
+  };
+  await mkdir(outDir, { recursive: true });
+  try {
+    const paths = [
+      manifestPath, legacyPredictionsPath, envelopePredictionsPath,
+      legacyTrainingReportPath, envelopeTrainingReportPath, legacyReceiptPath, envelopeReceiptPath,
+    ];
+    const bytes = await Promise.all(paths.map(path => readFile(path)));
+    const [manifest, legacyPredictions, envelopePredictions, legacyReport, envelopeReport, legacyReceipt, envelopeReceipt] = bytes.map(value => JSON.parse(value.toString('utf8')));
+    const manifestSha256 = sha256(bytes[0]);
+    const legacyPredictionsSha256 = sha256(bytes[1]);
+    const envelopePredictionsSha256 = sha256(bytes[2]);
+    if (manifest.schema !== CORPUS_SCHEMA || manifest.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0') {
+      throw new Error('recurrent envelope manifest route mismatch');
+    }
+    const pair = [
+      ['legacy', 'one-step-ratio', legacyPredictions, legacyReport, legacyReceipt, legacyPredictionsSha256],
+      ['envelope', 'training-episode-envelope', envelopePredictions, envelopeReport, envelopeReceipt, envelopePredictionsSha256],
+    ];
+    for (const [role, mode, predictions, trainingReport, receipt, predictionsSha256] of pair) {
+      if (predictions.schema !== PREDICTION_SCHEMA || predictions.status !== 'completed') throw new Error(`${role} predictions schema/status mismatch`);
+      if (predictions.manifest?.sha256 !== manifestSha256 || predictions.manifest?.bytes !== bytes[0].byteLength) throw new Error(`${role} manifest identity mismatch`);
+      if (
+        trainingReport.status !== 'completed'
+        || trainingReport.manifest?.sha256 !== manifestSha256
+        || trainingReport.predictions?.sha256 !== predictionsSha256
+        || trainingReport.supportBudget?.mode !== mode
+        || trainingReport.route?.backend !== 'mlx'
+        || !/^Device\(gpu,\s*\d+\)$/i.test(String(trainingReport.route?.device))
+        || trainingReport.route.fallbackReason !== null
+      ) throw new Error(`${role} training report route/identity mismatch`);
+      if (
+        receipt.status !== 'done' || receipt.exit_code !== 0 || receipt.failure_phase !== null
+        || typeof receipt.job_id !== 'string' || !receipt.job_id
+        || typeof receipt.effective_route !== 'string' || !receipt.effective_route.includes(`--support-budget-mode ${mode}`)
+      ) throw new Error(`${role} Greenroom receipt mismatch`);
+    }
+    const sharedKeys = [
+      ['manifest', manifestSha256],
+      ['model', legacyReport.model?.sha256],
+      ['destination state model', legacyReport.destinationStateModel?.sha256],
+      ['training manifest', legacyReport.modelTrainingManifest?.sha256],
+    ];
+    if (sharedKeys.some(([, value]) => !isSha256(value))) throw new Error('recurrent envelope shared identity is malformed');
+    if (
+      legacyReport.model.sha256 !== envelopeReport.model?.sha256
+      || legacyReport.destinationStateModel.sha256 !== envelopeReport.destinationStateModel?.sha256
+      || legacyReport.modelTrainingManifest.sha256 !== envelopeReport.modelTrainingManifest?.sha256
+      || JSON.stringify(legacyPredictions.temporal) !== JSON.stringify(envelopePredictions.temporal)
+      || legacyPredictions.frames?.length !== envelopePredictions.frames?.length
+      || legacyPredictions.frames.some((frame, index) => frame.referenceFrameId !== envelopePredictions.frames[index]?.referenceFrameId)
+    ) throw new Error('recurrent envelope pair does not share corpus/model/time identity');
+    const frameCount = legacyPredictions.frames.length - 1;
+    const cadenceMs = legacyPredictions.temporal.controlledStepDeltaMs;
+    const legacyBudget = supportBudgetEvidence(legacyReport, 'one-step-ratio', frameCount);
+    const envelopeBudget = supportBudgetEvidence(envelopeReport, 'training-episode-envelope', frameCount);
+    const frameZero = legacyReport.supportBudget.inferenceFrameZero;
+    if (
+      envelopeReport.supportBudget.trainingManifestSha256 !== legacyReport.supportBudget.trainingManifestSha256
+      || envelopeReport.supportBudget.inferenceFrameZero?.referenceFrameId !== frameZero.referenceFrameId
+      || envelopeReport.supportBudget.inferenceFrameZero?.count !== frameZero.count
+    ) throw new Error('recurrent envelope pair frame zero mismatch');
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      manifestSha256,
+      legacyPredictionsSha256,
+      envelopePredictionsSha256,
+      occupancyModelSha256: legacyReport.model.sha256,
+      destinationStateModelSha256: legacyReport.destinationStateModel.sha256,
+      trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
+      inferenceFrameZero: frameZero,
+      frameCount,
+      controlledStepDeltaMs: cadenceMs,
+    };
+    failurePhase = 'nested-audit';
+    const legacyDir = resolve(outDir, 'legacy-source');
+    const envelopeDir = resolve(outDir, 'envelope-source');
+    const legacyAudit = await writeMotionCohortAudit(manifestPath, legacyPredictionsPath, { outDir: legacyDir });
+    const envelopeAudit = await writeMotionCohortAudit(manifestPath, envelopePredictionsPath, { outDir: envelopeDir });
+    failurePhase = 'nested-raster';
+    const witnessOptions = {
+      width, height, staticAttenuation: 1, unmatchedAttenuation: 1,
+      partialFlowDebugGain: 0.625, witnessMode: 'raw-product-view', ffmpeg, ffprobe,
+    };
+    const legacyWitness = await writeMotionCohortWitness(
+      manifestPath, legacyPredictionsPath, resolve(legacyDir, 'motion-cohort-audit.json'),
+      { ...witnessOptions, outDir: legacyDir, predictionLabel: 'LEGACY' },
+    );
+    const envelopeWitness = await writeMotionCohortWitness(
+      manifestPath, envelopePredictionsPath, resolve(envelopeDir, 'motion-cohort-audit.json'),
+      { ...witnessOptions, outDir: envelopeDir, predictionLabel: 'ENVELOPE' },
+    );
+    for (const role of ['reference', 'control']) {
+      if (
+        JSON.stringify(legacyWitness.roleEvidence[role].map(frame => frame.sha256))
+        !== JSON.stringify(envelopeWitness.roleEvidence[role].map(frame => frame.sha256))
+      ) throw new Error(`recurrent envelope nested ${role} raster identity mismatch`);
+    }
+    failurePhase = 'four-role-encode';
+    const roleSources = {
+      reference: resolve(legacyDir, 'beauty', 'reference'),
+      control: resolve(legacyDir, 'beauty', 'control'),
+      legacy: resolve(legacyDir, 'beauty', 'predicted'),
+      envelope: resolve(envelopeDir, 'beauty', 'predicted'),
+    };
+    const debugSources = {
+      reference: resolve(legacyDir, 'debug', 'reference'),
+      control: resolve(legacyDir, 'debug', 'control'),
+      legacy: resolve(legacyDir, 'debug', 'predicted'),
+      envelope: resolve(envelopeDir, 'debug', 'predicted'),
+    };
+    const fps = 1000 / cadenceMs;
+    const artifact = await encodeComparison(
+      Object.values(roleSources), resolve(outDir, 'recurrent-envelope-comparison.mp4'), fps, frameCount, ffmpeg, ffprobe,
+    );
+    const debugArtifact = await encodeComparison(
+      Object.values(debugSources), resolve(outDir, 'recurrent-envelope-debug-comparison.mp4'), fps, frameCount, ffmpeg, ffprobe,
+    );
+    const stepped = frames => frames.map((frame, index) => ({ step: index + 1, ...frame }));
+    const roleEvidence = {
+      reference: stepped(legacyWitness.roleEvidence.reference),
+      control: stepped(legacyWitness.roleEvidence.control),
+      legacy: stepped(legacyWitness.roleEvidence.predicted),
+      envelope: stepped(envelopeWitness.roleEvidence.predicted),
+    };
+    const receiptIdentity = (path, value, rawBytes) => ({
+      path,
+      bytes: rawBytes.byteLength,
+      sha256: sha256(rawBytes),
+      jobId: value.job_id,
+      status: value.status,
+      exitCode: value.exit_code,
+      effectiveRoute: value.effective_route,
+      startedAt: value.started_at,
+      finishedAt: value.finished_at,
+    });
+    failurePhase = 'report-write';
+    const report = {
+      schema: WITNESS_SCHEMA,
+      status: 'completed',
+      configuration: {
+        authority: 'legacy-vs-training-episode-envelope-recurrence-v0',
+        witnessMode: 'raw-recurrent-envelope-comparison',
+      },
+      source: {
+        audit: { path: resolve(legacyDir, 'motion-cohort-audit.json'), sha256: sha256(await readFile(resolve(legacyDir, 'motion-cohort-audit.json'))) },
+        envelopeAudit: { path: resolve(envelopeDir, 'motion-cohort-audit.json'), sha256: sha256(await readFile(resolve(envelopeDir, 'motion-cohort-audit.json'))) },
+        manifest: { path: manifestPath, bytes: bytes[0].byteLength, sha256: manifestSha256 },
+        legacy: {
+          predictions: { path: legacyPredictionsPath, bytes: bytes[1].byteLength, sha256: legacyPredictionsSha256 },
+          trainingReport: { path: legacyTrainingReportPath, bytes: bytes[3].byteLength, sha256: sha256(bytes[3]) },
+          greenroomReceipt: receiptIdentity(legacyReceiptPath, legacyReceipt, bytes[5]),
+          backend: legacyReport.route,
+        },
+        envelope: {
+          predictions: { path: envelopePredictionsPath, bytes: bytes[2].byteLength, sha256: envelopePredictionsSha256 },
+          trainingReport: { path: envelopeTrainingReportPath, bytes: bytes[4].byteLength, sha256: sha256(bytes[4]) },
+          greenroomReceipt: receiptIdentity(envelopeReceiptPath, envelopeReceipt, bytes[6]),
+          backend: envelopeReport.route,
+        },
+        sharedIdentity: {
+          occupancyModelSha256: legacyReport.model.sha256,
+          destinationStateModelSha256: legacyReport.destinationStateModel.sha256,
+          trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
+          inferenceFrameZero: frameZero,
+        },
+      },
+      playback: {
+        authority: 'finite-complete-heldout-recurrent-support-envelope-comparison-v0',
+        frameCount,
+        controlledStepDeltaMs: cadenceMs,
+        simulatorDurationSeconds: frameCount * cadenceMs / 1000,
+        requestedFps: fps,
+        effectiveFps: artifact.probe.fps,
+        encodedDurationSeconds: artifact.probe.duration,
+        loops: false,
+      },
+      emphasis: {
+        authority: 'raw-product-view-no-cohort-attenuation-v0',
+        staticCohorts: [], motionCohorts: [], staticAttenuation: 1, unmatchedAttenuation: 1,
+        thresholdSelection: 'none; every full splat retains original opacity',
+      },
+      roles: {
+        reference: 'exact-heldout-full-splat-state-v0',
+        control: 'frozen-current-full-splat-state-v0',
+        legacy: 'one-step-ratio-learned-recurrent-full-splat-state-v0',
+        envelope: 'training-episode-envelope-learned-recurrent-full-splat-state-v0',
+      },
+      roleEvidence,
+      controlFrameIdentity: legacyWitness.controlFrameIdentity,
+      supportBudgetComparison: {
+        authority: 'paired-recurrent-support-budget-accounting-v0',
+        trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
+        inferenceFrameZero: frameZero,
+        legacy: legacyBudget,
+        envelope: envelopeBudget,
+      },
+      artifact,
+      partialFlowDebug: {
+        authority: 'display-only-motion-cohort-debug-mix-v0',
+        requestedGain: 0.625,
+        effectiveGain: 0.625,
+        stateMutation: false,
+        artifact: debugArtifact,
+      },
+      metrics: {
+        authority: 'accepted-training-report-support-and-same-corpus-iou-v0',
+        summary: { legacy: recurrentSummary(legacyReport), envelope: recurrentSummary(envelopeReport) },
+        legacyHoldout: legacyReport.holdoutMetrics,
+        envelopeHoldout: envelopeReport.holdoutMetrics,
+      },
+      claimBoundary: 'Offline same-raster diagnostic only; it does not establish analytical-raymarch image error, authorize runtime composition, or prove cross-basin generalization.',
+    };
+    validateMotionCohortWitness(report);
+    await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
+    await writeFile(resolve(outDir, 'inspection-guide.html'), recurrentEnvelopeGuide(report));
+    return report;
+  } catch (error) {
+    const failure = {
+      schema: WITNESS_SCHEMA,
+      status: 'failed',
+      failurePhase,
+      error: error?.stack || error?.message || String(error),
+      lastTrustworthyEvidence,
+    };
+    await writeFile(reportPath, `${JSON.stringify(failure, null, 2)}\n`);
+    throw error;
+  }
+}
+
 if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.argv[1])}`).href) {
   const args = parseArgs(process.argv.slice(2));
   if (!args.get('--manifest') || !args.get('--predictions')) {
@@ -818,7 +1232,25 @@ if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.arg
     process.exitCode = 2;
   } else {
     try {
-      if (args.get('--audit')) {
+      if (args.get('--envelope-predictions')) {
+        const report = await writeRecurrentEnvelopeWitness(
+          args.get('--manifest'), args.get('--predictions'), args.get('--envelope-predictions'), {
+            legacyTrainingReport: args.get('--legacy-training-report'),
+            envelopeTrainingReport: args.get('--envelope-training-report'),
+            legacyReceipt: args.get('--legacy-receipt'),
+            envelopeReceipt: args.get('--envelope-receipt'),
+            outDir: args.get('--out-dir'), report: args.get('--report'),
+            width: args.get('--width'), height: args.get('--height'),
+            ffmpeg: args.get('--ffmpeg'), ffprobe: args.get('--ffprobe'),
+          },
+        );
+        console.log(JSON.stringify({
+          schema: report.schema,
+          status: report.status,
+          frames: report.playback.frameCount,
+          roles: Object.keys(report.roles),
+        }, null, 2));
+      } else if (args.get('--audit')) {
         const report = await writeMotionCohortWitness(
           args.get('--manifest'), args.get('--predictions'), args.get('--audit'), {
             outDir: args.get('--out-dir'), report: args.get('--report'), gridStep: args.get('--grid-step'),
