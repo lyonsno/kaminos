@@ -57,8 +57,12 @@
       NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
       NATIVE_LOW_SHARED_DEVICE_ROUTE,
       NATIVE_LOW_TRANSPORT_MODE,
+      NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY,
+      NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
+      NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
       SELECTIVE_HEAD_LIVE_MODEL,
       SELECTIVE_HEAD_LIVE_MODEL_URL,
+      nativeLowTrainedPackageRouteRegistry,
     } from './native-low-selective-live-runtime.mjs';
     import {
       VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
@@ -166,6 +170,31 @@
         staleCueRowsRetained: false,
         hiddenCandidateCap: false,
       },
+      nativeLowTrainedPackageRouteRegistry: {
+        identity: 'native-low-trained-package-route-registry-v0',
+        routes: ['native-low-transfer-160-to-128-zero-shot-v0', 'native-low-transfer-160-to-96-deployment-grid-v0'],
+        dispatchIdentity: 'native-low-support-positive-indirect-residual-dispatch-v0',
+        sourceHistoryDispatchIdentity: 'sourceHistoryDispatchArgs',
+      },
+      nativeLowDualTrainedPackageManualCapture: {
+        identity: 'native-low-dual-trained-package-manual-capture-v0',
+        api: ['setCapturePaused', 'debugState', 'stepCaptureFrame'],
+        visualRoles: ['native96Control', 'baseline128Trained', 'candidate96Trained'],
+        modelReceipts: {
+          baseline128Trained: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
+          candidate96Trained: 'baa54236f04c28eab278cf60e4a60745cd3c0160a985a9adbb1e06db7958f6e8',
+        },
+        singleSourceStep: true,
+        secondPackageAdvanceSourceStep: false,
+        candidateInstanceEqualityOk: true,
+        candidateCount: 0,
+        instanceCount: 0,
+        overflowCount: 0,
+        fallbackFields: 'fallbackFields',
+        stalePredictionRejection: 'stalePredictionRejection',
+        fallbackBackend: null,
+        staleFallbackFieldsRequired: true,
+      },
       nativeLowVivisectorCandidateHeadPackageReceiver: {
         identity: 'native-low-vivisector-candidate-head-package-receiver-v0',
         schema: 'kaminos.native-low.vivisector-candidate-head-width32-package.v0',
@@ -200,6 +229,8 @@
     const fixedGateDiscontinuityAssayMode = !native64ManifestMode && params.get('fixed_gate_discontinuity_assay') === '1';
     const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
     const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
+    const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
+    const requestedTransferRouteId = params.get('native_low_transfer_route') || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
     const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
     const vivisectorCandidateHeadTrainedRouteRequested = !native64ManifestMode
       && (Boolean(vivisectorCandidateHeadPackageUrl) || params.get('candidate_head_trained_route') === 'vivisector-width32');
@@ -225,6 +256,8 @@
     let latestRunnerState = null;
     let latestDiscontinuityAssay = null;
     let latestCueBufferLifecycleStress = null;
+    let latestManualDualCapture = null;
+    let capturePaused = manualDualCaptureMode;
     let vivisectorCandidateHeadPackageReceipt = {
       identity: VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
       schema: VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
@@ -253,11 +286,21 @@
       document.querySelector('#treatmentImage + .pane-label').innerHTML = 'native64SelectivePredicted<span>Frozen 128-trained model prediction at 160^3, splat-only-v0</span>';
     }
 
+    if (manualDualCaptureMode) {
+      document.body.classList.add('front-topology-ablation');
+      frontTopologyAblatedPane.hidden = false;
+      title.querySelector('strong').textContent = 'Native 96 control vs both trained transfer candidates';
+      title.querySelector('span').textContent = 'Paused one-step manual capture, shared native source state, splat-only-v0';
+      document.querySelector('#controlImage + .pane-label').innerHTML = 'native96Control<span>Untouched native 96^3 simulator, splat-only-v0</span>';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'baseline128Trained<span>160->128 zero-shot package applied to native 96 source, splat-only-v0</span>';
+      document.querySelector('#frontTopologyAblatedImage + .pane-label').innerHTML = 'candidate96Trained<span>160->96 deployment-grid package applied to the same native 96 source, splat-only-v0</span>';
+    }
+
     const baseControls = {
       kaminos_volume_smoke: '1',
       volume_scene: 'tall_plume',
       volume_tall_preset: 'rgb_upscale_basin_0711',
-      volume_resolution: native64ManifestMode ? '64' : '128',
+      volume_resolution: native64ManifestMode ? '64' : manualDualCaptureMode ? '96' : '128',
       volume_majorant_grid: '24',
       volume_boundary_sidecar_source: 'baked',
       volume_boundary_sidecar_view: 'off',
@@ -397,6 +440,7 @@
         coarseFrontDetailAdmissionEnabled,
         treatmentSplatRadianceGain,
         treatmentSplatOpacityGain,
+        transferRouteId: requestedTransferRouteId,
         candidateHeadBenchmarkEnabled: candidateHeadBenchmarkEnabled || cueBufferLifecycleStressMode,
         candidateCueBufferLifecycleStressEnabled: cueBufferLifecycleStressMode,
       };
@@ -730,6 +774,187 @@
       return latestCueBufferLifecycleStress;
     }
 
+    function trainedRoleReceipt(role, receipt) {
+      const route = receipt?.nativeLowTrainedPackageRoute || {};
+      const equality = receipt?.candidateInstanceEquality || route.candidateInstanceEquality || {};
+      return {
+        identity: role,
+        role,
+        sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        sameNativeStateIdentity: receipt?.sameNativeStateIdentity || null,
+        modelIdentity: route.modelIdentity || receipt?.modelIdentity || null,
+        modelSha256: route.modelSha256 || receipt?.modelSha256 || null,
+        packageSha256: route.packageSha256 || null,
+        requestedTransferRouteId: route.requestedTransferRouteId || receipt?.requestedTransferRouteId || null,
+        effectiveTransferRouteId: route.effectiveTransferRouteId || receipt?.effectiveTransferRouteId || null,
+        trainedLowGrid: route.trainedLowGrid ?? null,
+        effectiveSourceGrid: route.effectiveSourceGrid ?? null,
+        requestedBackend: receipt?.requestedBackend || route.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || route.effectiveBackend || null,
+        fallbackBackend: receipt?.fallbackBackend || route.fallbackBackend || null,
+        requestedComposition: receipt?.requestedComposition || requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || route.effectiveComposition || null,
+        candidateCount: equality.candidateCount ?? receipt?.treatmentSplatCandidateCount ?? null,
+        instanceCount: equality.instanceCount ?? receipt?.treatmentSplatInstanceCount ?? null,
+        overflowCount: equality.overflowCount ?? null,
+        candidateInstanceEquality: {
+          ...equality,
+          equal: equality.equal ?? equality.candidateCount === equality.instanceCount,
+          overflowZero: equality.overflowZero ?? equality.overflowCount === 0,
+          hiddenCandidateCap: false,
+        },
+        stageTiming: receipt?.stageTiming || null,
+        modelSpecificTiming: route.modelSpecificTiming || null,
+        stalePredictionRejection: receipt?.stalePredictionRejection || null,
+      };
+    }
+
+    function nativeControlRoleReceipt(receipt) {
+      return {
+        identity: 'native96Control',
+        role: 'native96Control',
+        authority: 'untouched-native-96-control-sanity-baseline-v0',
+        grid: 96,
+        sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        sameNativeStateIdentity: receipt?.sameNativeStateIdentity || null,
+        requestedBackend: receipt?.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || null,
+        fallbackBackend: receipt?.fallbackBackend || null,
+        requestedComposition: receipt?.requestedComposition || requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || null,
+        splatCandidateCount: receipt?.controlSplatCandidateCount ?? null,
+        splatInstanceCount: receipt?.controlSplatInstanceCount ?? null,
+      };
+    }
+
+    function setCapturePaused(paused) {
+      capturePaused = Boolean(paused);
+      routeStatus = capturePaused ? 'paused' : 'running';
+      proto()?.setSelectiveHeadLiveCapturePaused?.(capturePaused);
+      if (!capturePaused) requestAnimationFrame(loop);
+      return { ok: true, paused: capturePaused, identity: 'native-low-manual-capture-pause-control-v0' };
+    }
+
+    async function stepCaptureFrame() {
+      failurePhase = 'manual-dual-capture';
+      capturePaused = true;
+      const prototype = await waitForPrototype();
+      if (!prototype?.captureNativeLowSelectiveSharedDeviceFrame) {
+        throw new Error('captureNativeLowSelectiveSharedDeviceFrame missing from renderer prototype');
+      }
+      prototype.setSelectiveHeadLiveCapturePaused?.(true);
+      prototype.setControls({
+        resolution: 96,
+        boundarySplatMode: 'learned',
+        selectiveHeadLiveRole: 'off',
+        selectiveHeadLiveRenderComposition: requestedComposition,
+        runtimeQualityReason: 'native-low-dual-trained-package-manual-capture',
+      });
+      const sharedOptions = {
+        boundarySplatComposition: requestedComposition,
+        now: performance.now(),
+        captureVisuals: true,
+        sourceHistoryDetailAdmissionEnabled,
+        sourceHistoryDetailTargetCoverage,
+        supportProbabilityDetailAdmissionEnabled,
+        coarseFrontDetailAdmissionEnabled,
+        treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain,
+      };
+      const runnerBefore = prototype.debugState?.() || null;
+      const baseline128 = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
+        ...sharedOptions,
+        transferRouteId: NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
+        advanceSourceStep: true,
+      });
+      if (!baseline128?.ok) throw new Error(`${baseline128?.failurePhase || 'baseline128Trained'}:${baseline128?.error || 'unknown'}`);
+      const candidate96 = await prototype.captureNativeLowSelectiveSharedDeviceFrame({
+        ...sharedOptions,
+        transferRouteId: NATIVE_LOW_TRANSFER_160_TO_96_DEPLOYMENT_GRID_ROUTE,
+        advanceSourceStep: false,
+        expectedSourceStepIdentity: baseline128.sourceStepIdentity,
+      });
+      if (!candidate96?.ok) throw new Error(`${candidate96?.failurePhase || 'candidate96Trained'}:${candidate96?.error || 'unknown'}`);
+      replaceImageUrls({
+        visuals: {
+          controlObjectUrl: baseline128.visuals?.controlObjectUrl,
+          treatmentObjectUrl: baseline128.visuals?.treatmentObjectUrl,
+          frontTopologyAblatedObjectUrl: candidate96.visuals?.treatmentObjectUrl,
+        },
+      });
+      frameIndex += 1;
+      const baselineRole = trainedRoleReceipt('baseline128Trained', baseline128);
+      const candidateRole = trainedRoleReceipt('candidate96Trained', candidate96);
+      const native96Control = nativeControlRoleReceipt(baseline128);
+      const sameNativeStateIdentity = `native-96-shared-source:${baseline128.sourceStepIdentity}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
+      const candidateEqualityOk = baselineRole.candidateCount === baselineRole.instanceCount
+        && candidateRole.candidateCount === candidateRole.instanceCount
+        && baselineRole.overflowCount === 0
+        && candidateRole.overflowCount === 0;
+      latestManualDualCapture = {
+        ok: candidateEqualityOk,
+        status: candidateEqualityOk ? 'captured' : 'failed',
+        identity: 'native-low-dual-trained-package-manual-capture-v0',
+        routeRegistryIdentity: NATIVE_LOW_TRAINED_PACKAGE_ROUTE_REGISTRY_IDENTITY,
+        routeRegistry: nativeLowTrainedPackageRouteRegistry(),
+        sourceStepIdentity: baseline128.sourceStepIdentity,
+        sameNativeStateIdentity,
+        singleNative96StepAdvanced: true,
+        secondPackageAdvanceSourceStep: false,
+        independentPages: false,
+        sharedSourceStateEncoding: true,
+        runnerFrameBefore: runnerBefore?.frameCount ?? null,
+        runnerFrameAfter: prototype.debugState?.()?.frameCount ?? null,
+        sourceStepDelta: baseline128.simulationSteppingReceipt?.simStepDelta ?? null,
+        secondPackageSourceStepDelta: candidate96.simulationSteppingReceipt?.simStepDelta ?? null,
+        visualRoles: {
+          native96Control,
+          baseline128Trained: baselineRole,
+          candidate96Trained: candidateRole,
+        },
+        modelReceipts: {
+          baseline128Trained: {
+            modelIdentity: baselineRole.modelIdentity,
+            modelSha256: baselineRole.modelSha256,
+            packageSha256: baselineRole.packageSha256,
+          },
+          candidate96Trained: {
+            modelIdentity: candidateRole.modelIdentity,
+            modelSha256: candidateRole.modelSha256,
+            packageSha256: candidateRole.packageSha256,
+          },
+        },
+        requestedRoute: NATIVE_LOW_SELECTIVE_LIVE_ROUTE,
+        effectiveRoute: NATIVE_LOW_SHARED_DEVICE_ROUTE,
+        requestedBackend: 'WebGPU',
+        effectiveBackend: baseline128.effectiveBackend || candidate96.effectiveBackend || null,
+        fallbackBackend: baseline128.fallbackBackend || candidate96.fallbackBackend || null,
+        requestedComposition,
+        effectiveComposition: baseline128.effectiveComposition === candidate96.effectiveComposition ? baseline128.effectiveComposition : null,
+        compositionMismatch: baseline128.effectiveComposition !== requestedComposition || candidate96.effectiveComposition !== requestedComposition ? compositionMismatch : null,
+        stalePredictionRejection: {
+          baseline128Trained: baseline128.stalePredictionRejection || null,
+          candidate96Trained: candidate96.stalePredictionRejection || null,
+          repeatedStaticPrediction: false,
+          stalePrediction: false,
+        },
+        fallbackFields: {
+          baselineFallbackBackend: baseline128.fallbackBackend || null,
+          candidateFallbackBackend: candidate96.fallbackBackend || null,
+          baselineCompositionMismatch: baseline128.compositionMismatch || null,
+          candidateCompositionMismatch: candidate96.compositionMismatch || null,
+          staleFrameRejected: false,
+        },
+        candidateInstanceEqualityOk: candidateEqualityOk,
+        failurePhase: candidateEqualityOk ? null : 'manual-dual-candidate-instance-equality',
+      };
+      latestReceipt = latestManualDualCapture;
+      latestRunnerState = prototype.debugState?.() || null;
+      lastTrustworthyEvidence = { latestManualDualCapture, runner: latestRunnerState };
+      status.textContent = `manual dual | step ${baseline128.sourceStep} | 128 ${baselineRole.instanceCount}/${baselineRole.candidateCount} | 96 ${candidateRole.instanceCount}/${candidateRole.candidateCount}`;
+      return latestManualDualCapture;
+    }
+
     function debugState() {
       const durationSeconds = (performance.now() - startedAtMs) / 1000;
       const receipt = latestReceipt || {};
@@ -752,6 +977,13 @@
         modelIdentity: SELECTIVE_HEAD_LIVE_MODEL.identity,
         modelSha256: SELECTIVE_HEAD_LIVE_MODEL.packed.sha256,
         modelUrl: SELECTIVE_HEAD_LIVE_MODEL_URL,
+        requestedTransferRouteId,
+        nativeLowTrainedPackageRouteRegistry: nativeLowTrainedPackageRouteRegistry(),
+        nativeLowTrainedPackageRoute: receipt.nativeLowTrainedPackageRoute || null,
+        nativeLowDualTrainedPackageManualCapture: latestManualDualCapture,
+        native96Control: latestManualDualCapture?.visualRoles?.native96Control || null,
+        baseline128Trained: latestManualDualCapture?.visualRoles?.baseline128Trained || null,
+        candidate96Trained: latestManualDualCapture?.visualRoles?.candidate96Trained || null,
         modelChecksumMismatch: null,
         inputAuthority: NATIVE_LOW_INPUT_AUTHORITY,
         featureAuthority: NATIVE_LOW_FEATURE_AUTHORITY,
@@ -857,13 +1089,19 @@
       runnerFrame.src = `./?${new URLSearchParams(baseControls)}`;
       const prototype = await waitForPrototype();
       prototype.setControls({
-        resolution: native64ManifestMode ? 64 : 128,
+        resolution: native64ManifestMode ? 64 : manualDualCaptureMode ? 96 : 128,
         boundarySplatMode: 'learned',
         selectiveHeadLiveRole: 'off',
         selectiveHeadLiveRenderComposition: requestedComposition,
       });
       prototype.setSelectiveHeadLiveCapturePaused?.(true);
       startedAtMs = performance.now();
+      if (manualDualCaptureMode) {
+        routeStatus = 'paused';
+        failurePhase = null;
+        status.textContent = 'manual capture paused | call window.__kaminosNativeLowSelectiveLive.stepCaptureFrame()';
+        return;
+      }
       await tick();
       if (native64ManifestMode) {
         routeStatus = 'captured';
@@ -885,6 +1123,7 @@
 
     async function loop() {
       if (routeStatus !== 'running') return;
+      if (capturePaused) return;
       try {
         if (performance.now() - lastFrameAtMs >= stepIntervalMs) {
           lastFrameAtMs = performance.now();
@@ -901,7 +1140,7 @@
       requestAnimationFrame(loop);
     }
 
-    window.__kaminosNativeLowSelectiveLive = { debugState };
+    window.__kaminosNativeLowSelectiveLive = { setCapturePaused, debugState, stepCaptureFrame };
     initialize().catch(error => {
       routeStatus = 'failed';
       failurePhase = failurePhase || 'route-initialize';

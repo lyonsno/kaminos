@@ -30,6 +30,16 @@ const WITNESS_CONTRACT_MARKERS = Object.freeze({
   hiddenCandidateCap: false,
   sameSourceStepIdentity: 'same-source-step-required',
   offlineImporterUsed: false,
+  nativeLowTrainedPackageRoute: {
+    requestedTransferRouteId: 'native-low-transfer-160-to-128-zero-shot-v0',
+    effectiveTransferRouteId: 'native-low-transfer-160-to-128-zero-shot-v0',
+    candidateInstanceEquality: {
+      candidateCount: 0,
+      instanceCount: 0,
+      overflowCount: 0,
+      hiddenCandidateCap: false,
+    },
+  },
 });
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');

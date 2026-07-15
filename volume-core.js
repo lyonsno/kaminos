@@ -19,6 +19,7 @@ import {
   NATIVE_LOW_INPUT_AUTHORITY,
   NATIVE_LOW_SHARED_DEVICE_ROUTE,
   NATIVE_LOW_TRANSPORT_MODE,
+  NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE,
   createNativeLowSelectiveSharedDeviceRuntime,
 } from './native-low-selective-live-runtime.mjs';
 
@@ -5745,7 +5746,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatRenderBindGroup = null;
   let selectiveHeadLiveRuntime = null;
   let selectiveHeadLiveBindGroups = null;
-  let nativeLowSelectiveSharedRuntime = null;
+  const nativeLowSelectiveSharedRuntimes = new Map();
   let bindGroupLayout = null;
   let majorantFluidBindGroupLayout = null;
   let majorantWriteBindGroupLayout = null;
@@ -12464,12 +12465,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
-  async function ensureNativeLowSelectiveSharedRuntime() {
-    if (!nativeLowSelectiveSharedRuntime) {
-      nativeLowSelectiveSharedRuntime = await createNativeLowSelectiveSharedDeviceRuntime({ device });
+  async function ensureNativeLowSelectiveSharedRuntime({ transferRouteId = NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE, sourceGrid = gridSize } = {}) {
+    const key = `${transferRouteId}:source-${sourceGrid}`;
+    if (!nativeLowSelectiveSharedRuntimes.has(key)) {
+      nativeLowSelectiveSharedRuntimes.set(key, await createNativeLowSelectiveSharedDeviceRuntime({ device, transferRouteId, sourceGrid }));
     }
-    state.nativeLowSelectiveSharedDevice = nativeLowSelectiveSharedRuntime.debugState();
-    return nativeLowSelectiveSharedRuntime;
+    const runtime = nativeLowSelectiveSharedRuntimes.get(key);
+    state.nativeLowSelectiveSharedDevice = runtime.debugState();
+    return runtime;
   }
 
   function setSharedDeviceCopiedState(step, frame) {
@@ -12906,6 +12909,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const requestedComposition = options.boundarySplatComposition ?? 'splat-only-v0';
     const captureVisuals = options.captureVisuals === true;
     const frontTopologyAblationEnabled = options.frontTopologyAblation === true;
+    const requestedTransferRouteId = String(options.transferRouteId || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE);
+    const advanceSourceStep = options.advanceSourceStep !== false;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const calibration = nativeLowTreatmentSplatCalibrationDebug({
       radianceGain: options.treatmentSplatRadianceGain,
@@ -12913,32 +12918,38 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     const startedAt = performance.now();
     const sourceMajorantGrid = majorantGridSize;
+    const sourceGrid = gridSize;
     const sourceFrame = state.frameCount;
     const sourceSimStepBefore = state.simStepCount;
     try {
       if (!state.active || !device) throw new Error('inactive');
-      if (gridSize !== 128) throw new Error(`native-low-shared-device-grid-mismatch:${gridSize}`);
+      if (![96, 128].includes(sourceGrid)) throw new Error(`native-low-shared-device-grid-mismatch:${sourceGrid}`);
       if (requestedComposition !== 'splat-only-v0') throw new Error(`unsupported-native-low-shared-device-composition:${requestedComposition}`);
       cancelAnimationFrame(raf);
       raf = 0;
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-      const runtime = await ensureNativeLowSelectiveSharedRuntime();
+      const runtime = await ensureNativeLowSelectiveSharedRuntime({ transferRouteId: requestedTransferRouteId, sourceGrid });
       const runtimeBeforeInference = runtime.debugState();
 
       failurePhase = 'native-low-source-step';
-      updateUniforms(fixedNow);
       const nativeStepStart = performance.now();
-      const nativeEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native 128 source step` });
-      encodeSim(nativeEncoder);
-      device.queue.submit([nativeEncoder.finish()]);
-      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      if (advanceSourceStep) {
+        updateUniforms(fixedNow);
+        const nativeEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} native ${sourceGrid} source step` });
+        encodeSim(nativeEncoder);
+        device.queue.submit([nativeEncoder.finish()]);
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+      }
       const nativeStepMs = performance.now() - nativeStepStart;
       const sourceStep = state.simStepCount;
       const simStepDelta = sourceStep - sourceSimStepBefore;
-      if (simStepDelta !== 1) throw new Error(`simulation-not-stepping:${simStepDelta}`);
+      const requiredSimStepDelta = advanceSourceStep ? 1 : 0;
+      if (simStepDelta !== requiredSimStepDelta) throw new Error(`simulation-not-stepping:${simStepDelta}`);
       const sourceFluid = fluidBuffers[currentFluid];
       const sourceFront = frontBuffers[currentFront];
-      const sourceStepIdentity = `native-low-shared-device-step-${sourceStep}-frame-${sourceFrame + 1}`;
+      const sourceFrameAfter = state.frameCount;
+      const computedSourceStepIdentity = `native-low-shared-device-step-${sourceStep}-frame-${sourceFrameAfter}`;
+      const sourceStepIdentity = options.expectedSourceStepIdentity || computedSourceStepIdentity;
       const simulationSteppingReceipt = {
         identity: 'native-low-simulation-stepping-receipt-v0',
         sourceFrameBefore: sourceFrame,
@@ -12946,7 +12957,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sourceSimStepBefore,
         sourceSimStepAfter: sourceStep,
         simStepDelta,
-        requiredSimStepDelta: 1,
+        requiredSimStepDelta,
+        advanceSourceStep,
         authority: 'renderer-owned-native-source-step-before-model-consumption-v0',
       };
       lastTrustworthyEvidence = { sourceStepIdentity, sourceStep, nativeStepMs, simulationSteppingReceipt };
@@ -13007,7 +13019,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const inferenceEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} inference encoder` });
       const historyEpochIdentity = [
         'native-low-source-history-epoch-v0',
-        `grid-${gridSize}`,
+        `grid-${sourceGrid}`,
         `majorant-${sourceMajorantGrid}`,
         `scene-${controlsSnapshot.volumeScene || 'unknown'}`,
         `source-reset-${state.nativeLowSourceHistoryEpochCount ?? state.fluidStateResetCount ?? 0}`,
@@ -13134,7 +13146,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       device.queue.submit([treatmentEncoder.finish()]);
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-      setSharedDeviceCopiedState(sourceStep, sourceFrame + 1);
+      setSharedDeviceCopiedState(sourceStep, sourceFrameAfter);
       const treatmentCopyMs = performance.now() - treatmentCopyStart;
       const treatmentMaterializeMs = performance.now() - treatmentMaterializeStart;
 
@@ -13144,7 +13156,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatComposition: requestedComposition,
         now: fixedNow,
         sameStateCaptureId: `${sourceStepIdentity}:treatment`,
-        baseFrameCount: sourceFrame + 1,
+        baseFrameCount: sourceFrameAfter,
         baseSimStepCount: sourceStep,
         controlOverrides: {
           nativeLowTreatmentSplatRadianceGain: calibration.effectiveRadianceGain,
@@ -13157,6 +13169,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const treatmentRenderMs = performance.now() - treatmentRenderStart;
       const treatmentSplatCandidateCount = treatmentRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
       const treatmentSplatInstanceCount = treatmentRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      const treatmentSplatOverflowCount = treatmentRender.boundarySplatOverflowCount ?? state.boundarySplatOverflowCount ?? 0;
       let frontTopologyAblatedVisualUrl = null;
       let frontTopologyAblatedRender = null;
       let frontTopologyAblatedMaterializeMs = null;
@@ -13181,7 +13194,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         }
         device.queue.submit([ablatedEncoder.finish()]);
         if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-        setSharedDeviceCopiedState(sourceStep, sourceFrame + 1);
+        setSharedDeviceCopiedState(sourceStep, sourceFrameAfter);
         frontTopologyAblatedCopyMs = performance.now() - ablatedCopyStart;
         frontTopologyAblatedMaterializeMs = performance.now() - ablatedMaterializeStart;
 
@@ -13191,7 +13204,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           boundarySplatComposition: requestedComposition,
           now: fixedNow,
           sameStateCaptureId: `${sourceStepIdentity}:frontTopology-ablation`,
-          baseFrameCount: sourceFrame + 1,
+          baseFrameCount: sourceFrameAfter,
           baseSimStepCount: sourceStep,
           controlOverrides: {
             nativeLowTreatmentSplatRadianceGain: calibration.effectiveRadianceGain,
@@ -13219,19 +13232,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       failurePhase = 'shared-device-source-restore';
       const restoreStart = performance.now();
       const restoreRebuildStart = performance.now();
-      rebuildFluidState(128, sourceMajorantGrid, 'native-low-shared-device-source-restore', { skipInitialFluid: true });
+      rebuildFluidState(sourceGrid, sourceMajorantGrid, 'native-low-shared-device-source-restore', { skipInitialFluid: true });
       const restoreRebuildMs = performance.now() - restoreRebuildStart;
       const restoreCopyStart = performance.now();
-      const restoreEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} restore 128 source materialization` });
+      const restoreEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} restore ${sourceGrid} source materialization` });
       for (const target of fluidBuffers) {
-        restoreEncoder.copyBufferToBuffer(runtime.buffers.lowSnapshotFluid, 0, target, 0, fluidBufferBytes(128));
+        restoreEncoder.copyBufferToBuffer(runtime.buffers.lowSnapshotFluid, 0, target, 0, fluidBufferBytes(sourceGrid));
       }
       for (const target of frontBuffers) {
-        restoreEncoder.copyBufferToBuffer(runtime.buffers.lowSnapshotFront, 0, target, 0, frontFieldBufferBytes(128));
+        restoreEncoder.copyBufferToBuffer(runtime.buffers.lowSnapshotFront, 0, target, 0, frontFieldBufferBytes(sourceGrid));
       }
       device.queue.submit([restoreEncoder.finish()]);
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-      setSharedDeviceCopiedState(sourceStep, sourceFrame + 1);
+      setSharedDeviceCopiedState(sourceStep, sourceFrameAfter);
       const restoreCopyMs = performance.now() - restoreCopyStart;
       const restoreMaterializeMs = performance.now() - restoreStart;
 
@@ -13241,7 +13254,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatComposition: requestedComposition,
         now: fixedNow,
         sameStateCaptureId: `${sourceStepIdentity}:control`,
-        baseFrameCount: sourceFrame + 1,
+        baseFrameCount: sourceFrameAfter,
         baseSimStepCount: sourceStep,
         restoreControls: true,
       });
@@ -13263,7 +13276,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         restoreCopyMs,
         restoreMaterializeMs,
         treatmentCopyBytes: fluidBufferBytes(160) * 2 + frontFieldBufferBytes(160) * 2,
-        restoreCopyBytes: fluidBufferBytes(128) * 2 + frontFieldBufferBytes(128) * 2,
+        restoreCopyBytes: fluidBufferBytes(sourceGrid) * 2 + frontFieldBufferBytes(sourceGrid) * 2,
       };
       if (frontTopologyAblationEnabled) {
         nativeLowMaterializationProfile.frontTopologyAblation = {
@@ -13276,6 +13289,33 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
 
       const sameNativeStateIdentity = `${sourceStepIdentity}:model-${runtime.modelSha256}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
+      const candidateInstanceEquality = {
+        identity: 'uncapped-candidate-instance-equality-v0',
+        candidateCount: treatmentSplatCandidateCount,
+        instanceCount: treatmentSplatInstanceCount,
+        overflowCount: treatmentSplatOverflowCount,
+        equal: treatmentSplatCandidateCount === treatmentSplatInstanceCount,
+        overflowZero: treatmentSplatOverflowCount === 0,
+        hiddenCandidateCap: false,
+      };
+      const nativeLowTrainedPackageRoute = {
+        ...(runtimeState.nativeLowTrainedPackageRoute || {}),
+        identity: 'native-low-trained-package-route-v0',
+        requestedTransferRouteId,
+        effectiveTransferRouteId: runtimeState.effectiveTransferRouteId || requestedTransferRouteId,
+        effectiveSourceGrid: sourceGrid,
+        requestedBackend: runtimeState.requestedBackend,
+        effectiveBackend: runtimeState.effectiveBackend,
+        fallbackBackend: runtimeState.fallbackBackend,
+        requestedComposition,
+        effectiveComposition: treatmentRender.boundarySplatCompositionEffective,
+        modelSpecificTiming: {
+          inferenceGpuMs: inferenceTiming.ms,
+          uploadDispatchMs: inferenceWallMs,
+          endToEndFrameMs: null,
+        },
+        candidateInstanceEquality,
+      };
       const supportPositiveCount = supportStats.supportPositiveCount ?? runtimeState.supportPositiveCount ?? 0;
       const supportPrevalence = supportStats.supportPrevalence ?? runtimeState.supportPrevalence ?? 0;
       const blankTreatmentAttribution = supportPositiveCount <= 0
@@ -13588,6 +13628,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         requestedComposition,
         effectiveComposition: treatmentRender.boundarySplatCompositionEffective,
         compositionMismatch: treatmentRender.boundarySplatCompositionEffective !== requestedComposition ? 'compositionMismatch' : null,
+        requestedTransferRouteId,
+        effectiveTransferRouteId: runtimeState.effectiveTransferRouteId || requestedTransferRouteId,
+        nativeLowTrainedPackageRoute: {
+          ...nativeLowTrainedPackageRoute,
+          modelSpecificTiming: {
+            ...nativeLowTrainedPackageRoute.modelSpecificTiming,
+            endToEndFrameMs,
+          },
+        },
+        candidateInstanceEquality,
         requestedBackend: runtimeState.requestedBackend,
         effectiveBackend: runtimeState.effectiveBackend,
         fallbackBackend: runtimeState.fallbackBackend,
@@ -13673,7 +13723,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           treatmentObjectUrl: treatmentVisualUrl,
           frontTopologyAblatedObjectUrl: frontTopologyAblatedVisualUrl,
         },
-        nativeLowControl: { grid: 128, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: controlSplatInstanceCount },
+        nativeLowControl: { grid: sourceGrid, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: controlSplatInstanceCount },
         fullFrozenTreatmentReference: { grid: 160, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: treatmentSplatInstanceCount },
         frontTopologyAblatedTreatment: frontTopologyAblationEnabled
           ? { grid: 160, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: frontTopologyAblatedSplatInstanceCount }
@@ -14224,8 +14274,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     renderFrozenScaleToCanvas,
     dispose() {
       this.setActive(false);
-      nativeLowSelectiveSharedRuntime?.destroy();
-      nativeLowSelectiveSharedRuntime = null;
+      for (const runtime of nativeLowSelectiveSharedRuntimes.values()) runtime?.destroy?.();
+      nativeLowSelectiveSharedRuntimes.clear();
       frameTexture?.destroy();
       browserResidualFeatureTexture?.destroy();
       externalEmitterBuffer?.destroy();
