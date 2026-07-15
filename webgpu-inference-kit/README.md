@@ -162,6 +162,7 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `runtime.defineComputeKernel(input)` and `runtime.runKernel(kernel, options)`: build bind group layouts, bind groups, pipeline layouts, compute pipelines, command encoders, compute passes, dispatches, submits, and stage profile entries from one kernel descriptor.
 - `runtime.defineProgram(input)` and `runtime.runProgram(program)`: declare a small phase program above single-kernel dispatch, resolving named tensors/uniforms/buffers into kernel bindings, executing kernel phases, running readback phases, preserving staged profile metadata, and applying yield boundaries at phase edges.
 - `runtime.runInvocation(input, fn)`, `runtime.applySchedulerDecision(decision)`, and `runtime.schedulerSnapshot()`: run arbitrary adapter code against an immutable scheduler revision, apply a guarded decision between invocations, and inspect the scheduler that the next invocation will receive.
+- `runtime.createInferenceQueue(options)`: retain an uncapped FIFO of background jobs, run one immutable route invocation at a time, record uncapped progress and terminal outcomes, cancel pending work, and place adaptive decisions between jobs.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
 - `defineTensorManifest(input)`: normalize model tensor metadata, dtype sizes, byte lengths, offsets, and shapes for browser-loaded weight bundles.
@@ -325,6 +326,42 @@ if (decision.schedulerChanged) runtime.applySchedulerDecision(decision);
 ```
 
 `runProgram()` opens and closes the same invocation boundary automatically. For a phase with a matching `commandDuty.chunkControl`, its emitted descriptor records the invocation's effective control. The kit does not pretend it can split an already submitted command buffer: custom adapter loops must consume `invocation.getControl(controlId)` when deciding how much work to encode before the next submit.
+
+## Background Inference Queue
+
+Long routes such as SHARP and SF3D are often better product citizens as a continuous background queue than as a modal wait. A runtime-bound queue serializes full invocations while allowing the product to submit many jobs immediately:
+
+```js
+const inferenceQueue = runtime.createInferenceQueue();
+
+const job = inferenceQueue.enqueue({
+  jobId: crypto.randomUUID(),
+  metadata: { sourceImageName: file.name },
+  async execute(invocation) {
+    return runSharpInference({
+      sourceImage,
+      spnFusionOutputItems: invocation.getControl("spnFusionOutputItems"),
+      yieldToBrowser: invocation.yieldToBrowser,
+      onProgress(progress) {
+        invocation.reportProgress(progress);
+      },
+    });
+  },
+});
+
+const completion = await job.completion;
+if (completion.status === "succeeded") showAsset(completion.output);
+```
+
+`job.cancel(reason)` cancels only a pending job. Once its invocation has started, the handle returns `not-cancelled-active`; it never implies that submitted WebGPU work was preempted. `completion` always resolves to a terminal record (`succeeded`, `failed`, or `cancelled-before-start`) with route/job identity, scheduler revision, uncapped progress, and explicit output/failure presence.
+
+Adaptive decisions enter the queue as control barriers:
+
+```js
+const applicationReceipt = await inferenceQueue.scheduleSchedulerDecision(decision);
+```
+
+A queued decision waits for the active invocation to finish and applies before the next pending job. The queue owns an immutable copy of the decision, records applied and failed control attempts, and continues processing after job or decision failure. `snapshot()` exposes every retained job and decision without a hidden cap; `forgetJob(jobId)` is the explicit reclamation boundary, and `drain()` resolves once no job, decision, or active invocation remains.
 
 ## Receipt And Evidence Layer
 

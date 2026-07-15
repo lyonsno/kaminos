@@ -28,6 +28,9 @@ import {
   createWebGpuSchedulerApplication,
 } from './scheduler-application.js';
 import {
+  createWebGpuInferenceQueue,
+} from './inference-queue.js';
+import {
   WEBGPU_BUFFER_USAGE,
   assertTensorDataByteLength,
   createGpuTensor,
@@ -653,6 +656,14 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     schedulerSnapshot() {
       if (!schedulerApplication) throw new Error('scheduler application is not configured for this runtime');
       return schedulerApplication.snapshot();
+    },
+
+    createInferenceQueue(options = {}) {
+      return createWebGpuInferenceQueue({
+        ...options,
+        routeId: options.routeId || input.routeId,
+        runtime,
+      });
     },
 
     runHostPhase(phase, fn, options = {}) {

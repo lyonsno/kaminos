@@ -142,6 +142,22 @@ await runtime.runInvocation({ invocationId: 'sam3-static-invocation-a' }, async 
   assert.equal(invocation.scheduler.yieldMs, 0);
 });
 
+const inferenceQueue = runtime.createInferenceQueue({ now });
+const queuedInvocation = inferenceQueue.enqueue({
+  jobId: 'sam3-queued-static-invocation-a',
+  async execute(invocation) {
+    return {
+      routeId: invocation.routeId,
+      schedulerRevision: invocation.schedulerRevision,
+    };
+  },
+});
+assert.deepEqual((await queuedInvocation.completion).output, {
+  routeId: runtime.routeId,
+  schedulerRevision: null,
+});
+assert.equal((await inferenceQueue.drain()).status, 'idle');
+
 const preprocessed = await runtime.runHostPhase(
   WEBGPU_HOST_PHASE.cpuPreprocess,
   async () => 'preprocessed',

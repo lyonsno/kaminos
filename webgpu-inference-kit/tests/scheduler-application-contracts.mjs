@@ -380,4 +380,40 @@ assert.throws(
 releaseInvocation();
 assert.equal(await heldInvocation, 4);
 
+let releaseQueuedJob;
+let signalQueuedJobStarted;
+const queuedJobStarted = new Promise(resolve => { signalQueuedJobStarted = resolve; });
+const adaptiveQueue = runtime.createInferenceQueue({ now });
+const queuedA = adaptiveQueue.enqueue({
+  jobId: 'adaptive-queue-job-a',
+  async execute(context) {
+    signalQueuedJobStarted();
+    await new Promise(resolve => { releaseQueuedJob = resolve; });
+    return { revision: context.schedulerRevision, yieldMs: context.scheduler.yieldMs };
+  },
+});
+const queuedB = adaptiveQueue.enqueue({
+  jobId: 'adaptive-queue-job-b',
+  async execute(context) {
+    return { revision: context.schedulerRevision, yieldMs: context.scheduler.yieldMs };
+  },
+});
+await queuedJobStarted;
+const revisionOneScheduler = runtime.schedulerSnapshot().scheduler;
+const queuedDecision = adaptiveQueue.scheduleSchedulerDecision(decision({
+  revision: 2,
+  previousScheduler: revisionOneScheduler,
+  effectiveScheduler: {
+    ...revisionOneScheduler,
+    yieldMs: 4,
+  },
+  action: 'increase-yield-budget',
+  target: 'yieldMs',
+}));
+releaseQueuedJob();
+assert.deepEqual((await queuedA.completion).output, { revision: 1, yieldMs: 2 });
+assert.equal((await queuedDecision).application.effectiveRevision, 2);
+assert.deepEqual((await queuedB.completion).output, { revision: 2, yieldMs: 4 });
+assert.equal((await adaptiveQueue.drain()).status, 'idle');
+
 console.log('scheduler application contracts passed');
