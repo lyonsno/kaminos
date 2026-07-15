@@ -162,6 +162,7 @@ assert.match(indexSource, /requestedBoundarySplatMode:\s*'learned'/, 'compositio
 assert.match(indexSource, /requestedLiveFieldRole:\s*'truthHigh'/, 'composition state records the current-field render authority');
 assert.match(indexSource, /requestedRenderComposition:\s*'smoke-raymarch-under-splats-v0'/, 'composition state records the non-double-counted renderer composition');
 assert.match(indexSource, /installFingerFluidCompositionCameraControls\(panel\)/, 'camera controls bind to the top-level composition surface instead of the occluded liquid canvas');
+assert.match(indexSource, /#finger-fluid-bench-operator-panel\[data-pyro-composition="active"\] #kaminos-volume-canvas\.active\s*\{[^}]*pointer-events:\s*auto;/, 'the visible Pyro composition canvas is the physical browser hit target');
 assert.match(indexSource, /composition-camera-orbit-wheel-zoom-v0/, 'camera evidence names the effective orbit and wheel-zoom contract');
 assert.match(indexSource, /fingerFluidBenchCamera\.yaw\s*-=/, 'composition pointer drag changes camera yaw');
 assert.match(indexSource, /fingerFluidBenchCamera\.pitch\s*=\s*Math\.max/, 'composition pointer drag changes camera pitch');
@@ -204,6 +205,13 @@ assert.match(witnessSource, /main\(\)\s*\.then\([\s\S]*process\.exit\(0\)/, 'suc
 assert.match(witnessSource, /\.catch\(error\s*=>[\s\S]*process\.exit\(1\)/, 'failed visual witness exits nonzero after preserving its durable failure report');
 assert.match(witnessSource, /cameraWitness\?\.orbitChanged[^\n]+true/, 'visual witness requires an actual orbit input delta');
 assert.match(witnessSource, /cameraWitness\?\.zoomChanged[^\n]+true/, 'visual witness requires an actual zoom input delta');
+assert.match(witnessSource, /document\.elementFromPoint\(/, 'visual witness resolves the browser physical hit target instead of dispatching directly to a non-hit-testable proxy');
+assert.match(witnessSource, /hitTargetId\s*!==\s*'kaminos-volume-canvas'/, 'visual witness rejects a composition whose physical input lands on the underlying liquid canvas');
+assert.match(witnessSource, /dragMoves\.length\s*!==\s*1/, 'visual witness rejects duplicated physical drag delivery');
+assert.match(witnessSource, /wheelEvents\.length\s*!==\s*1/, 'visual witness rejects duplicated physical wheel delivery');
+assert.match(witnessSource, /wheelEvents\[0\]\.deltaY/, 'visual witness derives expected zoom from the DOM delta actually delivered by the browser');
+assert.match(witnessSource, /yawDeltaError[^\n]+CAMERA_DELTA_EPSILON/, 'visual witness rejects doubled or otherwise incorrect orbit deltas');
+assert.match(witnessSource, /distanceDeltaError[^\n]+CAMERA_DELTA_EPSILON/, 'visual witness rejects doubled or otherwise incorrect zoom deltas');
 assert.match(witnessSource, /sameDevice[^\n]+true/, 'visual witness rejects cross-device composition');
 assert.match(witnessSource, /acceptedContacts[^\n]+0/, 'visual witness requires consumed sparse contacts');
 assert.match(witnessSource, /touchedCells[^\n]+0/, 'visual witness requires spatially touched Pyro cells');
