@@ -258,6 +258,13 @@ export function createWebGpuInferenceQueue(input = {}) {
     const admission = await admissionHandle.admission;
     job.admissionStatus = admission.status;
     if (admission.status !== 'granted' || job.status !== 'pending') return false;
+    if (state.pendingDecisions.length > 0) {
+      const cancellation = admissionHandle.cancel('scheduler-decision-arrived-before-start');
+      job.admissionStatus = cancellation.status;
+      job.admissionHandle = null;
+      job.admissionSequence = null;
+      return false;
+    }
     job.admission = {
       schema: admission.schema,
       schedulingPolicy: admission.schedulingPolicy,

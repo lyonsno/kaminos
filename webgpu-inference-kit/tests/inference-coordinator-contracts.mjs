@@ -47,6 +47,22 @@ assert.equal(initial.activeAdmissionSequence, null);
 assert.equal(initial.pendingAdmissionCount, 0);
 assert.deepEqual(initial.admissions, []);
 
+const configuredRuntime = await kit.createWebGpuInferenceRuntime({
+  routeId: 'configured.webgpu-local.v0',
+  device: { queue: {} },
+  adapterName: 'coordinator-contract-adapter',
+  admissionCoordinator: coordinator,
+});
+assert.equal(configuredRuntime.admissionCoordinator, coordinator);
+assert.equal(
+  configuredRuntime.createInferenceQueue().snapshot().admissionPolicy,
+  'shared-global-fifo-by-eligible-route-head',
+);
+assert.equal(
+  configuredRuntime.createInferenceQueue({ admissionCoordinator: null }).snapshot().admissionPolicy,
+  'route-local-fifo',
+);
+
 const executionLog = [];
 let activeInvocationCount = 0;
 
@@ -172,6 +188,123 @@ assert.equal(settled.admissions.every(row => row.routeId && row.jobId), true);
 const releasedSequence = settled.admissions.find(row => row.status === 'released').sequence;
 assert.equal(coordinator.forgetAdmission(releasedSequence), true);
 assert.equal(coordinator.forgetAdmission(releasedSequence), false);
+
+const barrierCoordinator = createWebGpuInferenceCoordinator();
+const barrierLog = [];
+let barrierRevision = 0;
+let barrierActiveCount = 0;
+const releaseBarrierHolder = deferred();
+const barrierHolderStarted = deferred();
+
+function createBarrierRuntime(routeId, options = {}) {
+  return {
+    routeId,
+    async runInvocation({ invocationId }, execute) {
+      assert.equal(barrierActiveCount, 0, 'barrier repair must retain cross-route exclusion');
+      barrierActiveCount += 1;
+      const revision = options.scheduler === true ? barrierRevision : 0;
+      barrierLog.push(`start:${routeId}:${invocationId}:r${revision}`);
+      try {
+        return await execute(Object.freeze({
+          routeId,
+          invocationId,
+          schedulerRevision: revision,
+          scheduler: Object.freeze({ yieldMs: 0 }),
+          getControl() { return 8 / (2 ** revision); },
+          async yieldToBrowser() {},
+        }));
+      } finally {
+        barrierLog.push(`end:${routeId}:${invocationId}:r${revision}`);
+        barrierActiveCount -= 1;
+      }
+    },
+    applySchedulerDecision(decision) {
+      assert.equal(barrierActiveCount, 0, 'decision must apply outside every admitted invocation');
+      barrierRevision = decision.revision;
+      barrierLog.push(`decision:${routeId}:r${barrierRevision}`);
+      return {
+        status: 'applied',
+        routeId,
+        previousRevision: barrierRevision - 1,
+        effectiveRevision: barrierRevision,
+      };
+    },
+  };
+}
+
+const holderRoute = 'holder.webgpu-local.v0';
+const targetRoute = 'target.webgpu-local.v0';
+const interloperRoute = 'interloper.webgpu-local.v0';
+const holderQueue = createWebGpuInferenceQueue({
+  runtime: createBarrierRuntime(holderRoute),
+  admissionCoordinator: barrierCoordinator,
+});
+const targetQueue = createWebGpuInferenceQueue({
+  runtime: createBarrierRuntime(targetRoute, { scheduler: true }),
+  admissionCoordinator: barrierCoordinator,
+});
+const interloperQueue = createWebGpuInferenceQueue({
+  runtime: createBarrierRuntime(interloperRoute),
+  admissionCoordinator: barrierCoordinator,
+});
+
+const holder = holderQueue.enqueue({
+  jobId: 'barrier-holder',
+  async execute() {
+    barrierHolderStarted.resolve();
+    await releaseBarrierHolder.promise;
+    return 'holder-done';
+  },
+});
+await barrierHolderStarted.promise;
+
+const target = targetQueue.enqueue({
+  jobId: 'barrier-target',
+  async execute(invocation) { return invocation.schedulerRevision; },
+});
+await Promise.resolve();
+await Promise.resolve();
+assert.equal(barrierCoordinator.snapshot().pendingAdmissions[0].jobId, 'barrier-target');
+
+const barrierDecision = targetQueue.scheduleSchedulerDecision({ revision: 1 });
+const interloper = interloperQueue.enqueue({
+  jobId: 'barrier-interloper',
+  async execute() { return 'interloper-done'; },
+});
+releaseBarrierHolder.resolve();
+
+const [holderCompletion, interloperCompletion, targetCompletion, barrierDecisionReceipt] = await Promise.all([
+  holder.completion,
+  interloper.completion,
+  target.completion,
+  barrierDecision,
+]);
+await Promise.all([
+  holderQueue.drain(),
+  targetQueue.drain(),
+  interloperQueue.drain(),
+  barrierCoordinator.drain(),
+]);
+
+assert.equal(holderCompletion.output, 'holder-done');
+assert.equal(interloperCompletion.output, 'interloper-done');
+assert.equal(barrierDecisionReceipt.application.effectiveRevision, 1);
+assert.equal(targetCompletion.schedulerRevision, 1);
+assert.equal(targetCompletion.output, 1);
+assert.deepEqual(barrierLog, [
+  `start:${holderRoute}:barrier-holder:r0`,
+  `end:${holderRoute}:barrier-holder:r0`,
+  `decision:${targetRoute}:r1`,
+  `start:${interloperRoute}:barrier-interloper:r0`,
+  `end:${interloperRoute}:barrier-interloper:r0`,
+  `start:${targetRoute}:barrier-target:r1`,
+  `end:${targetRoute}:barrier-target:r1`,
+]);
+const targetAdmissions = barrierCoordinator.snapshot().admissions
+  .filter(row => row.jobId === 'barrier-target');
+assert.equal(targetAdmissions.length, 2);
+assert.deepEqual(targetAdmissions.map(row => row.status), ['cancelled-before-start', 'released']);
+assert.equal(targetAdmissions[0].cancellation.reason, 'scheduler-decision-arrived-before-start');
 
 const bulkQueues = [sharpQueue, sf3dQueue, kimodoQueue];
 const bulkHandles = [];
