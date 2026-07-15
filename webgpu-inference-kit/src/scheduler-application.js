@@ -5,6 +5,7 @@ import {
 export const WEBGPU_SCHEDULER_APPLICATION_SCHEMA = 'kaminos.webgpu-scheduler-application.v0';
 export const WEBGPU_SCHEDULER_INVOCATION_SCHEMA = 'kaminos.webgpu-scheduler-invocation.v0';
 export const WEBGPU_SCHEDULER_DECISION_APPLICATION_SCHEMA = 'kaminos.webgpu-scheduler-decision-application.v0';
+export const WEBGPU_SCHEDULER_BOUNDARY_SCHEMA = 'kaminos.webgpu-scheduler-boundary.v0';
 
 const SCHEDULER_KEYS = ['mode', 'phaseChunkSize', 'waitForSubmittedWorkDone', 'yieldMs'];
 
@@ -144,6 +145,9 @@ function validateDecisionTransition(decision, scheduler) {
 }
 
 export function createWebGpuSchedulerApplication(input = {}) {
+  if (input.maxBoundaries != null || input.retention != null && input.retention !== 'uncapped') {
+    throw new Error('scheduler boundary retention is uncapped; capped retention is not supported');
+  }
   if (!isNonEmptyString(input.routeId)) throw new Error('routeId must be a non-empty string');
   const revision = input.revision ?? 0;
   if (!Number.isInteger(revision) || revision < 0) throw new Error('revision must be a non-negative integer');
@@ -157,6 +161,8 @@ export function createWebGpuSchedulerApplication(input = {}) {
     bounds,
     activeInvocations: new Set(),
     activeInvocationIds: new Set(),
+    invocationStates: new WeakMap(),
+    boundaries: [],
   };
 
   function snapshot() {
@@ -167,8 +173,70 @@ export function createWebGpuSchedulerApplication(input = {}) {
       scheduler: clone(state.scheduler),
       bounds: clone(state.bounds),
       activeInvocationCount: state.activeInvocations.size,
-      applicationAuthority: 'subsequent-invocations-only-no-submitted-work-preemption',
+      retention: 'uncapped',
+      boundaryCount: state.boundaries.length,
+      boundaries: clone(state.boundaries),
+      applicationAuthority: 'future-invocations-and-explicit-active-boundaries-no-submitted-work-preemption',
     };
+  }
+
+  function refreshInvocationAtBoundary(invocation, boundaryInput = {}) {
+    if (!state.activeInvocations.has(invocation)) {
+      throw new Error('unknown invocation or invocation already ended');
+    }
+    const invocationState = state.invocationStates.get(invocation);
+    if (!invocationState) throw new Error('active invocation state is unavailable');
+    if (!isPlainObject(boundaryInput)) throw new Error('scheduler boundary must be an object');
+    const boundaryId = boundaryInput.boundaryId;
+    const dutyId = boundaryInput.dutyId;
+    const phase = boundaryInput.phase;
+    if (!isNonEmptyString(boundaryId)) throw new Error('boundaryId must be a non-empty string');
+    if (!isNonEmptyString(dutyId)) throw new Error('dutyId must be a non-empty string');
+    if (!isNonEmptyString(phase)) throw new Error('phase must be a non-empty string');
+    if (boundaryInput.position !== 'before-encode') {
+      throw new Error('scheduler refresh is authorized only at position before-encode');
+    }
+    if (boundaryInput.metadata != null && !isPlainObject(boundaryInput.metadata)) {
+      throw new Error('scheduler boundary metadata must be an object when provided');
+    }
+    if (invocationState.boundaryIds.has(boundaryId)) {
+      throw new Error(`duplicate scheduler boundary ${boundaryId}`);
+    }
+    invocationState.boundaryIds.add(boundaryId);
+
+    const previousSchedulerRevision = invocationState.revision;
+    const previousScheduler = clone(invocationState.scheduler);
+    if (state.revision > invocationState.revision) {
+      invocationState.revision = state.revision;
+      invocationState.scheduler = clone(state.scheduler);
+    }
+    const schedulerChanged = invocationState.revision !== previousSchedulerRevision;
+    const boundary = deepFreeze({
+      schema: WEBGPU_SCHEDULER_BOUNDARY_SCHEMA,
+      status: schedulerChanged ? 'updated' : 'maintained',
+      sequence: state.boundaries.length + 1,
+      routeId: state.routeId,
+      invocationId: invocation.invocationId,
+      boundaryId,
+      dutyId,
+      phase,
+      position: 'before-encode',
+      previousSchedulerRevision,
+      observedApplicationRevision: state.revision,
+      requestedSchedulerRevision: state.revision,
+      effectiveSchedulerRevision: invocationState.revision,
+      schedulerChanged,
+      previousScheduler,
+      scheduler: clone(invocationState.scheduler),
+      requestedYieldMs: state.scheduler.yieldMs,
+      effectiveYieldMs: invocationState.scheduler.yieldMs,
+      effectivePhaseChunkSize: clone(invocationState.scheduler.phaseChunkSize),
+      metadata: clone(boundaryInput.metadata || {}),
+      applicationAuthority: 'pre-encoding-safe-boundary-no-submission-claim-no-submitted-work-preemption',
+    });
+    invocationState.boundaryCount += 1;
+    state.boundaries.push(clone(boundary));
+    return boundary;
   }
 
   function beginInvocation(invocationInput = {}) {
@@ -178,24 +246,38 @@ export function createWebGpuSchedulerApplication(input = {}) {
     if (state.activeInvocationIds.has(invocationInput.invocationId)) {
       throw new Error(`invocationId ${invocationInput.invocationId} is already active`);
     }
-    const scheduler = deepFreeze(clone(state.scheduler));
-    const invocation = Object.freeze({
+    const invocationState = {
+      revision: state.revision,
+      scheduler: clone(state.scheduler),
+      boundaryIds: new Set(),
+      boundaryCount: 0,
+    };
+    let invocation;
+    invocation = Object.freeze({
       schema: WEBGPU_SCHEDULER_INVOCATION_SCHEMA,
       routeId: state.routeId,
       invocationId: invocationInput.invocationId,
-      schedulerRevision: state.revision,
-      scheduler,
+      get schedulerRevision() {
+        return invocationState.revision;
+      },
+      get scheduler() {
+        return deepFreeze(clone(invocationState.scheduler));
+      },
       bounds: deepFreeze(clone(state.bounds)),
-      applicationAuthority: 'frozen-future-invocation-snapshot',
+      applicationAuthority: 'explicit-safe-boundary-refresh-no-submitted-work-preemption',
       getControl(controlId) {
-        if (!isNonEmptyString(controlId) || !Object.hasOwn(scheduler.phaseChunkSize, controlId)) {
+        if (!isNonEmptyString(controlId) || !Object.hasOwn(invocationState.scheduler.phaseChunkSize, controlId)) {
           throw new Error(`undeclared scheduler control ${controlId || '<missing>'}`);
         }
-        return scheduler.phaseChunkSize[controlId];
+        return invocationState.scheduler.phaseChunkSize[controlId];
+      },
+      refreshAtBoundary(boundaryInput = {}) {
+        return refreshInvocationAtBoundary(invocation, boundaryInput);
       },
     });
     state.activeInvocations.add(invocation);
     state.activeInvocationIds.add(invocation.invocationId);
+    state.invocationStates.set(invocation, invocationState);
     return invocation;
   }
 
@@ -205,17 +287,17 @@ export function createWebGpuSchedulerApplication(input = {}) {
     }
     state.activeInvocations.delete(invocation);
     state.activeInvocationIds.delete(invocation.invocationId);
+    const invocationState = state.invocationStates.get(invocation);
     return {
       invocationId: invocation.invocationId,
       schedulerRevision: invocation.schedulerRevision,
+      effectiveSchedulerRevision: invocationState.revision,
+      boundaryCount: invocationState.boundaryCount,
       activeInvocationCount: state.activeInvocations.size,
     };
   }
 
   function applyDecision(decision) {
-    if (state.activeInvocations.size > 0) {
-      throw new Error(`active invocation count ${state.activeInvocations.size}; cannot apply scheduler decision`);
-    }
     if (!isPlainObject(decision) || decision.schema !== FOREGROUND_BUDGET_GOVERNOR_SCHEMA) {
       throw new Error('decision must be a foreground budget governor decision');
     }
@@ -255,7 +337,8 @@ export function createWebGpuSchedulerApplication(input = {}) {
       target: decision.target,
       previousScheduler,
       effectiveScheduler: clone(state.scheduler),
-      applicationAuthority: 'subsequent-invocations-only',
+      activeInvocationCount: state.activeInvocations.size,
+      applicationAuthority: 'future-invocations-and-explicit-active-boundaries',
     };
   }
 

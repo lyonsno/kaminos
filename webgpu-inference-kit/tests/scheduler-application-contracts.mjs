@@ -10,6 +10,8 @@ import {
   createWebGpuSchedulerApplication,
 } from '../src/index.js';
 
+const WEBGPU_SCHEDULER_BOUNDARY_SCHEMA = 'kaminos.webgpu-scheduler-boundary.v0';
+
 const routeId = 'sharp.image-to-splat.webgpu-local.v0';
 const baselineScheduler = {
   mode: 'cooperative',
@@ -77,6 +79,17 @@ function application() {
   });
 }
 
+assert.throws(
+  () => createWebGpuSchedulerApplication({
+    routeId,
+    scheduler: structuredClone(baselineScheduler),
+    bounds: structuredClone(declaredBounds),
+    maxBoundaries: 1,
+  }),
+  /boundary retention is uncapped/i,
+  'live boundary history must not silently discard long-running inference duties',
+);
+
 const guarded = application();
 const initial = guarded.snapshot();
 assert.equal(initial.schema, WEBGPU_SCHEDULER_APPLICATION_SCHEMA);
@@ -92,7 +105,7 @@ assert.equal(invocation.routeId, routeId);
 assert.equal(invocation.invocationId, 'sharp-invocation-a');
 assert.equal(invocation.schedulerRevision, 0);
 assert.deepEqual(invocation.scheduler, baselineScheduler);
-assert.equal(invocation.applicationAuthority, 'frozen-future-invocation-snapshot');
+assert.equal(invocation.applicationAuthority, 'explicit-safe-boundary-refresh-no-submitted-work-preemption');
 assert.throws(
   () => { invocation.scheduler.phaseChunkSize.spnFusionOutputItems = 1; },
   /read only|readonly|not extensible|Cannot assign/i,
@@ -105,22 +118,10 @@ assert.throws(
 );
 assert.throws(
   () => { invocation.schedulerRevision = 999; },
-  /read only|readonly|not extensible|Cannot assign/i,
-  'the public invocation token must not lie about its frozen scheduler revision',
+  /read only|readonly|not extensible|Cannot assign|only a getter/i,
+  'the public invocation token must not lie about its effective scheduler revision',
 );
 assert.equal(guarded.snapshot().scheduler.phaseChunkSize.spnFusionOutputItems, 8);
-
-assert.throws(
-  () => guarded.applyDecision(decision()),
-  /active invocation.*cannot apply/i,
-  'an in-flight invocation must never observe a scheduler mutation',
-);
-assert.equal(guarded.snapshot().revision, 0);
-guarded.endInvocation(invocation);
-assert.equal(guarded.snapshot().activeInvocationCount, 0);
-assert.throws(() => guarded.endInvocation(invocation), /already ended|unknown invocation/i);
-const reusedInvocationId = guarded.beginInvocation({ invocationId: 'sharp-invocation-a' });
-guarded.endInvocation(reusedInvocationId);
 
 const applied = guarded.applyDecision(decision());
 assert.equal(applied.schema, WEBGPU_SCHEDULER_DECISION_APPLICATION_SCHEMA);
@@ -128,10 +129,59 @@ assert.equal(applied.status, 'applied');
 assert.equal(applied.routeId, routeId);
 assert.equal(applied.previousRevision, 0);
 assert.equal(applied.effectiveRevision, 1);
-assert.equal(applied.applicationAuthority, 'subsequent-invocations-only');
+assert.equal(applied.applicationAuthority, 'future-invocations-and-explicit-active-boundaries');
 assert.deepEqual(applied.previousScheduler, baselineScheduler);
 assert.equal(applied.effectiveScheduler.phaseChunkSize.spnFusionOutputItems, 4);
 assert.equal(guarded.snapshot().revision, 1);
+assert.equal(invocation.schedulerRevision, 0, 'application changes do not mutate active work mid-duty');
+
+const liveBoundary = invocation.refreshAtBoundary({
+  boundaryId: 'sharp-invocation-a:before-duty-1',
+  dutyId: 'sharp-invocation-a:duty-1',
+  phase: 'spn-fusion',
+  position: 'before-encode',
+});
+assert.equal(liveBoundary.schema, WEBGPU_SCHEDULER_BOUNDARY_SCHEMA);
+assert.equal(liveBoundary.status, 'updated');
+assert.equal(liveBoundary.routeId, routeId);
+assert.equal(liveBoundary.invocationId, 'sharp-invocation-a');
+assert.equal(liveBoundary.dutyId, 'sharp-invocation-a:duty-1');
+assert.equal(liveBoundary.previousSchedulerRevision, 0);
+assert.equal(liveBoundary.observedApplicationRevision, 1);
+assert.equal(liveBoundary.effectiveSchedulerRevision, 1);
+assert.equal(liveBoundary.schedulerChanged, true);
+assert.equal(liveBoundary.scheduler.phaseChunkSize.spnFusionOutputItems, 4);
+assert.equal(liveBoundary.requestedYieldMs, 2);
+assert.equal(liveBoundary.effectiveYieldMs, 2);
+assert.equal(liveBoundary.effectivePhaseChunkSize.spnFusionOutputItems, 4);
+assert.equal(liveBoundary.applicationAuthority, 'pre-encoding-safe-boundary-no-submission-claim-no-submitted-work-preemption');
+assert.equal(invocation.schedulerRevision, 1);
+assert.equal(invocation.getControl('spnFusionOutputItems'), 4);
+assert.throws(
+  () => invocation.refreshAtBoundary({
+    boundaryId: 'sharp-invocation-a:before-duty-1',
+    dutyId: 'sharp-invocation-a:duty-1',
+    phase: 'spn-fusion',
+    position: 'before-encode',
+  }),
+  /duplicate scheduler boundary/i,
+);
+const endedLiveInvocation = guarded.endInvocation(invocation);
+assert.equal(endedLiveInvocation.effectiveSchedulerRevision, 1);
+assert.equal(endedLiveInvocation.boundaryCount, 1);
+assert.equal(guarded.snapshot().activeInvocationCount, 0);
+assert.throws(() => guarded.endInvocation(invocation), /already ended|unknown invocation/i);
+assert.throws(
+  () => invocation.refreshAtBoundary({
+    boundaryId: 'sharp-invocation-a:after-end',
+    dutyId: 'sharp-invocation-a:duty-after-end',
+    phase: 'spn-fusion',
+    position: 'before-encode',
+  }),
+  /invocation.*ended|unknown invocation/i,
+);
+const reusedInvocationId = guarded.beginInvocation({ invocationId: 'sharp-invocation-a' });
+guarded.endInvocation(reusedInvocationId);
 
 const nextInvocation = guarded.beginInvocation({ invocationId: 'sharp-invocation-b' });
 assert.equal(nextInvocation.schedulerRevision, 1);
@@ -188,6 +238,43 @@ const foreignInvocation = foreign.beginInvocation({ invocationId: 'foreign-invoc
 assert.throws(() => guarded.endInvocation(foreignInvocation), /unknown invocation/i);
 foreign.endInvocation(foreignInvocation);
 
+const parallel = application();
+const parallelA = parallel.beginInvocation({ invocationId: 'parallel-a' });
+const parallelB = parallel.beginInvocation({ invocationId: 'parallel-b' });
+parallel.applyDecision(decision());
+const parallelABoundary = parallelA.refreshAtBoundary({
+  boundaryId: 'parallel-a:boundary-1',
+  dutyId: 'parallel-a:duty-1',
+  phase: 'spn-fusion',
+  position: 'before-encode',
+});
+assert.equal(parallelABoundary.effectiveSchedulerRevision, 1);
+assert.equal(parallelB.schedulerRevision, 0, 'one active invocation refresh must not mutate its sibling');
+parallel.endInvocation(parallelA);
+const parallelRevisionOne = parallel.snapshot().scheduler;
+parallel.applyDecision(decision({
+  revision: 2,
+  previousScheduler: parallelRevisionOne,
+  effectiveScheduler: { ...parallelRevisionOne, yieldMs: 4 },
+  action: 'increase-yield-budget',
+  target: 'yieldMs',
+}));
+const parallelBBoundary = parallelB.refreshAtBoundary({
+  boundaryId: 'parallel-b:boundary-1',
+  dutyId: 'parallel-b:duty-1',
+  phase: 'gaussian-cpu',
+  position: 'before-encode',
+});
+assert.equal(parallelBBoundary.previousSchedulerRevision, 0);
+assert.equal(parallelBBoundary.effectiveSchedulerRevision, 2);
+assert.equal(parallelBBoundary.effectiveYieldMs, 4);
+parallel.endInvocation(parallelB);
+assert.deepEqual(
+  parallel.snapshot().boundaries.map(row => [row.invocationId, row.effectiveSchedulerRevision]),
+  [['parallel-a', 1], ['parallel-b', 2]],
+  'each active invocation must advance only when it reaches its own explicit safe boundary',
+);
+
 const runtimeApplication = application();
 const yields = [];
 let nowMs = 0;
@@ -196,6 +283,7 @@ const now = () => {
   return nowMs;
 };
 const submissions = [];
+const encodedDispatches = [];
 const queue = {
   submit(commandBuffers) {
     for (const commandBuffer of commandBuffers) {
@@ -240,7 +328,7 @@ const device = {
         return {
           setPipeline() {},
           setBindGroup() {},
-          dispatchWorkgroups() {},
+          dispatchWorkgroups(...dispatch) { encodedDispatches.push(dispatch); },
           end() {},
         };
       },
@@ -249,7 +337,9 @@ const device = {
   },
 };
 
-const runtime = await createWebGpuInferenceRuntime({
+let runtime;
+let liveDecisionApplied = false;
+runtime = await createWebGpuInferenceRuntime({
   routeId,
   runtimeLabel: 'guarded-scheduler-runtime',
   device,
@@ -270,6 +360,10 @@ const runtime = await createWebGpuInferenceRuntime({
   now,
   yield: async metadata => {
     yields.push(structuredClone(metadata));
+    if (!liveDecisionApplied && metadata.schedulerRevision === 0) {
+      liveDecisionApplied = true;
+      runtime.applySchedulerDecision(decision());
+    }
     return {
       reason: metadata.reason,
       waitForSubmittedWorkDone: metadata.scheduler.waitForSubmittedWorkDone,
@@ -287,6 +381,28 @@ const readbackOutput = runtime.createTensor({
   usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copySrc,
 });
 new Float32Array(readbackOutput.buffer.data.buffer).set([0.75]);
+
+await runtime.runInvocation({ invocationId: 'invalid-boundary-invocation' }, async context => {
+  const boundaryCount = runtime.schedulerSnapshot().boundaryCount;
+  assert.throws(
+    () => runtime.prepareCommandDuty({
+      phase: 'invalid-bounds',
+      kind: 'compute',
+      chunkControl: {
+        controlId: 'spnFusionOutputItems',
+        unit: 'output-item',
+        current: 8,
+        bounds: { ...declaredBounds.phaseChunkSize.spnFusionOutputItems, min: 2 },
+      },
+    }, context),
+    /duty bounds mismatch/i,
+  );
+  assert.equal(
+    runtime.schedulerSnapshot().boundaryCount,
+    boundaryCount,
+    'invalid pre-submit controls must fail before a boundary receipt can claim scheduler uptake',
+  );
+});
 
 const program = runtime.defineProgram({
   name: 'sharp.guarded-scheduler-program',
@@ -334,24 +450,69 @@ const program = runtime.defineProgram({
 });
 
 const firstRun = await runtime.runProgram(program, { invocationId: 'runtime-invocation-a' });
-assert.equal(firstRun.schedulerInvocation.schedulerRevision, 0);
+assert.equal(firstRun.schedulerInvocation.schedulerRevision, 1);
 assert.equal(firstRun.schedulerInvocation.invocationId, 'runtime-invocation-a');
 assert.equal(new Float32Array(firstRun.outputs.outputBytes)[0], 0.75);
 assert.equal(yields.at(-1).schedulerRevision, 0);
 assert.equal(yields.at(-1).scheduler.yieldMs, 2);
+const firstRunBoundaries = runtime.schedulerSnapshot().boundaries
+  .filter(row => row.invocationId === 'runtime-invocation-a');
+assert.equal(firstRunBoundaries.length, 2);
+assert.deepEqual(
+  firstRunBoundaries.map(row => ({
+    phase: row.phase,
+    previous: row.previousSchedulerRevision,
+    effective: row.effectiveSchedulerRevision,
+    changed: row.schedulerChanged,
+  })),
+  [
+    { phase: 'spn-fusion', previous: 0, effective: 0, changed: false },
+    { phase: 'readback-output', previous: 0, effective: 1, changed: true },
+  ],
+);
 
-runtime.applySchedulerDecision(decision());
 const secondRun = await runtime.runProgram(program, { invocationId: 'runtime-invocation-b' });
 assert.equal(secondRun.schedulerInvocation.schedulerRevision, 1);
 assert.equal(secondRun.schedulerInvocation.scheduler.phaseChunkSize.spnFusionOutputItems, 4);
 assert.equal(yields.at(-1).schedulerRevision, 1);
 assert.equal(runtime.schedulerSnapshot().revision, 1);
 
+await runtime.runInvocation({ invocationId: 'runtime-dynamic-dispatch' }, async context => {
+  await runtime.runKernel(program.phases[0].kernel, {
+    stage: 'dynamic-spn-fusion',
+    schedulerInvocation: context,
+    commandDuty: program.phases[0].commandDuty,
+    dispatch({ commandDuty }) {
+      assert.equal(commandDuty.metadata.schedulerBoundary.effectiveSchedulerRevision, 1);
+      assert.equal(commandDuty.chunkControl.current, 4);
+      return [commandDuty.chunkControl.current];
+    },
+  });
+});
+assert.deepEqual(
+  encodedDispatches.at(-1),
+  [4, 1, 1],
+  'a custom adapter can derive the work it encodes from the control refreshed at the same duty boundary',
+);
+
 const dutyReport = runtime.finishCommandDuties();
 assert.deepEqual(
   dutyReport.submissions.map(row => row.descriptor.chunkControl.current),
-  [8, 8, 4, 4],
-  'compute and staged-readback duties must report the effective control for each frozen invocation',
+  [8, 4, 4, 4, 4],
+  'each compute and staged-readback duty must report the scheduler revision effective at its own safe boundary',
+);
+assert.deepEqual(
+  dutyReport.submissions.map(row => ({
+    revision: row.descriptor.metadata.schedulerBoundary.effectiveSchedulerRevision,
+    yieldMs: row.descriptor.metadata.schedulerBoundary.effectiveYieldMs,
+    dutyId: row.descriptor.metadata.schedulerBoundary.dutyId,
+  })),
+  dutyReport.submissions.map((row, index) => ({
+    revision: [0, 1, 1, 1, 1][index],
+    yieldMs: 2,
+    dutyId: row.descriptor.dutyId,
+  })),
+  'every recorded duty must carry the exact boundary revision and effective donation delay it consumed',
 );
 
 let releaseInvocation;
@@ -360,25 +521,34 @@ const heldInvocation = runtime.runInvocation(
   async context => {
     assert.equal(context.schedulerRevision, 1);
     await new Promise(resolve => { releaseInvocation = resolve; });
-    return context.getControl('spnFusionOutputItems');
+    const boundary = context.refreshAtBoundary({
+      boundaryId: 'runtime-held-invocation:before-duty',
+      dutyId: 'runtime-held-invocation:duty',
+      phase: 'held-phase',
+      position: 'before-encode',
+    });
+    return {
+      revision: boundary.effectiveSchedulerRevision,
+      yieldMs: boundary.scheduler.yieldMs,
+      control: context.getControl('spnFusionOutputItems'),
+    };
   },
 );
 await Promise.resolve();
-assert.throws(
-  () => runtime.applySchedulerDecision(decision({
-    revision: 2,
-    previousScheduler: runtime.schedulerSnapshot().scheduler,
-    effectiveScheduler: {
-      ...runtime.schedulerSnapshot().scheduler,
-      yieldMs: 4,
-    },
-    action: 'increase-yield-budget',
-    target: 'yieldMs',
-  })),
-  /active invocation.*cannot apply/i,
-);
+const revisionOneScheduler = runtime.schedulerSnapshot().scheduler;
+const heldApplication = runtime.applySchedulerDecision(decision({
+  revision: 2,
+  previousScheduler: revisionOneScheduler,
+  effectiveScheduler: {
+    ...revisionOneScheduler,
+    yieldMs: 4,
+  },
+  action: 'increase-yield-budget',
+  target: 'yieldMs',
+}));
+assert.equal(heldApplication.effectiveRevision, 2);
 releaseInvocation();
-assert.equal(await heldInvocation, 4);
+assert.deepEqual(await heldInvocation, { revision: 2, yieldMs: 4, control: 4 });
 
 let releaseQueuedJob;
 let signalQueuedJobStarted;
@@ -399,21 +569,21 @@ const queuedB = adaptiveQueue.enqueue({
   },
 });
 await queuedJobStarted;
-const revisionOneScheduler = runtime.schedulerSnapshot().scheduler;
+const revisionTwoScheduler = runtime.schedulerSnapshot().scheduler;
 const queuedDecision = adaptiveQueue.scheduleSchedulerDecision(decision({
-  revision: 2,
-  previousScheduler: revisionOneScheduler,
+  revision: 3,
+  previousScheduler: revisionTwoScheduler,
   effectiveScheduler: {
-    ...revisionOneScheduler,
-    yieldMs: 4,
+    ...revisionTwoScheduler,
+    yieldMs: 6,
   },
   action: 'increase-yield-budget',
   target: 'yieldMs',
 }));
 releaseQueuedJob();
-assert.deepEqual((await queuedA.completion).output, { revision: 1, yieldMs: 2 });
-assert.equal((await queuedDecision).application.effectiveRevision, 2);
-assert.deepEqual((await queuedB.completion).output, { revision: 2, yieldMs: 4 });
+assert.deepEqual((await queuedA.completion).output, { revision: 2, yieldMs: 4 });
+assert.equal((await queuedDecision).application.effectiveRevision, 3);
+assert.deepEqual((await queuedB.completion).output, { revision: 3, yieldMs: 6 });
 assert.equal((await adaptiveQueue.drain()).status, 'idle');
 
 console.log('scheduler application contracts passed');

@@ -48,6 +48,14 @@ function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
+function stableSerialize(value) {
+  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
+  if (value != null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function deepFreeze(value) {
   if (value == null || typeof value !== 'object' || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
@@ -304,6 +312,17 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
     throw new Error('queue.submit must be available for tensor readback');
   }
 
+  const preparedCommandDuty = runtime.prepareCommandDuty({
+    ...(options.commandDuty || {}),
+    phase: options.commandDuty?.phase || `${tensor.name || 'tensor'}.readback`,
+    kind: 'copy',
+    metadata: {
+      ...(options.commandDuty?.metadata || {}),
+      operation: 'tensor-readback-copy',
+      tensorName: tensor.name || null,
+    },
+  }, options.schedulerInvocation || null);
+
   const staging = runtime.createBuffer({
     label: options.stagingLabel || `${tensor.name || 'tensor'}.readback`,
     size: alignedSize,
@@ -327,16 +346,7 @@ async function readBufferViaStaging(runtime, tensor, options = {}) {
   await runOptionalHostPhase(
     runtime,
     WEBGPU_HOST_PHASE.queueSubmission,
-    () => runOptionalCommandDuty(runtime, {
-      ...(options.commandDuty || {}),
-      phase: options.commandDuty?.phase || `${tensor.name || 'tensor'}.readback`,
-      kind: 'copy',
-      metadata: {
-        ...(options.commandDuty?.metadata || {}),
-        operation: 'tensor-readback-copy',
-        tensorName: tensor.name || null,
-      },
-    }, () => runtime.queue.submit([commandBuffer])),
+    () => runOptionalCommandDuty(runtime, preparedCommandDuty, () => runtime.queue.submit([commandBuffer])),
     { detail: { operation: 'tensor-readback-copy', tensor: tensor.name || null } },
   );
   const mapped = await runOptionalHostPhase(
@@ -483,6 +493,50 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     throw new Error('admissionCoordinator must expose requestAdmission');
   }
   let invocationSequence = 0;
+  let commandDutySequence = 0;
+
+  function prepareCommandDuty(descriptorInput = {}, schedulerInvocation = null) {
+    const descriptor = clone(descriptorInput || {});
+    if (!isNonEmptyString(descriptor.phase)) throw new Error('command duty phase must be a non-empty string');
+    commandDutySequence += 1;
+    const dutyId = descriptor.dutyId
+      || `${commandDuties?.runId || runtime.runtimeLabel}:command-duty:${commandDutySequence}`;
+    descriptor.dutyId = dutyId;
+
+    const control = descriptor.chunkControl;
+    if (control != null && schedulerInvocation?.bounds != null) {
+      const controlId = control.controlId;
+      const declaredBounds = schedulerInvocation.bounds?.phaseChunkSize?.[controlId];
+      if (!declaredBounds) throw new Error(`undeclared scheduler control ${controlId || '<missing>'}`);
+      if (stableSerialize(control.bounds) !== stableSerialize(declaredBounds)) {
+        throw new Error(`command duty bounds mismatch for scheduler control ${controlId}`);
+      }
+    }
+
+    let schedulerBoundary = null;
+    if (schedulerInvocation?.refreshAtBoundary) {
+      schedulerBoundary = schedulerInvocation.refreshAtBoundary({
+        boundaryId: `${schedulerInvocation.invocationId}:scheduler-boundary:${commandDutySequence}`,
+        dutyId,
+        phase: descriptor.phase,
+        position: 'before-encode',
+        metadata: {
+          kind: descriptor.kind || null,
+          runtimeLabel: runtime.runtimeLabel,
+        },
+      });
+    }
+
+    if (control != null && schedulerInvocation?.bounds != null) {
+      const controlId = control.controlId;
+      descriptor.chunkControl.current = schedulerInvocation.getControl(controlId);
+    }
+    descriptor.metadata = {
+      ...(descriptor.metadata || {}),
+      ...(schedulerBoundary ? { schedulerBoundary: clone(schedulerBoundary) } : {}),
+    };
+    return descriptor;
+  }
 
   function fallbackInvocation(invocationId) {
     if (!isNonEmptyString(invocationId)) {
@@ -550,6 +604,7 @@ export async function createWebGpuInferenceRuntime(input = {}) {
     commandDuties,
     schedulerApplication,
     admissionCoordinator,
+    prepareCommandDuty,
 
     getShaderModule(label, code, descriptor) {
       return resourceCaches.getShaderModule(label, code, descriptor);
@@ -641,7 +696,19 @@ export async function createWebGpuInferenceRuntime(input = {}) {
         ? schedulerApplication.beginInvocation(invocationInput)
         : fallbackInvocation(invocationInput.invocationId);
       const context = Object.freeze({
-        ...invocation,
+        schema: invocation.schema,
+        routeId: invocation.routeId,
+        invocationId: invocation.invocationId,
+        get schedulerRevision() { return invocation.schedulerRevision; },
+        get scheduler() { return invocation.scheduler; },
+        bounds: invocation.bounds,
+        applicationAuthority: invocation.applicationAuthority,
+        getControl(controlId) { return invocation.getControl(controlId); },
+        ...(invocation.refreshAtBoundary ? {
+          refreshAtBoundary(boundaryInput = {}) {
+            return invocation.refreshAtBoundary(boundaryInput);
+          },
+        } : {}),
         async yieldToBrowser(metadata = {}) {
           return performYield(metadata, invocation);
         },
@@ -699,13 +766,31 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       if (!kernelDefinition || typeof kernelDefinition !== 'object') {
         throw new Error('kernelDefinition must be an object');
       }
-      if (!Array.isArray(options.dispatch) || options.dispatch.length < 1 || options.dispatch.length > 3) {
+      const preparedCommandDuty = options.submit === false
+        ? null
+        : runtime.prepareCommandDuty({
+            ...(options.commandDuty || {}),
+            phase: options.commandDuty?.phase || options.stage || kernelDefinition.name,
+            kind: 'compute',
+            metadata: {
+              ...(options.commandDuty?.metadata || {}),
+              kernelName: kernelDefinition.name,
+              operation: 'kernel-dispatch',
+            },
+          }, options.schedulerInvocation || null);
+      const dispatchInput = typeof options.dispatch === 'function'
+        ? options.dispatch({
+            schedulerInvocation: options.schedulerInvocation || null,
+            commandDuty: clone(preparedCommandDuty),
+          })
+        : options.dispatch;
+      if (!Array.isArray(dispatchInput) || dispatchInput.length < 1 || dispatchInput.length > 3) {
         throw new Error('dispatch must be an array with 1 to 3 dimensions');
       }
       const dispatch = [
-        options.dispatch[0],
-        options.dispatch[1] ?? 1,
-        options.dispatch[2] ?? 1,
+        dispatchInput[0],
+        dispatchInput[1] ?? 1,
+        dispatchInput[2] ?? 1,
       ];
       for (const dim of dispatch) {
         if (!Number.isInteger(dim) || dim < 1) throw new Error('dispatch dimensions must be positive integers');
@@ -747,19 +832,14 @@ export async function createWebGpuInferenceRuntime(input = {}) {
           { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name, dispatch } },
         );
         if (options.submit !== false) {
+          preparedCommandDuty.metadata = {
+            ...preparedCommandDuty.metadata,
+            ...metadata,
+          };
           await runOptionalHostPhase(
             runtime,
             WEBGPU_HOST_PHASE.queueSubmission,
-            () => runOptionalCommandDuty(runtime, {
-              ...(options.commandDuty || {}),
-              phase: options.commandDuty?.phase || stageName,
-              kind: 'compute',
-              metadata: {
-                ...(options.commandDuty?.metadata || {}),
-                ...metadata,
-                operation: 'kernel-dispatch',
-              },
-            }, () => queue.submit([commandBuffer])),
+            () => runOptionalCommandDuty(runtime, preparedCommandDuty, () => queue.submit([commandBuffer])),
             { detail: { operation: 'kernel-dispatch', kernelName: kernelDefinition.name } },
           );
         }
