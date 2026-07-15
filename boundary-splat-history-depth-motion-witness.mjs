@@ -257,7 +257,7 @@ async function captureHistoryDepth(requestedDepth, expectedSubstrate, preactivat
 
   failurePhase = `${label}:history-prime`;
   const historyPrime = await evaluate(`window.__kaminosVolumePrototype.primeBoundarySplatLiveHistory(${JSON.stringify({
-    minimumHistoryFrames: Number(initialState.boundarySplatEffectiveHistoryWindowFrames) + 1,
+    minimumHistoryFrames: (requestedDepth - 1) * Number(initialState.boundarySplatHistoryFrameStride) + 1,
   })})`, true);
   validateHistoryPrime(historyPrime, requestedDepth);
   const slotMetadata = await evaluate('window.__kaminosVolumePrototype.sampleBoundarySplatHistorySlotMetadata()', true);

@@ -24,6 +24,7 @@ assert.match(witness, /matchedSubstrateIdentity/, 'rows must prove matched basin
 assert.match(witness, /boundarySplatHistoryAllocatedSlots/, 'rows must preserve physical allocation depth');
 assert.match(witness, /boundarySplatBufferIntegrity/, 'rows must preserve physical history memory authority');
 assert.match(witness, /primeBoundarySplatLiveHistory/, 'every depth must be fully primed before capture');
+assert.match(witness, /minimumHistoryFrames:\s*\(requestedDepth\s*-\s*1\)\s*\*\s*Number\(initialState\.boundarySplatHistoryFrameStride\)\s*\+\s*1/, 'in-place transition priming must derive span from requested depth rather than stale effective-window telemetry');
 assert.match(witness, /sampleBoundarySplatPbrCostLadder/, 'every depth must record measured raster work');
 assert.match(witness, /perSourceReuse/, 'rows must report selected history-slot reuse');
 assert.match(witness, /Page\.captureScreenshot/, 'motion frames must come from the effective browser canvas');
