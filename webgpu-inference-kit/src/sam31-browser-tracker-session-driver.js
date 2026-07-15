@@ -9,7 +9,7 @@ import { createSam31TemporalMemoryBankPhaseProgramRouteDefinition, runSam31Tempo
 import { validateSam31BrowserTrackerGeometry } from './sam31-browser-tracker-package.js';
 import { runSam31TwoImageBackbone } from './sam31-two-image-backbone.js';
 import { summarizeSam3TensorParityCheckpoint } from './sam-image-vit-block-stack-phase-program.js';
-import { evaluateSam31TrackerDownstreamParity } from './sam31-tracker-parity.js';
+import { createSam31NumericalVerificationEvidence, evaluateSam31TrackerDownstreamParity } from './sam31-tracker-parity.js';
 
 const TRACKER_PACKET_NAMES = Object.freeze(['ingress', 'decoder', 'memory', 'temporal', 'episode', 'pointer']);
 
@@ -525,7 +525,8 @@ export async function runSam31BrowserTrackerPackageInvocation({
   const frame0ProducerParityPassed = !verificationAttached
     || (maximums.frame0MaskConditioning <= frame0Tolerance && pointerParityPassed);
   const imageBackboneCompoundParity = verificationAttached ? imageBackbone?.compoundParity ?? null : null;
-  const parityPassed = !verificationAttached || ((imageBackbone?.parityPassed ?? true) && imageBackboneCompoundParity?.passed === true && suppressionParity <= frame0Tolerance && frame0ProducerParityPassed && downstreamCompoundParity.passed);
+  const verifiedParityPassed = verificationAttached && imageBackbone?.parityPassed === true && imageBackboneCompoundParity?.passed === true && suppressionParity <= frame0Tolerance && frame0ProducerParityPassed && downstreamCompoundParity.passed;
+  const numericalVerification = createSam31NumericalVerificationEvidence({ verificationAttached, parityPassed: verifiedParityPassed });
   const ingressBindingsPassed = !verificationAttached || packetAuthority.packets.episode?.ingressBindingsPassed === true;
   const evidence = {
     packageExecutionAuthorityPassed: packetAuthority.packageExecutionAuthorityPassed,
@@ -538,11 +539,13 @@ export async function runSam31BrowserTrackerPackageInvocation({
     routeChainPassed,
     persistentStatePassed,
     stateTransitionPassed,
-    parityPassed,
-    verificationContractPassed: verificationAttached ? parityPassed : packageRuntime.packageResolution?.verification?.attached === false,
+    parityPassed: numericalVerification.passed,
+    parityState: numericalVerification.state,
+    parityGatePassed: numericalVerification.gatePassed,
+    verificationContractPassed: verificationAttached ? numericalVerification.passed === true : packageRuntime.packageResolution?.verification?.attached === false,
     errorsPassed: errors.length === 0,
   };
-  evidence.passed = Object.values(evidence).every(Boolean);
+  evidence.passed = Object.entries(evidence).every(([name, value]) => name === 'parityPassed' || name === 'parityState' || value === true);
   const referenceStateTransition = episode.stateTransition;
   const effectiveStateTransition = {
     ...referenceStateTransition,
@@ -553,6 +556,11 @@ export async function runSam31BrowserTrackerPackageInvocation({
     bridgeDebt: trackerStateSnapshot.bridgeDebt,
   };
   const final = { invocationIndex, episodeMode: 'two-image', verificationAttached, deviceLoss: null, packageRuntime: { rootUrl: packageRuntime.rootUrl, packageId: packageRuntime.packageId, invocationId: packageRuntime.invocationId, verificationId: packageRuntime.verificationId, sourceImageSha256: packageRuntime.sourceImageSha256, encodedSourceImageSha256: packageRuntime.encodedSourceImageSha256, rgbaSourceImageSha256: packageRuntime.rgbaSourceImageSha256, initialMaskSha256: packageRuntime.initialMaskSha256, session: packageRuntime.session, packageResolution: packageRuntime.packageResolution, inputEvidence: packageRuntime.inputEvidence || null, cacheEvidence: packageRuntime.cacheEvidence() }, packetAuthority, trackerState: trackerStateSnapshot, adapterInfo, requestIds, requestedRouteIds, effectiveRouteIds, receipts, parity: verificationAttached ? { imageBackbone: imageBackbone?.parity ?? null, imageBackboneDiagnostics: imageBackbone?.parityDiagnostics ?? null, imageBackboneCompoundParity, maximums, downstreamParityDiagnostics, downstreamCompoundParity, frame0Decoder: null, frame0MaskConditioning: frame0MaskConditioning?.parity ?? null, frame0InteractivePointer: frame0InteractivePointer?.parity ?? null, frame0MaskSuppression: { maxAbsDiff: suppressionParity, suppressedAbsentMaskCount: suppression.suppressedAbsentMaskCount, semanticsPassed: suppression.semanticsPassed, memoryInputMaskSha256: memoryInputMaskHash }, frame0Memory: memoryParity, temporalBank: bankParity, frame1Attention: conditionedParity, frame1Decoder: frame1Decoder.parity } : null, imageBackbone: imageBackbone ? { routeChainPassed: imageBackbone.routeChainPassed, parityPassed: imageBackbone.parityPassed, parityMaximum: imageBackbone.parityMaximum, parityDiagnostics: imageBackbone.parityDiagnostics, compoundParity: imageBackboneCompoundParity, sourceImageSha256: imageBackbone.sourceImageSha256 } : null, stateTransition: effectiveStateTransition, referenceStateTransition, effectiveStateTransition, pointerDigestPassed, pointerPacketInputDigestPassed, pointerPacketOutputDigestPassed, evidence, uncapturedErrors: errors, manifest: { reference: episode.reference, shape: episode.shape, executionGeometry, plan: episode.plan } };
+  final.numericalVerification = numericalVerification;
+  if (final.imageBackbone) {
+    final.imageBackbone.parityState = imageBackbone.parityState;
+    final.imageBackbone.parityGatePassed = imageBackbone.parityGatePassed;
+  }
   if (!evidence.passed) throw Object.assign(new Error(`two-frame tracker evidence failed: ${JSON.stringify(evidence)}`), { evidenceState: final });
   return final;
 }

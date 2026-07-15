@@ -266,7 +266,12 @@ function invocationSummary({ invocationId, executionRealmId, verificationAttache
       status: 'real', fallbackReason: null, effectiveRouteId: `route-${index}`,
       outputs: [{ role: index === 18 ? 'sam31-multiplex-selected-masks' : `output-${index}`, artifactId: `${outputPrefix}-${index}`, sha256: index === 18 ? maskOutputSha256 : `${outputPrefix}-sha-${index}` }],
     })),
-    evidence: { routeChainPassed: true },
+    evidence: {
+      routeChainPassed: true,
+      parityPassed: verificationAttached ? true : null,
+      parityState: verificationAttached ? 'verified-passed' : 'not-attached',
+      parityGatePassed: true,
+    },
     trackerState: {
       version: 1,
       conditioningFrameIndices: [0],
@@ -306,6 +311,9 @@ const dualEvidence = trackerPackageRuntime.createSam31BrowserTrackerDualInvocati
 assert.equal(dualEvidence.passed, true);
 assert.equal(dualEvidence.sameModelPackage, true);
 assert.equal(dualEvidence.secondVerificationFree, true);
+assert.equal(secondInvocationSummary.evidence.parityPassed, null, 'the accepted verification-free invocation must not claim numerical passage');
+assert.equal(secondInvocationSummary.evidence.parityState, 'not-attached');
+assert.equal(secondInvocationSummary.evidence.parityGatePassed, true, 'absence of optional verification must not block execution');
 assert.equal(dualEvidence.noSecondStaticOriginNetworkLoads, true);
 assert.equal(dualEvidence.distinctEncodedSourceImages, true);
 assert.equal(dualEvidence.distinctRgbaSourceImages, true);

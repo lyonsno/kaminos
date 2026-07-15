@@ -98,6 +98,8 @@ for (const token of [
   'referenceStateTransition',
   'effectiveStateTransition',
   'parityPassed',
+  'parityState',
+  'parityGatePassed',
   'downstreamCompoundParity',
   'packetAuthorityPassed',
   'verifiedPackets.length === (isTwoImage ? 6 : isMaskConditioned ? 5 : 4)',
@@ -132,6 +134,8 @@ for (const token of [
   'routeChainPassed',
   'stateTransitionPassed',
   'parityPassed',
+  'parityState',
+  'parityGatePassed',
   'pixelCheck',
 ]) {
   assert.match(driver, new RegExp(token), `terminal witness must preserve ${token}`);

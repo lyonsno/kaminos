@@ -47,6 +47,18 @@ function imageBackboneTolerance(tolerances, profile) {
   };
 }
 
+export function createSam31NumericalVerificationEvidence({ verificationAttached, parityPassed } = {}) {
+  const attached = verificationAttached === true;
+  const passed = attached ? parityPassed === true : null;
+  return {
+    schema: 'kaminos.sam31-numerical-verification-evidence.v0',
+    state: attached ? passed ? 'verified-passed' : 'verified-failed' : 'not-attached',
+    attached,
+    passed,
+    gatePassed: !attached || passed,
+  };
+}
+
 export function evaluateSam31ImageBackboneParity({ diagnostics, tolerances } = {}) {
   const checkpoints = IMAGE_BACKBONE_CHECKPOINTS.map(spec => {
     const summary = readPath(diagnostics, spec.summaryPath);

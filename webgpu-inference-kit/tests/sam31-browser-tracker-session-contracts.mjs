@@ -14,8 +14,44 @@ assert.equal(typeof kit.runSam31TwoImageBackbone, 'function', 'the inference kit
 assert.equal(typeof kit.runSam31BrowserTrackerPackageInvocation, 'function', 'the inference kit must export the package-backed invocation driver');
 assert.equal(typeof kit.evaluateSam31TrackerDownstreamParity, 'function', 'the inference kit must export the compound downstream parity evaluator');
 assert.equal(typeof kit.evaluateSam31ImageBackboneParity, 'function', 'the inference kit must export the image-backbone compound parity evaluator');
+assert.equal(typeof kit.createSam31NumericalVerificationEvidence, 'function', 'the inference kit must expose one numerical-verification authority contract');
 assert.equal(kit.createSam31BrowserTrackerSessionForTest, undefined, 'the lifecycle test seam must not be part of the package API');
 assert.equal(kit.createSam31BrowserTrackerPackageAuthority, undefined, 'the raw runtime authority helper must not be part of the package API');
+
+if (typeof kit.createSam31NumericalVerificationEvidence === 'function') {
+  assert.deepEqual(
+    kit.createSam31NumericalVerificationEvidence({ verificationAttached: false }),
+    {
+      schema: 'kaminos.sam31-numerical-verification-evidence.v0',
+      state: 'not-attached',
+      attached: false,
+      passed: null,
+      gatePassed: true,
+    },
+    'verification-free execution must remain admissible without claiming numerical passage',
+  );
+  assert.deepEqual(
+    kit.createSam31NumericalVerificationEvidence({ verificationAttached: true, parityPassed: true }),
+    {
+      schema: 'kaminos.sam31-numerical-verification-evidence.v0',
+      state: 'verified-passed',
+      attached: true,
+      passed: true,
+      gatePassed: true,
+    },
+  );
+  assert.deepEqual(
+    kit.createSam31NumericalVerificationEvidence({ verificationAttached: true, parityPassed: false }),
+    {
+      schema: 'kaminos.sam31-numerical-verification-evidence.v0',
+      state: 'verified-failed',
+      attached: true,
+      passed: false,
+      gatePassed: false,
+    },
+    'an attached failed comparison must still block the numerical gate',
+  );
+}
 
 if (typeof kit.evaluateSam31TrackerDownstreamParity === 'function') {
   const summary = ({ maxAbsDiff, meanAbsDiff, rootMeanSquareDiff, expectedAtMaxAbsDiff }) => ({
@@ -321,7 +357,12 @@ const packageRuntime = {
   verificationAttached: false,
 };
 const completeInvocationResult = () => ({
-  evidence: { passed: true },
+  evidence: {
+    passed: true,
+    parityPassed: null,
+    parityState: 'not-attached',
+    parityGatePassed: true,
+  },
   receipts: Array.from({ length: 19 }, (_, index) => ({ index })),
   requestIds: Array.from({ length: 19 }, (_, index) => `request-${index}`),
   requestedRouteIds: Array.from({ length: 19 }, (_, index) => `route-${index}`),
