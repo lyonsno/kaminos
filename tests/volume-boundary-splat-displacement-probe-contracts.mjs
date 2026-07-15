@@ -192,6 +192,31 @@ assert.equal(report.models.mlpVacancyGated.test.duplicateDestinationCount, 0);
 assert.equal(report.models.mlpVacancyGated.test.uniqueDestinationCount, report.models.mlpVacancyGated.test.rowCount);
 assert.equal(report.models.mlpVacancyGated.calibration.selectedOn, 'validation');
 assert.equal(report.models.mlpVacancyGated.calibration.testDataUsedForSelection, false);
+const thresholdSweep = report.models.mlpVacancyGated.calibration.thresholdSweep;
+assert.equal(thresholdSweep.identity, 'uncapped-validation-vacancy-threshold-sweep-v0');
+assert.equal(thresholdSweep.capped, false);
+assert.equal(thresholdSweep.testDataUsedForSelection, false);
+assert.equal(thresholdSweep.pointCount, thresholdSweep.points.length);
+assert.ok(thresholdSweep.pointCount > 1, 'sweep preserves every validation threshold transition');
+assert.equal(thresholdSweep.points[0].acceptedMoveCount, 0, 'sweep starts from the no-move control');
+for (let index = 1; index < thresholdSweep.points.length; index += 1) {
+  const previous = thresholdSweep.points[index - 1];
+  const point = thresholdSweep.points[index];
+  assert.ok(point.threshold <= previous.threshold, 'sweep thresholds descend monotonically');
+  assert.ok(point.acceptedMoveCount > previous.acceptedMoveCount, 'accepted coverage grows monotonically');
+  assert.equal(
+    point.correctedLowOnlyCount - point.corruptedOverlapCount,
+    point.uniqueOverlapDelta,
+    'validation net correction equals unique-overlap delta under collision-free arbitration',
+  );
+}
+assert.equal(thresholdSweep.paretoPointCount, thresholdSweep.paretoFrontier.length);
+assert.ok(thresholdSweep.paretoPointCount > 0, 'sweep preserves its non-dominated coverage/overlap frontier');
+assert.ok(
+  thresholdSweep.maximumCoveragePositiveNet.acceptedMoveCount
+    >= report.models.mlpVacancyGated.calibration.validationSelectedMoveCount,
+  'coverage-edge candidate is at least as broad as the maximum-overlap selection',
+);
 assert.equal(report.models.mlpVacancyGated.evaluationAuthority, 'global-vacancy-election-then-role-slice-v0');
 assert.equal(report.models.mlpVacancyGated.gateRoles.all.duplicateDestinationCount, 0);
 assert.equal(report.checkpoint.replay.status, 'verified');
@@ -215,6 +240,40 @@ const displacementValues = new Float32Array(
 );
 assert.ok(displacementValues.every(value => Number.isFinite(value) && value >= 0 && value <= 1));
 assert.ok(existsSync(join(outDir, 'displacement-model.npz')), 'probe persists the fitted displacement model');
+
+const coverageOutDir = join(fixtureRoot, 'probe-maximum-coverage-positive-net');
+const coverageRun = spawnSync('python3', [
+  probePath,
+  '--low-manifest', lowManifest,
+  '--high-manifest', highManifest,
+  '--out-dir', coverageOutDir,
+  '--spatial-block-size', '4',
+  '--epochs', '10',
+  '--hidden-width', '16',
+  '--batch-size', '32',
+  '--seed', '9413',
+  '--move-gate-selection', 'maximum-coverage-positive-net',
+], { encoding: 'utf8' });
+assert.equal(coverageRun.status, 0, `coverage-edge fixture probe succeeds: ${coverageRun.stderr}`);
+const coverageReport = JSON.parse(readFileSync(join(coverageOutDir, 'manifest.json'), 'utf8'));
+const coverageCalibration = coverageReport.models.mlpVacancyGated.calibration;
+assert.equal(coverageCalibration.selectionPolicy, 'maximum-coverage-positive-net');
+assert.equal(coverageCalibration.testDataUsedForSelection, false);
+assert.equal(
+  coverageCalibration.validationSelectedMoveCount,
+  coverageCalibration.thresholdSweep.maximumCoveragePositiveNet.acceptedMoveCount,
+);
+assert.equal(
+  coverageCalibration.validationUniqueOverlapDelta,
+  coverageCalibration.thresholdSweep.maximumCoveragePositiveNet.uniqueOverlapDelta,
+);
+assert.ok(
+  coverageReport.denseOutputs.boundarySplatOffsetClass.acceptedMovedCandidateCount
+    >= displacement.acceptedMovedCandidateCount,
+  'coverage-edge policy emits at least as many globally gated moves as maximum-overlap selection',
+);
+assert.equal(coverageReport.checkpoint.replay.status, 'verified');
+assert.equal(coverageReport.checkpoint.replay.classParity, true);
 
 const mismatchedManifest = join(fixtureRoot, 'high-mismatched-source.json');
 const mismatched = JSON.parse(readFileSync(highManifest, 'utf8'));

@@ -29,6 +29,9 @@ GATED_MLP_IDENTITY = "tiny-softmax-mlp-vacancy-gated-offset-v0"
 DISPLACEMENT_GRID_AUTHORITY = "validation-selected-vacancy-gated-offset-class-grid-v0"
 DISPLACEMENT_GRID_CHANNEL = "boundarySplatOffsetClassNormalized"
 GLOBAL_GATE_EVALUATION_AUTHORITY = "global-vacancy-election-then-role-slice-v0"
+THRESHOLD_SWEEP_IDENTITY = "uncapped-validation-vacancy-threshold-sweep-v0"
+MAXIMUM_UNIQUE_OVERLAP_SELECTION = "maximum-unique-overlap"
+MAXIMUM_COVERAGE_POSITIVE_NET_SELECTION = "maximum-coverage-positive-net"
 FEATURE_ORDER = [
     "sidecar.support", "sidecar.coverage", "sidecar.ridge", "sidecar.footprint",
     "material.smokeDensity", "material.heat", "material.fuel", "material.detail",
@@ -471,6 +474,7 @@ def calibrate_vacancy_threshold(
     high_set: set[int],
     grid: int,
     selection_mask: np.ndarray,
+    selection_policy: str,
 ) -> dict[str, Any]:
     winners = vacancy_winners(source_indexes, coords, raw_classes, probabilities, original_occupied, grid)
     selected_winners = [winner for winner in winners if bool(selection_mask[winner[2]])]
@@ -479,30 +483,100 @@ def calibrate_vacancy_threshold(
         grouped.setdefault(winner[0], []).append(winner)
     cumulative_delta = 0
     cumulative_moves = 0
+    cumulative_corrected = 0
+    cumulative_corrupted = 0
+    cumulative_neutral = 0
     best_delta = 0
     best_moves = 0
     best_threshold = 2.0
+    sweep_points: list[dict[str, Any]] = [{
+        "threshold": 2.0,
+        "acceptedMoveCount": 0,
+        "correctedLowOnlyCount": 0,
+        "corruptedOverlapCount": 0,
+        "neutralMoveCount": 0,
+        "uniqueOverlapDelta": 0,
+    }]
     for score in sorted(grouped, reverse=True):
         proposals = grouped[score]
         cumulative_moves += len(proposals)
         for _margin, source, _row, destination in proposals:
-            cumulative_delta += int(destination in high_set) - int(source in high_set)
+            source_matches = source in high_set
+            destination_matches = destination in high_set
+            if not source_matches and destination_matches:
+                cumulative_corrected += 1
+            elif source_matches and not destination_matches:
+                cumulative_corrupted += 1
+            else:
+                cumulative_neutral += 1
+        cumulative_delta = cumulative_corrected - cumulative_corrupted
+        sweep_points.append({
+            "threshold": float(score),
+            "acceptedMoveCount": cumulative_moves,
+            "correctedLowOnlyCount": cumulative_corrected,
+            "corruptedOverlapCount": cumulative_corrupted,
+            "neutralMoveCount": cumulative_neutral,
+            "uniqueOverlapDelta": cumulative_delta,
+        })
         if cumulative_delta > best_delta or (cumulative_delta == best_delta and cumulative_moves < best_moves):
             best_delta = cumulative_delta
             best_moves = cumulative_moves
             best_threshold = float(score)
+
+    pareto_reversed: list[dict[str, Any]] = []
+    best_later_delta = -math.inf
+    for point in reversed(sweep_points):
+        if point["uniqueOverlapDelta"] > best_later_delta:
+            pareto_reversed.append(point)
+            best_later_delta = point["uniqueOverlapDelta"]
+    pareto_frontier = list(reversed(pareto_reversed))
+    positive_net_points = [point for point in sweep_points if point["uniqueOverlapDelta"] > 0]
+    maximum_coverage_positive_net = positive_net_points[-1] if positive_net_points else sweep_points[0]
+    maximum_unique_overlap = next(
+        point for point in sweep_points
+        if point["threshold"] == best_threshold
+        and point["acceptedMoveCount"] == best_moves
+        and point["uniqueOverlapDelta"] == best_delta
+    )
+    threshold_sweep = {
+        "identity": THRESHOLD_SWEEP_IDENTITY,
+        "selectedOn": "validation",
+        "testDataUsedForSelection": False,
+        "arbitrationAuthority": GLOBAL_GATE_EVALUATION_AUTHORITY,
+        "capped": False,
+        "pointAuthority": "one point per distinct validation-winner confidence margin plus the no-move control",
+        "pointCount": len(sweep_points),
+        "points": sweep_points,
+        "paretoAxes": ["acceptedMoveCount", "uniqueOverlapDelta"],
+        "paretoPointCount": len(pareto_frontier),
+        "paretoFrontier": pareto_frontier,
+        "maximumUniqueOverlap": maximum_unique_overlap,
+        "maximumCoveragePositiveNet": maximum_coverage_positive_net,
+    }
+    if selection_policy == MAXIMUM_UNIQUE_OVERLAP_SELECTION:
+        selected_point = maximum_unique_overlap
+        selection_metric = "postOffsetUniqueOverlap"
+    elif selection_policy == MAXIMUM_COVERAGE_POSITIVE_NET_SELECTION:
+        selected_point = maximum_coverage_positive_net
+        selection_metric = "acceptedMoveCount subject to positive postOffsetUniqueOverlap delta"
+    else:
+        raise ProbeFailure("calibration", "unsupported move-gate selection policy", {
+            "selectionPolicy": selection_policy,
+        })
     return {
         "identity": MOVE_GATE_IDENTITY,
         "vacancyPolicy": VACANCY_POLICY,
         "selectedOn": "validation",
-        "selectionMetric": "postOffsetUniqueOverlap",
+        "selectionPolicy": selection_policy,
+        "selectionMetric": selection_metric,
         "confidence": "predicted-class probability minus center-class probability",
-        "threshold": best_threshold,
+        "threshold": selected_point["threshold"],
         "arbitrationAuthority": GLOBAL_GATE_EVALUATION_AUTHORITY,
         "globalWinnerCount": len(winners),
         "validationWinnerCount": len(selected_winners),
-        "validationSelectedMoveCount": best_moves,
-        "validationUniqueOverlapDelta": best_delta,
+        "validationSelectedMoveCount": selected_point["acceptedMoveCount"],
+        "validationUniqueOverlapDelta": selected_point["uniqueOverlapDelta"],
+        "thresholdSweep": threshold_sweep,
         "noPositiveValidationPolicy": "threshold 2.0 disables all moves",
         "testDataUsedForSelection": False,
         "targetDataUsedForCalibration": True,
@@ -655,6 +729,11 @@ def main() -> int:
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--learning-rate", type=float, default=2.0e-3)
     parser.add_argument("--weight-decay", type=float, default=1.0e-5)
+    parser.add_argument(
+        "--move-gate-selection",
+        choices=[MAXIMUM_UNIQUE_OVERLAP_SELECTION, MAXIMUM_COVERAGE_POSITIVE_NET_SELECTION],
+        default=MAXIMUM_UNIQUE_OVERLAP_SELECTION,
+    )
     args = parser.parse_args()
     out_dir = Path(args.out_dir).resolve()
     manifest_path = out_dir / "manifest.json"
@@ -712,6 +791,7 @@ def main() -> int:
         calibration = calibrate_vacancy_threshold(
             low_indexes, low_coords, mlp_predictions["all"],
             mlp_probability_rows["all"], low_set, high_set, grid, validation_mask,
+            args.move_gate_selection,
         )
         global_gated, global_gate = apply_vacancy_gate(
             low_indexes, low_coords, mlp_predictions["all"], mlp_probability_rows["all"],
@@ -763,6 +843,7 @@ def main() -> int:
             mlpW1=mlp_state["w1"], mlpB1=mlp_state["b1"],
             mlpW2=mlp_state["w2"], mlpB2=mlp_state["b2"],
             moveGateIdentity=np.asarray([MOVE_GATE_IDENTITY]),
+            moveGateSelectionPolicy=np.asarray([args.move_gate_selection]),
             moveGateThreshold=np.asarray([calibration["threshold"]], dtype=np.float32),
         )
         phase = "checkpoint-replay"
