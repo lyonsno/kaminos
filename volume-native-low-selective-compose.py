@@ -20,13 +20,16 @@ INPUT_AUTHORITY = "native-low-simulator-state-no-synthetic-downsample-v0"
 COMPOSITION_AUTHORITY = "frozen-exact-basin-heads-applied-to-native-low-state-v0"
 CROSS_GRID_COMPOSITION_AUTHORITY = "frozen-trained-grid-heads-applied-to-explicit-cross-grid-native-state-v0"
 SAMPLING_IDENTITY = "normalized-nearest-cell-low-to-output-grid-v0"
-MODEL_IDENTITY = "exact-basin-selective-carrier-heads-160-to-128-v0"
 FLUID_CHANNELS = [
     "velocityX", "velocityY", "velocityZ", "densityCarrier",
     "smokeDensity", "heat", "fuel", "detail",
     "flame", "ember", "visibleFireCarrier", "combustionFront",
     "microdetail", "interfaceShred", "fireLick", "emberFleck",
 ]
+
+
+def model_identity(high_grid: int, low_grid: int) -> str:
+    return f"exact-basin-selective-carrier-heads-{high_grid}-to-{low_grid}-v0"
 
 
 class ApplicationFailure(RuntimeError):
@@ -169,10 +172,11 @@ def main() -> int:
         low_grid = int(native.get("grid") or 0)
         trained_low_grid = int(model.get("source", {}).get("lowGrid") or 0)
         high_grid = int(model.get("source", {}).get("highGrid") or 0)
-        if trained_low_grid != 128 or high_grid != 160:
+        if trained_low_grid < 2 or high_grid <= trained_low_grid:
             raise ApplicationFailure(phase, "native/model grid relationship mismatch", {
                 "nativeGrid": low_grid, "modelLowGrid": trained_low_grid, "modelHighGrid": high_grid,
             })
+        expected_model_identity = model_identity(high_grid, trained_low_grid)
         if low_grid < 2 or low_grid > high_grid:
             raise ApplicationFailure(phase, "native grid is outside the normalized sampling domain", {
                 "nativeGrid": low_grid, "outputGrid": high_grid,
@@ -201,8 +205,15 @@ def main() -> int:
             sidecars.get("front") or {}, native_path, "native front",
             [low_grid, low_grid, low_grid, 1], ["frontTopology"],
         )
-        if model.get("identity") != MODEL_IDENTITY or model.get("status") != "captured" or model.get("failurePhase") is not None:
-            raise ApplicationFailure("model-validation", "frozen model identity/status mismatch")
+        if (
+            model.get("identity") != expected_model_identity
+            or model.get("status") != "captured"
+            or model.get("failurePhase") is not None
+        ):
+            raise ApplicationFailure("model-validation", "frozen model identity/status mismatch", {
+                "expectedIdentity": expected_model_identity,
+                "actualIdentity": model.get("identity"),
+            })
         packed_descriptor = model.get("packed") or {}
         packed_path = resolve_artifact_path(str(packed_descriptor.get("path") or ""), model_manifest_path)
         if packed_path.stat().st_size != int(packed_descriptor.get("byteLength") or -1):
@@ -299,11 +310,14 @@ def main() -> int:
                 "front": {**sidecars["front"], "path": str(low_front_path)},
             },
             "model": {
-                "identity": MODEL_IDENTITY,
+                "identity": expected_model_identity,
                 "modelSha256": model_sha256,
                 "manifestPath": str(model_manifest_path),
                 "manifestSha256": evidence["modelManifestSha256"],
                 "trainingPairAuthority": model.get("source", {}).get("pairAuthority"),
+                "trainingInputAuthority": model.get("source", {}).get("trainingInputAuthority"),
+                "trainingInputSyntheticDownsample": model.get("source", {}).get("trainingInputSyntheticDownsample"),
+                "nativeDeploymentInputSeenDuringTraining": model.get("source", {}).get("nativeDeploymentInputSeenDuringTraining"),
                 "trainedLowGrid": trained_low_grid,
                 "trainedHighGrid": high_grid,
                 "features": model.get("features"),
@@ -320,6 +334,8 @@ def main() -> int:
                 "samplingIdentity": SAMPLING_IDENTITY,
                 "applicationInput": "native low simulator field only",
                 "syntheticDownsampleApplied": False,
+                "trainingInputSyntheticDownsample": model.get("source", {}).get("trainingInputSyntheticDownsample"),
+                "nativeDeploymentInputSeenDuringTraining": model.get("source", {}).get("nativeDeploymentInputSeenDuringTraining"),
                 "highTruthUse": "unavailable; not loaded and not used for application or metrics",
             },
             "support": {
@@ -357,12 +373,12 @@ def main() -> int:
                 "receiverAdvance": "held render only; simulation advance is forbidden for this assay",
             },
             "limitations": [
-                "Frozen heads were trained on one synthetic phase-aligned 160-to-128 basin.",
+                f"Frozen heads were trained on one synthetic phase-aligned {high_grid}-to-{trained_low_grid} basin.",
                 (
                     f"This is an explicit cross-grid zero-shot application from native {low_grid} to output {high_grid}; "
                     f"the model training low grid remains {trained_low_grid}."
                     if cross_grid_application
-                    else "This is a zero-shot application to a genuinely native 128-grid simulator state."
+                    else f"This is a zero-shot application to a genuinely native {low_grid}-grid simulator state."
                 ),
                 "No high truth exists at the native phase, so visual coherence and persistence are the discriminants.",
             ],

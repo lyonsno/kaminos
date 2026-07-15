@@ -13,7 +13,8 @@ import numpy as np
 
 
 SCHEMA = "kaminos.volume.selective-head-live-model.v0"
-IDENTITY = "exact-basin-selective-carrier-heads-160-to-128-v0"
+PAIR_AUTHORITY = "downsampled-same-high-history-input-to-exact-high-target"
+TRAINING_INPUT_AUTHORITY = "phase-aligned-high-filtered-to-low-grid-v0"
 CHANNELS = ["supportProbability", "fuel", "fireLick", "visibleFireCarrier", "frontTopology"]
 HEAD_KEYS = {
     "supportProbability": "",
@@ -37,6 +38,10 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def model_identity(high_grid: int, low_grid: int) -> str:
+    return f"exact-basin-selective-carrier-heads-{high_grid}-to-{low_grid}-v0"
+
+
 def model_arrays(archive: Any, prefix: str) -> list[np.ndarray]:
     arrays = [
         np.asarray(archive[f"{prefix}w1"], dtype="<f4"),
@@ -56,6 +61,8 @@ def main() -> int:
     parser.add_argument("--probe-manifest", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--support-threshold", type=float, default=0.98)
+    parser.add_argument("--expected-low-grid", type=int)
+    parser.add_argument("--expected-high-grid", type=int)
     args = parser.parse_args()
     probe_path = Path(args.probe_manifest).expanduser().resolve()
     out_dir = Path(args.out_dir).expanduser().resolve()
@@ -64,7 +71,18 @@ def main() -> int:
     require(probe.get("schema") == "kaminos.volume.exact-basin-support-probe.v0", "probe schema mismatch")
     require(probe.get("status") == "captured" and probe.get("failurePhase") is None, "probe is not captured")
     require(probe.get("features", {}).get("featureCount") == 185, "probe feature count mismatch")
-    require(probe.get("inputs", {}).get("lowGrid") == 128 and probe.get("inputs", {}).get("highGrid") == 160, "probe grid pair mismatch")
+    inputs = probe.get("inputs", {})
+    low_grid = int(inputs.get("lowGrid") or 0)
+    high_grid = int(inputs.get("highGrid") or 0)
+    require(low_grid >= 2 and high_grid > low_grid, "probe grid pair mismatch")
+    if args.expected_low_grid is not None:
+        require(low_grid == args.expected_low_grid, "probe low grid differs from caller expectation")
+    if args.expected_high_grid is not None:
+        require(high_grid == args.expected_high_grid, "probe high grid differs from caller expectation")
+    require(inputs.get("pairAuthority") == PAIR_AUTHORITY, "probe pair authority mismatch")
+    require(inputs.get("trainingInputAuthority") == TRAINING_INPUT_AUTHORITY, "probe training input authority mismatch")
+    require(inputs.get("trainingInputSyntheticDownsample") is True, "probe must record synthetic training downsample")
+    require(inputs.get("nativeDeploymentInputSeenDuringTraining") is False, "probe must deny native deployment training input")
     classifier_path = Path(probe["classifier"]["artifact"]["path"]).resolve()
     heads_path = Path(probe["channelHeadArtifact"]["path"]).resolve()
     require(sha256(classifier_path) == probe["classifier"]["artifact"]["sha256"], "classifier checksum mismatch")
@@ -104,7 +122,7 @@ def main() -> int:
     values.tofile(data_path)
     model = {
         "schema": SCHEMA,
-        "identity": IDENTITY,
+        "identity": model_identity(high_grid, low_grid),
         "status": "captured",
         "failurePhase": None,
         "source": {
@@ -112,9 +130,12 @@ def main() -> int:
             "probeManifestSha256": sha256(probe_path),
             "classifierSha256": sha256(classifier_path),
             "channelHeadsSha256": sha256(heads_path),
-            "lowGrid": 128,
-            "highGrid": 160,
-            "pairAuthority": "downsampled-same-high-history-input-to-exact-high-target",
+            "lowGrid": low_grid,
+            "highGrid": high_grid,
+            "pairAuthority": inputs["pairAuthority"],
+            "trainingInputAuthority": inputs["trainingInputAuthority"],
+            "trainingInputSyntheticDownsample": inputs["trainingInputSyntheticDownsample"],
+            "nativeDeploymentInputSeenDuringTraining": inputs["nativeDeploymentInputSeenDuringTraining"],
         },
         "features": {
             "identity": "full-low-field-plus-spatial-rbf-features-v0",
