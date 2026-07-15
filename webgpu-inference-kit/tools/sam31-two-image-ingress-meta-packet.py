@@ -44,7 +44,25 @@ def parse_args():
     parser.add_argument("--frame-0", default=str(DEFAULT_SOURCE_ROOT / "assets/videos/0001/0.jpg"))
     parser.add_argument("--frame-1", default=str(DEFAULT_SOURCE_ROOT / "assets/videos/0001/1.jpg"))
     parser.add_argument("--resolution", type=int, default=28)
+    parser.add_argument("--diagnostic-vit-layers", default="")
     return parser.parse_args()
+
+
+def parse_diagnostic_vit_layers(value: str) -> list[int]:
+    if not value.strip():
+        return []
+    layers = []
+    for token in value.split(","):
+        token = token.strip()
+        if not token:
+            raise ValueError("diagnostic ViT layer list contains an empty entry")
+        layer_index = int(token)
+        if layer_index < 0 or layer_index >= 32:
+            raise ValueError(f"diagnostic ViT layer {layer_index} is outside the executed range 0..31")
+        if layer_index in layers:
+            raise ValueError(f"diagnostic ViT layer {layer_index} is duplicated")
+        layers.append(layer_index)
+    return layers
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -274,6 +292,7 @@ def write_failure_receipt(args, error: Exception):
             "sourceRoot": str(Path(args.source_root).resolve()),
             "frames": [str(Path(args.frame_0).resolve()), str(Path(args.frame_1).resolve())],
             "resolution": args.resolution,
+            "diagnosticVitLayers": args.diagnostic_vit_layers,
         },
         "expected": {"modelRevision": HF_REVISION, "checkpointSha256": CHECKPOINT_SHA256, "sourceCommit": SOURCE_COMMIT},
         "primaryOutputWritten": False,
@@ -289,6 +308,7 @@ def main():
     checkpoint = Path(args.checkpoint).resolve()
     source_root = Path(args.source_root).resolve()
     frame_paths = [Path(args.frame_0).resolve(), Path(args.frame_1).resolve()]
+    diagnostic_vit_layers = parse_diagnostic_vit_layers(args.diagnostic_vit_layers)
     out_dir.mkdir(parents=True, exist_ok=True)
     invalidate_primary_outputs(out_dir)
 
@@ -347,11 +367,16 @@ def main():
         raise RuntimeError("two-image fixture collapsed to identical source content")
 
     captures = {}
+    def capture_vit_layer(layer_index):
+        return lambda _module, _inputs, output: captures.__setitem__(f"vit-layer-{layer_index}", output.detach().clone())
+
     hooks = [
         trunk.patch_embed.register_forward_hook(lambda _module, _inputs, output: captures.__setitem__("patch", output.detach().clone())),
         trunk.ln_pre.register_forward_hook(lambda _module, _inputs, output: captures.__setitem__("prefix", output.detach().clone())),
         trunk.register_forward_hook(lambda _module, _inputs, output: captures.__setitem__("backbone", output[-1].detach().clone())),
     ]
+    for layer_index in diagnostic_vit_layers:
+        hooks.append(trunk.blocks[layer_index].register_forward_hook(capture_vit_layer(layer_index)))
     outputs = []
     FAILURE_PHASE = "official-two-image-execution"
     torch.set_num_threads(min(8, max(1, torch.get_num_threads())))
@@ -369,6 +394,7 @@ def main():
                 "patch": captures["patch"],
                 "prefix": captures["prefix"],
                 "backbone": captures["backbone"],
+                "diagnostic_layers": {layer_index: captures[f"vit-layer-{layer_index}"] for layer_index in diagnostic_vit_layers},
                 "interactive": [item.tensors for item in interactive],
                 "interactive_pos": interactive_pos,
                 "propagation": [item.tensors for item in propagation],
@@ -390,6 +416,8 @@ def main():
         add_tensor(tensors, out_dir, f"frame-{frame_index}-patch-embeddings", output["patch"].reshape(1, -1, 1024), "B,N,C")
         add_tensor(tensors, out_dir, f"frame-{frame_index}-vit-prefix-hidden-states", output["prefix"], "B,H,W,C")
         add_tensor(tensors, out_dir, f"frame-{frame_index}-vit-backbone-hidden-states", output["backbone"].permute(0, 2, 3, 1), "B,H,W,C")
+        for layer_index in diagnostic_vit_layers:
+            add_tensor(tensors, out_dir, f"frame-{frame_index}-vit-layer-{layer_index}-hidden-states", output["diagnostic_layers"][layer_index], "B,H,W,C")
         if frame_index == 0:
             for level, value in enumerate(output["interactive"]):
                 add_tensor(tensors, out_dir, f"frame-0-interactive-feature-{level}", value.permute(0, 2, 3, 1), "B,H,W,C")
@@ -455,6 +483,7 @@ def main():
             "checkpoint": {"file": checkpoint.name, "path": str(checkpoint), "sha256": checkpoint_sha},
         },
         "sourceImages": source_images,
+        "diagnosticVitLayers": diagnostic_vit_layers,
         "shape": shape,
         "routeIds": ROUTE_IDS,
         "execution": {
@@ -509,6 +538,7 @@ def main():
         "shape": shape,
         "routeIds": ROUTE_IDS,
         "checkpointAudit": checkpoint_audit,
+        "diagnosticVitLayers": diagnostic_vit_layers,
         "primaryOutputWritten": True,
         "outputs": {
             "tensorManifest": str(manifest_path),

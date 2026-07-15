@@ -177,6 +177,7 @@ export {
   createSam3ImageVitBlockStackPhaseProgramRouteDefinition,
   createSam3ImageVitBlockStackPhaseProgramRouteReceipt,
   runSam3ImageVitBlockStackPhaseProgramRoute,
+  normalizeSam3ExpectedLayerCheckpoints,
   summarizeSam3FinitePhaseOutputs,
   summarizeSam3FiniteValues,
   summarizeSam3LayerParityCheckpoint,

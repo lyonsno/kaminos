@@ -311,6 +311,25 @@ export async function verifySam31TwoImageIngressPacketAuthority({ manifestText, 
   assertNamedEqual('ingress', manifest.sourceImages[1]?.frameIndex, 1, 'manifest.sourceImages[1].frameIndex');
   if (manifest.sourceImages[0]?.rgbaSha256 === manifest.sourceImages[1]?.rgbaSha256) throw new Error('ingress packet authority rejected identical source image tensors');
   if (manifest.sourceImages[0]?.originalSha256 === manifest.sourceImages[1]?.originalSha256) throw new Error('ingress packet authority rejected identical encoded source images');
+  const diagnosticVitLayers = manifest.diagnosticVitLayers ?? [];
+  if (!Array.isArray(diagnosticVitLayers)
+      || new Set(diagnosticVitLayers).size !== diagnosticVitLayers.length
+      || diagnosticVitLayers.some(layerIndex => !Number.isInteger(layerIndex) || layerIndex < 0 || layerIndex >= 32)) {
+    throw new Error('ingress packet authority rejected invalid diagnosticVitLayers');
+  }
+  const tensorRoles = new Set((manifest.tensors || []).map(entry => entry.role));
+  for (const frameIndex of [0, 1]) {
+    for (const layerIndex of diagnosticVitLayers) {
+      const role = `frame-${frameIndex}-vit-layer-${layerIndex}-hidden-states`;
+      if (!tensorRoles.has(role)) throw new Error(`ingress diagnostic checkpoint tensor missing: ${role}`);
+    }
+  }
+  for (const role of tensorRoles) {
+    const match = /^frame-[01]-vit-layer-(\d+)-hidden-states$/.exec(role);
+    if (match && !diagnosticVitLayers.includes(Number(match[1]))) {
+      throw new Error(`ingress diagnostic checkpoint tensor is undeclared: ${role}`);
+    }
+  }
   return {
     passed: true,
     name: 'ingress',
@@ -324,6 +343,7 @@ export async function verifySam31TwoImageIngressPacketAuthority({ manifestText, 
     modelRevision: manifest.reference.model.revision,
     checkpointSha256: manifest.reference.checkpoint.sha256,
     sourceCommit: manifest.reference.source.commit,
+    diagnosticVitLayers,
     sourceImages: manifest.sourceImages.map(image => ({ frameIndex: image.frameIndex, originalSha256: image.originalSha256, rgbaSha256: image.rgbaSha256 })),
   };
 }

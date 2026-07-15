@@ -996,6 +996,26 @@ export function summarizeSam3FinitePhaseOutputs(outputs) {
   }));
 }
 
+export function normalizeSam3ExpectedLayerCheckpoints(checkpoints, executedLayerIndexes) {
+  if (!Array.isArray(checkpoints) || checkpoints.length === 0) {
+    throw new Error('expectedLayerCheckpoints must be a non-empty array');
+  }
+  if (!Array.isArray(executedLayerIndexes) || executedLayerIndexes.length === 0) {
+    throw new Error('executedLayerIndexes must be a non-empty array');
+  }
+  const executed = new Set(executedLayerIndexes);
+  const normalized = new Map();
+  for (const checkpoint of checkpoints) {
+    const layerIndex = checkpoint?.layerIndex;
+    if (!Number.isInteger(layerIndex) || layerIndex < 0) throw new Error('expected checkpoint layerIndex must be a non-negative integer');
+    if (!executed.has(layerIndex)) throw new Error(`expected checkpoint layer ${layerIndex} was not executed`);
+    if (normalized.has(layerIndex)) throw new Error(`duplicate expected checkpoint for layer ${layerIndex}`);
+    if (!(checkpoint.hiddenStates instanceof Float32Array)) throw new TypeError(`expected checkpoint layer ${layerIndex} hiddenStates must be a Float32Array`);
+    normalized.set(layerIndex, checkpoint.hiddenStates);
+  }
+  return normalized;
+}
+
 export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
   if (!input.request || typeof input.request !== 'object') throw new Error('request is required');
   const route = input.route || createSam3ImageVitBlockStackPhaseProgramRouteDefinition({ kernel: input.kernel });
@@ -1005,10 +1025,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
   const { shape, hiddenStates, weights } = validateImageVitBlockStackInputs(input.tensors || {});
   const expectedLayerCheckpoints = input.expectedLayerCheckpoints == null
     ? null
-    : new Map(input.expectedLayerCheckpoints.map(checkpoint => [checkpoint.layerIndex, checkpoint.hiddenStates]));
-  if (expectedLayerCheckpoints && expectedLayerCheckpoints.size !== weights.layers.length) {
-    throw new Error(`expectedLayerCheckpoints must cover all ${weights.layers.length} executed ViT layers`);
-  }
+    : normalizeSam3ExpectedLayerCheckpoints(input.expectedLayerCheckpoints, weights.layers.map(layer => layer.layerIndex));
 
   const runtime = await createWebGpuInferenceRuntime({
     routeId: SAM3_IMAGE_VIT_BLOCK_STACK_PHASE_PROGRAM_ROUTE_ID,
@@ -1250,7 +1267,7 @@ export async function runSam3ImageVitBlockStackPhaseProgramRoute(input = {}) {
         layerIndex: layer.layerIndex,
         isGlobal: layerShape.isGlobal,
         ...summarizeSam3FiniteValues(checkpointValues),
-        ...(expectedLayerCheckpoints ? summarizeSam3LayerParityCheckpoint(
+        ...(expectedLayerCheckpoints?.has(layer.layerIndex) ? summarizeSam3LayerParityCheckpoint(
           layer.layerIndex,
           layerShape.isGlobal,
           expectedLayerCheckpoints.get(layer.layerIndex),

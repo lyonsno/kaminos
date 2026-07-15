@@ -83,9 +83,24 @@ const {
   summarizeSam3FiniteValues,
   summarizeSam3FinitePhaseOutputs,
   summarizeSam3LayerParityCheckpoint,
+  normalizeSam3ExpectedLayerCheckpoints,
   stableSam3Gelu,
   validateRouteDefinition,
 } = await import('../src/index.js');
+
+const partialLayerCheckpoints = normalizeSam3ExpectedLayerCheckpoints([
+  { layerIndex: 0, hiddenStates: new Float32Array([1, 2]) },
+  { layerIndex: 7, hiddenStates: new Float32Array([3, 4]) },
+], [0, 1, 2, 3, 4, 5, 6, 7]);
+assert.deepEqual([...partialLayerCheckpoints.keys()], [0, 7], 'selected diagnostic checkpoints must remain a lawful subset of executed layers');
+assert.throws(
+  () => normalizeSam3ExpectedLayerCheckpoints([{ layerIndex: 7, hiddenStates: new Float32Array(1) }, { layerIndex: 7, hiddenStates: new Float32Array(1) }], [0, 7]),
+  /duplicate.*layer 7/,
+);
+assert.throws(
+  () => normalizeSam3ExpectedLayerCheckpoints([{ layerIndex: 8, hiddenStates: new Float32Array(1) }], [0, 7]),
+  /layer 8.*not executed/,
+);
 
 const dispatchShape = {
   batch: 1,

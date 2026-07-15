@@ -9,12 +9,19 @@ const packageJson = JSON.parse(readFileSync(new URL('package.json', root), 'utf8
 const backboneSource = readFileSync(new URL('smokes/sam31-two-image-backbone.js', root), 'utf8');
 const trackerDriverSource = readFileSync(new URL('tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', root), 'utf8');
 const trackerSmokeSource = readFileSync(new URL('smokes/sam31-two-frame-tracker-parity.js', root), 'utf8');
+const ingressExporterSource = readFileSync(new URL('tools/sam31-two-image-ingress-meta-packet.py', root), 'utf8');
 
 assert.doesNotMatch(backboneSource, /JSON\.stringify\(maximums\)\.match/, 'two-image parity aggregation must inspect numeric values rather than digits embedded in field names');
 assert.match(trackerDriverSource, /kaminos\.sam31-two-image-tracker\.browser-parity-smoke\.v0/, 'two-image browser evidence must emit a schema that names the raw-image tracker boundary');
 assert.equal(maximumSam31ParityValue({ frame0: { feature2: 0.25 }, frame1: { feature0: -0.5 } }), 0.5, 'two-image parity aggregation must ignore digits in diagnostic field names');
 assert.equal(maximumSam31ParityValue({ frame0: Number.NaN }), Number.POSITIVE_INFINITY, 'non-finite parity must fail loud through aggregate evidence');
 assert.match(trackerSmokeSource, /parityMaximum:\s*imageBackbone\.parityMaximum/, 'the tracker summary must preserve the aggregate raw-image backbone parity maximum');
+assert.match(ingressExporterSource, /--diagnostic-vit-layers/, 'pinned ingress export must accept caller-selected ViT layer checkpoints');
+assert.match(ingressExporterSource, /trunk\.blocks\[layer_index\]\.register_forward_hook/, 'diagnostic checkpoints must come from official Meta ViT block execution');
+assert.match(ingressExporterSource, /frame-\{frame_index\}-vit-layer-\{layer_index\}-hidden-states/, 'diagnostic checkpoint roles must preserve frame and layer identity');
+assert.match(ingressExporterSource, /"diagnosticVitLayers": diagnostic_vit_layers/, 'the authenticated manifest must declare the effective selected layer list');
+assert.match(backboneSource, /expectedLayerCheckpoints:\s*expectedLayerCheckpoints/, 'browser backbone must bind selected source checkpoints into the WebGPU block stack');
+assert.match(backboneSource, /parity\.vitLayers = Object\.fromEntries/, 'browser evidence must preserve per-layer numeric parity without diagnostic metadata contamination');
 
 const spatialPositions = resolveSam31SpatialPositionEmbeddings({
   values: new Float32Array([100, 101, 1, 2, 3, 4, 5, 6, 7, 8]),

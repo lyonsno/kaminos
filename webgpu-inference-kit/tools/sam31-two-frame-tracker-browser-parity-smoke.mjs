@@ -31,6 +31,14 @@ if (!['memory', 'opfs'].includes(staticBacking)) throw new Error(`unsupported --
 const reusePacket = args.get('--reuse-packet') === '1';
 const verifyOnly = args.get('--verify-only') === '1';
 const requestedCommit = args.get('--commit') || null;
+const diagnosticVitLayers = args.get('--diagnostic-vit-layers') || null;
+const requestedDiagnosticVitLayers = diagnosticVitLayers == null
+  ? []
+  : diagnosticVitLayers.split(',').map(value => Number(value.trim()));
+if (requestedDiagnosticVitLayers.some(layerIndex => !Number.isInteger(layerIndex) || layerIndex < 0 || layerIndex >= 32)
+    || new Set(requestedDiagnosticVitLayers).size !== requestedDiagnosticVitLayers.length) {
+  throw new Error('--diagnostic-vit-layers must be a unique comma-separated subset of 0..31');
+}
 const episodeMode = packageMode ? 'two-image' : args.get('--episode-mode') || 'propagation-decoder';
 if (!['propagation-decoder', 'mask-conditioning', 'two-image'].includes(episodeMode)) throw new Error(`unsupported --episode-mode ${episodeMode}`);
 const isTwoImage = episodeMode === 'two-image';
@@ -177,6 +185,9 @@ function loadCallerInput(index) {
 const callerInputEntries = callerInputs ? packageDirs.map((_, index) => loadCallerInput(index)) : [];
 
 function writeReport(extra = {}) {
+  const effectiveDiagnosticVitLayers = packetAuthority?.packets?.ingress?.diagnosticVitLayers
+    ?? lastState?.manifest?.diagnosticVitLayers
+    ?? null;
   const value = {
     schema: REPORT_SCHEMA,
     ok: false,
@@ -192,6 +203,12 @@ function writeReport(extra = {}) {
     episodeMode,
     packetTools,
     packetAuthority,
+    diagnosticVitLayers: {
+      requested: requestedDiagnosticVitLayers,
+      effective: effectiveDiagnosticVitLayers,
+      passed: effectiveDiagnosticVitLayers != null
+        && JSON.stringify(requestedDiagnosticVitLayers) === JSON.stringify(effectiveDiagnosticVitLayers),
+    },
     packageAuthority,
     metaPreprocessEvidence: callerInputEntries.map(entry => entry.metaPreprocessEvidence),
     callerRequestEvidence,
@@ -341,6 +358,7 @@ function generatePackets() {
       toolArgs.push('--frame-0', args.get('--frame-0') || join(sourceRoot, 'assets', 'videos', '0001', '0.jpg'));
       toolArgs.push('--frame-1', args.get('--frame-1') || join(sourceRoot, 'assets', 'videos', '0001', '1.jpg'));
       toolArgs.push('--resolution', args.get('--resolution') || '28');
+      if (diagnosticVitLayers) toolArgs.push('--diagnostic-vit-layers', diagnosticVitLayers);
     }
     if (name === 'episode') {
       toolArgs.push('--frame0-mode', isTwoImage ? 'mask-conditioning' : episodeMode);
@@ -448,6 +466,10 @@ async function main() {
       phase = 'verify_packet_authority';
       try {
         packetAuthority = await verifyPacketAuthority();
+        if (isTwoImage && diagnosticVitLayers
+            && JSON.stringify(packetAuthority.packets.ingress.diagnosticVitLayers) !== JSON.stringify(requestedDiagnosticVitLayers)) {
+          throw new Error(`requested diagnostic ViT layers do not match effective ingress packet: ${JSON.stringify(requestedDiagnosticVitLayers)} != ${JSON.stringify(packetAuthority.packets.ingress.diagnosticVitLayers)}`);
+        }
       } catch (error) {
         packetAuthority = { passed: false, error: String(error?.message || error) };
         throw error;
