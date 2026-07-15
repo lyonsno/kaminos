@@ -1,12 +1,12 @@
 export const LIQUID_FIRE_CONTACT_CONSUMER_SCHEMA = 'kaminos.pyro-liquid-contact-consumer.v0';
 export const LIQUID_FIRE_CONTACT_SOURCE_SCHEMA = 'kaminos.liquid-fire-contact-descriptor.v1';
 export const LIQUID_FIRE_CONTACT_SOURCE_PACKING = 'gpu-sparse-liquid-fire-contact-source-vec4x8-v1';
-export const LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID = 'affine-liquid-world-to-pyro-near-domain-v0';
+export const LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID = 'shared-world-unit-cube-to-pyro-near-domain-v0';
 export const LIQUID_FIRE_CONTACT_ACCUMULATION_LAYOUT = 'atomic-u32-wetness-heat-flame-vapor-per-near-cell-v0';
 export const LIQUID_FIRE_CONTACT_MAGIC = 0x4b4c4643;
 export const LIQUID_FIRE_CONTACT_VERSION = 1;
 export const LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE = 65536;
-export const LIQUID_FIRE_CONTACT_STATS_WORDS = 12;
+export const LIQUID_FIRE_CONTACT_STATS_WORDS = 15;
 
 function nonnegativeInteger(value, label) {
   const integer = Number(value);
@@ -50,6 +50,23 @@ function clamp(value, minimum, maximum) {
 
 function stableFloat(value) {
   return Number(value.toFixed(8));
+}
+
+function smoothstep(minimum, maximum, value) {
+  const t = clamp((value - minimum) / Math.max(1e-6, maximum - minimum), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+export function advanceLiquidFireQuenchReference(state = {}, contact = {}) {
+  const retained = Math.max(0, clamp(state.quench, 0, 1) * 0.996 - 0.0003);
+  const deposited = clamp(retained + clamp(contact.wetness, 0, 2) * 0.45, 0, 1);
+  const suppression = smoothstep(0.08, 0.55, deposited);
+  return {
+    quench: stableFloat(deposited),
+    heat: stableFloat(clamp(state.heat, 0, 4) * (1 - suppression * 0.995)),
+    fuel: stableFloat(clamp(state.fuel, 0, 4) * (1 - suppression * 0.995)),
+    flame: stableFloat(clamp(state.flame, 0, 4) * (1 - suppression)),
+  };
 }
 
 export function applyLiquidFireContactCellReference(cell, contact) {
@@ -183,6 +200,9 @@ struct ConsumerStats {
   sourceGeneration: atomic<u32>,
   sourceEpoch: atomic<u32>,
   sourceFrameHash: atomic<u32>,
+  quenchDeposited: atomic<u32>,
+  quenchedCells: atomic<u32>,
+  sourceQuench: atomic<u32>,
 };
 
 struct ConsumerParams {
@@ -190,6 +210,7 @@ struct ConsumerParams {
   receiverScale: vec4<f32>,
   receiverOffset: vec4<f32>,
   transfer: vec4<f32>,
+  sourceQuench: vec4<f32>,
 };
 
 @group(0) @binding(0) var<storage, read_write> sourceHeader: LiquidFireContactHeader;
@@ -198,6 +219,7 @@ struct ConsumerParams {
 @group(0) @binding(3) var<storage, read_write> consumerStats: ConsumerStats;
 @group(0) @binding(4) var<uniform> consumerParams: ConsumerParams;
 @group(0) @binding(5) var<storage, read_write> nearFluid: array<vec4<f32>>;
+@group(0) @binding(6) var<storage, read_write> quenchField: array<atomic<u32>>;
 
 fn fixedPoint(value: f32) -> u32 {
   return u32(clamp(value, 0.0, 65535.0) * FIXED_POINT_SCALE + 0.5);
@@ -234,6 +256,9 @@ fn clear_liquid_fire_contact_consumer_stats(@builtin(global_invocation_id) gid: 
   atomicStore(&consumerStats.sourceGeneration, 0u);
   atomicStore(&consumerStats.sourceEpoch, 0u);
   atomicStore(&consumerStats.sourceFrameHash, 0u);
+  atomicStore(&consumerStats.quenchDeposited, 0u);
+  atomicStore(&consumerStats.quenchedCells, 0u);
+  atomicStore(&consumerStats.sourceQuench, 0u);
 }
 
 @compute @workgroup_size(64)
@@ -286,8 +311,8 @@ fn apply_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec3<u
   if (cellIndex >= GRID_CELL_COUNT) { return; }
   if (atomicLoad(&consumerStats.status) != 4u) { return; }
   let wetness = min(0.24, floatPoint(atomicExchange(&accumulation[cellIndex].wetness, 0u)));
-  let requestedHeatRemoval = min(0.010, floatPoint(atomicExchange(&accumulation[cellIndex].heatRemoval, 0u)));
-  let requestedFlameRemoval = min(0.012, floatPoint(atomicExchange(&accumulation[cellIndex].flameRemoval, 0u)));
+  var requestedHeatRemoval = min(0.010, floatPoint(atomicExchange(&accumulation[cellIndex].heatRemoval, 0u)));
+  var requestedFlameRemoval = min(0.012, floatPoint(atomicExchange(&accumulation[cellIndex].flameRemoval, 0u)));
   let addedVapor = min(0.020, floatPoint(atomicExchange(&accumulation[cellIndex].vapor, 0u)));
   if (wetness <= 0.0 && addedVapor <= 0.0) {
     return;
@@ -297,8 +322,20 @@ fn apply_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec3<u
   var cell1 = nearFluid[base + 1u];
   var cell2 = nearFluid[base + 2u];
   var cell3 = nearFluid[base + 3u];
+  let priorQuench = clamp(floatPoint(atomicLoad(&quenchField[cellIndex])), 0.0, 1.0);
+  let depositedQuench = min(1.0, priorQuench + wetness * 0.45);
+  atomicStore(&quenchField[cellIndex], fixedPoint(depositedQuench));
+  let quenchStrength = smoothstep(0.08, 0.55, depositedQuench);
+  let receiverCell = vec3<u32>(cellIndex % GRID, (cellIndex / GRID) % GRID, cellIndex / (GRID * GRID));
+  let receiverUnit = (vec3<f32>(receiverCell) + vec3<f32>(0.5)) / f32(GRID);
+  let sourceContactDistance = distance(receiverUnit, consumerParams.sourceQuench.xyz);
+  if (sourceContactDistance <= consumerParams.sourceQuench.w) {
+    atomicMax(&quenchField[GRID_CELL_COUNT], fixedPoint(min(1.0, wetness * 4.5)));
+  }
+  requestedHeatRemoval = max(requestedHeatRemoval, quenchStrength * 4.0);
+  requestedFlameRemoval = max(requestedFlameRemoval, quenchStrength * 8.0);
   let removedHeat = min(cell1.y, requestedHeatRemoval);
-  let removedFuel = min(cell1.z, wetness * consumerParams.transfer.y);
+  let removedFuel = min(cell1.z, max(wetness * consumerParams.transfer.y, quenchStrength * 4.0));
   let removedFlame = min(cell2.x, requestedFlameRemoval);
   let remainingFlameRemoval = max(0.0, requestedFlameRemoval - removedFlame);
   let removedFlameDetail = min(cell2.z, remainingFlameRemoval);
@@ -324,6 +361,10 @@ fn apply_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec3<u
   atomicAdd(&consumerStats.removedFuel, fixedPoint(removedFuel));
   atomicAdd(&consumerStats.removedFlame, fixedPoint(removedVisibleFire));
   atomicAdd(&consumerStats.addedVapor, fixedPoint(addedVapor));
+  atomicAdd(&consumerStats.quenchDeposited, fixedPoint(depositedQuench - priorQuench));
+  if (quenchStrength >= 0.5) {
+    atomicAdd(&consumerStats.quenchedCells, 1u);
+  }
 }
 
 @compute @workgroup_size(1)
@@ -333,6 +374,7 @@ fn finalize_liquid_fire_contact_transfer(@builtin(global_invocation_id) gid: vec
   atomicStore(&consumerStats.sourceGeneration, atomicLoad(&sourceHeader.allocationGeneration));
   atomicStore(&consumerStats.sourceEpoch, atomicLoad(&sourceHeader.epoch));
   atomicStore(&consumerStats.sourceFrameHash, atomicLoad(&sourceHeader.sourceFrameHash));
+  atomicStore(&consumerStats.sourceQuench, atomicLoad(&quenchField[GRID_CELL_COUNT]));
   let acceptedContacts = atomicLoad(&consumerStats.acceptedContacts);
   if (acceptedContacts > 0u) {
     atomicStore(&consumerStats.status, 1u);
@@ -347,14 +389,16 @@ export function liquidFireContactConsumerParams({
   allocationGeneration,
   epoch,
   sourceFrameHash,
-  receiverScale = [1 / 24, 1 / 7, 1 / 24],
-  receiverOffset = [0.66, 0.34, 0.5],
+  receiverScale = [0.5, 0.5, 0.5],
+  receiverOffset = [0.5, 0.5, 0.5],
+  sourceQuenchCenter = [0.5, 0.13, 0.5],
+  sourceQuenchRadius = 0.42,
   heatRemoval = 0.6,
   fuelRemoval = 0.3,
   flameRemoval = 0.75,
   vaporYield = 1,
 } = {}) {
-  const buffer = new ArrayBuffer(64);
+  const buffer = new ArrayBuffer(80);
   const words = new Uint32Array(buffer);
   const floats = new Float32Array(buffer);
   words.set([
@@ -366,5 +410,6 @@ export function liquidFireContactConsumerParams({
   floats.set([...receiverScale, 0], 4);
   floats.set([...receiverOffset, 0], 8);
   floats.set([heatRemoval, fuelRemoval, flameRemoval, vaporYield], 12);
+  floats.set([...sourceQuenchCenter, sourceQuenchRadius], 16);
   return buffer;
 }

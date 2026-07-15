@@ -37,6 +37,7 @@ let cameraWitness = null;
 let preContactWitness = null;
 let preContactVolumeSample = null;
 let preContactComposedSample = null;
+let postContactComposedSample = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -71,6 +72,7 @@ function writeReport(report = {}) {
     preContactWitness,
     preContactVolumeSample,
     preContactComposedSample,
+    postContactComposedSample,
     canvasOut,
     preContactOut,
     output: primaryOutputWritten ? out : null,
@@ -305,7 +307,7 @@ async function main() {
           majorantReadback: sample.majorantReadback,
         };
       })()`);
-      preContactComposedSample = await evaluate(ws, `(async () => {
+      preContactComposedSample = await evaluate(ws, `(window.__kaminosCaptureComposedFireSample = async () => {
         const prototype = window.__kaminosVolumePrototype;
         if (typeof prototype?.captureSelectiveHeadLiveFrame !== 'function') {
           throw new Error('missing composed-frame Pyro witness hook');
@@ -407,16 +409,19 @@ async function main() {
         const rect = surface.getBoundingClientRect();
         const start = { x: rect.left + rect.width * 0.45, y: rect.top + rect.height * 0.35 };
         const hitTarget = document.elementFromPoint(start.x, start.y);
-        const eventCapture = { pointerDowns: [], dragMoves: [], wheelEvents: [] };
+        const eventCapture = { recording: true, pointerDowns: [], dragMoves: [], wheelEvents: [] };
         window.__kaminosCompositionCameraInputWitnessEvents = eventCapture;
         const panel = document.getElementById('finger-fluid-bench-operator-panel');
         panel.addEventListener('pointerdown', event => {
+          if (!eventCapture.recording) return;
           eventCapture.pointerDowns.push({ clientX: event.clientX, clientY: event.clientY, buttons: event.buttons });
         }, { capture: true });
         panel.addEventListener('pointermove', event => {
+          if (!eventCapture.recording) return;
           if (event.buttons === 1) eventCapture.dragMoves.push({ clientX: event.clientX, clientY: event.clientY, buttons: event.buttons });
         }, { capture: true });
         panel.addEventListener('wheel', event => {
+          if (!eventCapture.recording) return;
           eventCapture.wheelEvents.push({ deltaX: event.deltaX, deltaY: event.deltaY, deltaMode: event.deltaMode });
         }, { capture: true });
         return {
@@ -473,6 +478,22 @@ async function main() {
       if (cameraWitness.distanceDeltaError > CAMERA_DELTA_EPSILON) {
         throw new Error(`composition camera zoom input was applied more or less than once: ${JSON.stringify(cameraWitness)}`);
       }
+      await evaluate(ws, `window.__kaminosCompositionCameraInputWitnessEvents.recording = false`);
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: cameraInputRoute.end.x, y: cameraInputRoute.end.y });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: cameraInputRoute.end.x, y: cameraInputRoute.end.y, button: 'left', buttons: 1, clickCount: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: cameraInputRoute.start.x, y: cameraInputRoute.start.y, button: 'left', buttons: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: cameraInputRoute.start.x, y: cameraInputRoute.start.y, button: 'left', buttons: 0, clickCount: 1 });
+      await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseWheel', x: cameraInputRoute.start.x, y: cameraInputRoute.start.y, deltaX: 0, deltaY: -90 });
+      cameraWitness.restored = await evaluate(ws, `window.kaminosFingerFluidCompositionCameraState()`);
+      cameraWitness.restoredError = Math.max(
+        Math.abs(cameraWitness.restored.yaw - cameraInputRoute.before.yaw),
+        Math.abs(cameraWitness.restored.pitch - cameraInputRoute.before.pitch),
+        Math.abs(cameraWitness.restored.distance - cameraInputRoute.before.distance),
+      );
+      cameraWitness.restoredTargetUnchanged = JSON.stringify(cameraWitness.restored.target) === JSON.stringify(cameraInputRoute.before.target);
+      if (cameraWitness.restoredError > CAMERA_DELTA_EPSILON || cameraWitness.restoredTargetUnchanged !== true) {
+        throw new Error(`composition camera was not restored before fixed-view comparison: ${JSON.stringify(cameraWitness)}`);
+      }
       const compositionDeadline = Date.now() + 5000;
       while (Date.now() < compositionDeadline) {
         compositionWitness = await evaluate(ws, `(async () => {
@@ -486,8 +507,9 @@ async function main() {
           compositionWitness?.consumerWitness?.ok === true &&
           compositionWitness.consumerWitness.acceptedContacts > 0 &&
           compositionWitness.consumerWitness.touchedCells > 0 &&
-          compositionWitness.consumerWitness.removedHeat > 0 &&
-          compositionWitness.consumerWitness.removedFlame > 0 &&
+          compositionWitness.consumerWitness.quenchDeposited > 0 &&
+          compositionWitness.consumerWitness.quenchedCells > 0 &&
+          compositionWitness.consumerWitness.sourceQuench >= 0.8 &&
           compositionWitness.consumerWitness.addedVapor > 0
         ) break;
         await delay(100);
@@ -504,15 +526,25 @@ async function main() {
       if (compositionWitness?.sameDevice !== true) throw new Error('liquid/fire composition did not preserve the same GPUDevice');
       if (compositionWitness?.source !== 'kaminos.liquid-fire-contact-descriptor.v1') throw new Error(`liquid/fire composition source schema mismatch: ${compositionWitness?.source}`);
       if (compositionWitness?.sourceFrameId !== 'kaminos/finger-fluid-bench:gpu-simulation-frame') throw new Error(`liquid/fire composition source frame mismatch: ${compositionWitness?.sourceFrameId}`);
-      if (compositionWitness?.receiverTransformId !== 'affine-liquid-world-to-pyro-near-domain-v0') throw new Error(`liquid/fire composition receiver transform mismatch: ${compositionWitness?.receiverTransformId}`);
+      if (compositionWitness?.receiverTransformId !== 'shared-world-unit-cube-to-pyro-near-domain-v0') throw new Error(`liquid/fire composition receiver transform mismatch: ${compositionWitness?.receiverTransformId}`);
       if (compositionWitness?.consumerWitness?.ok !== true) {
         throw new Error(`liquid/fire GPU consumer rejected source: ${compositionWitness?.consumerWitness?.status}`);
       }
       if (!(compositionWitness.consumerWitness.acceptedContacts > 0)) throw new Error('liquid/fire composition accepted no sparse contacts');
       if (!(compositionWitness.consumerWitness.touchedCells > 0)) throw new Error('liquid/fire composition touched no Pyro cells');
-      if (!(compositionWitness.consumerWitness.removedHeat > 0)) throw new Error('liquid/fire composition removed no local heat');
-      if (!(compositionWitness.consumerWitness.removedFlame > 0)) throw new Error('liquid/fire composition removed no local flame');
+      if (!(compositionWitness.consumerWitness.quenchDeposited > 0)) throw new Error('liquid/fire composition deposited no persistent quench state');
+      if (!(compositionWitness.consumerWitness.quenchedCells > 0)) throw new Error('liquid/fire composition suppressed no Pyro cells');
+      if (!(compositionWitness.consumerWitness.sourceQuench >= 0.8)) throw new Error('liquid/fire composition did not quench the persistent burner source');
       if (!(compositionWitness.consumerWitness.addedVapor > 0)) throw new Error('liquid/fire composition added no local vapor');
+      postContactComposedSample = await evaluate(ws, `window.__kaminosCaptureComposedFireSample()`);
+      const preContactFirePixels = preContactComposedSample?.composedFireBounds?.pixelCount || 0;
+      const postContactFirePixels = postContactComposedSample?.composedFireBounds?.pixelCount || 0;
+      const postFireRatio = postContactFirePixels / Math.max(1, preContactFirePixels);
+      postContactComposedSample.postFireRatio = postFireRatio;
+      postContactComposedSample.preContactFirePixels = preContactFirePixels;
+      if (!(postFireRatio <= 0.15)) {
+        throw new Error(`sustained liquid contact did not quench the fixed-view luminous flame: ${JSON.stringify({ postFireRatio, preContactFirePixels, postContactFirePixels, pre: preContactComposedSample?.composedFireBounds, post: postContactComposedSample?.composedFireBounds })}`);
+      }
     }
 
     phase = 'read_debug_state';

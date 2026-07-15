@@ -573,6 +573,10 @@ function frontFieldBufferBytes(gridSize) {
   return gridCellCount(gridSize) * Float32Array.BYTES_PER_ELEMENT;
 }
 
+function quenchFieldBufferBytes(gridSize) {
+  return (gridCellCount(gridSize) + 1) * Uint32Array.BYTES_PER_ELEMENT;
+}
+
 function pressureBufferBytes(gridSize) {
   return gridCellCount(gridSize) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
@@ -1115,6 +1119,8 @@ struct ExternalEmitterInfluence {
 @group(0) @binding(8) var<storage, read_write> frontDst: array<f32>;
 @group(0) @binding(9) var<storage, read> oracleActivityCue: array<f32>;
 @group(0) @binding(10) var<storage, read> boundarySidecar: array<vec4<f32>>;
+@group(0) @binding(11) var<storage, read> quenchSrc: array<u32>;
+@group(0) @binding(12) var<storage, read_write> quenchDst: array<u32>;
 @group(1) @binding(0) var<storage, read_write> majorantDst: array<vec4<f32>>;
 @group(2) @binding(0) var<storage, read> pressureSrc: array<vec4<f32>>;
 @group(2) @binding(1) var<storage, read_write> pressureDst: array<vec4<f32>>;
@@ -1336,6 +1342,10 @@ fn readSlot(c: vec3<i32>, slot: u32) -> vec4<f32> {
 
 fn readFrontField(c: vec3<i32>) -> f32 {
   return frontSrc[index3(clampCell(c))];
+}
+
+fn readQuenchField(c: vec3<i32>) -> f32 {
+  return f32(quenchSrc[index3(clampCell(c))]) / 65536.0;
 }
 
 fn sampleFrontField(cellCenter: vec3<f32>) -> f32 {
@@ -2570,6 +2580,7 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
     return;
   }
   let idx = index3(gid);
+  let sourceQuenchIndex = GRID * GRID * GRID;
   let base = idx * SLOTS_PER_CELL;
   let cell = vec3<f32>(gid) + vec3<f32>(0.5);
   let cellI = vec3<i32>(gid);
@@ -3764,6 +3775,31 @@ fn cs(@builtin(global_invocation_id) gid: vec3<u32>) {
   interfaceShred = interfaceShred * canonicalProofCarrierMask;
   fireLick = fireLick * canonicalProofCarrierMask;
   emberFleck = emberFleck * canonicalProofCarrierMask;
+  let quenchNeighborMax = max(
+    max(readQuenchField(cellI + vec3<i32>(-1, 0, 0)), readQuenchField(cellI + vec3<i32>(1, 0, 0))),
+    max(
+      max(readQuenchField(cellI + vec3<i32>(0, -1, 0)), readQuenchField(cellI + vec3<i32>(0, 1, 0))),
+      max(readQuenchField(cellI + vec3<i32>(0, 0, -1)), readQuenchField(cellI + vec3<i32>(0, 0, 1)))
+    )
+  );
+  let transportedQuench = max(clamp(f32(quenchSrc[idx]) / 65536.0, 0.0, 1.0) * 0.996, quenchNeighborMax * 0.92);
+  let persistentQuench = max(0.0, transportedQuench - 0.0003);
+  quenchDst[idx] = u32(clamp(persistentQuench, 0.0, 1.0) * 65536.0 + 0.5);
+  if (idx == 0u) {
+    quenchDst[sourceQuenchIndex] = quenchSrc[sourceQuenchIndex];
+  }
+  let localQuenchSuppression = smoothstep(0.08, 0.55, persistentQuench);
+  let sourceQuenchSuppression = smoothstep(0.08, 0.80, f32(quenchSrc[sourceQuenchIndex]) / 65536.0);
+  let quenchSuppression = max(localQuenchSuppression, sourceQuenchSuppression);
+  heat = heat * (1.0 - quenchSuppression * 0.995);
+  fuel = fuel * (1.0 - quenchSuppression * 0.995);
+  flame = flame * (1.0 - quenchSuppression);
+  ember = ember * (1.0 - quenchSuppression);
+  flameDetail = flameDetail * (1.0 - quenchSuppression);
+  combustionFront = combustionFront * (1.0 - quenchSuppression);
+  combustionFrontTopology = combustionFrontTopology * (1.0 - quenchSuppression);
+  fireLick = fireLick * (1.0 - quenchSuppression);
+  emberFleck = emberFleck * (1.0 - quenchSuppression);
   let density = clamp(max(smoke * 1.08 + microSmoke * 0.08, heat * 0.42 + materialDetail * 0.18 + interfaceShred * 0.20 + fireLick * 0.05 + fuel * 0.10), 0.0, 2.2);
   vel = vel * mix(0.55, 1.0, wallFade);
   vel.y = mix(max(vel.y, -0.015), vel.y, bonfireScene);
@@ -5806,6 +5842,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let boundarySplatTelemetryMapPending = false;
   let fluidBuffers = [];
   let frontBuffers = [];
+  let quenchBuffers = [];
   let pressureBuffers = [];
   let currentFluid = 0;
   let currentFront = 0;
@@ -6267,6 +6304,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     selectiveHeadLiveBindGroups = null;
     for (const buffer of fluidBuffers) buffer.destroy();
     for (const buffer of frontBuffers) buffer.destroy();
+    for (const buffer of quenchBuffers) buffer.destroy();
     for (const buffer of pressureBuffers) buffer.destroy();
     boundarySidecarBuffer?.destroy();
     boundarySplatBuffer?.destroy();
@@ -6286,6 +6324,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     oracleActivityCueBuffer = null;
     fluidBuffers = [];
     frontBuffers = [];
+    quenchBuffers = [];
     pressureBuffers = [];
     bindGroups = [];
     majorantFrontBindGroups = [];
@@ -6447,7 +6486,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function rebuildFluidBindGroups() {
-    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
+    if (!device || !bindGroupLayout || !uniformBuffer || !externalEmitterBuffer || !oracleActivityCueBuffer || fluidBuffers.length !== 2 || frontBuffers.length !== 2 || quenchBuffers.length !== 2 || !majorantBuffer || !boundarySidecarBuffer || !historyTexture || !historySampler) return;
     bindGroups = [
       device.createBindGroup({
         label: `kaminos fluid bind group ${gridSize}^3 A to B`,
@@ -6464,6 +6503,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[1] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: quenchBuffers[0] } },
+          { binding: 12, resource: { buffer: quenchBuffers[1] } },
         ],
       }),
       device.createBindGroup({
@@ -6481,6 +6522,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[0] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: quenchBuffers[1] } },
+          { binding: 12, resource: { buffer: quenchBuffers[0] } },
         ],
       }),
     ];
@@ -6504,6 +6547,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatDrawBuffer
       || !boundarySplatCameraBuffer
       || !boundarySplatFeatureBuffer
+      || quenchBuffers.length !== 2
     ) {
       selectiveHeadLiveBindGroups = null;
       return;
@@ -6524,6 +6568,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           { binding: 8, resource: { buffer: frontBuffers[0] } },
           { binding: 9, resource: { buffer: oracleActivityCueBuffer } },
           { binding: 10, resource: { buffer: boundarySidecarBuffer } },
+          { binding: 11, resource: { buffer: quenchBuffers[0] } },
+          { binding: 12, resource: { buffer: quenchBuffers[1] } },
         ],
       }),
       majorant: device.createBindGroup({
@@ -6736,7 +6782,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function rebuildLiquidFireContactConsumer() {
     destroyLiquidFireContactConsumer();
-    if (!device || !liquidFireContactDescriptor || fluidBuffers.length !== 2) {
+    if (!device || !liquidFireContactDescriptor || fluidBuffers.length !== 2 || quenchBuffers.length !== 2) {
       state.liquidFireContactStatus = liquidFireContactDescriptor ? 'waiting-for-pyro-state' : 'unbound';
       return;
     }
@@ -6758,15 +6804,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     liquidFireContactParamsBuffer = device.createBuffer({
       label: 'kaminos liquid-fire contact consumer params',
-      size: 64,
+      size: 80,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(liquidFireContactAccumulationBuffer, 0, new Uint32Array(cellCount * 4));
     device.queue.writeBuffer(liquidFireContactStatsBuffer, 0, new Uint32Array(LIQUID_FIRE_CONTACT_STATS_WORDS));
+    const sourcePrimitive = getPrimitiveSource();
     device.queue.writeBuffer(liquidFireContactParamsBuffer, 0, liquidFireContactConsumerParams({
       allocationGeneration: descriptor.allocationGeneration,
       epoch: descriptor.epoch,
       sourceFrameHash: descriptor.sourceFrameHash,
+      sourceQuenchCenter: sourcePrimitive.position.map(value => value * 0.5 + 0.5),
+      sourceQuenchRadius: Math.max(0.42, sourcePrimitive.radius * 1.5),
     }));
     liquidFireContactShader = device.createShaderModule({
       label: `kaminos liquid-fire contact consumer ${gridSize}^3`,
@@ -6781,6 +6830,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
         { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+        { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
       ],
     });
     liquidFireContactPipelineLayout = device.createPipelineLayout({
@@ -6818,6 +6868,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 3, resource: { buffer: liquidFireContactStatsBuffer } },
         { binding: 4, resource: { buffer: liquidFireContactParamsBuffer } },
         { binding: 5, resource: { buffer: fluidBuffer } },
+        { binding: 6, resource: { buffer: quenchBuffers[index] } },
       ],
     }));
     state.liquidFireContactStatus = liquidFireContactTransferEnabled
@@ -6896,10 +6947,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       sourceGeneration: words[9],
       sourceEpoch: words[10],
       sourceFrameHash: words[11],
+      quenchDeposited: words[12] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
+      quenchedCells: words[13],
+      sourceQuench: words[14] / LIQUID_FIRE_CONTACT_FIXED_POINT_SCALE,
       sourceFrameId: liquidFireContactDescriptor?.sourceFrameId || null,
       receiverTransformId: LIQUID_FIRE_CONTACT_RECEIVER_TRANSFORM_ID,
-      receiverScale: [1 / 24, 1 / 7, 1 / 24],
-      receiverOffset: [0.66, 0.34, 0.5],
+      receiverScale: [0.5, 0.5, 0.5],
+      receiverOffset: [0.5, 0.5, 0.5],
       dispatchCount: state.liquidFireContactDispatchCount,
       transferEnabled: liquidFireContactTransferEnabled,
       transferGateReason: state.liquidFireContactTransferGateReason,
@@ -7050,6 +7104,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       });
       device.queue.writeBuffer(buffer, 0, new Float32Array(gridCellCount(gridSize)));
+      return buffer;
+    });
+    quenchBuffers = [0, 1].map(i => {
+      const buffer = device.createBuffer({
+        label: `kaminos persistent liquid quench field ${gridSize}^3 ${i}`,
+        size: quenchFieldBufferBytes(gridSize),
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      });
+      device.queue.writeBuffer(buffer, 0, new Uint32Array(gridCellCount(gridSize) + 1));
       return buffer;
     });
     pressureBuffers = [0, 1].map(i => {
@@ -7454,6 +7517,16 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           binding: 10,
           visibility: GPUShaderStage.FRAGMENT,
           buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 11,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'read-only-storage' },
+        },
+        {
+          binding: 12,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' },
         },
       ],
     });
