@@ -131,6 +131,22 @@ assert.equal(sessionLeaseA.resource, sessionLeaseB.resource);
 sessionLeaseA.release();
 sessionLeaseB.release();
 
+const detachedCreatorGate = deferred();
+const detachedCreatorAbort = new AbortController();
+const detachedCreator = routeB.residency.acquireOrCreate({
+  resourceId: 'detached.creator', declaredBytes: 32, signal: detachedCreatorAbort.signal,
+  async create() { return detachedCreatorGate.promise; }, dispose() {},
+});
+detachedCreatorAbort.abort('route-cancelled');
+await assert.rejects(detachedCreator, /aborted|route-cancelled/i);
+assert.throws(
+  () => session.unregisterRoute(routeB.routeId),
+  /resource creation|active flight|settle/i,
+);
+detachedCreatorGate.reject(new Error('creator settled after abort'));
+await session.resourceFactory.drain();
+assert.equal(session.unregisterRoute(routeB.routeId).status, 'detached');
+
 const lossGate = deferred();
 const lossRequest = routeA.residency.acquireOrCreate({
   resourceId: 'loss.weights', declaredBytes: 64,

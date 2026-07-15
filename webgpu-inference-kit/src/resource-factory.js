@@ -79,6 +79,7 @@ export function createWebGpuResourceFactory(input = {}) {
       waiterCount: flight.waiters.size,
       requestedWaiterCount: flight.requestedWaiterCount,
       cancelledWaiterCount: flight.cancelledWaiterCount,
+      routeIds: [...flight.routeIds].sort(),
       createdAtMs: flight.createdAtMs,
       settledAtMs: flight.settledAtMs,
       failure: cloneJson(flight.failure, 'failure'),
@@ -100,6 +101,7 @@ export function createWebGpuResourceFactory(input = {}) {
   function addWaiter(flight, request) {
     const waiterId = `${flight.flightId}:waiter:${nextWaiterSequence++}`;
     flight.requestedWaiterCount += 1;
+    flight.routeIds.add(request.routeId);
     return new Promise((resolve, reject) => {
       const waiter = { waiterId, request, resolve, reject, abortListener: null };
       function cancel() {
@@ -205,6 +207,7 @@ export function createWebGpuResourceFactory(input = {}) {
       requestedWaiterCount: 0,
       cancelledWaiterCount: 0,
       controller: new AbortController(),
+      routeIds: new Set([request.routeId]),
       createdAtMs: now(),
       settledAtMs: null,
       failure: null,
@@ -237,9 +240,9 @@ export function createWebGpuResourceFactory(input = {}) {
       }
       return invalidation;
     },
-    hasActiveWaiters(routeId) {
+    hasActiveFlights(routeId) {
       for (const flight of activeByResource.values()) {
-        for (const waiter of flight.waiters.values()) if (waiter.request.routeId === routeId) return true;
+        if (flight.routeIds.has(routeId)) return true;
       }
       return false;
     },

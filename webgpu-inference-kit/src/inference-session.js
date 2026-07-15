@@ -321,8 +321,8 @@ export async function createWebGpuInferenceSession(input = {}) {
     if (residency.hasActiveLeases(routeId)) {
       throw new Error(`route ${routeId} must release every resource lease before unregister`);
     }
-    if (resourceFactory.hasActiveWaiters(routeId)) {
-      throw new Error(`route ${routeId} must let every resource creation waiter settle before unregister`);
+    if (resourceFactory.hasActiveFlights(routeId)) {
+      throw new Error(`route ${routeId} must let every associated resource creation flight settle before unregister`);
     }
     route.attached = false;
     state.routes.delete(routeId);
