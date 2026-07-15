@@ -26,6 +26,7 @@ const BOUNDARY_SPLAT_SELECTOR_POLICY_IDENTITY = 'boundary-splat-nested-permutati
 const BOUNDARY_SPLAT_ADAPTIVE_LOD_IDENTITY = 'boundary-splat-projected-area-nested-tiers-v0';
 const BOUNDARY_SPLAT_POPULATION_ALLOCATOR_IDENTITY = 'boundary-splat-global-marginal-utility-population-v0';
 const BOUNDARY_SPLAT_INDIRECT_DRAW_IDENTITY = 'boundary-splat-single-global-indirect-no-first-instance-v0';
+const BOUNDARY_SPLAT_MATCHED_COMPARATOR_IDENTITY = 'boundary-splat-matched-comparator-v0';
 const BOUNDARY_SPLAT_SELECTOR_POLICY_CODE = 2;
 const BOUNDARY_SPLAT_SELECTOR_BUDGETS = [0, 12800, 6400, 3200, 1600, 800];
 const BOUNDARY_SPLAT_ADAPTIVE_TIER_BUDGETS = [800, 1600, 3200, 6400, 12800, 0];
@@ -10898,6 +10899,106 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
+  async function sampleBoundarySplatMatchedComparatorCost(options = {}) {
+    if (!state.active || !device || !boundarySplatRequested()) {
+      return { ok: false, reason: 'inactive-or-boundary-splat-route-unavailable' };
+    }
+    const controlMode = normalizeBoundarySplatLodMode(options.controlMode);
+    const treatmentMode = normalizeBoundarySplatLodMode(options.treatmentMode);
+    const warmupSamples = Math.max(0, Math.floor(Number(options.warmupSamples ?? 2)));
+    const steadySamples = Math.max(1, Math.floor(Number(options.steadySamples ?? 8)));
+    const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const controlsBefore = { ...controlsSnapshot };
+    const simStepCountBefore = state.simStepCount;
+    const frameCountBefore = state.frameCount;
+    const rows = [];
+    cancelAnimationFrame(raf);
+    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    try {
+      for (const [role, lodMode] of [['control', controlMode], ['treatment', treatmentMode]]) {
+        controlsSnapshot = applyRuntimeQualityControls({ ...controlsBefore, boundarySplatLodMode: lodMode });
+        updateUniforms(fixedNow);
+        for (let index = 0; index < warmupSamples; index += 1) {
+          await sampleBoundarySplatGpuProfile({ advanceSimulation: false });
+        }
+        const profiles = [];
+        for (let index = 0; index < steadySamples; index += 1) {
+          profiles.push(await sampleBoundarySplatGpuProfile({ advanceSimulation: false }));
+        }
+        const draw = await sampleBoundarySplatDrawState();
+        rows.push({
+          role,
+          lodMode,
+          advanceSimulation: false,
+          sourceCandidateCount: draw?.sourceCandidateCount ?? null,
+          selectedCandidateCount: draw?.selectedCandidateCount ?? null,
+          requestedCandidateBudget: draw?.requestedCandidateBudget ?? null,
+          effectiveCandidateBudget: draw?.effectiveCandidateBudget ?? null,
+          requestedInstanceCount: draw?.requestedInstanceCount ?? null,
+          renderedInstanceCount: draw?.instanceCount ?? null,
+          globalRenderedInstanceCount: draw?.globalRenderedInstanceCount ?? null,
+          historyArchiveCandidateCount: draw?.historyArchiveCandidateCount ?? null,
+          historyWriteSlot: draw?.historyWriteSlot ?? null,
+          phaseSourceCount: draw?.phaseSourceCount ?? null,
+          tierGroups: draw?.tierGroups ?? [],
+          indirectCommand: draw?.indirectCommand ?? null,
+          indirectCommandAgreement: draw?.indirectCommandAgreement ?? null,
+          indirectCommandAuthority: draw?.indirectCommandAuthority ?? null,
+          timestampStatus: profiles.every(profile => profile.timestampStatus === 'available') ? 'available' : 'unsupported',
+          compaction: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.compaction?.ms)),
+          splatRaster: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.splatRaster?.ms)),
+          totalWithoutSimulation: summarizeBoundarySplatTimingSamples(profiles.map(profile => profile.stages?.total?.ms)),
+          overflowCount: draw?.overflowCount ?? null,
+          candidateCopyBytes: profiles.at(-1)?.candidateCopyBytes ?? null,
+          fallbackReason: state.boundarySplatFallbackReason,
+        });
+      }
+    } finally {
+      controlsSnapshot = controlsBefore;
+      updateUniforms(fixedNow);
+    }
+    const simStepCountAfter = state.simStepCount;
+    const frameCountAfter = state.frameCount;
+    const simulatorPreserved = simStepCountAfter === simStepCountBefore;
+    const framePreserved = frameCountAfter === frameCountBefore;
+    const result = {
+      identity: BOUNDARY_SPLAT_MATCHED_COMPARATOR_IDENTITY,
+      ok: rows.length === 2
+        && simulatorPreserved
+        && framePreserved
+        && rows.every(row => row.timestampStatus === 'available'
+          && row.indirectCommandAgreement === true
+          && row.indirectCommandAuthority === 'gpu-indirect-command-buffer-post-submit-readback-v0'
+          && Number(row.overflowCount || 0) === 0
+          && Number(row.candidateCopyBytes || 0) === 0
+          && row.fallbackReason == null),
+      authority: 'serial-control-treatment-same-browser-frozen-live-simulator-gpu-timestamps-v0',
+      controlMode,
+      treatmentMode,
+      fixedNow,
+      warmupSamples,
+      steadySamples,
+      simStepCountBefore,
+      simStepCountAfter,
+      frameCountBefore,
+      frameCountAfter,
+      simulatorPreserved,
+      framePreserved,
+      addedSimulationPasses: 0,
+      effectiveRoute: state.effectiveRoute,
+      backend: state.backend,
+      rendererIdentity: state.boundarySplatRendererIdentity,
+      modelIdentity: state.boundarySplatAttributeModelIdentity,
+      sourceAuthority: state.boundarySplatSourceAuthority,
+      phaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
+      compositionIdentity: state.boundarySplatCompositionIdentity,
+      pbrSceneIdentity: state.boundarySplatPbrSceneIdentity,
+      rows,
+    };
+    state.boundarySplatMatchedComparatorCost = result;
+    return result;
+  }
+
   async function primeBoundarySplatLiveHistory(options = {}) {
     if (!state.active || !device) return { ok: false, reason: 'inactive' };
     const controlsBefore = { ...controlsSnapshot };
@@ -13490,6 +13591,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatGlobalRenderedInstanceCount: boundarySplatExactDrawState?.globalRenderedInstanceCount ?? state.boundarySplatGlobalRenderedInstanceCount,
         boundarySplatTelemetryLodMode: state.boundarySplatTelemetryLodMode,
         boundarySplatHistoryArchiveCandidateCount: boundarySplatExactDrawState?.historyArchiveCandidateCount ?? state.boundarySplatHistoryArchiveCandidateCount,
+        boundarySplatHistoryWriteSlot: boundarySplatExactDrawState?.historyWriteSlot ?? state.boundarySplatHistoryWriteSlot,
+        boundarySplatHistoryAllocationGeneration: state.boundarySplatHistoryAllocationGeneration,
         boundarySplatRequestedCandidateBudget: boundarySplatExactDrawState?.requestedCandidateBudget ?? state.boundarySplatRequestedCandidateBudget,
         boundarySplatTelemetryRequestedCandidateBudget: state.boundarySplatTelemetryRequestedCandidateBudget,
         boundarySplatSelectorTelemetryFrameCount: state.boundarySplatSelectorTelemetryFrameCount,
@@ -13499,6 +13602,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatInstanceCount: boundarySplatExactDrawState?.instanceCount ?? state.boundarySplatInstanceCount,
         boundarySplatOverflowCount: boundarySplatExactDrawState?.overflowCount ?? state.boundarySplatOverflowCount,
         boundarySplatCandidateCopyBytes: state.boundarySplatCopyBytesThisFrame,
+        boundarySplatFallbackReason: state.boundarySplatFallbackReason,
         boundarySplatPhaseSourceCount: state.boundarySplatPhaseSourceCount,
         boundarySplatPhaseSourceIdentity: state.boundarySplatPhaseSourceIdentity,
         boundarySplatPhaseSources: state.boundarySplatPhaseSources,
@@ -13915,6 +14019,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     sampleBoundarySplatCandidateGeometry,
     sampleBoundarySplatInstanceCostLadder,
     sampleBoundarySplatPbrCostLadder,
+    sampleBoundarySplatMatchedComparatorCost,
     sampleBoundarySplatLiveCadence,
     sampleRenderScaleSet,
     controlledStepFrame,
