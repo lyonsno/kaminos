@@ -12215,6 +12215,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     try {
       controlsSnapshot = applyRuntimeQualityControls({
         ...controlsSnapshot,
+        selectiveHeadLiveRole: 'truthHigh',
+        selectiveHeadLiveRenderComposition: 'splat-only-v0',
         boundarySplatMode: 'analytic',
         boundarySplatFeatureCapture: true,
         volumeResidualMode: 'off',
@@ -12262,6 +12264,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       }
       if (candidateSample.boundarySplatOverflowCount !== 0) {
         throw new Error(`fixed-candidate-supervision-overflow:${candidateSample.boundarySplatOverflowCount}`);
+      }
+      if (candidateSample.selectiveHeadLiveEffectiveRole !== 'truthHigh') {
+        throw new Error(`fixed-candidate-supervision-selective-role:${candidateSample.selectiveHeadLiveEffectiveRole || 'missing'}`);
+      }
+      if (candidateSample.selectiveHeadLiveCompositionEffective !== 'splat-only-v0') {
+        throw new Error(`fixed-candidate-supervision-selective-composition:${candidateSample.selectiveHeadLiveCompositionEffective || 'missing'}`);
       }
 
       controlsSnapshot = applyRuntimeQualityControls({
