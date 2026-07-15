@@ -7,6 +7,7 @@ assert.equal(typeof kit.validateWebGpuModelResourceManifest, 'function');
 assert.equal(typeof kit.verifyWebGpuModelResourceBundle, 'function');
 assert.equal(typeof kit.loadWebGpuModelResources, 'function');
 assert.equal(typeof kit.prepareWebGpuModelResourceBundle, 'function');
+assert.equal(Object.isFrozen(kit.WEBGPU_MODEL_RESOURCE_SHARING_POLICIES), true);
 
 const {
   WEBGPU_BUFFER_USAGE,
@@ -21,6 +22,36 @@ const {
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value != null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function withRecomputedSemanticIds(manifest) {
+  const allocations = manifest.allocations.map(allocation => {
+    const semanticIdentity = canonicalJson({
+      modelId: manifest.modelId,
+      revision: manifest.revision,
+      manifestMetadata: manifest.metadata,
+      allocationId: allocation.allocationId,
+      allocationMetadata: allocation.metadata,
+      tensors: allocation.tensors,
+    });
+    const semanticResourceId = `${allocation.physicalResourceId}:semantic:${encodeURIComponent(semanticIdentity)}`;
+    return {
+      ...allocation,
+      semanticResourceId,
+      resourceId: manifest.resourceSharing.policy === 'content-addressed-physical-dedupe'
+        ? allocation.physicalResourceId
+        : semanticResourceId,
+    };
+  });
+  return { ...manifest, allocations };
 }
 
 function deferred() {
@@ -104,18 +135,34 @@ function routeFixture({ routeId, runtime, residency, factory }) {
 
 const bundle = Uint8Array.from({ length: 32 }, (_, index) => index);
 const manifest = manifestFor(bundle);
-assert.equal(manifest.schema, 'kaminos.webgpu-model-resource-manifest.v0');
+assert.equal(manifest.schema, 'kaminos.webgpu-model-resource-manifest.v1');
 assert.equal(manifest.identity, `acme/vision-model@0123456789abcdef#sha256:${sha256(bundle)}`);
 assert.equal(manifest.allocations.length, 2);
-assert.match(manifest.allocations[0].resourceId, /^kaminos:model-resource:/);
-assert.match(manifest.allocations[0].resourceId, /acme%2Fvision-model/);
-assert.match(manifest.allocations[0].resourceId, /0123456789abcdef/);
-assert.match(manifest.allocations[0].resourceId, new RegExp(sha256(bundle)));
+assert.equal(manifest.resourceSharing.policy, 'semantic-identity');
+assert.match(manifest.allocations[0].physicalResourceId, new RegExp(`sha256:${sha256(bundle)}:0:16:${WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst}$`));
+assert.equal(manifest.allocations[0].resourceId, manifest.allocations[0].semanticResourceId);
+assert.notEqual(manifest.allocations[0].resourceId, manifest.allocations[0].physicalResourceId);
 assert.equal(Object.isFrozen(manifest), true);
 assert.equal(Object.isFrozen(manifest.allocations), true);
 assert.equal(Object.isFrozen(manifest.allocations[0].tensors[0].shape), true);
 assert.throws(() => { manifest.allocations.push({}); }, /read only|not extensible|object is not extensible/i);
 assert.deepEqual(validateWebGpuModelResourceManifest(manifest), { ok: true, errors: [] });
+
+const priorPhysicalOnlyManifest = {
+  ...manifest,
+  schema: 'kaminos.webgpu-model-resource-manifest.v0',
+  resourceSharing: undefined,
+  allocations: manifest.allocations.map(allocation => {
+    const { physicalResourceId, semanticResourceId, ...priorAllocation } = allocation;
+    return { ...priorAllocation, resourceId: physicalResourceId };
+  }),
+};
+assert.deepEqual(validateWebGpuModelResourceManifest(priorPhysicalOnlyManifest), {
+  ok: false,
+  errors: [
+    'schema kaminos.webgpu-model-resource-manifest.v0 is an unsupported prior physical-only manifest; regenerate it as kaminos.webgpu-model-resource-manifest.v1 and choose resourceSharing policy explicitly',
+  ],
+});
 
 const verification = await verifyWebGpuModelResourceBundle(manifest, bundle);
 assert.deepEqual(verification, {
@@ -323,30 +370,167 @@ assert.equal(modelB.release().status, 'released');
 assert.equal(residency.snapshot().activeLeaseCount, 0);
 assert.equal(residency.snapshot().evictionCandidates.length, 2);
 
-const revisionResidency = createWebGpuResourceResidency({ sessionId: 'model-revision-identity' });
-const revisionFactory = createWebGpuResourceFactory({ sessionId: 'model-revision-identity', residency: revisionResidency });
-const revisionRuntimeA = runtimeFixture();
-const revisionRuntimeB = runtimeFixture();
 const revisionManifest = manifestFor(bundle, { revision: 'fedcba9876543210' });
+const roleManifest = manifestFor(bundle, {
+  metadata: {
+    role: 'depth-backbone',
+    kernelProfile: { family: 'vit', precision: 'f16' },
+  },
+});
+const tensorSemanticManifest = manifestFor(bundle, {
+  allocations: manifest.allocations.map((allocation, allocationIndex) => ({
+    ...allocation,
+    tensors: allocation.tensors.map((tensor, tensorIndex) => ({
+      ...tensor,
+      metadata: allocationIndex === 0 && tensorIndex === 0
+        ? { role: 'query-projection', layout: 'row-major' }
+        : tensor.metadata,
+    })),
+  })),
+});
 assert.notEqual(
   manifest.allocations[0].resourceId,
   revisionManifest.allocations[0].resourceId,
-  'identical bundle ranges under different authenticated model revisions must not collapse to one resident resource identity',
+  'identical bytes under different model revisions must not share authenticated resource identity by default',
 );
-const revisionModelA = await loadWebGpuModelResources({
+assert.notEqual(
+  manifest.allocations[0].resourceId,
+  roleManifest.allocations[0].resourceId,
+  'manifest role and kernel-profile metadata must participate in default resource identity',
+);
+assert.notEqual(
+  manifest.allocations[0].resourceId,
+  tensorSemanticManifest.allocations[0].resourceId,
+  'tensor semantic metadata must participate in default resource identity',
+);
+
+const semanticResidency = createWebGpuResourceResidency({ sessionId: 'semantic-isolation' });
+const semanticFactory = createWebGpuResourceFactory({ sessionId: 'semantic-isolation', residency: semanticResidency });
+const semanticRuntimeA = runtimeFixture();
+const semanticRuntimeB = runtimeFixture();
+const semanticModelA = await loadWebGpuModelResources({
   manifest,
   bundle,
-  route: routeFixture({ routeId: 'revision-a', runtime: revisionRuntimeA, residency: revisionResidency, factory: revisionFactory }),
+  route: routeFixture({ routeId: 'semantic-a', runtime: semanticRuntimeA, residency: semanticResidency, factory: semanticFactory }),
 });
-const revisionModelB = await loadWebGpuModelResources({
+const semanticModelB = await loadWebGpuModelResources({
   manifest: revisionManifest,
   bundle,
-  route: routeFixture({ routeId: 'revision-b', runtime: revisionRuntimeB, residency: revisionResidency, factory: revisionFactory }),
+  route: routeFixture({ routeId: 'semantic-b', runtime: semanticRuntimeB, residency: semanticResidency, factory: semanticFactory }),
 });
-assert.equal(revisionRuntimeA.created.length + revisionRuntimeB.created.length, 4, 'each revision must materialize its own two semantic allocations');
-assert.notEqual(revisionModelA.allocations[0].buffer, revisionModelB.allocations[0].buffer);
-revisionModelA.release();
-revisionModelB.release();
+assert.equal(
+  semanticRuntimeA.created.length + semanticRuntimeB.created.length,
+  4,
+  'default semantic isolation must materialize both revisions instead of silently reusing one physical allocation pair',
+);
+assert.notEqual(semanticModelA.allocations[0].buffer, semanticModelB.allocations[0].buffer);
+semanticModelA.release();
+semanticModelB.release();
+
+const physicalSharing = { policy: 'content-addressed-physical-dedupe' };
+const physicalManifestA = manifestFor(bundle, { resourceSharing: physicalSharing });
+const physicalManifestB = manifestFor(bundle, {
+  revision: 'physically-compatible-revision',
+  metadata: { role: 'alternate-consumer', kernelProfile: { family: 'vit', precision: 'f32' } },
+  resourceSharing: physicalSharing,
+});
+assert.equal(physicalManifestA.resourceSharing.policy, 'content-addressed-physical-dedupe');
+assert.equal(physicalManifestA.allocations[0].resourceId, physicalManifestA.allocations[0].physicalResourceId);
+assert.equal(physicalManifestA.allocations[0].physicalResourceId, physicalManifestB.allocations[0].physicalResourceId);
+assert.notEqual(physicalManifestA.allocations[0].semanticResourceId, physicalManifestB.allocations[0].semanticResourceId);
+
+const physicalResidency = createWebGpuResourceResidency({ sessionId: 'explicit-physical-sharing' });
+const physicalFactory = createWebGpuResourceFactory({ sessionId: 'explicit-physical-sharing', residency: physicalResidency });
+const physicalRuntimeA = runtimeFixture();
+const physicalRuntimeB = runtimeFixture();
+const physicalModelA = await loadWebGpuModelResources({
+  manifest: physicalManifestA,
+  bundle,
+  route: routeFixture({ routeId: 'physical-a', runtime: physicalRuntimeA, residency: physicalResidency, factory: physicalFactory }),
+});
+const physicalModelB = await loadWebGpuModelResources({
+  manifest: physicalManifestB,
+  bundle,
+  route: routeFixture({ routeId: 'physical-b', runtime: physicalRuntimeB, residency: physicalResidency, factory: physicalFactory }),
+});
+assert.equal(physicalRuntimeA.created.length + physicalRuntimeB.created.length, 2, 'explicit content policy may reuse each physical allocation once');
+assert.equal(physicalModelA.allocations[0].buffer, physicalModelB.allocations[0].buffer);
+assert.notEqual(physicalModelA.allocations[0].semanticLeaseId, physicalModelB.allocations[0].semanticLeaseId);
+assert.notEqual(physicalModelA.allocations[0].semanticResourceId, physicalModelB.allocations[0].semanticResourceId);
+physicalModelA.release();
+physicalModelB.release();
+
+assert.throws(
+  () => manifestFor(bundle, { resourceSharing: { policy: 'implicit-byte-equality' } }),
+  /resourceSharing.*policy|semantic-identity|content-addressed-physical-dedupe/i,
+);
+assert.throws(
+  () => manifestFor(bundle, { resourceSharing: 'content-addressed-physical-dedupe' }),
+  /resourceSharing must be an object/i,
+);
+assert.throws(
+  () => manifestFor(bundle, { metadata: { role: undefined } }),
+  /manifest metadata.*undefined|undefined.*manifest metadata/i,
+);
+assert.throws(
+  () => manifestFor(bundle, {
+    allocations: [
+      { ...manifest.allocations[0], metadata: { role: () => 'encoder' } },
+      manifest.allocations[1],
+    ],
+  }),
+  /allocation metadata.*function|function.*allocation metadata/i,
+);
+assert.throws(
+  () => manifestFor(bundle, {
+    allocations: [
+      {
+        ...manifest.allocations[0],
+        tensors: [
+          { ...manifest.allocations[0].tensors[0], metadata: { quantizationScale: Number.NaN } },
+          manifest.allocations[0].tensors[1],
+        ],
+      },
+      manifest.allocations[1],
+    ],
+  }),
+  /tensor metadata.*finite number|finite number.*tensor metadata/i,
+);
+
+const forgedMalformedManifest = withRecomputedSemanticIds({
+  ...manifest,
+  metadata: { role: undefined },
+  allocations: manifest.allocations.map((allocation, allocationIndex) => ({
+    ...allocation,
+    metadata: allocationIndex === 0 ? { dropped: undefined } : allocation.metadata,
+    tensors: allocation.tensors.map((tensor, tensorIndex) => ({
+      ...tensor,
+      metadata: allocationIndex === 0 && tensorIndex === 0
+        ? { quantizationScale: Number.NaN }
+        : tensor.metadata,
+    })),
+  })),
+});
+const forgedValidation = validateWebGpuModelResourceManifest(forgedMalformedManifest);
+assert.equal(forgedValidation.ok, false, 'public validation must reject forged manifests with lossy semantic metadata');
+assert.match(forgedValidation.errors.join('\n'), /manifest metadata|allocation metadata|tensor metadata/i);
+const forgedRuntime = runtimeFixture();
+const forgedResidency = createWebGpuResourceResidency({ sessionId: 'forged-metadata' });
+await assert.rejects(
+  () => loadWebGpuModelResources({
+    manifest: forgedMalformedManifest,
+    bundle,
+    route: routeFixture({
+      routeId: 'forged-metadata-route',
+      runtime: forgedRuntime,
+      residency: forgedResidency,
+      factory: createWebGpuResourceFactory({ sessionId: 'forged-metadata', residency: forgedResidency }),
+    }),
+  }),
+  /invalid WebGPU model resource manifest|metadata/i,
+);
+assert.equal(forgedRuntime.created.length, 0, 'malformed external metadata must fail before GPU allocation');
+assert.equal(forgedRuntime.writes.length, 0, 'malformed external metadata must fail before GPU upload');
 
 const mutableSource = Uint8Array.from(bundle);
 const mutationResidency = createWebGpuResourceResidency({ sessionId: 'mutation' });

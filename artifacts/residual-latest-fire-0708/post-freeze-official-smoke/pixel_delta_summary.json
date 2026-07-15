@@ -1,0 +1,38 @@
+{
+  "linear_vs_residual_strength1": {
+    "meanAbsChannel": 0.2986311728395062,
+    "maxAbsChannel": 8,
+    "rmseChannel": 0.7859839905070163,
+    "changedChannels": 492422,
+    "changedChannelRatio": 0.18997762345679012,
+    "changedPixels": 233365,
+    "changedPixelRatio": 0.2700983796296296
+  },
+  "linear_vs_residual_strength150": {
+    "meanAbsChannel": 0.46703433641975306,
+    "maxAbsChannel": 11,
+    "rmseChannel": 1.1579700669386606,
+    "changedChannels": 608900,
+    "changedChannelRatio": 0.23491512345679014,
+    "changedPixels": 277426,
+    "changedPixelRatio": 0.3210949074074074
+  },
+  "residual_strength1_vs_native_ref": {
+    "meanAbsChannel": 0.7156087962962963,
+    "maxAbsChannel": 58,
+    "rmseChannel": 1.7736703853316345,
+    "changedChannels": 1022833,
+    "changedChannelRatio": 0.3946114969135803,
+    "changedPixels": 538908,
+    "changedPixelRatio": 0.6237361111111112
+  },
+  "linear_vs_native_ref": {
+    "meanAbsChannel": 0.5517037037037037,
+    "maxAbsChannel": 58,
+    "rmseChannel": 1.6544233171548566,
+    "changedChannels": 840369,
+    "changedChannelRatio": 0.32421643518518517,
+    "changedPixels": 497990,
+    "changedPixelRatio": 0.5763773148148148
+  }
+}

@@ -5,6 +5,14 @@ import { join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const index = readFileSync(join(root, 'index.html'), 'utf8');
 const volumeWitness = readFileSync(join(root, 'volume-witness.mjs'), 'utf8');
+const serve = readFileSync(join(root, 'serve.py'), 'utf8');
+const reactionFrontAtlasWitnessPath = join(root, 'volume-reaction-front-atlas-witness.mjs');
+assert.ok(existsSync(reactionFrontAtlasWitnessPath), 'reaction-front atlas witness exists');
+const reactionFrontAtlasWitness = readFileSync(reactionFrontAtlasWitnessPath, 'utf8');
+const corePath = join(root, 'volume-core.js');
+assert.ok(existsSync(corePath), 'volume-core.js exists');
+const core = readFileSync(corePath, 'utf8');
+const topologyShellLabBlock = core.match(/let curlActivity = smoothstep[\s\S]*?let inspectShellMask =/)?.[0] || '';
 
 assert.match(index, /data-tab="volume"/, 'sidebar exposes a Volume tab');
 assert.match(index, /id="tab-volume"/, 'Volume tab content is present');
@@ -24,15 +32,71 @@ assert.match(index, /VOLUME_PRIMITIVE_SCHEMA/, 'scene data names the volume prim
 assert.match(index, /volumePrimitives/, 'scene data persists authored volume primitives');
 assert.match(index, /setVolumePrimitivesState/, 'scene loading can restore authored volume primitives');
 assert.match(index, /volume-core\.js/, 'index imports the volume prototype module');
-assert.match(index, /volume-core\.js\?v=pyro-palette-flame-paint-0703/, 'volume prototype import carries a cache key when editable Pyro palette and flame paint land');
+assert.match(index, /volume-core\.js\?v=[a-z0-9-]+/, 'volume prototype import carries a cache key so browser smokes pick up shader changes');
 assert.match(index, /id="volume-render-source-orientation"/, 'Volume tab exposes render/source orientation identity for operator smoke');
 assert.match(index, /id="volume-canonical-render-mode-state"/, 'Volume tab exposes effective canonical render diagnostic mode for operator smoke');
 assert.match(index, /id="volume-canonical-motion-mode-state"/, 'Volume tab exposes effective canonical motion diagnostic mode for operator smoke');
 assert.match(index, /operator_memory_fire_0701/, 'Volume tab exposes the operator tall-plume Pyro-memory baseline preset');
 assert.match(index, /pyro_contrast_warm_cap_small_flame_0702/, 'Volume tab pins the operator-found Pyro contrast warm-cap small-flame basin by stable route identity');
 assert.match(index, /pyro_material_bonfire_family_0702/, 'Volume tab pins the operator-found Pyro material bonfire family basin by stable route identity');
-assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_material_bonfire_family_0702'/, 'bare smoke routes default to the operator-found Pyro bonfire family basin');
+assert.match(index, /exploding_jellow_fireball_motherfucker_0706/, 'Volume tab pins the operator-found exploding jellow fireball Pyro look by stable route identity');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707/, 'Volume tab pins the operator-found Pyro Flow small-bonfire gamut basin by stable route identity');
+assert.match(index, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'boundary_fire_bonfire_a_la_ruffles_0709'/, 'bare smoke routes default to the operator-found Boundary Fire Bonfire_a_la_ruffles basin');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionLiveView:\s*'boundary_fire'/, 'Boundary Fire Bonfire_a_la_ruffles basin activates boundary-fire as the default live fire view');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*boundarySidecarSource:\s*'baked'[\s\S]*boundarySidecarBlur:\s*1\.00[\s\S]*boundarySidecarWidth:\s*2\.00[\s\S]*boundarySidecarRidge:\s*2\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin uses the promoted baked sidecar reconstruction path');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireRidge:\s*1\.28[\s\S]*reactionBoundaryFireRidgeCut:\s*0\.10[\s\S]*reactionBoundaryFireLuma:\s*5\.00/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted ridge and luma values');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*reactionBoundaryFireCleanBlue:\s*0\.64[\s\S]*reactionBoundaryFireSoot:\s*0\.64[\s\S]*reactionBoundaryFireYellow:\s*1\.02[\s\S]*reactionBoundaryFireWarmth:\s*0\.86/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted fuel color values');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*density:\s*6\.00[\s\S]*fire:\s*3\.50[\s\S]*radiance:\s*0\.00[\s\S]*absorption:\s*0\.30[\s\S]*glow:\s*0\.00[\s\S]*smoke:\s*2\.80/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted transport and smoke gains');
+assert.match(index, /boundary_fire_bonfire_a_la_ruffles_0709:[\s\S]*raySteps:\s*132[\s\S]*adaptiveRays:\s*1\.00[\s\S]*occupancySkip:\s*1\.00[\s\S]*majorantSkip:\s*0\.00[\s\S]*renderScale:\s*0\.65[\s\S]*resolution:\s*128[\s\S]*majorantGrid:\s*24/, 'Boundary Fire Bonfire_a_la_ruffles basin preserves the promoted simulation and ray budget');
+assert.match(index, /id="volume-agent-camera-save"/, 'Volume cockpit exposes durable camera capture for agent replay');
+assert.match(index, /id="volume-agent-view-save"/, 'Volume cockpit exposes durable camera-plus-settings capture for agent replay');
+assert.match(index, /Save Agent View \+ Settings/, 'Volume cockpit labels the full replay capture path distinctly from camera-only capture');
+assert.match(index, /artifacts\/volume-captures/, 'Volume cockpit names the on-disk capture directory instead of requiring clipboard handoff');
+assert.match(index, /saveVolumeAgentCapture/, 'Volume cockpit has a named capture writer path for agents');
+assert.match(index, /readVolumeDomControls/, 'Volume capture reads all live DOM volume controls, not only curated look fields');
+assert.match(index, /buildVolumeAgentCaptureRoute/, 'Volume capture serializes all live DOM controls into the replay route');
+assert.match(serve, /\/api\/volume-capture/, 'Local server exposes a volume capture write endpoint');
+assert.match(serve, /handle_volume_capture/, 'Local server handles durable volume capture writes explicitly');
+assert.match(serve, /volume-captures/, 'Local server writes volume captures under artifacts/volume-captures');
+assert.match(volumeWitness, /--capture/, 'Volume witness accepts a saved capture path for replay');
+assert.match(volumeWitness, /isCaptureReplay/, 'Volume witness reports whether it replayed a saved capture');
+assert.match(volumeWitness, /kaminosSetCameraDebugPose/, 'Volume witness reapplies saved camera poses for capture replay');
+assert.match(volumeWitness, /replayCaptureControls/, 'Volume witness reapplies saved DOM controls before capture screenshots');
+assert.match(volumeWitness, /buildRouteParamsForWitness/, 'Volume witness validates capture replay against saved DOM controls, not only the original route');
+assert.match(volumeWitness, /replay\?\.capture\?\.domControls/, 'Capture replay DOM controls feed route/control expectations');
+assert.match(volumeWitness, /volumeParamNameFromControlKey/, 'Capture replay maps DOM control keys back to volume route params for witness identity');
+assert.match(volumeWitness, /function captureControlValue/, 'Capture replay accepts both raw and structured saved DOM control values');
+assert.match(volumeWitness, /function assertCaptureReplayControls/, 'Capture replay has its own sparse-control assertion path instead of borrowing the full route witness');
+assert.match(volumeWitness, /capture replay had no saved DOM controls to verify/, 'Capture replay fails loud when a save produced no replayable controls');
+assert.match(volumeWitness, /capture-replay-evidence/, 'Capture replay writes a direct screenshot/report artifact before generic route assertions');
+assert.doesNotMatch(volumeWitness, /\bproc\.kill\(/, 'Capture replay cleanup does not reference the retired single-process browser handle');
+assert.match(volumeWitness, /capture-replay-evidence[\s\S]*closeBrowserSession\(browserSession\)/, 'Capture replay closes the active reusable browser session after writing evidence');
+assert.match(volumeWitness, /capture replay native GPU frame missing visible volume/, 'Capture replay refuses to present a blank native GPU frame as proof');
+const captureReplayEvidenceStart = volumeWitness.indexOf("phase = 'capture-replay-evidence'");
+const captureReplayEvidenceEnd = volumeWitness.indexOf("assert.equal(state.volumeScene", captureReplayEvidenceStart);
+const captureReplayEvidenceBody = volumeWitness.slice(captureReplayEvidenceStart, captureReplayEvidenceEnd);
+assert.match(captureReplayEvidenceBody, /sampleFrame\?\.\(\{\s*advanceSim:\s*false,\s*includeRgba:\s*true\s*\}\)/, 'Capture replay reads the renderer GPU frame at full resolution without advancing simulation');
+assert.match(captureReplayEvidenceBody, /expectedLength\s*=\s*sample\.image\.width\s*\*\s*sample\.image\.height\s*\*\s*4[\s\S]*sample\.image\.rgba\.length\s*!==\s*expectedLength/, 'Capture replay rejects partial native RGBA output instead of laundering it into evidence');
+assert.match(captureReplayEvidenceBody, /nativeRgba\.length\s*!==\s*nativeFrame\.expectedLength/, 'Capture replay verifies the transported native RGBA byte count before writing evidence');
+assert.match(captureReplayEvidenceBody, /for \(let offset = 0; offset < nativeFrame\.expectedLength; offset \+= nativeFrameTransportChunkBytes\)/, 'Capture replay transports every native RGBA byte in bounded CDP messages without capping the image');
+assert.match(captureReplayEvidenceBody, /Buffer\.concat\(nativeRgbaChunks\)/, 'Capture replay reconstructs the complete native frame from all transport chunks');
+assert.match(captureReplayEvidenceBody, /writeRgbaPng\(out,\s*nativeFrame\.width,\s*nativeFrame\.height,\s*nativeRgba\)/, 'Capture replay writes native renderer RGBA directly to the primary PNG artifact');
+assert.doesNotMatch(captureReplayEvidenceBody, /Page\.captureScreenshot/, 'Capture replay must not substitute a browser screenshot for native renderer pixels');
+assert.match(captureReplayEvidenceBody, /gpu-frame-texture-rgba8-readback/, 'Capture replay report names native GPU frame readback authority');
+assert.match(index, /name:\s*'Bonfire_a_la_ruffles'[\s\S]*TALL_PLUME_OPERATOR_PRESETS\.boundary_fire_bonfire_a_la_ruffles_0709/, 'built-in Bonfire_a_la_ruffles look library entry points at the Boundary Fire basin, not the stale Pyro Flow basin');
 assert.match(index, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'bare smoke routes apply the current Pyro basin when no explicit scene or preset is routed');
+assert.match(index, /id="volume-boundary-sidecar-source"/, 'Boundary Fire tuning exposes a live/baked sidecar source selector');
+assert.match(index, /volume_boundary_sidecar_source/, 'Basin URLs preserve the boundary sidecar source control');
+assert.match(index, /id="volume-boundary-sidecar-view"/, 'Boundary Fire tuning exposes a primary-view sidecar channel selector');
+assert.match(index, /volume_boundary_sidecar_view/, 'Basin URLs preserve the sidecar channel debug selector');
+assert.match(index, /value="coverage"[\s\S]*value="ridge"[\s\S]*value="proximity"[\s\S]*value="footprint"/, 'Sidecar channel selector exposes coverage, ridge, proximity, and footprint views');
+assert.match(index, /id="volume-boundary-sidecar-blur"/, 'Boundary Fire tuning exposes a sidecar blur/sample-efficiency control');
+assert.match(index, /id="volume-boundary-sidecar-width"/, 'Boundary Fire tuning exposes a sidecar step-footprint width control');
+assert.match(index, /id="volume-boundary-sidecar-ridge"/, 'Boundary Fire tuning exposes a baked ridge gain control');
+assert.match(index, /boundarySidecarSource/, 'Volume controls carry the boundary sidecar source into the renderer');
+assert.match(index, /boundarySidecarView/, 'Volume controls carry the sidecar channel debug view into the renderer');
+assert.match(index, /!routeVolumeScene\s*\|\|\s*routeVolumeScene === 'tall_plume'/, 'smoke routes with explicit tall_plume scene must still apply the Pyro basin instead of plain tall-plume mechanics');
+assert.match(index, /routeVolumeScene && !\(shouldApplyDefaultVolumeSmokeTallPreset && routeVolumeScene === 'tall_plume'\)/, 'explicit tall_plume route must not immediately overwrite the Pyro basin with the plain scene preset');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*resolution:\s*96/, 'Pyro material bonfire basin keeps a conservative default grid while preserving the look controls');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*fire:\s*0\.00/, 'Pyro material bonfire basin lets Pyro own the visible flame instead of stacking old stock fire');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroMaterialGain:\s*0\.65/, 'Pyro material bonfire basin preserves the recovered material gain');
@@ -43,6 +107,22 @@ assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroFireMode:\s*'p
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadianceSource:\s*'fire'/, 'Pyro material bonfire basin pins the rebuilt radiance source to fire');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pyroRadianceFireLock:\s*0\.00/, 'Pyro material bonfire basin preserves the recovered radiance fire-lock state');
 assert.match(index, /pyro_material_bonfire_family_0702:[\s\S]*pressureMode:\s*'global-p3'/, 'Pyro material bonfire basin preserves the Full P3 pressure solve');
+assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*fire:\s*0\.00/, 'Exploding jellow fireball basin keeps Pyro-owned visible flame authority');
+assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pyroMaterialGain:\s*1\.50/, 'Exploding jellow fireball basin preserves the operator-tuned high material gain');
+assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pyroBiteHotColor:\s*'#ff4000'/, 'Exploding jellow fireball basin preserves the operator-tuned bite hot color');
+assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pyroRadianceCoolColor:\s*'#ff6b6b'/, 'Exploding jellow fireball basin preserves the operator-tuned radiance cool color');
+assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pyroFireMode:\s*'pyro-owned'/, 'Exploding jellow fireball basin preserves Pyro-owned flame display mode');
+assert.match(index, /exploding_jellow_fireball_motherfucker_0706:[\s\S]*pressureMode:\s*'global-p3'/, 'Exploding jellow fireball basin preserves the Full P3 pressure solve for training pickup');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*density:\s*6\.00/, 'Pyro Flow small-bonfire gamut basin preserves the high-density live basin');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*fire:\s*0\.00/, 'Pyro Flow small-bonfire gamut basin lets Pyro own the visible flame');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*inputRadius:\s*0\.19/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned input radius');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*flowRate:\s*0\.85/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned flow rate');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowBite:\s*3\.00/, 'Pyro Flow small-bonfire gamut basin preserves the loud Flow carrier gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowRadiance:\s*4\.00/, 'Pyro Flow small-bonfire gamut basin preserves the Flow radiance gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowSpikes:\s*1\.00/, 'Pyro Flow small-bonfire gamut basin preserves the Flow spike gain');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowCoolColor:\s*'#ff6400'/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned Flow cool color');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pyroFlowHotColor:\s*'#ff320f'/, 'Pyro Flow small-bonfire gamut basin preserves the operator-tuned Flow hot color');
+assert.match(index, /pyro_flow_small_bonfire_gamut_0707:[\s\S]*pressureMode:\s*'global-p3'/, 'Pyro Flow small-bonfire gamut basin preserves the Full P3 pressure solve for training pickup');
 assert.match(index, /id="volume-basin-bonfire-family"/, 'Volume cockpit exposes a one-click Pyro material bonfire family basin action');
 assert.match(index, /KAMINOS_VOLUME_BASIN_STORAGE_KEY/, 'Volume cockpit has a durable localStorage key for last-basin recovery');
 assert.match(index, /saveVolumeBasinSnapshot/, 'Volume cockpit autosaves current basin controls on slider changes');
@@ -54,6 +134,19 @@ assert.match(index, /id="volume-basin-slot"/, 'Volume cockpit exposes named loca
 assert.match(index, /KAMINOS_VOLUME_BASIN_SLOT_STORAGE_PREFIX/, 'Volume cockpit stores basin slots under a stable localStorage prefix');
 assert.match(index, /VOLUME_LOOK_LIBRARY_IDENTITY/, 'Volume cockpit has a stable JSON look-library identity');
 assert.match(index, /KAMINOS_VOLUME_LOOK_LIBRARY_STORAGE_KEY/, 'Volume cockpit stores the editable JSON look library under a stable browser key');
+assert.match(index, /BUILT_IN_VOLUME_LOOK_LIBRARY/, 'Volume cockpit carries source-backed looks so fresh ports are not empty');
+assert.match(index, /exploding-jellow-fireball-motherfucker/, 'Source-backed look library exposes the operator-saved exploding jellow Pyro look');
+assert.match(index, /Bonfire_a_la_ruffles/, 'Source-backed look library exposes the operator-saved Bonfire a la Ruffles Pyro look');
+const bonfireLookBlock = index.match(/name:\s*'Bonfire_a_la_ruffles'[\s\S]*?sourceBacked:\s*true,[\s\S]*?\},\n\s*\],\n\s*firesim:/)?.[0] || '';
+assert.match(bonfireLookBlock, /TALL_PLUME_OPERATOR_PRESETS\.boundary_fire_bonfire_a_la_ruffles_0709/, 'Bonfire a la Ruffles aliases the current Boundary Fire basin instead of the stale Pyro Flow controls');
+assert.match(bonfireLookBlock, /boundaryFireAuthored:\s*true/, 'Bonfire a la Ruffles is marked as a Boundary Fire-authored source-backed look');
+assert.doesNotMatch(bonfireLookBlock, /pyroFlowBite:\s*0\.95/, 'Bonfire a la Ruffles must not preserve the stale low Flow carrier gain');
+assert.doesNotMatch(bonfireLookBlock, /pyroRadiance:\s*1\.25/, 'Bonfire a la Ruffles must not preserve the stale old Radiance carrier gain');
+assert.match(index, /mergeVolumeLookLibraryWithBuiltIns/, 'Volume cockpit merges source-backed looks with browser-local saved looks');
+const mergeVolumeLookLibraryFn = index.match(/function mergeVolumeLookLibraryWithBuiltIns\(library = normalizeVolumeLookLibrary\(\)\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(mergeVolumeLookLibraryFn, /existing\?\.sourceBacked[\s\S]*continue/, 'Source-backed looks override stale same-name browser-local look shadows');
+const readVolumeLookLibraryFn = index.match(/function readVolumeLookLibrary\(\) \{([\s\S]*?)\n\}/)?.[1] || '';
+assert.match(readVolumeLookLibraryFn, /mergeVolumeLookLibraryWithBuiltIns/, 'Reading the look library includes source-backed looks before refreshing the dropdown');
 assert.match(index, /PYRO_LOOK_FIELDS/, 'Volume cockpit defines a Pyro-only look field list');
 assert.match(index, /FIRESIM_LOOK_FIELDS/, 'Volume cockpit defines a FireSim look field list separate from render expense');
 assert.match(index, /id="volume-look-library-kind"/, 'Volume cockpit exposes a Pyro/FireSim library selector');
@@ -79,7 +172,7 @@ for (const forbidden of ['raySteps', 'adaptiveRays', 'occupancySkip', 'majorantS
   assert.doesNotMatch(fireSimLookFields[1], new RegExp(`'${forbidden}'`), `FireSim look presets must not save ${forbidden} expense/solve state`);
 }
 assert.match(index, /id="volume-look-freeze"/, 'Volume look lab exposes a freeze control');
-assert.match(index, /stops fluid steps/i, 'Volume freeze control explains that only sim stepping stops');
+assert.match(index, /pixel-stable pin for sim steps, shader time, temporal jitter, and history blending/i, 'Volume freeze control explains the pixel-stable temporal pinning contract');
 assert.match(index, /id="volume-pyro-compare"/, 'Volume look lab exposes a same-frame Pyro compare selector');
 assert.match(index, /Base only/, 'Pyro compare selector can mute Pyro carriers against the same frozen sim');
 assert.match(index, /volume_look_freeze/, 'Basin URLs preserve look-lab freeze state');
@@ -89,6 +182,36 @@ assert.match(index, /Volume route controls loaded; renderer failed/, 'Volume rou
 assert.match(index, /initKaminosVolumeRoute\(\)\.catch/, 'Volume route initializes from the scene-init fallback path for setup diagnostics');
 assert.match(index, /\.slider-row\s*\{[^}]*user-select:\s*none/, 'Slider rows prevent label/help text selection from stealing drag gestures');
 assert.match(index, /\.slider-row input\[type="range"\]\s*\{[^}]*min-height:\s*24px/, 'Range sliders expose a taller grab lane than the visible rail');
+assert.match(core, /topology-lab-monotonic-carrier-mix-v0/, 'Topology shell lab declares monotonic additive carrier-mix identity');
+assert.doesNotMatch(topologyShellLabBlock, /shellCarrierGainSum|\/\s*max\(\s*0\.001[\s\S]*shellThermalGain/, 'Topology shell carrier gains must not be normalized through a shared hidden denominator');
+assert.match(core, /BOUNDARY_SIDECAR_IDENTITY\s*=\s*'baked-boundary-sidecar-v0'/, 'Boundary sidecar bake carries a stable identity');
+assert.match(core, /BOUNDARY_SIDECAR_BAKE_AUTHORITY\s*=\s*'band-limited-support-coverage-ridge-proximity-footprint-v1'/, 'Boundary sidecar bake names reconstructable sheet structure authority');
+assert.match(core, /function boundarySidecarBufferBytes/, 'Boundary sidecar buffer size is explicit and grid-scaled');
+assert.match(core, /function normalizeBoundarySidecarView/, 'Renderer normalizes sidecar channel debug views');
+assert.match(core, /function boundarySidecarViewValue/, 'Renderer maps sidecar channel debug views into uniforms');
+assert.match(core, /@group\(3\) @binding\(0\) var<storage, read_write> boundarySidecarDst/, 'WGSL has a write-only boundary sidecar bake output binding');
+assert.match(core, /boundary_sidecar_display:\s*vec4<f32>/, 'Raymarch uniforms carry sidecar debug display controls separately from reconstruction controls');
+assert.match(core, /@compute @workgroup_size\(4, 4, 4\)\s*fn csBoundarySidecar/, 'WGSL includes a boundary sidecar compute bake pass');
+assert.match(core, /boundarySidecarCoverage/, 'Boundary sidecar bake records a coverage/opacity integral channel');
+assert.match(core, /boundarySidecarProximity/, 'Boundary sidecar raymarch derives a proximity support channel');
+assert.match(core, /boundarySidecarFootprintWidth/, 'Boundary sidecar raymarch derives a ray-footprint reconstruction width');
+assert.match(core, /boundarySidecarBuildPipeline/, 'Renderer owns a boundary sidecar compute pipeline');
+assert.match(core, /encodeBoundarySidecar/, 'Render loop encodes the boundary sidecar bake before drawing');
+assert.match(core, /async function sampleFrame\([^)]*\)[\s\S]*encodeBoundarySidecar\(encoder(?:,[^)]*)?\)[\s\S]*encodeDraw\(encoder, frameTexture\.createView\(\), 'kaminos volume one-off readback pass'/, 'sampleFrame readback bakes the boundary sidecar before drawing evidence frames');
+assert.match(core, /sampleWorldBoundarySidecar/, 'Raymarch samples the baked boundary sidecar');
+assert.match(core, /boundarySidecarStepFootprintWidth/, 'Boundary-fire path compensates sheet width for ray step footprint');
+const boundaryFireBranch = core.match(/if \(boundarySurfaceMode > 0\.5\) \{[\s\S]*?let boundaryGradientGate/);
+assert.ok(boundaryFireBranch, 'Boundary-fire shader branch is discoverable for sidecar source contracts');
+const bakedOnlyBranch = boundaryFireBranch[0].match(/if \(boundarySidecarSource > 0\.5 && boundarySidecarSource <= 1\.5\) \{([\s\S]*?)\} else \{/);
+assert.ok(bakedOnlyBranch, 'Baked sidecar mode has a distinct branch from live/mix');
+assert.match(bakedOnlyBranch[1], /sampleWorldBoundarySidecar\(p\)/, 'Baked sidecar mode samples the baked structure field');
+assert.doesNotMatch(bakedOnlyBranch[1], /liveBoundarySupportAt/, 'Baked sidecar mode must not pay the live seven-tap boundary support path per ray step');
+assert.match(boundaryFireBranch[0], /if \(boundarySidecarSource > 1\.5\) \{[\s\S]*mix\(boundarySupport, boundarySidecarSample\.x, 0\.5\)/, 'Mix sidecar mode is the explicit expensive live+baked comparison path');
+assert.match(core, /boundaryStructureSource:\s*boundarySidecarSourceName/, 'Debug state reports the effective boundary structure source');
+assert.match(core, /boundarySidecarDebug/, 'Debug state exposes boundary sidecar bake identity and controls');
+assert.match(core, /channels:\s*\['support', 'coverage', 'ridge', 'proximity', 'footprint'\]/, 'Debug state reports sidecar channel semantics');
+assert.match(core, /uniforms\[312\]\s*=\s*boundarySidecarViewValue/, 'Uniform upload carries the sidecar debug view selector');
+assert.match(core, /sidecarViewName !== 'off'/, 'Sidecar channel debug views force a bake even when the live source remains selected');
 assert.match(index, /id="volume-pyro-interface-focus"/, 'Pyro cockpit exposes an interface-focus slider');
 assert.match(index, /Border carrier/i, 'Pyro interface-focus slider describes the standalone border carrier');
 assert.match(index, /id="volume-pyro-edge-bite"/, 'Pyro cockpit exposes an edge-bite slider');
@@ -182,6 +305,90 @@ assert.match(index, /id="volume-pyro-radiance-rise"/, 'Pyro cockpit exposes a ra
 assert.match(index, /Radiance rise/i, 'Pyro radiance rise slider describes low flame light versus higher wake permission');
 assert.match(index, /id="volume-pyro-radiance-fire-lock"/, 'Pyro cockpit exposes a radiance live-fire lock');
 assert.match(index, /Radiance fire lock/i, 'Pyro radiance fire-lock slider describes whether current raw fire authority is required');
+for (const [id, copy] of [
+  ['volume-pyro-flow-bite', 'Flow bite'],
+  ['volume-pyro-flow-border', 'Flow border'],
+  ['volume-pyro-flow-teeth', 'Flow teeth'],
+  ['volume-pyro-flow-rise', 'Flow rise'],
+  ['volume-pyro-flow-fire-lock', 'Flow fire lock'],
+  ['volume-pyro-flow-luma', 'Flow luma'],
+  ['volume-pyro-flow-radiance', 'Flow radiance'],
+  ['volume-pyro-flow-spikes', 'Flow spikes'],
+]) {
+  assert.match(index, new RegExp(`id="${id}"`), `Pyro cockpit exposes topology/flow carrier control ${id}`);
+  assert.match(index, new RegExp(copy, 'i'), `Pyro cockpit labels ${copy} for topology/flow carrier tuning`);
+}
+for (const [id, label] of [
+  ['volume-pyro-flow-cool-color', 'Flow cool'],
+  ['volume-pyro-flow-hot-color', 'Flow hot'],
+]) {
+  assert.match(index, new RegExp(`id="${id}"[^>]+type="color"|type="color"[^>]+id="${id}"`), `Pyro cockpit exposes editable flow carrier swatch ${id}`);
+  assert.match(index, new RegExp(label, 'i'), `Pyro cockpit labels the ${label} editable endpoint`);
+}
+assert.match(index, /Flow only/i, 'Pyro carrier isolate selector can show Flow alone');
+assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Flow isolate mode');
+for (const param of [
+  'volume_pyro_flow_bite',
+  'volume_pyro_flow_border',
+  'volume_pyro_flow_teeth',
+  'volume_pyro_flow_rise',
+  'volume_pyro_flow_fire_lock',
+  'volume_pyro_flow_luma',
+  'volume_pyro_flow_radiance',
+  'volume_pyro_flow_spikes',
+  'volume_pyro_flow_cool_color',
+  'volume_pyro_flow_hot_color',
+]) {
+  assert.match(index, new RegExp(param), `Pyro basin URLs preserve ${param}`);
+}
+for (const field of [
+  'pyroFlowBite',
+  'pyroFlowBorder',
+  'pyroFlowTeeth',
+  'pyroFlowRise',
+  'pyroFlowFireLock',
+  'pyroFlowLuma',
+  'pyroFlowRadiance',
+  'pyroFlowSpikes',
+  'pyroFlowCoolColor',
+  'pyroFlowHotColor',
+]) {
+  assert.match(index, new RegExp(`'${field}'`), `Pyro look library preserves ${field}`);
+}
+for (const routeName of [
+  'routePyroFlowBite',
+  'routePyroFlowBorder',
+  'routePyroFlowTeeth',
+  'routePyroFlowRise',
+  'routePyroFlowFireLock',
+  'routePyroFlowLuma',
+  'routePyroFlowRadiance',
+  'routePyroFlowSpikes',
+  'routePyroFlowCoolColor',
+  'routePyroFlowHotColor',
+]) {
+  assert.match(index, new RegExp(routeName), `Pyro route parser accepts ${routeName}`);
+}
+const volumeSyncControlLoop = index.match(/for \(const id of \[([\s\S]*?'volume-canonical-body-balance'[\s\S]*?)\]\) \{\s*document\.getElementById\(id\)\.addEventListener\('input', syncControls\)/);
+assert.ok(volumeSyncControlLoop, 'Volume cockpit has one explicit syncControls listener list for slider/select controls');
+for (const id of ['volume-pyro-flow-radiance', 'volume-pyro-flow-spikes']) {
+  assert.match(volumeSyncControlLoop[1], new RegExp(`'${id}'`), `Flow control ${id} triggers syncControls instead of becoming a stale display-only knob`);
+}
+assert.match(index, /moveVolumePyroRadianceControlsBelowFlow/, 'Pyro cockpit keeps old Radiance directly below Flow instead of burying it under demoted Bite/Fold/Wake controls');
+assert.match(index, /moveVolumePyroLegacyControlsBelowRadiance/, 'Pyro cockpit explicitly demotes legacy Bite/Fold/Wake controls below the still-useful Radiance surface');
+assert.match(index, /FLOW_FIRST_PYRO_CONTROL_IDS[\s\S]*volume-pyro-flow-bite[\s\S]*volume-pyro-flow-radiance[\s\S]*volume-pyro-flow-spikes/, 'Pyro cockpit treats Flow as the primary carrier control group');
+assert.match(index, /PYRO_RADIANCE_CONTROL_IDS[\s\S]*volume-pyro-radiance[\s\S]*volume-pyro-radiance-fire-lock/, 'Pyro cockpit keeps the old Radiance controls together as the second carrier group');
+assert.match(index, /LEGACY_PYRO_CONTROL_IDS[\s\S]*volume-pyro-edge-bite[\s\S]*volume-pyro-smoke-fold[\s\S]*volume-pyro-wake-ember-color/, 'Pyro cockpit keeps legacy Bite/Fold/Wake controls available as a demoted group');
+const legacyPyroControlIds = index.match(/const LEGACY_PYRO_CONTROL_IDS = \[([\s\S]*?)\];/)?.[1] || '';
+assert.doesNotMatch(legacyPyroControlIds, /volume-pyro-radiance/, 'Demoted Bite/Fold/Wake controls must not bury the still-useful Radiance controls');
+assert.match(index, /moveVolumePyroFreezeIntoCarrierWorkbench/, 'Pyro cockpit explicitly moves Look Freeze into the carrier-tuning workbench');
+assert.match(index, /PYRO_CARRIER_WORKBENCH_PINNED_IDS[\s\S]*volume-look-freeze/, 'Pyro Freeze is pinned near the carrier controls instead of stranded in the generic route controls');
+assert.match(core, /pyroFlowSignal[\s\S]*combustionFrontTopology[\s\S]*fireLick/, 'Pyro shader derives Flow carrier from combustion-front topology and live fire-lick breakup');
+assert.match(core, /pyroFlowRadianceBoost[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow radiance as a sparse additive term derived from the live Flow carrier');
+assert.match(core, /pyroFlowSpikeSignal[\s\S]*pyroFlowSignal/, 'Pyro shader exposes Flow spikes as a separate topology/filament term derived from the live Flow carrier');
+assert.match(core, /flowSignalMax/, 'Pyro renderer debug state exposes flow carrier max for route evidence');
+assert.match(core, /flowRadianceMax/, 'Pyro renderer debug state exposes Flow radiance gain for route evidence');
+assert.match(core, /flowSpikeMax/, 'Pyro renderer debug state exposes Flow spike gain for route evidence');
 assert.match(index, /volume_pyro_radiance_gate/, 'Pyro basin URLs preserve radiance gate');
 assert.match(index, /volume_pyro_radiance_spill/, 'Pyro basin URLs preserve radiance spill');
 assert.match(index, /volume_pyro_radiance_warmth/, 'Pyro basin URLs preserve radiance warmth');
@@ -232,6 +439,12 @@ assert.doesNotMatch(volumeWitness, /`\/tmp\/kaminos-volume-witness-profile-\$\{p
 assert.match(volumeWitness, /mkdtempSync\([^)]*kaminos-volume-witness-profile-/, 'Volume witness default profile must be fresh per run so stale localStorage cannot shadow the requested route');
 assert.doesNotMatch(volumeWitness, /Number\(args\.get\('--debug-port'\) \|\| 9433\)/, 'Volume witness must not reuse one fixed default Chrome debug port across runs');
 assert.match(volumeWitness, /randomInt\(/, 'Volume witness default debug port must be randomized so stale Chrome targets cannot shadow the requested route');
+assert.match(volumeWitness, /--freeze-integrity-probe/, 'Volume witness can run a live look-freeze integrity probe');
+assert.match(volumeWitness, /--freeze-integrity-probe-only/, 'Volume witness can isolate freeze integrity from broader visual evidence gates');
+assert.match(volumeWitness, /look-freeze-render-phase-integrity-probe-v0/, 'Freeze integrity probe writes a stable predicate identity');
+assert.match(volumeWitness, /renderPhaseTimeFrozen/, 'Freeze integrity probe verifies renderer time stays pinned during frozen control scrubs');
+assert.match(volumeWitness, /renderPhaseFinite/, 'Freeze integrity probe rejects null or non-finite pinned renderer phases');
+assert.match(volumeWitness, /pyroDynamicDetailPhaseFrozen/, 'Freeze integrity probe verifies Pyro material memory does not advance during frozen control scrubs');
 assert.match(index, /routePyroRadianceGate/, 'Pyro route parser accepts radiance gate');
 assert.match(index, /routePyroRadianceSpill/, 'Pyro route parser accepts radiance spill');
 assert.match(index, /routePyroRadianceWarmth/, 'Pyro route parser accepts radiance warmth');
@@ -266,8 +479,9 @@ assert.match(index, /Bite only/i, 'Pyro carrier isolate selector can show Bite a
 assert.match(index, /Fold only/i, 'Pyro carrier isolate selector can show Fold alone');
 assert.match(index, /Wake only/i, 'Pyro carrier isolate selector can show Wake alone');
 assert.match(index, /Radiance only/i, 'Pyro carrier isolate selector can show Radiance alone');
+assert.match(index, /Flow only/i, 'Pyro carrier isolate selector can show Flow alone');
 assert.match(index, /All carriers/i, 'Pyro carrier selector can expose all carriers without implying forced loud paint');
-assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Wake and Radiance isolate modes');
+assert.match(index, /\['normal', 'border', 'bite', 'fold', 'wake', 'radiance', 'flow', 'all'\]\.includes\(routePyroCarrierView\)/, 'Pyro carrier-view URL route accepts the Wake, Radiance, and Flow isolate modes');
 assert.match(index, /Math\.min\(10,\s*routePyroRadiance\)/, 'Pyro radiance URL route accepts the same loud range as the cockpit slider');
 assert.match(index, /id="volume-pyro-overdrive"/, 'Pyro cockpit exposes a diagnostic overdrive slider');
 assert.match(index, /Continuous carrier gain/i, 'Pyro overdrive slider describes a reachable normal-mode gain, not a fake diagnostic mode');
@@ -323,6 +537,13 @@ assert.match(index, /temporalAccum/, 'Volume controls carry temporal accumulatio
 assert.match(index, /id="volume-temporal-jitter"/, 'Volume tab exposes temporal ray jitter control');
 assert.match(index, /volume_temporal_jitter/, 'URL route can override temporal ray jitter strength');
 assert.match(index, /temporalJitter/, 'Volume controls carry temporal ray jitter strength into the renderer');
+assert.match(index, /Look lab freeze:[^<]*(pixel-stable|pins temporal)/i, 'Freeze help text must promise pixel-stable temporal pinning only when the renderer actually pins it');
+assert.match(core, /const lookFreeze = normalizeLookFreeze\(controlsSnapshot\.lookFreeze\)[\s\S]*?const baseTemporalAccum/, 'lookFreeze must be resolved before temporal uniforms are written');
+assert.match(core, /uniforms\[19\]\s*=\s*renderPhaseTimeMs\s*\*\s*0\.001/, 'look freeze pins shader time through the freeze-aware render phase');
+assert.match(core, /uniforms\[44\]\s*=\s*lookFreeze\s*\?\s*0\s*:\s*\(historyValid \? requestedTemporalAccum : 0\)/, 'look freeze disables temporal history blending instead of accumulating crawl');
+assert.match(core, /uniforms\[45\]\s*=\s*lookFreeze\s*\?\s*0\s*:\s*\(controlsSnapshot\.temporalJitter \?\? 0\.85\)/, 'look freeze disables temporal ray jitter');
+assert.match(core, /uniforms\[47\]\s*=\s*renderPhaseFrame\s*%\s*4096/, 'look freeze pins shader frame index through the freeze-aware render phase');
+assert.match(core, /const sampleLookFreeze = normalizeLookFreeze\(controlsSnapshot\.lookFreeze\)[\s\S]*if \(advanceSim && !sampleLookFreeze\) \{[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder, \{[^}]*force: true[^}]*\}\)[\s\S]*\} else if \(!sampleLookFreeze\)/, 'sampleFrame must not advance sim/majorant while look freeze is active but may rebuild majorants for frozen render-scale reads');
 assert.match(index, /id="volume-history-clamp"/, 'Volume tab exposes temporal history clamp control');
 assert.match(index, /volume_history_clamp/, 'URL route can override temporal history clamp strength');
 assert.match(index, /historyClamp/, 'Volume controls carry temporal history clamp strength into the renderer');
@@ -448,6 +669,30 @@ assert.match(index, /id="volume-input-radius"[^>]+value="0\.12"/, 'smoke route d
 assert.match(index, /id="volume-flow-rate"[^>]+value="0\.15"/, 'smoke route defaults to the accepted input flow rate');
 assert.match(index, /id="volume-projection"/, 'Volume tab exposes a pressure/projection control');
 assert.match(index, /id="volume-flow-debug"/, 'Volume tab exposes a flow diagnostic overlay control');
+assert.match(index, /id="volume-oracle-activity-cue"/, 'Volume tab exposes a truth-oracle scalar activity receiver master toggle');
+assert.match(index, /id="volume-oracle-activity-display"/, 'Volume tab exposes an inert scalar activity display control');
+assert.match(index, /id="volume-oracle-activity-curl-noise"/, 'Volume tab exposes a scalar activity curl-noise receiver gain');
+assert.match(index, /id="volume-oracle-activity-vorticity"/, 'Volume tab exposes a scalar activity vorticity receiver gain');
+assert.match(index, /id="volume-oracle-activity-material"/, 'Volume tab exposes a scalar activity material/interface receiver gain');
+assert.match(index, /volume_oracle_activity_cue/, 'Basin URLs preserve scalar activity receiver master toggle');
+assert.match(index, /volume_oracle_activity_curl_noise/, 'Basin URLs preserve scalar activity curl-noise receiver gain');
+assert.match(index, /volume_oracle_activity_vorticity/, 'Basin URLs preserve scalar activity vorticity receiver gain');
+assert.match(index, /volume_oracle_activity_material/, 'Basin URLs preserve scalar activity material receiver gain');
+assert.match(core, /TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY\s*=\s*'truth-oracle-scalar-activity-receiver-v0'/, 'volume core names the truth-oracle scalar activity receiver route');
+assert.match(core, /TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY\s*=\s*'truth-high-diagnostic-activity-projected-to-receiver-grid-v0'/, 'volume core preserves truth-derived cue authority separately from learned/product inputs');
+assert.match(core, /oracle_activity_controls:\s*vec4<f32>/, 'fluid uniforms carry scalar activity receiver hook controls');
+assert.match(core, /oracle_activity_controls2:\s*vec4<f32>/, 'fluid uniforms carry scalar activity cue source/display controls');
+assert.match(core, /truthOracleActivityCueAtCell/, 'fluid shader samples a named scalar activity cue field');
+assert.match(core, /oracleActivityCurlNoiseForce/, 'fluid shader exposes scalar activity gated curl-noise force hook');
+assert.match(core, /oracleActivityVorticityConfinement/, 'fluid shader exposes scalar activity gated vorticity confinement hook');
+assert.match(core, /oracleActivityMaterialBirth/, 'fluid shader exposes scalar activity gated material/interface birth hook');
+assert.match(core, /setTruthOracleActivityCue/, 'volume prototype exposes a public API for feeding projected truth activity cue buffers');
+assert.match(core, /function normalizeScalarActivityCueGridSize/, 'truth-oracle cue source grids use a dedicated positive-integer normalizer instead of supported receiver-grid snapping');
+assert.match(core, /sourceGrid\s*=\s*normalizeScalarActivityCueGridSize/, 'truth-oracle cue upload preserves source-grid identity before resampling to the receiver grid');
+assert.match(core, /scalarActivityReceiver/, 'debug state reports scalar activity receiver identity, cue authority, toggles, gains, and effective source');
+assert.match(core, /requestedCueAuthority/, 'scalar activity receiver debug state distinguishes requested cue authority');
+assert.match(core, /effectiveCueAuthority/, 'scalar activity receiver debug state distinguishes effective cue authority');
+assert.match(core, /externalCueCellCount/, 'scalar activity receiver debug state reports whether an external cue buffer is actually present');
 assert.match(index, /id="volume-pyro-detail"/, 'Volume tab exposes the Pyro dynamic detail debug toggle');
 assert.match(index, /id="volume-pyro-material-gain"/, 'Volume tab exposes an opt-in Pyro material-memory renderer gain');
 assert.match(index, /id="volume-pyro-dynamic-atlas"/, 'Volume tab exposes an inspectable Pyro dynamic detail atlas canvas');
@@ -558,9 +803,6 @@ assert.match(index, /params\.has\('volume_flow_debug'\)/, 'missing flow-debug ro
 assert.match(index, /rotateSpeed\s*=\s*-\d/, 'viewport orbit drag uses object-turntable rotation direction');
 assert.match(index, /screenSpacePanning\s*=\s*true/, 'viewport pan tracks screen-space pointer movement');
 
-const corePath = join(root, 'volume-core.js');
-assert.ok(existsSync(corePath), 'volume-core.js exists');
-const core = existsSync(corePath) ? readFileSync(corePath, 'utf8') : '';
 assert.match(core, /export function createKaminosVolumePrototype/, 'volume module exports createKaminosVolumePrototype');
 assert.match(core, /kaminos-volume-prototype-v0/, 'volume module exposes stable witness identity');
 assert.match(core, /native-3d-compute-fluid-raymarch-v0/, 'volume module records compute-backed fluid route identity');
@@ -573,6 +815,52 @@ assert.doesNotMatch(core, /canonicalPlumeScene[\s\S]{0,1600}bonfireRenderedFireE
 assert.match(core, /canonicalSmokeFieldSlice/, 'canonical plume exposes a CPU-readback field-slice artifact instead of relying only on camera raymarch evidence');
 assert.match(core, /canonical-smoke-field-slice-v0/, 'canonical plume field slice has a stable witness identity');
 assert.match(core, /smoke-density-max-z-projection/, 'canonical plume field slice includes a smoke-density max-Z projection for field-shape diagnosis');
+assert.match(core, /REACTION_FRONT_STAGE_IDENTITY\s*=\s*'reaction-front-stage-fields-v0'/, 'reaction-front atlas uses a stable modular stage identity');
+assert.match(core, /REACTION_FRONT_ATLAS_SCHEMA\s*=\s*'kaminos\.volume\.reaction-front-atlas\.v0'/, 'reaction-front atlas reports a stable schema');
+assert.match(core, /buildReactionFrontAtlas/, 'reaction-front atlas is built from the CPU fluid/front readback path');
+assert.match(core, /reactionFrontAtlas/, 'sampleFrame sim readback exposes the reaction-front atlas for future live debug viewers');
+assert.match(core, /heatSupport[\s\S]*fuelSupport[\s\S]*reactionPotential[\s\S]*gradientMagnitude[\s\S]*narrowFrontCandidate[\s\S]*shellCandidate/, 'reaction-front atlas stages keep source support, potential, gradient, narrow-front, and shell-candidate fields distinct');
+assert.match(core, /labelOverlay:\s*true/, 'reaction-front atlas PNG declares visible panel labels for operator smoke');
+assert.match(core, /drawAtlasLabel/, 'reaction-front atlas draws panel labels into the PNG pixels instead of relying only on report metadata');
+assert.match(index, /data-volume-control-section="reaction-front-extractor"/, 'reaction-front extractor controls are grouped away from legacy pyro controls');
+assert.match(index, /id="volume-reaction-live-view"/, 'reaction-front extractor exposes a primary-viewer live inspect selector');
+assert.match(index, /<option value="boundary">boundary<\/option>/, 'reaction-front live inspect selector exposes the derived boundary candidate in the primary viewer');
+assert.match(index, /<option value="boundary_fire">boundary-fire<\/option>/, 'reaction-front live inspect selector exposes the boundary-fire sheet radiance mode separately from scalar boundary inspect');
+assert.match(index, /volume_reaction_live_view/, 'reaction-front live inspect selector is routeable through basin URLs');
+assert.match(index, /reactionLiveView[\s\S]*fireRenderMode:\s*reactionLiveView !== 'off' \? 'inspect'/, 'reaction-front live inspect selector overrides the primary renderer into inspect mode');
+assert.match(index, /reaction-live-view-shader-inspect-v0/, 'reaction-front live inspect labels its shader-side approximation boundary');
+assert.match(index, /reaction-boundary-live-controls-v0/, 'reaction-front live boundary controls declare a stable route/debug identity');
+assert.match(index, /id="volume-reaction-boundary-gradient"[\s\S]*id="volume-reaction-boundary-opacity"/, 'reaction-front extractor exposes live boundary gradient, support, topology, and display sliders for the primary viewer');
+assert.match(index, /volume_reaction_boundary_gradient[\s\S]*volume_reaction_boundary_opacity/, 'reaction-front live boundary controls are copyable and routeable through basin URLs');
+assert.match(index, /reactionBoundaryControls:\s*\{[\s\S]*gradientGain[\s\S]*supportThermal[\s\S]*displayOpacity/, 'reaction-front live boundary controls reach the runtime controls object as a grouped contract');
+assert.match(index, /reaction-boundary-fire-controls-v0/, 'reaction-front boundary-fire controls declare a stable sheet-radiance identity');
+assert.match(index, /id="volume-reaction-boundary-fire-ridge"[\s\S]*id="volume-reaction-boundary-fire-luma"/, 'reaction-front extractor exposes ridge, tip, erosion, and fuel-color sliders for boundary-fire');
+assert.match(index, /volume_reaction_boundary_fire_ridge[\s\S]*volume_reaction_boundary_fire_luma/, 'reaction-front boundary-fire controls are copyable and routeable through basin URLs');
+assert.match(index, /reactionBoundaryFireControls:\s*\{[\s\S]*ridgeGain[\s\S]*tipBreakup[\s\S]*cleanBlue[\s\S]*fireLuma/, 'reaction-front boundary-fire controls reach the runtime controls object as a grouped contract');
+assert.match(core, /shellInspectModeValue[\s\S]*mode === 'boundary'[\s\S]*return 8[\s\S]*mode === 'boundary_fire'[\s\S]*return 9/, 'volume shader routing maps boundary and boundary-fire inspect modes to distinct mode ids');
+assert.match(core, /let shellInspectMode = clamp\(u\.topology_shell_controls\.y,\s*0\.0,\s*9\.0\)/, 'shader inspect mode clamp includes boundary-fire');
+assert.match(core, /boundary_fire_structure:\s*vec4<f32>[\s\S]*boundary_fire_color:\s*vec4<f32>[\s\S]*boundary_fire_display:\s*vec4<f32>/, 'shader carries dedicated boundary-fire uniforms instead of stealing unrelated controls');
+assert.match(core, /fn liveBoundarySupportAt/, 'shader computes live boundary support from sampled carriers instead of trusting a named front field');
+assert.match(core, /inspectBoundaryMask[\s\S]*boundaryCandidate/, 'shader primary-view inspect path includes a derived boundary candidate signal');
+assert.match(core, /boundaryFireRidge[\s\S]*boundaryFireTipGate[\s\S]*boundaryFireErosion/, 'shader boundary-fire mode derives ridge, dynamic tip, and topology erosion terms');
+assert.match(core, /cleanFuelColor[\s\S]*sootMaturity[\s\S]*sootThermalColor[\s\S]*boundaryFireColor/, 'shader boundary-fire color mixes clean fuel color toward soot-rich thermal color');
+assert.match(core, /reactionBoundaryControls/, 'renderer debug state exposes effective live boundary controls for witness reports');
+assert.match(core, /reactionBoundaryFireControls/, 'renderer debug state exposes effective boundary-fire controls for witness reports');
+assert.match(index, /id="volume-reaction-heat-min"[\s\S]*id="volume-reaction-shell-contrast"/, 'reaction-front extractor exposes threshold and shaping sliders');
+assert.match(index, /volume_reaction_heat_min[\s\S]*volume_reaction_shell_contrast/, 'reaction-front extractor controls are copyable and routeable through basin URLs');
+assert.match(index, /reactionHeatMin:\s*parseFloat\(document\.getElementById\('volume-reaction-heat-min'\)\.value\)/, 'reaction-front heat threshold reaches the runtime controls object');
+assert.match(index, /volume-reaction-atlas-canvas/, 'reaction-front atlas has an in-page visual capture surface for operator smoke');
+assert.match(index, /captureVolumeReactionAtlas/, 'reaction-front atlas capture path can draw sampleFrame output without rewiring the renderer');
+assert.match(core, /normalizeReactionFrontAtlasControls/, 'reaction-front atlas has a normalized controls contract independent of legacy pyro controls');
+assert.match(core, /reactionFrontAtlasControls/, 'reaction-front atlas readback returns effective extractor controls');
+assert.match(core, /stretchErode[\s\S]*divergenceGain[\s\S]*curlWarp[\s\S]*shellContrast/, 'reaction-front atlas supports stretch erosion, divergence gating, curl warp, and contrast shaping knobs');
+assert.match(reactionFrontAtlasWitness, /kaminos\.volume-reaction-front-atlas-witness\.v0/, 'reaction-front atlas witness declares its schema');
+assert.match(reactionFrontAtlasWitness, /reactionFrontAtlas/, 'reaction-front atlas witness consumes sampleFrame sim readback atlas data');
+assert.match(reactionFrontAtlasWitness, /failure_phase/, 'reaction-front atlas witness writes failure phase for false-closure diagnosis');
+assert.match(reactionFrontAtlasWitness, /primary_output_written/, 'reaction-front atlas witness records whether primary visual output was actually written');
+assert.match(reactionFrontAtlasWitness, /requestedRoute[\s\S]*effectiveRoute/, 'reaction-front atlas witness records requested and effective route identity');
+assert.match(reactionFrontAtlasWitness, /reactionFrontAtlas\.controls/, 'reaction-front atlas witness records effective extractor controls in its report');
+assert.match(reactionFrontAtlasWitness, /uiCaptureSummary[\s\S]*__kaminosCaptureVolumeReactionAtlas/, 'reaction-front atlas witness exercises the in-page capture hook');
 assert.match(core, /canonicalSourceBand/, 'canonical plume uses a named low source band instead of inheriting the compact vertical source band');
 assert.match(core, /canonicalSourceMode/, 'canonical plume source physics mode reaches the shader and debug state');
 assert.match(core, /canonicalSourceYControl/, 'canonical plume source height is an explicit route/debug control');
@@ -875,7 +1163,14 @@ assert.match(core, /normalizePyroCompareMode\(controlsSnapshot\.pyroCompareMode\
 assert.match(core, /pyroCompareMuted\s*=\s*pyroCompareMode\s*===\s*'base'/, 'Base compare mode mutes Pyro material carriers');
 assert.match(core, /lookFreezeCanPin\(state\)/, 'Look-lab freeze waits for an initialized sim frame before pinning');
 assert.match(core, /pumpLookLabFrozenFrame\(\)/, 'Frozen look-lab controls force a redraw even when the browser parks RAF');
-assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder\)/, 'Look-lab freeze skips sim and majorant passes while live mode keeps stepping');
+assert.match(core, /if \(lookFreeze\)[\s\S]*state\.lookFreezeFrame[\s\S]*else[\s\S]*encodeSim\(encoder\)[\s\S]*encodeMajorant\(encoder(?:,[^)]*)?\)/, 'Look-lab freeze skips sim and majorant passes while live mode keeps stepping');
+assert.match(core, /lookFreezeRenderTimeMs/, 'Look-lab freeze pins renderer time as well as sim stepping so radiance probes do not crawl');
+assert.match(core, /lookFreezeRenderFrame/, 'Look-lab freeze pins temporal-frame shader input as well as sim stepping');
+assert.match(core, /typeof state\.lookFreezeRenderTimeMs !== 'number'/, 'Look-lab freeze render-time pin treats null as unpinned rather than finite zero');
+assert.match(core, /uniforms\[19\]\s*=\s*renderPhaseTimeMs\s*\*\s*0\.001/, 'Renderer time uniform uses the freeze-aware render phase instead of raw RAF time');
+assert.match(core, /uniforms\[47\]\s*=\s*renderPhaseFrame\s*%\s*4096/, 'Temporal frame uniform uses the freeze-aware render frame instead of raw frameCount');
+assert.match(core, /const renderPhaseAuthority\s*=\s*lookFreeze\s*\?\s*'look-freeze-pinned-render-phase'/, 'Debug state reports whether render phase is live or look-freeze pinned');
+assert.match(core, /setControls\(next\)[\s\S]*const controlsLookFreeze[\s\S]*if \(!controlsLookFreeze\) updatePyroDynamicDetailState\(\{ inputKind: 'control-proxy' \}\)/, 'Look-lab freeze prevents control scrubbing from advancing Pyro material-memory state');
 assert.match(core, /uniforms\[85\]\s*=\s*pyroMaterialEnergy/, 'CPU uploads reset-gated Pyro material-memory energy into the WGSL uniform block');
 assert.match(core, /uniforms\[88\s*\+\s*memoryIndex\s*\*\s*4\]\s*=\s*sample\[0\]/, 'CPU uploads each Pyro material-memory atlas cell into the uniform block');
 assert.match(core, /samplePyroMaterialMemoryCell\(p\)/, 'shader samples Pyro material memory spatially from the current raymarch position');
@@ -963,7 +1258,7 @@ assert.match(core, /uniforms\[203\]\s*=\s*pyroRadianceChroma/, 'CPU uploads Radi
 assert.match(core, /uniforms\[212\]\s*=\s*pyroFlamePaint/, 'CPU uploads flame paint gain into the Pyro luma uniform block');
 assert.match(core, /uniforms\[213\]\s*=\s*pyroFlameLuma/, 'CPU uploads flame luminance into the Pyro luma uniform block');
 assert.match(core, /writePyroPaletteUniform/, 'CPU uploads editable Pyro palette color endpoints');
-assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*260\)/, 'previous view-projection matrix shifts after Bite-stack and palette uniforms');
+assert.match(core, /uniforms\.set\(previousViewProj\.elements,\s*328\)/, 'previous view-projection matrix shifts after Bite-stack, flow, palette, topology-shell lab, boundary-fire, boundary sidecar reconstruction, sidecar display, selective live render controls, and scalar activity receiver uniforms');
 assert.match(core, /paletteShape/, 'debug state exposes editable Pyro palette shape');
 assert.match(core, /lumaShape/, 'debug state exposes independent Pyro luma shape');
 assert.match(core, /radianceShape/, 'debug state exposes Pyro radiance gate/spill/warmth shape');
@@ -1025,6 +1320,16 @@ assert.match(core, /tallPlumeSourceSlabRelief/, 'tall plume high-flow source sla
 assert.match(core, /tallPlumeEmitterBand/, 'tall plume has a named compact emitter band for combustion source birth');
 assert.match(core, /tallPlumeCombustionSource/, 'tall plume combustion source is separated from the broad smoke source column');
 assert.match(core, /tallPlumeEmitterFireBirth/, 'tall plume fire birth is separated from the broad column fire source');
+assert.match(core, /tallPlumeSourceWidthGate/, 'tall plume source birth must explicitly know when the emitter is wide enough to need extra front topology');
+assert.match(core, /tallPlumeFrontPacketDensity/, 'tall plume source width must scale front packet density instead of only scaling the hot body');
+assert.match(core, /tallPlumeAnnularFrontBirth/, 'tall plume wide-source birth must add an annular combustion-front carrier');
+assert.match(core, /tallPlumeInteriorFireRelief/, 'tall plume wide-source birth must relieve the interior so broad sources do not become solid hot plugs');
+assert.match(core, /let columnFrontTopologyBirth = max\(columnCombustionFrontBirth \* 0\.32, tallPlumeAnnularFrontBirth \* 0\.42\);/, 'tall plume annular source birth must feed combustion front topology, not only visible flame color');
+assert.match(core, /tallPlumeSmokeDebandWarp/, 'tall plume smoke source must warp away from the old planar breakup carrier');
+assert.match(core, /tallPlumeSmokeDebandBasis/, 'tall plume smoke source must use a named de-banded scalar basis');
+assert.match(core, /tallPlumeSmokeSourceBreakup/, 'tall plume smoke source must expose the de-banded breakup selected for smoke density birth');
+assert.match(core, /let columnSource = exp\(-sourceRadial \* sourceRadial \* smokeSourceFalloff\) \* sourceBand \* mix\(breakup, tallPlumeSmokeSourceBreakup, tallPlumeScene\) \* inputFlow;/, 'tall plume smoke birth must swap the old planar breakup out of the density source');
+assert.doesNotMatch(core, /let columnSource = exp\(-sourceRadial \* sourceRadial \* smokeSourceFalloff\) \* sourceBand \* breakup \* inputFlow;/, 'tall plume smoke birth must not bake the old planar breakup directly into density');
 assert.match(core, /tallPlumeLiveReactionCarrier/, 'tall plume reaction is driven by compact combustion carrier rather than broad smoke source');
 assert.doesNotMatch(core, /let tallPlumeLiveFlameSurvival = tallPlumeReactionSurvival \* tallPlumeFuelSurvival \* tallPlumeFlameContourSurvival;/, 'tall plume live flame survival must not bypass front topology and tip taper');
 assert.match(core, /fireBirth \* 0\.024 \* tallPlumeRawSourceFireRelief/, 'tall plume flame storage must downweight raw source birth at high flow');
@@ -1481,8 +1786,12 @@ assert.match(witness, /TALL_PLUME_OPERATOR_PRESETS/, 'witness knows named tall-p
 assert.match(witness, /operator_fire_0622/, 'witness recognizes the 2026-06-22 tall-plume fire/smoke wind foothold preset');
 assert.match(witness, /operator_memory_fire_0701/, 'witness recognizes the 2026-07-01 operator-found Pyro-memory tall-plume baseline preset');
 assert.match(witness, /pyro_material_bonfire_family_0702/, 'witness recognizes the 2026-07-02 operator-found Pyro material bonfire family basin');
-assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'pyro_material_bonfire_family_0702'/, 'witness mirrors the bare smoke route default Pyro basin');
+assert.match(witness, /exploding_jellow_fireball_motherfucker_0706/, 'witness recognizes the 2026-07-06 operator-found exploding jellow fireball Pyro basin');
+assert.match(witness, /pyro_flow_small_bonfire_gamut_0707/, 'witness recognizes the 2026-07-07 operator-found Pyro Flow small-bonfire gamut basin');
+assert.match(witness, /boundary_fire_bonfire_a_la_ruffles_0709/, 'witness recognizes the 2026-07-09 operator-found Boundary Fire Bonfire_a_la_ruffles basin');
+assert.match(witness, /DEFAULT_VOLUME_SMOKE_TALL_PRESET\s*=\s*'boundary_fire_bonfire_a_la_ruffles_0709'/, 'witness mirrors the bare smoke route default Boundary Fire Bonfire_a_la_ruffles basin');
 assert.match(witness, /kaminos_volume_smoke'\)\s*===\s*'1'[\s\S]*DEFAULT_VOLUME_SMOKE_TALL_PRESET/, 'witness expects bare smoke routes to boot into the default Pyro basin');
+assert.match(witness, /!routeParams\.has\('volume_scene'\)\s*\|\|\s*routeParams\.get\('volume_scene'\) === 'tall_plume'/, 'witness expects explicit tall_plume smoke routes to preserve the default Pyro basin');
 assert.match(witness, /expectedDetailScaleArtifactQuarantine/, 'witness verifies the tall-plume detail-scale artifact quarantine state');
 assert.match(witness, /detailScaleArtifactQuarantine/, 'witness records the effective detail-scale artifact quarantine state');
 assert.match(witness, /expectedReactionFuelScale/, 'witness verifies tall-plume reaction fuel route identity');
@@ -1522,6 +1831,12 @@ assert.match(witness, /renderScale/, 'witness records effective internal render 
 assert.match(witness, /displayWidth/, 'witness records displayed canvas width');
 assert.match(witness, /renderWidth/, 'witness records internal render width');
 assert.match(witness, /renderPixelRatio/, 'witness records render-to-display pixel ratio');
+assert.match(witness, /volumeResidualMode/, 'witness records effective residual mode when residual reconstruction is active');
+assert.match(witness, /volumeResidualFeatureAuthority/, 'witness records residual feature-plane authority identity');
+assert.match(witness, /volumeResidualFeatureDebugMode/, 'witness records residual feature debug visualization identity');
+assert.match(witness, /volumeResidualCost/, 'witness records residual application cost evidence');
+assert.match(witness, /recoverIdentityFrameState[\s\S]*Page\.captureScreenshot[\s\S]*debugState/, 'witness forces a compositor read and rechecks debug state before failing slow/backgrounded volume identity');
+assert.match(witness, /function wsRequest[\s\S]*setInterval[\s\S]*clearInterval/, 'CDP websocket requests keep Node alive until each browser response resolves or rejects');
 assert.match(witness, /expectedExternalEmitterMode/, 'witness verifies external emitter route identity when requested');
 assert.match(witness, /externalEmitterMode/, 'witness records external emitter mode');
 assert.match(witness, /externalEmitterCount/, 'witness records effective external emitter count');
@@ -1553,6 +1868,40 @@ assert.match(witness, /mainFluidLocalProjectionStrategy/, 'witness reports the m
 assert.match(witness, /main-fluid-local-projection-staged-pressure-only-v0/, 'witness recognizes the staged-only main-fluid local projection strategy');
 assert.match(witness, /mainFluidLocalProjectionDivergenceEvaluationsPerCell/, 'witness reports main-fluid local projection divergence evaluations per cell');
 assert.match(witness, /fireLickBreakupEvaluationsPerCell/, 'witness reports fire-lick breakup evaluations per cell');
+const selectiveHeadLiveWitness = readFileSync(join(root, 'volume-selective-head-live-witness.mjs'), 'utf8');
+const selectiveHeadLiveSequenceWitness = readFileSync(join(root, 'volume-selective-head-live-sequence-witness.mjs'), 'utf8');
+const selectiveHeadCompositionWitness = readFileSync(join(root, 'volume-selective-head-composition-witness.mjs'), 'utf8');
+const selectiveHeadLivePage = readFileSync(join(root, 'volume-selective-head-live.html'), 'utf8');
+assert.match(core, /SELECTIVE_HEAD_LIVE_RENDER_COMPOSITIONS/, 'selective-head live renderer compositions are explicit identities, not hidden pass side effects');
+assert.match(core, /splat-only-v0/, 'selective-head live supports a splat-only attribution composition');
+assert.match(core, /raymarch-only-v0/, 'selective-head live supports a raymarch-only diagnostic composition');
+assert.match(core, /smoke-raymarch-under-splats-v0/, 'selective-head live supports the non-double-counted smoke raymarch under splat-fire composition');
+assert.match(core, /full-raymarch-under-splats-diagnostic-v0/, 'selective-head live preserves the old full-fire hybrid only as an explicit diagnostic');
+assert.match(core, /normalizeSelectiveHeadLiveRenderComposition/, 'selective-head live normalizes requested renderer composition before use');
+assert.match(core, /selectiveHeadLiveCompositionRequestedRaw/, 'selective-head live debug state preserves the raw requested renderer composition');
+assert.match(core, /selectiveHeadLiveCompositionRequested/, 'selective-head live debug state records requested renderer composition');
+assert.match(core, /selectiveHeadLiveCompositionEffective/, 'selective-head live debug state records effective renderer composition');
+assert.match(core, /selectiveHeadLiveCompositionFallbackReason/, 'selective-head live fails loud when renderer composition is substituted');
+assert.match(core, /selectiveHeadLivePassReceipt/, 'selective-head live reports exactly which raymarch and splat passes were encoded and applied');
+assert.match(core, /setControls\(next\)[\s\S]*selectiveHeadLiveRenderCompositionRequest/, 'route-init controls normalize renderer composition in setControls without depending on render-loop locals');
+assert.match(core, /smoke-raymarch-authority-broad-smoke-only-v0/, 'smoke-hybrid mode names the raymarch authority partition');
+assert.match(core, /splat-fire-authority-learned-boundary-sheets-v0/, 'smoke-hybrid mode names the splat fire-sheet authority partition');
+assert.doesNotMatch(core, /const selectiveHybrid = state\.selectiveHeadLiveEffectiveRole !== 'off';[\s\S]*loadOp: selectiveHybrid \? 'load' : 'clear'/, 'selective-head live must not silently equate role-on with full raymarch-under-splats');
+assert.match(selectiveHeadLivePage, /data-composition="smoke-raymarch-under-splats-v0"/, 'operator page exposes smoke-hybrid as an explicit composition control');
+assert.match(selectiveHeadLivePage, /data-composition="splat-only-v0"/, 'operator page exposes splat-only as an explicit attribution composition control');
+assert.match(selectiveHeadLivePage, /data-composition="full-raymarch-under-splats-diagnostic-v0"/, 'operator page exposes the old full hybrid only as a diagnostic composition');
+assert.match(selectiveHeadLivePage, /composition authority/i, 'operator status labels renderer composition authority');
+assert.match(selectiveHeadLivePage, /pass receipt/i, 'operator status labels applied pass receipts');
+assert.match(selectiveHeadLiveWitness, /expectedComposition/, 'selective-head live witness verifies requested renderer composition');
+assert.match(selectiveHeadLiveWitness, /composition drift/i, 'selective-head live witness rejects composition drift during observation');
+assert.match(selectiveHeadLiveWitness, /selectiveHeadLivePassReceipt/, 'selective-head live witness records pass receipts');
+assert.match(selectiveHeadLiveSequenceWitness, /composition drift/i, 'selective-head sequence witness rejects per-frame composition drift');
+assert.match(selectiveHeadLiveSequenceWitness, /selectiveHeadLivePassReceipt/, 'selective-head sequence witness records pass receipts for encoded frames');
+for (const source of [selectiveHeadLiveWitness, selectiveHeadLiveSequenceWitness, selectiveHeadCompositionWitness]) {
+  assert.match(source, /isInspectablePageTarget/, 'selective-head witnesses reject Chrome extension targets before CDP evaluation');
+  assert.ok(source.includes('chrome-extension://'), 'selective-head witnesses make extension-target fallback impossible to confuse with page evidence');
+}
+assert.ok(selectiveHeadCompositionWitness.includes("lastTrustworthyEvidence = { phase: 'route-settle', state };"), 'same-state composition witness preserves route-settle state on pre-capture failure');
 assert.match(witness, /pressureSourceStrategy/, 'witness reports pressure source strategy');
 assert.match(witness, /tallPlumePressureIterationStrategy/, 'witness reports tall-plume pressure iteration strategy');
 assert.match(witness, /tall-plume-pressure2-v0/, 'witness recognizes the tall-plume pressure2 strategy');
@@ -1595,12 +1944,17 @@ assert.match(witness, /not-gpu-exclusive-or-present-latency/, 'witness preserves
 assert.match(witness, /windowSize/, 'witness accepts an explicit browser window size for fullscreen-ish sweeps');
 assert.match(witness, /simStepCount/, 'witness records simulation step count');
 assert.match(witness, /simReadback/, 'witness records simulation readback evidence');
+assert.match(witness, /function parseCliArgs[\s\S]*next && !next\.startsWith\('--'\)[\s\S]*true[\s\S]*parsed\.set\(key, value\)/, 'volume witness parses bare boolean flags without swallowing the next option');
 assert.match(witness, /detailMean/, 'witness records transported material detail evidence');
 assert.match(witness, /simGridLabel/, 'witness records human-readable sim grid identity');
 assert.match(witness, /velocity-material-fire-microdetail-storage-buffer/, 'witness requires the microdetail storage label');
 assert.match(witness, /fireLayerMean/, 'witness requires transported fire layer evidence');
 assert.match(witness, /combustionFrontMean/, 'witness requires transported combustion-front evidence when bonfire fire is visible');
 assert.match(witness, /radianceMean/, 'witness requires fire radiance evidence');
+assert.match(witness, /boundaryFireReadbackEvidence[\s\S]*emissionDetailMean[\s\S]*combustionFrontMean[\s\S]*frontTopologyMean/, 'boundary-fire inspect/shell routes can prove live fire from topology/emission carriers when stock radiance is intentionally zero');
+assert.match(witness, /fireFuelOverlapRatio <= 0\.01[\s\S]*!boundaryFireReadbackEvidence\.acceptsZeroRadiance/, 'boundary-fire inspect/shell routes do not fail tall-plume support solely because stock fire/fuel overlap is intentionally bypassed');
+assert.match(witness, /boundaryFireMainRendererEvidence[\s\S]*boundaryFireReadbackEvidence\.acceptsZeroRadiance[\s\S]*mainRendererMetrics\.litPixels[\s\S]*mainRendererMetrics\.meanLuma/, 'boundary-fire inspect/shell routes do not require orange-fire screenshot classification when live topology/emission carriers and lit main-renderer volume are present');
+assert.match(witness, /boundaryFireVisualEvidence[\s\S]*boundaryFireReadbackEvidence\.acceptsZeroRadiance[\s\S]*metrics\.litPixels[\s\S]*metrics\.volumeBounds[\s\S]*metrics\.meanLuma/, 'boundary-fire inspect/shell routes do not require orange-fire cropped preview classification when live topology/emission carriers and visible volume bounds are present');
 assert.match(witness, /extinctionMean/, 'witness requires smoke extinction evidence');
 assert.match(witness, /emissiveLikePixels/, 'witness records emissive-fire visual evidence separately from generic fire color');
 assert.match(witness, /volumeBounds/, 'witness records visual volume bounds for scale-scene comparison');
@@ -1765,6 +2119,9 @@ assert.match(greenroomBenchmark, /dryRun/, 'greenroom benchmark supports writing
 const renderPairDatasetPath = join(root, 'volume-render-pair-dataset.mjs');
 assert.ok(existsSync(renderPairDatasetPath), 'volume render-scale pair dataset extractor exists');
 const renderPairDataset = existsSync(renderPairDatasetPath) ? readFileSync(renderPairDatasetPath, 'utf8') : '';
+const renderPairCorpusPath = join(root, 'volume-render-pair-corpus.mjs');
+assert.ok(existsSync(renderPairCorpusPath), 'volume render-scale pair corpus generator exists');
+const renderPairCorpus = existsSync(renderPairCorpusPath) ? readFileSync(renderPairCorpusPath, 'utf8') : '';
 assert.match(renderPairDataset, /kaminos\.volume\.render-pair-dataset\.v0/, 'render-pair dataset writes a stable dataset schema identity');
 assert.match(renderPairDataset, /volume-witness\.mjs/, 'render-pair dataset captures frames through the witness instead of bypassing route validation');
 assert.match(renderPairDataset, /lowRenderScale/, 'render-pair dataset records requested low render scale');
@@ -1776,6 +2133,80 @@ assert.match(renderPairDataset, /prototypeIdentity/, 'render-pair dataset record
 assert.match(renderPairDataset, /renderPixelRatio/, 'render-pair dataset records low/high internal-to-display pixel ratio');
 assert.match(renderPairDataset, /dryRun/, 'render-pair dataset supports a dry run manifest without spending browser/GPU time');
 assert.match(renderPairDataset, /failurePhase/, 'render-pair dataset records the phase when capture or validation fails');
+assert.match(renderPairDataset, /frame-locked-render-scale-set-v0/, 'render-pair dataset must expose frame-locked same-state pair authority for supervised residual training');
+assert.match(renderPairDataset, /sameStateCaptureId/, 'render-pair dataset records a same-state capture identity shared by low/high scales');
+assert.match(renderPairDataset, /featureCapture/, 'render-pair dataset records same-state residual feature captures when requested');
+assert.match(renderPairDataset, /featurePath/, 'render-pair dataset exposes feature image paths for feature-aware residual training');
+assert.match(renderPairDataset, /shader-material-authority-residual-feature-v0/, 'render-pair dataset preserves shader/material feature authority for feature images');
+assert.match(renderPairDataset, /gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass/, 'render-pair dataset preserves source-pass feature readback authority');
+assert.match(renderPairDataset, /baseFrameCount/, 'render-pair dataset records the frozen source frame count');
+assert.match(renderPairDataset, /baseSimStepCount/, 'render-pair dataset records the frozen source sim-step count');
+assert.match(renderPairDataset, /--render-scale-set/, 'render-pair dataset asks the witness for a same-state render-scale set');
+assert.match(renderPairDataset, /supervisedResidualTrainingSuitable/, 'render-pair dataset labels whether a pair is suitable for supervised residual training');
+assert.match(renderPairDataset, /--reuse-witness-browser/, 'render-pair dataset can reuse one headful witness browser across repeated captures');
+assert.match(renderPairDataset, /shared-headful-cdp-browser-v0/, 'render-pair dataset records the shared headful CDP browser reuse policy');
+assert.match(renderPairDataset, /witnessBrowserSession/, 'render-pair dataset records effective witness browser session identity in the manifest');
+assert.match(renderPairDataset, /cleanupWitnessBrowserSession/, 'render-pair dataset closes the shared witness browser once after capture instead of per frame');
+assert.match(renderPairCorpus, /shared-headful-cdp-browser-v0/, 'render-pair corpus records the shared headful browser policy for whole-corpus capture runs');
+assert.match(renderPairCorpus, /corpus-owned-shared-headful-cdp-browser/, 'render-pair corpus can hold one headful browser across all variant/frame child captures');
+assert.match(renderPairCorpus, /cleanupCorpusWitnessBrowserSession/, 'render-pair corpus closes its shared witness browser once after all captures');
+assert.match(renderPairCorpus, /--keep-witness-browser-open/, 'render-pair corpus keeps child dataset browsers open for corpus-level cleanup');
+assert.match(renderPairCorpus, /gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass/, 'render-pair corpus top-level metadata preserves source-pass feature readback authority');
+const controlledStepVariantStart = renderPairCorpus.indexOf('function runControlledStepVariant');
+const controlledStepVariantSummaryStart = renderPairCorpus.indexOf('const summary = {', controlledStepVariantStart);
+const controlledStepVariantCommandBlock = renderPairCorpus.slice(controlledStepVariantStart, controlledStepVariantSummaryStart);
+assert.match(controlledStepVariantCommandBlock, /--render-scale-feature-captures/, 'render-pair corpus forwards requested feature captures through controlled-step witness captures');
+assert.match(controlledStepVariantCommandBlock, /--render-scale-auxiliary-captures/, 'render-pair corpus forwards requested Flow Debug/interface auxiliary captures through controlled-step witness captures');
+assert.match(fieldSliceWitness, /sampleRenderScaleSet/, 'volume witness invokes the browser-side same-state render-scale set API');
+assert.match(fieldSliceWitness, /renderFrozenScaleToCanvas/, 'volume witness renders each same-state scale to the visible canvas before image capture');
+assert.match(fieldSliceWitness, /imageAuthority/, 'volume witness preserves screenshot authority for frozen-state scale images');
+assert.match(fieldSliceWitness, /sourcePassApplied/, 'volume witness preserves whether feature captures came from the frozen source pass');
+assert.match(fieldSliceWitness, /--render-scale-auxiliary-captures/, 'volume witness exposes auxiliary render-scale captures for debug-conditioning images');
+assert.match(fieldSliceWitness, /flowDebug/, 'volume witness labels the Flow Debug/interface auxiliary capture separately from residual material features');
+assert.match(fieldSliceWitness, /controlOverrides:\s*\{\s*flowDebug:\s*1\s*\}/, 'Flow Debug auxiliary capture must use the flow/interface debug control override');
+assert.match(fieldSliceWitness, /canvasCssRect/, 'volume witness records canvas clip bounds for clean training images');
+assert.match(fieldSliceWitness, /Page\.captureScreenshot[\s\S]*clip/, 'volume witness captures clean canvas clips instead of full-page UI screenshots for render-scale pairs');
+assert.match(fieldSliceWitness, /fps-counter/, 'volume witness suppresses the in-viewport FPS HUD during clean render-scale pair capture');
+assert.match(fieldSliceWitness, /hudSuppression/, 'volume witness reports HUD suppression state for clean render-scale pair capture');
+assert.match(fieldSliceWitness, /--controlled-step-sequence/, 'volume witness exposes controlled-step sequence mode for temporal corpus generation');
+assert.match(fieldSliceWitness, /controlledStepFrame/, 'volume witness advances the browser simulator through explicit controlled-step frames');
+assert.match(fieldSliceWitness, /controlledStepSequenceReport/, 'volume witness reports controlled-step frame-locked captures for temporal corpus consumers');
+assert.match(fieldSliceWitness, /--reuse-browser/, 'volume witness can attach to an existing headful browser for repeated capture');
+assert.match(fieldSliceWitness, /attach-or-launch-shared-cdp-browser-v0/, 'volume witness names the attach-or-launch shared browser policy');
+assert.match(fieldSliceWitness, /keepBrowserOpen/, 'volume witness can leave the shared browser alive for the dataset runner instead of killing it per capture');
+assert.match(fieldSliceWitness, /unref\(\)/, 'volume witness must detach kept-open Chrome so shared-browser corpus captures do not hang after writing reports');
+assert.match(core, /sampleRenderScaleSet/, 'volume core exposes a same-state multi-render-scale capture API');
+assert.match(core, /compactRenderScaleSample[\s\S]*reactionFrontAtlas[\s\S]*null[\s\S]*sampleRenderScaleSet[\s\S]*compactSamples/, 'controlled-step render-scale captures compact heavy sim readback atlases before returning over CDP');
+assert.match(core, /renderFrozenScaleToCanvas/, 'volume core exposes render-only frozen-state canvas capture');
+const renderFrozenScaleToCanvasStart = core.indexOf('async function renderFrozenScaleToCanvas');
+const renderFrozenScaleToCanvasEnd = core.indexOf('async function sampleRenderScaleSet', renderFrozenScaleToCanvasStart);
+const renderFrozenScaleToCanvasBody = core.slice(renderFrozenScaleToCanvasStart, renderFrozenScaleToCanvasEnd);
+assert.match(renderFrozenScaleToCanvasBody, /controlOverrides/, 'frozen render-scale canvas capture accepts explicit render-only control overrides for auxiliary debug captures');
+assert.match(renderFrozenScaleToCanvasBody, /\.\.\.controlsSnapshot,\s*\.\.\.controlOverrides,\s*renderScale/, 'frozen render-scale control overrides must be applied before renderScale so requested scale remains authoritative');
+assert.match(renderFrozenScaleToCanvasBody, /includeFeatureRgba[\s\S]*encodeBrowserResidualSourcePass/, 'frozen feature captures must render the residual source MRT for the requested frozen scale instead of reading a stale feature texture');
+assert.match(renderFrozenScaleToCanvasBody, /encodeDraw\(encoder,\s*currentTexture\.createView\(\),\s*'kaminos frozen render-scale canvas pass'\)[\s\S]*includeFeatureRgba[\s\S]*ensureFrameTexture\(\)[\s\S]*encodeBrowserResidualSourcePass\(encoder,\s*frameTexture\.createView\(\),\s*browserResidualFeatureTexture\.createView\(\)\)/, 'frozen feature captures must preserve the normal visible RGB draw and render feature MRT into an offscreen frame texture');
+assert.doesNotMatch(renderFrozenScaleToCanvasBody, /encodeBrowserResidualSourcePass\(encoder,\s*currentTexture\.createView\(\),\s*browserResidualFeatureTexture\.createView\(\)\)/, 'frozen feature source pass must not overwrite the visible canvas texture');
+assert.match(renderFrozenScaleToCanvasBody, /featureCaptureSourcePassApplied/, 'frozen feature captures must report whether the source pass produced the feature texture for this capture');
+assert.match(renderFrozenScaleToCanvasBody, /gpu-feature-texture-rgba8-readback-frozen-sim-state-source-pass/, 'frozen feature captures must distinguish source-pass feature readback authority from opportunistic texture readback');
+assert.match(core, /advanceSim:\s*false/, 'same-state render-scale capture renders without advancing the simulator for each scale');
+assert.match(core, /render-only-frozen-sim-state/, 'same-state render-scale capture labels render-only frozen simulator authority');
+assert.match(core, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'volume core labels canvas-clip screenshot authority for frozen-state scale images');
+
+const sourceScaleProbePath = join(root, 'volume-source-scale-probe.mjs');
+assert.ok(existsSync(sourceScaleProbePath), 'source-scale blobbiness probe exists');
+const sourceScaleProbe = existsSync(sourceScaleProbePath) ? readFileSync(sourceScaleProbePath, 'utf8') : '';
+assert.match(sourceScaleProbe, /kaminos\.volume\.source-scale-blobbiness-probe\.v0/, 'source-scale probe writes a stable manifest schema identity');
+assert.match(sourceScaleProbe, /volume-witness\.mjs/, 'source-scale probe captures frames through the witness instead of bypassing route validation');
+assert.match(sourceScaleProbe, /volume_input_radius/, 'source-scale probe varies source radius through the public route parameter');
+assert.match(sourceScaleProbe, /volume_fire_scale/, 'source-scale probe varies fire scale through the public route parameter');
+assert.match(sourceScaleProbe, /effectiveRouteIdentity/, 'source-scale probe records effective route identity from each witness');
+assert.match(sourceScaleProbe, /sourceRadius/, 'source-scale probe records the requested source radius');
+assert.match(sourceScaleProbe, /perimeterAreaRatio/, 'source-scale probe reports flame boundary complexity');
+assert.match(sourceScaleProbe, /boundaryGradientEnergy/, 'source-scale probe reports boundary gradient energy');
+assert.match(sourceScaleProbe, /localMaxCount/, 'source-scale probe reports interior lobe/local-maximum count');
+assert.match(sourceScaleProbe, /saturationFraction/, 'source-scale probe reports whiteout/saturation fraction');
+assert.match(sourceScaleProbe, /complexityCollapseRatio/, 'source-scale probe reports large-source complexity collapse ratios');
+assert.match(sourceScaleProbe, /failurePhase/, 'source-scale probe records the failure phase before pretending to produce evidence');
 
 const dynamicTextureProofPath = join(root, 'volume-dynamic-texture-proof.mjs');
 assert.ok(existsSync(dynamicTextureProofPath), 'dynamic texture proof harness exists');
@@ -1789,3 +2220,45 @@ for (const control of ['fuel-off-decay', 'snuff-quench-reset', 'broad-smoke-no-f
 }
 assert.match(dynamicTextureProof, /confidenceFloor/, 'dynamic texture proof records confidence gating for the hidden detail state');
 assert.match(dynamicTextureProof, /failurePhase/, 'dynamic texture proof records the failure phase before pretending to produce evidence');
+
+const residualMlxPath = join(root, 'volume-residual-upscale-mlx.py');
+assert.ok(existsSync(residualMlxPath), 'MLX residual upscaler runner exists in the branch for reproducible Greenroom jobs');
+const residualMlx = existsSync(residualMlxPath) ? readFileSync(residualMlxPath, 'utf8') : '';
+assert.match(residualMlx, /kaminos\.volume\.residual-upscale-mlx\.v0/, 'MLX residual runner writes a stable report schema');
+assert.match(residualMlx, /frame-locked-render-scale-set-v0/, 'MLX residual runner accepts frame-locked same-state pair manifests');
+assert.match(residualMlx, /cdp-canvas-clip-capture-after-render-only-frozen-sim-state/, 'MLX residual runner requires canvas-clip same-state image authority');
+assert.match(residualMlx, /mx\.default_device\(\)/, 'MLX residual runner records the effective MLX device');
+
+const residualGreenroomRunnerPath = join(root, 'volume-residual-greenroom-runner.py');
+assert.ok(existsSync(residualGreenroomRunnerPath), 'Greenroom wrapper exists for residual MLX jobs');
+const residualGreenroomRunner = existsSync(residualGreenroomRunnerPath) ? readFileSync(residualGreenroomRunnerPath, 'utf8') : '';
+assert.match(residualGreenroomRunner, /kaminos\.volume\.residual-greenroom-runner\.v0/, 'Greenroom wrapper writes stable route-proof identity');
+assert.match(residualGreenroomRunner, /mlxDefaultDevice/, 'Greenroom wrapper prints MLX default device before heavy work');
+assert.match(residualGreenroomRunner, /greenroom-route-proof\.json/, 'Greenroom wrapper writes route proof into the job output directory');
+assert.match(residualMlx, /--edge-band-mode/, 'MLX residual runner can derive target-error edge bands from low/high pairs');
+assert.match(residualMlx, /low-gradient/, 'MLX residual runner supports low-image gradient proxy masks for inference-available edge curriculum probes');
+assert.match(residualMlx, /low-luma/, 'MLX residual runner supports low-image luma proxy masks for inference-available fire/body curriculum probes');
+assert.match(residualMlx, /low-gradient-luma/, 'MLX residual runner supports mixed low-image gradient+luma proxy masks');
+assert.match(residualMlx, /edgeBandAuthority/, 'MLX residual runner reports whether the active edge-band mask was target-derived or low-image proxy-derived');
+assert.match(residualMlx, /targetEdgeBandDeltaPsnr/, 'MLX residual runner audits proxy-mask runs against target-derived edge bands');
+assert.match(residualMlx, /--edge-sampling-probability/, 'MLX residual runner can bias patch sampling toward target-error edge bands');
+assert.match(residualMlx, /--edge-loss-weight/, 'MLX residual runner exposes explicit edge-band reconstruction loss');
+assert.match(residualMlx, /--edge-gradient-loss-weight/, 'MLX residual runner exposes edge-band gradient loss for crisp silhouette recovery');
+assert.match(residualMlx, /--outside-edge-residual-weight/, 'MLX residual runner can penalize hallucinated residual energy outside target-error edge bands');
+assert.match(residualMlx, /--residual-output-limit/, 'MLX residual runner can bound residual output amplitude to prevent edge-mask ringing from poisoning background');
+assert.match(residualMlx, /residualOutputLimit/, 'MLX residual runner reports the effective residual output limit');
+assert.match(residualMlx, /apply_limited_residual/, 'MLX residual runner centralizes residual limiting before adding model residuals back to the low image');
+assert.match(residualMlx, /--residual-application-mask-mode/, 'MLX residual runner can gate applied residuals with an inference-available mask');
+assert.match(residualMlx, /residualApplicationMaskAuthority/, 'MLX residual runner reports whether the residual application mask is inference-available or target-derived');
+assert.match(residualMlx, /residualApplicationMaskMode/, 'saved MLX residual artifacts preserve the residual application mask mode');
+assert.match(residualMlx, /edge_band_mask/, 'MLX residual runner names the target-derived edge-band mask builder');
+assert.match(residualMlx, /edgeBandPixels/, 'MLX residual runner records edge-band mask pixel counts per pair');
+assert.match(residualMlx, /edgeBandDeltaPsnr/, 'MLX residual runner reports edge-band PSNR delta separately from full-frame PSNR');
+assert.match(residualMlx, /outsideEdgeResidualMse/, 'MLX residual runner reports outside-edge residual damage separately from edge improvement');
+assert.match(residualMlx, /residual-preview-low-model-target-targetres-modelres-error-mask\.png/, 'MLX residual runner writes a preview strip exposing target residual, model residual, remaining error, and mask');
+assert.match(residualGreenroomRunner, /--edge-band-mode/, 'Greenroom residual wrapper forwards edge-band mode to the MLX runner');
+assert.match(residualGreenroomRunner, /targetEdgeBandDeltaPsnr/, 'Greenroom residual wrapper preserves target-edge audit metrics from proxy-mask runs');
+assert.match(residualGreenroomRunner, /--edge-sampling-probability/, 'Greenroom residual wrapper forwards edge-biased sampling probability');
+assert.match(residualGreenroomRunner, /--edge-gradient-loss-weight/, 'Greenroom residual wrapper forwards edge gradient loss weight');
+assert.match(residualGreenroomRunner, /--residual-output-limit/, 'Greenroom residual wrapper forwards residual output limit for bounded proxy-mask runs');
+assert.match(residualGreenroomRunner, /--residual-application-mask-mode/, 'Greenroom residual wrapper forwards residual application mask mode for inference-authority gate probes');

@@ -9,28 +9,6 @@ function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
-function stableSerialize(value) {
-  if (Array.isArray(value)) return `[${value.map(stableSerialize).join(',')}]`;
-  if (value != null && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableSerialize(value[key])}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function resolveCommandDuty(commandDuty, schedulerInvocation) {
-  const resolved = clone(commandDuty || {});
-  const control = resolved.chunkControl;
-  if (control == null || schedulerInvocation == null || schedulerInvocation.bounds == null) return resolved;
-  const controlId = control.controlId;
-  const declaredBounds = schedulerInvocation.bounds?.phaseChunkSize?.[controlId];
-  if (!declaredBounds) throw new Error(`undeclared scheduler control ${controlId || '<missing>'}`);
-  if (stableSerialize(control.bounds) !== stableSerialize(declaredBounds)) {
-    throw new Error(`phase command duty bounds mismatch for scheduler control ${controlId}`);
-  }
-  resolved.chunkControl.current = schedulerInvocation.getControl(controlId);
-  return resolved;
-}
-
 function publicSchedulerInvocation(invocation) {
   if (invocation == null) return null;
   return {
@@ -239,7 +217,7 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
         dispatch: phase.dispatch,
         yieldAfter: phase.yieldAfter,
         yieldReason: phase.yieldReason,
-        commandDuty: resolveCommandDuty(phase.commandDuty, schedulerInvocation),
+        commandDuty: clone(phase.commandDuty),
         schedulerInvocation,
         metadata: {
           ...phase.metadata,
@@ -258,12 +236,7 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
         const readbackOutputs = {};
         for (const readback of phase.readbacks) {
           const readbackOptions = clone(readback.options);
-          if (readbackOptions.commandDuty != null) {
-            readbackOptions.commandDuty = resolveCommandDuty(
-              readbackOptions.commandDuty,
-              schedulerInvocation,
-            );
-          }
+          readbackOptions.schedulerInvocation = schedulerInvocation;
           readbackOutputs[readback.name] = await stage.readTensor(readback.tensor, readbackOptions);
         }
         return readbackOutputs;

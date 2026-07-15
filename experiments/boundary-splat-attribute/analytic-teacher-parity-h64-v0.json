@@ -1,0 +1,12 @@
+{
+  "schema": "kaminos.boundary-splat-attribute-job.v0",
+  "routeIdentity": "analytic-boundary-splat-teacher-parity-v0",
+  "purpose": "Separate tiny-head approximation error from export error using a wider, longer analytic-teacher fit with compiler-side MLX parity samples.",
+  "claimBoundary": "Wiring and approximation evidence only; this job cannot establish visual improvement over analytic splats or raymarch.",
+  "features": 16,
+  "outputs": 6,
+  "hiddenSize": 64,
+  "sampleCount": 131072,
+  "steps": 5000,
+  "seed": 713
+}

@@ -1,0 +1,239 @@
+{
+  "schema": "kaminos.residual.small-unet-comparison.v1",
+  "createdAt": "2026-07-09T07:46:00Z",
+  "runs": {
+    "direct_050": "artifacts/residual-latest-fire-0709/support-scaling-greenroom/support-050-sameeval-fire-rs010",
+    "small_unet_050": "artifacts/residual-latest-fire-0709/small-unet-greenroom/small-unet-050-sameeval-rs010",
+    "small_unet_bite_050": "artifacts/residual-latest-fire-0709/small-unet-greenroom/small-unet-bite-050-sameeval-rs010",
+    "direct_145_evalonly": "artifacts/residual-latest-fire-0709/support-scaling-greenroom/support-165-on050-sameeval-evalonly-rs010"
+  },
+  "jobs": {
+    "smallUnet": "0f1ce5333c63",
+    "smallUnetBite": "19b2b162d12b",
+    "direct050": "329f215ad54a",
+    "direct145EvalOnly": "7b9b767f0d2f"
+  },
+  "evalPairsMatch": {
+    "direct_050": true,
+    "small_unet_050": true,
+    "small_unet_bite_050": true,
+    "direct_145_evalonly": true
+  },
+  "modelConfigs": {
+    "direct_050": {
+      "modelArch": "direct-residual",
+      "hiddenChannels": 16,
+      "featureInputMode": "feature-rgba",
+      "materialFocus": "fire-interface",
+      "residualOutputLimit": 0.35,
+      "residualApplyScale": 0.25,
+      "residualApplicationMaskMode": "off",
+      "learningRate": 0.001,
+      "maxSteps": 2000
+    },
+    "small_unet_050": {
+      "modelArch": "small-unet",
+      "hiddenChannels": 8,
+      "featureInputMode": "feature-rgba",
+      "materialFocus": "fire-interface",
+      "residualOutputLimit": 0.35,
+      "residualApplyScale": 0.25,
+      "residualApplicationMaskMode": "off",
+      "learningRate": 0.001,
+      "maxSteps": 2000
+    },
+    "small_unet_bite_050": {
+      "modelArch": "small-unet",
+      "hiddenChannels": 16,
+      "featureInputMode": "feature-rgba",
+      "materialFocus": "fire-interface",
+      "residualOutputLimit": 0.5,
+      "residualApplyScale": 0.25,
+      "residualApplicationMaskMode": "off",
+      "learningRate": 0.002,
+      "maxSteps": 4000
+    },
+    "direct_145_evalonly": {
+      "modelArch": "direct-residual",
+      "hiddenChannels": 16,
+      "featureInputMode": "feature-rgba",
+      "materialFocus": "fire-interface",
+      "residualOutputLimit": 0.35,
+      "residualApplyScale": 0.25,
+      "residualApplicationMaskMode": "off",
+      "learningRate": 0.001,
+      "maxSteps": 2000
+    }
+  },
+  "metrics": [
+    {
+      "metric": "baselinePsnr",
+      "direct_050": 35.58486229930135,
+      "small_unet_050": 35.58486229930135,
+      "small_unet_bite_050": 35.054168370356145,
+      "direct_145_evalonly": 35.58486229930135,
+      "small_unet_050_minus_direct_050": 0.0,
+      "small_unet_bite_050_minus_direct_050": -0.5306939289452046,
+      "direct_145_evalonly_minus_direct_050": 0.0
+    },
+    {
+      "metric": "modelPsnr",
+      "direct_050": 34.98790655622203,
+      "small_unet_050": 35.57614708912631,
+      "small_unet_bite_050": 35.07351152070446,
+      "direct_145_evalonly": 35.154309350745876,
+      "small_unet_050_minus_direct_050": 0.5882405329042797,
+      "small_unet_bite_050_minus_direct_050": 0.08560496448242816,
+      "direct_145_evalonly_minus_direct_050": 0.16640279452384732
+    },
+    {
+      "metric": "deltaPsnr",
+      "direct_050": -0.5969557430793202,
+      "small_unet_050": -0.008715210175040511,
+      "small_unet_bite_050": 0.019343150348312577,
+      "direct_145_evalonly": -0.4305529485554729,
+      "small_unet_050_minus_direct_050": 0.5882405329042797,
+      "small_unet_bite_050_minus_direct_050": 0.6162988934276328,
+      "direct_145_evalonly_minus_direct_050": 0.16640279452384732
+    },
+    {
+      "metric": "weightedBaselinePsnr",
+      "direct_050": 35.30908432581599,
+      "small_unet_050": 35.30908432581599,
+      "small_unet_bite_050": 34.59734664743103,
+      "direct_145_evalonly": 35.30908432581599,
+      "small_unet_050_minus_direct_050": 0.0,
+      "small_unet_bite_050_minus_direct_050": -0.7117376783849565,
+      "direct_145_evalonly_minus_direct_050": 0.0
+    },
+    {
+      "metric": "weightedModelPsnr",
+      "direct_050": 34.772544604499174,
+      "small_unet_050": 35.30284729994654,
+      "small_unet_bite_050": 34.62120632236972,
+      "direct_145_evalonly": 34.936206345992915,
+      "small_unet_050_minus_direct_050": 0.530302695447368,
+      "small_unet_bite_050_minus_direct_050": -0.15133828212945133,
+      "direct_145_evalonly_minus_direct_050": 0.16366174149374046
+    },
+    {
+      "metric": "weightedDeltaPsnr",
+      "direct_050": -0.5365397213168137,
+      "small_unet_050": -0.006237025869445745,
+      "small_unet_bite_050": 0.023859674938691455,
+      "direct_145_evalonly": -0.37287797982307325,
+      "small_unet_050_minus_direct_050": 0.530302695447368,
+      "small_unet_bite_050_minus_direct_050": 0.5603993962555052,
+      "direct_145_evalonly_minus_direct_050": 0.16366174149374046
+    },
+    {
+      "metric": "edgeBandBaselinePsnr",
+      "direct_050": 27.426636501747673,
+      "small_unet_050": 27.426636501747673,
+      "small_unet_bite_050": 30.592670697389437,
+      "direct_145_evalonly": 27.426636501747673,
+      "small_unet_050_minus_direct_050": 0.0,
+      "small_unet_bite_050_minus_direct_050": 3.166034195641764,
+      "direct_145_evalonly_minus_direct_050": 0.0
+    },
+    {
+      "metric": "edgeBandModelPsnr",
+      "direct_050": 27.588500711206105,
+      "small_unet_050": 27.450099846772588,
+      "small_unet_bite_050": 30.62702064486134,
+      "direct_145_evalonly": 27.701151145586124,
+      "small_unet_050_minus_direct_050": -0.1384008644335175,
+      "small_unet_bite_050_minus_direct_050": 3.038519933655234,
+      "direct_145_evalonly_minus_direct_050": 0.11265043438001854
+    },
+    {
+      "metric": "edgeBandDeltaPsnr",
+      "direct_050": 0.16186420945843238,
+      "small_unet_050": 0.023463345024914872,
+      "small_unet_bite_050": 0.03434994747190245,
+      "direct_145_evalonly": 0.2745146438384509,
+      "small_unet_050_minus_direct_050": -0.1384008644335175,
+      "small_unet_bite_050_minus_direct_050": -0.12751426198652993,
+      "direct_145_evalonly_minus_direct_050": 0.11265043438001854
+    },
+    {
+      "metric": "temporalBaselinePsnr",
+      "direct_050": null,
+      "small_unet_050": null,
+      "small_unet_bite_050": null,
+      "direct_145_evalonly": null
+    },
+    {
+      "metric": "temporalModelPsnr",
+      "direct_050": null,
+      "small_unet_050": null,
+      "small_unet_bite_050": null,
+      "direct_145_evalonly": null
+    },
+    {
+      "metric": "temporalDeltaPsnr",
+      "direct_050": -0.018052240126074537,
+      "small_unet_050": 0.0,
+      "small_unet_bite_050": -6.813275632566729e-08,
+      "direct_145_evalonly": -0.07096500046981191,
+      "small_unet_050_minus_direct_050": 0.018052240126074537,
+      "small_unet_bite_050_minus_direct_050": 0.01805217199331821,
+      "direct_145_evalonly_minus_direct_050": -0.052912760343737375
+    },
+    {
+      "metric": "improvedPatchFraction",
+      "direct_050": 0.25,
+      "small_unet_050": 0.25,
+      "small_unet_bite_050": 0.625,
+      "direct_145_evalonly": 0.25,
+      "small_unet_050_minus_direct_050": 0.0,
+      "small_unet_bite_050_minus_direct_050": 0.375,
+      "direct_145_evalonly_minus_direct_050": 0.0
+    },
+    {
+      "metric": "durationSeconds",
+      "direct_050": 19.97501492500305,
+      "small_unet_050": 27.359949111938477,
+      "small_unet_bite_050": 45.382548332214355,
+      "direct_145_evalonly": 3.0994415283203125e-06,
+      "small_unet_050_minus_direct_050": 7.384934186935425,
+      "small_unet_bite_050_minus_direct_050": 25.407533407211304,
+      "direct_145_evalonly_minus_direct_050": -19.975011825561523
+    }
+  ],
+  "metricSummary": {
+    "direct_050": {
+      "deltaPsnr": -0.5969557430793202,
+      "weightedDeltaPsnr": -0.5365397213168137,
+      "edgeBandDeltaPsnr": 0.16186420945843238,
+      "temporalDeltaPsnr": -0.018052240126074537,
+      "improvedPatchFraction": 0.25,
+      "durationSeconds": 19.97501492500305
+    },
+    "small_unet_050": {
+      "deltaPsnr": -0.008715210175040511,
+      "weightedDeltaPsnr": -0.006237025869445745,
+      "edgeBandDeltaPsnr": 0.023463345024914872,
+      "temporalDeltaPsnr": 0.0,
+      "improvedPatchFraction": 0.25,
+      "durationSeconds": 27.359949111938477
+    },
+    "small_unet_bite_050": {
+      "deltaPsnr": 0.019343150348312577,
+      "weightedDeltaPsnr": 0.023859674938691455,
+      "edgeBandDeltaPsnr": 0.03434994747190245,
+      "temporalDeltaPsnr": -6.813275632566729e-08,
+      "improvedPatchFraction": 0.625,
+      "durationSeconds": 45.382548332214355
+    },
+    "direct_145_evalonly": {
+      "deltaPsnr": -0.4305529485554729,
+      "weightedDeltaPsnr": -0.37287797982307325,
+      "edgeBandDeltaPsnr": 0.2745146438384509,
+      "temporalDeltaPsnr": -0.07096500046981191,
+      "improvedPatchFraction": 0.25,
+      "durationSeconds": 3.0994415283203125e-06
+    }
+  },
+  "read": "small-unet variants are far less globally wrong than direct_050, but both underperform direct edge-band gains and visually look conservative rather than reconstructive under this first objective."
+}

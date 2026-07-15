@@ -99,11 +99,43 @@ const ownerRoute = await session.registerRoute({
 const resident = await createSam31ResidentModelResources({ packageRuntime, route: ownerRoute });
 assert.equal(resident.schema, 'kaminos.sam31-resident-model-resources.v0');
 assert.equal(resident.packageId, packageRuntime.packageId);
+assert.equal(
+  resident.manifest.schema,
+  'kaminos.webgpu-model-resource-manifest.v1',
+  'the SAM resident owner must regenerate model resources through the current semantic manifest schema',
+);
+assert.equal(
+  resident.manifest.resourceSharing.policy,
+  'semantic-identity',
+  'SAM must retain semantic isolation unless a separate compatibility contract authorizes physical dedupe',
+);
 assert.equal(resident.manifest.allocations.length, 2);
+for (const allocation of resident.manifest.allocations) {
+  assert.match(allocation.physicalResourceId, /^kaminos:model-resource:sha256:/);
+  assert.match(allocation.semanticResourceId, /^kaminos:model-resource:sha256:.*:semantic:/);
+  assert.notEqual(allocation.physicalResourceId, allocation.semanticResourceId);
+  assert.equal(
+    allocation.resourceId,
+    allocation.semanticResourceId,
+    'default SAM residency must key allocation and single-flight identity by the complete semantic contract',
+  );
+}
+for (const allocation of resident.modelLease.allocations) {
+  assert.equal(allocation.resourceSharingPolicy, 'semantic-identity');
+  assert.equal(allocation.resourceId, allocation.semanticResourceId);
+  assert.match(allocation.semanticLeaseId, /^kaminos:model-resource:sha256:.*:semantic:.*:lease:/);
+}
 assert.equal(buffers.length, 2, 'every unique authenticated static artifact must allocate exactly once');
 assert.equal(writes.length, 2, 'every unique authenticated static artifact must upload exactly once');
 assert.equal(resident.evidence().resources.length, 2, 'resident evidence must retain every static artifact without a cap');
 assert.equal(resident.evidence().truncated, false);
+for (const resource of resident.evidence().resources) {
+  assert.equal(resource.resourceSharingPolicy, 'semantic-identity');
+  assert.equal(resource.resourceId, resource.semanticResourceId);
+  assert.match(resource.physicalResourceId, /^kaminos:model-resource:sha256:/);
+  assert.match(resource.semanticResourceId, /^kaminos:model-resource:sha256:.*:semantic:/);
+  assert.match(resource.semanticLeaseId, /^kaminos:model-resource:sha256:.*:semantic:.*:lease:/);
+}
 assert.equal(
   resident.evidence().bundleVerification.byteCustody,
   'loader-owned-transfer-before-verification',

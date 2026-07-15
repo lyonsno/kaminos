@@ -1,0 +1,152 @@
+{
+  "identity": "kaminos-post-freeze-official-residual-ab-v0",
+  "route": "http://127.0.0.1:18176/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=pyro_flow_small_bonfire_gamut_0707&volume_resolution=160&volume_majorant_grid=48&volume_pressure_mode=global-p3&volume_temporal_accum=0&volume_temporal_jitter=0&volume_render_scale=0.10&volume_residual_mode=webgpu-direct-residual&volume_residual_model_url=artifacts%2Fresidual-latest-fire-0707%2Fbrowser-feature-rs010-frontbite-feature-rgba.json&volume_residual_strength=1&volume_look_freeze=0",
+  "outputDir": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707/artifacts/residual-latest-fire-0708/post-freeze-official-smoke",
+  "worktree": "/private/tmp/kaminos-kaminos-desperate-latest-fire-0707",
+  "branch": "cc/kaminos-desperate-latest-fire-0707",
+  "commit": "bee1e57c6b16e231db5b1d42f95f54eb943cfd8a",
+  "residualModelUrl": "artifacts/residual-latest-fire-0707/browser-feature-rs010-frontbite-feature-rgba.json",
+  "pinned": {
+    "frameCount": 163,
+    "simStepCount": 127,
+    "lookFreezeFrame": 127,
+    "renderPhaseTimeMs": 3443.899999976158,
+    "renderPhaseFrame": 127,
+    "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+    "backend": "WebGPU:apple"
+  },
+  "final": {
+    "frameCount": 476,
+    "simStepCount": 127,
+    "renderPhaseTimeMs": 3443.899999976158,
+    "renderPhaseFrame": 127,
+    "renderPhaseAuthority": "look-freeze-pinned-render-phase"
+  },
+  "captures": [
+    {
+      "name": "01_low_rs010_linear_off",
+      "label": "0.10 linear-css-upscale / residual off",
+      "image": "artifacts/residual-latest-fire-0708/post-freeze-official-smoke/01_low_rs010_linear_off.png",
+      "sha256": "1c92992cd2d37f9b2dcff63d4ed0302ebe88a78b83cff35685e73be9275194a5",
+      "clipInfo": {
+        "x": 380,
+        "y": 0,
+        "width": 900,
+        "height": 960,
+        "scale": 1
+      },
+      "state": {
+        "frameCount": 248,
+        "simStepCount": 127,
+        "lookFreeze": 1,
+        "lookFreezeFrame": 127,
+        "renderPhaseTimeMs": 3443.899999976158,
+        "renderPhaseFrame": 127,
+        "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+        "renderScale": 0.1,
+        "volumeReconstructionStyle": "linear-css-upscale",
+        "volumeResidualMode": "off",
+        "volumeResidualStatus": "off",
+        "volumeResidualStrength": 1,
+        "volumeResidualAuthority": "off",
+        "volumeResidualModelError": null,
+        "backend": "WebGPU:apple"
+      }
+    },
+    {
+      "name": "02_low_rs010_feature_rgba_residual_on",
+      "label": "0.10 browser feature-RGBA residual / strength 1",
+      "image": "artifacts/residual-latest-fire-0708/post-freeze-official-smoke/02_low_rs010_feature_rgba_residual_on.png",
+      "sha256": "7ae88304172f69872fe17f4383c1c0a3f7c9713ad8dac82f489a05db59d0825f",
+      "clipInfo": {
+        "x": 380,
+        "y": 0,
+        "width": 900,
+        "height": 960,
+        "scale": 1
+      },
+      "state": {
+        "frameCount": 346,
+        "simStepCount": 127,
+        "lookFreeze": 1,
+        "lookFreezeFrame": 127,
+        "renderPhaseTimeMs": 3443.899999976158,
+        "renderPhaseFrame": 127,
+        "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+        "renderScale": 0.1,
+        "volumeReconstructionStyle": "webgpu-direct-residual",
+        "volumeResidualMode": "webgpu-direct-residual",
+        "volumeResidualStatus": "loaded",
+        "volumeResidualStrength": 1,
+        "volumeResidualAuthority": "browser-webgpu-direct-residual-v0",
+        "volumeResidualModelError": null,
+        "backend": "WebGPU:apple"
+      }
+    },
+    {
+      "name": "03_low_rs010_feature_rgba_residual_gain150",
+      "label": "0.10 browser feature-RGBA residual / strength 1.5",
+      "image": "artifacts/residual-latest-fire-0708/post-freeze-official-smoke/03_low_rs010_feature_rgba_residual_gain150.png",
+      "sha256": "5634ddcef9d7bb3142fb06f1bd9c1c11c3aed3f4214d9aebfc5d51e6b24fae2f",
+      "clipInfo": {
+        "x": 380,
+        "y": 0,
+        "width": 900,
+        "height": 960,
+        "scale": 1
+      },
+      "state": {
+        "frameCount": 436,
+        "simStepCount": 127,
+        "lookFreeze": 1,
+        "lookFreezeFrame": 127,
+        "renderPhaseTimeMs": 3443.899999976158,
+        "renderPhaseFrame": 127,
+        "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+        "renderScale": 0.1,
+        "volumeReconstructionStyle": "webgpu-direct-residual",
+        "volumeResidualMode": "webgpu-direct-residual",
+        "volumeResidualStatus": "loaded",
+        "volumeResidualStrength": 1.5,
+        "volumeResidualAuthority": "browser-webgpu-direct-residual-v0",
+        "volumeResidualModelError": null,
+        "backend": "WebGPU:apple"
+      }
+    },
+    {
+      "name": "04_ref_rs100_native_off",
+      "label": "1.00 native reference / residual off",
+      "image": "artifacts/residual-latest-fire-0708/post-freeze-official-smoke/04_ref_rs100_native_off.png",
+      "sha256": "8ab9a38defc8e6723776e28c224139efd918e67c73c2c8442cee4f9e79343d5e",
+      "clipInfo": {
+        "x": 380,
+        "y": 0,
+        "width": 900,
+        "height": 960,
+        "scale": 1
+      },
+      "state": {
+        "frameCount": 466,
+        "simStepCount": 127,
+        "lookFreeze": 1,
+        "lookFreezeFrame": 127,
+        "renderPhaseTimeMs": 3443.899999976158,
+        "renderPhaseFrame": 127,
+        "renderPhaseAuthority": "look-freeze-pinned-render-phase",
+        "renderScale": 1,
+        "volumeReconstructionStyle": "native-resolution",
+        "volumeResidualMode": "off",
+        "volumeResidualStatus": "off",
+        "volumeResidualStrength": 1,
+        "volumeResidualAuthority": "off",
+        "volumeResidualModelError": null,
+        "backend": "WebGPU:apple"
+      }
+    }
+  ],
+  "chrome": {
+    "port": 55677,
+    "userDataDir": "/tmp/kaminos-post-freeze-ab-profile-55677"
+  },
+  "timestamp": "2026-07-08T02:34:50.490Z"
+}

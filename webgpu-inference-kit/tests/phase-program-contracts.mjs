@@ -127,6 +127,14 @@ const runtime = await createWebGpuInferenceRuntime({
   browser: 'Node fake',
   kernel: { profile: 'sam3-phase-program-v0' },
   requiredStages: ['decode-mask', 'readback-mask'],
+  commandDuties: {
+    runId: 'sam3-phase-program-run-a',
+    clock: {
+      clockId: 'sam3-phase-program-clock-a',
+      source: 'performance.now',
+      timeOriginEpochMs: 1_700_000_000_000,
+    },
+  },
   now,
   yield: async metadata => {
     calls.yields.push(metadata);
@@ -183,6 +191,14 @@ const program = runtime.defineProgram({
       kernel: 'decodeMask',
       dispatch: [1, 1, 1],
       yieldAfter: true,
+      commandDuty: {
+        chunkControl: {
+          controlId: 'maskDecoderTiles',
+          unit: 'mask-decoder-tile',
+          current: 4,
+          bounds: { min: 1, max: 8, stepFactor: 2 },
+        },
+      },
       metadata: {
         programName: 'spoofed-program',
         phaseName: 'spoofed-phase',
@@ -235,6 +251,40 @@ assert.deepEqual(new Float32Array(result.outputs.maskBytes, 0, 3), new Float32Ar
 assert.deepEqual(calls.dispatches.at(-1), { x: 1, y: 1, z: 1 });
 assert.equal(calls.submissions.length, 2);
 assert.equal(calls.yields.at(-1).reason, 'sam3.mask-decoder-program.decode-mask.post-submit');
+
+const commandDuties = runtime.finishCommandDuties();
+assert.equal(commandDuties.submissionCount, 2);
+assert.deepEqual(
+  commandDuties.submissions.map(row => ({
+    phase: row.descriptor.phase,
+    kind: row.descriptor.kind,
+    programName: row.descriptor.metadata.programName,
+    phaseName: row.descriptor.metadata.phaseName,
+    phaseIndex: row.descriptor.metadata.phaseIndex,
+  })),
+  [
+    {
+      phase: 'decode-mask',
+      kind: 'compute',
+      programName: 'sam3.mask-decoder-program',
+      phaseName: 'decode-mask',
+      phaseIndex: 0,
+    },
+    {
+      phase: 'readback-mask',
+      kind: 'copy',
+      programName: 'sam3.mask-decoder-program',
+      phaseName: 'readback-mask',
+      phaseIndex: 1,
+    },
+  ],
+);
+assert.deepEqual(commandDuties.submissions[0].descriptor.chunkControl, {
+  controlId: 'maskDecoderTiles',
+  unit: 'mask-decoder-tile',
+  current: 4,
+  bounds: { min: 1, max: 8, stepFactor: 2 },
+});
 
 const profile = runtime.finishProfile({
   evidence: { mode: 'live', source: 'phase-program-contract' },

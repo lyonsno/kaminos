@@ -1,12 +1,17 @@
 import { WEBGPU_BUFFER_USAGE } from './runtime-primitives.js';
 
-export const WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA = 'kaminos.webgpu-model-resource-manifest.v0';
+export const WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA = 'kaminos.webgpu-model-resource-manifest.v1';
 export const WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA = 'kaminos.webgpu-model-resource-bundle-verification.v0';
 export const WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA = 'kaminos.webgpu-model-resource-bundle-custody.v0';
 export const WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA = 'kaminos.webgpu-model-resource-lease.v0';
 export const WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA = 'kaminos.webgpu-model-resource-tensor.v0';
+export const WEBGPU_MODEL_RESOURCE_SHARING_POLICIES = Object.freeze({
+  semanticIdentity: 'semantic-identity',
+  contentAddressedPhysicalDedupe: 'content-addressed-physical-dedupe',
+});
 
 const bundleCustody = new WeakMap();
+const PRIOR_PHYSICAL_ONLY_MANIFEST_SCHEMA = 'kaminos.webgpu-model-resource-manifest.v0';
 
 const DTYPE_BYTES = new Map([
   ['f32', 4],
@@ -30,12 +35,57 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-function cloneJson(value, label) {
-  if (value == null) return value;
+function cloneJson(value, label, path = label, ancestors = new Set()) {
+  if (value === null) return null;
+  if (typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error(`${label} must contain only finite numbers; invalid value at ${path}`);
+    if (Object.is(value, -0)) throw new Error(`${label} must not contain negative zero; invalid value at ${path}`);
+    return value;
+  }
+  if (typeof value !== 'object') {
+    throw new Error(`${label} contains unsupported ${typeof value} value at ${path}`);
+  }
+  if (ancestors.has(value)) throw new Error(`${label} must not contain a cycle at ${path}`);
+  ancestors.add(value);
   try {
-    return JSON.parse(JSON.stringify(value));
-  } catch {
-    throw new Error(`${label} must be JSON-compatible`);
+    if (Array.isArray(value)) {
+      const keys = Reflect.ownKeys(value).filter(key => key !== 'length');
+      const clone = new Array(value.length);
+      for (let index = 0; index < value.length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, index);
+        if (!descriptor) throw new Error(`${label} must not contain a sparse array hole at ${path}[${index}]`);
+        if (!Object.hasOwn(descriptor, 'value')) {
+          throw new Error(`${label} arrays must contain only data elements; invalid element at ${path}[${index}]`);
+        }
+        clone[index] = cloneJson(descriptor.value, label, `${path}[${index}]`, ancestors);
+      }
+      if (keys.some(key => typeof key === 'symbol' || !/^(0|[1-9][0-9]*)$/.test(key))) {
+        throw new Error(`${label} arrays must not contain symbol or named properties at ${path}`);
+      }
+      return clone;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error(`${label} must contain only plain JSON objects; invalid object at ${path}`);
+    }
+    const clone = {};
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key === 'symbol') throw new Error(`${label} must not contain symbol keys at ${path}`);
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+        throw new Error(`${label} must contain only enumerable data properties; invalid property at ${path}.${key}`);
+      }
+      Object.defineProperty(clone, key, {
+        value: cloneJson(descriptor.value, label, `${path}.${key}`, ancestors),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
+    return clone;
+  } finally {
+    ancestors.delete(value);
   }
 }
 
@@ -45,6 +95,16 @@ function canonicalJson(value) {
     return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
   }
   return JSON.stringify(value);
+}
+
+function validateJsonValue(value, label, errors) {
+  try {
+    cloneJson(value, label);
+    return true;
+  } catch (error) {
+    errors.push(String(error?.message || error));
+    return false;
+  }
 }
 
 function normalizeDtype(dtype) {
@@ -80,13 +140,33 @@ function bundleIdentity(modelId, revision, sha256) {
   return `${modelId}@${revision}#sha256:${sha256}`;
 }
 
-function allocationResourceId(modelId, revision, sha256, allocation) {
-  const semanticIdentity = canonicalJson({
+function physicalResourceId(sha256, allocation) {
+  return `kaminos:model-resource:sha256:${sha256}:${allocation.byteOffset}:${allocation.byteLength}:${allocation.usage}`;
+}
+
+function semanticResourceId(modelId, revision, manifestMetadata, physicalId, allocation) {
+  const semantics = canonicalJson({
+    modelId,
+    revision,
+    manifestMetadata,
     allocationId: allocation.allocationId,
-    metadata: allocation.metadata ?? null,
-    tensors: allocation.tensors || [],
+    allocationMetadata: allocation.metadata,
+    tensors: allocation.tensors,
   });
-  return `kaminos:model-resource:${encodeURIComponent(modelId)}@${encodeURIComponent(revision)}:sha256:${sha256}:${allocation.byteOffset}:${allocation.byteLength}:${allocation.usage}:semantic:${encodeURIComponent(semanticIdentity)}`;
+  return `${physicalId}:semantic:${encodeURIComponent(semantics)}`;
+}
+
+function normalizeResourceSharing(input) {
+  if (input != null && (typeof input !== 'object' || Array.isArray(input))) {
+    throw new Error('resourceSharing must be an object');
+  }
+  const policy = input?.policy ?? WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.semanticIdentity;
+  if (!Object.values(WEBGPU_MODEL_RESOURCE_SHARING_POLICIES).includes(policy)) {
+    throw new Error(
+      `resourceSharing.policy must be ${WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.semanticIdentity} or ${WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe}`,
+    );
+  }
+  return { policy };
 }
 
 function byteView(data) {
@@ -122,11 +202,26 @@ export function validateWebGpuModelResourceManifest(manifest) {
   if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) {
     return { ok: false, errors: ['manifest must be an object'] };
   }
+  if (manifest.schema === PRIOR_PHYSICAL_ONLY_MANIFEST_SCHEMA) {
+    return {
+      ok: false,
+      errors: [
+        `schema ${PRIOR_PHYSICAL_ONLY_MANIFEST_SCHEMA} is an unsupported prior physical-only manifest; regenerate it as ${WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA} and choose resourceSharing policy explicitly`,
+      ],
+    };
+  }
   if (manifest.schema !== WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA) {
     errors.push(`schema must be ${WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA}`);
   }
   if (!isNonEmptyString(manifest.modelId)) errors.push('modelId must be a non-empty string');
   if (!isNonEmptyString(manifest.revision)) errors.push('revision must be a non-empty string');
+  const manifestMetadataValid = validateJsonValue(manifest.metadata, 'manifest metadata', errors);
+  const resourceSharingPolicy = manifest.resourceSharing?.policy;
+  if (!Object.values(WEBGPU_MODEL_RESOURCE_SHARING_POLICIES).includes(resourceSharingPolicy)) {
+    errors.push(
+      `resourceSharing.policy must be ${WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.semanticIdentity} or ${WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe}`,
+    );
+  }
   if (!manifest.bundle || typeof manifest.bundle !== 'object' || Array.isArray(manifest.bundle)) {
     errors.push('bundle must be an object');
   }
@@ -169,6 +264,19 @@ export function validateWebGpuModelResourceManifest(manifest) {
     } else {
       allocationIds.add(allocation.allocationId);
     }
+    const allocationMetadataValid = validateJsonValue(allocation.metadata, `${prefix}.metadata`, errors);
+    let tensorMetadataValid = true;
+    if (Array.isArray(allocation.tensors)) {
+      allocation.tensors.forEach((tensor, tensorIndex) => {
+        if (tensor && typeof tensor === 'object' && !Array.isArray(tensor)) {
+          tensorMetadataValid = validateJsonValue(
+            tensor.metadata,
+            `${prefix}.tensors[${tensorIndex}].metadata`,
+            errors,
+          ) && tensorMetadataValid;
+        }
+      });
+    }
     if (!Number.isSafeInteger(allocation.byteOffset) || allocation.byteOffset < 0) {
       errors.push(`${prefix}.byteOffset must be a non-negative safe integer`);
     }
@@ -203,9 +311,29 @@ export function validateWebGpuModelResourceManifest(manifest) {
       typeof bundleSha256 === 'string'
       && allocationRangeValid
       && Number.isSafeInteger(allocation.usage)
-      && allocation.resourceId !== allocationResourceId(manifest.modelId, manifest.revision, bundleSha256, allocation)
     ) {
-      errors.push(`${prefix}.resourceId must be content-derived from bundle and allocation identity`);
+      const expectedPhysicalResourceId = physicalResourceId(bundleSha256, allocation);
+      if (allocation.physicalResourceId !== expectedPhysicalResourceId) {
+        errors.push(`${prefix}.physicalResourceId must be content-derived from bundle and allocation bytes`);
+      }
+      if (manifestMetadataValid && allocationMetadataValid && tensorMetadataValid) {
+        const expectedSemanticResourceId = semanticResourceId(
+          manifest.modelId,
+          manifest.revision,
+          manifest.metadata,
+          expectedPhysicalResourceId,
+          allocation,
+        );
+        if (allocation.semanticResourceId !== expectedSemanticResourceId) {
+          errors.push(`${prefix}.semanticResourceId must bind model, revision, manifest, allocation, and tensor semantics`);
+        }
+        const expectedResourceId = resourceSharingPolicy === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe
+          ? expectedPhysicalResourceId
+          : expectedSemanticResourceId;
+        if (allocation.resourceId !== expectedResourceId) {
+          errors.push(`${prefix}.resourceId must match the declared resourceSharing policy`);
+        }
+      }
     }
     if (!Array.isArray(allocation.tensors) || allocation.tensors.length === 0) {
       errors.push(`${prefix}.tensors must be a non-empty array`);
@@ -292,6 +420,8 @@ export function defineWebGpuModelResourceManifest(input = {}) {
   const modelId = input.modelId;
   const revision = input.revision;
   const sha256 = typeof input.bundle?.sha256 === 'string' ? input.bundle.sha256.toLowerCase() : input.bundle?.sha256;
+  const metadata = cloneJson(input.metadata ?? null, 'manifest metadata');
+  const resourceSharing = normalizeResourceSharing(input.resourceSharing);
   const allocations = (input.allocations || []).map(allocation => {
     const normalized = {
       allocationId: allocation.allocationId,
@@ -316,9 +446,15 @@ export function defineWebGpuModelResourceManifest(input = {}) {
       };
       }),
     };
+    const physicalId = physicalResourceId(sha256, normalized);
+    const semanticId = semanticResourceId(modelId, revision, metadata, physicalId, normalized);
     return {
       ...normalized,
-      resourceId: allocationResourceId(modelId, revision, sha256, normalized),
+      resourceId: resourceSharing.policy === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe
+        ? physicalId
+        : semanticId,
+      physicalResourceId: physicalId,
+      semanticResourceId: semanticId,
     };
   });
   const manifest = {
@@ -330,7 +466,8 @@ export function defineWebGpuModelResourceManifest(input = {}) {
       byteLength: input.bundle?.byteLength,
       sha256,
     },
-    metadata: cloneJson(input.metadata ?? null, 'manifest metadata'),
+    metadata,
+    resourceSharing,
     allocations,
   };
   const validation = validateWebGpuModelResourceManifest(manifest);
@@ -535,31 +672,39 @@ export async function loadWebGpuModelResources(input = {}) {
       throwIfAborted(signal);
       let lease;
       try {
+        const sharedPhysical = manifest.resourceSharing.policy
+          === WEBGPU_MODEL_RESOURCE_SHARING_POLICIES.contentAddressedPhysicalDedupe;
         lease = await route.residency.acquireOrCreate({
           resourceId: allocation.resourceId,
           declaredBytes: allocation.byteLength,
           kind: 'model-weight-buffer',
           metadata: {
-            modelId: manifest.modelId,
-            revision: manifest.revision,
-            allocationId: allocation.allocationId,
-            allocationMetadata: allocation.metadata,
-            tensorSemantics: allocation.tensors,
+            resourceSharingPolicy: manifest.resourceSharing.policy,
+            physicalResourceId: allocation.physicalResourceId,
             bundleSha256: manifest.bundle.sha256,
             bundleByteLength: manifest.bundle.byteLength,
             sourceByteOffset: allocation.byteOffset,
             byteLength: allocation.byteLength,
             usage: allocation.usage,
+            ...(sharedPhysical ? {} : {
+              semanticResourceId: allocation.semanticResourceId,
+              modelId: manifest.modelId,
+              revision: manifest.revision,
+              manifestMetadata: manifest.metadata,
+              allocationId: allocation.allocationId,
+              allocationMetadata: allocation.metadata,
+              tensorSemantics: allocation.tensors,
+            }),
           },
           signal,
           create({ signal: flightSignal }) {
             throwIfAborted(flightSignal);
             let buffer;
             try {
-              const createModelBuffer = typeof route.runtime.createManagedBuffer === 'function'
+              const createResidentBuffer = typeof route.runtime.createManagedBuffer === 'function'
                 ? route.runtime.createManagedBuffer.bind(route.runtime)
                 : route.runtime.createBuffer.bind(route.runtime);
-              buffer = createModelBuffer({
+              buffer = createResidentBuffer({
                 label: `${manifest.modelId}@${manifest.revision}:${allocation.allocationId}`,
                 size: allocation.byteLength,
                 usage: allocation.usage,
@@ -590,6 +735,10 @@ export async function loadWebGpuModelResources(input = {}) {
       allocations.push(Object.freeze({
         allocationId: allocation.allocationId,
         resourceId: allocation.resourceId,
+        physicalResourceId: allocation.physicalResourceId,
+        semanticResourceId: allocation.semanticResourceId,
+        semanticLeaseId: `${allocation.semanticResourceId}:lease:${lease.leaseId}`,
+        resourceSharingPolicy: manifest.resourceSharing.policy,
         leaseId: lease.leaseId,
         generation: lease.generation,
         byteOffset: allocation.byteOffset,
@@ -624,6 +773,10 @@ export async function loadWebGpuModelResources(input = {}) {
         usage: manifestAllocation.usage,
         allocationId: manifestAllocation.allocationId,
         resourceId: manifestAllocation.resourceId,
+        physicalResourceId: manifestAllocation.physicalResourceId,
+        semanticResourceId: manifestAllocation.semanticResourceId,
+        semanticLeaseId: allocation.semanticLeaseId,
+        resourceSharingPolicy: manifest.resourceSharing.policy,
         buffer: allocation.buffer,
         bufferOffset: tensor.byteOffset,
         metadata: tensor.metadata,
@@ -637,6 +790,7 @@ export async function loadWebGpuModelResources(input = {}) {
     identity: manifest.identity,
     modelId: manifest.modelId,
     revision: manifest.revision,
+    resourceSharing: manifest.resourceSharing,
     routeId: route.routeId,
     manifest,
     verification,

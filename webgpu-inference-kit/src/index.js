@@ -39,88 +39,9 @@ export {
 } from './inference-runtime.js';
 
 export {
-  WEBGPU_INFERENCE_SESSION_DEVICE_LOSS_SCHEMA,
-  WEBGPU_INFERENCE_SESSION_ROUTE_SCHEMA,
-  WEBGPU_INFERENCE_SESSION_SCHEMA,
-  createWebGpuInferenceSession,
-} from './inference-session.js';
-
-export {
-  WEBGPU_RESOURCE_RESIDENCY_LEASE_SCHEMA,
-  WEBGPU_RESOURCE_RESIDENCY_RESOURCE_SCHEMA,
-  WEBGPU_RESOURCE_RESIDENCY_SCHEMA,
-  createWebGpuResourceResidency,
-} from './resource-residency.js';
-
-export {
-  WEBGPU_RESOURCE_FACTORY_SCHEMA,
-  WEBGPU_RESOURCE_FLIGHT_SCHEMA,
-  createWebGpuResourceFactory,
-} from './resource-factory.js';
-
-export {
-  WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA,
-  WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
-  WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
-  WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA,
-  WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA,
-  defineWebGpuModelResourceManifest,
-  loadWebGpuModelResources,
-  prepareWebGpuModelResourceBundle,
-  validateWebGpuModelResourceManifest,
-  verifyWebGpuModelResourceBundle,
-} from './model-resource-manifest.js';
-
-export {
   SAM31_RESIDENT_MODEL_RESOURCES_SCHEMA,
   createSam31ResidentModelResources,
 } from './sam31-resident-model-resources.js';
-
-export {
-  WEBGPU_INFERENCE_ADMISSION_CANCELLATION_SCHEMA,
-  WEBGPU_INFERENCE_ADMISSION_RELEASE_SCHEMA,
-  WEBGPU_INFERENCE_ADMISSION_SCHEMA,
-  WEBGPU_INFERENCE_COORDINATOR_SCHEMA,
-  createWebGpuInferenceCoordinator,
-} from './inference-coordinator.js';
-
-export {
-  WEBGPU_INFERENCE_JOB_CANCELLATION_SCHEMA,
-  WEBGPU_INFERENCE_JOB_COMPLETION_SCHEMA,
-  WEBGPU_INFERENCE_QUEUE_SCHEMA,
-  WEBGPU_SCHEDULER_DECISION_QUEUE_RECEIPT_SCHEMA,
-  createWebGpuInferenceQueue,
-} from './inference-queue.js';
-
-export {
-  FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
-  createForegroundBudgetGovernor,
-} from './foreground-budget-governor.js';
-
-export {
-  WEBGPU_SCHEDULER_APPLICATION_SCHEMA,
-  WEBGPU_SCHEDULER_DECISION_APPLICATION_SCHEMA,
-  WEBGPU_SCHEDULER_INVOCATION_SCHEMA,
-  createWebGpuSchedulerApplication,
-} from './scheduler-application.js';
-
-export {
-  WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
-  WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
-  WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,
-  createWebGpuCommandDutyObservationFromReport,
-  createWebGpuCommandDutyRecorder,
-  createWebGpuCommandDutyDescriptor,
-  createWebGpuCommandDutyObservation,
-} from './command-duty-descriptor.js';
-
-export {
-  WEBGPU_HOST_PHASE,
-  WEBGPU_HOST_PHASE_EVENT_BATCH_SCHEMA,
-  WEBGPU_HOST_PHASE_RECORDER_SCHEMA,
-  createWebGpuHostPhaseRecorder,
-  projectWebGpuHostPhaseEvents,
-} from './host-phase-recorder.js';
 
 export {
   createWebGpuBackendIdentity,
@@ -160,6 +81,88 @@ export {
   WEBGPU_ROUTE_BACKPRESSURE_SCHEMA,
   WEBGPU_ROUTE_SCHEDULER_SCHEMA,
 } from './scheduler-backpressure.js';
+
+export {
+  FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
+  createForegroundBudgetGovernor,
+} from './foreground-budget-governor.js';
+
+export {
+  WEBGPU_SCHEDULER_APPLICATION_SCHEMA,
+  WEBGPU_SCHEDULER_BOUNDARY_SCHEMA,
+  WEBGPU_SCHEDULER_DECISION_APPLICATION_SCHEMA,
+  WEBGPU_SCHEDULER_INVOCATION_SCHEMA,
+  createWebGpuSchedulerApplication,
+} from './scheduler-application.js';
+
+export {
+  WEBGPU_INFERENCE_JOB_CANCELLATION_SCHEMA,
+  WEBGPU_INFERENCE_JOB_COMPLETION_SCHEMA,
+  WEBGPU_INFERENCE_QUEUE_SCHEMA,
+  WEBGPU_SCHEDULER_DECISION_QUEUE_RECEIPT_SCHEMA,
+  createWebGpuInferenceQueue,
+} from './inference-queue.js';
+
+export {
+  WEBGPU_INFERENCE_ADMISSION_CANCELLATION_SCHEMA,
+  WEBGPU_INFERENCE_ADMISSION_RELEASE_SCHEMA,
+  WEBGPU_INFERENCE_ADMISSION_SCHEMA,
+  WEBGPU_INFERENCE_COORDINATOR_SCHEMA,
+  createWebGpuInferenceCoordinator,
+} from './inference-coordinator.js';
+
+export {
+  WEBGPU_INFERENCE_SESSION_DEVICE_LOSS_SCHEMA,
+  WEBGPU_INFERENCE_SESSION_ROUTE_SCHEMA,
+  WEBGPU_INFERENCE_SESSION_SCHEMA,
+  createWebGpuInferenceSession,
+} from './inference-session.js';
+
+export {
+  WEBGPU_RESOURCE_RESIDENCY_INVALIDATION_SCHEMA,
+  WEBGPU_RESOURCE_RESIDENCY_LEASE_SCHEMA,
+  WEBGPU_RESOURCE_RESIDENCY_RESOURCE_SCHEMA,
+  WEBGPU_RESOURCE_RESIDENCY_SCHEMA,
+  createWebGpuResourceResidency,
+} from './resource-residency.js';
+
+export {
+  WEBGPU_RESOURCE_FACTORY_SCHEMA,
+  WEBGPU_RESOURCE_FLIGHT_SCHEMA,
+  createWebGpuResourceFactory,
+} from './resource-factory.js';
+
+export {
+  WEBGPU_MODEL_RESOURCE_BUNDLE_VERIFICATION_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_BUNDLE_CUSTODY_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_LEASE_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_MANIFEST_SCHEMA,
+  WEBGPU_MODEL_RESOURCE_SHARING_POLICIES,
+  WEBGPU_MODEL_RESOURCE_TENSOR_SCHEMA,
+  defineWebGpuModelResourceManifest,
+  loadWebGpuModelResources,
+  prepareWebGpuModelResourceBundle,
+  validateWebGpuModelResourceManifest,
+  verifyWebGpuModelResourceBundle,
+} from './model-resource-manifest.js';
+
+export {
+  WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
+  WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
+  WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,
+  createWebGpuCommandDutyObservationFromReport,
+  createWebGpuCommandDutyRecorder,
+  createWebGpuCommandDutyDescriptor,
+  createWebGpuCommandDutyObservation,
+} from './command-duty-descriptor.js';
+
+export {
+  WEBGPU_HOST_PHASE,
+  WEBGPU_HOST_PHASE_EVENT_BATCH_SCHEMA,
+  WEBGPU_HOST_PHASE_RECORDER_SCHEMA,
+  createWebGpuHostPhaseRecorder,
+  projectWebGpuHostPhaseEvents,
+} from './host-phase-recorder.js';
 
 export {
   SCHEDULER_EVENT_TRACE_SCHEMA,
