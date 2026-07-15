@@ -733,7 +733,7 @@ try {
   function validateCapturedSample(sample, frameIndex) {
     if (sample?.ok !== true) throw new Error(`sampleFrame failed for frame ${frameIndex}: ${JSON.stringify(sample)}`);
     if (sample.effectiveRoute !== 'native-3d-compute-fluid-raymarch-v0') throw new Error(`wrong effective route: ${sample.effectiveRoute}`);
-    if (!sample.image || !Array.isArray(sample.image.rgba)) {
+    if (!sample.image || (!Array.isArray(sample.image.rgba) && !ArrayBuffer.isView(sample.image.rgba))) {
       throw new Error(`sampleFrame omitted RGBA image for frame ${frameIndex}`);
     }
     const expectedRgbaLength = Number(sample.image.width) * Number(sample.image.height) * 4;

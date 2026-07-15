@@ -144,4 +144,10 @@ assert.match(
   'canvas witness authority must be explicit rather than impersonating direct texture readback',
 );
 
+assert.match(
+  source,
+  /ArrayBuffer\.isView\(sample\.image\.rgba\)/,
+  'complete host-decoded RGBA typed arrays must not be rejected merely because CDP pixels formerly arrived as JSON arrays',
+);
+
 console.log('smoke oracle teacher capture CLI contracts passed');
