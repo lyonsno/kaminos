@@ -131,6 +131,12 @@ assert.equal(runtime.schema, WEBGPU_INFERENCE_RUNTIME_SCHEMA);
 assert.equal(runtime.routeId, 'sam3.segment-anything.webgpu-local.v0');
 assert.equal(runtime.backendIdentity.adapterName, 'Test WebGPU Adapter');
 assert.deepEqual(runtime.backendIdentity.features, ['shader-f16']);
+assert.equal(Object.isFrozen(runtime.backendIdentity), true);
+assert.equal(Object.isFrozen(runtime.backendIdentity.features), true);
+assert.throws(
+  () => { runtime.backendIdentity.adapterName = 'forged-direct-runtime-adapter'; },
+  /read only|readonly|not extensible|Cannot assign/i,
+);
 assert.equal(runtime.hostPhases.runId, 'sam3-run-host-phase-a');
 
 await runtime.runInvocation({ invocationId: 'sam3-static-invocation-a' }, async invocation => {

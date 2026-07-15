@@ -105,22 +105,22 @@ function normalizeKernel(input = {}) {
 }
 
 function normalizeBackendIdentity(input, context) {
-  if (input.backendIdentity?.kind === 'webgpu-local') return clone(input.backendIdentity);
-  if (context?.backendIdentity?.kind === 'webgpu-local') return clone(context.backendIdentity);
+  if (input.backendIdentity?.kind === 'webgpu-local') return deepFreeze(clone(input.backendIdentity));
+  if (context?.backendIdentity?.kind === 'webgpu-local') return deepFreeze(clone(context.backendIdentity));
 
   const adapterName = input.adapterName || input.adapter?.info?.description || input.adapter?.info?.device;
   if (!isNonEmptyString(adapterName)) {
     throw new Error('adapter identity required when wrapping an existing device; provide backendIdentity, adapterName, or adapter.info');
   }
 
-  return createWebGpuBackendIdentity({
+  return deepFreeze(createWebGpuBackendIdentity({
     adapterName,
     browser: input.browser || globalThis.navigator?.userAgent || null,
     requestedFeatures: input.requestedFeatures || context?.deviceRequest?.requiredFeatures || [],
     effectiveFeatures: input.effectiveFeatures || input.device?.features || context?.device?.features || input.adapter?.features || [],
     limits: input.limits || input.device?.limits || context?.device?.limits || input.adapter?.limits || {},
     timestampQuery: input.timestampQuery || context?.deviceRequest?.timestampQuery || 'unavailable',
-  });
+  }));
 }
 
 export function createCooperativeYield(input = {}) {

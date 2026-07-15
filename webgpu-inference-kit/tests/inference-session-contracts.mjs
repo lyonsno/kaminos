@@ -112,6 +112,8 @@ const holderStarted = deferred();
 function runtimeOptions(routeId) {
   return {
     runtimeLabel: `${routeId}.runtime`,
+    kernel: { profile: `${routeId}.kernel.v0` },
+    requiredStages: ['identity-stage'],
     yield: async () => ({}),
   };
 }
@@ -141,6 +143,19 @@ session.unregisterRoute(concurrentRouteId);
 assert.equal(holderRoute.runtime.device, borrowed.device);
 assert.equal(waitingRoute.runtime.device, borrowed.device);
 assert.equal(holderRoute.runtime.admissionCoordinator, session.admissionCoordinator);
+assert.equal(Object.isFrozen(holderRoute.runtime.backendIdentity), true);
+assert.throws(
+  () => { holderRoute.runtime.backendIdentity.adapterName = 'forged-route-adapter'; },
+  /read only|readonly|not extensible|Cannot assign/i,
+);
+assert.equal(holderRoute.runtime.backendIdentity.adapterName, 'Apple test adapter');
+await holderRoute.runtime.runStage('identity-stage', async () => 'identity-recorded');
+assert.equal(
+  holderRoute.runtime.finishProfile({
+    evidence: { mode: 'live', source: 'session-identity-contract' },
+  }).backend.adapterName,
+  'Apple test adapter',
+);
 assert.equal(holderRoute.snapshot().queue.admissionPolicy, 'shared-global-fifo-by-eligible-route-head');
 
 await assert.rejects(
