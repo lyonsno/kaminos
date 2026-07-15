@@ -64,7 +64,24 @@ for (const job of receipts.generationJobs) {
   assert.ok(job.metrics.rawTriangles > 300_000);
   assert.ok(job.metrics.finalTriangles > 80_000);
   assert.equal(job.requested.strength, job.effective.strength);
+  assert.equal(job.requested.rescale, job.effective.rescale);
   assert.deepEqual(job.requested.interval, job.effective.interval);
+  assert.equal(job.requested.inputPath, job.effective.inputPath);
+  assert.equal(job.requested.outputPath, job.effective.outputPath);
+  assert.equal(job.receipt.input_path, job.effective.inputPath);
+  assert.equal(`${job.receipt.output_dir}/output.glb`, job.effective.outputPath);
+  assert.ok(
+    job.receipt.effective_route.startsWith(`${experiment.routeIdentity.runner} `),
+    'effective route must use the admitted Trellis runner',
+  );
+  assert.equal(job.effective.seed, experiment.fixed.seed);
+  assert.equal(job.effective.steps, experiment.fixed.steps);
+  assert.equal(job.effective.resolution, experiment.fixed.resolution);
+  assert.equal(job.effective.targetFaces, experiment.fixed.targetFaces);
+  assert.equal(job.effective.textureSize, experiment.fixed.textureSize);
+  assert.equal(job.effective.cascade, experiment.fixed.cascade);
+  assert.equal(job.effective.simplifyFirst, experiment.fixed.simplifyFirst);
+  assert.equal(job.output.path, job.effective.outputPath);
   assert.equal(job.input.sha256, experiment.source.sha256);
   seenCells.add(`${job.stage}/${job.pressure}`);
   seenJobs.add(job.receipt.job_id);
@@ -101,6 +118,12 @@ assert.equal(
   44,
   'every admitted camera witness must be visually distinct',
 );
+const expectedYaw = new Map([
+  ['left', -0.85],
+  ['front', 0],
+  ['right', 0.85],
+  ['rear', 3.141593],
+]);
 for (const job of receipts.witnessJobs) {
   assert.equal(job.receipt.status, 'done');
   assert.equal(job.receipt.exit_code, 0);
@@ -111,6 +134,13 @@ for (const job of receipts.witnessJobs) {
   assert.match(job.requestSha256, /^[a-f0-9]{64}$/);
   assert.match(job.output.sha256, /^[a-f0-9]{64}$/);
   assert.ok(job.output.bytes > 100_000, 'witness must be a substantive nonblank PNG');
+  assert.equal(job.request.params.yaw, String(job.effectiveCamera.yaw));
+  assert.equal(job.request.params.pitch, String(job.effectiveCamera.pitch));
+  assert.equal(job.effectiveCamera.yaw, expectedYaw.get(job.view));
+  assert.equal(job.effectiveCamera.pitch, 0.2);
+  assert.equal(job.receipt.input_path, job.effectiveCamera.inputPath);
+  assert.equal(`${job.receipt.output_dir}/render.png`, job.effectiveCamera.outputPath);
+  assert.equal(job.output.path, job.effectiveCamera.outputPath);
 }
 
 for (const sheet of [experiment.contactSheets.denseShape, experiment.contactSheets.sparseStructure]) {
@@ -118,7 +148,24 @@ for (const sheet of [experiment.contactSheets.denseShape, experiment.contactShee
   assert.equal(sha256(bytes), sheet.sha256);
   assert.equal(bytes.readUInt32BE(16), 2048);
   assert.equal(bytes.readUInt32BE(20), sheet.height);
+  assert.match(sheet.assemblySha256, /^[a-f0-9]{64}$/);
+  assert.equal(sheet.assemblySha256, sha256(Buffer.from(JSON.stringify(sheet.cells))));
+  assert.equal(sheet.cells.length, sheet.rows * 4);
+  assert.equal(new Set(sheet.cells.map(cell => cell.sourceJobId)).size, sheet.cells.length);
+  for (const cell of sheet.cells) {
+    const witness = receipts.witnessJobs.find(job => job.receipt.job_id === cell.sourceJobId);
+    assert.ok(witness, `sheet cell must name an admitted witness: ${cell.sourceJobId}`);
+    assert.equal(cell.stage, witness.stage);
+    assert.equal(cell.pressure, witness.pressure);
+    assert.equal(cell.view, witness.view);
+    assert.equal(cell.sourcePath, witness.output.path);
+    assert.equal(cell.sourceSha256, witness.output.sha256);
+    assert.equal(cell.yaw, witness.effectiveCamera.yaw);
+    assert.equal(cell.pitch, witness.effectiveCamera.pitch);
+  }
 }
+assert.equal(experiment.contactSheets.denseShape.rows, 3);
+assert.equal(experiment.contactSheets.sparseStructure.rows, 8);
 assert.equal(experiment.contactSheets.denseShape.height, 1668);
 assert.equal(experiment.contactSheets.denseShape.layout, '3 rows x 4 columns: low 3.0, default 7.5, high 12.0 by left/front/right/rear');
 assert.equal(experiment.contactSheets.sparseStructure.height, 4448);

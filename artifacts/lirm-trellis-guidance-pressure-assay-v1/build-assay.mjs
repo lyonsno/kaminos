@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import {
-  copyFileSync,
   mkdirSync,
   readFileSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -13,6 +14,16 @@ const greenroomRoot = '/Users/noahlyons/.local/state/gpu-greenroom';
 const sourcePath = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png';
 const denseRoot = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715';
 const sparseRoot = '/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715';
+const runner = '/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py';
+const fixed = {
+  seed: 42,
+  steps: 6,
+  resolution: 512,
+  targetFaces: 200000,
+  textureSize: 1024,
+  cascade: false,
+  simplifyFirst: true,
+};
 
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const fileRecord = path => {
@@ -25,6 +36,52 @@ const readJobFile = (jobId, name) => {
   return { path, bytes, sha256: sha256(bytes), value: JSON.parse(bytes) };
 };
 const integer = value => Number(value.replaceAll(',', ''));
+const assertSame = (label, actual, expected) => {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+};
+const routeFlag = (route, name) => {
+  const match = route.match(new RegExp(`(?:^| )--${name} ([^ ]+)`));
+  if (!match) throw new Error(`effective route is missing --${name}`);
+  return match[1];
+};
+const routeHas = (route, name) => new RegExp(`(?:^| )--${name}(?: |$)`).test(route);
+const parseGenerationRoute = (route, stage) => {
+  if (!route.startsWith(`${runner} `)) throw new Error(`unexpected Trellis runner: ${route}`);
+  const prefix = stage === 'dense-shape' ? 'shape' : 'sparse';
+  const cascade = routeHas(route, 'no-cascade') ? false : routeHas(route, 'cascade') ? true : null;
+  if (cascade === null) throw new Error('effective route must name cascade mode');
+  return {
+    inputPath: routeFlag(route, 'image'),
+    outputPath: routeFlag(route, 'output'),
+    seed: Number(routeFlag(route, 'seed')),
+    resolution: Number(routeFlag(route, 'resolution')),
+    steps: Number(routeFlag(route, 'steps')),
+    targetFaces: Number(routeFlag(route, 'target-faces')),
+    textureSize: Number(routeFlag(route, 'texture-size')),
+    cascade,
+    simplifyFirst: routeHas(route, 'simplify-first'),
+    strength: Number(routeFlag(route, `${prefix}-guidance-strength`)),
+    rescale: Number(routeFlag(route, `${prefix}-guidance-rescale`)),
+    interval: [
+      Number(routeFlag(route, `${prefix}-guidance-low`)),
+      Number(routeFlag(route, `${prefix}-guidance-high`)),
+    ],
+  };
+};
+const parseWitnessRoute = route => {
+  const split = route.split(' -- ');
+  if (split.length !== 2) throw new Error(`witness route lacks one argument delimiter: ${route}`);
+  const args = split[1].split(' ');
+  if (args.length !== 4) throw new Error(`witness route must end in input output yaw pitch: ${route}`);
+  return {
+    inputPath: args[0],
+    outputPath: args[1],
+    yaw: Number(args[2]),
+    pitch: Number(args[3]),
+  };
+};
 
 const generationSpecs = [
   ['dense-shape', 'low-3p0', '3b9a7ce7660e', denseRoot, 3.0],
@@ -85,6 +142,23 @@ const generationJobs = generationSpecs.map(([stage, pressure, jobId, outputRoot,
   const log = readFileSync(join(greenroomRoot, 'done', jobId, 'stdout.log'), 'utf8');
   const field = stage === 'dense-shape' ? 'shape_guidance_strength' : 'sparse_guidance_strength';
   const rescale = stage === 'dense-shape' ? 0.5 : 0.7;
+  const requested = {
+    ...fixed,
+    inputPath: requestFile.value.input_path,
+    outputPath: join(requestFile.value.output_dir, 'output.glb'),
+    strength,
+    rescale,
+    interval: [0.6, 1.0],
+  };
+  const effective = parseGenerationRoute(receiptFile.value.effective_route, stage);
+  assertSame(`${jobId} request id`, requestFile.value.job_id, jobId);
+  assertSame(`${jobId} receipt id`, receiptFile.value.job_id, jobId);
+  assertSame(`${jobId} request input`, requestFile.value.input_path, sourcePath);
+  assertSame(`${jobId} receipt input`, receiptFile.value.input_path, sourcePath);
+  assertSame(`${jobId} expected output cell`, requestFile.value.output_dir, join(outputRoot, pressure));
+  assertSame(`${jobId} receipt output cell`, receiptFile.value.output_dir, requestFile.value.output_dir);
+  assertSame(`${jobId} requested stage strength`, Number(requestFile.value.params[field]), strength);
+  for (const key of Object.keys(requested)) assertSame(`${jobId} effective ${key}`, effective[key], requested[key]);
   return {
     stage,
     pressure,
@@ -93,13 +167,9 @@ const generationJobs = generationSpecs.map(([stage, pressure, jobId, outputRoot,
     receiptSha256: receiptFile.sha256,
     requestSha256: requestFile.sha256,
     input: fileRecord(receiptFile.value.input_path),
-    output: fileRecord(join(outputRoot, pressure, 'output.glb')),
-    requested: { strength, rescale, interval: [0.6, 1.0] },
-    effective: {
-      strength: Number(receiptFile.value.effective_route.match(new RegExp(`--${field.replaceAll('_', '-')} ([^ ]+)`))[1]),
-      rescale,
-      interval: [0.6, 1.0],
-    },
+    output: fileRecord(effective.outputPath),
+    requested,
+    effective,
     metrics: parseMetrics(log),
   };
 });
@@ -107,7 +177,19 @@ const generationJobs = generationSpecs.map(([stage, pressure, jobId, outputRoot,
 const witnessJobs = witnessSpecs.flatMap(([stage, pressure, jobIds]) => jobIds.map((jobId, index) => {
   const receiptFile = readJobFile(jobId, 'receipt.json');
   const requestFile = readJobFile(jobId, 'request.json');
-  const output = fileRecord(join(receiptFile.value.output_dir, 'render.png'));
+  const effectiveCamera = parseWitnessRoute(receiptFile.value.effective_route);
+  const generation = generationJobs.find(job => job.stage === stage && job.pressure === pressure);
+  if (!generation) throw new Error(`missing generation for witness ${stage}/${pressure}`);
+  assertSame(`${jobId} request id`, requestFile.value.job_id, jobId);
+  assertSame(`${jobId} receipt id`, receiptFile.value.job_id, jobId);
+  assertSame(`${jobId} witness input`, effectiveCamera.inputPath, generation.output.path);
+  assertSame(`${jobId} receipt input`, receiptFile.value.input_path, effectiveCamera.inputPath);
+  assertSame(`${jobId} request input`, requestFile.value.input_path, effectiveCamera.inputPath);
+  assertSame(`${jobId} witness output`, effectiveCamera.outputPath, join(receiptFile.value.output_dir, 'render.png'));
+  assertSame(`${jobId} request output dir`, requestFile.value.output_dir, receiptFile.value.output_dir);
+  assertSame(`${jobId} yaw`, effectiveCamera.yaw, Number(requestFile.value.params.yaw));
+  assertSame(`${jobId} pitch`, effectiveCamera.pitch, Number(requestFile.value.params.pitch));
+  const output = fileRecord(effectiveCamera.outputPath);
   return {
     stage,
     pressure,
@@ -118,8 +200,61 @@ const witnessJobs = witnessSpecs.flatMap(([stage, pressure, jobIds]) => jobIds.m
     requestSha256: requestFile.sha256,
     input: fileRecord(receiptFile.value.input_path),
     output,
+    effectiveCamera,
   };
 }));
+
+const contactSheetCells = stage => witnessJobs
+  .filter(job => job.stage === stage)
+  .map(job => ({
+    stage: job.stage,
+    pressure: job.pressure,
+    view: job.view,
+    sourceJobId: job.receipt.job_id,
+    sourcePath: job.output.path,
+    sourceSha256: job.output.sha256,
+    yaw: job.effectiveCamera.yaw,
+    pitch: job.effectiveCamera.pitch,
+  }));
+
+const buildContactSheet = ({ stage, outputPath, title }) => {
+  const cells = contactSheetCells(stage);
+  const manifestPath = `${outputPath}.inputs.json`;
+  const manifest = {
+    width: 2048,
+    cellWidth: 512,
+    cellHeight: 556,
+    imageHeight: 419,
+    imageOffsetY: 46,
+    headerHeight: 91,
+    cells: cells.map(cell => ({
+      sourcePath: cell.sourcePath,
+      title: title(cell),
+      viewLabel: `${cell.view.toUpperCase()} yaw ${cell.yaw}`,
+    })),
+  };
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  try {
+    const result = spawnSync('/usr/bin/swift', [
+      join(artifactRoot, 'assemble-contact-sheet.swift'),
+      manifestPath,
+      outputPath,
+    ], { encoding: 'utf8' });
+    if (result.status !== 0) {
+      throw new Error(`contact sheet assembly failed: ${result.stderr || result.stdout}`);
+    }
+  } finally {
+    unlinkSync(manifestPath);
+  }
+  return {
+    ...fileRecord(outputPath),
+    path: outputPath.split('/').at(-1),
+    rows: cells.length / 4,
+    height: (cells.length / 4) * 556,
+    cells,
+    assemblySha256: sha256(Buffer.from(JSON.stringify(cells))),
+  };
+};
 
 const receipts = {
   schema: 'kaminos.lirm-trellis-guidance-pressure-route-receipts.v1',
@@ -132,8 +267,16 @@ const receipts = {
 mkdirSync(artifactRoot, { recursive: true });
 const denseSheetPath = join(artifactRoot, 'dense-shape-guidance-pressure-contact-sheet.png');
 const sparseSheetPath = join(artifactRoot, 'sparse-structure-guidance-pressure-contact-sheet.png');
-copyFileSync(join(denseRoot, 'shape-guidance-pressure-contact-sheet.png'), denseSheetPath);
-copyFileSync(join(sparseRoot, 'sparse-guidance-pressure-contact-sheet.png'), sparseSheetPath);
+const denseSheet = buildContactSheet({
+  stage: 'dense-shape',
+  outputPath: denseSheetPath,
+  title: cell => `DENSE CFG ${generationJobs.find(job => job.stage === cell.stage && job.pressure === cell.pressure).effective.strength.toFixed(2)}`,
+});
+const sparseSheet = buildContactSheet({
+  stage: 'sparse-structure',
+  outputPath: sparseSheetPath,
+  title: cell => `SPARSE CFG ${generationJobs.find(job => job.stage === cell.stage && job.pressure === cell.pressure).effective.strength.toFixed(2)}`,
+});
 
 const receiptPath = join(artifactRoot, 'route-receipts.json');
 writeFileSync(receiptPath, `${JSON.stringify(receipts, null, 2)}\n`);
@@ -141,22 +284,14 @@ writeFileSync(receiptPath, `${JSON.stringify(receipts, null, 2)}\n`);
 const experiment = {
   schema: 'kaminos.lirm-trellis-guidance-pressure-assay.v1',
   source: fileRecord(sourcePath),
-  fixed: {
-    seed: 42,
-    steps: 6,
-    resolution: 512,
-    targetFaces: 200000,
-    textureSize: 1024,
-    cascade: false,
-    simplifyFirst: true,
-  },
+  fixed,
   routeCommits: {
     denseShapeGuidance: 'c3cea40',
     sparseStructureGuidance: 'ee75fdb',
   },
   routeIdentity: {
     knownGoodLocalRunnerChecked: true,
-    runner: '/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py',
+    runner,
     effectiveBackend: 'MLX on Apple Silicon through gpu-greenroom strict FIFO',
     firstReceiptProvesRoute: true,
     heavyRunAcceptedBeforeProof: false,
@@ -168,15 +303,11 @@ const experiment = {
   },
   contactSheets: {
     denseShape: {
-      ...fileRecord(denseSheetPath),
-      path: 'dense-shape-guidance-pressure-contact-sheet.png',
-      height: 1668,
+      ...denseSheet,
       layout: '3 rows x 4 columns: low 3.0, default 7.5, high 12.0 by left/front/right/rear',
     },
     sparseStructure: {
-      ...fileRecord(sparseSheetPath),
-      path: 'sparse-structure-guidance-pressure-contact-sheet.png',
-      height: 4448,
+      ...sparseSheet,
       layout: '8 rows x 4 columns: sparse CFG 0.0, 0.25, 0.5, 0.75, 1.0, 3.0, 7.5, 12.0 by left/front/right/rear',
     },
   },

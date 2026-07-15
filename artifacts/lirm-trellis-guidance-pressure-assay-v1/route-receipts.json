@@ -65,6 +65,15 @@
         "bytes": 10029248
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/low-3p0/output.glb",
         "strength": 3,
         "rescale": 0.5,
         "interval": [
@@ -73,6 +82,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/low-3p0/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 3,
         "rescale": 0.5,
         "interval": [
@@ -155,6 +173,15 @@
         "bytes": 9998996
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/default-7p5/output.glb",
         "strength": 7.5,
         "rescale": 0.5,
         "interval": [
@@ -163,6 +190,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/default-7p5/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 7.5,
         "rescale": 0.5,
         "interval": [
@@ -245,6 +281,15 @@
         "bytes": 8207324
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/high-12p0/output.glb",
         "strength": 12,
         "rescale": 0.5,
         "interval": [
@@ -253,6 +298,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/high-12p0/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 12,
         "rescale": 0.5,
         "interval": [
@@ -332,6 +386,15 @@
         "bytes": 9526612
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
         "strength": 0,
         "rescale": 0.7,
         "interval": [
@@ -340,6 +403,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 0,
         "rescale": 0.7,
         "interval": [
@@ -419,6 +491,15 @@
         "bytes": 9460604
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
         "strength": 0.25,
         "rescale": 0.7,
         "interval": [
@@ -427,6 +508,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 0.25,
         "rescale": 0.7,
         "interval": [
@@ -506,6 +596,15 @@
         "bytes": 9662108
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
         "strength": 0.5,
         "rescale": 0.7,
         "interval": [
@@ -514,6 +613,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 0.5,
         "rescale": 0.7,
         "interval": [
@@ -593,6 +701,15 @@
         "bytes": 9310824
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p75/output.glb",
         "strength": 0.75,
         "rescale": 0.7,
         "interval": [
@@ -601,6 +718,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p75/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 0.75,
         "rescale": 0.7,
         "interval": [
@@ -680,6 +806,15 @@
         "bytes": 9920924
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/conditioned-1p0/output.glb",
         "strength": 1,
         "rescale": 0.7,
         "interval": [
@@ -688,6 +823,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/conditioned-1p0/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 1,
         "rescale": 0.7,
         "interval": [
@@ -767,6 +911,15 @@
         "bytes": 9263216
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/low-3p0/output.glb",
         "strength": 3,
         "rescale": 0.7,
         "interval": [
@@ -775,6 +928,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/low-3p0/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 3,
         "rescale": 0.7,
         "interval": [
@@ -854,6 +1016,15 @@
         "bytes": 9998996
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/default-7p5/output.glb",
         "strength": 7.5,
         "rescale": 0.7,
         "interval": [
@@ -862,6 +1033,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/default-7p5/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 7.5,
         "rescale": 0.7,
         "interval": [
@@ -941,6 +1121,15 @@
         "bytes": 9802924
       },
       "requested": {
+        "seed": 42,
+        "steps": 6,
+        "resolution": 512,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/high-12p0/output.glb",
         "strength": 12,
         "rescale": 0.7,
         "interval": [
@@ -949,6 +1138,15 @@
         ]
       },
       "effective": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/high-12p0/output.glb",
+        "seed": 42,
+        "resolution": 512,
+        "steps": 6,
+        "targetFaces": 200000,
+        "textureSize": 1024,
+        "cascade": false,
+        "simplifyFirst": true,
         "strength": 12,
         "rescale": 0.7,
         "interval": [
@@ -1020,6 +1218,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/low-3p0/left/render.png",
         "sha256": "af1918484048c44de96b38559fdc6c024adbe80eb9c294d64c8609548b024d79",
         "bytes": 736686
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/low-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/low-3p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1072,6 +1276,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/low-3p0/front/render.png",
         "sha256": "25e31e8df12603d68c74dc9ecca6fb024fcfc3b422879962984cef10fcb7f9c4",
         "bytes": 694333
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/low-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/low-3p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -1124,6 +1334,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/low-3p0/right/render.png",
         "sha256": "b59ce71ca50fd06138739d27d4394251058ecd80053d8ae429707b5229cdc612",
         "bytes": 746897
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/low-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/low-3p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1176,6 +1392,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/low-3p0/opposite/render.png",
         "sha256": "0a88f2a09ec9ac9aaed0430a877bec2a3bd7ab5e70c901f81eecea0427b618c3",
         "bytes": 666686
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/low-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/low-3p0/opposite/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -1228,6 +1450,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/default-7p5/left/render.png",
         "sha256": "196d4621755575e0ff443d620aeadbe150a2bdabed38d693c08d20306e2a921a",
         "bytes": 735751
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/default-7p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/default-7p5/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1280,6 +1508,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/default-7p5/front/render.png",
         "sha256": "b630dd5e9bebf6be2dcd6703ebeb6901f0d7942163048d6defae1899ecd52d21",
         "bytes": 695908
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/default-7p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/default-7p5/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -1332,6 +1566,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/default-7p5/right/render.png",
         "sha256": "d67ff5cabb5e92a1eef6114410bcdf2c496f2ae16179b966c04b2b8bd1b5ad57",
         "bytes": 746845
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/default-7p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/default-7p5/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1384,6 +1624,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/default-7p5/opposite/render.png",
         "sha256": "ea77f0b3c819558f727484828724224e3ef11f3fb7d72aad877e84bd700d1930",
         "bytes": 666872
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/default-7p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/default-7p5/opposite/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -1436,6 +1682,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/high-12p0/left/render.png",
         "sha256": "370d5d6ccd75a33fcf1379b6224aa45a1e44b23d04b8955499e3f3997acf519a",
         "bytes": 743790
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/high-12p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/high-12p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1488,6 +1740,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/high-12p0/front/render.png",
         "sha256": "ce58073bd4f4bd43795f61b8c4e6eeee7ec0b121b8ff5005f9e0d3ef17e2890b",
         "bytes": 705001
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/high-12p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/high-12p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -1540,6 +1798,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/high-12p0/right/render.png",
         "sha256": "6ee49aeab529c23b23ab414961b77a907560a003898d0cb903aa1b4b1efc36b6",
         "bytes": 760394
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/high-12p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/high-12p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1592,6 +1856,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/high-12p0/opposite/render.png",
         "sha256": "c0ccffdbf2bddde977938b9c4e2c385d6d6626b31ad12e8d7ae8c13832db863e",
         "bytes": 671919
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/high-12p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-shape-guidance-pressure-20260715/witness/high-12p0/opposite/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -1643,6 +1913,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left/render.png",
         "sha256": "b6d68372010c861cab4f294c1999ea958fa4a131432435a420f6a5c126a043fd",
         "bytes": 631380
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1694,6 +1970,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front/render.png",
         "sha256": "ab21eb6c970c5e2ded13ef2a58f8502ccfd4b27c41d7832eca77ef5d3943bf48",
         "bytes": 625770
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -1745,6 +2027,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right/render.png",
         "sha256": "bef97fe375d574ff2b76ad6541e37ebb8a3c9b9ab75a86d4768cec8152a877d0",
         "bytes": 635754
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1796,6 +2084,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear/render.png",
         "sha256": "1fc14b5a5bffc3ff5ce0bdcb94bcb4080c19629e8a76f5a93bc3a138e18187e9",
         "bytes": 619403
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/prior-hybrid-0p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/prior-hybrid-0p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -1847,6 +2141,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left/render.png",
         "sha256": "ad25c666c55657a55b9c67e6a16ff684052db475a3e811ad3a4a8551138e3da7",
         "bytes": 656809
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -1898,6 +2198,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front/render.png",
         "sha256": "6c7936e3543e39d022cca524882ea5daaa8b1d1d033a78a5110c9fd8310c0bb2",
         "bytes": 669609
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -1949,6 +2255,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right/render.png",
         "sha256": "5d7a2142be66a8bc4a8484fce0486a51800135a6cbe4ffe0f10eef4c6fe65dda",
         "bytes": 712768
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2000,6 +2312,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear/render.png",
         "sha256": "215a9aee0bc29b43078b52053ec80ea2801c55687ebaf924c3e1cf85d9afac22",
         "bytes": 650729
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p25/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p25/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -2051,6 +2369,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left/render.png",
         "sha256": "a1035404c993623a94764110fd362cb608d1a7592e69226df9e89e9223d5ca85",
         "bytes": 735145
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2102,6 +2426,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front/render.png",
         "sha256": "f64a754a0d189988767db5f85e200616ecaf19b78c306c680e268565369a91ec",
         "bytes": 695562
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -2153,6 +2483,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right/render.png",
         "sha256": "6bab7c8590733986c2767b661d2a10c4e24e78e4891459ce70837848ed2e322c",
         "bytes": 764661
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2204,6 +2540,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear/render.png",
         "sha256": "020e6f526ea54fef3b71b2467cf95dfac464e5097725932139db2e47088bdae1",
         "bytes": 664177
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p50/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p50/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -2255,6 +2597,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p75/left/render.png",
         "sha256": "18df6fd9b93c7f16f425f7125b266763f512fd4d047dff5a010653bd5d0fd3d5",
         "bytes": 746287
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p75/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p75/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2306,6 +2654,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p75/front/render.png",
         "sha256": "98f8ae64aebaa0f9ba22ef45dc7d1ae957f754d3ac2cdfe23b8231d6a77a858e",
         "bytes": 708293
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p75/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p75/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -2357,6 +2711,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p75/right/render.png",
         "sha256": "8cf259cd4cd1f278a3ed0fc939add5dbebfe4d67801c2f3e0820434f90f35aa9",
         "bytes": 768309
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p75/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p75/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2408,6 +2768,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p75/rear/render.png",
         "sha256": "8f907a389bcb83debb96195bf5372060c44784db394fc871cb13f6faba98eaef",
         "bytes": 662309
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/hybrid-0p75/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/hybrid-0p75/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -2459,6 +2825,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/conditioned-1p0/left/render.png",
         "sha256": "6400fc7f9b5fc7ff5b02587ee652df0fc849d8960a426cab2c635bbba7782694",
         "bytes": 733957
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/conditioned-1p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/conditioned-1p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2510,6 +2882,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/conditioned-1p0/front/render.png",
         "sha256": "19e5f21ee946a730b4b668c0fbc582fb5d3f93ce7f09460649a1ffa91122341b",
         "bytes": 695632
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/conditioned-1p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/conditioned-1p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -2561,6 +2939,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/conditioned-1p0/right/render.png",
         "sha256": "3311be7646888169b263b64f32684de25e0acde43be5a83885f2f07aa6994fa2",
         "bytes": 746261
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/conditioned-1p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/conditioned-1p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2612,6 +2996,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/conditioned-1p0/rear/render.png",
         "sha256": "c215319c8b04c7db980fe392b4cd85ea8bc427e70e944c942c14ba819d7ad3f7",
         "bytes": 662764
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/conditioned-1p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/conditioned-1p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -2663,6 +3053,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/low-3p0/left/render.png",
         "sha256": "68fbe11d49171ac9511596f88743b2e00dfac49f146894088f42480359251754",
         "bytes": 736992
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/low-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/low-3p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2714,6 +3110,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/low-3p0/front/render.png",
         "sha256": "2bd356a5dc0b7d00b838f537bb1e1c6d4cbd00c187e9065127ebad1d03ef2753",
         "bytes": 697785
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/low-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/low-3p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -2765,6 +3167,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/low-3p0/right/render.png",
         "sha256": "aa57fb4d5db464eca6d68edd22f1ec67b18bade36550c4ec3c76f0ead4dda1da",
         "bytes": 749066
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/low-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/low-3p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2816,6 +3224,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/low-3p0/rear/render.png",
         "sha256": "5c82ccf420d195d7ce567f2cb8c361dbbfe3fa12227276b0773baf0ec8d8e23b",
         "bytes": 667909
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/low-3p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/low-3p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -2867,6 +3281,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/default-7p5/left/render.png",
         "sha256": "849d96a00ed1bdd19555219be48d93def0a1b07faee5159061828637611d0b17",
         "bytes": 735751
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/default-7p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/default-7p5/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -2918,6 +3338,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/default-7p5/front/render.png",
         "sha256": "8548081eae62fce4a0506fa03fc822cbba5925a0db0e43b38188d42ac002dd23",
         "bytes": 695908
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/default-7p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/default-7p5/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -2969,6 +3395,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/default-7p5/right/render.png",
         "sha256": "73e1cae8ea75b867d7bfe05564fd5b6805a7da26eedf84dee6a697ebec9bc814",
         "bytes": 746845
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/default-7p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/default-7p5/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -3020,6 +3452,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/default-7p5/rear/render.png",
         "sha256": "eb08c1e75b5d66cf9389eed8c51e29e90df00fdd6695b67e0c8f18b977242990",
         "bytes": 666872
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/default-7p5/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/default-7p5/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     },
     {
@@ -3071,6 +3509,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/high-12p0/left/render.png",
         "sha256": "92432315edb18181579bdc3ecaefc98fb4129327e5c7244ae4719f15bebaee32",
         "bytes": 735586
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/high-12p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/high-12p0/left/render.png",
+        "yaw": -0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -3122,6 +3566,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/high-12p0/front/render.png",
         "sha256": "ae7b309ffdb452dd942b4681b18084d122791fcc226826809dc44b74c259b37e",
         "bytes": 699951
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/high-12p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/high-12p0/front/render.png",
+        "yaw": 0,
+        "pitch": 0.2
       }
     },
     {
@@ -3173,6 +3623,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/high-12p0/right/render.png",
         "sha256": "e76682a2cc1066093e7bb1ee196eca8f46f79c46b87bb44bf19d9fa14502b039",
         "bytes": 748156
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/high-12p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/high-12p0/right/render.png",
+        "yaw": 0.85,
+        "pitch": 0.2
       }
     },
     {
@@ -3224,6 +3680,12 @@
         "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/high-12p0/rear/render.png",
         "sha256": "ccda9a92b12491170de346925558292c539eb5d68becfbb94714d925ae3694d7",
         "bytes": 671179
+      },
+      "effectiveCamera": {
+        "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/high-12p0/output.glb",
+        "outputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-0066-sparse-guidance-pressure-20260715/witness-valid/high-12p0/rear/render.png",
+        "yaw": 3.141593,
+        "pitch": 0.2
       }
     }
   ]
