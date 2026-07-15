@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaminos Basin Smoke</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #050607; color: #edf4f5; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #050607; }
+    main { width: min(680px, calc(100vw - 32px)); border: 1px solid #314149; border-radius: 6px; padding: 20px; background: #0b1012; }
+    strong { display: block; font-size: 18px; }
+    #status { margin-top: 8px; color: #9eb0b5; font: 13px/1.5 "SF Mono", Menlo, monospace; overflow-wrap: anywhere; }
+    #status.failed { color: #ff9d8d; }
+  </style>
+</head>
+<body>
+  <main>
+    <strong>Resolving durable basin</strong>
+    <div id="status">Loading capture authority...</div>
+  </main>
+  <script type="module">
+    const status = document.getElementById('status');
+    const params = new URLSearchParams(location.search);
+    const captureId = params.get('capture');
+
+    async function resolveCapture() {
+      if (!captureId) throw new Error('capture id is required');
+      const response = await fetch(`/api/volume-capture?id=${encodeURIComponent(captureId)}`, { cache: 'no-store' });
+      const document = await response.json();
+      if (!response.ok) throw new Error(document.error || `capture lookup failed: ${response.status}`);
+      if (document.identity !== 'kaminos-volume-agent-capture-artifact-v1') throw new Error('capture artifact identity mismatch');
+      const capture = document.capture;
+      if (capture?.identity !== 'kaminos-volume-agent-capture-v1' || capture.kind !== 'prototype-basin') {
+        throw new Error('capture is not a prototype-basin settings artifact');
+      }
+      if (capture.sceneAuthority?.status !== 'prototype' || capture.sceneAuthority?.effective !== 'tall_plume') {
+        throw new Error(`capture scene is not prototype-authoritative: ${capture.sceneAuthority?.effective || 'missing'}`);
+      }
+      if (!capture.route || !capture.domControls || Number(capture.controlCount) < 1) {
+        throw new Error('capture omitted its exact settings route or DOM controls');
+      }
+      const excluded = capture.stateExclusions || {};
+      for (const field of ['fluidField', 'frontField', 'boundarySidecar', 'splatInstances', 'historyBuffers', 'pressureState', 'replayState']) {
+        if (excluded[field] !== true) throw new Error(`capture did not exclude ${field}`);
+      }
+
+      if (capture.requestedSmoke?.role !== 'truthHigh') throw new Error('prototype basin role is not truthHigh');
+      if (capture.requestedSmoke?.composition !== 'splat-only-v0') throw new Error('prototype basin composition is not splat-only-v0');
+      const requestedRole = capture.requestedSmoke.role;
+      const requestedComposition = capture.requestedSmoke.composition;
+
+      const capturedRoute = new URL(capture.route, location.origin);
+      if (capturedRoute.searchParams.get('volume_scene') !== 'tall_plume') {
+        throw new Error('captured settings route is not tall_plume');
+      }
+      if (capturedRoute.searchParams.get('volume_boundary_splat_mode') !== 'learned') {
+        throw new Error('captured settings cannot satisfy splat-only composition');
+      }
+      if (capturedRoute.searchParams.get('volume_resolution') !== '160') {
+        throw new Error('captured settings are outside the exact selective-head grid');
+      }
+      const target = new URL('/volume-selective-head-live.html', location.origin);
+      for (const [key, value] of capturedRoute.searchParams) {
+        if (key.startsWith('volume_')) target.searchParams.set(key, value);
+      }
+      target.searchParams.set('role', requestedRole);
+      target.searchParams.set('composition', requestedComposition);
+      target.searchParams.set('warmup_steps', '0');
+      target.searchParams.set('basin_capture', captureId);
+      status.textContent = `${captureId} | ${requestedRole} | ${requestedComposition} | fresh live / no anchor`;
+      location.replace(target);
+    }
+
+    resolveCapture().catch(error => {
+      status.classList.add('failed');
+      status.textContent = `BASIN SMOKE FAILED | ${error?.message || error}`;
+      console.error('KAMINOS BASIN SMOKE FAILED', error);
+    });
+  </script>
+</body>
+</html>

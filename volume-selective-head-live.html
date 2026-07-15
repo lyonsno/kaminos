@@ -162,24 +162,48 @@
       prototype()?.setSelectiveHeadLiveRenderComposition?.(composition);
     }
 
+    function passReceiptMatchesComposition(receipt, composition) {
+      if (!receipt || receipt.composition !== composition || receipt.fallbackReason) return false;
+      if (composition === 'splat-only-v0') return receipt.splatApplied === true && receipt.raymarchApplied === false;
+      if (composition === 'raymarch-only-v0') return receipt.raymarchApplied === true && receipt.splatApplied === false;
+      if (composition === 'smoke-raymarch-under-splats-v0') return receipt.raymarchApplied === true && receipt.splatApplied === true;
+      if (composition === 'full-raymarch-under-splats-diagnostic-v0') return receipt.raymarchApplied === true && receipt.splatApplied === true;
+      return false;
+    }
+
     function debugState() {
       const state = prototype()?.debugState?.() || null;
+      const effectiveRole = state?.selectiveHeadLiveEffectiveRole || null;
+      const effectiveComposition = state?.selectiveHeadLiveCompositionEffective || null;
+      const passReceipt = state?.selectiveHeadLivePassReceipt || null;
+      const fallback = state?.selectiveHeadLiveFallbackReason
+        || state?.selectiveHeadLiveCompositionFallbackReason
+        || state?.boundarySplatFallbackReason
+        || null;
+      const rendererSettled = warmupComplete
+        && state?.active
+        && effectiveRole === requestedRole
+        && effectiveComposition === requestedComposition
+        && passReceiptMatchesComposition(passReceipt, requestedComposition);
       return {
         routeIdentity: ROUTE_IDENTITY,
-        status: warmupError || state?.error ? 'failed' : warmupComplete && state?.active ? 'running' : 'warming',
+        status: warmupError || state?.error || fallback
+          ? 'failed'
+          : (rendererSettled ? 'running' : (warmupComplete && state?.active ? 'settling' : 'warming')),
         requestedRole,
         requestedComposition,
+        sourceCaptureId: params.get('basin_capture') || null,
         warmupAuthority,
         warmupTarget,
         warmupComplete,
         warmupStarted,
         warmupReceipt,
-        effectiveRole: state?.selectiveHeadLiveEffectiveRole || null,
+        effectiveRole,
         roleAuthority: state?.selectiveHeadLiveRoleAuthority || null,
         compositionAuthority: state?.selectiveHeadLiveCompositionAuthority || null,
-        effectiveComposition: state?.selectiveHeadLiveCompositionEffective || null,
+        effectiveComposition,
         compositionFallbackReason: state?.selectiveHeadLiveCompositionFallbackReason || null,
-        selectiveHeadLivePassReceipt: state?.selectiveHeadLivePassReceipt || null,
+        selectiveHeadLivePassReceipt: passReceipt,
         fallbackReason: state?.selectiveHeadLiveFallbackReason || null,
         modelIdentity: state?.selectiveHeadLiveModelIdentity || null,
         featureAuthority: state?.selectiveHeadLiveFeatureAuthority || null,
@@ -250,6 +274,7 @@
       const pass = state.selectiveHeadLivePassReceipt || {};
       status.classList.toggle('bad', Boolean(fallback || state.error));
       status.textContent = [
+        state.sourceCaptureId ? `capture: ${state.sourceCaptureId}` : 'capture: direct route',
         state.warmupAuthority === 'fresh-live-settings-no-anchor-v0'
           ? 'fresh settings live: no anchor imported'
           : (state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`),

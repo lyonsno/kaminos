@@ -123,6 +123,13 @@ assert.match(
   /const warmupTarget = warmupParam === '0'\s*\?\s*0[\s\S]*fresh-live-settings-no-anchor-v0/,
   'only an explicit valid zero-step request reports that no checksum field anchor was imported',
 );
+assert.match(page, /sourceCaptureId:\s*params\.get\('basin_capture'\)/, 'selective-head wrapper records the durable source-capture id');
+assert.match(page, /capture: \$\{state\.sourceCaptureId/, 'operator status names the durable source capture that actually rendered');
+assert.match(page, /effectiveRole === requestedRole[\s\S]*effectiveComposition === requestedComposition[\s\S]*'running'[\s\S]*'settling'/, 'wrapper reports running only after requested renderer role and composition become effective');
+assert.match(page, /function passReceiptMatchesComposition\(/, 'wrapper has a named exact pass-tuple predicate');
+assert.match(page, /splat-only-v0[\s\S]*splatApplied === true[\s\S]*raymarchApplied === false/, 'splat-only running requires splats applied and raymarch absent');
+assert.match(page, /raymarch-only-v0[\s\S]*raymarchApplied === true[\s\S]*splatApplied === false/, 'raymarch-only running requires raymarch applied and splats absent');
+assert.match(page, /smoke-raymarch-under-splats-v0[\s\S]*raymarchApplied === true[\s\S]*splatApplied === true/, 'hybrid running requires both passes applied');
 
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /kaminos\.volume\.selective-head-live-witness\.v0/);

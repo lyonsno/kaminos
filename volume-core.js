@@ -15,6 +15,10 @@ import {
   SELECTIVE_HEAD_LIVE_ROUTE,
   createSelectiveHeadLiveRuntime,
 } from './selective-head-live-runtime.mjs';
+import {
+  normalizeVolumeScene,
+  volumeSceneReceipt,
+} from './volume-scene-ontology.mjs';
 
 const ROUTE_IDENTITY = 'native-3d-compute-fluid-raymarch-v0';
 const PROTOTYPE_IDENTITY = 'kaminos-volume-prototype-v0';
@@ -123,8 +127,6 @@ const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const MAX_EXTERNAL_EMITTERS = 32;
 const EXTERNAL_EMITTER_COMPONENTS = 20;
-const DEFAULT_VOLUME_SCENE = 'compact_plume';
-const SUPPORTED_VOLUME_SCENES = new Set([DEFAULT_VOLUME_SCENE, 'canonical_plume', 'tall_plume', 'bonfire_plume']);
 const CANONICAL_SOURCE_MODE_VALUES = {
   current: 0,
   passive_bottom: 1,
@@ -255,10 +257,6 @@ function normalizeBrowserResidualStrength(value) {
 function normalizeBrowserResidualFeatureDebug(value) {
   const normalized = String(value ?? '0').toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'debug' ? 1 : 0;
-}
-
-function normalizeVolumeScene(value) {
-  return SUPPORTED_VOLUME_SCENES.has(value) ? value : DEFAULT_VOLUME_SCENE;
 }
 
 function normalizeCanonicalSourceMode(value) {
@@ -5284,6 +5282,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       authority: 'off',
     },
     volumeScene: normalizeVolumeScene(controlsSnapshot.volumeScene),
+    volumeSceneAuthority: volumeSceneReceipt(controlsSnapshot.volumeScene),
     frameCount: 0,
     simStepCount: 0,
     lookFreeze: normalizeLookFreeze(controlsSnapshot.lookFreeze),
@@ -8032,6 +8031,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.boundarySidecarView = boundarySidecarViewName;
     state.boundarySidecarDebug = boundarySidecarDebug(boundarySidecarSourceName);
     state.volumeScene = normalizeVolumeScene(controlsSnapshot.volumeScene);
+    state.volumeSceneAuthority = volumeSceneReceipt(controlsSnapshot.volumeScene);
     state.bonfireReferenceConfinement = bonfireReferenceConfinementDebug(controlsSnapshot.volumeScene);
     state.minimalPlumeProof = minimalPlumeProofDebug(controlsSnapshot.volumeScene);
     state.adaptiveRaymarch = uniforms[39];

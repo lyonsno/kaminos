@@ -998,7 +998,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
     def volume_capture_slug(self, payload):
         requested = str(payload.get("name") or payload.get("captureId") or payload.get("kind") or "volume-capture")
         slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", requested).strip(".-").lower()[:72] or "volume-capture"
-        stamp = time.strftime("%Y%m%d-%H%M%S")
+        stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 1_000_000:06d}"
         return f"{stamp}-{slug}"
 
     def volume_capture_path_for_id(self, capture_id):
@@ -1061,10 +1061,39 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json({"error": "capture payload must be a JSON object"}, 400)
             return
 
+        if payload.get("kind") == "prototype-basin":
+            scene_authority = payload.get("sceneAuthority") or {}
+            requested_smoke = payload.get("requestedSmoke") or {}
+            exclusions = payload.get("stateExclusions") or {}
+            forbidden_runtime_fields = ("href", "camera", "volumeDebugState", "viewport")
+            excluded_fields = (
+                "fluidField", "frontField", "boundarySidecar", "splatInstances",
+                "historyBuffers", "pressureState", "replayState",
+            )
+            if scene_authority.get("status") != "prototype" or scene_authority.get("effective") != "tall_plume":
+                self.send_json({"error": "prototype-basin capture requires tall_plume prototype authority"}, 400)
+                return
+            if requested_smoke.get("role") != "truthHigh" or requested_smoke.get("composition") != "splat-only-v0" or requested_smoke.get("warmupSteps") != 0:
+                self.send_json({"error": "prototype-basin capture requires explicit truthHigh splat-only fresh-smoke identity"}, 400)
+                return
+            if ((payload.get("domControls") or {}).get("boundarySplatMode", {}).get("value") != "learned"):
+                self.send_json({"error": "prototype-basin splat-only smoke requires learned boundary splats"}, 400)
+                return
+            if str(((payload.get("domControls") or {}).get("resolution", {}).get("value"))) != "160":
+                self.send_json({"error": "prototype-basin selective-head smoke requires resolution 160"}, 400)
+                return
+            if any(exclusions.get(field) is not True for field in excluded_fields):
+                self.send_json({"error": "prototype-basin capture must explicitly exclude runtime and replay state"}, 400)
+                return
+            if any(field in payload for field in forbidden_runtime_fields):
+                self.send_json({"error": "prototype-basin capture must not contain runtime, camera, or viewport state"}, 400)
+                return
+
         VOLUME_CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
         capture_id = self.volume_capture_slug(payload)
         path = self.volume_capture_path_for_id(capture_id)
         relative_path = str(path.relative_to(ROOT))
+        smoke_url = f"/volume-basin-smoke.html?capture={capture_id}" if payload.get("kind") == "prototype-basin" else None
         document = {
             "identity": "kaminos-volume-agent-capture-artifact-v1",
             "captureId": capture_id,
@@ -1073,6 +1102,8 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "witnessCommand": f"node volume-witness.mjs --capture {relative_path}",
             "capture": payload,
         }
+        if smoke_url:
+            document["smokeUrl"] = smoke_url
         path.write_text(json.dumps(document, indent=2))
         self.send_json({
             "ok": True,
@@ -1080,6 +1111,7 @@ class KaminosHandler(http.server.SimpleHTTPRequestHandler):
             "relativePath": relative_path,
             "path": str(path),
             "witnessCommand": document["witnessCommand"],
+            "smokeUrl": smoke_url,
             "document": document,
         })
 
