@@ -2329,7 +2329,7 @@ async function main() {
   let sceneContextEvidence = null;
   let sceneContextLocalAssetMount = null;
   try {
-    if (expectsVolumeBrickWallSceneContext) {
+    if (expectsVolumeBrickWallSceneContext && !expectsReceiverLightIsolateEvidence) {
       phase = 'brick-wall-local-asset-mount';
       sceneContextLocalAssetMount = ensureBrickWallLocalAssetMount();
     }
@@ -2464,7 +2464,7 @@ async function main() {
         receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
         receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
         receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
-        receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
+        receiverLightDebug.receiverBufferSource === 'scene-prepass-depth-dynamic-receiver-mask-v0' &&
         receiverLightDebug.attachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
         receiverLightDebug.effectiveAttachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
         receiverLightDebug.attachmentAuthority === 'native-shared-device-gpu-texture-only-v0' &&
@@ -2503,6 +2503,9 @@ async function main() {
         throw new Error(`Tier 2 receiver-light receipt not accepted: ${JSON.stringify(receiverLightEvidence)}`);
       }
       for (let cadenceProbe = 0; cadenceProbe < 20; cadenceProbe += 1) {
+        // Headless Chrome may suspend presentation while DevTools only polls JS.
+        // A surface capture requests one honest compositor frame without changing state.
+        await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', fromSurface: true });
         await delay(250);
         const receiverLightLaterEval = await wsRequest(ws, 'Runtime.evaluate', {
           expression: 'window.kaminosTier2ReceiverLightDebugState?.() ?? null',
@@ -2573,18 +2576,28 @@ async function main() {
         if (!freezeReceipt?.accepted || !freezeReceipt.clip) {
           throw new Error(`receiver-light paired delta could not freeze and frame the render surface: ${JSON.stringify(freezeReceipt)}`);
         }
-        await delay(250);
-        const receiverOnShot = await wsRequest(ws, 'Page.captureScreenshot', {
-          format: 'png',
-          fromSurface: true,
-          clip: freezeReceipt.clip,
-        });
-        const receiverOnBuffer = Buffer.from(receiverOnShot.data || '', 'base64');
         const receiverOnPath = out.replace(/\.png$/i, '.receiver-on.png');
         const receiverMutedPath = out.replace(/\.png$/i, '.receiver-muted.png');
-        writeFileSync(receiverOnPath, receiverOnBuffer);
+        let receiverOnBuffer;
         let receiverMutedBuffer;
+        let foregroundMuteReceipt = null;
         try {
+          const foregroundMuteEval = await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessForegroundMute?.(true) ?? null',
+            returnByValue: true,
+          });
+          foregroundMuteReceipt = foregroundMuteEval.result.value || null;
+          if (foregroundMuteReceipt?.witnessForegroundMuted !== true || foregroundMuteReceipt?.nativeCanvasOpacity !== '0') {
+            throw new Error(`receiver-light paired delta could not hide foreground fire: ${JSON.stringify(foregroundMuteReceipt)}`);
+          }
+          await delay(250);
+          const receiverOnShot = await wsRequest(ws, 'Page.captureScreenshot', {
+            format: 'png',
+            fromSurface: true,
+            clip: freezeReceipt.clip,
+          });
+          receiverOnBuffer = Buffer.from(receiverOnShot.data || '', 'base64');
+          writeFileSync(receiverOnPath, receiverOnBuffer);
           const muteEval = await wsRequest(ws, 'Runtime.evaluate', {
             expression: 'window.kaminosTier2ReceiverLightSetWitnessMute?.(true) ?? null',
             returnByValue: true,
@@ -2605,6 +2618,10 @@ async function main() {
             expression: 'window.kaminosTier2ReceiverLightSetWitnessMute?.(false) ?? null',
             returnByValue: true,
           });
+          await wsRequest(ws, 'Runtime.evaluate', {
+            expression: 'window.kaminosTier2ReceiverLightSetWitnessForegroundMute?.(false) ?? null',
+            returnByValue: true,
+          });
         }
         const delta = measureReceiverLightDelta(
           parsePngRgba(receiverOnBuffer),
@@ -2615,6 +2632,8 @@ async function main() {
           ...delta,
           accepted: delta.warmPositivePixels >= 100 && delta.meanPositiveLumaDelta >= 2,
           freezeReceipt,
+          foregroundMutedAtCapture: foregroundMuteReceipt?.witnessForegroundMuted === true,
+          foregroundMuteReceipt,
           receiverOnPath,
           receiverMutedPath,
         };
@@ -4962,7 +4981,7 @@ async function main() {
             receiverLightDebug.receiverMaskAuthority === 'opt-in-receiver-buffer-required-v0' &&
             receiverLightDebug.supportIdentity === 'combustion-front-receiver-support-v0' &&
             receiverLightDebug.supportAuthority === 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0' &&
-            receiverLightDebug.receiverBufferSource === 'explicit-opt-in-receiver-proxy-buffer-v0' &&
+            receiverLightDebug.receiverBufferSource === 'scene-prepass-depth-dynamic-receiver-mask-v0' &&
             receiverLightDebug.attachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
             receiverLightDebug.effectiveAttachmentIdentity === 'gpu-splat-radiance-coverage-depth-moments-v0' &&
             receiverLightDebug.attachmentAuthority === 'native-shared-device-gpu-texture-only-v0' &&

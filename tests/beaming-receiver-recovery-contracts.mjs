@@ -51,10 +51,18 @@ requirePatterns(index, 'receiver light', [
   [/sourceTexture\s*=\s*attachments\.radianceTexture/, 'receiver binds the producer radiance texture directly'],
   [/sourceTexture\s*=\s*attachments\.momentsTexture/, 'receiver binds the producer moments texture directly'],
   [/createTier2ReceiverBufferLightPass/, 'renderer builds a separate receiver light pass'],
-  [/receiverMaskRenderTarget/, 'renderer owns an explicit receiver mask target'],
+  [/createTier2ReceiverBufferLightPass\(baseOutputNode, sceneDepthNode\)/, 'receiver pass consumes the rendered scene prepass depth'],
+  [/scene-prepass-depth-dynamic-receiver-mask-v0/, 'dynamic rendered geometry has stable receiver-mask authority'],
+  [/sceneGeometryReceiverMaskNode/, 'light is restricted to scene geometry instead of proxy planes'],
+  [/receiverRadianceLowResTarget/, 'renderer downsamples live fire radiance before spreading it'],
+  [/receiverRadianceBlurHorizontalTarget/, 'renderer owns a horizontal low-resolution radiance blur target'],
+  [/receiverRadianceBlurVerticalTarget/, 'renderer owns a vertical low-resolution radiance blur target'],
+  [/receiver-radiance-separable-low-resolution-area-wash-v0/, 'the GPU area-wash strategy has a stable identity'],
+  [/new THREE\.QuadMesh/, 'the live GPU attachment is filtered without CPU readback'],
   [/volume_receiver_light/, 'route can opt into receiver lighting'],
   [/volume_receiver_light_isolate/, 'route can isolate receiver-light evidence'],
   [/window\.kaminosTier2ReceiverLightDebugState/, 'light-pass state is exposed to witnesses'],
+  [/window\.kaminosTier2ReceiverLightSetWitnessForegroundMute/, 'witnesses can hide foreground fire without hiding receiver illumination'],
   [/supportIdentity:\s*TIER2_RECEIVER_SUPPORT_IDENTITY/, 'debug state preserves support identity'],
   [/supportAuthority:\s*TIER2_RECEIVER_SUPPORT_AUTHORITY/, 'debug state preserves support authority'],
   [/receiverBufferSource:\s*TIER2_RECEIVER_BUFFER_SOURCE/, 'light pass starts from an explicit receiver buffer'],
@@ -65,6 +73,12 @@ requirePatterns(index, 'receiver light', [
   [/canvasBridgeAuthority:\s*false/, 'the stale canvas bridge is not lighting authority'],
   [/tier2ReceiverLightActive[\s\S]*mainRendererNeeded/, 'active receiver lighting forces a main-renderer draw'],
 ]);
+
+const receiverPassSource = index.slice(
+  index.indexOf('function createTier2ReceiverBufferLightPass'),
+  index.indexOf('async function initKaminosVolumeRoute'),
+);
+assert.doesNotMatch(receiverPassSource, /receiverProxies|tier2-receiver-proxy-/, 'proxy planes must not masquerade as scene receivers');
 
 requirePatterns(witness, 'witness', [
   [/receiverSupport\.identity !== 'combustion-front-receiver-support-v0'/, 'wrong support identity fails loud'],
@@ -92,10 +106,14 @@ requirePatterns(witness, 'witness', [
   [/nativeAttachmentAccepted/, 'reports preserve native attachment liveness'],
   [/stale native receiver-light attachments/, 'stale native attachments fail loud'],
   [/for \(let cadenceProbe = 0; cadenceProbe < 20; cadenceProbe \+= 1\)/, 'native attachment cadence is polled across contested frames instead of sampled after one brittle sleep'],
+  [/for \(let cadenceProbe = 0; cadenceProbe < 20; cadenceProbe \+= 1\)[\s\S]{0,500}Page\.captureScreenshot/, 'each headless cadence probe requests a compositor frame so the witness cannot stall its own producer'],
   [/attachmentFrameCount[\s\S]{0,500}break/, 'cadence polling exits only after the attachment frame advances'],
   [/receiver-light attachment cadence did not advance within 5s/, 'cadence timeout names the actual evidence horizon'],
   [/receiver-light rendered evidence overexposed/, 'overexposed evidence fails loud'],
   [/kaminosTier2ReceiverLightSetWitnessMute/, 'the witness can mute only the receiver contribution without changing scene composition'],
+  [/kaminosTier2ReceiverLightSetWitnessForegroundMute\?\.\(true\)/, 'paired receiver proof hides the temporally changing foreground flame'],
+  [/finally\s*\{[\s\S]*kaminosTier2ReceiverLightSetWitnessForegroundMute\?\.\(false\)/, 'paired receiver proof restores foreground fire even when capture fails'],
+  [/foregroundMutedAtCapture/, 'paired evidence records that foreground fire could not supply the measured delta'],
   [/finally\s*\{[\s\S]*kaminosTier2ReceiverLightSetWitnessMute\?\.\(false\)/, 'mute-only diagnostics restore receiver output even when capture fails'],
   [/receiverLightDeltaEvidence/, 'reports preserve receiver-region delta evidence'],
   [/receiver-light paired delta missing warm receiver signal/, 'a nonblank flame or scene cannot substitute for positive receiver-light delta'],

@@ -2894,7 +2894,7 @@ input[type="color"].volume-color-swatch::-webkit-color-swatch { border: none; bo
 
 <script type="module">
 import * as THREE from 'three';
-import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, viewportUV, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture } from 'three/tsl';
+import { pass, mrt, normalView, vec2, vec3, vec4, mix, float, uniform, texture, viewportUV, packNormalToRGB, unpackRGBToNormal, sample, positionView, convertToTexture, step } from 'three/tsl';
 import { aoCompute } from './lib/addons/tsl/display/GTAOComputeNode.js';
 import { denoise } from './lib/addons/tsl/display/DenoiseNode.js';
 import { createKaminosVolumePrototype, requestKaminosSharedWebGpuDevice } from './volume-core.js?v=native-splat-receiver-clean-0714b';
@@ -9031,7 +9031,7 @@ async function initScene() {
   const aoOutput = mix(float(1.0), denoisePass.r, aoIntensity);
   const baseSceneOutput = scenePass.mul(vec4(vec3(aoOutput), 1));
   tier2ReceiverLightPass?.dispose?.();
-  tier2ReceiverLightPass = createTier2ReceiverBufferLightPass(baseSceneOutput);
+  tier2ReceiverLightPass = createTier2ReceiverBufferLightPass(baseSceneOutput, prePassDepth);
   renderPipeline.outputNode = tier2ReceiverLightPass.outputNode;
   window.kaminosTier2ReceiverLightDebugState = () => tier2ReceiverLightPass?.debugState?.() || {
     identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
@@ -9045,6 +9045,7 @@ async function initScene() {
     canvasBridgeAuthority: false,
   };
   window.kaminosTier2ReceiverLightSetWitnessMute = muted => tier2ReceiverLightPass?.setWitnessMute?.(muted) || null;
+  window.kaminosTier2ReceiverLightSetWitnessForegroundMute = muted => tier2ReceiverLightPass?.setWitnessForegroundMute?.(muted) || null;
   window.kaminosAODebugState = () => ({
     route: 'three-tsl-render-pipeline-gtao-compute',
     hasRenderPipeline: !!renderPipeline,
@@ -9667,7 +9668,7 @@ function isKaminosVolumeSmokeRoute(params = new URLSearchParams(window.location.
 
 const TIER2_RECEIVER_LIGHT_PASS_IDENTITY = 'tier2-opt-in-receiver-buffer-light-pass-v0';
 const TIER2_RECEIVER_MASK_AUTHORITY = 'opt-in-receiver-buffer-required-v0';
-const TIER2_RECEIVER_BUFFER_SOURCE = 'explicit-opt-in-receiver-proxy-buffer-v0';
+const TIER2_RECEIVER_BUFFER_SOURCE = 'scene-prepass-depth-dynamic-receiver-mask-v0';
 const TIER2_RECEIVER_SUPPORT_IDENTITY = 'combustion-front-receiver-support-v0';
 const TIER2_RECEIVER_SUPPORT_AUTHORITY = 'combustion-front-topology-sidecar-v0+reaction-front-stage-fields-v0';
 const TIER2_RECEIVER_SPLAT_MOMENT_ENVELOPE_SOURCE = 'gpu-splat-radiance-coverage-depth-moments-v0';
@@ -19747,48 +19748,9 @@ function createVolumeMainRendererBridge() {
   };
 }
 
-function createTier2ReceiverBufferLightPass(baseOutputNode) {
+function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
   const params = new URLSearchParams(window.location.search);
-  const receiverScene = new THREE.Scene();
-  const receiverMaskMaterial = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
-    depthTest: true,
-    depthWrite: true,
-    side: THREE.DoubleSide,
-  });
   const drawSize = renderer.getDrawingBufferSize(new THREE.Vector2());
-  const receiverMaskRenderTarget = new THREE.RenderTarget(
-    Math.max(1, Math.round(drawSize.x)),
-    Math.max(1, Math.round(drawSize.y)),
-    {
-      type: THREE.HalfFloatType,
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter,
-      depthBuffer: true,
-    }
-  );
-  receiverMaskRenderTarget.texture.name = 'tier2-receiver-mask-render-target-v0';
-
-  const receiverProxies = [];
-  const addReceiverProxy = (mesh, role) => {
-    mesh.name = `tier2-receiver-proxy-${role}-v0`;
-    mesh.userData.kaminosTier2Receiver = {
-      identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
-      receiverMaskAuthority: TIER2_RECEIVER_MASK_AUTHORITY,
-      receiverBufferSource: TIER2_RECEIVER_BUFFER_SOURCE,
-      role,
-    };
-    receiverScene.add(mesh);
-    receiverProxies.push(mesh);
-  };
-  const wall = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.2), receiverMaskMaterial);
-  wall.position.set(0.18, 0.14, -1.12);
-  wall.rotation.y = 0.06;
-  addReceiverProxy(wall, 'wall');
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 2.4), receiverMaskMaterial);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(0.12, -0.86, 0.12);
-  addReceiverProxy(floor, 'floor');
 
   const createBlackAttachment = label => sharedGpu.device.createTexture({
     label,
@@ -19815,28 +19777,81 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
   const attachmentUv = viewportUV;
   const radianceTextureNode = texture(radianceExternalTexture);
   const momentsTextureNode = texture(momentsExternalTexture);
-  const receiverTaps = [
-    [0.000, 0.000, 0.16],
-    [-0.022, 0.000, 0.10], [0.022, 0.000, 0.10], [0.000, -0.022, 0.10], [0.000, 0.022, 0.10],
-    [-0.060, 0.000, 0.065], [0.060, 0.000, 0.065], [0.000, -0.060, 0.065], [0.000, 0.060, 0.065],
-    [-0.115, 0.000, 0.032], [0.115, 0.000, 0.032], [0.000, -0.115, 0.032], [0.000, 0.115, 0.032],
+  const receiverAreaWashScale = 0.125;
+  const areaWashWidth = Math.max(16, Math.round(drawSize.x * receiverAreaWashScale));
+  const areaWashHeight = Math.max(16, Math.round(drawSize.y * receiverAreaWashScale));
+  const createAreaWashTarget = name => {
+    const target = new THREE.RenderTarget(areaWashWidth, areaWashHeight, {
+      type: THREE.HalfFloatType,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      depthBuffer: false,
+    });
+    target.texture.name = name;
+    target.texture.colorSpace = THREE.NoColorSpace;
+    return target;
+  };
+  const receiverRadianceLowResTarget = createAreaWashTarget('tier2-receiver-radiance-low-resolution-v0');
+  const receiverRadianceBlurHorizontalTarget = createAreaWashTarget('tier2-receiver-radiance-horizontal-blur-v0');
+  const receiverRadianceBlurVerticalTarget = createAreaWashTarget('tier2-receiver-radiance-vertical-blur-v0');
+
+  const sourceRadianceSample = radianceTextureNode.sample(attachmentUv);
+  const sourceMomentsSample = momentsTextureNode.sample(attachmentUv);
+  const sourceCoverage = sourceRadianceSample.a.max(sourceMomentsSample.g.mul(0.025));
+  const downsampleMaterial = new THREE.NodeMaterial();
+  downsampleMaterial.name = 'tier2-receiver-radiance-downsample-v0';
+  downsampleMaterial.fragmentNode = vec4(sourceRadianceSample.rgb, sourceCoverage);
+  downsampleMaterial.blending = THREE.NoBlending;
+  downsampleMaterial.toneMapped = false;
+  const downsampleQuad = new THREE.QuadMesh(downsampleMaterial);
+
+  const areaWashTexel = uniform(new THREE.Vector2(1 / areaWashWidth, 1 / areaWashHeight));
+  const blurKernel = [
+    [0, 0.20],
+    [4, 0.15],
+    [12, 0.10],
+    [32, 0.075],
+    [64, 0.075],
   ];
-  let spreadRadianceNode = vec3(0.0);
-  let spreadCoverageNode = float(0.0);
-  for (const [x, y, weight] of receiverTaps) {
-    const sampleUv = attachmentUv.add(vec2(x, y));
-    const radianceSample = radianceTextureNode.sample(sampleUv);
-    const momentsSample = momentsTextureNode.sample(sampleUv);
-    spreadRadianceNode = spreadRadianceNode.add(radianceSample.rgb.mul(weight));
-    spreadCoverageNode = spreadCoverageNode.add(
-      radianceSample.a.max(momentsSample.g.mul(0.025)).mul(weight)
-    );
-  }
-  const receiverMaskNode = texture(receiverMaskRenderTarget.texture).sample(viewportUV).r;
+  const buildBlurNode = (sourceNode, axis) => {
+    let result = sourceNode.sample(viewportUV).mul(blurKernel[0][1]);
+    for (const [offset, weight] of blurKernel.slice(1)) {
+      const delta = areaWashTexel.mul(vec2(axis[0] * offset, axis[1] * offset));
+      result = result
+        .add(sourceNode.sample(viewportUV.add(delta)).mul(weight))
+        .add(sourceNode.sample(viewportUV.sub(delta)).mul(weight));
+    }
+    return result;
+  };
+  const horizontalBlurMaterial = new THREE.NodeMaterial();
+  horizontalBlurMaterial.name = 'tier2-receiver-radiance-horizontal-blur-v0';
+  horizontalBlurMaterial.fragmentNode = buildBlurNode(texture(receiverRadianceLowResTarget.texture), [1, 0]);
+  horizontalBlurMaterial.blending = THREE.NoBlending;
+  horizontalBlurMaterial.toneMapped = false;
+  const horizontalBlurQuad = new THREE.QuadMesh(horizontalBlurMaterial);
+  const verticalBlurMaterial = new THREE.NodeMaterial();
+  verticalBlurMaterial.name = 'tier2-receiver-radiance-vertical-blur-v0';
+  verticalBlurMaterial.fragmentNode = buildBlurNode(texture(receiverRadianceBlurHorizontalTarget.texture), [0, 1]);
+  verticalBlurMaterial.blending = THREE.NoBlending;
+  verticalBlurMaterial.toneMapped = false;
+  const verticalBlurQuad = new THREE.QuadMesh(verticalBlurMaterial);
+
+  const areaWashSample = texture(receiverRadianceBlurVerticalTarget.texture).sample(viewportUV);
+  const spreadRadianceNode = areaWashSample.rgb;
+  const spreadCoverageNode = areaWashSample.a;
+  const spreadEnergyNode = spreadRadianceNode.r.mul(0.2126)
+    .add(spreadRadianceNode.g.mul(0.7152))
+    .add(spreadRadianceNode.b.mul(0.0722));
+  const receiverWarmSpectralBasisNode = vec3(1.0, 0.38, 0.08);
+  const sceneGeometryReceiverMaskNode = float(1.0).sub(step(float(0.999), sceneDepthNode));
   const receiverStrength = uniform(0.0);
   const isolateMix = uniform(isTier2ReceiverLightIsolateRoute(params) ? 1.0 : 0.0);
-  const receiverSupportNode = spreadCoverageNode.mul(1.5).clamp(0.18, 1.0);
-  const receiverSignalNode = spreadRadianceNode.mul(receiverSupportNode).mul(receiverMaskNode).mul(receiverStrength);
+  const receiverSupportNode = spreadCoverageNode.mul(0.2).add(0.8).clamp(0.8, 1.0);
+  const receiverSignalNode = receiverWarmSpectralBasisNode
+    .mul(spreadEnergyNode)
+    .mul(receiverSupportNode)
+    .mul(sceneGeometryReceiverMaskNode)
+    .mul(receiverStrength);
   const receiverLightNode = vec4(receiverSignalNode, 1.0);
   const outputNode = mix(
     baseOutputNode.add(vec4(receiverSignalNode, 0.0)),
@@ -19873,12 +19888,17 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     hiddenThreeLightAuthority: false,
     canvasBridgeAuthority: false,
     fallbackAuthority: false,
+    areaWashIdentity: 'receiver-radiance-separable-low-resolution-area-wash-v0',
+    areaWashScale: receiverAreaWashScale,
+    areaWashSize: { width: areaWashWidth, height: areaWashHeight },
     witnessMuted: false,
+    witnessForegroundMuted: false,
     active: false,
     isolate: isolateMix.value > 0,
-    receiverCount: receiverProxies.length,
+    receiverCount: 1,
+    receiverSelectionIdentity: TIER2_RECEIVER_BUFFER_SOURCE,
     receiverRenderFrameCount: 0,
-    lastRenderTargetSize: { width: receiverMaskRenderTarget.width, height: receiverMaskRenderTarget.height },
+    lastRenderTargetSize: { width: drawSize.x, height: drawSize.y },
   };
   let boundAttachmentKey = 'black';
 
@@ -19926,7 +19946,7 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
       );
       boundAttachmentKey = attachmentKey;
     }
-    receiverStrength.value = state.witnessMuted ? 0 : (state.isolate ? 1.35 : 0.82);
+    receiverStrength.value = state.witnessMuted ? 0 : (state.isolate ? 1.8 : 1.25);
     state.effectiveAttachmentIdentity = attachments.identity;
     state.attachmentStatus = attachments.status;
     state.attachmentReason = null;
@@ -19950,7 +19970,7 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
     const canvas = volumePrototype?.canvasElement?.();
     if (!canvas) return;
     const sceneContextActive = volumeSceneContext?.debugState?.()?.visible === true;
-    const shouldHideNativeCanvas = state.active && state.isolate;
+    const shouldHideNativeCanvas = state.active && (state.isolate || state.witnessForegroundMuted);
     const shouldCssCompositeNativeCanvas = state.active && sceneContextActive && !state.isolate;
     if (shouldHideNativeCanvas) {
       canvas.style.opacity = '0';
@@ -19972,7 +19992,6 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
   return {
     identity: TIER2_RECEIVER_LIGHT_PASS_IDENTITY,
     outputNode,
-    receiverMaskRenderTarget,
     update() {
       state.active = routeActive();
       state.isolate = isTier2ReceiverLightIsolateRoute();
@@ -20021,33 +20040,54 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
       const previousTarget = renderer.getRenderTarget();
       const previousClearColor = renderer.getClearColor(new THREE.Color());
       const previousClearAlpha = renderer.getClearAlpha();
-      renderer.setRenderTarget(receiverMaskRenderTarget);
-      renderer.setClearColor(0x000000, 1);
+      renderer.setRenderTarget(receiverRadianceLowResTarget);
+      renderer.setClearColor(0x000000, 0);
       renderer.clear();
-      renderer.render(receiverScene, camera);
+      downsampleQuad.render(renderer);
+      renderer.setRenderTarget(receiverRadianceBlurHorizontalTarget);
+      renderer.clear();
+      horizontalBlurQuad.render(renderer);
+      renderer.setRenderTarget(receiverRadianceBlurVerticalTarget);
+      renderer.clear();
+      verticalBlurQuad.render(renderer);
       renderer.setRenderTarget(previousTarget);
       renderer.setClearColor(previousClearColor, previousClearAlpha);
       state.receiverRenderFrameCount += 1;
       state.lastRenderTargetSize = {
-        width: receiverMaskRenderTarget.width,
-        height: receiverMaskRenderTarget.height,
+        width: drawSize.x,
+        height: drawSize.y,
       };
       return true;
     },
     resize(width, height) {
-      receiverMaskRenderTarget.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)));
+      const lowWidth = Math.max(16, Math.round(width * receiverAreaWashScale));
+      const lowHeight = Math.max(16, Math.round(height * receiverAreaWashScale));
+      receiverRadianceLowResTarget.setSize(lowWidth, lowHeight);
+      receiverRadianceBlurHorizontalTarget.setSize(lowWidth, lowHeight);
+      receiverRadianceBlurVerticalTarget.setSize(lowWidth, lowHeight);
+      areaWashTexel.value.set(1 / lowWidth, 1 / lowHeight);
+      state.areaWashSize = { width: lowWidth, height: lowHeight };
       state.lastRenderTargetSize = {
-        width: receiverMaskRenderTarget.width,
-        height: receiverMaskRenderTarget.height,
+        width: Math.max(1, Math.round(width)),
+        height: Math.max(1, Math.round(height)),
       };
     },
     setWitnessMute(muted) {
       state.witnessMuted = Boolean(muted);
-      receiverStrength.value = state.witnessMuted ? 0 : (state.isolate ? 1.35 : 0.82);
+      receiverStrength.value = state.witnessMuted ? 0 : (state.isolate ? 1.8 : 1.25);
       return {
         identity: 'tier2-receiver-light-witness-mute-v0',
         witnessMuted: state.witnessMuted,
         strength: receiverStrength.value,
+      };
+    },
+    setWitnessForegroundMute(muted) {
+      state.witnessForegroundMuted = Boolean(muted);
+      setNativeVolumeVisibility();
+      return {
+        identity: 'tier2-receiver-light-witness-foreground-mute-v0',
+        witnessForegroundMuted: state.witnessForegroundMuted,
+        nativeCanvasOpacity: volumePrototype?.canvasElement?.()?.style?.opacity || '',
       };
     },
     debugState() {
@@ -20065,10 +20105,12 @@ function createTier2ReceiverBufferLightPass(baseOutputNode) {
       const momentsWrapperWasInitialized = renderer._textures.get(momentsExternalTexture).initialized === true;
       radianceExternalTexture.dispose();
       momentsExternalTexture.dispose();
-      receiverScene.remove(...receiverProxies);
-      for (const mesh of receiverProxies) mesh.geometry.dispose();
-      receiverMaskMaterial.dispose();
-      receiverMaskRenderTarget.dispose();
+      receiverRadianceLowResTarget.dispose();
+      receiverRadianceBlurHorizontalTarget.dispose();
+      receiverRadianceBlurVerticalTarget.dispose();
+      downsampleMaterial.dispose();
+      horizontalBlurMaterial.dispose();
+      verticalBlurMaterial.dispose();
       if (!radianceWrapperWasInitialized) blackRadianceTexture.destroy();
       if (!momentsWrapperWasInitialized) blackMomentsTexture.destroy();
     },

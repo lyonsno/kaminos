@@ -24,7 +24,7 @@ assert.match(index, /attachments\.device\s*===\s*sharedGpu\.device/, 'Tier 2 rec
 assert.match(index, /sourceTexture\s*=\s*attachments\.radianceTexture/, 'Tier 2 receiver light directly binds the producer-owned radiance texture');
 assert.match(index, /sourceTexture\s*=\s*attachments\.momentsTexture/, 'Tier 2 receiver light directly binds the producer-owned moments texture');
 assert.match(index, /createTier2ReceiverBufferLightPass/, 'main renderer builds a separate receiver-buffer light pass');
-assert.match(index, /receiverMaskRenderTarget/, 'Tier 2 receiver light renders opted-in receivers into a receiver mask render target');
+assert.match(index, /scene-prepass-depth-dynamic-receiver-mask-v0/, 'Tier 2 receiver light restricts illumination to dynamic rendered scene geometry');
 assert.match(index, /state\.attachmentGeneration\s*=\s*attachments\.textureGeneration/, 'Tier 2 receiver light reports the effective native texture generation');
 assert.doesNotMatch(index.slice(index.indexOf('function createTier2ReceiverBufferLightPass'), index.indexOf('async function initKaminosVolumeRoute')), /CanvasTexture|lastFrameEnergy|Math\.sin/, 'Tier 2 receiver light has no canvas, scalar-energy, or sinusoidal fallback authority');
 assert.match(index, /cpuReadbackAuthority:\s*false/, 'Tier 2 receiver light must not use CPU readback as lighting authority');
