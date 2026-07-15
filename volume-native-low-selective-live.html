@@ -15,13 +15,15 @@
     #status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a8b7bb; font: 10px/1.35 "SF Mono", Menlo, monospace; }
     #status.bad { color: #ff9d8d; }
     #panes { width: 100vw; height: 100vh; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: #162024; }
+    body.front-topology-ablation #panes { grid-template-columns: 1fr 1fr 1fr; }
     .pane { min-width: 0; min-height: 0; position: relative; display: grid; place-items: center; background: #000; }
+    .pane[hidden] { display: none; }
     .pane img { width: 100%; height: 100%; object-fit: cover; display: block; background: #000; }
     .pane-label { position: absolute; z-index: 5; left: 12px; bottom: 12px; max-width: calc(100% - 24px); padding: 7px 9px; border: 1px solid rgba(190, 215, 220, .22); background: rgba(5, 8, 8, .78); border-radius: 5px; font-size: 11px; color: #dbe8ea; }
     .pane-label span { display: block; margin-top: 2px; color: #90a1a6; font-size: 10px; }
     #runner-wrap { position: fixed; left: -2200px; top: 0; width: 900px; height: 640px; opacity: .01; pointer-events: none; }
     #runner { width: 100%; height: 100%; border: 0; display: block; background: #000; }
-    @media (max-width: 900px) { #toolbar { grid-template-columns: 1fr; } #panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+    @media (max-width: 900px) { #toolbar { grid-template-columns: 1fr; } #panes, body.front-topology-ablation #panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } body.front-topology-ablation #panes { grid-template-rows: 1fr 1fr 1fr; } }
   </style>
 </head>
 <body>
@@ -40,6 +42,10 @@
     <section class="pane">
       <img id="treatmentImage" alt="nativeLowSelectivePredicted">
       <div class="pane-label">nativeLowSelectivePredicted<span>Frozen model 160^3 materialized in the same WebGPU device, splat-only-v0</span></div>
+    </section>
+    <section id="frontTopologyAblatedPane" class="pane" hidden>
+      <img id="frontTopologyAblatedImage" alt="frontTopologyAblatedTreatment">
+      <div class="pane-label">frontTopologyAblatedTreatment<span>Learned support/carrier residuals, native-low upsampled front, no learned frontTopology residual</span></div>
     </section>
   </main>
   <div id="runner-wrap"><iframe id="runner" title="sharedDeviceNativeLowRenderer"></iframe></div>
@@ -110,12 +116,15 @@
     const native64SourceManifestUrl = params.get('native64_source_manifest') || '';
     const native64PredictionManifestUrl = params.get('native64_prediction_manifest') || '';
     const native64ManifestMode = Boolean(native64SourceManifestUrl && native64PredictionManifestUrl);
+    const frontTopologyAblationMode = !native64ManifestMode && params.get('front_topology_ablation') === '1';
     const requestedCalibration = 'native-low-learned-splat-calibration-v0';
     const status = document.getElementById('status');
     const title = document.getElementById('title');
     const runnerFrame = document.getElementById('runner');
     const controlImage = document.getElementById('controlImage');
     const treatmentImage = document.getElementById('treatmentImage');
+    const frontTopologyAblatedImage = document.getElementById('frontTopologyAblatedImage');
+    const frontTopologyAblatedPane = document.getElementById('frontTopologyAblatedPane');
     let routeStatus = 'starting';
     let failurePhase = null;
     let lastTrustworthyEvidence = {};
@@ -126,6 +135,15 @@
     let latestRunnerState = null;
     let lastControlObjectUrl = null;
     let lastTreatmentObjectUrl = null;
+    let lastFrontTopologyAblatedObjectUrl = null;
+
+    if (frontTopologyAblationMode) {
+      document.body.classList.add('front-topology-ablation');
+      frontTopologyAblatedPane.hidden = false;
+      title.querySelector('strong').textContent = 'Native control vs full frozen vs no-learned-front ablation';
+      title.querySelector('span').textContent = 'Same source step/camera, shared-device WebGPU, splat-only-v0';
+      document.querySelector('#treatmentImage + .pane-label').innerHTML = 'fullFrozenTreatmentReference<span>Frozen support + learned frontTopology + carrier residuals, splat-only-v0</span>';
+    }
 
     if (native64ManifestMode) {
       title.querySelector('strong').textContent = 'Native 64 control vs frozen 128-trained prediction';
@@ -210,6 +228,11 @@
         lastTreatmentObjectUrl = receipt.visuals.treatmentObjectUrl;
         treatmentImage.src = lastTreatmentObjectUrl;
       }
+      if (receipt?.visuals?.frontTopologyAblatedObjectUrl) {
+        if (lastFrontTopologyAblatedObjectUrl) URL.revokeObjectURL(lastFrontTopologyAblatedObjectUrl);
+        lastFrontTopologyAblatedObjectUrl = receipt.visuals.frontTopologyAblatedObjectUrl;
+        frontTopologyAblatedImage.src = lastFrontTopologyAblatedObjectUrl;
+      }
     }
 
     async function tick() {
@@ -225,6 +248,7 @@
         boundarySplatComposition: requestedComposition,
         now: performance.now(),
         captureVisuals: true,
+        frontTopologyAblation: frontTopologyAblationMode,
         treatmentSplatRadianceGain,
         treatmentSplatOpacityGain,
       };
@@ -244,7 +268,8 @@
       if (native64ManifestMode) {
         status.textContent = `native64 step ${receipt.sourceStep} | support ${receipt.predictedPositiveCount}/${Math.round(160 ** 3)} @ ${receipt.supportThreshold} | splats ${receipt.treatmentSplatInstanceCount} | ${receipt.macroStructureDecision} | ${Math.round(receipt.endToEndFrameMs)} ms`;
       } else {
-        status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount} | cal ${receipt.treatmentSplatRadianceGain}/${receipt.treatmentSplatOpacityGain} | ${Math.round(receipt.endToEndFrameMs)} ms`;
+        const ablationText = frontTopologyAblationMode ? ` | ablated ${receipt.frontTopologyAblatedSplatInstanceCount}` : '';
+        status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount}${ablationText} | cal ${receipt.treatmentSplatRadianceGain}/${receipt.treatmentSplatOpacityGain} | ${Math.round(receipt.endToEndFrameMs)} ms`;
       }
     }
 
@@ -275,6 +300,9 @@
         syntheticDownsampleApplied,
         nativeLowControl: { grid: native64ManifestMode ? 64 : 128, step: receipt.controlStep ?? null, backend: runner?.backend || null },
         nativeLowSelectivePredicted: { grid: 160, step: receipt.treatmentStep ?? null, backend: runner?.backend || null },
+        fullFrozenTreatmentReference: receipt.fullFrozenTreatmentReference || null,
+        frontTopologyAblatedTreatment: receipt.frontTopologyAblatedTreatment || null,
+        nativeLowFrontTopologyAblation: receipt.nativeLowFrontTopologyAblation || null,
         native64CrossGridDiscriminant: receipt.native64CrossGridDiscriminant || null,
         native64NoModelControl: receipt.native64NoModelControl || null,
         native64SelectivePredicted: receipt.native64SelectivePredicted || null,
@@ -315,6 +343,8 @@
         supportPrevalence: receipt.supportPrevalence ?? null,
         treatmentSplatCandidateCount: receipt.treatmentSplatCandidateCount ?? null,
         treatmentSplatInstanceCount: receipt.treatmentSplatInstanceCount ?? null,
+        frontTopologyAblatedSplatCandidateCount: receipt.frontTopologyAblatedSplatCandidateCount ?? null,
+        frontTopologyAblatedSplatInstanceCount: receipt.frontTopologyAblatedSplatInstanceCount ?? null,
         controlSplatCandidateCount: receipt.controlSplatCandidateCount ?? null,
         controlSplatInstanceCount: receipt.controlSplatInstanceCount ?? null,
         calibrationGain: receipt.calibrationGain ?? 1,
@@ -329,6 +359,8 @@
         treatmentRebuildMs: receipt.treatmentRebuildMs ?? null,
         treatmentCopyMs: receipt.treatmentCopyMs ?? null,
         treatmentRenderMs: receipt.treatmentRenderMs ?? null,
+        frontTopologyAblatedMaterializeMs: receipt.frontTopologyAblatedMaterializeMs ?? null,
+        frontTopologyAblatedRenderMs: receipt.frontTopologyAblatedRenderMs ?? null,
         restoreMaterializeMs: receipt.restoreMaterializeMs ?? null,
         restoreRebuildMs: receipt.restoreRebuildMs ?? null,
         restoreCopyMs: receipt.restoreCopyMs ?? null,

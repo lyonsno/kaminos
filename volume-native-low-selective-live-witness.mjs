@@ -16,9 +16,13 @@ const WITNESS_CONTRACT_MARKERS = Object.freeze({
   requestedCalibration: 'native-low-learned-splat-calibration-v0',
   effectiveCalibration: 'native-low-learned-splat-calibration-v0',
   modelOutputMutation: false,
+  nativeLowFrontTopologyAblation: 'native-low-front-topology-ablation-v0',
+  sameSourceStepIdentity: 'same-source-step-required',
+  offlineImporterUsed: false,
 });
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
+const frontTopologyAblationRequested = new URL(url).searchParams.get('front_topology_ablation') === '1';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-native-low-selective-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
@@ -159,6 +163,15 @@ try {
       && Number(state?.nativeLowBreakEvenBudgetLedger?.credibleBreakEvenTargetMs) === 15
       && Number(state?.nativeLowBreakEvenBudgetLedger?.profitableTargetMs) === 10
       && typeof state?.nativeLowBreakEvenBudgetLedger?.skeletonPlausibleUnder24ms === 'boolean'
+      && (!frontTopologyAblationRequested
+        || (
+          state?.nativeLowFrontTopologyAblation?.identity === 'native-low-front-topology-ablation-v0'
+          && state?.nativeLowFrontTopologyAblation?.sameSourceStepIdentity
+          && state?.nativeLowFrontTopologyAblation?.offlineImporterUsed === false
+          && state?.nativeLowFrontTopologyAblation?.fullFrozenTreatmentReference?.learnedFrontTopologyResidualApplied === true
+          && state?.nativeLowFrontTopologyAblation?.frontTopologyAblatedTreatment?.learnedFrontTopologyResidualApplied === false
+          && Number(state?.frontTopologyAblatedSplatInstanceCount) >= 0
+        ))
       && state?.simulationSteppingReceipt?.simStepDelta === 1
       && state?.currentSourceFrameConsumption?.encodedFrameDelta === 1
       && state?.stalePredictionRejection?.repeatedStaticPrediction === false
@@ -229,6 +242,14 @@ try {
   assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.credibleBreakEvenTargetMs), 15, 'credible break-even target must be 15ms');
   assert.equal(Number(state?.nativeLowBreakEvenBudgetLedger?.profitableTargetMs), 10, 'profitable target must be 10ms');
   assert.equal(typeof state?.nativeLowBreakEvenBudgetLedger?.skeletonPlausibleUnder24ms, 'boolean', '24ms plausibility decision missing');
+  if (frontTopologyAblationRequested) {
+    assert.equal(state?.nativeLowFrontTopologyAblation?.identity, 'native-low-front-topology-ablation-v0', 'frontTopology ablation missing');
+    assert.equal(state?.nativeLowFrontTopologyAblation?.offlineImporterUsed, false, 'offline importer was used for frontTopology ablation');
+    assert.equal(state?.nativeLowFrontTopologyAblation?.fullFrozenTreatmentReference?.learnedFrontTopologyResidualApplied, true, 'full frozen frontTopology reference missing');
+    assert.equal(state?.nativeLowFrontTopologyAblation?.frontTopologyAblatedTreatment?.learnedFrontTopologyResidualApplied, false, 'learned frontTopology residual was not disabled');
+    assert.equal(state?.nativeLowFrontTopologyAblation?.frontTopologyAblatedTreatment?.learnedSupportAndCarrierResidualsRetained, true, 'learned carrier residuals were not retained');
+    assert.ok(Number(state?.frontTopologyAblatedSplatInstanceCount) >= 0, 'frontTopology ablated splat count missing');
+  }
   assert.equal(state?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator did not step exactly once for this model frame');
   assert.equal(state?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model did not consume exactly one current source frame');
   assert.equal(state?.stalePredictionRejection?.repeatedStaticPrediction, false, 'stale prediction was not rejected');
@@ -253,6 +274,10 @@ try {
   assert.equal(endState?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator stopped stepping during observation');
   assert.equal(endState?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model stopped consuming current source frames during observation');
   assert.equal(endState?.stalePredictionRejection?.repeatedStaticPrediction, false, 'repeated static prediction during observation');
+  if (frontTopologyAblationRequested) {
+    assert.equal(endState?.nativeLowFrontTopologyAblation?.sameSourceStepIdentity, endState?.sourceStepIdentity, 'frontTopology ablation source identity drift');
+    assert.equal(endState?.nativeLowFrontTopologyAblation?.offlineImporterUsed, false, 'offline importer used during observation');
+  }
 
   failurePhase = 'blankFrameRejection';
   const capture = await socket.call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
@@ -282,6 +307,12 @@ try {
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
     nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
     nativeLowBreakEvenBudgetLedger: endState.nativeLowBreakEvenBudgetLedger,
+    nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
+    fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
+    frontTopologyAblatedTreatment: endState.frontTopologyAblatedTreatment,
+    frontTopologyAblatedSplatCandidateCount: endState.frontTopologyAblatedSplatCandidateCount,
+    frontTopologyAblatedSplatInstanceCount: endState.frontTopologyAblatedSplatInstanceCount,
+    frontTopologyAblationRequested,
     nativeLowSupportTileProfile: endState.nativeLowSupportTileProfile,
     nativeLowSourceTileCandidate: endState.nativeLowSourceTileCandidate,
     supportTileProjection: {

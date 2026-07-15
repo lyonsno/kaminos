@@ -96,6 +96,12 @@ assert.match(combined, /dense278MbRouteDisposition[\s\S]*fidelity-control-only[\
 assert.match(combined, /gpuResidentDirectSparseRequirement[\s\S]*noJsVisibleDenseArrays[\s\S]*noCpuReadback[\s\S]*noFull160Materialization/, 'ledger requires GPU-resident sparse route without JS dense arrays, readback, or full materialization');
 assert.match(combined, /denseSupportFrontDependencyKilledByBudget[\s\S]*skeletonPlausibleUnder24ms/, 'ledger records whether dense support/front dependency is killed by the 24ms boundary');
 assert.match(witness, /nativeLowBreakEvenBudgetLedger[\s\S]*outerKillBoundaryMs[\s\S]*skeletonPlausibleUnder24ms/, 'witness preserves learned-transfer break-even budget ledger');
+assert.match(combined, /native-low-front-topology-ablation-v0/, 'route records shared-device learned frontTopology visual ablation');
+assert.match(combined, /fullFrozenTreatmentReference[\s\S]*frontTopologyAblatedTreatment[\s\S]*nativeLowControl/, 'frontTopology ablation keeps native control, full frozen reference, and ablated treatment');
+assert.match(combined, /native-low-nearest-normalized-front-upsampling-no-learned-front-residual-v0/, 'frontTopology ablation labels native-low upsample authority with no learned front residual');
+assert.match(combined, /learnedSupportAndCarrierResidualsRetained[\s\S]*learnedFrontTopologyResidualApplied:\s*false/, 'frontTopology ablation retains learned support/carrier residuals while disabling learned front residual');
+assert.match(combined, /frontTopologyVisualDecision[\s\S]*frontTopologyLoadBearing/, 'frontTopology ablation emits visual decision fields');
+assert.match(witness, /nativeLowFrontTopologyAblation[\s\S]*sameSourceStepIdentity[\s\S]*offlineImporterUsed:\s*false/, 'witness preserves shared-device same-source frontTopology ablation without offline importer');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');

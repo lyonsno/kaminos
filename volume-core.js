@@ -12875,6 +12875,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     let lastTrustworthyEvidence = {};
     const requestedComposition = options.boundarySplatComposition ?? 'splat-only-v0';
     const captureVisuals = options.captureVisuals === true;
+    const frontTopologyAblationEnabled = options.frontTopologyAblation === true;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const calibration = nativeLowTreatmentSplatCalibrationDebug({
       radianceGain: options.treatmentSplatRadianceGain,
@@ -13054,12 +13055,63 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const treatmentRenderMs = performance.now() - treatmentRenderStart;
       const treatmentSplatCandidateCount = treatmentRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
       const treatmentSplatInstanceCount = treatmentRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      let frontTopologyAblatedVisualUrl = null;
+      let frontTopologyAblatedRender = null;
+      let frontTopologyAblatedMaterializeMs = null;
+      let frontTopologyAblatedRebuildMs = null;
+      let frontTopologyAblatedCopyMs = null;
+      let frontTopologyAblatedRenderMs = null;
+      let frontTopologyAblatedSplatCandidateCount = null;
+      let frontTopologyAblatedSplatInstanceCount = null;
+      if (frontTopologyAblationEnabled) {
+        failurePhase = 'shared-device-front-topology-ablation-materialization';
+        const ablatedMaterializeStart = performance.now();
+        const ablatedRebuildStart = performance.now();
+        rebuildFluidState(160, sourceMajorantGrid, 'native-low-shared-device-front-topology-ablation-materialize', { skipInitialFluid: true });
+        frontTopologyAblatedRebuildMs = performance.now() - ablatedRebuildStart;
+        const ablatedCopyStart = performance.now();
+        const ablatedEncoder = device.createCommandEncoder({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} frontTopology ablation materialization` });
+        for (const target of fluidBuffers) {
+          ablatedEncoder.copyBufferToBuffer(runtime.buffers.predictedFluid, 0, target, 0, fluidBufferBytes(160));
+        }
+        for (const target of frontBuffers) {
+          ablatedEncoder.copyBufferToBuffer(runtime.buffers.nativeUpsampleFront, 0, target, 0, frontFieldBufferBytes(160));
+        }
+        device.queue.submit([ablatedEncoder.finish()]);
+        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+        setSharedDeviceCopiedState(sourceStep, sourceFrame + 1);
+        frontTopologyAblatedCopyMs = performance.now() - ablatedCopyStart;
+        frontTopologyAblatedMaterializeMs = performance.now() - ablatedMaterializeStart;
+
+        failurePhase = 'shared-device-front-topology-ablation-render';
+        const ablatedRenderStart = performance.now();
+        frontTopologyAblatedRender = await renderFrozenScaleToCanvas({
+          boundarySplatComposition: requestedComposition,
+          now: fixedNow,
+          sameStateCaptureId: `${sourceStepIdentity}:frontTopology-ablation`,
+          baseFrameCount: sourceFrame + 1,
+          baseSimStepCount: sourceStep,
+          controlOverrides: {
+            nativeLowTreatmentSplatRadianceGain: calibration.effectiveRadianceGain,
+            nativeLowTreatmentSplatOpacityGain: calibration.effectiveOpacityGain,
+          },
+          restoreControls: true,
+        });
+        if (!frontTopologyAblatedRender?.ok) throw new Error(`native-low-shared-device-frontTopology-ablation-render:${frontTopologyAblatedRender?.reason || 'unknown'}`);
+        frontTopologyAblatedVisualUrl = captureVisuals ? await captureCanvasObjectUrl() : null;
+        frontTopologyAblatedRenderMs = performance.now() - ablatedRenderStart;
+        frontTopologyAblatedSplatCandidateCount = frontTopologyAblatedRender.boundarySplatCandidateCount ?? state.boundarySplatCandidateCount;
+        frontTopologyAblatedSplatInstanceCount = frontTopologyAblatedRender.boundarySplatInstanceCount ?? state.boundarySplatInstanceCount;
+      }
       lastTrustworthyEvidence = {
         ...lastTrustworthyEvidence,
         treatmentMaterializeMs,
         treatmentRenderMs,
         treatmentSplatCandidateCount,
         treatmentSplatInstanceCount,
+        frontTopologyAblatedMaterializeMs,
+        frontTopologyAblatedRenderMs,
+        frontTopologyAblatedSplatInstanceCount,
       };
 
       failurePhase = 'shared-device-source-restore';
@@ -13111,6 +13163,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         treatmentCopyBytes: fluidBufferBytes(160) * 2 + frontFieldBufferBytes(160) * 2,
         restoreCopyBytes: fluidBufferBytes(128) * 2 + frontFieldBufferBytes(128) * 2,
       };
+      if (frontTopologyAblationEnabled) {
+        nativeLowMaterializationProfile.frontTopologyAblation = {
+          materializeMs: frontTopologyAblatedMaterializeMs,
+          rebuildMs: frontTopologyAblatedRebuildMs,
+          copyMs: frontTopologyAblatedCopyMs,
+          renderMs: frontTopologyAblatedRenderMs,
+          copyBytes: fluidBufferBytes(160) * 2 + frontFieldBufferBytes(160) * 2,
+        };
+      }
 
       const sameNativeStateIdentity = `${sourceStepIdentity}:model-${runtime.modelSha256}:composition-${requestedComposition}:transport-${NATIVE_LOW_TRANSPORT_MODE}`;
       const supportPositiveCount = supportStats.supportPositiveCount ?? runtimeState.supportPositiveCount ?? 0;
@@ -13272,6 +13333,45 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         currentSourceFrameConsumption,
         stalePredictionRejection,
       };
+      const nativeLowFrontTopologyAblation = frontTopologyAblationEnabled
+        ? {
+            identity: 'native-low-front-topology-ablation-v0',
+            authority: 'shared-device-same-source-visual-ablation-v0',
+            sameSourceStepIdentity: sourceStepIdentity,
+            sameNativeStateIdentity,
+            offlineImporterUsed: false,
+            requestedComposition,
+            effectiveComposition: frontTopologyAblatedRender?.boundarySplatCompositionEffective || null,
+            nativeLowControl: {
+              role: 'nativeLowControl',
+              authority: 'untouched-native-low-128-control-v0',
+              splatInstanceCount: controlSplatInstanceCount,
+            },
+            fullFrozenTreatmentReference: {
+              role: 'fullFrozenTreatmentReference',
+              authority: 'frozen-dense-support-front-plus-carrier-reference-v0',
+              learnedSupportApplied: true,
+              learnedFrontTopologyResidualApplied: true,
+              learnedCarrierResidualsApplied: true,
+              splatInstanceCount: treatmentSplatInstanceCount,
+            },
+            frontTopologyAblatedTreatment: {
+              role: 'frontTopologyAblatedTreatment',
+              authority: 'native-low-nearest-normalized-front-upsampling-no-learned-front-residual-v0',
+              learnedSupportAndCarrierResidualsRetained: true,
+              learnedSupportApplied: true,
+              learnedFuelResidualApplied: true,
+              learnedVisibleFireCarrierResidualApplied: true,
+              learnedFireLickResidualApplied: true,
+              learnedFrontTopologyResidualApplied: false,
+              nativeUpsampleFrontApplied: true,
+              splatInstanceCount: frontTopologyAblatedSplatInstanceCount,
+            },
+            frontTopologyVisualDecision: 'requires-visual-inspection-v0',
+            frontTopologyLoadBearing: null,
+            decisionAuthority: 'operator-or-agent-visual-inspection-required-v0',
+          }
+        : null;
       const receipt = {
         ok: true,
         status: 'captured',
@@ -13341,6 +13441,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeLowMaterializationProfile,
         nativeLowProductionStageLedger,
         nativeLowBreakEvenBudgetLedger,
+        nativeLowFrontTopologyAblation,
+        frontTopologyAblationEnabled,
+        frontTopologyAblatedSplatCandidateCount,
+        frontTopologyAblatedSplatInstanceCount,
+        frontTopologyAblatedMaterializeMs,
+        frontTopologyAblatedRenderMs,
         endToEndFrameMs,
         stageTiming: {
           nativeStepMs,
@@ -13355,6 +13461,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           treatmentCopyMs,
           treatmentMaterializeMs,
           treatmentRenderMs,
+          frontTopologyAblatedMaterializeMs,
+          frontTopologyAblatedRenderMs,
           restoreRebuildMs,
           restoreCopyMs,
           restoreMaterializeMs,
@@ -13363,8 +13471,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         visuals: {
           controlObjectUrl: controlVisualUrl,
           treatmentObjectUrl: treatmentVisualUrl,
+          frontTopologyAblatedObjectUrl: frontTopologyAblatedVisualUrl,
         },
+        nativeLowControl: { grid: 128, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: controlSplatInstanceCount },
+        fullFrozenTreatmentReference: { grid: 160, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: treatmentSplatInstanceCount },
+        frontTopologyAblatedTreatment: frontTopologyAblationEnabled
+          ? { grid: 160, step: sourceStep, backend: runtimeState.effectiveBackend, splatInstanceCount: frontTopologyAblatedSplatInstanceCount }
+          : null,
         treatmentRender,
+        frontTopologyAblatedRender,
         controlRender,
         runtime: runtimeState,
         failurePhase: null,
