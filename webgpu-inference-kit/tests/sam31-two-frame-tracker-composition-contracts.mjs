@@ -96,6 +96,19 @@ for (const token of [
 }
 
 const driver = readFileSync(new URL('tools/sam31-two-frame-tracker-browser-parity-smoke.mjs', root), 'utf8');
+const orchestrator = readFileSync(new URL('smokes/sam31-two-image-tracker-orchestrator.js', root), 'utf8');
+assert.match(
+  orchestrator,
+  /if \(!packageMode\) \{[\s\S]*?invocations,[\s\S]*?completedInvocationCount: invocations\.length,[\s\S]*?childStatus: 'passed'/,
+  'a passed direct run must publish one complete parent invocation instead of retaining the child running summary',
+);
+assert.match(
+  driver,
+  /terminalStatePassed =[\s\S]*?lastState\.completedInvocationCount === completedInvocations\.length[\s\S]*?lastState\.childStatus === 'passed'/,
+  'the terminal witness must independently reject contradictory completed-count and child-status evidence',
+);
+assert.match(driver, /if \(!terminalStatePassed\) throw new Error/, 'contradictory terminal state must fail before screenshot capture');
+assert.match(driver, /passed: terminalStatePassed &&/, 'terminal-state passage must remain load-bearing in the pixel witness');
 for (const token of [
   'kaminos.sam31-two-frame-tracker.browser-parity-smoke.v0',
   'failure_phase',

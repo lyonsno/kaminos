@@ -177,7 +177,15 @@ async function run() {
   }
 
   if (!packageMode) {
-    update('passed', 'complete', invocations[0]);
+    const final = invocations[0];
+    update('passed', 'complete', {
+      ...final,
+      invocations,
+      completedInvocationCount: invocations.length,
+      invocationIndex: 0,
+      childStatus: 'passed',
+      deviceLoss: final.deviceLoss || null,
+    });
     return;
   }
   const final = invocations.at(-1);

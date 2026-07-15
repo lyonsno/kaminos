@@ -74,6 +74,7 @@ let stderr = '';
 let screenshotWritten = false;
 let pixelCheck = null;
 let viewportLayout = null;
+let terminalStatePassed = false;
 let packetAuthority = null;
 let packageAuthority = null;
 let commitIdentityEvidence = { requestedCommit, effectiveCommits: [], commitIdentityPassed: requestedCommit == null };
@@ -201,6 +202,7 @@ function writeReport(extra = {}) {
     primary_output_written: screenshotWritten,
     pixelCheck,
     viewportLayout,
+    terminalStatePassed,
     browserVersion,
     adapterInfo: lastState?.adapterInfo || null,
     requestedRouteIds: lastState?.requestedRouteIds || null,
@@ -492,6 +494,11 @@ async function main() {
     }
     if (lastState?.status !== 'passed') throw new Error(lastState?.error || `browser ended in ${lastState?.status}`);
     const completedInvocations = lastState.invocations?.length > 0 ? lastState.invocations : [lastState];
+    terminalStatePassed = completedInvocations.length > 0
+      && lastState.completedInvocationCount === completedInvocations.length
+      && lastState.childStatus === 'passed'
+      && completedInvocations.every(invocation => invocation.evidence?.passed === true);
+    if (!terminalStatePassed) throw new Error(`browser terminal state is contradictory: ${JSON.stringify({ status: lastState.status, phase: lastState.phase, completedInvocationCount: lastState.completedInvocationCount, invocationCount: completedInvocations.length, childStatus: lastState.childStatus, invocationPassage: completedInvocations.map(invocation => invocation.evidence?.passed === true) })}`);
     const effectiveCommits = [...new Set(completedInvocations
       .flatMap(invocation => invocation.receipts || [])
       .map(receipt => receipt.kernel?.commit ?? null).filter(Boolean))];
@@ -524,7 +531,7 @@ async function main() {
       await evaluate(socket, `(() => { window.scrollTo(0,0); const statusElement=document.querySelector('#status'); statusElement.scrollTo(0, 0); return {scrollX,scrollY,statusScrollLeft:statusElement.scrollLeft,statusScrollTop:statusElement.scrollTop}; })()`);
       const shot = await wsRequest(socket, 'Page.captureScreenshot', { format: 'png', fromSurface: true, captureBeyondViewport: false, clip: { x: 0, y: 0, width: viewportLayout.innerWidth, height: viewportLayout.innerHeight, scale: 1 } });
       const pixels = await inspectPixels(socket, shot.data, viewportLayout);
-      pixelCheck = { ...pixels, attempt, passed: pixels.nonBlackFraction >= 0.05 && pixels.maximumChannel > 24 && pixels.borderSignalFraction >= 0.25 && pixels.headingSignalFraction >= 0.01 && pixels.statusTopSignalFraction >= 0.005 };
+      pixelCheck = { ...pixels, attempt, terminalStatePassed, passed: terminalStatePassed && pixels.nonBlackFraction >= 0.05 && pixels.maximumChannel > 24 && pixels.borderSignalFraction >= 0.25 && pixels.headingSignalFraction >= 0.01 && pixels.statusTopSignalFraction >= 0.005 };
       if (!pixelCheck.passed) continue;
       mkdirSync(dirname(screenshotPath), { recursive: true }); writeFileSync(screenshotPath, Buffer.from(shot.data, 'base64')); screenshotWritten = true; break;
     }
