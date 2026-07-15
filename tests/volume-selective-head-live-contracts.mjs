@@ -108,6 +108,21 @@ assert.match(page, /d58df9b715f0e7cd21b2e97811e5f19b2ecf2e7494a7e2bbc3866f61fcb9
 assert.match(page, /1fd70b831b7f377d2923288715ca6ccbe26939790fd51b8f759ffb7c00ff29e8/, 'page pins the exact high front checksum');
 assert.match(page, /warmupTarget/, 'page exposes the requested replay horizon');
 assert.match(page, /warmupComplete/, 'page distinguishes warmup from learned execution');
+assert.match(
+  page,
+  /for \(const \[key, value\] of params\)[\s\S]*if \(key\.startsWith\('volume_'\)\) basinQuery\.set\(key, value\)/,
+  'selective-head wrapper passes explicitly routed basin settings into the native iframe instead of silently replacing them with its defaults',
+);
+assert.match(
+  page,
+  /kaminos_volume_smoke:\s*'1'[\s\S]*if \(key\.startsWith\('volume_'\)\) basinQuery\.set\(key, value\)/,
+  'selective-head wrapper keeps its required inner smoke route active instead of accepting an outer route-gate override',
+);
+assert.match(
+  page,
+  /const warmupTarget = warmupParam === '0'\s*\?\s*0[\s\S]*fresh-live-settings-no-anchor-v0/,
+  'only an explicit valid zero-step request reports that no checksum field anchor was imported',
+);
 
 const witness = readFileSync(witnessPath, 'utf8');
 assert.match(witness, /kaminos\.volume\.selective-head-live-witness\.v0/);

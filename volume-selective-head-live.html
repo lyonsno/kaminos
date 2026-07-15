@@ -25,7 +25,7 @@
   <div id="toolbar">
     <div id="title">
       <strong>Continuous same-history live assay</strong>
-      <span>Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render</span>
+      <span id="assay-source">Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render</span>
     </div>
     <div id="roles" role="group" aria-label="Live reconstruction role">
       <button type="button" data-role="truthHigh">Truth high</button>
@@ -61,14 +61,29 @@
     const params = new URLSearchParams(location.search);
     let requestedRole = roles.includes(params.get('role')) ? params.get('role') : 'selectiveFullResidual';
     let requestedComposition = compositions.includes(params.get('composition')) ? params.get('composition') : 'smoke-raymarch-under-splats-v0';
-    const warmupTarget = Math.max(0, Math.floor(Number(params.get('warmup_steps') ?? 96) || 0));
+    const warmupParam = params.get('warmup_steps');
+    const parsedWarmupTarget = warmupParam === null ? 96 : Number(warmupParam);
+    const warmupParamValid = warmupParam === null
+      || warmupParam === '0'
+      || (warmupParam.trim() !== '' && Number.isFinite(parsedWarmupTarget) && parsedWarmupTarget >= 1);
+    const warmupTarget = warmupParam === '0'
+      ? 0
+      : (warmupParamValid ? Math.max(1, Math.floor(parsedWarmupTarget)) : 96);
+    const warmupAuthority = warmupTarget === 0
+      ? 'fresh-live-settings-no-anchor-v0'
+      : WARMUP_AUTHORITY;
     const anchorBase = String(params.get('anchor_base') || 'http://127.0.0.1:18537').replace(/\/$/, '');
     let warmupStarted = false;
     let warmupComplete = warmupTarget === 0;
-    let warmupReceipt = null;
-    let warmupError = null;
+    let warmupReceipt = warmupTarget === 0
+      ? { ok: true, authority: warmupAuthority, completedSteps: 0, importedAnchor: false }
+      : null;
+    let warmupError = warmupParamValid ? null : `invalid warmup_steps: ${JSON.stringify(warmupParam)}`;
     const basin = document.getElementById('basin');
     const status = document.getElementById('status');
+    document.getElementById('assay-source').textContent = warmupTarget === 0
+      ? 'Fresh live simulation from routed basin settings; no checksum field anchor imported'
+      : 'Load checksum-bound training step 96, then 160 truth -> 128 phase-aligned input -> frozen heads -> 160 render';
     const buttons = Array.from(document.querySelectorAll('[data-role]'));
     const compositionButtons = Array.from(document.querySelectorAll('[data-composition]'));
     const basinQuery = new URLSearchParams({
@@ -118,6 +133,9 @@
       volume_residual_feature_debug: '0',
       volume_quality_reason: 'selective-head-continuous-live-assay',
     });
+    for (const [key, value] of params) {
+      if (key.startsWith('volume_')) basinQuery.set(key, value);
+    }
     basin.src = `./?${basinQuery}`;
 
     function prototype() {
@@ -151,7 +169,7 @@
         status: warmupError || state?.error ? 'failed' : warmupComplete && state?.active ? 'running' : 'warming',
         requestedRole,
         requestedComposition,
-        warmupAuthority: WARMUP_AUTHORITY,
+        warmupAuthority,
         warmupTarget,
         warmupComplete,
         warmupStarted,
@@ -179,6 +197,7 @@
 
     async function initializeWarmup() {
       if (warmupStarted) return;
+      if (!warmupParamValid) throw new Error(warmupError);
       const started = performance.now();
       while (!prototype()?.debugState?.()?.active) {
         if (performance.now() - started > 120000) throw new Error('exact basin did not activate before replay warmup');
@@ -231,7 +250,9 @@
       const pass = state.selectiveHeadLivePassReceipt || {};
       status.classList.toggle('bad', Boolean(fallback || state.error));
       status.textContent = [
-        state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`,
+        state.warmupAuthority === 'fresh-live-settings-no-anchor-v0'
+          ? 'fresh settings live: no anchor imported'
+          : (state.warmupComplete ? `trained horizon crossed: ${state.warmupTarget}` : `warming exact basin: ${state.simStepCount}/${state.warmupTarget}`),
         `effective role: ${state.effectiveRole || 'starting'}`,
         `role authority: ${state.roleAuthority || roleAuthorities[requestedRole]}`,
         `effective composition: ${state.effectiveComposition || 'starting'}`,
