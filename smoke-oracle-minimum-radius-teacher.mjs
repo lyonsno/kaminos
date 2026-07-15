@@ -171,7 +171,7 @@ export function assessMinimumRadiusMaturityCandidate({ current: currentValue, pr
   const reasons = [];
   if (litFraction <= 0.001 || smokeFraction <= 0.001) reasons.push('blank-render');
   if (!(liveVoxels > 0) || !(smokeWeight > 0)) reasons.push('missing-smoke-support');
-  if (!(rise >= 0.2)) reasons.push('insufficient-rise');
+  if (!(rise >= 0.55)) reasons.push('insufficient-rise');
   if (!(lateral >= 0.08)) reasons.push('insufficient-lateral-support');
   if (!previous) reasons.push('missing-adjacent-predecessor');
   if (previous && current.simStepCount !== previous.simStepCount + 1) reasons.push('non-adjacent-steps');

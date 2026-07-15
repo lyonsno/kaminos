@@ -90,12 +90,12 @@ const candidate = assessMinimumRadiusMaturityCandidate({
   previous: {
     simStepCount: 104,
     render: { width: 640, height: 455, litPixels: 22000, smokeLikePixels: 11000, sha256: 'sha256:' + '2'.repeat(64) },
-    support: { liveVoxels: 44000, smokeWeight: 12000, smokeVisualRiseDisplacement: 0.48, smokeVisualLateralDisplacement: 0.14 },
+    support: { liveVoxels: 44000, smokeWeight: 12000, smokeVisualRiseDisplacement: 0.62, smokeVisualLateralDisplacement: 0.14 },
   },
   current: {
     simStepCount: 105,
     render: { width: 640, height: 455, litPixels: 22400, smokeLikePixels: 11400, sha256: 'sha256:' + '3'.repeat(64) },
-    support: { liveVoxels: 44800, smokeWeight: 12300, smokeVisualRiseDisplacement: 0.5, smokeVisualLateralDisplacement: 0.15 },
+    support: { liveVoxels: 44800, smokeWeight: 12300, smokeVisualRiseDisplacement: 0.64, smokeVisualLateralDisplacement: 0.15 },
   },
 });
 assert.equal(candidate.candidate, true);
@@ -108,6 +108,13 @@ const startupColumn = assessMinimumRadiusMaturityCandidate({
 });
 assert.equal(startupColumn.candidate, false, 'a tall but narrow startup column is not a mature plume');
 assert.ok(startupColumn.reasons.includes('insufficient-lateral-support'));
+
+const shortHead = assessMinimumRadiusMaturityCandidate({
+  previous: { ...candidate.previous, support: { ...candidate.previous.support, smokeVisualRiseDisplacement: 0.27 } },
+  current: { ...candidate.current, support: { ...candidate.current.support, smokeVisualRiseDisplacement: 0.28 } },
+});
+assert.equal(shortHead.candidate, false, 'a broad young smoke head is not yet the canonical mature tall plume');
+assert.ok(shortHead.reasons.includes('insufficient-rise'));
 
 assert.throws(
   () => admitMinimumRadiusTeacherWindow({ contract, frames: [candidate.previous, candidate.current] }),
