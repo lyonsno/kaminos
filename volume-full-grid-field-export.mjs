@@ -631,14 +631,23 @@ async function main() {
       const oracleActivitySplatOpacity = Object.hasOwn(renderControlOverrides, 'oracleActivitySplatOpacity')
         ? Number(renderControlOverrides.oracleActivitySplatOpacity)
         : 0;
+      const oracleActivitySplatRadiusConcentration = Object.hasOwn(renderControlOverrides, 'oracleActivitySplatRadiusConcentration')
+        ? Number(renderControlOverrides.oracleActivitySplatRadiusConcentration)
+        : 0;
       if (!Number.isFinite(oracleActivityFireDetail) || oracleActivityFireDetail < -2 || oracleActivityFireDetail > 2) {
         throw new Error(`scalar activity cue fire-detail gain is outside [-2, 2]: ${renderControlOverrides.oracleActivityFireDetail}`);
       }
       if (!Number.isFinite(oracleActivitySplatOpacity) || oracleActivitySplatOpacity < -2 || oracleActivitySplatOpacity > 2) {
         throw new Error(`scalar activity cue splat-opacity gain is outside [-2, 2]: ${renderControlOverrides.oracleActivitySplatOpacity}`);
       }
+      if (!Number.isFinite(oracleActivitySplatRadiusConcentration) || oracleActivitySplatRadiusConcentration < -2 || oracleActivitySplatRadiusConcentration > 2) {
+        throw new Error(`scalar activity cue splat-radius concentration is outside [-2, 2]: ${renderControlOverrides.oracleActivitySplatRadiusConcentration}`);
+      }
       if (oracleActivitySplatOpacity !== 0 && renderComposition === 'raymarch-only-v0') {
         throw new Error('scalar activity cue splat-opacity assay requires a splat render composition');
+      }
+      if (oracleActivitySplatRadiusConcentration !== 0 && renderComposition === 'raymarch-only-v0') {
+        throw new Error('scalar activity cue splat-radius concentration assay requires a splat render composition');
       }
       renderControlOverrides = {
         ...renderControlOverrides,
@@ -649,6 +658,7 @@ async function main() {
         oracleActivityMaterial: 0,
         oracleActivityFireDetail,
         oracleActivitySplatOpacity,
+        oracleActivitySplatRadiusConcentration,
       };
     }
     const resolved = resolveSourceCapture();
@@ -893,6 +903,16 @@ async function main() {
             throw new Error(`scalar-activity-splat-opacity-gain-mismatch: requested=${requestedSplatOpacity} receipt=${JSON.stringify({
               oracleActivitySplatOpacityRequested: renderReceipt.oracleActivitySplatOpacityRequested,
               oracleActivitySplatOpacityEffective: renderReceipt.oracleActivitySplatOpacityEffective,
+            })}`);
+          }
+          const requestedSplatRadiusConcentration = Number(renderControlOverrides.oracleActivitySplatRadiusConcentration || 0);
+          if (
+            renderReceipt.oracleActivitySplatRadiusConcentrationRequested !== requestedSplatRadiusConcentration
+            || renderReceipt.oracleActivitySplatRadiusConcentrationEffective !== requestedSplatRadiusConcentration
+          ) {
+            throw new Error(`scalar-activity-splat-radius-concentration-gain-mismatch: requested=${requestedSplatRadiusConcentration} receipt=${JSON.stringify({
+              oracleActivitySplatRadiusConcentrationRequested: renderReceipt.oracleActivitySplatRadiusConcentrationRequested,
+              oracleActivitySplatRadiusConcentrationEffective: renderReceipt.oracleActivitySplatRadiusConcentrationEffective,
             })}`);
           }
         }

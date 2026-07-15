@@ -66,6 +66,16 @@ assert.match(
   /oracleActivitySplatOpacityRequested[\s\S]*?oracleActivitySplatOpacityEffective[\s\S]*?scalar-activity-splat-opacity-gain-mismatch/,
   'scalar-cue witnesses fail loud unless the requested signed learned-splat opacity gain is the effective bounded gain',
 );
+assert.match(
+  exporter,
+  /oracleActivitySplatRadiusConcentration[\s\S]*?outside \[-2, 2\][\s\S]*?splat-radius concentration assay requires a splat render composition/,
+  'scalar-cue radius witnesses reject out-of-range gains and raymarch-only compositions before capture',
+);
+assert.match(
+  exporter,
+  /oracleActivitySplatRadiusConcentrationRequested[\s\S]*?oracleActivitySplatRadiusConcentrationEffective[\s\S]*?scalar-activity-splat-radius-concentration-gain-mismatch/,
+  'scalar-cue witnesses fail loud unless requested and effective splat-radius concentration match',
+);
 assert.match(exporter, /sourceCapture/, 'export manifest records source-capture custody');
 assert.match(exporter, /payloadSha256/, 'exporter validates and records the exact capture payload hash');
 assert.match(exporter, /deterministicReplay/, 'exporter preserves deterministic replay identity');

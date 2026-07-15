@@ -695,6 +695,11 @@ assert.match(
 );
 assert.match(
   core,
+  /splatRadiusConcentrationGain:\s*clampFinite\(snapshot\.oracleActivitySplatRadiusConcentration,\s*-2,\s*2,\s*0\)/,
+  'render-only scalar activity splat radius concentration is signed, bounded, and inert by default',
+);
+assert.match(
+  core,
   /fn renderOnlyScalarActivityCueHighPassAtCell[\s\S]*?oracle_activity_controls2\.y[\s\S]*?oracleActivityCue\[centerIdx\][\s\S]*?neighborMean[\s\S]*?centerCue - neighborMean/,
   'render-only fire detail consumes an uploaded external cue through local six-neighbor high-pass contrast',
 );
@@ -720,12 +725,30 @@ assert.match(
   /let attributeOutput = applyBoundarySplatAttributeHook[\s\S]*?var composedColorOpacity = attributeOutput\.colorOpacity[\s\S]*?composedColorOpacity\.a \*= [^;]+[\s\S]*?boundarySplats\[candidateIndex\]\.colorOpacity = composedColorOpacity/,
   'scalar activity modulates learned-splat opacity after the attribute head without replacing its color prediction',
 );
-assert.doesNotMatch(core, /structuralSignal\s*[+*=-][^;]*oracleActivity|candidateCount[\s\S]{0,300}?oracleActivity|radius[\s\S]{0,300}?oracleActivity/, 'splat activity composition does not alter candidate birth or splat radius');
+assert.match(
+  core,
+  /var composedRadiusScale = attributeOutput\.radiusScale[\s\S]*?let activityRadiusMultiplier = clamp\(exp2\(-boundarySplatCamera\.activityControls\.y \* activityContrast \* 0\.5\), 0\.65, 1\.45\)[\s\S]*?composedRadiusScale \*= activityRadiusMultiplier/,
+  'carrier radius concentration is a bounded signed multiplier applied after the learned attribute head',
+);
+assert.match(
+  core,
+  /let activityAreaCompensation = 1\.0 \/ max\(activityRadiusMultiplier \* activityRadiusMultiplier, 1e-4\)[\s\S]*?composedColorOpacity\.a \*= activityOpacityMultiplier \* activityAreaCompensation/,
+  'carrier radius concentration inversely compensates opacity by footprint area instead of buying brightness',
+);
+assert.match(
+  core,
+  /boundarySplats\[candidateIndex\]\.shape = vec4<f32>\(radius \* composedRadiusScale\.x, radius \* composedRadiusScale\.y/,
+  'the compensated radius multiplier reaches both learned-splat footprint axes',
+);
+assert.doesNotMatch(core, /structuralSignal\s*[+*=-][^;]*oracleActivity|candidateCount[\s\S]{0,300}?oracleActivity/, 'splat activity composition does not alter candidate birth');
 assert.match(core, /binding:\s*7,\s*visibility:\s*GPUShaderStage\.COMPUTE,\s*buffer:\s*\{\s*type:\s*'read-only-storage'\s*\}/, 'boundary-splat compute layout declares the scalar activity cue binding');
 assert.match(core, /\{ binding:\s*7,\s*resource:\s*\{ buffer:\s*oracleActivityCueBuffer \}\s*\}/, 'boundary-splat compute bind groups bind the effective imported cue buffer');
 assert.match(core, /oracleActivitySplatOpacityRequested/, 'frozen render receipt records requested splat-opacity gain');
 assert.match(core, /oracleActivitySplatOpacityEffective/, 'frozen render receipt records effective bounded splat-opacity gain');
 assert.match(core, /render-only-external-carrier-high-pass-learned-splat-opacity-v0/, 'frozen render receipt names the isolated learned-splat opacity application route');
+assert.match(core, /oracleActivitySplatRadiusConcentrationRequested/, 'frozen render receipt records requested splat-radius concentration');
+assert.match(core, /oracleActivitySplatRadiusConcentrationEffective/, 'frozen render receipt records effective bounded splat-radius concentration');
+assert.match(core, /render-only-external-carrier-high-pass-area-preserving-learned-splat-radius-v0/, 'frozen render receipt names the area-preserving learned-splat radius application route');
 assert.match(core, /oracleActivityCurlNoiseForce/, 'fluid shader exposes scalar activity gated curl-noise force hook');
 assert.match(core, /oracleActivityVorticityConfinement/, 'fluid shader exposes scalar activity gated vorticity confinement hook');
 assert.match(core, /oracleActivityMaterialBirth/, 'fluid shader exposes scalar activity gated material/interface birth hook');
