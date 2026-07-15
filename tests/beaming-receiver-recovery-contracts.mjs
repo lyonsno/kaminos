@@ -57,7 +57,7 @@ requirePatterns(index, 'receiver light', [
   [/receiverRadianceLowResTarget/, 'renderer downsamples live fire radiance before spreading it'],
   [/receiverRadianceBlurHorizontalTarget/, 'renderer owns a horizontal low-resolution radiance blur target'],
   [/receiverRadianceBlurVerticalTarget/, 'renderer owns a vertical low-resolution radiance blur target'],
-  [/receiver-radiance-separable-low-resolution-area-wash-v0/, 'the GPU area-wash strategy has a stable identity'],
+  [/receiver-radiance-iterative-separable-low-resolution-area-wash-v1/, 'the continuous GPU area-wash strategy has a stable identity'],
   [/new THREE\.QuadMesh/, 'the live GPU attachment is filtered without CPU readback'],
   [/volume_receiver_light/, 'route can opt into receiver lighting'],
   [/volume_receiver_light_isolate/, 'route can isolate receiver-light evidence'],
@@ -79,6 +79,24 @@ const receiverPassSource = index.slice(
   index.indexOf('async function initKaminosVolumeRoute'),
 );
 assert.doesNotMatch(receiverPassSource, /receiverProxies|tier2-receiver-proxy-/, 'proxy planes must not masquerade as scene receivers');
+const receiverBlurKernelSource = receiverPassSource.match(/const blurKernel = \[([\s\S]*?)\n\s*\];/)?.[1] || '';
+const receiverBlurOffsets = [...receiverBlurKernelSource.matchAll(/\[\s*([0-9]+(?:\.[0-9]+)?),/g)]
+  .map(match => Number(match[1]));
+assert.ok(receiverBlurOffsets.length >= 5, 'receiver area wash must declare a compact integration kernel');
+assert.ok(
+  Math.max(...receiverBlurOffsets) <= 8,
+  `receiver area wash cannot expose sparse translated source copies; largest tap was ${Math.max(...receiverBlurOffsets)}`,
+);
+assert.match(
+  receiverPassSource,
+  /const receiverAreaWashBlurRounds = [4-9];/,
+  'receiver area wash must accumulate compact taps across bounded iterative rounds',
+);
+assert.match(
+  receiverPassSource,
+  /for \(let blurRound = 1; blurRound < receiverAreaWashBlurRounds; blurRound \+= 1\)/,
+  'receiver area wash must spread energy through repeated integration instead of distant one-shot taps',
+);
 
 requirePatterns(witness, 'witness', [
   [/receiverSupport\.identity !== 'combustion-front-receiver-support-v0'/, 'wrong support identity fails loud'],

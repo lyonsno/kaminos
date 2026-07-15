@@ -19806,12 +19806,19 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
   const downsampleQuad = new THREE.QuadMesh(downsampleMaterial);
 
   const areaWashTexel = uniform(new THREE.Vector2(1 / areaWashWidth, 1 / areaWashHeight));
+  const receiverAreaWashBlurRounds = 4;
+  // A normalized row-16 binomial kernel. Repeated compact integration spreads
+  // radiance without exposing distant taps as translated copies of the flame.
   const blurKernel = [
-    [0, 0.20],
-    [4, 0.15],
-    [12, 0.10],
-    [32, 0.075],
-    [64, 0.075],
+    [0, 0.196380615234375],
+    [1, 0.174560546875],
+    [2, 0.1221923828125],
+    [3, 0.066650390625],
+    [4, 0.02777099609375],
+    [5, 0.008544921875],
+    [6, 0.0018310546875],
+    [7, 0.000244140625],
+    [8, 0.0000152587890625],
   ];
   const buildBlurNode = (sourceNode, axis) => {
     let result = sourceNode.sample(viewportUV).mul(blurKernel[0][1]);
@@ -19829,6 +19836,12 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
   horizontalBlurMaterial.blending = THREE.NoBlending;
   horizontalBlurMaterial.toneMapped = false;
   const horizontalBlurQuad = new THREE.QuadMesh(horizontalBlurMaterial);
+  const horizontalRefineBlurMaterial = new THREE.NodeMaterial();
+  horizontalRefineBlurMaterial.name = 'tier2-receiver-radiance-horizontal-refine-blur-v1';
+  horizontalRefineBlurMaterial.fragmentNode = buildBlurNode(texture(receiverRadianceBlurVerticalTarget.texture), [1, 0]);
+  horizontalRefineBlurMaterial.blending = THREE.NoBlending;
+  horizontalRefineBlurMaterial.toneMapped = false;
+  const horizontalRefineBlurQuad = new THREE.QuadMesh(horizontalRefineBlurMaterial);
   const verticalBlurMaterial = new THREE.NodeMaterial();
   verticalBlurMaterial.name = 'tier2-receiver-radiance-vertical-blur-v0';
   verticalBlurMaterial.fragmentNode = buildBlurNode(texture(receiverRadianceBlurHorizontalTarget.texture), [0, 1]);
@@ -19888,9 +19901,10 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
     hiddenThreeLightAuthority: false,
     canvasBridgeAuthority: false,
     fallbackAuthority: false,
-    areaWashIdentity: 'receiver-radiance-separable-low-resolution-area-wash-v0',
+    areaWashIdentity: 'receiver-radiance-iterative-separable-low-resolution-area-wash-v1',
     areaWashScale: receiverAreaWashScale,
     areaWashSize: { width: areaWashWidth, height: areaWashHeight },
+    areaWashBlurRounds: receiverAreaWashBlurRounds,
     witnessMuted: false,
     witnessForegroundMuted: false,
     active: false,
@@ -20050,6 +20064,14 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
       renderer.setRenderTarget(receiverRadianceBlurVerticalTarget);
       renderer.clear();
       verticalBlurQuad.render(renderer);
+      for (let blurRound = 1; blurRound < receiverAreaWashBlurRounds; blurRound += 1) {
+        renderer.setRenderTarget(receiverRadianceBlurHorizontalTarget);
+        renderer.clear();
+        horizontalRefineBlurQuad.render(renderer);
+        renderer.setRenderTarget(receiverRadianceBlurVerticalTarget);
+        renderer.clear();
+        verticalBlurQuad.render(renderer);
+      }
       renderer.setRenderTarget(previousTarget);
       renderer.setClearColor(previousClearColor, previousClearAlpha);
       state.receiverRenderFrameCount += 1;
@@ -20110,6 +20132,7 @@ function createTier2ReceiverBufferLightPass(baseOutputNode, sceneDepthNode) {
       receiverRadianceBlurVerticalTarget.dispose();
       downsampleMaterial.dispose();
       horizontalBlurMaterial.dispose();
+      horizontalRefineBlurMaterial.dispose();
       verticalBlurMaterial.dispose();
       if (!radianceWrapperWasInitialized) blackRadianceTexture.destroy();
       if (!momentsWrapperWasInitialized) blackMomentsTexture.destroy();
