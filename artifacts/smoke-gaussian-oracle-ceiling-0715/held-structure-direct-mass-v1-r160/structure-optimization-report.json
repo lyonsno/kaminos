@@ -1,0 +1,147 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-structure-optimization-report.v0",
+  "identity": "smoke-gaussian-oracle-structure-optimization-v0",
+  "status": "passed",
+  "createdAt": "2026-07-15T12:55:04.645Z",
+  "source": {
+    "sourceFitReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-hostile-camera-split-r160/recorded-native/oracle-fit-report.json",
+    "sourceFitReportIdentity": "sha256:a657a65e94e565f2539f0f8e7b6f9cc1fbcc5ff07686e3e711c349412286998d",
+    "sourceArtifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-native-camera-fit-r160/budget-1024.gaussians.f32",
+    "sourceArtifactIdentity": "sha256:5bdbe9a377121306a87e61ba7ecb765c306db80f4a555fd6941d9068aa856a07",
+    "activeGaussianCount": 1024,
+    "teacherReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-native-camera-teacher-r160-640x455/dense-raymarch-teacher-report.json",
+    "teacherReportIdentity": "sha256:c47cfc3d04b38d041930ec470933f37e3b93b3bd2e1386b30526c3ce00d77812",
+    "teacherRadiancePath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-native-camera-teacher-r160-640x455/linear-smoke-radiance.f32",
+    "teacherRadianceIdentity": "sha256:ba9d3ea643c78a738edba9b8be3caf8ce1f31e3665d75ba2f1b3da824438681b",
+    "cameraId": "recorded-native"
+  },
+  "trainView": {
+    "cameraId": "recorded-native",
+    "role": "calibration",
+    "cameraIdentity": "sha256:24600dbb7f6b677ea45f82e78f198701cdf0dfde586a2e8d15a60c37030d6994"
+  },
+  "budget": {
+    "requestedBudget": 1024,
+    "activeGaussianCount": 1024,
+    "hiddenBudgetCapApplied": false
+  },
+  "optimizer": {
+    "identity": "nonnegative-log-mass-adam-multiscale-structure-v0",
+    "iterationCount": 120,
+    "learningRate": 0.02,
+    "scales": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "valueWeight": 1,
+    "gradientWeight": 2,
+    "coverageScale": 1.5,
+    "extinctionScale": 0.008,
+    "initialLoss": 0.00009288054040377112,
+    "finalLoss": 0.00006753645480402689,
+    "checkpoints": [
+      {
+        "iteration": 0,
+        "loss": 0.00009288054040377112
+      },
+      {
+        "iteration": 12,
+        "loss": 0.00007908154775126134
+      },
+      {
+        "iteration": 24,
+        "loss": 0.00007534775135972229
+      },
+      {
+        "iteration": 36,
+        "loss": 0.00007306386057878201
+      },
+      {
+        "iteration": 48,
+        "loss": 0.00007175720869415577
+      },
+      {
+        "iteration": 60,
+        "loss": 0.00007078987936120541
+      },
+      {
+        "iteration": 72,
+        "loss": 0.00006997935015693273
+      },
+      {
+        "iteration": 84,
+        "loss": 0.00006927148390325051
+      },
+      {
+        "iteration": 96,
+        "loss": 0.00006863980731934543
+      },
+      {
+        "iteration": 108,
+        "loss": 0.00006806606322186417
+      },
+      {
+        "iteration": 120,
+        "loss": 0.00006753645480402689
+      }
+    ]
+  },
+  "hiddenIterationCapApplied": false,
+  "extinctionAccounting": {
+    "teacherTotalExtinction": 1858452.360901263,
+    "representedExtinction": 1858452.3624801636,
+    "absoluteError": 0.0015789004974067211,
+    "relativeError": 8.495781385760288e-10
+  },
+  "optimizedArtifact": {
+    "path": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-r160/budget-1024.gaussians.f32",
+    "sha256": "sha256:8d5d5b2de1e2ec10d5c587d1d78a97b263d16cbea60bc6280065ef02c2ee047d",
+    "byteLength": 114688,
+    "dtype": "float32",
+    "byteOrder": "little-endian",
+    "shape": [
+      1024,
+      28
+    ],
+    "channelOrder": [
+      "positionX",
+      "positionY",
+      "positionZ",
+      "covXX",
+      "covXY",
+      "covXZ",
+      "covYY",
+      "covYZ",
+      "covZZ",
+      "axis0X",
+      "axis0Y",
+      "axis0Z",
+      "axis1X",
+      "axis1Y",
+      "axis1Z",
+      "axis2X",
+      "axis2Y",
+      "axis2Z",
+      "radius0",
+      "radius1",
+      "radius2",
+      "extinctionMass",
+      "densityWitness",
+      "temperatureWitness",
+      "velocityX",
+      "velocityY",
+      "velocityZ",
+      "sourceVoxelCount"
+    ]
+  },
+  "optimizedFitReportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-r160/oracle-fit-report.json",
+  "costs": {
+    "authority": "cpu-wall-clock-performance-now-v0",
+    "optimizerMs": 9782.592042,
+    "productBuildMs": 8.582457999998951,
+    "totalMs": 9791.177583
+  },
+  "reportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-r160/structure-optimization-report.json"
+}

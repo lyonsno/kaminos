@@ -1,0 +1,51 @@
+{
+  "schema": "kaminos.smoke-oracle-hostile-camera-split.v0",
+  "identity": "smoke-oracle-hostile-camera-split-v0",
+  "status": "passed",
+  "createdAt": "2026-07-15T12:58:16.117Z",
+  "sourceFitReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-native-camera-fit-budget-4096-r160/oracle-fit-report.json",
+  "sourceFitReportIdentity": "sha256:ddc55a41a6eea424d8c88f7322b77e47e0ac3141aa106f6c62da4a609c9a54cb",
+  "cameraSplit": {
+    "authority": "explicit-disjoint-world-space-hostile-camera-split-v0",
+    "calibrationCameraIds": [
+      "recorded-native"
+    ],
+    "heldOutCameraIds": [
+      "side-plus-90",
+      "back-plus-180",
+      "elevated-plus-35"
+    ],
+    "overlap": 0
+  },
+  "products": [
+    {
+      "cameraId": "recorded-native",
+      "role": "calibration",
+      "transform": "recorded-camera-unchanged",
+      "cameraIdentity": "sha256:24600dbb7f6b677ea45f82e78f198701cdf0dfde586a2e8d15a60c37030d6994",
+      "fitReportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-hostile-camera-split-budget-4096-r160/recorded-native/oracle-fit-report.json"
+    },
+    {
+      "cameraId": "side-plus-90",
+      "role": "held-out",
+      "transform": "world-y-azimuth-plus-90-degrees",
+      "cameraIdentity": "sha256:c1487f3400bf6f699db81f75f2b538a2b8520915d35ce0a9ac77c5ef7a303e2d",
+      "fitReportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-hostile-camera-split-budget-4096-r160/side-plus-90/oracle-fit-report.json"
+    },
+    {
+      "cameraId": "back-plus-180",
+      "role": "held-out",
+      "transform": "world-y-azimuth-plus-180-degrees",
+      "cameraIdentity": "sha256:f432bb7c8fdd485fe3129196c332da4b861a636869985a1946cc29bbd32721f9",
+      "fitReportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-hostile-camera-split-budget-4096-r160/back-plus-180/oracle-fit-report.json"
+    },
+    {
+      "cameraId": "elevated-plus-35",
+      "role": "held-out",
+      "transform": "camera-elevation-plus-35-degrees-radius-preserved",
+      "cameraIdentity": "sha256:b36ace032d72d2c6a173e235cf176fb717b7049fe109d0ee5617dfbc2d3bfbc4",
+      "fitReportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-hostile-camera-split-budget-4096-r160/elevated-plus-35/oracle-fit-report.json"
+    }
+  ],
+  "reportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-hostile-camera-split-budget-4096-r160/hostile-camera-split-report.json"
+}

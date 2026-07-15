@@ -9,14 +9,91 @@ import { deflateSync } from 'node:zlib';
 const rendererUrl = new URL('../smoke-gaussian-oracle-renderer.mjs', import.meta.url);
 const rendererSource = await readFile(rendererUrl, 'utf8');
 assert.match(rendererSource, /args\.get\('--projection'\)/, 'native-camera projection must be selectable from the reproducible CLI');
+assert.match(rendererSource, /args\.has\('--optimize-structure'\)/, 'direct structural optimization must be selectable from the reproducible CLI');
 const {
   SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY,
   projectOrthographicGaussianFootprint,
   projectPerspectiveGaussianFootprint,
+  buildPerspectiveGaussianBasis,
+  renderSparseGaussianBasis,
+  multiscaleStructuralLoss,
+  optimizeGaussianExtinctionMasses,
+  optimizeSmokeGaussianStructureProduct,
   renderSmokeGaussianOracleWitness,
 } = await import(rendererUrl);
 
 assert.equal(SMOKE_GAUSSIAN_ORACLE_RENDER_IDENTITY, 'smoke-gaussian-oracle-render-witness-v1');
+
+const structureTarget = Float32Array.from([
+  0, 0, 1, 1,
+  0, 0.25, 1, 0.75,
+  0, 0.5, 1, 0.5,
+  0, 0, 1, 1,
+]);
+const identityStructure = multiscaleStructuralLoss({
+  prediction: structureTarget,
+  target: structureTarget,
+  width: 4,
+  height: 4,
+  scales: [1, 2],
+  valueWeight: 1,
+  gradientWeight: 2,
+});
+assert.equal(identityStructure.totalLoss, 0);
+assert.equal(identityStructure.gradient.every(value => value === 0), true);
+assert.deepEqual(identityStructure.levels.map(level => level.scale), [1, 2]);
+
+const smoothPrediction = Float32Array.from({ length: 16 }, () => 0.35);
+const structureLoss = multiscaleStructuralLoss({
+  prediction: smoothPrediction,
+  target: structureTarget,
+  width: 4,
+  height: 4,
+  scales: [1, 2],
+  valueWeight: 1,
+  gradientWeight: 2,
+});
+assert.ok(structureLoss.totalLoss > 0);
+assert.ok(structureLoss.gradientLoss > 0, 'missing articulated edges must incur explicit gradient loss');
+const probeIndex = 5;
+const epsilon = 1e-4;
+const plus = smoothPrediction.slice();
+const minus = smoothPrediction.slice();
+plus[probeIndex] += epsilon;
+minus[probeIndex] -= epsilon;
+const plusLoss = multiscaleStructuralLoss({ prediction: plus, target: structureTarget, width: 4, height: 4, scales: [1, 2], valueWeight: 1, gradientWeight: 2 }).totalLoss;
+const minusLoss = multiscaleStructuralLoss({ prediction: minus, target: structureTarget, width: 4, height: 4, scales: [1, 2], valueWeight: 1, gradientWeight: 2 }).totalLoss;
+const finiteDifference = (plusLoss - minusLoss) / (2 * epsilon);
+assert.ok(Math.abs(structureLoss.gradient[probeIndex] - finiteDifference) < 1e-4, 'analytic structural gradient must match finite difference');
+
+const toyBasis = [
+  { indices: Uint32Array.from([0, 1, 4, 5, 8, 9, 12, 13]), values: Float32Array.from({ length: 8 }, () => 1) },
+  { indices: Uint32Array.from([2, 3, 6, 7, 10, 11, 14, 15]), values: Float32Array.from({ length: 8 }, () => 1) },
+];
+const toyTarget = new Float32Array(16);
+for (let index = 0; index < toyTarget.length; index += 1) {
+  const depth = index % 4 < 2 ? 3 : 1;
+  toyTarget[index] = 1 - Math.exp(-0.5 * depth);
+}
+const optimizedMasses = optimizeGaussianExtinctionMasses({
+  basis: toyBasis,
+  initialMasses: Float64Array.from([2, 2]),
+  target: toyTarget,
+  width: 4,
+  height: 4,
+  extinctionScale: 0.5,
+  iterations: 120,
+  learningRate: 0.08,
+  scales: [1, 2],
+  valueWeight: 1,
+  gradientWeight: 2,
+});
+assert.equal(optimizedMasses.iterationCount, 120, 'requested optimizer iterations must not be silently capped');
+assert.ok(optimizedMasses.finalLoss < optimizedMasses.initialLoss * 0.01, 'direct extinction optimization must materially reduce structural loss');
+assert.ok(Math.abs(optimizedMasses.masses[0] - 3) < 0.05);
+assert.ok(Math.abs(optimizedMasses.masses[1] - 1) < 0.05);
+assert.ok(optimizedMasses.masses.every(value => value >= 0));
+assert.ok(Math.abs(optimizedMasses.masses.reduce((sum, value) => sum + value, 0) - 4) < 1e-10, 'optimizer must conserve requested total extinction');
 
 const tiltedFootprint = projectOrthographicGaussianFootprint([4, 1.5, 0.25, 1, 0.1, 2]);
 assert.equal(tiltedFootprint.varianceX, 4, 'orthographic footprint preserves world X variance');
@@ -62,6 +139,27 @@ assert.ok(Math.abs(perspectiveFootprint.varianceX - 100) < 1e-10, 'world covaria
 assert.ok(Math.abs(perspectiveFootprint.varianceY - 56.25) < 1e-10);
 assert.ok(Math.abs(perspectiveFootprint.covarianceXY) < 1e-12);
 assert.ok(Math.abs(perspectiveFootprint.determinant - 5625) < 1e-8);
+
+const sparsePerspective = buildPerspectiveGaussianBasis({
+  rows: [{
+    position: [0, 0, -2],
+    covariance: [0.04, 0, 0, 0.09, 0, 0.16],
+    extinctionMass: 3,
+  }],
+  width: 200,
+  height: 100,
+  camera: { projectionMatrix: perspectiveMatrix, matrixWorldInverse: identityViewMatrix },
+  coverageScale: 1,
+});
+assert.equal(sparsePerspective.visibleGaussianCount, 1);
+assert.equal(sparsePerspective.basis.length, 1);
+assert.ok(sparsePerspective.basis[0].indices.length > 0);
+const sparseDepth = renderSparseGaussianBasis(sparsePerspective.basis, Float64Array.from([3]), 200 * 100);
+assert.ok(sparseDepth[50 * 200 + 100] > 0, 'sparse basis must render nonblank projected optical depth');
+const expectedCenterDepth = 3 * perspectiveFootprint.normalization * Math.exp(-0.5 * (
+  perspectiveFootprint.inverseXX * 0.5 ** 2 + perspectiveFootprint.inverseYY * 0.5 ** 2
+));
+assert.ok(Math.abs(sparseDepth[50 * 200 + 100] - expectedCenterDepth) < 1e-8, 'sparse basis must use the exact perspective Gaussian contribution');
 
 const behindCamera = projectPerspectiveGaussianFootprint({
   position: [0, 0, 2],
@@ -215,6 +313,7 @@ async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raym
       effectiveRoute: route,
       prototypeIdentity: 'kaminos-volume-prototype-v0',
       backend: 'WebGPU:apple',
+      fluidIdentity: `sha256:${'c'.repeat(64)}`,
       camera,
       cameraIdentity: camera ? `sha256:${sha256(Buffer.from(JSON.stringify(camera)))}` : null,
       grid: 8,
@@ -242,6 +341,12 @@ async function writeFitReport(directory, { route = 'native-3d-compute-fluid-raym
       support: { supportLeakageFraction: 0, maxThreeSigmaDiameter: 1.32 },
       artifact,
     }],
+    cameraEvaluation: camera ? {
+      identity: 'smoke-oracle-camera-evaluation-product-v0',
+      cameraId: 'recorded-native',
+      role: 'calibration',
+      fitAuthority: 'world-space-state-fit-camera-independent-v0',
+    } : null,
   }, null, 2)}\n`);
   return { reportPath, raymarchPath, raymarchSha: `sha256:${sha256(raymarchBytes)}` };
 }
@@ -285,6 +390,102 @@ try {
     ],
   };
   const held = await writeFitReport(join(directory, 'held'), { camera: heldCamera });
+  const heldFit = JSON.parse(await readFile(held.reportPath, 'utf8'));
+  const teacherValues = Float32Array.from({ length: 64 }, (_, index) => {
+    const x = index % 8;
+    const y = Math.floor(index / 8);
+    return x >= 2 && x <= 5 && y >= 1 && y <= 6 ? 180 / 255 : 0;
+  });
+  const teacherBytes = Buffer.from(teacherValues.buffer);
+  const teacherRadiancePath = join(directory, 'held', 'linear-smoke-radiance.f32');
+  await writeFile(teacherRadiancePath, teacherBytes);
+  const teacherReportPath = join(directory, 'held', 'dense-raymarch-teacher-report.json');
+  await writeFile(teacherReportPath, `${JSON.stringify({
+    schema: 'kaminos.smoke-dense-raymarch-teacher-report.v0',
+    identity: 'smoke-dense-state-raymarch-teacher-v0',
+    status: 'passed',
+    source: {
+      fitReportPath: held.reportPath,
+      manifestIdentity: heldFit.teacher.manifestIdentity,
+      fluidIdentity: heldFit.teacher.fluidIdentity,
+      cameraIdentity: heldFit.teacher.cameraIdentity,
+      effectiveRoute: heldFit.teacher.effectiveRoute,
+      prototypeIdentity: heldFit.teacher.prototypeIdentity,
+      backend: heldFit.teacher.backend,
+      camera: heldFit.teacher.camera,
+    },
+    raymarch: { width: 8, height: 8, productionCompositorAuthority: false },
+    pixelStats: { blank: false, nonzeroOpticalPixels: 24 },
+    artifacts: {
+      linearRadiance: {
+        path: teacherRadiancePath,
+        sha256: `sha256:${sha256(teacherBytes)}`,
+        dtype: 'float32',
+        byteOrder: 'little-endian',
+        shape: [8, 8],
+        byteLength: teacherBytes.byteLength,
+      },
+    },
+  }, null, 2)}\n`);
+  const structureProduct = await optimizeSmokeGaussianStructureProduct({
+    fitReportPath: held.reportPath,
+    teacherReportPath,
+    outDir: join(directory, 'optimized-structure'),
+    budget: 2,
+    coverageScale: 1.5,
+    extinctionScale: 1,
+    iterations: 12,
+    learningRate: 0.02,
+    scales: [1, 2],
+    valueWeight: 1,
+    gradientWeight: 2,
+  });
+  assert.equal(structureProduct.status, 'passed');
+  assert.equal(structureProduct.identity, 'smoke-gaussian-oracle-structure-optimization-v0');
+  assert.equal(structureProduct.hiddenIterationCapApplied, false);
+  assert.equal(structureProduct.trainView.cameraId, 'recorded-native');
+  assert.equal(structureProduct.trainView.role, 'calibration');
+  assert.equal(structureProduct.budget.activeGaussianCount, 2);
+  assert.ok(existsSync(structureProduct.optimizedFitReportPath));
+  assert.ok(existsSync(structureProduct.optimizedArtifact.path));
+  assert.ok(Math.abs(structureProduct.extinctionAccounting.relativeError) < 1e-10);
+  const durableFit = JSON.parse(await readFile(structureProduct.optimizedFitReportPath, 'utf8'));
+  const durableArtifact = durableFit.budgetCurve[0].artifact;
+  const durableBytes = await readFile(durableArtifact.path);
+  const durableValues = new Float32Array(
+    durableBytes.buffer,
+    durableBytes.byteOffset,
+    durableBytes.byteLength / Float32Array.BYTES_PER_ELEMENT,
+  );
+  const durableMassChannel = durableArtifact.channelOrder.indexOf('extinctionMass');
+  const durableMassSum = Array.from(
+    { length: durableArtifact.shape[0] },
+    (_, index) => durableValues[index * durableArtifact.shape[1] + durableMassChannel],
+  ).reduce((sum, value) => sum + value, 0);
+  assert.equal(
+    structureProduct.extinctionAccounting.representedExtinction,
+    durableMassSum,
+    'extinction accounting must describe the serialized Float32 product, not pre-serialization optimizer values',
+  );
+
+  const staleTeacher = JSON.parse(await readFile(teacherReportPath, 'utf8'));
+  staleTeacher.source.cameraIdentity = `sha256:${'d'.repeat(64)}`;
+  const staleTeacherPath = join(directory, 'held', 'stale-dense-raymarch-teacher-report.json');
+  await writeFile(staleTeacherPath, `${JSON.stringify(staleTeacher, null, 2)}\n`);
+  const failedOutDir = join(directory, 'failed-optimized-structure');
+  await assert.rejects(
+    () => optimizeSmokeGaussianStructureProduct({
+      fitReportPath: held.reportPath,
+      teacherReportPath: staleTeacherPath,
+      outDir: failedOutDir,
+      budget: 2,
+      iterations: 2,
+    }),
+    /camera identity/i,
+    'wrong teacher camera identity must not enter structural optimization',
+  );
+  const failedStructure = JSON.parse(await readFile(join(failedOutDir, 'structure-optimization-report.json'), 'utf8'));
+  assert.equal(failedStructure.status, 'failed', 'failure before optimized product must still leave a durable report');
   const nativeReport = await renderSmokeGaussianOracleWitness({
     fitReportPath: held.reportPath,
     raymarchPngPath: held.raymarchPath,

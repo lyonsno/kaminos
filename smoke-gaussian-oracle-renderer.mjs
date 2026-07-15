@@ -459,13 +459,14 @@ function projectOrthographicOpticalDepth(rows, width, height, worldSpace, covera
   };
 }
 
-function projectPerspectiveOpticalDepth(rows, width, height, camera, coverageScale) {
-  const opticalDepth = new Float32Array(width * height);
-  const contributorCounts = new Uint32Array(width * height);
-  const peakContributions = new Float32Array(width * height);
+export function buildPerspectiveGaussianBasis({ rows, width, height, camera, coverageScale = 1 } = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error('perspective Gaussian basis requires nonempty rows');
+  if (!Number.isInteger(width) || width <= 0 || !Number.isInteger(height) || height <= 0) throw new Error('perspective Gaussian basis requires positive integer dimensions');
+  if (!(coverageScale > 0)) throw new Error('perspective Gaussian basis requires positive coverageScale');
   const varianceFloor = 1 / 12;
-  const projectedRows = rows.map(row => ({
+  const projectedRows = rows.map((row, gaussianIndex) => ({
     ...row,
+    gaussianIndex,
     footprint: projectPerspectiveGaussianFootprint({
       position: row.position,
       covariance: row.covariance,
@@ -478,6 +479,7 @@ function projectPerspectiveOpticalDepth(rows, width, height, camera, coverageSca
     }),
   }));
   const footprints = projectedRows.filter(row => row.footprint.visible);
+  const basis = [];
   for (const row of footprints) {
     const footprint = row.footprint;
     const trace = footprint.varianceX + footprint.varianceY;
@@ -488,6 +490,9 @@ function projectPerspectiveOpticalDepth(rows, width, height, camera, coverageSca
     const maxX = Math.min(width - 1, Math.ceil(footprint.pixelX + supportRadius));
     const minY = Math.max(0, Math.floor(footprint.pixelY - supportRadius));
     const maxY = Math.min(height - 1, Math.ceil(footprint.pixelY + supportRadius));
+    const indices = [];
+    const values = [];
+    const coreIndices = [];
     for (let y = minY; y <= maxY; y += 1) {
       const dy = y + 0.5 - footprint.pixelY;
       for (let x = minX; x <= maxX; x += 1) {
@@ -496,12 +501,58 @@ function projectPerspectiveOpticalDepth(rows, width, height, camera, coverageSca
           + 2 * footprint.inverseXY * dx * dy
           + footprint.inverseYY * dy * dy;
         if (mahalanobisSquared > 32) continue;
-        const contribution = row.extinctionMass * footprint.normalization * Math.exp(-0.5 * mahalanobisSquared);
         const index = y * width + x;
-        opticalDepth[index] += contribution;
-        peakContributions[index] = Math.max(peakContributions[index], contribution);
-        if (mahalanobisSquared <= 16) contributorCounts[index] += 1;
+        indices.push(index);
+        values.push(footprint.normalization * Math.exp(-0.5 * mahalanobisSquared));
+        if (mahalanobisSquared <= 16) coreIndices.push(index);
       }
+    }
+    basis.push({
+      gaussianIndex: row.gaussianIndex,
+      indices: Uint32Array.from(indices),
+      values: Float32Array.from(values),
+      coreIndices: Uint32Array.from(coreIndices),
+      determinant: footprint.determinant,
+    });
+  }
+  return {
+    basis,
+    requestedGaussianCount: rows.length,
+    visibleGaussianCount: footprints.length,
+    rejectedGaussianCount: rows.length - footprints.length,
+    rejectionReasons: Object.fromEntries(projectedRows
+      .filter(row => !row.footprint.visible)
+      .reduce((counts, row) => counts.set(row.footprint.rejectionReason, (counts.get(row.footprint.rejectionReason) || 0) + 1), new Map())),
+  };
+}
+
+export function renderSparseGaussianBasis(basis, masses, pixelCount) {
+  if (!Array.isArray(basis) || !masses || basis.length !== masses.length) throw new Error('sparse Gaussian basis and masses must have equal nonzero count');
+  const opticalDepth = new Float64Array(pixelCount);
+  for (let gaussianIndex = 0; gaussianIndex < basis.length; gaussianIndex += 1) {
+    const item = basis[gaussianIndex];
+    const mass = masses[gaussianIndex];
+    for (let itemIndex = 0; itemIndex < item.indices.length; itemIndex += 1) {
+      opticalDepth[item.indices[itemIndex]] += mass * item.values[itemIndex];
+    }
+  }
+  return opticalDepth;
+}
+
+function projectPerspectiveOpticalDepth(rows, width, height, camera, coverageScale) {
+  const sparse = buildPerspectiveGaussianBasis({ rows, width, height, camera, coverageScale });
+  const masses = Float64Array.from(sparse.basis, item => rows[item.gaussianIndex].extinctionMass);
+  const opticalDepth64 = renderSparseGaussianBasis(sparse.basis, masses, width * height);
+  const opticalDepth = Float32Array.from(opticalDepth64);
+  const contributorCounts = new Uint32Array(width * height);
+  const peakContributions = new Float32Array(width * height);
+  for (let gaussianIndex = 0; gaussianIndex < sparse.basis.length; gaussianIndex += 1) {
+    const item = sparse.basis[gaussianIndex];
+    const mass = masses[gaussianIndex];
+    for (const index of item.coreIndices) contributorCounts[index] += 1;
+    for (let itemIndex = 0; itemIndex < item.indices.length; itemIndex += 1) {
+      const index = item.indices[itemIndex];
+      peakContributions[index] = Math.max(peakContributions[index], mass * item.values[itemIndex]);
     }
   }
   let supportPixelCount = 0;
@@ -518,18 +569,16 @@ function projectPerspectiveOpticalDepth(rows, width, height, camera, coverageSca
     if (contributors === 1) singleContributorPixelCount += 1;
     if (opticalDepth[index] > 0) peakDominanceSum += peakContributions[index] / opticalDepth[index];
   }
-  const determinants = footprints.map(row => row.footprint.determinant);
+  const determinants = sparse.basis.map(item => item.determinant);
   return {
     opticalDepth,
     diagnostics: {
       identity: 'perspective-full-covariance-overlap-diagnostics-v0',
       coverageScale,
-      requestedGaussianCount: rows.length,
-      visibleGaussianCount: footprints.length,
-      rejectedGaussianCount: rows.length - footprints.length,
-      rejectionReasons: Object.fromEntries(projectedRows
-        .filter(row => !row.footprint.visible)
-        .reduce((counts, row) => counts.set(row.footprint.rejectionReason, (counts.get(row.footprint.rejectionReason) || 0) + 1), new Map())),
+      requestedGaussianCount: sparse.requestedGaussianCount,
+      visibleGaussianCount: sparse.visibleGaussianCount,
+      rejectedGaussianCount: sparse.rejectedGaussianCount,
+      rejectionReasons: sparse.rejectionReasons,
       supportPixelCount,
       singleContributorPixelCount,
       singleContributorPixelFraction: supportPixelCount ? singleContributorPixelCount / supportPixelCount : 0,
@@ -567,6 +616,471 @@ function lumaToRgba(luma, tone = 'render') {
     rgba[offset + 3] = 255;
   }
   return rgba;
+}
+
+export function multiscaleStructuralLoss({
+  prediction,
+  target,
+  width,
+  height,
+  scales = [1, 2, 4],
+  valueWeight = 1,
+  gradientWeight = 1,
+} = {}) {
+  if (!prediction || !target || prediction.length !== target.length || prediction.length !== width * height) {
+    throw new Error('prediction and target must match the declared image dimensions');
+  }
+  if (!Array.isArray(scales) || scales.length === 0 || scales.some(scale => !Number.isInteger(scale) || scale <= 0)) {
+    throw new Error('multiscale structural loss requires positive integer scales');
+  }
+  if (!(valueWeight >= 0) || !(gradientWeight >= 0) || !(valueWeight + gradientWeight > 0)) {
+    throw new Error('multiscale structural loss requires nonnegative nonzero weights');
+  }
+  const fullGradient = new Float64Array(prediction.length);
+  const levelWeight = 1 / scales.length;
+  const levels = [];
+  let valueLoss = 0;
+  let gradientLoss = 0;
+  for (const scale of scales) {
+    const levelWidth = Math.ceil(width / scale);
+    const levelHeight = Math.ceil(height / scale);
+    const levelLength = levelWidth * levelHeight;
+    const predictedLevel = new Float64Array(levelLength);
+    const targetLevel = new Float64Array(levelLength);
+    const counts = new Uint32Array(levelLength);
+    for (let y = 0; y < height; y += 1) {
+      const levelY = Math.floor(y / scale);
+      for (let x = 0; x < width; x += 1) {
+        const sourceIndex = y * width + x;
+        const levelIndex = levelY * levelWidth + Math.floor(x / scale);
+        predictedLevel[levelIndex] += prediction[sourceIndex];
+        targetLevel[levelIndex] += target[sourceIndex];
+        counts[levelIndex] += 1;
+      }
+    }
+    for (let index = 0; index < levelLength; index += 1) {
+      predictedLevel[index] /= counts[index];
+      targetLevel[index] /= counts[index];
+    }
+    const levelGradient = new Float64Array(levelLength);
+    let levelValueLoss = 0;
+    for (let index = 0; index < levelLength; index += 1) {
+      const residual = predictedLevel[index] - targetLevel[index];
+      levelValueLoss += residual * residual;
+      levelGradient[index] += levelWeight * valueWeight * 2 * residual / levelLength;
+    }
+    levelValueLoss = levelWeight * valueWeight * levelValueLoss / levelLength;
+    let edgeSquaredError = 0;
+    let edgeCount = 0;
+    for (let y = 0; y < levelHeight; y += 1) {
+      for (let x = 0; x < levelWidth; x += 1) {
+        const index = y * levelWidth + x;
+        if (x + 1 < levelWidth) {
+          const next = index + 1;
+          const residual = (predictedLevel[next] - predictedLevel[index]) - (targetLevel[next] - targetLevel[index]);
+          edgeSquaredError += residual * residual;
+          edgeCount += 1;
+        }
+        if (y + 1 < levelHeight) {
+          const next = index + levelWidth;
+          const residual = (predictedLevel[next] - predictedLevel[index]) - (targetLevel[next] - targetLevel[index]);
+          edgeSquaredError += residual * residual;
+          edgeCount += 1;
+        }
+      }
+    }
+    const edgeScale = edgeCount ? levelWeight * gradientWeight / edgeCount : 0;
+    for (let y = 0; y < levelHeight; y += 1) {
+      for (let x = 0; x < levelWidth; x += 1) {
+        const index = y * levelWidth + x;
+        if (x + 1 < levelWidth) {
+          const next = index + 1;
+          const residual = (predictedLevel[next] - predictedLevel[index]) - (targetLevel[next] - targetLevel[index]);
+          const derivative = 2 * edgeScale * residual;
+          levelGradient[index] -= derivative;
+          levelGradient[next] += derivative;
+        }
+        if (y + 1 < levelHeight) {
+          const next = index + levelWidth;
+          const residual = (predictedLevel[next] - predictedLevel[index]) - (targetLevel[next] - targetLevel[index]);
+          const derivative = 2 * edgeScale * residual;
+          levelGradient[index] -= derivative;
+          levelGradient[next] += derivative;
+        }
+      }
+    }
+    const levelGradientLoss = edgeScale * edgeSquaredError;
+    valueLoss += levelValueLoss;
+    gradientLoss += levelGradientLoss;
+    for (let y = 0; y < height; y += 1) {
+      const levelY = Math.floor(y / scale);
+      for (let x = 0; x < width; x += 1) {
+        const sourceIndex = y * width + x;
+        const levelIndex = levelY * levelWidth + Math.floor(x / scale);
+        fullGradient[sourceIndex] += levelGradient[levelIndex] / counts[levelIndex];
+      }
+    }
+    levels.push({
+      scale,
+      width: levelWidth,
+      height: levelHeight,
+      valueLoss: levelValueLoss,
+      gradientLoss: levelGradientLoss,
+      edgeCount,
+    });
+  }
+  return {
+    identity: 'multiscale-luma-value-gradient-loss-v0',
+    scales: [...scales],
+    valueWeight,
+    gradientWeight,
+    valueLoss,
+    gradientLoss,
+    totalLoss: valueLoss + gradientLoss,
+    gradient: fullGradient,
+    levels,
+  };
+}
+
+export function optimizeGaussianExtinctionMasses({
+  basis,
+  initialMasses,
+  target,
+  width,
+  height,
+  extinctionScale,
+  iterations,
+  learningRate,
+  scales = [1, 2, 4],
+  valueWeight = 1,
+  gradientWeight = 1,
+} = {}) {
+  if (!Array.isArray(basis) || basis.length === 0 || !initialMasses || basis.length !== initialMasses.length) {
+    throw new Error('optimizer requires one sparse image basis per initial Gaussian mass');
+  }
+  if (!target || target.length !== width * height) throw new Error('optimizer target dimensions do not match');
+  if (!(extinctionScale > 0) || !Number.isFinite(extinctionScale)) throw new Error('optimizer requires positive finite extinctionScale');
+  if (!Number.isInteger(iterations) || iterations <= 0) throw new Error('optimizer requires a positive integer iteration count');
+  if (!(learningRate > 0) || !Number.isFinite(learningRate)) throw new Error('optimizer requires positive finite learningRate');
+  const totalMass = Array.from(initialMasses).reduce((sum, value) => sum + Number(value), 0);
+  if (!(totalMass > 0) || Array.from(initialMasses).some(value => !(value > 0) || !Number.isFinite(value))) {
+    throw new Error('optimizer requires positive finite initial masses');
+  }
+  for (const item of basis) {
+    if (!(item.indices instanceof Uint32Array) || !(item.values instanceof Float32Array) || item.indices.length !== item.values.length) {
+      throw new Error('optimizer sparse basis entries require matched Uint32 indices and Float32 values');
+    }
+    if (item.indices.some(index => index >= target.length) || item.values.some(value => !(value >= 0) || !Number.isFinite(value))) {
+      throw new Error('optimizer sparse basis contains an invalid pixel or contribution');
+    }
+  }
+  const logMasses = Float64Array.from(initialMasses, value => Math.log(value));
+  const masses = Float64Array.from(initialMasses);
+  const firstMoment = new Float64Array(masses.length);
+  const secondMoment = new Float64Array(masses.length);
+  const checkpoints = [];
+  const evaluate = (withGradient) => {
+    const depth = new Float64Array(target.length);
+    for (let gaussianIndex = 0; gaussianIndex < basis.length; gaussianIndex += 1) {
+      const item = basis[gaussianIndex];
+      const mass = masses[gaussianIndex];
+      for (let itemIndex = 0; itemIndex < item.indices.length; itemIndex += 1) {
+        depth[item.indices[itemIndex]] += mass * item.values[itemIndex];
+      }
+    }
+    const luma = new Float32Array(target.length);
+    for (let index = 0; index < luma.length; index += 1) luma[index] = 1 - Math.exp(-extinctionScale * depth[index]);
+    const structural = multiscaleStructuralLoss({ prediction: luma, target, width, height, scales, valueWeight, gradientWeight });
+    if (!withGradient) return { depth, luma, structural, massGradient: null };
+    const depthGradient = new Float64Array(depth.length);
+    for (let index = 0; index < depth.length; index += 1) {
+      depthGradient[index] = structural.gradient[index] * extinctionScale * Math.exp(-extinctionScale * depth[index]);
+    }
+    const massGradient = new Float64Array(masses.length);
+    for (let gaussianIndex = 0; gaussianIndex < basis.length; gaussianIndex += 1) {
+      const item = basis[gaussianIndex];
+      let gradient = 0;
+      for (let itemIndex = 0; itemIndex < item.indices.length; itemIndex += 1) {
+        gradient += depthGradient[item.indices[itemIndex]] * item.values[itemIndex];
+      }
+      massGradient[gaussianIndex] = gradient;
+    }
+    return { depth, luma, structural, massGradient };
+  };
+  const initial = evaluate(false);
+  checkpoints.push({ iteration: 0, loss: initial.structural.totalLoss });
+  const beta1 = 0.9;
+  const beta2 = 0.999;
+  const epsilon = 1e-8;
+  for (let iteration = 1; iteration <= iterations; iteration += 1) {
+    const current = evaluate(true);
+    for (let index = 0; index < masses.length; index += 1) {
+      const gradient = current.massGradient[index] * masses[index];
+      firstMoment[index] = beta1 * firstMoment[index] + (1 - beta1) * gradient;
+      secondMoment[index] = beta2 * secondMoment[index] + (1 - beta2) * gradient * gradient;
+      const correctedFirst = firstMoment[index] / (1 - beta1 ** iteration);
+      const correctedSecond = secondMoment[index] / (1 - beta2 ** iteration);
+      logMasses[index] -= learningRate * correctedFirst / (Math.sqrt(correctedSecond) + epsilon);
+      masses[index] = Math.exp(Math.max(-30, Math.min(30, logMasses[index])));
+    }
+    const representedMass = masses.reduce((sum, value) => sum + value, 0);
+    const normalization = totalMass / representedMass;
+    for (let index = 0; index < masses.length; index += 1) {
+      masses[index] *= normalization;
+      logMasses[index] = Math.log(masses[index]);
+    }
+    if (iteration === iterations || iteration % Math.max(1, Math.floor(iterations / 10)) === 0) {
+      checkpoints.push({ iteration, loss: evaluate(false).structural.totalLoss });
+    }
+  }
+  const final = evaluate(false);
+  return {
+    identity: 'nonnegative-log-mass-adam-multiscale-structure-v0',
+    iterationCount: iterations,
+    hiddenIterationCapApplied: false,
+    learningRate,
+    extinctionScale,
+    scales: [...scales],
+    valueWeight,
+    gradientWeight,
+    totalExtinction: totalMass,
+    initialLoss: initial.structural.totalLoss,
+    finalLoss: final.structural.totalLoss,
+    masses,
+    luma: final.luma,
+    checkpoints,
+  };
+}
+
+export async function optimizeSmokeGaussianStructureProduct({
+  fitReportPath,
+  teacherReportPath,
+  outDir,
+  budget,
+  coverageScale = 1.5,
+  extinctionScale = 0.008,
+  iterations = 120,
+  learningRate = 0.02,
+  scales = [1, 2, 4, 8],
+  valueWeight = 1,
+  gradientWeight = 2,
+} = {}) {
+  if (!outDir) throw new Error('structure optimizer outDir is required');
+  await mkdir(outDir, { recursive: true });
+  const failureReportPath = join(outDir, 'structure-optimization-report.json');
+  let lastTrustworthyEvidence = null;
+  let failurePhase = 'validate-inputs';
+  try {
+    if (!fitReportPath || !teacherReportPath) throw new Error('structure optimizer requires fitReportPath and teacherReportPath');
+    const requestedBudget = Number(budget);
+    if (!Number.isInteger(requestedBudget) || requestedBudget <= 0) throw new Error('structure optimizer requires a positive integer budget');
+    const absoluteFitPath = resolve(fitReportPath);
+    const fitBytes = await readFile(absoluteFitPath);
+    const fit = JSON.parse(fitBytes.toString('utf8'));
+    validateTeacher(fit, 'native-camera');
+    if (fit.cameraEvaluation?.role !== 'calibration' || !fit.cameraEvaluation.cameraId) {
+      throw new Error('structure optimization requires an explicit calibration-role camera product');
+    }
+    const entry = fit.budgetCurve?.find(item => item.requestedBudget === requestedBudget);
+    if (!entry || entry.activeGaussianCount !== requestedBudget) throw new Error(`structure optimizer lacks exact uncapped budget ${requestedBudget}`);
+    if (entry.extinctionAccounting?.relativeError > 1e-5) throw new Error('source Gaussian product does not conserve extinction');
+    const loaded = await loadRows(absoluteFitPath, entry);
+    lastTrustworthyEvidence = {
+      sourceFitReportPath: absoluteFitPath,
+      sourceFitReportIdentity: `sha256:${sha256(fitBytes)}`,
+      sourceArtifactPath: loaded.artifactPath,
+      sourceArtifactIdentity: loaded.artifactIdentity,
+      activeGaussianCount: loaded.rows.length,
+    };
+
+    failurePhase = 'validate-dense-teacher';
+    const absoluteTeacherPath = resolve(teacherReportPath);
+    const teacherBytes = await readFile(absoluteTeacherPath);
+    const teacher = JSON.parse(teacherBytes.toString('utf8'));
+    if (teacher.schema !== 'kaminos.smoke-dense-raymarch-teacher-report.v0'
+      || teacher.identity !== 'smoke-dense-state-raymarch-teacher-v0'
+      || teacher.status !== 'passed' || teacher.pixelStats?.blank !== false) {
+      throw new Error('structure optimizer requires a passed nonblank dense smoke teacher');
+    }
+    for (const key of ['manifestIdentity', 'fluidIdentity', 'cameraIdentity', 'effectiveRoute', 'prototypeIdentity', 'backend']) {
+      const label = key === 'cameraIdentity' ? 'camera identity' : key;
+      if (teacher.source?.[key] !== fit.teacher?.[key]) throw new Error(`dense teacher ${label} does not match fit authority`);
+    }
+    if (JSON.stringify(teacher.source?.camera) !== JSON.stringify(fit.teacher.camera)) throw new Error('dense teacher camera does not match fit camera');
+    const radiance = teacher.artifacts?.linearRadiance;
+    const width = Number(teacher.raymarch?.width);
+    const height = Number(teacher.raymarch?.height);
+    if (!radiance || radiance.dtype !== 'float32' || radiance.byteOrder !== 'little-endian'
+      || !Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0
+      || JSON.stringify(radiance.shape) !== JSON.stringify([height, width])) {
+      throw new Error('dense teacher lacks compatible linear radiance dimensions');
+    }
+    const radiancePath = resolveArtifactPath(absoluteTeacherPath, radiance.path);
+    const radianceBytes = await readFile(radiancePath);
+    const radianceIdentity = `sha256:${sha256(radianceBytes)}`;
+    if (radianceBytes.byteLength !== radiance.byteLength || radianceIdentity !== radiance.sha256) {
+      throw new Error('dense teacher linear radiance artifact identity mismatch');
+    }
+    const target = new Float32Array(radianceBytes.buffer, radianceBytes.byteOffset, radianceBytes.byteLength / 4);
+    lastTrustworthyEvidence = {
+      ...lastTrustworthyEvidence,
+      teacherReportPath: absoluteTeacherPath,
+      teacherReportIdentity: `sha256:${sha256(teacherBytes)}`,
+      teacherRadiancePath: radiancePath,
+      teacherRadianceIdentity: radianceIdentity,
+      cameraId: fit.cameraEvaluation.cameraId,
+    };
+
+    failurePhase = 'build-shared-projection-basis';
+    const basisProduct = buildPerspectiveGaussianBasis({
+      rows: loaded.rows,
+      width,
+      height,
+      camera: fit.teacher.camera,
+      coverageScale,
+    });
+    if (basisProduct.visibleGaussianCount !== requestedBudget || basisProduct.rejectedGaussianCount !== 0) {
+      throw new Error(`structure optimizer rejected ${basisProduct.rejectedGaussianCount} source Gaussians from the train view`);
+    }
+
+    failurePhase = 'optimize-extinction-masses';
+    const startedAt = performance.now();
+    const initialMasses = Float64Array.from(loaded.rows, row => row.extinctionMass);
+    const optimized = optimizeGaussianExtinctionMasses({
+      basis: basisProduct.basis,
+      initialMasses,
+      target,
+      width,
+      height,
+      extinctionScale,
+      iterations,
+      learningRate,
+      scales,
+      valueWeight,
+      gradientWeight,
+    });
+    const optimizedAt = performance.now();
+
+    failurePhase = 'write-optimized-product';
+    const sourceArtifact = entry.artifact;
+    const sourceArtifactBytes = await readFile(loaded.artifactPath);
+    const packed = Float32Array.from(new Float32Array(
+      sourceArtifactBytes.buffer,
+      sourceArtifactBytes.byteOffset,
+      sourceArtifactBytes.byteLength / Float32Array.BYTES_PER_ELEMENT,
+    ));
+    const massChannel = sourceArtifact.channelOrder.indexOf('extinctionMass');
+    if (massChannel < 0) throw new Error('source artifact lacks extinctionMass channel');
+    const stride = sourceArtifact.shape[1];
+    for (let index = 0; index < requestedBudget; index += 1) packed[index * stride + massChannel] = optimized.masses[index];
+    const optimizedArtifactPath = join(outDir, `budget-${requestedBudget}.gaussians.f32`);
+    const optimizedArtifactBytes = Buffer.from(packed.buffer);
+    await writeFile(optimizedArtifactPath, optimizedArtifactBytes);
+    const optimizedArtifact = {
+      ...sourceArtifact,
+      path: optimizedArtifactPath,
+      sha256: `sha256:${sha256(optimizedArtifactBytes)}`,
+      byteLength: optimizedArtifactBytes.byteLength,
+    };
+    let representedExtinction = 0;
+    for (let index = 0; index < requestedBudget; index += 1) {
+      representedExtinction += packed[index * stride + massChannel];
+    }
+    const teacherExtinction = fit.teacher.totalSmokeExtinction;
+    const extinctionAccounting = {
+      teacherTotalExtinction: teacherExtinction,
+      representedExtinction,
+      absoluteError: Math.abs(representedExtinction - teacherExtinction),
+      relativeError: Math.abs(representedExtinction - teacherExtinction) / Math.max(teacherExtinction, 1e-12),
+    };
+    const optimizedFit = structuredClone(fit);
+    optimizedFit.createdAt = new Date().toISOString();
+    optimizedFit.requestedBudgets = [requestedBudget];
+    optimizedFit.budgetCurve = [structuredClone(entry)];
+    optimizedFit.budgetCurve[0].artifact = optimizedArtifact;
+    optimizedFit.budgetCurve[0].totalAssignedExtinction = representedExtinction;
+    optimizedFit.budgetCurve[0].extinctionAccounting = extinctionAccounting;
+    optimizedFit.optimizer = {
+      identity: 'direct-image-space-extinction-mass-structure-optimization-v0',
+      sourceOptimizer: fit.optimizer,
+      positionAuthority: 'source-world-space-position-fixed-v0',
+      covarianceAuthority: 'source-world-space-covariance-fixed-v0',
+      extinctionAuthority: optimized.identity,
+    };
+    optimizedFit.structureOptimization = {
+      sourceFitReportPath: absoluteFitPath,
+      sourceFitReportIdentity: `sha256:${sha256(fitBytes)}`,
+      teacherReportPath: absoluteTeacherPath,
+      teacherReportIdentity: `sha256:${sha256(teacherBytes)}`,
+      cameraId: fit.cameraEvaluation.cameraId,
+      role: fit.cameraEvaluation.role,
+      coverageScale,
+      extinctionScale,
+      iterationCount: optimized.iterationCount,
+      hiddenIterationCapApplied: optimized.hiddenIterationCapApplied,
+      scales: optimized.scales,
+      valueWeight,
+      gradientWeight,
+      initialLoss: optimized.initialLoss,
+      finalLoss: optimized.finalLoss,
+      checkpoints: optimized.checkpoints,
+    };
+    const optimizedFitReportPath = join(outDir, 'oracle-fit-report.json');
+    await writeFile(optimizedFitReportPath, `${JSON.stringify(optimizedFit, null, 2)}\n`);
+    const report = {
+      schema: 'kaminos.smoke-gaussian-oracle-structure-optimization-report.v0',
+      identity: 'smoke-gaussian-oracle-structure-optimization-v0',
+      status: 'passed',
+      createdAt: new Date().toISOString(),
+      source: lastTrustworthyEvidence,
+      trainView: {
+        cameraId: fit.cameraEvaluation.cameraId,
+        role: fit.cameraEvaluation.role,
+        cameraIdentity: fit.teacher.cameraIdentity,
+      },
+      budget: { requestedBudget, activeGaussianCount: requestedBudget, hiddenBudgetCapApplied: false },
+      optimizer: {
+        identity: optimized.identity,
+        iterationCount: optimized.iterationCount,
+        learningRate,
+        scales: optimized.scales,
+        valueWeight,
+        gradientWeight,
+        coverageScale,
+        extinctionScale,
+        initialLoss: optimized.initialLoss,
+        finalLoss: optimized.finalLoss,
+        checkpoints: optimized.checkpoints,
+      },
+      hiddenIterationCapApplied: optimized.hiddenIterationCapApplied,
+      extinctionAccounting,
+      optimizedArtifact,
+      optimizedFitReportPath,
+      costs: {
+        authority: 'cpu-wall-clock-performance-now-v0',
+        optimizerMs: optimizedAt - startedAt,
+        productBuildMs: performance.now() - optimizedAt,
+        totalMs: performance.now() - startedAt,
+      },
+      reportPath: failureReportPath,
+    };
+    await writeFile(failureReportPath, `${JSON.stringify(report, null, 2)}\n`);
+    return report;
+  } catch (error) {
+    const failure = {
+      schema: 'kaminos.smoke-gaussian-oracle-structure-optimization-report.v0',
+      identity: 'smoke-gaussian-oracle-structure-optimization-v0',
+      status: 'failed',
+      createdAt: new Date().toISOString(),
+      failurePhase,
+      lastTrustworthyEvidence,
+      message: error?.message || String(error),
+      stack: error?.stack || null,
+      reportPath: failureReportPath,
+    };
+    await writeFile(failureReportPath, `${JSON.stringify(failure, null, 2)}\n`);
+    throw error;
+  }
 }
 
 function compareLuma(teacher, render) {
@@ -792,6 +1306,41 @@ function parseArgs(argv) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = parseArgs(process.argv.slice(2));
+  if (args.has('--optimize-structure')) {
+    const structureScales = String(args.get('--structure-scales') || '1,2,4,8')
+      .split(',')
+      .map(value => Number(value.trim()))
+      .filter(value => value || value === 0);
+    try {
+      const report = await optimizeSmokeGaussianStructureProduct({
+        fitReportPath: args.get('--fit-report'),
+        teacherReportPath: args.get('--teacher-report'),
+        outDir: args.get('--out-dir'),
+        budget: Number(args.get('--budget') || 1024),
+        coverageScale: Number(args.get('--coverage-scale') || 1.5),
+        extinctionScale: Number(args.get('--extinction-scale') || 0.008),
+        iterations: Number(args.get('--iterations') || 120),
+        learningRate: Number(args.get('--learning-rate') || 0.02),
+        scales: structureScales,
+        valueWeight: Number(args.get('--value-weight') || 1),
+        gradientWeight: Number(args.get('--gradient-weight') || 2),
+      });
+      console.log(JSON.stringify({
+        status: report.status,
+        identity: report.identity,
+        reportPath: report.reportPath,
+        optimizedFitReportPath: report.optimizedFitReportPath,
+        budget: report.budget,
+        trainView: report.trainView,
+        optimizer: report.optimizer,
+        extinctionAccounting: report.extinctionAccounting,
+        costs: report.costs,
+      }, null, 2));
+    } catch (error) {
+      console.error(error?.stack || error);
+      process.exitCode = 1;
+    }
+  } else {
   const budgets = String(args.get('--budgets') || '32,64,128')
     .split(',')
     .map(value => Number(value.trim()))
@@ -831,5 +1380,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   } catch (error) {
     console.error(error?.stack || error);
     process.exitCode = 1;
+  }
   }
 }

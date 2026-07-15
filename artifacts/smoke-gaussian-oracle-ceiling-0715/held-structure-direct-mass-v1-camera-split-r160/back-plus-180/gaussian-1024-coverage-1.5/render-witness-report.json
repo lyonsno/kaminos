@@ -1,0 +1,164 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-render-witness-report.v0",
+  "identity": "smoke-gaussian-oracle-render-witness-v1",
+  "status": "passed",
+  "createdAt": "2026-07-15T12:57:33.060Z",
+  "hiddenBudgetCapApplied": false,
+  "fitReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/back-plus-180/oracle-fit-report.json",
+  "teacher": {
+    "raymarchPngPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/back-plus-180/teacher-640x455/dense-raymarch-smoke.png",
+    "raymarchSha256": "sha256:691e3bf7326faa86681e1d2db3b1e8ceb65cd395f3c5b5012dfcc53aa6ecde1e",
+    "width": 640,
+    "height": 455,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "worldSpace": {
+      "coordinateFrame": "kaminos-normalized-volume-local-v0",
+      "transformAuthority": "operator-basin-normalized-volume-domain-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "cameraIdentity": "sha256:f432bb7c8fdd485fe3129196c332da4b861a636869985a1946cc29bbd32721f9",
+    "camera": {
+      "position": [
+        4.240694400313741,
+        2.1456160048363166,
+        -8.186282121306322
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        1.9525841007696796,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        -0.88793373359369,
+        -0.10333870251762352,
+        0.4482128928403821,
+        0,
+        0,
+        0.974436447903406,
+        0.2246633236587421,
+        0,
+        -0.4599713955740831,
+        0.19948614377787444,
+        -0.8652349933366448,
+        0,
+        -4.440892098500626e-16,
+        -0.019488728958067858,
+        -9.46583288443892,
+        1
+      ]
+    }
+  },
+  "renderer": {
+    "identity": "cpu-perspective-full-covariance-gaussian-smoke-v0",
+    "cameraAuthority": "checksum-bound-fit-teacher-camera-v0",
+    "cameraIdentity": "sha256:f432bb7c8fdd485fe3129196c332da4b861a636869985a1946cc29bbd32721f9",
+    "compositorAuthority": "single-channel-smoke-luma-proxy-not-production-compositor-v0",
+    "projectionAuthority": "full-view-projection-jacobian-covariance-v0",
+    "scaleSelection": "explicit-extinction-scale-sweep-min-luma-mse-v0",
+    "requestedExtinctionScales": [
+      0.008
+    ],
+    "coverageSelection": "explicit-mass-preserving-covariance-dilation-sweep-min-luma-mse-v0",
+    "requestedCoverageScales": [
+      1.5
+    ]
+  },
+  "requestedBudgets": [
+    1024
+  ],
+  "budgetCurve": [
+    {
+      "requestedBudget": 1024,
+      "activeGaussianCount": 1024,
+      "selectedExtinctionScale": 0.008,
+      "selectedCoverageScale": 1.5,
+      "scaleSweep": [
+        0.008
+      ],
+      "coverageSweep": [
+        1.5
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 188.592333
+      },
+      "projectionDiagnostics": {
+        "identity": "perspective-full-covariance-overlap-diagnostics-v0",
+        "coverageScale": 1.5,
+        "requestedGaussianCount": 1024,
+        "visibleGaussianCount": 1024,
+        "rejectedGaussianCount": 0,
+        "rejectionReasons": {},
+        "supportPixelCount": 31295,
+        "singleContributorPixelCount": 3576,
+        "singleContributorPixelFraction": 0.11426745486499441,
+        "meanContributorsPerSupportPixel": 43.591212653778555,
+        "maxContributors": 145,
+        "meanPeakContributionFraction": 0.3525822350035676,
+        "minimumProjectedCovarianceDeterminant": 160.32507437679996,
+        "maximumProjectedCovarianceDeterminant": 15919.481098240945
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-r160/budget-1024.gaussians.f32",
+        "identity": "sha256:8d5d5b2de1e2ec10d5c587d1d78a97b263d16cbea60bc6280065ef02c2ee047d"
+      },
+      "metrics": {
+        "lumaMse": 0.00010447424248289469,
+        "lumaMae": 0.0022657290675346642,
+        "renderMeanLuma": 0.02991108113163149,
+        "teacherMeanLuma": 0.03116833720195675,
+        "renderActivePixels": 17200,
+        "teacherActivePixels": 16109,
+        "activePixelIoU": 0.9363446110917335
+      },
+      "support": {
+        "supportLeakageGaussianCount": 134,
+        "supportLeakageFraction": 0.130859375,
+        "maxThreeSigmaDiameter": 0.7925818161767746
+      },
+      "images": {
+        "renderPngPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/back-plus-180/gaussian-1024-coverage-1.5/budget-1024.perspective-render.png",
+        "diffPngPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/back-plus-180/gaussian-1024-coverage-1.5/budget-1024.perspective-diff.png"
+      }
+    }
+  ],
+  "contactSheet": {
+    "path": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/back-plus-180/gaussian-1024-coverage-1.5/perspective-render-contact-sheet.png",
+    "sha256": "sha256:45e041dc697ed7a60c627740bfd5cf53b15c1454c1fc80032f5ae43ab252e6ec",
+    "layout": "columns: teacher-raymarch | gaussian-proxy-render | abs-luma-diff; rows: requested budgets",
+    "inspected": false,
+    "inspectionNote": null
+  },
+  "reportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/back-plus-180/gaussian-1024-coverage-1.5/render-witness-report.json",
+  "reportIdentity": "sha256:cb540a2950d7fce0fd62e1d2bf691f55519958a1c86ce4315ea0e7116ba98acb"
+}

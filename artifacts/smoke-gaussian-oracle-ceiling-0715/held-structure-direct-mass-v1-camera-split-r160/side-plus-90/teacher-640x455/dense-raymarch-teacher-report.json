@@ -1,0 +1,150 @@
+{
+  "schema": "kaminos.smoke-dense-raymarch-teacher-report.v0",
+  "identity": "smoke-dense-state-raymarch-teacher-v0",
+  "status": "passed",
+  "createdAt": "2026-07-15T12:56:12.801Z",
+  "source": {
+    "fitReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/side-plus-90/oracle-fit-report.json",
+    "manifestIdentity": "sha256:553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+    "fluidPath": "/Users/noahlyons/.local/state/kaminos/volume-basins/operator-live-basin-0715/kaminos-live-basin-2026-07-15T09-25-00-971Z.fluid.f32",
+    "fluidIdentity": "sha256:9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20",
+    "cameraIdentity": "sha256:c1487f3400bf6f699db81f75f2b538a2b8520915d35ce0a9ac77c5ef7a303e2d",
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "grid": 160,
+    "worldSpace": {
+      "coordinateFrame": "kaminos-normalized-volume-local-v0",
+      "transformAuthority": "operator-basin-normalized-volume-domain-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        8.186282121306322,
+        2.1456160048363166,
+        4.240694400313741
+      ],
+      "target": [
+        0,
+        0.02,
+        0
+      ],
+      "projectionMatrix": [
+        1.9525841007696796,
+        0,
+        0,
+        0,
+        0,
+        2.7474774194546225,
+        0,
+        0,
+        0,
+        0,
+        -1.0002000200020003,
+        -1,
+        0,
+        0,
+        -0.020002000200020003,
+        0
+      ],
+      "matrixWorldInverse": [
+        0.4599713955740831,
+        -0.19948614377787444,
+        0.8652349933366448,
+        0,
+        0,
+        0.974436447903406,
+        0.2246633236587421,
+        0,
+        -0.88793373359369,
+        -0.10333870251762352,
+        0.4482128928403821,
+        0,
+        -4.440892098500626e-16,
+        -0.019488728958067913,
+        -9.46583288443892,
+        1
+      ]
+    }
+  },
+  "raymarch": {
+    "identity": "cpu-dense-smoke-optical-depth-ray-integral-v0",
+    "interpolation": "trilinear-cell-centered-smoke-density-v0",
+    "requestedSamplesPerCell": 1,
+    "effectiveSamplesPerCell": 1,
+    "stepWorld": 0.0125,
+    "width": 640,
+    "height": 455,
+    "totalSamples": 2845362,
+    "extinctionCoefficient": 1,
+    "radianceModel": "single-channel-one-minus-transmittance-v0",
+    "productionCompositorAuthority": false
+  },
+  "pixelStats": {
+    "blank": false,
+    "nonzeroOpticalPixels": 26022,
+    "maximumOpticalDepth": 2.082104320994162,
+    "centerOpticalDepth": 1.9323886632919312,
+    "cornerOpticalDepth": 0
+  },
+  "costs": {
+    "authority": "cpu-wall-clock-performance-now-v0",
+    "sourceLoadAndValidateMs": 126.983791,
+    "raymarchMs": 6096.431917,
+    "artifactWriteMs": 18.32091700000001,
+    "totalMs": 6241.7366250000005
+  },
+  "artifacts": {
+    "opticalDepth": {
+      "path": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/side-plus-90/teacher-640x455/optical-depth.f32",
+      "sha256": "sha256:24d1d7308bbb015726f54f6b8da9118c85b50b5ac0b6dc6a29c31d543d881e6e",
+      "dtype": "float32",
+      "byteOrder": "little-endian",
+      "shape": [
+        455,
+        640
+      ],
+      "byteLength": 1164800
+    },
+    "transmittance": {
+      "path": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/side-plus-90/teacher-640x455/transmittance.f32",
+      "sha256": "sha256:d2481ba1f588d8f489b648b325d0aee502c2eca90f91e49a1cbfc02e94a4e4df",
+      "dtype": "float32",
+      "byteOrder": "little-endian",
+      "shape": [
+        455,
+        640
+      ],
+      "byteLength": 1164800
+    },
+    "linearRadiance": {
+      "path": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/side-plus-90/teacher-640x455/linear-smoke-radiance.f32",
+      "sha256": "sha256:b0c36df2f4d4b84f09712796023791c499030a0c59e757a0e9e2b2bba28552e0",
+      "dtype": "float32",
+      "byteOrder": "little-endian",
+      "shape": [
+        455,
+        640
+      ],
+      "byteLength": 1164800
+    },
+    "displayPng": {
+      "path": "artifacts/smoke-gaussian-oracle-ceiling-0715/held-structure-direct-mass-v1-camera-split-r160/side-plus-90/teacher-640x455/dense-raymarch-smoke.png",
+      "sha256": "sha256:a0add9a680551eaf7591e9ce7ce2d4810835da53455058e7cab2a73a67d048f6",
+      "width": 640,
+      "height": 455,
+      "byteLength": 23096
+    }
+  }
+}

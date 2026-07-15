@@ -24,7 +24,7 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-async function writeFrame(directory, mutate = {}) {
+async function writeFrame(directory, mutate = {}, densityPattern = 'plume') {
   await mkdir(directory, { recursive: true });
   const grid = 4;
   const values = new Float32Array(grid ** 3 * channels.length);
@@ -34,7 +34,9 @@ async function writeFrame(directory, mutate = {}) {
         const offset = ((z * grid * grid) + (y * grid) + x) * channels.length;
         const leftPlume = x === 1 && y >= 1 && z <= 2;
         const rightPlume = x === 2 && y >= 1 && z >= 1;
-        values[offset + 4] = leftPlume || rightPlume ? 0.5 + y * 0.1 : 0;
+        values[offset + 4] = densityPattern === 'interior-pocket'
+          ? (x === 2 && y === 2 && z === 2 ? 1.5 : 0.2)
+          : leftPlume || rightPlume ? 0.5 + y * 0.1 : 0;
         values[offset + 0] = 0.01 * x;
         values[offset + 1] = 0.08;
         values[offset + 2] = -0.01 * z;
@@ -196,7 +198,7 @@ try {
   const recursiveReport = await fitSmokeGaussianOracleFrame({
     manifestPath,
     outDir: join(directory, 'recursive-fit'),
-    budgets: [1, 2, 4],
+    budgets: [1, 2, 4, 8],
     densityThreshold: 0.000001,
     optimizerStrategy: 'recursive-moment-split',
   });
@@ -208,6 +210,35 @@ try {
   assert.equal(recursiveReport.budgetCurve.every(entry => entry.activeGaussianCount === entry.requestedBudget), true);
   assert.equal(recursiveReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
   assert.ok(recursiveReport.budgetCurve[2].massWeightedSse <= recursiveReport.budgetCurve[0].massWeightedSse);
+
+  const structureManifestPath = await writeFrame(join(directory, 'structure-frame'), {}, 'interior-pocket');
+  const structureControl = await fitSmokeGaussianOracleFrame({
+    manifestPath: structureManifestPath,
+    outDir: join(directory, 'structure-control'),
+    budgets: [1, 2, 4, 8],
+    densityThreshold: 0.000001,
+    optimizerStrategy: 'recursive-moment-split',
+  });
+  const structureReport = await fitSmokeGaussianOracleFrame({
+    manifestPath: structureManifestPath,
+    outDir: join(directory, 'structure-fit'),
+    budgets: [1, 2, 4, 8],
+    densityThreshold: 0.000001,
+    optimizerStrategy: 'recursive-gradient-moment-split',
+    structureGradientGain: 128,
+  });
+  assert.equal(structureReport.optimizer.identity, 'recursive-gradient-weighted-moment-split-v0');
+  assert.equal(structureReport.optimizer.structureGradientGain, 128);
+  assert.equal(structureReport.optimizer.allocationAuthority, 'density-times-one-plus-normalized-smoke-gradient-gain-v0');
+  assert.ok(structureReport.optimizer.gradientDiagnostics.maximumSmokeGradient > 0);
+  assert.ok(structureReport.optimizer.gradientDiagnostics.meanActiveSmokeGradient > 0);
+  assert.equal(structureReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
+  assert.equal(structureReport.budgetCurve.every(entry => Number.isFinite(entry.structureWeightedSse)), true);
+  assert.notEqual(
+    structureReport.budgetCurve[3].artifact.sha256,
+    structureControl.budgetCurve[3].artifact.sha256,
+    'boundary-weighted allocation must materially change the fixed-budget product on an articulated field',
+  );
 
   const nextManifestPath = await writeFrame(join(directory, 'next-frame'), {
     deterministicReplay: {
