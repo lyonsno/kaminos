@@ -21,9 +21,9 @@ const COHORT_AUTHORITY = 'exact-oracle-support-motion-cohort-index-v0';
 const COHORT_ORDER = ['stable-q1', 'stable-q2', 'stable-q3', 'stable-q4', 'transported', 'birth'];
 const DEBUG_GAIN = 0.625;
 const BEAUTY_ROLES = ['reference', 'sourceReuse', 'oracleDonor', 'oraclePredicted', 'learnedDonor', 'learnedPredicted'];
-const BEAUTY_LABELS = ['REFERENCE', 'SOURCE REUSE', 'ORACLE DONOR', 'ORACLE + RESIDUAL', 'LEARNED DONOR', 'LEARNED + RESIDUAL'];
+const BEAUTY_LABELS = ['REFERENCE', 'SOURCE REUSE', 'ORACLE DONOR', 'ORACLE RESIDUAL', 'LEARNED DONOR', 'LEARNED RESIDUAL'];
 const DEBUG_ROLES = ['reference', 'oracleDonor', 'oraclePredicted', 'learnedDonor', 'learnedPredicted'];
-const DEBUG_LABELS = ['REFERENCE', 'ORACLE DONOR', 'ORACLE + RESIDUAL', 'LEARNED DONOR', 'LEARNED + RESIDUAL'];
+const DEBUG_LABELS = ['REFERENCE', 'ORACLE DONOR', 'ORACLE RESIDUAL', 'LEARNED DONOR', 'LEARNED RESIDUAL'];
 
 function parseArgs(argv) {
   const result = new Map();

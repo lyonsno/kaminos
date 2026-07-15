@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const witnessUrl = new URL('../boundary-splat-appearance-transport-witness.mjs', import.meta.url);
 const witness = await import(witnessUrl);
@@ -77,11 +80,113 @@ assert.notDeepEqual(debugRows[0].slice(4, 7), sites[0].splat.slice(4, 7));
 assert.notDeepEqual(debugRows[1].slice(4, 7), sites[1].splat.slice(4, 7));
 assert.throws(() => witness.buildAppearanceRows(sites, ['transported', 'birth'], 0.5), /exactly 0\.625/);
 
+const root = await mkdtemp(join(tmpdir(), 'appearance-transport-witness-contract-'));
+try {
+  const hash = bytes => createHash('sha256').update(bytes).digest('hex');
+  const writeIdentity = async (name, document) => {
+    const path = join(root, name);
+    const bytes = Buffer.from(`${JSON.stringify(document)}\n`);
+    await writeFile(path, bytes);
+    return { path, bytes: bytes.byteLength, sha256: hash(bytes) };
+  };
+  const writeRole = async (pairIndex, role, authority, colorGain) => {
+    const candidates = new Float32Array(16);
+    candidates[8] = pairIndex + colorGain;
+    const splats = new Float32Array([
+      pairIndex * 0.08, 0, 0, 1,
+      0.5 + colorGain * 0.03, 0.25 + pairIndex * 0.1, 0.1, 0.9,
+      0.22, 0.22, 0, 0,
+    ]);
+    const artifact = async (suffix, values, strideFloats) => {
+      const path = join(root, `pair-${pairIndex}-${role}.${suffix}.f32`);
+      const bytes = Buffer.from(values.buffer, values.byteOffset, values.byteLength);
+      await writeFile(path, bytes);
+      return {
+        path, bytes: bytes.byteLength, sha256: hash(bytes), count: 1,
+        strideFloats, dtype: 'float32-le', authority,
+      };
+    };
+    return {
+      candidates: await artifact('features', candidates, 16),
+      splats: await artifact('splats', splats, 12),
+    };
+  };
+  const modelIdentity = await writeIdentity('appearance-model.json', { model: 'appearance' });
+  const transportIdentity = await writeIdentity('transport-model.json', { model: 'transport' });
+  const camera = {
+    viewProjection: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+    right: [1, 0, 0],
+    up: [0, 1, 0],
+  };
+  const manifestIdentity = await writeIdentity('phase-corpus.json', {
+    frames: [{ id: 'frame-0', camera }, { id: 'frame-1', camera }, { id: 'frame-2', camera }],
+  });
+  const pairs = [];
+  for (let index = 0; index < 2; index += 1) {
+    const roleArtifacts = {};
+    let roleIndex = 0;
+    for (const [role, authority] of Object.entries(roles)) {
+      roleArtifacts[role] = await writeRole(index, role, authority, roleIndex);
+      roleIndex += 1;
+    }
+    const cohortPath = join(root, `pair-${index}-cohorts.u8`);
+    const cohortBytes = Buffer.from([2]);
+    await writeFile(cohortPath, cohortBytes);
+    pairs.push({
+      step: index + 1,
+      sourceFrameId: `frame-${index}`,
+      targetFrameId: `frame-${index + 1}`,
+      ...roleArtifacts,
+      cohorts: {
+        path: cohortPath, bytes: 1, sha256: hash(cohortBytes), count: 1,
+        dtype: 'uint8', authority: 'exact-oracle-support-motion-cohort-index-v0',
+        order: ['stable-q1', 'stable-q2', 'stable-q3', 'stable-q4', 'transported', 'birth'],
+      },
+      supportAccounting: {
+        targetFrameSupportCount: 1,
+        exactSupportCount: 1,
+        excludedUnsupportedTargetCount: 0,
+        unsupportedBirthCount: 0,
+        supportChanged: false,
+        worldPositionsChanged: false,
+        candidateStateFrozenToExact: true,
+        learnedCompositionMatchesOracleSupport: true,
+        learnedDonor: { destinationCount: 1, deathWouldHaveWonCount: index },
+      },
+      metrics: pair(index === 0 ? 0.1 : 0.3, index === 0 ? 0.4 : 0.2).metrics,
+    });
+  }
+  const fullEvaluation = {
+    ...evaluation,
+    model: modelIdentity,
+    transportModel: transportIdentity,
+    evaluationManifest: manifestIdentity,
+    temporal: {
+      authority: 'all-adjacent-cross-episode-one-step-evaluations-v0',
+      evaluatedPairCount: 2,
+      controlledStepDeltaMs: 160,
+      pairCap: null,
+      sampleCap: null,
+    },
+    pairs,
+  };
+  const evaluationPath = join(root, 'evaluation.json');
+  await writeFile(evaluationPath, `${JSON.stringify(fullEvaluation)}\n`);
+  const outDir = join(root, 'witness');
+  const report = await witness.writeAppearanceTransportWitness(evaluationPath, { outDir, width: 48, height: 48 });
+  assert.equal(report.status, 'completed');
+  assert.equal(report.playback.frameCount, 2);
+  assert.equal((await readFile(join(outDir, 'appearance-transport-beauty.mp4'))).byteLength > 0, true);
+  assert.equal((await readFile(join(outDir, 'appearance-transport-debug.mp4'))).byteLength > 0, true);
+} finally {
+  await rm(root, { recursive: true, force: true });
+}
+
 assert.match(source, /REFERENCE/);
 assert.match(source, /SOURCE REUSE/);
 assert.match(source, /ORACLE DONOR/);
-assert.match(source, /ORACLE \+ RESIDUAL/);
-assert.match(source, /LEARNED \+ RESIDUAL/);
+assert.match(source, /ORACLE RESIDUAL/);
+assert.match(source, /LEARNED RESIDUAL/);
 assert.match(source, /one-step temporal sequence/i);
 assert.match(source, /native differing support/i);
 assert.match(source, /unsupported births/i);
