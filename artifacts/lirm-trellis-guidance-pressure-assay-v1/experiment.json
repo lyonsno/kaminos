@@ -1,0 +1,54 @@
+{
+  "schema": "kaminos.lirm-trellis-guidance-pressure-assay.v1",
+  "source": {
+    "path": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
+    "sha256": "03a773c497d03281e94d387d5162058abd9134d6e1c52ecfca1de6ed8193d5ba",
+    "bytes": 288739
+  },
+  "fixed": {
+    "seed": 42,
+    "steps": 6,
+    "resolution": 512,
+    "targetFaces": 200000,
+    "textureSize": 1024,
+    "cascade": false,
+    "simplifyFirst": true
+  },
+  "routeCommits": {
+    "denseShapeGuidance": "c3cea40",
+    "sparseStructureGuidance": "ee75fdb"
+  },
+  "routeIdentity": {
+    "knownGoodLocalRunnerChecked": true,
+    "runner": "/Users/noahlyons/dev/trellis2mlx/.venv/bin/python -u generate.py",
+    "effectiveBackend": "MLX on Apple Silicon through gpu-greenroom strict FIFO",
+    "firstReceiptProvesRoute": true,
+    "heavyRunAcceptedBeforeProof": false
+  },
+  "rejectedWitnessSubmissions": {
+    "reason": "Repeated -p groups retained only pitch, leaving every yaw at the route default 0.0.",
+    "admittedToAssay": false,
+    "replacementEvidence": "witness-valid tree with one -p group containing yaw and pitch"
+  },
+  "contactSheets": {
+    "denseShape": {
+      "path": "dense-shape-guidance-pressure-contact-sheet.png",
+      "sha256": "75bcebb1948c225ed922ef8b5fe8ebbc8eb40d306a4b3b600d81f4b66268a8d9",
+      "bytes": 888892,
+      "height": 1668,
+      "layout": "3 rows x 4 columns: low 3.0, default 7.5, high 12.0 by left/front/right/rear"
+    },
+    "sparseStructure": {
+      "path": "sparse-structure-guidance-pressure-contact-sheet.png",
+      "sha256": "e58b1e9fafe093bba3895da24500d75cd3bd4897b88f2c1c1143e118d7f18825",
+      "bytes": 2400710,
+      "height": 4448,
+      "layout": "8 rows x 4 columns: sparse CFG 0.0, 0.25, 0.5, 0.75, 1.0, 3.0, 7.5, 12.0 by left/front/right/rear"
+    }
+  },
+  "routeReceiptManifest": {
+    "path": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/lirm-trellis-guidance-pressure-assay-v1/route-receipts.json",
+    "sha256": "963f9d5d43ebfecdf5865624a8acf6c1ba9a3f4c2d53b8cf081740133a7282d3",
+    "bytes": 183713
+  }
+}
