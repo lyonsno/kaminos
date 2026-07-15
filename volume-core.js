@@ -12959,7 +12959,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let timestampWrites = null;
       let stageTimestampWrites = null;
       const timestampQueryCount = 6;
-      const candidateHeadBenchmarkEnabled = options.candidateHeadBenchmarkEnabled === true;
+      const candidateCueBufferLifecycleStressEnabled = options.candidateCueBufferLifecycleStressEnabled === true;
+      const candidateHeadBenchmarkEnabled = options.candidateHeadBenchmarkEnabled === true || candidateCueBufferLifecycleStressEnabled;
       let candidateQuerySet = null;
       let candidateTimestampReadback = null;
       let candidateTimestampResolveBuffer = null;
@@ -13018,6 +13019,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         historyEpochIdentity,
         historyResetReason,
         candidateHeadBenchmarkEnabled,
+        candidateCueBufferLifecycleStressEnabled,
       });
       if (querySet && timestampReadback && timestampResolveBuffer) {
         inferenceEncoder.resolveQuerySet(querySet, 0, timestampQueryCount, timestampResolveBuffer, 0);
@@ -13061,6 +13063,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const supportStatsStart = performance.now();
       const supportStats = await runtime.sampleSupportStats();
       const supportStatsMs = performance.now() - supportStatsStart;
+      const nativeLowCandidateCueBufferLifecycle = candidateCueBufferLifecycleStressEnabled
+        ? await runtime.sampleCandidateCueBufferLifecycle()
+        : (runtime.debugState().nativeLowCandidateCueBufferLifecycle || null);
       let nativeLowCandidateHeadCostMicrobenchmark = runtime.debugState().nativeLowCandidateHeadCostMicrobenchmark || null;
       if (candidateHeadBenchmarkEnabled) {
         let candidateTiming = null;
@@ -13518,6 +13523,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         coarseFrontSparseDetailBand: nativeLowCoarseFrontSparseDetailBand,
         sourceHistoryDetailCandidate: nativeLowSourceHistoryDetailCandidate,
         candidateHeadCostMicrobenchmark: nativeLowCandidateHeadCostMicrobenchmark,
+        candidateCueBufferLifecycle: nativeLowCandidateCueBufferLifecycle,
         simulationSteppingReceipt,
         currentSourceFrameConsumption,
         stalePredictionRejection,
@@ -13633,6 +13639,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeLowCoarseFrontSparseDetailBand,
         nativeLowSourceHistoryDetailCandidate,
         nativeLowCandidateHeadCostMicrobenchmark,
+        nativeLowCandidateCueBufferLifecycle,
         nativeLowFixedSourceDeltaAdmission,
         nativeLowFrontTopologyAblation,
         frontTopologyAblationEnabled,

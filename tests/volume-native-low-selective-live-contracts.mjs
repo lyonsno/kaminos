@@ -36,7 +36,7 @@ const candidateHeadPackage = readFileSync(candidateHeadPackagePath, 'utf8');
 const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}\n${candidateHeadPackage}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
-assert.match(combined, /native-low-candidate-head-cost-microbenchmark-v1/, 'route and witness carry fail-loud runtime build identity');
+assert.match(combined, /native-low-resident-cue-buffer-lifecycle-stress-v1/, 'route and witness carry fail-loud runtime build identity');
 assert.match(witness, /expectedRuntimeBuildIdentity[\s\S]*runtimeBuildIdentity[\s\S]*cachedCodeRejection/, 'witness records expected/effective runtime build identity and cached-code rejection');
 assert.match(witness, /user-data-dir[\s\S]*Network\.setCacheDisabled[\s\S]*cacheBustUrl/, 'witness uses a fresh browser profile, disables cache, and cache-busts the route URL');
 assert.match(witness, /servedSourceBundleSha256[\s\S]*fresh-http-served-source-bundle-sha256-v0[\s\S]*runtimeBuildIdentityPresent/, 'witness binds receipt to the HTTP-served source bundle hash and runtime marker');
@@ -166,6 +166,15 @@ assert.match(combined, /currentSourceChannels must be 17[\s\S]*sourceDeltaChanne
 assert.match(combined, /candidateListSource must be real uncapped fixed-gate sourceHistoryCandidates[\s\S]*dispatchMode must be dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0/, 'trained receiver preserves real indirect dispatch over uncapped fixed-gate candidates');
 assert.match(combined, /compact-renderer-facing-cue-record-v0[\s\S]*cueRecordStrideBytes must be 32/, 'trained receiver preserves compact renderer-facing cue schema');
 assert.match(witness, /nativeLowVivisectorCandidateHeadPackageReceiver[\s\S]*vivisectorCandidateHeadTrainedRouteRequested/, 'witness preserves Vivisector receiver receipt and request state');
+assert.match(combined, /native-low-resident-cue-buffer-lifecycle-stress-v0/, 'route records resident cue-buffer lifecycle stress identity');
+assert.match(combined, /cue_buffer_lifecycle_stress[\s\S]*nativeLowResidentCueBufferLifecycleStress/, 'route exposes resident cue-buffer lifecycle stress mode and receipt');
+assert.match(combined, /candidateCueRecordCapacity[\s\S]*candidateCueRecordCapacityBytes[\s\S]*candidateCueRecordAllocationCount[\s\S]*candidateCueRecordReuseCount[\s\S]*candidateCueRecordGrowthCount/, 'cue-buffer lifecycle receipt records capacity, allocation, reuse, and growth counts');
+assert.match(combined, /staleCueRowsRetained[\s\S]*false[\s\S]*staleTailRowsChecked[\s\S]*activeTokenMismatchCount/, 'cue-buffer lifecycle stress proves stale rows and active token mismatches fail loud');
+assert.match(combined, /observedCandidateCountTarget[\s\S]*209000[\s\S]*distinctCandidateCountCount[\s\S]*countDecreaseObserved/, 'cue-buffer lifecycle stress records changing counts up to the observed 209k range');
+assert.match(combined, /candidateListSource[\s\S]*real-uncapped-fixed-gate-sourceHistoryCandidates-v0[\s\S]*dispatchMode[\s\S]*dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0/, 'cue-buffer lifecycle stress preserves real fixed-gate candidate list and indirect dispatch identity');
+assert.match(combined, /synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0[\s\S]*lifecycle-cost-substrate-not-fidelity-or-visual-evidence-v0/, 'cue-buffer lifecycle stress labels synthetic authority as lifecycle/cost substrate only');
+assert.match(combined, /noReallocation[\s\S]*noLeak[\s\S]*hiddenCandidateCap[\s\S]*false/, 'cue-buffer lifecycle stress rejects reallocation, leaks, and hidden caps');
+assert.match(witness, /cueBufferLifecycleStressRequested[\s\S]*nativeLowResidentCueBufferLifecycleStress[\s\S]*staleCueRowsRetained/, 'witness preserves and asserts resident cue-buffer lifecycle stress receipt');
 assert.match(combined, /native-low-front-topology-ablation-v0/, 'route records shared-device learned frontTopology visual ablation');
 assert.match(combined, /fullFrozenTreatmentReference[\s\S]*frontTopologyAblatedTreatment[\s\S]*nativeLowControl/, 'frontTopology ablation keeps native control, full frozen reference, and ablated treatment');
 assert.match(combined, /native-low-nearest-normalized-front-upsampling-no-learned-front-residual-v0/, 'frontTopology ablation labels native-low upsample authority with no learned front residual');

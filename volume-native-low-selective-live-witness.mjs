@@ -12,7 +12,7 @@ const ROUTE = 'native-low-live-browser-webgpu-inference-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 const MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9';
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
-const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-candidate-head-cost-microbenchmark-v1';
+const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-resident-cue-buffer-lifecycle-stress-v1';
 const WITNESS_CONTRACT_MARKERS = Object.freeze({
   transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
   requestedCalibration: 'native-low-learned-splat-calibration-v0',
@@ -37,6 +37,7 @@ const expectedRuntimeBuildIdentity = String(args.get('--expected-runtime-build')
 const frontTopologyAblationRequested = new URL(url).searchParams.get('front_topology_ablation') === '1';
 const fixedGateDiscontinuityAssayRequested = new URL(url).searchParams.get('fixed_gate_discontinuity_assay') === '1';
 const candidateHeadBenchmarkRequested = new URL(url).searchParams.get('candidate_head_benchmark') === '1';
+const cueBufferLifecycleStressRequested = new URL(url).searchParams.get('cue_buffer_lifecycle_stress') === '1';
 const vivisectorCandidateHeadTrainedRouteRequested = Boolean(new URL(url).searchParams.get('vivisector_candidate_head_package'))
   || new URL(url).searchParams.get('candidate_head_trained_route') === 'vivisector-width32';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
@@ -344,7 +345,7 @@ try {
   assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noJsVisibleDenseArrays, true, 'sparse detail-band path allowed JS-visible dense arrays');
   assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.identity, 'native-low-source-history-detail-candidate-v0', 'source-history detail candidate missing');
   assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.sourceChannelCount, 17, 'source-history candidate must use all 17 source channels');
-  if (fixedGateDiscontinuityAssayRequested) {
+  if (fixedGateDiscontinuityAssayRequested || cueBufferLifecycleStressRequested) {
     assert.ok(Number(state?.nativeLowSourceHistoryDetailCandidate?.candidateCoverage) >= 0, 'source-history candidate coverage missing');
   } else {
     assert.ok(Number(state?.nativeLowSourceHistoryDetailCandidate?.candidateCoverage) >= 0.09, 'source-history candidate coverage missing');
@@ -400,6 +401,29 @@ try {
     assert.equal(benchmark.budgetDisposition?.profitableTargetMs, 10, 'candidate-head benchmark profitable target missing');
     assert.equal(benchmark.budgetDisposition?.credibleBreakEvenTargetMs, 15, 'candidate-head benchmark credible target missing');
     assert.equal(benchmark.budgetDisposition?.outerKillBoundaryMs, 24, 'candidate-head benchmark kill boundary missing');
+  }
+  if (cueBufferLifecycleStressRequested) {
+    const stress = state?.nativeLowResidentCueBufferLifecycleStress || {};
+    assert.equal(stress.identity, 'native-low-resident-cue-buffer-lifecycle-stress-v0', 'resident cue-buffer lifecycle stress missing');
+    assert.equal(stress.claimScope, 'lifecycle-cost-substrate-not-fidelity-or-visual-evidence-v0', 'cue-buffer lifecycle stress overclaimed evidence');
+    assert.equal(stress.candidateListSource, 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0', 'cue-buffer stress candidate list source mismatch');
+    assert.equal(stress.dispatchMode, 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0', 'cue-buffer stress dispatch mode mismatch');
+    assert.equal(stress.syntheticWeightsAuthority, 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0', 'cue-buffer stress synthetic authority missing');
+    assert.ok(Number(stress.candidateCueRecordCapacity) >= Number(stress.candidateCountMax), 'cue-buffer capacity does not cover observed candidate count');
+    assert.equal(Number(stress.candidateCueRecordAllocationCount), 1, 'resident cue buffer was reallocated');
+    assert.equal(Number(stress.candidateCueRecordGrowthCount), 0, 'resident cue buffer grew during stress');
+    assert.ok(Number(stress.candidateCueRecordReuseCount) >= Number(stress.frameCount), 'resident cue buffer reuse count did not cover stress frames');
+    assert.equal(stress.noReallocation, true, 'resident cue buffer reallocation was not rejected');
+    assert.equal(stress.noLeak, true, 'resident cue buffer leak was not rejected');
+    assert.equal(stress.hiddenCandidateCap, false, 'cue-buffer stress hid a candidate cap');
+    assert.equal(stress.staleCueRowsRetained, false, 'cue-buffer stress retained stale cue rows');
+    assert.equal(Number(stress.activeTokenMismatchCount), 0, 'cue-buffer stress found active cue rows with stale tokens');
+    assert.ok(Number(stress.staleTailRowsChecked) > 0, 'cue-buffer stress never checked a stale tail after a count decrease');
+    assert.equal(stress.countDecreaseObserved, true, 'cue-buffer stress never observed a candidate-count decrease');
+    assert.ok(Number(stress.distinctCandidateCountCount) >= 2, 'cue-buffer stress did not exercise changing candidate counts');
+    assert.ok(Number(stress.candidateCountMax) >= Number(stress.observedCandidateCountTarget), 'cue-buffer stress did not reach the observed candidate-count target');
+    assert.equal(stress.fidelityClaim, false, 'cue-buffer stress made a fidelity claim');
+    assert.equal(stress.visualClaim, false, 'cue-buffer stress made a visual claim');
   }
   if (frontTopologyAblationRequested) {
     assert.equal(state?.nativeLowFrontTopologyAblation?.identity, 'native-low-front-topology-ablation-v0', 'frontTopology ablation missing');
@@ -511,10 +535,13 @@ try {
     nativeLowSourceHistoryDetailCandidate: endState.nativeLowSourceHistoryDetailCandidate,
     nativeLowFixedSourceDeltaAdmission: endState.nativeLowFixedSourceDeltaAdmission,
     nativeLowCandidateHeadCostMicrobenchmark: endState.nativeLowCandidateHeadCostMicrobenchmark,
+    nativeLowResidentCueBufferLifecycleStress: endState.nativeLowResidentCueBufferLifecycleStress,
+    nativeLowCandidateCueBufferLifecycle: endState.nativeLowCandidateCueBufferLifecycle,
     nativeLowVivisectorCandidateHeadPackageReceiver: endState.nativeLowVivisectorCandidateHeadPackageReceiver,
     nativeLowFixedGateDiscontinuityAssay: endState.nativeLowFixedGateDiscontinuityAssay,
     fixedGateDiscontinuityAssayRequested,
     candidateHeadBenchmarkRequested,
+    cueBufferLifecycleStressRequested,
     vivisectorCandidateHeadTrainedRouteRequested,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,

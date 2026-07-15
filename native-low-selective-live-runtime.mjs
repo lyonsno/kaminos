@@ -15,7 +15,8 @@ export const NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH = 'native-lo
 export const NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION = 'native-low-fixed-source-delta-admission-v0';
 export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
 export const NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK = 'native-low-candidate-head-cost-microbenchmark-v0';
-export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-candidate-head-cost-microbenchmark-v1';
+export const NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS = 'native-low-resident-cue-buffer-lifecycle-stress-v0';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-resident-cue-buffer-lifecycle-stress-v1';
 
 const LOW_GRID = 128;
 const HIGH_GRID = 160;
@@ -29,6 +30,8 @@ const CANDIDATE_HEAD_BENCHMARK_WIDTHS = Object.freeze([16, 24, 32]);
 const CANDIDATE_HEAD_INPUT_COUNT = 48;
 const CANDIDATE_HEAD_OUTPUT_COUNT = 8;
 const CANDIDATE_CUE_RECORD_STRIDE_BYTES = 32;
+const CANDIDATE_CUE_LIFECYCLE_STATS_BYTES = 8 * Uint32Array.BYTES_PER_ELEMENT;
+const CANDIDATE_CUE_LIFECYCLE_PARAMS_BYTES = 4 * Uint32Array.BYTES_PER_ELEMENT;
 const SOURCE_DELTA_THRESHOLD = 0.5457155704;
 const SOURCE_DELTA_CALIBRATION_SHA256 = 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3';
 const SOURCE_DELTA_SCALES = Object.freeze([
@@ -351,6 +354,7 @@ const INPUT_COUNT: u32 = ${CANDIDATE_HEAD_INPUT_COUNT}u;
 @group(0) @binding(4) var<storage, read> sourceHistoryCandidates: array<u32>;
 @group(0) @binding(5) var<storage, read> sourceHistoryDispatchArgs: array<u32>;
 @group(0) @binding(6) var<storage, read_write> candidateCueRecords: array<vec4<f32>>;
+@group(0) @binding(7) var<storage, read> candidateCueLifecycleParams: array<u32>;
 
 fn index3(cell: vec3<u32>, grid: u32) -> u32 {
   return cell.x + cell.y * grid + cell.z * grid * grid;
@@ -425,11 +429,55 @@ fn benchmarkCandidateHead(@builtin(global_invocation_id) gid: vec3<u32>) {
     outputs[o] = value;
   }
   let outBase = compactIndex * 2u;
+  let lifecycleEnabled = candidateCueLifecycleParams[3] != 0u;
+  let lifecycleToken = candidateCueLifecycleParams[0];
+  let diagnosticW = select(outputs[4], bitcast<f32>(lifecycleToken), lifecycleEnabled);
   candidateCueRecords[outBase] = vec4<f32>(normalized, outputs[0]);
-  candidateCueRecords[outBase + 1u] = vec4<f32>(outputs[1], outputs[2], outputs[3], outputs[4]);
+  candidateCueRecords[outBase + 1u] = vec4<f32>(outputs[1], outputs[2], outputs[3], diagnosticW);
 }
 `;
 }
+
+const CANDIDATE_CUE_LIFECYCLE_WGSL = `
+const RESIDUAL_WORKGROUP_SIZE: u32 = ${RESIDUAL_WORKGROUP_SIZE}u;
+
+@group(0) @binding(0) var<storage, read_write> candidateCueRecords: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> sourceHistoryDispatchArgs: array<u32>;
+@group(0) @binding(2) var<storage, read_write> lifecycleStats: array<atomic<u32>>;
+@group(0) @binding(3) var<storage, read> lifecycleParams: array<u32>;
+
+@compute @workgroup_size(${RESIDUAL_WORKGROUP_SIZE})
+fn clearAndCheckCandidateCueLifecycle(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let index = gid.x;
+  let currentCount = sourceHistoryDispatchArgs[3];
+  let previousCount = lifecycleParams[1];
+  let capacity = lifecycleParams[2];
+  let token = lifecycleParams[0];
+  if (index == 0u) {
+    atomicStore(&lifecycleStats[4], currentCount);
+    atomicStore(&lifecycleStats[5], previousCount);
+    atomicStore(&lifecycleStats[6], token);
+    atomicStore(&lifecycleStats[7], capacity);
+  }
+  if (index >= capacity) { return; }
+  if (index < currentCount) {
+    atomicAdd(&lifecycleStats[0], 1u);
+    let observed = bitcast<u32>(candidateCueRecords[index * 2u + 1u].w);
+    if (observed != token) {
+      atomicAdd(&lifecycleStats[1], 1u);
+    }
+    return;
+  }
+  if (index < previousCount) {
+    atomicAdd(&lifecycleStats[2], 1u);
+    candidateCueRecords[index * 2u + 1u].w = bitcast<f32>(0u);
+    let observed = bitcast<u32>(candidateCueRecords[index * 2u + 1u].w);
+    if (observed != 0u) {
+      atomicAdd(&lifecycleStats[3], 1u);
+    }
+  }
+}
+`;
 
 async function sha256Hex(bytes) {
   const buffer = bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
@@ -496,6 +544,8 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
   const sourceHistoryCandidates = makeBuffer('native-low fixed source-delta high-cell candidates', highCells * Uint32Array.BYTES_PER_ELEMENT);
   const sourceHistoryStats = makeBuffer('native-low fixed source-delta stats', STATS_BYTES);
   const candidateCueRecords = makeBuffer('native-low candidate-head benchmark compact cue records', highCells * CANDIDATE_CUE_RECORD_STRIDE_BYTES);
+  const candidateCueLifecycleStats = makeBuffer('native-low candidate-head cue buffer lifecycle stats', CANDIDATE_CUE_LIFECYCLE_STATS_BYTES);
+  const candidateCueLifecycleParams = makeBuffer('native-low candidate-head cue buffer lifecycle params', CANDIDATE_CUE_LIFECYCLE_PARAMS_BYTES);
   const residualDispatchArgs = makeBuffer(
     'native-low shared-device finalized residual dispatch args',
     INDIRECT_ARGS_BYTES,
@@ -615,6 +665,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
     ],
   });
   const candidateHeadBenchmarkPipelineLayout = device.createPipelineLayout({
@@ -633,6 +684,27 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       compute: { module, entryPoint: 'benchmarkCandidateHead' },
     }));
   }
+  const candidateCueLifecycleShader = device.createShaderModule({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate cue lifecycle WGSL`,
+    code: CANDIDATE_CUE_LIFECYCLE_WGSL,
+  });
+  const candidateCueLifecycleLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate cue lifecycle layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+    ],
+  });
+  const candidateCueLifecyclePipeline = device.createComputePipeline({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate cue lifecycle clear/check`,
+    layout: device.createPipelineLayout({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate cue lifecycle pipeline layout`,
+      bindGroupLayouts: [candidateCueLifecycleLayout],
+    }),
+    compute: { module: candidateCueLifecycleShader, entryPoint: 'clearAndCheckCandidateCueLifecycle' },
+  });
   let encodedFrameCount = 0;
   let lastHistoryEpochIdentity = null;
   let lastSourceHistoryEpochReceipt = {
@@ -677,6 +749,29 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     learnedWeightsUsed: false,
     fidelityClaim: false,
     visualClaim: false,
+  };
+  let candidateCueRecordReuseCount = 0;
+  let candidateCueLifecycleToken = 0;
+  let lastCandidateCueBufferLifecycle = {
+    identity: NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS,
+    enabled: false,
+    claimScope: 'lifecycle-cost-substrate-not-fidelity-or-visual-evidence-v0',
+    candidateCueRecordCapacity: highCells,
+    candidateCueRecordCapacityBytes: highCells * CANDIDATE_CUE_RECORD_STRIDE_BYTES,
+    candidateCueRecordAllocationCount: 1,
+    candidateCueRecordReuseCount,
+    candidateCueRecordGrowthCount: 0,
+    noReallocation: true,
+    noLeak: true,
+    hiddenCandidateCap: false,
+    staleCueRowsRetained: false,
+    fidelityClaim: false,
+    visualClaim: false,
+  };
+  let lastCandidateCueLifecycleEncodeReceipt = {
+    token: 0,
+    previousCandidateCount: 0,
+    stressEnabled: false,
   };
   const makeCandidateHeadBenchmarkReceipt = (widthTimings = null, timestampValues = []) => {
     const candidateCount = Number(lastSourceHistoryAdmission.uncappedCandidateCount || 0);
@@ -880,7 +975,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     noHiddenCaps: true,
     supportCompactionIdentity: NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH,
     runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
-    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs, candidateCueRecords },
+    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs, candidateCueRecords, candidateCueLifecycleStats, candidateCueLifecycleParams },
     encodeFromNativeLow(encoder, sourceFluid, sourceFront, options = {}) {
       const currentHistoryEpochIdentity = String(options.historyEpochIdentity || 'native-low-source-history-epoch-unspecified-v0');
       const priorHistoryEpochIdentity = lastHistoryEpochIdentity;
@@ -946,6 +1041,24 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       finalizeSourceHistoryPass.dispatchWorkgroups(1);
       finalizeSourceHistoryPass.end();
       if (options.candidateHeadBenchmarkEnabled === true) {
+        const lifecycleStressEnabled = options.candidateCueBufferLifecycleStressEnabled === true;
+        candidateCueRecordReuseCount += 1;
+        candidateCueLifecycleToken = (candidateCueLifecycleToken % 0x00ffffff) + 1;
+        const previousCandidateCount = Number(lastCandidateCueBufferLifecycle.candidateCount || 0);
+        device.queue.writeBuffer(candidateCueLifecycleParams, 0, new Uint32Array([
+          candidateCueLifecycleToken,
+          previousCandidateCount,
+          highCells,
+          lifecycleStressEnabled ? 1 : 0,
+        ]));
+        if (lifecycleStressEnabled) {
+          device.queue.writeBuffer(candidateCueLifecycleStats, 0, new Uint32Array(8));
+        }
+        lastCandidateCueLifecycleEncodeReceipt = {
+          token: candidateCueLifecycleToken,
+          previousCandidateCount,
+          stressEnabled: lifecycleStressEnabled,
+        };
         const candidateBenchmarkBindGroup = device.createBindGroup({
           label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark bind group`,
           layout: candidateHeadBenchmarkLayout,
@@ -957,6 +1070,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
             { binding: 4, resource: { buffer: sourceHistoryCandidates } },
             { binding: 5, resource: { buffer: sourceHistoryDispatchArgs } },
             { binding: 6, resource: { buffer: candidateCueRecords } },
+            { binding: 7, resource: { buffer: candidateCueLifecycleParams } },
           ],
         });
         const candidateTimestampWrites = options.stageTimestampWrites?.candidateHeadBenchmark || {};
@@ -970,8 +1084,30 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
           candidatePass.dispatchWorkgroupsIndirect(sourceHistoryDispatchArgs, 0);
           candidatePass.end();
         }
+        if (lifecycleStressEnabled) {
+          const lifecycleBindGroup = device.createBindGroup({
+            label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate cue lifecycle bind group`,
+            layout: candidateCueLifecycleLayout,
+            entries: [
+              { binding: 0, resource: { buffer: candidateCueRecords } },
+              { binding: 1, resource: { buffer: sourceHistoryDispatchArgs } },
+              { binding: 2, resource: { buffer: candidateCueLifecycleStats } },
+              { binding: 3, resource: { buffer: candidateCueLifecycleParams } },
+            ],
+          });
+          const lifecyclePass = encoder.beginComputePass({ label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} resident cue-buffer lifecycle check` });
+          lifecyclePass.setPipeline(candidateCueLifecyclePipeline);
+          lifecyclePass.setBindGroup(0, lifecycleBindGroup);
+          lifecyclePass.dispatchWorkgroups(Math.ceil(highCells / RESIDUAL_WORKGROUP_SIZE));
+          lifecyclePass.end();
+        }
         lastCandidateHeadBenchmark = makeCandidateHeadBenchmarkReceipt();
       } else {
+        lastCandidateCueLifecycleEncodeReceipt = {
+          token: candidateCueLifecycleToken,
+          previousCandidateCount: Number(lastCandidateCueBufferLifecycle.candidateCount || 0),
+          stressEnabled: false,
+        };
         lastCandidateHeadBenchmark = {
           identity: NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK,
           enabled: false,
@@ -1118,6 +1254,62 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     makeCandidateHeadCostMicrobenchmarkReceipt(widthTimings = null, timestampValues = []) {
       lastCandidateHeadBenchmark = makeCandidateHeadBenchmarkReceipt(widthTimings, timestampValues);
       return { ...lastCandidateHeadBenchmark };
+    },
+    async sampleCandidateCueBufferLifecycle() {
+      const values = await readU32Buffer(
+        device,
+        candidateCueLifecycleStats,
+        CANDIDATE_CUE_LIFECYCLE_STATS_BYTES,
+        'native-low resident cue-buffer lifecycle stats readback',
+      );
+      const currentCount = Number(values[4] || lastSourceHistoryAdmission.uncappedCandidateCount || 0);
+      const previousCount = Number(values[5] || lastCandidateCueLifecycleEncodeReceipt.previousCandidateCount || 0);
+      const activeTokenMismatchCount = Number(values[1] || 0);
+      const staleTailRowsChecked = Number(values[2] || 0);
+      const staleTailNonzeroCount = Number(values[3] || 0);
+      lastCandidateCueBufferLifecycle = {
+        identity: NATIVE_LOW_RESIDENT_CUE_BUFFER_LIFECYCLE_STRESS,
+        enabled: lastCandidateCueLifecycleEncodeReceipt.stressEnabled === true,
+        claimScope: 'lifecycle-cost-substrate-not-fidelity-or-visual-evidence-v0',
+        syntheticWeightsAuthority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+        coarseLatentAuthority: 'deterministic-synthetic-coarse-latent-v0',
+        candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+        dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        lifecycleCheckDispatchMode: 'full-capacity-diagnostic-check-no-candidate-cap-v0',
+        outputSchema: {
+          identity: 'compact-renderer-facing-cue-record-v0',
+          cueRecordStrideBytes: CANDIDATE_CUE_RECORD_STRIDE_BYTES,
+          cueRecordVec4Count: 2,
+          lifecycleTokenChannel: 'cueRecord[1].w diagnostic token under synthetic benchmark stress',
+        },
+        candidateCueRecordCapacity: highCells,
+        candidateCueRecordCapacityBytes: highCells * CANDIDATE_CUE_RECORD_STRIDE_BYTES,
+        candidateCueRecordAllocationCount: 1,
+        candidateCueRecordReuseCount,
+        candidateCueRecordGrowthCount: 0,
+        noReallocation: true,
+        noLeak: true,
+        hiddenCandidateCap: false,
+        candidateCount: currentCount,
+        previousCandidateCount: previousCount,
+        candidateCountChanged: currentCount !== previousCount,
+        candidateCountDecrease: currentCount < previousCount,
+        candidateCountWithinCapacity: currentCount <= highCells,
+        activeRowsChecked: Number(values[0] || 0),
+        activeTokenMismatchCount,
+        staleTailRowsChecked,
+        staleTailNonzeroCount,
+        staleCueRowsRetained: staleTailNonzeroCount > 0,
+        lifecycleToken: Number(values[6] || lastCandidateCueLifecycleEncodeReceipt.token || 0),
+        reportedCapacityFromGpu: Number(values[7] || highCells),
+        statsReadbackAuthority: 'diagnostic-only-lifecycle-stress-readback-not-production-path-v0',
+        productionPathCpuReadback: false,
+        diagnosticReceiptReadbackOnly: true,
+        fidelityClaim: false,
+        visualClaim: false,
+        failurePhase: null,
+      };
+      return { ...lastCandidateCueBufferLifecycle };
     },
     async sampleSupportTileProfile() {
       const started = performance.now();
@@ -1313,6 +1505,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         nativeLowSourceTileCandidate: lastSourceTileCandidate,
         nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission,
         nativeLowCandidateHeadCostMicrobenchmark: lastCandidateHeadBenchmark,
+        nativeLowCandidateCueBufferLifecycle: lastCandidateCueBufferLifecycle,
         ...lastStats,
       };
     },
@@ -1327,6 +1520,8 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       sourceHistoryStats.destroy();
       sourceHistoryDispatchArgs.destroy();
       candidateCueRecords.destroy();
+      candidateCueLifecycleStats.destroy();
+      candidateCueLifecycleParams.destroy();
       stats.destroy();
       model.destroy();
     },

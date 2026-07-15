@@ -71,7 +71,7 @@
     const CONTRACT_MARKERS = Object.freeze({
       routeIdentity: 'native-low-live-browser-webgpu-inference-v0',
       sharedDeviceRoute: 'native-low-shared-device-buffer-inference-v0',
-      runtimeBuildIdentity: 'native-low-candidate-head-cost-microbenchmark-v1',
+      runtimeBuildIdentity: 'native-low-resident-cue-buffer-lifecycle-stress-v1',
       schema: REPORT_SCHEMA,
       modelIdentity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
       modelSha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
@@ -151,6 +151,21 @@
         pathExclusions: { noJsCandidateList: true, productionPathCpuReadback: false, dense160ReceiverMaterialization: false, hiddenCandidateCap: false },
         frozenDenseHeadsControl: 'arithmetic-control-only',
       },
+      nativeLowResidentCueBufferLifecycleStress: {
+        identity: 'native-low-resident-cue-buffer-lifecycle-stress-v0',
+        claimScope: 'lifecycle-cost-substrate-not-fidelity-or-visual-evidence-v0',
+        observedCandidateCountTarget: 209000,
+        candidateCueRecordCapacity: 160 ** 3,
+        candidateCueRecordCapacityBytes: (160 ** 3) * 32,
+        candidateCueRecordAllocationCount: 1,
+        candidateCueRecordReuseCount: 0,
+        candidateCueRecordGrowthCount: 0,
+        candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+        dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        syntheticWeightsAuthority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+        staleCueRowsRetained: false,
+        hiddenCandidateCap: false,
+      },
       nativeLowVivisectorCandidateHeadPackageReceiver: {
         identity: 'native-low-vivisector-candidate-head-package-receiver-v0',
         schema: 'kaminos.native-low.vivisector-candidate-head-width32-package.v0',
@@ -184,6 +199,7 @@
     const frontTopologyAblationMode = !native64ManifestMode && params.get('front_topology_ablation') === '1';
     const fixedGateDiscontinuityAssayMode = !native64ManifestMode && params.get('fixed_gate_discontinuity_assay') === '1';
     const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
+    const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
     const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
     const vivisectorCandidateHeadTrainedRouteRequested = !native64ManifestMode
       && (Boolean(vivisectorCandidateHeadPackageUrl) || params.get('candidate_head_trained_route') === 'vivisector-width32');
@@ -208,6 +224,7 @@
     let latestReceipt = null;
     let latestRunnerState = null;
     let latestDiscontinuityAssay = null;
+    let latestCueBufferLifecycleStress = null;
     let vivisectorCandidateHeadPackageReceipt = {
       identity: VIVISECTOR_CANDIDATE_HEAD_RECEIVER_IDENTITY,
       schema: VIVISECTOR_CANDIDATE_HEAD_PACKAGE_SCHEMA,
@@ -380,7 +397,8 @@
         coarseFrontDetailAdmissionEnabled,
         treatmentSplatRadianceGain,
         treatmentSplatOpacityGain,
-        candidateHeadBenchmarkEnabled,
+        candidateHeadBenchmarkEnabled: candidateHeadBenchmarkEnabled || cueBufferLifecycleStressMode,
+        candidateCueBufferLifecycleStressEnabled: cueBufferLifecycleStressMode,
       };
       const receipt = native64ManifestMode
         ? await prototype.captureNativeLowCrossGridManifestFrame({
@@ -393,6 +411,9 @@
       replaceImageUrls(receipt);
       latestReceipt = receipt;
       latestRunnerState = prototype.debugState?.() || null;
+      if (latestRunnerState?.backend && receipt.effectiveBackend === 'WebGPU') {
+        receipt.effectiveBackend = latestRunnerState.backend;
+      }
       frameIndex += 1;
       lastTrustworthyEvidence = { frameIndex, receipt, runner: latestRunnerState };
       if (native64ManifestMode) {
@@ -438,6 +459,7 @@
         mohelWarningCoverageRatio: admission.mohelWarningCoverageRatio ?? null,
         mohelWarning: admission.mohelWarning || null,
         candidateHeadCostMicrobenchmark: receipt?.nativeLowCandidateHeadCostMicrobenchmark || null,
+        candidateCueBufferLifecycle: receipt?.nativeLowCandidateCueBufferLifecycle || null,
         runtimeTopK: admission.runtimeTopK ?? null,
         dynamicPercentile: admission.dynamicPercentile ?? null,
         hiddenCandidateCap: admission.hiddenCandidateCap ?? null,
@@ -594,6 +616,120 @@
       return latestDiscontinuityAssay;
     }
 
+    function lifecycleStressFrame(receipt, runnerBefore = null, runnerAfter = null) {
+      const lifecycle = receipt?.nativeLowCandidateCueBufferLifecycle || {};
+      return {
+        kind: 'resident-cue-buffer-lifecycle-frame-v0',
+        sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        requestedBackend: receipt?.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || null,
+        requestedComposition: receipt?.requestedComposition || requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || null,
+        candidateCount: lifecycle.candidateCount ?? receipt?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount ?? null,
+        previousCandidateCount: lifecycle.previousCandidateCount ?? null,
+        candidateCountChanged: lifecycle.candidateCountChanged ?? null,
+        candidateCountDecrease: lifecycle.candidateCountDecrease ?? null,
+        candidateCueRecordCapacity: lifecycle.candidateCueRecordCapacity ?? null,
+        candidateCueRecordCapacityBytes: lifecycle.candidateCueRecordCapacityBytes ?? null,
+        candidateCueRecordAllocationCount: lifecycle.candidateCueRecordAllocationCount ?? null,
+        candidateCueRecordReuseCount: lifecycle.candidateCueRecordReuseCount ?? null,
+        candidateCueRecordGrowthCount: lifecycle.candidateCueRecordGrowthCount ?? null,
+        activeRowsChecked: lifecycle.activeRowsChecked ?? null,
+        activeTokenMismatchCount: lifecycle.activeTokenMismatchCount ?? null,
+        staleTailRowsChecked: lifecycle.staleTailRowsChecked ?? null,
+        staleTailNonzeroCount: lifecycle.staleTailNonzeroCount ?? null,
+        staleCueRowsRetained: lifecycle.staleCueRowsRetained ?? null,
+        hiddenCandidateCap: lifecycle.hiddenCandidateCap ?? null,
+        noReallocation: lifecycle.noReallocation ?? null,
+        noLeak: lifecycle.noLeak ?? null,
+        syntheticWeightsAuthority: lifecycle.syntheticWeightsAuthority || null,
+        claimScope: lifecycle.claimScope || null,
+        candidateListSource: lifecycle.candidateListSource || null,
+        dispatchMode: lifecycle.dispatchMode || null,
+        sourceBundleSha256: params.get('served_source_bundle_sha256') || null,
+        runnerFrameBefore: runnerBefore?.frameCount ?? null,
+        runnerFrameAfter: runnerAfter?.frameCount ?? null,
+      };
+    }
+
+    async function runCueBufferLifecycleStress(prototype) {
+      const frames = [];
+      const controlSchedule = [
+        { inputRadius: 0.53, flowRate: 1.0, windStrength: 1.25, runtimeQualityReason: 'cue-buffer-lifecycle-baseline-a' },
+        { inputRadius: 0.18, flowRate: 1.5, windStrength: 0.15, windAngle: 72, runtimeQualityReason: 'cue-buffer-lifecycle-small-source' },
+        { inputRadius: 0.64, flowRate: 0.85, windStrength: 1.8, windAngle: -45, runtimeQualityReason: 'cue-buffer-lifecycle-wide-source' },
+        { inputRadius: 0.28, flowRate: 1.25, windStrength: 0.55, windAngle: 18, runtimeQualityReason: 'cue-buffer-lifecycle-mid-source' },
+      ];
+      for (const controls of controlSchedule) {
+        const before = prototype.debugState?.() || null;
+        prototype.setControls(controls);
+        const receipt = await tick();
+        const after = prototype.debugState?.() || null;
+        frames.push(lifecycleStressFrame(receipt, before, after));
+      }
+      prototype.setControls({ resolution: 96, runtimeQualityReason: 'cue-buffer-lifecycle-grid-reset-96' });
+      prototype.setControls({ resolution: 128, runtimeQualityReason: 'cue-buffer-lifecycle-grid-reset-128' });
+      const beforeReset = prototype.debugState?.() || null;
+      const resetReceipt = await tick();
+      const afterReset = prototype.debugState?.() || null;
+      frames.push({ ...lifecycleStressFrame(resetReceipt, beforeReset, afterReset), kind: 'resident-cue-buffer-lifecycle-reset-frame-v0' });
+      const beforeRecovery = prototype.debugState?.() || null;
+      const recoveryReceipt = await tick();
+      const afterRecovery = prototype.debugState?.() || null;
+      frames.push({ ...lifecycleStressFrame(recoveryReceipt, beforeRecovery, afterRecovery), kind: 'resident-cue-buffer-lifecycle-post-reset-frame-v0' });
+
+      const counts = frames.map(frame => Number(frame.candidateCount)).filter(Number.isFinite);
+      const maxCount = counts.length ? Math.max(...counts) : null;
+      const minCount = counts.length ? Math.min(...counts) : null;
+      const distinctCounts = [...new Set(counts)];
+      const staleTailRowsChecked = frames.reduce((sum, frame) => sum + Number(frame.staleTailRowsChecked || 0), 0);
+      const activeTokenMismatchCount = frames.reduce((sum, frame) => sum + Number(frame.activeTokenMismatchCount || 0), 0);
+      const staleTailNonzeroCount = frames.reduce((sum, frame) => sum + Number(frame.staleTailNonzeroCount || 0), 0);
+      const allocationCounts = frames.map(frame => Number(frame.candidateCueRecordAllocationCount)).filter(Number.isFinite);
+      const growthCounts = frames.map(frame => Number(frame.candidateCueRecordGrowthCount)).filter(Number.isFinite);
+      const reuseCounts = frames.map(frame => Number(frame.candidateCueRecordReuseCount)).filter(Number.isFinite);
+      const capacity = frames.find(frame => Number.isFinite(Number(frame.candidateCueRecordCapacity)))?.candidateCueRecordCapacity ?? 160 ** 3;
+      latestCueBufferLifecycleStress = {
+        identity: 'native-low-resident-cue-buffer-lifecycle-stress-v0',
+        claimScope: 'lifecycle-cost-substrate-not-fidelity-or-visual-evidence-v0',
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        sourceBundleSha256: params.get('served_source_bundle_sha256') || null,
+        requestedBackend: 'WebGPU',
+        effectiveBackend: frames.find(frame => frame.effectiveBackend)?.effectiveBackend || null,
+        requestedComposition,
+        effectiveComposition: frames.find(frame => frame.effectiveComposition)?.effectiveComposition || null,
+        candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+        dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+        syntheticWeightsAuthority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+        observedCandidateCountTarget: 209000,
+        candidateCountMin: minCount,
+        candidateCountMax: maxCount,
+        candidateCountMean: counts.length ? counts.reduce((sum, value) => sum + value, 0) / counts.length : null,
+        distinctCandidateCountCount: distinctCounts.length,
+        countDecreaseObserved: frames.some(frame => frame.candidateCountDecrease === true),
+        candidateCueRecordCapacity: capacity,
+        candidateCueRecordCapacityBytes: capacity * 32,
+        candidateCueRecordAllocationCount: allocationCounts.length ? Math.max(...allocationCounts) : 1,
+        candidateCueRecordReuseCount: reuseCounts.length ? Math.max(...reuseCounts) : 0,
+        candidateCueRecordGrowthCount: growthCounts.length ? Math.max(...growthCounts) : 0,
+        noReallocation: allocationCounts.every(value => value === 1),
+        noLeak: growthCounts.every(value => value === 0),
+        hiddenCandidateCap: false,
+        staleTailRowsChecked,
+        activeTokenMismatchCount,
+        staleTailNonzeroCount,
+        staleCueRowsRetained: staleTailNonzeroCount > 0,
+        fidelityClaim: false,
+        visualClaim: false,
+        frameCount: frames.length,
+        frames,
+        failurePhase: null,
+      };
+      status.textContent = `cue lifecycle | frames ${frames.length} | count ${minCount}-${maxCount} | stale ${staleTailNonzeroCount}`;
+      return latestCueBufferLifecycleStress;
+    }
+
     function debugState() {
       const durationSeconds = (performance.now() - startedAtMs) / 1000;
       const receipt = latestReceipt || {};
@@ -695,6 +831,8 @@
         nativeLowSourceHistoryDetailCandidate: receipt.nativeLowSourceHistoryDetailCandidate || null,
         nativeLowFixedSourceDeltaAdmission: receipt.nativeLowFixedSourceDeltaAdmission || null,
         nativeLowCandidateHeadCostMicrobenchmark: receipt.nativeLowCandidateHeadCostMicrobenchmark || null,
+        nativeLowResidentCueBufferLifecycleStress: latestCueBufferLifecycleStress,
+        nativeLowCandidateCueBufferLifecycle: receipt.nativeLowCandidateCueBufferLifecycle || null,
         nativeLowVivisectorCandidateHeadPackageReceiver: vivisectorCandidateHeadPackageReceipt,
         nativeLowFixedGateDiscontinuityAssay: latestDiscontinuityAssay,
         endToEndFrameMs: receipt.endToEndFrameMs ?? null,
@@ -735,6 +873,10 @@
       if (fixedGateDiscontinuityAssayMode) {
         routeStatus = 'assay-running';
         await runFixedGateDiscontinuityAssay(prototype);
+      }
+      if (cueBufferLifecycleStressMode) {
+        routeStatus = 'cue-buffer-lifecycle-stress-running';
+        await runCueBufferLifecycleStress(prototype);
       }
       routeStatus = 'running';
       failurePhase = null;
