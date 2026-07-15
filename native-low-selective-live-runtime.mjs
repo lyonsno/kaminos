@@ -206,6 +206,23 @@ async function readU32Buffer(device, source, byteLength, label) {
   return values;
 }
 
+async function readU32BufferRange(device, source, sourceOffset, byteLength, label) {
+  if (byteLength <= 0) return new Uint32Array(0);
+  const readback = device.createBuffer({
+    label,
+    size: byteLength,
+    usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+  });
+  const encoder = device.createCommandEncoder({ label: `${label} encoder` });
+  encoder.copyBufferToBuffer(source, sourceOffset, readback, 0, byteLength);
+  device.queue.submit([encoder.finish()]);
+  await readback.mapAsync(GPUMapMode.READ);
+  const values = new Uint32Array(readback.getMappedRange()).slice();
+  readback.unmap();
+  readback.destroy();
+  return values;
+}
+
 export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
   if (!device) throw new Error('shared-device native-low runtime requires the renderer WebGPU device');
   const response = await fetch(SELECTIVE_HEAD_LIVE_MODEL_URL, { cache: 'no-store' });
@@ -288,6 +305,29 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       droppedInputChannels: false,
     };
   };
+  const makeEmptySupportTileProfile = (tileProfileReadbackMs = 0) => {
+    const tileSize = 16;
+    const tileGrid = Math.ceil(HIGH_GRID / tileSize);
+    return {
+      identity: 'native-low-support-proximal-tile-profile-v0',
+      authority: 'diagnostic-compacted-support-index-readback-v0',
+      diagnosticFullSupportPassRequired: true,
+      tileProfileReadbackMs,
+      tileSize,
+      tileGrid,
+      highCellCount: highCells,
+      supportMass: 0,
+      supportCentroid: null,
+      supportExtent: null,
+      activeTileCount: 0,
+      activeTileCoverage: 0,
+      projectedSupportFrontCellCount: 0,
+      projectedCellReduction: 1,
+      hiddenSupportCap: false,
+      droppedInputChannels: false,
+    };
+  };
+  let lastSupportTileProfile = makeEmptySupportTileProfile();
   return {
     identity: NATIVE_LOW_SHARED_DEVICE_ROUTE,
     transportMode: NATIVE_LOW_TRANSPORT_MODE,
@@ -358,6 +398,84 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       lastStats.nativeLowInferenceWorkProfile = makeInferenceWorkProfile(lastStats);
       return { ...lastStats };
     },
+    async sampleSupportTileProfile() {
+      const started = performance.now();
+      const supportMass = Number(lastStats.supportPositiveCount || 0);
+      if (supportMass <= 0) {
+        lastSupportTileProfile = makeEmptySupportTileProfile(performance.now() - started);
+        return { ...lastSupportTileProfile };
+      }
+      const supportIndices = await readU32BufferRange(
+        device,
+        lowSnapshotFront,
+        lowFrontBytes,
+        supportMass * Uint32Array.BYTES_PER_ELEMENT,
+        'native-low shared-device support-proximal tile profile readback',
+      );
+      const tileSize = 16;
+      const tileGrid = Math.ceil(HIGH_GRID / tileSize);
+      const activeTiles = new Set();
+      let sumX = 0;
+      let sumY = 0;
+      let sumZ = 0;
+      let minX = HIGH_GRID;
+      let minY = HIGH_GRID;
+      let minZ = HIGH_GRID;
+      let maxX = 0;
+      let maxY = 0;
+      let maxZ = 0;
+      for (const highIndex of supportIndices) {
+        const z = Math.floor(highIndex / (HIGH_GRID * HIGH_GRID));
+        const y = Math.floor((highIndex - z * HIGH_GRID * HIGH_GRID) / HIGH_GRID);
+        const x = highIndex - z * HIGH_GRID * HIGH_GRID - y * HIGH_GRID;
+        sumX += x;
+        sumY += y;
+        sumZ += z;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        minZ = Math.min(minZ, z);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        maxZ = Math.max(maxZ, z);
+        const tx = Math.floor(x / tileSize);
+        const ty = Math.floor(y / tileSize);
+        const tz = Math.floor(z / tileSize);
+        activeTiles.add(tx + ty * tileGrid + tz * tileGrid * tileGrid);
+      }
+      const activeTileCount = activeTiles.size;
+      const tileCellCount = tileSize ** 3;
+      const projectedSupportFrontCellCount = Math.min(highCells, activeTileCount * tileCellCount);
+      lastSupportTileProfile = {
+        identity: 'native-low-support-proximal-tile-profile-v0',
+        authority: 'diagnostic-compacted-support-index-readback-v0',
+        diagnosticFullSupportPassRequired: true,
+        tileProfileReadbackMs: performance.now() - started,
+        tileSize,
+        tileGrid,
+        highCellCount: highCells,
+        supportMass,
+        supportCentroid: {
+          cell: { x: sumX / supportMass, y: sumY / supportMass, z: sumZ / supportMass },
+          normalized: {
+            x: (sumX / supportMass) / Math.max(1, HIGH_GRID - 1),
+            y: (sumY / supportMass) / Math.max(1, HIGH_GRID - 1),
+            z: (sumZ / supportMass) / Math.max(1, HIGH_GRID - 1),
+          },
+        },
+        supportExtent: {
+          minCell: { x: minX, y: minY, z: minZ },
+          maxCell: { x: maxX, y: maxY, z: maxZ },
+          sizeCells: { x: maxX - minX + 1, y: maxY - minY + 1, z: maxZ - minZ + 1 },
+        },
+        activeTileCount,
+        activeTileCoverage: activeTileCount / (tileGrid ** 3),
+        projectedSupportFrontCellCount,
+        projectedCellReduction: 1 - projectedSupportFrontCellCount / highCells,
+        hiddenSupportCap: false,
+        droppedInputChannels: false,
+      };
+      return { ...lastSupportTileProfile };
+    },
     debugState() {
       const nativeLowInferenceWorkProfile = lastStats.nativeLowInferenceWorkProfile || makeInferenceWorkProfile(lastStats);
       return {
@@ -374,6 +492,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         noHiddenCaps: true,
         encodedFrameCount,
         nativeLowInferenceWorkProfile,
+        nativeLowSupportTileProfile: lastSupportTileProfile,
         ...lastStats,
       };
     },

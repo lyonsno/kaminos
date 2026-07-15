@@ -81,6 +81,10 @@ assert.match(combined, /frozenDenseRouteControl[\s\S]*denseReceiverWriteBytes[\s
 assert.match(combined, /measuredInteractiveBasinProjection[\s\S]*dense160ReceiverWriteAvoidanceCandidate[\s\S]*projectionAuthority/, 'production ledger emits an honest measured interactive-basin projection');
 assert.match(combined, /simulationSteppingReceipt[\s\S]*simStepDelta[\s\S]*currentSourceFrameConsumption/, 'route rejects repeated static prediction by proving sim step and current-source consumption');
 assert.match(witness, /nativeLowProductionStageLedger[\s\S]*stalePredictionRejection[\s\S]*simulationSteppingReceipt/, 'witness preserves production ledger and stale-prediction checks');
+assert.match(combined, /native-low-support-proximal-tile-profile-v0/, 'route records support-proximal tile profile for sparse/tiled support-front architecture');
+assert.match(combined, /supportCentroid[\s\S]*supportExtent[\s\S]*activeTileCount[\s\S]*projectedSupportFrontCellCount/, 'support tile profile preserves centroid, extent, active tiles, and projected cell count');
+assert.match(combined, /diagnosticFullSupportPassRequired[\s\S]*tileProfileReadbackMs/, 'support tile profile admits diagnostic full-pass/readback authority');
+assert.match(witness, /nativeLowSupportTileProfile[\s\S]*activeTileCoverage[\s\S]*projectedCellReduction/, 'witness preserves support-proximal sparse/tiled projection');
 assert.match(route, /durationSeconds/, 'route reports continuous comparison duration');
 assert.match(route, /blankFrameRejection/, 'route refuses blank frames as evidence');
 assert.match(route, /frameCacheKey/, 'route distinguishes live frames from cached screenshots');

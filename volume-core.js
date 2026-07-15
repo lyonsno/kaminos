@@ -12981,6 +12981,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const supportStatsStart = performance.now();
       const supportStats = await runtime.sampleSupportStats();
       const supportStatsMs = performance.now() - supportStatsStart;
+      const nativeLowSupportTileProfile = await runtime.sampleSupportTileProfile();
       const runtimeState = runtime.debugState();
       const encodedFrameDelta = Number(runtimeState.encodedFrameCount || 0) - Number(runtimeBeforeInference.encodedFrameCount || 0);
       if (encodedFrameDelta !== 1) throw new Error(`repeated-static-prediction:${encodedFrameDelta}`);
@@ -13012,7 +13013,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         supportCompactedCount: nativeLowInferenceWorkProfile?.supportCompactedCount ?? null,
         residualHeadEvaluatedCount: nativeLowInferenceWorkProfile?.residualHeadEvaluatedCount ?? null,
       };
-      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs, currentSourceFrameConsumption, stalePredictionRejection };
+      lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inferenceTiming, supportStats, supportStatsMs, nativeLowSupportTileProfile, currentSourceFrameConsumption, stalePredictionRejection };
 
       failurePhase = 'shared-device-treatment-materialization';
       const treatmentMaterializeStart = performance.now();
@@ -13172,6 +13173,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           avoidedDenseReceiverWriteBytesLowerBound: Math.max(0, denseReceiverWriteBytes - projectedSparseCandidateBytes),
           projectionAuthority: 'measured-splat-count-times-current-candidate-stride-v0',
         },
+        supportProximalTileProjection: {
+          identity: nativeLowSupportTileProfile.identity,
+          diagnosticFullSupportPassRequired: nativeLowSupportTileProfile.diagnosticFullSupportPassRequired,
+          supportCentroid: nativeLowSupportTileProfile.supportCentroid,
+          supportExtent: nativeLowSupportTileProfile.supportExtent,
+          activeTileCount: nativeLowSupportTileProfile.activeTileCount,
+          activeTileCoverage: nativeLowSupportTileProfile.activeTileCoverage,
+          projectedSupportFrontCellCount: nativeLowSupportTileProfile.projectedSupportFrontCellCount,
+          projectedCellReduction: nativeLowSupportTileProfile.projectedCellReduction,
+          tileProfileReadbackMs: nativeLowSupportTileProfile.tileProfileReadbackMs,
+        },
         simulationSteppingReceipt,
         currentSourceFrameConsumption,
         stalePredictionRejection,
@@ -13207,6 +13219,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         noHiddenCaps: runtimeState.noHiddenCaps,
         nativeLowInferenceWorkProfile,
         nativeLowHeadCostProfile,
+        nativeLowSupportTileProfile,
         supportPositiveCount,
         supportPrevalence,
         treatmentSplatCandidateCount,

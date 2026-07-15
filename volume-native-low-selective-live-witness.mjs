@@ -140,6 +140,10 @@ try {
       && state?.headCostTimingAuthority === 'webgpu-timestamp-query-stage-split-v0'
       && Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0
       && Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0
+      && state?.nativeLowSupportTileProfile?.identity === 'native-low-support-proximal-tile-profile-v0'
+      && Number(state?.nativeLowSupportTileProfile?.activeTileCount) >= 0
+      && Number(state?.nativeLowSupportTileProfile?.projectedSupportFrontCellCount) >= 0
+      && Number(state?.nativeLowSupportTileProfile?.tileProfileReadbackMs) >= 0
       && state?.nativeLowProductionStageLedger?.identity === 'native-low-production-stage-ledger-v0'
       && state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained === true
       && Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0
@@ -196,6 +200,10 @@ try {
   assert.equal(state?.headCostTimingAuthority, 'webgpu-timestamp-query-stage-split-v0', 'wrong head cost timing authority');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportFrontGpuMs) >= 0, 'supportFrontGpuMs missing');
   assert.ok(Number(state?.nativeLowHeadCostProfile?.supportPositiveResidualGpuMs) >= 0, 'supportPositiveResidualGpuMs missing');
+  assert.equal(state?.nativeLowSupportTileProfile?.identity, 'native-low-support-proximal-tile-profile-v0', 'support-proximal tile profile missing');
+  assert.ok(Number(state?.nativeLowSupportTileProfile?.activeTileCount) >= 0, 'activeTileCount missing');
+  assert.ok(Number(state?.nativeLowSupportTileProfile?.projectedSupportFrontCellCount) >= 0, 'projectedSupportFrontCellCount missing');
+  assert.ok(Number(state?.nativeLowSupportTileProfile?.tileProfileReadbackMs) >= 0, 'tileProfileReadbackMs missing');
   assert.equal(state?.nativeLowProductionStageLedger?.identity, 'native-low-production-stage-ledger-v0', 'production stage ledger missing');
   assert.equal(state?.nativeLowProductionStageLedger?.frozenDenseRouteControl?.retained, true, 'frozen dense route control missing');
   assert.ok(Number(state?.nativeLowProductionStageLedger?.denseReceiverWriteBytes) > 0, 'dense receiver write bytes missing');
@@ -253,6 +261,12 @@ try {
     treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
     nativeLowMaterializationProfile: endState.nativeLowMaterializationProfile,
     nativeLowProductionStageLedger: endState.nativeLowProductionStageLedger,
+    nativeLowSupportTileProfile: endState.nativeLowSupportTileProfile,
+    supportTileProjection: {
+      activeTileCoverage: endState.nativeLowSupportTileProfile?.activeTileCoverage,
+      projectedCellReduction: endState.nativeLowSupportTileProfile?.projectedCellReduction,
+      projectedSupportFrontCellCount: endState.nativeLowSupportTileProfile?.projectedSupportFrontCellCount,
+    },
     simulationSteppingReceipt: endState.simulationSteppingReceipt,
     currentSourceFrameConsumption: endState.currentSourceFrameConsumption,
     stalePredictionRejection: endState.stalePredictionRejection,
