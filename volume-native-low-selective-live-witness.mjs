@@ -12,7 +12,7 @@ const ROUTE = 'native-low-live-browser-webgpu-inference-v0';
 const MODEL = 'exact-basin-selective-carrier-heads-160-to-128-v0';
 const MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9';
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
-const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-fixed-source-delta-calibration-relative-warning-v1';
+const REQUIRED_RUNTIME_BUILD_IDENTITY = 'native-low-candidate-head-cost-microbenchmark-v1';
 const WITNESS_CONTRACT_MARKERS = Object.freeze({
   transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
   requestedCalibration: 'native-low-learned-splat-calibration-v0',
@@ -36,6 +36,7 @@ const url = required('--url');
 const expectedRuntimeBuildIdentity = String(args.get('--expected-runtime-build') || REQUIRED_RUNTIME_BUILD_IDENTITY);
 const frontTopologyAblationRequested = new URL(url).searchParams.get('front_topology_ablation') === '1';
 const fixedGateDiscontinuityAssayRequested = new URL(url).searchParams.get('fixed_gate_discontinuity_assay') === '1';
+const candidateHeadBenchmarkRequested = new URL(url).searchParams.get('candidate_head_benchmark') === '1';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-native-low-selective-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
@@ -351,6 +352,35 @@ try {
   assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.mohelWarningBoundaryCoverage) > 0, 'Mohel warning boundary coverage missing');
   assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCount) >= 0, 'uncapped candidate count missing');
   assert.ok(Number(state?.nativeLowFixedSourceDeltaAdmission?.uncappedCandidateCoverage) >= 0, 'uncapped candidate coverage missing');
+  if (candidateHeadBenchmarkRequested) {
+    const benchmark = state?.nativeLowCandidateHeadCostMicrobenchmark || {};
+    assert.equal(benchmark.identity, 'native-low-candidate-head-cost-microbenchmark-v0', 'candidate-head benchmark missing');
+    assert.equal(benchmark.authority, 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0', 'candidate-head benchmark authority overclaims learned evidence');
+    assert.equal(benchmark.coarseLatentAuthority, 'deterministic-synthetic-coarse-latent-v0', 'candidate-head benchmark coarse latent authority missing');
+    assert.equal(benchmark.learnedWeightsUsed, false, 'candidate-head benchmark used learned weights');
+    assert.equal(benchmark.fidelityClaim, false, 'candidate-head benchmark made a fidelity claim');
+    assert.equal(benchmark.visualClaim, false, 'candidate-head benchmark made a visual claim');
+    assert.deepEqual(benchmark.benchmarkWidths, [16, 24, 32], 'candidate-head benchmark widths drifted');
+    assert.equal(benchmark.dispatchMode, 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0', 'candidate-head benchmark did not use indirect source-history dispatch args');
+    assert.equal(benchmark.candidateListSource, 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0', 'candidate-head benchmark did not consume the real fixed-gate candidate list');
+    assert.equal(benchmark.candidateInputs?.currentSourceChannels, 17, 'candidate-head benchmark did not read all current source channels');
+    assert.equal(benchmark.candidateInputs?.sourceDeltaChannels, 17, 'candidate-head benchmark did not read all source deltas');
+    assert.equal(benchmark.candidateInputs?.normalizedPositionAndSubcell, true, 'candidate-head benchmark did not read normalized position/subcell');
+    assert.equal(benchmark.outputSchema?.identity, 'compact-renderer-facing-cue-record-v0', 'candidate-head benchmark output schema missing');
+    assert.equal(Number(benchmark.outputSchema?.cueRecordStrideBytes), 32, 'candidate-head benchmark cue stride drifted');
+    assert.equal(benchmark.pathExclusions?.noJsCandidateList, true, 'candidate-head benchmark exposed a JS candidate list');
+    assert.equal(benchmark.pathExclusions?.productionPathCpuReadback, false, 'candidate-head benchmark added CPU readback to production path');
+    assert.equal(benchmark.pathExclusions?.dense160ReceiverMaterialization, false, 'candidate-head benchmark materialized a dense 160 receiver');
+    assert.equal(benchmark.pathExclusions?.hiddenCandidateCap, false, 'candidate-head benchmark hid a candidate cap');
+    assert.equal(benchmark.frozenDenseHeadsControl, 'arithmetic-control-only', 'candidate-head benchmark misused frozen dense heads as runtime evidence');
+    assert.equal(benchmark.widthResults?.length, 3, 'candidate-head benchmark did not report three width results');
+    assert.ok(benchmark.widthResults.every(result => [16, 24, 32].includes(Number(result.width))), 'candidate-head benchmark reported an unexpected width');
+    assert.ok(benchmark.widthResults.every(result => Number(result.indirectWorkgroups) >= 0 && Number(result.indirectThreads) >= 0), 'candidate-head benchmark indirect work accounting missing');
+    assert.ok(benchmark.widthResults.every(result => Number(result.estimatedTotalMacs) >= 0 && Number(result.estimatedTotalBytes) >= 0), 'candidate-head benchmark MAC/byte accounting missing');
+    assert.equal(benchmark.budgetDisposition?.profitableTargetMs, 10, 'candidate-head benchmark profitable target missing');
+    assert.equal(benchmark.budgetDisposition?.credibleBreakEvenTargetMs, 15, 'candidate-head benchmark credible target missing');
+    assert.equal(benchmark.budgetDisposition?.outerKillBoundaryMs, 24, 'candidate-head benchmark kill boundary missing');
+  }
   if (frontTopologyAblationRequested) {
     assert.equal(state?.nativeLowFrontTopologyAblation?.identity, 'native-low-front-topology-ablation-v0', 'frontTopology ablation missing');
     assert.equal(state?.nativeLowFrontTopologyAblation?.offlineImporterUsed, false, 'offline importer was used for frontTopology ablation');
@@ -385,6 +415,11 @@ try {
     assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.actualBasinGridSceneRebuild?.sourceHistoryResetReason, 'epoch-changed-first-frame-invalidated', 'rebuild first frame was not invalidated');
     assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.postRebuildConsecutiveValidFrame?.historyEpochValidForAdmission, true, 'post-rebuild consecutive frame did not become valid');
     assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.assayClaimScope, 'routing-cost-discontinuity-receipt-not-visual-robustness-claim-v0', 'assay overclaimed visual robustness');
+    if (candidateHeadBenchmarkRequested) {
+      assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.candidateHeadCostMicrobenchmarkStrip?.identity, 'native-low-candidate-head-cost-microbenchmark-v0', 'assay did not preserve candidate-head benchmark strip');
+      assert.ok(Number(state?.nativeLowFixedGateDiscontinuityAssay?.candidateHeadCostMicrobenchmarkStrip?.benchmarkFrameCount) >= 4, 'assay did not benchmark the steady pre-shift strip');
+      assert.ok(Number(state?.nativeLowFixedGateDiscontinuityAssay?.candidateHeadCostMicrobenchmarkStrip?.candidateCountMax) >= Number(state?.nativeLowFixedGateDiscontinuityAssay?.candidateHeadCostMicrobenchmarkStrip?.candidateCountMin), 'assay benchmark count range invalid');
+    }
   }
 
   const startState = state;
@@ -455,8 +490,10 @@ try {
     nativeLowCoarseFrontSparseDetailBand: endState.nativeLowCoarseFrontSparseDetailBand,
     nativeLowSourceHistoryDetailCandidate: endState.nativeLowSourceHistoryDetailCandidate,
     nativeLowFixedSourceDeltaAdmission: endState.nativeLowFixedSourceDeltaAdmission,
+    nativeLowCandidateHeadCostMicrobenchmark: endState.nativeLowCandidateHeadCostMicrobenchmark,
     nativeLowFixedGateDiscontinuityAssay: endState.nativeLowFixedGateDiscontinuityAssay,
     fixedGateDiscontinuityAssayRequested,
+    candidateHeadBenchmarkRequested,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
     frontTopologyAblatedTreatment: endState.frontTopologyAblatedTreatment,

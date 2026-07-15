@@ -12881,6 +12881,25 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  async function readNativeLowCandidateHeadCostTimings(source) {
+    await source.mapAsync(GPUMapMode.READ);
+    const values = new BigUint64Array(source.getMappedRange().slice(0));
+    source.unmap();
+    source.destroy();
+    const widths = [16, 24, 32];
+    const timings = {};
+    for (let index = 0; index < widths.length; index += 1) {
+      const start = values[index * 2];
+      const end = values[index * 2 + 1];
+      timings[widths[index]] = start > 0n && end >= start ? Number(end - start) / 1_000_000 : null;
+    }
+    return {
+      authority: 'webgpu-timestamp-query-width-split-v0',
+      values: Array.from(values, value => value.toString()),
+      timings,
+    };
+  }
+
   async function captureNativeLowSelectiveSharedDeviceFrame(options = {}) {
     let failurePhase = 'shared-device-preflight';
     let lastTrustworthyEvidence = {};
@@ -12940,6 +12959,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       let timestampWrites = null;
       let stageTimestampWrites = null;
       const timestampQueryCount = 6;
+      const candidateHeadBenchmarkEnabled = options.candidateHeadBenchmarkEnabled === true;
+      let candidateQuerySet = null;
+      let candidateTimestampReadback = null;
+      let candidateTimestampResolveBuffer = null;
+      const candidateTimestampQueryCount = 6;
       if (timestampSupported) {
         querySet = device.createQuerySet({ type: 'timestamp', count: timestampQueryCount });
         timestampResolveBuffer = device.createBuffer({
@@ -12958,6 +12982,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           supportFront: { querySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
           supportPositiveResidual: { querySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 },
         };
+        if (candidateHeadBenchmarkEnabled) {
+          candidateQuerySet = device.createQuerySet({ type: 'timestamp', count: candidateTimestampQueryCount });
+          candidateTimestampResolveBuffer = device.createBuffer({
+            label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark timestamp resolve`,
+            size: candidateTimestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+          });
+          candidateTimestampReadback = device.createBuffer({
+            label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark timestamp readback`,
+            size: candidateTimestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+          });
+          stageTimestampWrites.candidateHeadBenchmark = {
+            16: { querySet: candidateQuerySet, beginningOfPassWriteIndex: 0, endOfPassWriteIndex: 1 },
+            24: { querySet: candidateQuerySet, beginningOfPassWriteIndex: 2, endOfPassWriteIndex: 3 },
+            32: { querySet: candidateQuerySet, beginningOfPassWriteIndex: 4, endOfPassWriteIndex: 5 },
+          };
+        }
       }
       const inferenceStart = performance.now();
       device.pushErrorScope('validation');
@@ -12975,10 +13017,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         stageTimestampWrites,
         historyEpochIdentity,
         historyResetReason,
+        candidateHeadBenchmarkEnabled,
       });
       if (querySet && timestampReadback && timestampResolveBuffer) {
         inferenceEncoder.resolveQuerySet(querySet, 0, timestampQueryCount, timestampResolveBuffer, 0);
         inferenceEncoder.copyBufferToBuffer(timestampResolveBuffer, 0, timestampReadback, 0, timestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT);
+      }
+      if (candidateQuerySet && candidateTimestampReadback && candidateTimestampResolveBuffer) {
+        inferenceEncoder.resolveQuerySet(candidateQuerySet, 0, candidateTimestampQueryCount, candidateTimestampResolveBuffer, 0);
+        inferenceEncoder.copyBufferToBuffer(
+          candidateTimestampResolveBuffer,
+          0,
+          candidateTimestampReadback,
+          0,
+          candidateTimestampQueryCount * BigUint64Array.BYTES_PER_ELEMENT,
+        );
       }
       device.queue.submit([inferenceEncoder.finish()]);
       if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
@@ -13008,6 +13061,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const supportStatsStart = performance.now();
       const supportStats = await runtime.sampleSupportStats();
       const supportStatsMs = performance.now() - supportStatsStart;
+      let nativeLowCandidateHeadCostMicrobenchmark = runtime.debugState().nativeLowCandidateHeadCostMicrobenchmark || null;
+      if (candidateHeadBenchmarkEnabled) {
+        let candidateTiming = null;
+        if (candidateTimestampReadback) {
+          candidateTiming = await readNativeLowCandidateHeadCostTimings(candidateTimestampReadback);
+          candidateTimestampResolveBuffer?.destroy();
+          candidateQuerySet?.destroy?.();
+        }
+        nativeLowCandidateHeadCostMicrobenchmark = runtime.makeCandidateHeadCostMicrobenchmarkReceipt(
+          candidateTiming?.timings || null,
+          candidateTiming?.values || [],
+        );
+        nativeLowCandidateHeadCostMicrobenchmark.sourceDeltaAdmissionGpuMs = nativeLowHeadCostProfile.sourceDeltaAdmissionGpuMs;
+      }
       const nativeLowSupportTileProfile = await runtime.sampleSupportTileProfile();
       const nativeLowSourceTileCandidate = await runtime.sampleSourceProximalTileCandidate();
       const runtimeState = runtime.debugState();
@@ -13450,6 +13517,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         learnedTransferBreakEven: nativeLowBreakEvenBudgetLedger,
         coarseFrontSparseDetailBand: nativeLowCoarseFrontSparseDetailBand,
         sourceHistoryDetailCandidate: nativeLowSourceHistoryDetailCandidate,
+        candidateHeadCostMicrobenchmark: nativeLowCandidateHeadCostMicrobenchmark,
         simulationSteppingReceipt,
         currentSourceFrameConsumption,
         stalePredictionRejection,
@@ -13564,6 +13632,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         nativeLowBreakEvenBudgetLedger,
         nativeLowCoarseFrontSparseDetailBand,
         nativeLowSourceHistoryDetailCandidate,
+        nativeLowCandidateHeadCostMicrobenchmark,
         nativeLowFixedSourceDeltaAdmission,
         nativeLowFrontTopologyAblation,
         frontTopologyAblationEnabled,

@@ -65,7 +65,7 @@
     const CONTRACT_MARKERS = Object.freeze({
       routeIdentity: 'native-low-live-browser-webgpu-inference-v0',
       sharedDeviceRoute: 'native-low-shared-device-buffer-inference-v0',
-      runtimeBuildIdentity: 'native-low-fixed-source-delta-calibration-relative-warning-v1',
+      runtimeBuildIdentity: 'native-low-candidate-head-cost-microbenchmark-v1',
       schema: REPORT_SCHEMA,
       modelIdentity: 'exact-basin-selective-carrier-heads-160-to-128-v0',
       modelSha256: 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd883dc9',
@@ -135,6 +135,16 @@
         uncappedCandidateCoverage: 0,
         mohelWarning: null,
       },
+      nativeLowCandidateHeadCostMicrobenchmark: {
+        identity: 'native-low-candidate-head-cost-microbenchmark-v0',
+        authority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+        coarseLatentAuthority: 'deterministic-synthetic-coarse-latent-v0',
+        benchmarkWidths: [16, 24, 32],
+        candidateInputs: { currentSourceChannels: 17, sourceDeltaChannels: 17, normalizedPositionAndSubcell: true },
+        outputSchema: { identity: 'compact-renderer-facing-cue-record-v0', cueRecordStrideBytes: 32 },
+        pathExclusions: { noJsCandidateList: true, productionPathCpuReadback: false, dense160ReceiverMaterialization: false, hiddenCandidateCap: false },
+        frozenDenseHeadsControl: 'arithmetic-control-only',
+      },
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -156,6 +166,7 @@
     const native64ManifestMode = Boolean(native64SourceManifestUrl && native64PredictionManifestUrl);
     const frontTopologyAblationMode = !native64ManifestMode && params.get('front_topology_ablation') === '1';
     const fixedGateDiscontinuityAssayMode = !native64ManifestMode && params.get('fixed_gate_discontinuity_assay') === '1';
+    const candidateHeadBenchmarkEnabled = !native64ManifestMode && params.get('candidate_head_benchmark') === '1';
     const sourceHistoryDetailAdmissionEnabled = !native64ManifestMode && params.get('source_history_detail_candidate') !== '0';
     const sourceHistoryDetailTargetCoverage = Math.max(0.01, Math.min(0.5, Number(params.get('source_history_detail_coverage') || 0.10)));
     const supportProbabilityDetailAdmissionEnabled = params.get('support_detail_admission') === '1';
@@ -299,6 +310,7 @@
         coarseFrontDetailAdmissionEnabled,
         treatmentSplatRadianceGain,
         treatmentSplatOpacityGain,
+        candidateHeadBenchmarkEnabled,
       };
       const receipt = native64ManifestMode
         ? await prototype.captureNativeLowCrossGridManifestFrame({
@@ -355,6 +367,7 @@
         mohelWarningBoundaryCoverage: admission.mohelWarningBoundaryCoverage ?? null,
         mohelWarningCoverageRatio: admission.mohelWarningCoverageRatio ?? null,
         mohelWarning: admission.mohelWarning || null,
+        candidateHeadCostMicrobenchmark: receipt?.nativeLowCandidateHeadCostMicrobenchmark || null,
         runtimeTopK: admission.runtimeTopK ?? null,
         dynamicPercentile: admission.dynamicPercentile ?? null,
         hiddenCandidateCap: admission.hiddenCandidateCap ?? null,
@@ -443,6 +456,8 @@
       assayFrames.push(postRebuildValid);
 
       const preShiftStripStats = stripStats(preShiftFrames);
+      const benchmarkFrames = preShiftFrames.map(frame => frame.candidateHeadCostMicrobenchmark).filter(Boolean);
+      const benchmarkCandidateCounts = numericStats(benchmarkFrames.map(benchmark => benchmark.candidateCount));
       latestDiscontinuityAssay = {
         identity: 'native-low-fixed-source-delta-discontinuity-assay-v0',
         assayClaimScope: 'routing-cost-discontinuity-receipt-not-visual-robustness-claim-v0',
@@ -484,6 +499,17 @@
           provisionalOldRuntimeR20Coverage: 0.157384,
           retargetedToTenPercent: false,
           hiddenCapApplied: false,
+        },
+        candidateHeadCostMicrobenchmarkStrip: {
+          enabled: candidateHeadBenchmarkEnabled,
+          identity: 'native-low-candidate-head-cost-microbenchmark-v0',
+          claimScope: 'gpu-cost-microbenchmark-not-visual-or-fidelity-evidence-v0',
+          observedCandidateCountTargets: [554000, 609000, 761000],
+          benchmarkFrameCount: benchmarkFrames.length,
+          candidateCountMin: benchmarkCandidateCounts.min,
+          candidateCountMax: benchmarkCandidateCounts.max,
+          candidateCountMean: benchmarkCandidateCounts.mean,
+          frames: benchmarkFrames,
         },
         noRebuildViolentSourceShapeShift: noRebuildShift,
         actualBasinGridSceneRebuild: rebuildInvalidated,
@@ -598,6 +624,7 @@
         nativeLowCoarseFrontSparseDetailBand: receipt.nativeLowCoarseFrontSparseDetailBand || null,
         nativeLowSourceHistoryDetailCandidate: receipt.nativeLowSourceHistoryDetailCandidate || null,
         nativeLowFixedSourceDeltaAdmission: receipt.nativeLowFixedSourceDeltaAdmission || null,
+        nativeLowCandidateHeadCostMicrobenchmark: receipt.nativeLowCandidateHeadCostMicrobenchmark || null,
         nativeLowFixedGateDiscontinuityAssay: latestDiscontinuityAssay,
         endToEndFrameMs: receipt.endToEndFrameMs ?? null,
         simulationSteppingReceipt: receipt.simulationSteppingReceipt || null,

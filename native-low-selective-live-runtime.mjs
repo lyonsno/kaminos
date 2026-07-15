@@ -14,7 +14,8 @@ export const NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH = 'native-low-support
 export const NATIVE_LOW_SUPPORT_POSITIVE_INDIRECT_RESIDUAL_DISPATCH = 'native-low-support-positive-indirect-residual-dispatch-v0';
 export const NATIVE_LOW_FIXED_SOURCE_DELTA_ADMISSION = 'native-low-fixed-source-delta-admission-v0';
 export const NATIVE_LOW_SOURCE_PROXIMAL_TILE_CANDIDATE = 'native-low-source-proximal-tile-candidate-v0';
-export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-fixed-source-delta-calibration-relative-warning-v1';
+export const NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK = 'native-low-candidate-head-cost-microbenchmark-v0';
+export const NATIVE_LOW_RUNTIME_BUILD_IDENTITY = 'native-low-candidate-head-cost-microbenchmark-v1';
 
 const LOW_GRID = 128;
 const HIGH_GRID = 160;
@@ -24,6 +25,10 @@ const HIDDEN_WIDTH = 48;
 const STATS_BYTES = 16;
 const INDIRECT_ARGS_BYTES = 16;
 const RESIDUAL_WORKGROUP_SIZE = 64;
+const CANDIDATE_HEAD_BENCHMARK_WIDTHS = Object.freeze([16, 24, 32]);
+const CANDIDATE_HEAD_INPUT_COUNT = 48;
+const CANDIDATE_HEAD_OUTPUT_COUNT = 8;
+const CANDIDATE_CUE_RECORD_STRIDE_BYTES = 32;
 const SOURCE_DELTA_THRESHOLD = 0.5457155704;
 const SOURCE_DELTA_CALIBRATION_SHA256 = 'c1b0c1ada36317ee634f198cd90e1ce9be5fb38a421c7e500af3f465834c16d3';
 const SOURCE_DELTA_SCALES = Object.freeze([
@@ -330,6 +335,102 @@ fn finalizeSourceHistoryDispatchArgs() {
 }
 `;
 
+function candidateHeadBenchmarkWgsl(width) {
+  return `
+const LOW_GRID: u32 = ${LOW_GRID}u;
+const HIGH_GRID: u32 = ${HIGH_GRID}u;
+const SLOTS_PER_CELL: u32 = ${SLOTS_PER_CELL}u;
+const RESIDUAL_WORKGROUP_SIZE: u32 = ${RESIDUAL_WORKGROUP_SIZE}u;
+const BENCHMARK_WIDTH: u32 = ${width}u;
+const INPUT_COUNT: u32 = ${CANDIDATE_HEAD_INPUT_COUNT}u;
+
+@group(0) @binding(0) var<storage, read> lowFluid: array<vec4<f32>>;
+@group(0) @binding(1) var<storage, read> lowFront: array<f32>;
+@group(0) @binding(2) var<storage, read> priorLowFluid: array<vec4<f32>>;
+@group(0) @binding(3) var<storage, read> priorLowFrontAndSupport: array<u32>;
+@group(0) @binding(4) var<storage, read> sourceHistoryCandidates: array<u32>;
+@group(0) @binding(5) var<storage, read> sourceHistoryDispatchArgs: array<u32>;
+@group(0) @binding(6) var<storage, read_write> candidateCueRecords: array<vec4<f32>>;
+
+fn index3(cell: vec3<u32>, grid: u32) -> u32 {
+  return cell.x + cell.y * grid + cell.z * grid * grid;
+}
+
+fn syntheticWeight(a: u32, b: u32, salt: f32) -> f32 {
+  return (fract(sin(f32(a * 131u + b * 17u + 11u)) * 43758.5453 + salt) - 0.5) * 0.125;
+}
+
+@compute @workgroup_size(${RESIDUAL_WORKGROUP_SIZE})
+fn benchmarkCandidateHead(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let compactIndex = gid.x;
+  let candidateCount = sourceHistoryDispatchArgs[3];
+  if (compactIndex >= candidateCount) { return; }
+  let highIndex = sourceHistoryCandidates[compactIndex];
+  let z = highIndex / (HIGH_GRID * HIGH_GRID);
+  let y = (highIndex - z * HIGH_GRID * HIGH_GRID) / HIGH_GRID;
+  let x = highIndex - z * HIGH_GRID * HIGH_GRID - y * HIGH_GRID;
+  let highCell = vec3<u32>(x, y, z);
+  let lowCell = min(vec3<u32>(LOW_GRID - 1u), vec3<u32>(floor(vec3<f32>(highCell) * f32(LOW_GRID) / f32(HIGH_GRID))));
+  let lowIndex = index3(lowCell, LOW_GRID);
+  var inputs: array<f32, ${CANDIDATE_HEAD_INPUT_COUNT}>;
+  for (var slot = 0u; slot < SLOTS_PER_CELL; slot += 1u) {
+    let current = lowFluid[lowIndex * SLOTS_PER_CELL + slot];
+    let prior = priorLowFluid[lowIndex * SLOTS_PER_CELL + slot];
+    inputs[slot * 4u + 0u] = current.x;
+    inputs[slot * 4u + 1u] = current.y;
+    inputs[slot * 4u + 2u] = current.z;
+    inputs[slot * 4u + 3u] = current.w;
+    inputs[17u + slot * 4u + 0u] = current.x - prior.x;
+    inputs[17u + slot * 4u + 1u] = current.y - prior.y;
+    inputs[17u + slot * 4u + 2u] = current.z - prior.z;
+    inputs[17u + slot * 4u + 3u] = current.w - prior.w;
+  }
+  let currentFront = lowFront[lowIndex];
+  let priorFront = bitcast<f32>(priorLowFrontAndSupport[lowIndex]);
+  inputs[16u] = currentFront;
+  inputs[33u] = currentFront - priorFront;
+  let normalized = vec3<f32>(highCell) / f32(HIGH_GRID - 1u);
+  let lowCellFloat = vec3<f32>(highCell) * f32(LOW_GRID) / f32(HIGH_GRID);
+  let subcell = fract(lowCellFloat);
+  inputs[34u] = normalized.x;
+  inputs[35u] = normalized.y;
+  inputs[36u] = normalized.z;
+  inputs[37u] = subcell.x;
+  inputs[38u] = subcell.y;
+  inputs[39u] = subcell.z;
+  let centered = normalized * 2.0 - vec3<f32>(1.0);
+  inputs[40u] = sin(centered.x * 3.14159265);
+  inputs[41u] = cos(centered.x * 3.14159265);
+  inputs[42u] = sin(centered.y * 3.14159265);
+  inputs[43u] = cos(centered.y * 3.14159265);
+  inputs[44u] = sin(centered.z * 3.14159265);
+  inputs[45u] = cos(centered.z * 3.14159265);
+  inputs[46u] = length(centered.xz);
+  inputs[47u] = centered.y * inputs[46u];
+
+  var hidden: array<f32, ${width}>;
+  for (var h = 0u; h < BENCHMARK_WIDTH; h += 1u) {
+    var value = syntheticWeight(999u, h, 0.03125);
+    for (var i = 0u; i < INPUT_COUNT; i += 1u) {
+      value += inputs[i] * syntheticWeight(i, h, 0.0625);
+    }
+    hidden[h] = tanh(value);
+  }
+  var outputs: array<f32, ${CANDIDATE_HEAD_OUTPUT_COUNT}>;
+  for (var o = 0u; o < ${CANDIDATE_HEAD_OUTPUT_COUNT}u; o += 1u) {
+    var value = syntheticWeight(777u, o, 0.09375);
+    for (var h = 0u; h < BENCHMARK_WIDTH; h += 1u) {
+      value += hidden[h] * syntheticWeight(h, o + 101u, 0.125);
+    }
+    outputs[o] = value;
+  }
+  let outBase = compactIndex * 2u;
+  candidateCueRecords[outBase] = vec4<f32>(normalized, outputs[0]);
+  candidateCueRecords[outBase + 1u] = vec4<f32>(outputs[1], outputs[2], outputs[3], outputs[4]);
+}
+`;
+}
+
 async function sha256Hex(bytes) {
   const buffer = bytes instanceof ArrayBuffer ? bytes : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const digest = await crypto.subtle.digest('SHA-256', buffer);
@@ -394,6 +495,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
   const stats = makeBuffer('native-low shared-device support stats', STATS_BYTES);
   const sourceHistoryCandidates = makeBuffer('native-low fixed source-delta high-cell candidates', highCells * Uint32Array.BYTES_PER_ELEMENT);
   const sourceHistoryStats = makeBuffer('native-low fixed source-delta stats', STATS_BYTES);
+  const candidateCueRecords = makeBuffer('native-low candidate-head benchmark compact cue records', highCells * CANDIDATE_CUE_RECORD_STRIDE_BYTES);
   const residualDispatchArgs = makeBuffer(
     'native-low shared-device finalized residual dispatch args',
     INDIRECT_ARGS_BYTES,
@@ -503,6 +605,34 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     }),
     compute: { module: finalizeSourceHistoryDispatchShader, entryPoint: 'finalizeSourceHistoryDispatchArgs' },
   });
+  const candidateHeadBenchmarkLayout = device.createBindGroupLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark layout`,
+    entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 3, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 5, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+    ],
+  });
+  const candidateHeadBenchmarkPipelineLayout = device.createPipelineLayout({
+    label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark pipeline layout`,
+    bindGroupLayouts: [candidateHeadBenchmarkLayout],
+  });
+  const candidateHeadBenchmarkPipelines = new Map();
+  for (const width of CANDIDATE_HEAD_BENCHMARK_WIDTHS) {
+    const module = device.createShaderModule({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark width ${width} WGSL`,
+      code: candidateHeadBenchmarkWgsl(width),
+    });
+    candidateHeadBenchmarkPipelines.set(width, device.createComputePipeline({
+      label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark width ${width}`,
+      layout: candidateHeadBenchmarkPipelineLayout,
+      compute: { module, entryPoint: 'benchmarkCandidateHead' },
+    }));
+  }
   let encodedFrameCount = 0;
   let lastHistoryEpochIdentity = null;
   let lastSourceHistoryEpochReceipt = {
@@ -539,6 +669,115 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     runtimeTopK: false,
     dynamicPercentile: false,
     hiddenCandidateCap: false,
+  };
+  let lastCandidateHeadBenchmark = {
+    identity: NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK,
+    enabled: false,
+    authority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+    learnedWeightsUsed: false,
+    fidelityClaim: false,
+    visualClaim: false,
+  };
+  const makeCandidateHeadBenchmarkReceipt = (widthTimings = null, timestampValues = []) => {
+    const candidateCount = Number(lastSourceHistoryAdmission.uncappedCandidateCount || 0);
+    const candidateCoverage = Number(lastSourceHistoryAdmission.uncappedCandidateCoverage || 0);
+    const workgroups = Math.ceil(candidateCount / RESIDUAL_WORKGROUP_SIZE);
+    const threads = workgroups * RESIDUAL_WORKGROUP_SIZE;
+    const perCandidateMacs = CANDIDATE_HEAD_BENCHMARK_WIDTHS.reduce((acc, width) => {
+      acc[width] = width * (CANDIDATE_HEAD_INPUT_COUNT + CANDIDATE_HEAD_OUTPUT_COUNT);
+      return acc;
+    }, {});
+    const estimatedBytesPerCandidate = (SLOTS_PER_CELL * 4 * 4 * 2) + 4 + 4 + Uint32Array.BYTES_PER_ELEMENT + CANDIDATE_CUE_RECORD_STRIDE_BYTES;
+    const widthResults = CANDIDATE_HEAD_BENCHMARK_WIDTHS.map(width => {
+      const gpuMs = Number(widthTimings?.[width]);
+      const disposition = Number.isFinite(gpuMs)
+        ? gpuMs <= 10
+          ? 'clears-profitable-target'
+          : gpuMs <= 15
+            ? 'clears-credible-break-even-target'
+            : gpuMs <= 24
+              ? 'under-outer-kill-boundary-only'
+              : 'exceeds-outer-kill-boundary'
+        : 'not-measured';
+      return {
+        width,
+        gpuMs: Number.isFinite(gpuMs) ? gpuMs : null,
+        macsPerCandidate: perCandidateMacs[width],
+        estimatedTotalMacs: candidateCount * perCandidateMacs[width],
+        estimatedBytesPerCandidate,
+        estimatedTotalBytes: candidateCount * estimatedBytesPerCandidate,
+        indirectWorkgroups: workgroups,
+        indirectThreads: threads,
+        budgetDisposition: {
+          profitableTargetMs: 10,
+          credibleBreakEvenTargetMs: 15,
+          outerKillBoundaryMs: 24,
+          disposition,
+        },
+      };
+    });
+    const width32 = widthResults.find(result => result.width === 32);
+    const width24 = widthResults.find(result => result.width === 24);
+    const width16 = widthResults.find(result => result.width === 16);
+    const selectedNextAction = width32?.gpuMs !== null && width32?.gpuMs <= 15
+      ? 'reserve-width-32-shape-for-vivisector-trained-weights'
+      : (width24?.gpuMs !== null && width24?.gpuMs <= 15) || (width16?.gpuMs !== null && width16?.gpuMs <= 15)
+        ? 'report-fidelity-capacity-pressure-width-32-over-budget'
+        : widthResults.every(result => result.gpuMs !== null && result.gpuMs > 24)
+          ? 'test-one-fused-f16-kernel-improvement-before-rejecting-candidate-shape'
+          : 'continue-measuring-candidate-head-shape';
+    return {
+      identity: NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK,
+      enabled: true,
+      authority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+      coarseLatentAuthority: 'deterministic-synthetic-coarse-latent-v0',
+      learnedWeightsUsed: false,
+      trainedWeightsAvailable: false,
+      vivisectorWeightsDelivered: false,
+      fidelityClaim: false,
+      visualClaim: false,
+      activeTreatmentPath: false,
+      frozenDenseHeadsControl: 'arithmetic-control-only',
+      dispatchMode: 'dispatchWorkgroupsIndirect-sourceHistoryDispatchArgs-v0',
+      candidateListSource: 'real-uncapped-fixed-gate-sourceHistoryCandidates-v0',
+      sourceAdmissionTimedSeparately: true,
+      candidateCount,
+      candidateCoverage,
+      highCellCount: highCells,
+      benchmarkWidths: [...CANDIDATE_HEAD_BENCHMARK_WIDTHS],
+      candidateInputs: {
+        currentSourceChannels: 17,
+        sourceDeltaChannels: 17,
+        normalizedPositionAndSubcell: true,
+        deterministicSyntheticCoarseLatentChannels: 8,
+        inputCount: CANDIDATE_HEAD_INPUT_COUNT,
+      },
+      outputSchema: {
+        identity: 'compact-renderer-facing-cue-record-v0',
+        cueRecordStrideBytes: CANDIDATE_CUE_RECORD_STRIDE_BYTES,
+        cueRecordVec4Count: 2,
+        emittedCueRecordCount: candidateCount,
+        emittedCueBytes: candidateCount * CANDIDATE_CUE_RECORD_STRIDE_BYTES,
+      },
+      pathExclusions: {
+        noJsCandidateList: true,
+        productionPathCpuReadback: false,
+        diagnosticReceiptReadbackOnly: true,
+        dense160ReceiverMaterialization: false,
+        hiddenCandidateCap: false,
+      },
+      timestampAuthority: widthTimings ? 'webgpu-timestamp-query-width-split-v0' : 'not-measured',
+      timestampValues,
+      widthResults,
+      budgetDisposition: {
+        profitableTargetMs: 10,
+        credibleBreakEvenTargetMs: 15,
+        outerKillBoundaryMs: 24,
+        selectedNextAction,
+      },
+      sourceDeltaAdmissionGpuMs: null,
+      failurePhase: null,
+    };
   };
   const makeInferenceWorkProfile = stats => {
     const supportPositiveCount = Number(stats?.supportPositiveCount || 0);
@@ -641,7 +880,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
     noHiddenCaps: true,
     supportCompactionIdentity: NATIVE_LOW_SUPPORT_POSITIVE_RESIDUAL_DISPATCH,
     runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
-    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs },
+    buffers: { lowSnapshotFluid, lowSnapshotFront, predictedFluid, predictedFront, nativeUpsampleFront, residualDispatchArgs, sourceHistoryCandidates, sourceHistoryDispatchArgs, candidateCueRecords },
     encodeFromNativeLow(encoder, sourceFluid, sourceFront, options = {}) {
       const currentHistoryEpochIdentity = String(options.historyEpochIdentity || 'native-low-source-history-epoch-unspecified-v0');
       const priorHistoryEpochIdentity = lastHistoryEpochIdentity;
@@ -706,6 +945,42 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       finalizeSourceHistoryPass.setBindGroup(0, finalizeSourceHistoryBindGroup);
       finalizeSourceHistoryPass.dispatchWorkgroups(1);
       finalizeSourceHistoryPass.end();
+      if (options.candidateHeadBenchmarkEnabled === true) {
+        const candidateBenchmarkBindGroup = device.createBindGroup({
+          label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark bind group`,
+          layout: candidateHeadBenchmarkLayout,
+          entries: [
+            { binding: 0, resource: { buffer: sourceFluid } },
+            { binding: 1, resource: { buffer: sourceFront } },
+            { binding: 2, resource: { buffer: lowSnapshotFluid } },
+            { binding: 3, resource: { buffer: lowSnapshotFront } },
+            { binding: 4, resource: { buffer: sourceHistoryCandidates } },
+            { binding: 5, resource: { buffer: sourceHistoryDispatchArgs } },
+            { binding: 6, resource: { buffer: candidateCueRecords } },
+          ],
+        });
+        const candidateTimestampWrites = options.stageTimestampWrites?.candidateHeadBenchmark || {};
+        for (const width of CANDIDATE_HEAD_BENCHMARK_WIDTHS) {
+          const candidatePass = encoder.beginComputePass({
+            label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} candidate-head benchmark width ${width}`,
+            ...(candidateTimestampWrites[width] ? { timestampWrites: candidateTimestampWrites[width] } : {}),
+          });
+          candidatePass.setPipeline(candidateHeadBenchmarkPipelines.get(width));
+          candidatePass.setBindGroup(0, candidateBenchmarkBindGroup);
+          candidatePass.dispatchWorkgroupsIndirect(sourceHistoryDispatchArgs, 0);
+          candidatePass.end();
+        }
+        lastCandidateHeadBenchmark = makeCandidateHeadBenchmarkReceipt();
+      } else {
+        lastCandidateHeadBenchmark = {
+          identity: NATIVE_LOW_CANDIDATE_HEAD_COST_MICROBENCHMARK,
+          enabled: false,
+          authority: 'synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0',
+          learnedWeightsUsed: false,
+          fidelityClaim: false,
+          visualClaim: false,
+        };
+      }
       const bindGroup = device.createBindGroup({
         label: `${NATIVE_LOW_SHARED_DEVICE_ROUTE} bind group`,
         layout,
@@ -839,6 +1114,10 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       };
       lastStats.nativeLowInferenceWorkProfile = makeInferenceWorkProfile(lastStats);
       return { ...lastStats, nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission };
+    },
+    makeCandidateHeadCostMicrobenchmarkReceipt(widthTimings = null, timestampValues = []) {
+      lastCandidateHeadBenchmark = makeCandidateHeadBenchmarkReceipt(widthTimings, timestampValues);
+      return { ...lastCandidateHeadBenchmark };
     },
     async sampleSupportTileProfile() {
       const started = performance.now();
@@ -1033,6 +1312,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
         nativeLowSupportTileProfile: lastSupportTileProfile,
         nativeLowSourceTileCandidate: lastSourceTileCandidate,
         nativeLowFixedSourceDeltaAdmission: lastSourceHistoryAdmission,
+        nativeLowCandidateHeadCostMicrobenchmark: lastCandidateHeadBenchmark,
         ...lastStats,
       };
     },
@@ -1046,6 +1326,7 @@ export async function createNativeLowSelectiveSharedDeviceRuntime({ device }) {
       sourceHistoryCandidates.destroy();
       sourceHistoryStats.destroy();
       sourceHistoryDispatchArgs.destroy();
+      candidateCueRecords.destroy();
       stats.destroy();
       model.destroy();
     },

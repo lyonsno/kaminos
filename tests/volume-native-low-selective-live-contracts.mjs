@@ -34,7 +34,7 @@ const core = readFileSync(corePath, 'utf8');
 const combined = `${route}\n${witness}\n${native64Witness}\n${runtime}\n${core}`;
 
 assert.match(route, /native-low-live-browser-webgpu-inference-v0/, 'route names browser/WebGPU frozen-model inference authority');
-assert.match(combined, /native-low-fixed-source-delta-calibration-relative-warning-v1/, 'route and witness carry fail-loud runtime build identity');
+assert.match(combined, /native-low-candidate-head-cost-microbenchmark-v1/, 'route and witness carry fail-loud runtime build identity');
 assert.match(witness, /expectedRuntimeBuildIdentity[\s\S]*runtimeBuildIdentity[\s\S]*cachedCodeRejection/, 'witness records expected/effective runtime build identity and cached-code rejection');
 assert.match(witness, /user-data-dir[\s\S]*Network\.setCacheDisabled[\s\S]*cacheBustUrl/, 'witness uses a fresh browser profile, disables cache, and cache-busts the route URL');
 assert.match(witness, /servedSourceBundleSha256[\s\S]*fresh-http-served-source-bundle-sha256-v0[\s\S]*runtimeBuildIdentityPresent/, 'witness binds receipt to the HTTP-served source bundle hash and runtime marker');
@@ -145,6 +145,15 @@ assert.match(combined, /post-rebuild-consecutive-valid-frame-v0[\s\S]*historyEpo
 assert.match(combined, /assayClaimScope[\s\S]*routing-cost-discontinuity-receipt-not-visual-robustness-claim-v0/, 'discontinuity assay cannot claim visual robustness from unconsumed fixed candidate list');
 assert.match(combined, /sourceStepDelta[\s\S]*sourceDeltaAdmissionGpuMs[\s\S]*inferenceGpuMs[\s\S]*mohelWarning/, 'discontinuity assay records source step deltas, source-delta timing, whole inference timing, and Mohel warning');
 assert.match(combined, /servedSourceBundleSha256[\s\S]*runtimeBuildIdentity[\s\S]*fixedSourceDeltaCalibrationSha256[\s\S]*sourceDeltaThreshold[\s\S]*sourceDeltaScales/, 'discontinuity assay binds served runtime identity and fixed calibration receipts');
+assert.match(combined, /native-low-candidate-head-cost-microbenchmark-v0/, 'route records candidate-head cost microbenchmark identity');
+assert.match(combined, /dispatchWorkgroupsIndirect[\s\S]*sourceHistoryDispatchArgs[\s\S]*sourceHistoryCandidates/, 'candidate-head benchmark consumes the real fixed-gate candidate list through indirect dispatch');
+assert.match(combined, /benchmarkWidths[\s\S]*16[\s\S]*24[\s\S]*32/, 'candidate-head benchmark covers widths 16, 24, and 32');
+assert.match(combined, /synthetic-deterministic-candidate-head-cost-substrate-not-learned-evidence-v0[\s\S]*deterministic-synthetic-coarse-latent-v0/, 'candidate-head benchmark labels synthetic weights and coarse latent as cost substrate only');
+assert.match(combined, /currentSourceChannels[\s\S]*17[\s\S]*sourceDeltaChannels[\s\S]*17[\s\S]*normalizedPositionAndSubcell[\s\S]*true/, 'candidate-head benchmark reads production-shaped candidate inputs');
+assert.match(combined, /compact-renderer-facing-cue-record-v0[\s\S]*cueRecordStrideBytes/, 'candidate-head benchmark emits compact renderer-facing cue records');
+assert.match(combined, /noJsCandidateList[\s\S]*true[\s\S]*productionPathCpuReadback[\s\S]*false[\s\S]*dense160ReceiverMaterialization[\s\S]*false[\s\S]*hiddenCandidateCap[\s\S]*false/, 'candidate-head benchmark forbids JS candidate lists, production CPU readback, dense receiver materialization, and hidden caps');
+assert.match(combined, /frozenDenseHeadsControl[\s\S]*arithmetic-control-only/, 'candidate-head benchmark keeps frozen dense heads as arithmetic control only');
+assert.match(combined, /budgetDisposition[\s\S]*profitableTargetMs[\s\S]*10[\s\S]*credibleBreakEvenTargetMs[\s\S]*15[\s\S]*outerKillBoundaryMs[\s\S]*24/, 'candidate-head benchmark records budget disposition against 10/15/24 ms');
 assert.match(combined, /native-low-front-topology-ablation-v0/, 'route records shared-device learned frontTopology visual ablation');
 assert.match(combined, /fullFrozenTreatmentReference[\s\S]*frontTopologyAblatedTreatment[\s\S]*nativeLowControl/, 'frontTopology ablation keeps native control, full frozen reference, and ablated treatment');
 assert.match(combined, /native-low-nearest-normalized-front-upsampling-no-learned-front-residual-v0/, 'frontTopology ablation labels native-low upsample authority with no learned front residual');
