@@ -14,6 +14,29 @@ function deferred() {
 
 const residency = createWebGpuResourceResidency({ sessionId: 'singleflight' });
 const factory = createWebGpuResourceFactory({ sessionId: 'singleflight', residency });
+
+const preAborted = new AbortController();
+preAborted.abort('cancelled-before-resource-request');
+let preAbortedCreateCount = 0;
+await assert.rejects(
+  () => factory.acquireOrCreate({
+    resourceId: 'pre-aborted',
+    routeId: 'already-gone',
+    declaredBytes: 64,
+    signal: preAborted.signal,
+    async create() {
+      preAbortedCreateCount += 1;
+      return new Promise(() => {});
+    },
+    dispose() {},
+  }),
+  /aborted|cancelled-before-resource-request/i,
+);
+await Promise.resolve();
+assert.equal(preAbortedCreateCount, 0, 'a pre-aborted first waiter must not start resource creation');
+assert.equal(factory.snapshot().activeFlightCount, 0, 'a pre-aborted first waiter must not strand an active flight');
+assert.equal(factory.snapshot().flights.at(-1)?.status, 'cancelled');
+
 const creation = deferred();
 let createCount = 0;
 const requests = Array.from({ length: 32 }, (_, index) => factory.acquireOrCreate({
@@ -33,7 +56,7 @@ const requests = Array.from({ length: 32 }, (_, index) => factory.acquireOrCreat
 await Promise.resolve();
 assert.equal(createCount, 1);
 assert.equal(factory.snapshot().activeFlightCount, 1);
-assert.equal(factory.snapshot().flights[0].waiterCount, 32);
+assert.equal(factory.snapshot().flights.find(flight => flight.resourceId === 'weights.shared')?.waiterCount, 32);
 await assert.rejects(
   () => factory.acquireOrCreate({
     resourceId: 'weights.shared', routeId: 'conflict', declaredBytes: 8192,
@@ -99,7 +122,7 @@ await factory.drain();
 assert.equal(factory.snapshot().activeFlightCount, 0);
 
 assert.equal(factory.snapshot().retention, 'uncapped-until-explicit-forget-flight');
-assert.equal(factory.snapshot().flights.length, 5);
+assert.equal(factory.snapshot().flights.length, 6);
 assert.equal(factory.forgetFlight(factory.snapshot().flights[0].flightId), true);
 
 const lost = deferred();

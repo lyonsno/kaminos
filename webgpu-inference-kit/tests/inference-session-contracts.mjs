@@ -117,6 +117,21 @@ assert.equal(initial.routeRetention, 'uncapped-until-explicit-unregister');
 assert.equal(initial.deviceLoss, null);
 assert.deepEqual(initial.routes, []);
 
+await assert.rejects(
+  () => session.registerRoute({
+    routeId: 'forbidden-caller-shared-cache',
+    runtimeOptions: {
+      runtimeLabel: 'forbidden-caller-shared-cache.runtime',
+      kernel: { profile: 'forbidden-caller-shared-cache.kernel.v0' },
+      requiredStages: ['identity-stage'],
+      yield: async () => ({}),
+      resourceCaches: {},
+    },
+  }),
+  /session owns resourceCaches/i,
+  'session routes must not accept caller-shared caches that one route can clear beneath another',
+);
+
 let activeRouteCount = 0;
 const executionLog = [];
 const holderRelease = deferred();

@@ -194,6 +194,18 @@ assert.equal(firstCacheEvidence.backingStore.staticBackingStoreHitCount, 0);
 const secondRuntime = await loadSam31BrowserTrackerPackageRuntime({ rootUrl: 'https://example.test/two/tracker-runtime-root.json', pageUrl: 'https://example.test/smoke.html', fetchImpl, cache });
 assert.equal(secondRuntime.verificationAttached, false);
 assert.equal(secondRuntime.manifests.episode.tensors.some(item => item.role === 'expected-episode'), false, 'verification-free runtime must not expose expected tensors');
+
+const deferredFirstFrame = firstRuntime.manifests.ingress.tensors.find(item => item.role === 'frame-1-rgba');
+const authenticDeferredFirstFrame = first.files.get(deferredFirstFrame.file);
+first.files.set(deferredFirstFrame.file, Uint8Array.from(authenticDeferredFirstFrame, byte => byte ^ 0xff));
+await assert.rejects(
+  () => firstRuntime.loadUint8(deferredFirstFrame),
+  /dynamic artifact hash mismatch/i,
+  'a deferred loader must retain its invocation hash authority after another invocation reconfigures the shared cache',
+);
+assert.equal(cache.evidence().dynamicHashVerificationFailureCount, 1);
+first.files.set(deferredFirstFrame.file, authenticDeferredFirstFrame);
+
 await secondRuntime.loadFloat32(secondRuntime.manifests.decoder.weights[0]);
 await secondRuntime.loadUint8(secondRuntime.manifests.ingress.tensors.find(item => item.role === 'frame-0-rgba'));
 await secondRuntime.loadFloat32(secondRuntime.manifests.episode.tensors.find(item => item.role === 'frame-0-binary-mask-inputs'));
@@ -202,8 +214,8 @@ assert.equal(secondCacheEvidence.staticNetworkLoadCount, firstCacheEvidence.stat
 assert.equal(secondCacheEvidence.staticCacheHitCount, firstCacheEvidence.staticCacheHitCount + 1);
 assert.equal(secondCacheEvidence.backingStore.staticOriginNetworkLoadCount, firstCacheEvidence.backingStore.staticOriginNetworkLoadCount, 'retained-memory reuse must not report a second origin load');
 assert.equal(secondCacheEvidence.backingStore.staticBackingStoreHitCount, firstCacheEvidence.backingStore.staticBackingStoreHitCount + 1, 'retained-memory reuse must report the second static cache hit through backing evidence');
-assert.equal(secondCacheEvidence.dynamicNetworkLoadCount, firstCacheEvidence.dynamicNetworkLoadCount + 2, 'fresh image and mask reads must remain invocation-scoped');
-assert.equal(secondCacheEvidence.dynamicHashVerificationFailureCount, 0);
+assert.equal(secondCacheEvidence.dynamicNetworkLoadCount, firstCacheEvidence.dynamicNetworkLoadCount + 3, 'fresh image and mask reads plus the rejected stale read must remain invocation-scoped');
+assert.equal(secondCacheEvidence.dynamicHashVerificationFailureCount, 1);
 await assert.rejects(
   secondRuntime.loadFloat32({ role: 'undeclared', file: 'undeclared.bin', sha256: `sha256:${'0'.repeat(64)}`, byteLength: 4 }),
   /not declared by the authenticated package root/,

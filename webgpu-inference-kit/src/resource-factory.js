@@ -216,6 +216,13 @@ export function createWebGpuResourceFactory(input = {}) {
     flights.push(flight);
     activeByResource.set(flight.resourceId, flight);
     const promise = addWaiter(flight, request);
+    if (flight.waiters.size === 0) {
+      flight.controller.abort('resource-request-cancelled-before-creation');
+      flight.status = 'cancelled';
+      flight.settledAtMs = now();
+      activeByResource.delete(flight.resourceId);
+      return promise;
+    }
     startFlight(flight, request);
     return promise;
   }

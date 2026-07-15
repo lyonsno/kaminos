@@ -213,7 +213,7 @@ export async function loadSam31BrowserTrackerModelPackageRuntime({
     if (!entry?.file || !entry?.sha256 || !Number.isInteger(entry?.byteLength)) throw new Error('tracker static artifact entry is incomplete');
     const url = artifactUrl(entry.file);
     if (declared.get(url) !== `${entry.sha256}:${entry.byteLength}`) throw new Error(`${entry.role || entry.file} is not declared by the authenticated model package`);
-    const values = await cache.fetchArray(url, Type);
+    const values = await cache.fetchArray(url, Type, entry.sha256);
     if (values.byteLength !== entry.byteLength) throw new Error(`${entry.role || entry.file} byte length mismatch`);
     return values;
   }
@@ -279,7 +279,7 @@ export async function loadSam31BrowserTrackerPackageRuntime({
     if (declared.get(url) !== `${entry.sha256}:${entry.byteLength}`) {
       throw new Error(`${entry.role || entry.file} is not declared by the authenticated package root`);
     }
-    const values = await cache.fetchArray(url, Type);
+    const values = await cache.fetchArray(url, Type, entry.sha256);
     if (values.byteLength !== entry.byteLength) throw new Error(`${entry.role || entry.file} byte length mismatch`);
     return values;
   }

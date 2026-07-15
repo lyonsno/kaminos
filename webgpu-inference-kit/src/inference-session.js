@@ -28,6 +28,7 @@ const RESERVED_RUNTIME_OPTIONS = [
   'deviceRequest',
   'backendIdentity',
   'admissionCoordinator',
+  'resourceCaches',
 ];
 const RESERVED_QUEUE_OPTIONS = ['routeId', 'runtime', 'admissionCoordinator'];
 

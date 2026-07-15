@@ -174,6 +174,11 @@ export function createSam3BrowserStaticArtifactCache({
     }
   }
 
+  function expectedIdentity(kind, expectedSha256) {
+    if (expectedSha256 == null) return null;
+    return `${kind}:${requireNonEmptyString(expectedSha256, 'expected artifact sha256')}`;
+  }
+
   return {
     configure(input) {
       const nextPackageId = requireNonEmptyString(input?.packageId, 'packageId');
@@ -199,28 +204,36 @@ export function createSam3BrowserStaticArtifactCache({
       dynamicConfigurationCount += 1;
     },
 
-    async fetchArray(url, Type) {
+    async fetchArray(url, Type, expectedSha256 = null) {
       if (typeof Type !== 'function' || typeof Type.BYTES_PER_ELEMENT !== 'number') throw new Error('Type must be a typed array constructor');
       const identity = staticIdentity(url, 'array-buffer');
+      const expected = expectedIdentity('array-buffer', expectedSha256);
       if (!identity) {
         dynamicNetworkLoadCount += 1;
-        const dynamicIdentity = dynamicArtifacts.urls.get(url);
+        const dynamicIdentity = expected || dynamicArtifacts.urls.get(url);
         const value = dynamicIdentity?.startsWith('array-buffer:')
           ? await loadVerifiedDynamic(url, 'array-buffer', dynamicIdentity)
           : await fetchArrayBuffer(url);
         return new Type(value);
       }
+      if (expected && identity !== expected) {
+        throw new Error(`static artifact identity mismatch for ${url}: ${identity} !== ${expected}`);
+      }
       return new Type(await acquireStatic(url, 'array-buffer', identity));
     },
 
-    async fetchText(url) {
+    async fetchText(url, expectedSha256 = null) {
       const identity = staticIdentity(url, 'text');
+      const expected = expectedIdentity('text', expectedSha256);
       if (!identity) {
         dynamicNetworkLoadCount += 1;
-        const dynamicIdentity = dynamicArtifacts.urls.get(url);
+        const dynamicIdentity = expected || dynamicArtifacts.urls.get(url);
         return dynamicIdentity?.startsWith('text:')
           ? loadVerifiedDynamic(url, 'text', dynamicIdentity)
           : fetchText(url);
+      }
+      if (expected && identity !== expected) {
+        throw new Error(`static artifact identity mismatch for ${url}: ${identity} !== ${expected}`);
       }
       return acquireStatic(url, 'text', identity);
     },
