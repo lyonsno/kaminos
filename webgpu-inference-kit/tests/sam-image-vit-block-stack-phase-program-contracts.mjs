@@ -104,16 +104,16 @@ assert.throws(
 );
 
 const phaseParity = summarizeSam3PhaseParityCheckpoints(
-  { layerNorm1: new Float32Array([1, 2]).buffer, mlpHidden: new Float32Array([3, 4]).buffer },
-  { layerNorm1: new Float32Array([1.25, 2]), mlpHidden: new Float32Array([3, 3.5]) },
+  { layerNorm1: new Float32Array([1, 2]).buffer, mlpFc1: new Float32Array([3, 4]).buffer },
+  { layerNorm1: new Float32Array([1.25, 2]), mlpFc1: new Float32Array([3, 3.5]) },
 );
 assert.deepEqual(phaseParity.map(checkpoint => ({ phase: checkpoint.phase, maxAbsDiff: checkpoint.maxAbsDiff })), [
   { phase: 'layerNorm1', maxAbsDiff: 0.25 },
-  { phase: 'mlpHidden', maxAbsDiff: 0.5 },
+  { phase: 'mlpFc1', maxAbsDiff: 0.5 },
 ]);
 assert.throws(
-  () => summarizeSam3PhaseParityCheckpoints({ layerNorm1: new Float32Array(1).buffer }, { mlpHidden: new Float32Array(1) }),
-  /expected phase checkpoint mlpHidden was not read back/,
+  () => summarizeSam3PhaseParityCheckpoints({ layerNorm1: new Float32Array(1).buffer }, { mlpFc1: new Float32Array(1) }),
+  /expected phase checkpoint mlpFc1 was not read back/,
 );
 
 const dispatchShape = {

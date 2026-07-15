@@ -389,14 +389,14 @@ def main():
         def diagnostic_addmm_act(_activation, linear, value):
             output = F.gelu(linear(value), approximate="none")
             if linear is block.mlp.fc1:
-                captures.__setitem__("vit-phase-mlpHidden", output.detach().clone())
+                captures.__setitem__("vit-phase-mlpFc1", output.detach().clone())
             return output
         vitdet.addmm_act = diagnostic_addmm_act
         hooks.extend([
             block.norm1.register_forward_hook(capture_vit_phase("layerNorm1")),
-            block.attn.proj.register_forward_hook(capture_vit_phase("projected")),
+            block.attn.proj.register_forward_hook(capture_vit_phase("outputProjection")),
             block.norm2.register_forward_hook(capture_vit_phase("layerNorm2")),
-            block.mlp.fc2.register_forward_hook(capture_vit_phase("mlpOut")),
+            block.mlp.fc2.register_forward_hook(capture_vit_phase("mlpFc2")),
         ])
     outputs = []
     FAILURE_PHASE = "official-two-image-execution"
@@ -416,7 +416,7 @@ def main():
                 "prefix": captures["prefix"],
                 "backbone": captures["backbone"],
                 "diagnostic_layers": {layer_index: captures[f"vit-layer-{layer_index}"] for layer_index in diagnostic_vit_layers},
-                "diagnostic_phases": {phase: captures[f"vit-phase-{phase}"] for phase in ("layerNorm1", "projected", "layerNorm2", "mlpHidden", "mlpOut")} if diagnostic_vit_phase_layer is not None else {},
+                "diagnostic_phases": {phase: captures[f"vit-phase-{phase}"] for phase in ("layerNorm1", "outputProjection", "layerNorm2", "mlpFc1", "mlpFc2")} if diagnostic_vit_phase_layer is not None else {},
                 "interactive": [item.tensors for item in interactive],
                 "interactive_pos": interactive_pos,
                 "propagation": [item.tensors for item in propagation],

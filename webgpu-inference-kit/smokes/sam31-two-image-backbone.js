@@ -247,7 +247,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       }))
     : null;
   const expectedPhaseCheckpoints = verificationAttached && manifest.diagnosticVitPhaseLayer != null
-    ? Object.fromEntries(await Promise.all(['layerNorm1', 'projected', 'layerNorm2', 'mlpHidden', 'mlpOut'].map(async phase => {
+    ? Object.fromEntries(await Promise.all(['layerNorm1', 'outputProjection', 'layerNorm2', 'mlpFc1', 'mlpFc2'].map(async phase => {
         const role = `frame-${frameIndex}-vit-layer-${manifest.diagnosticVitPhaseLayer}-phase-${phase}`;
         const entry = tensorsByRole.get(role);
         if (!entry) throw new Error(`selected ViT phase checkpoint tensor missing: ${role}`);

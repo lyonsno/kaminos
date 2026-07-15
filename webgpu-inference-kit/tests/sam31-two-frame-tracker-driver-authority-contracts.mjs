@@ -123,7 +123,7 @@ async function writeIngressPacket(diagnosticVitLayers = [], diagnosticVitPhaseLa
   }
   if (diagnosticVitPhaseLayer !== null) {
     for (const frameIndex of [0, 1]) {
-      for (const phase of ['layerNorm1', 'projected', 'layerNorm2', 'mlpHidden', 'mlpOut']) {
+      for (const phase of ['layerNorm1', 'outputProjection', 'layerNorm2', 'mlpFc1', 'mlpFc2']) {
         tensors.push({ role: `frame-${frameIndex}-vit-layer-${diagnosticVitPhaseLayer}-phase-${phase}`, sha256: `sha256:${String(frameIndex + phase.length).repeat(64).slice(0, 64)}` });
       }
     }
@@ -292,7 +292,7 @@ await assert.rejects(
 );
 const missingPhaseManifest = {
   ...ingressPacket.manifest,
-  tensors: ingressPacket.manifest.tensors.filter(entry => entry.role !== 'frame-1-vit-layer-0-phase-mlpOut'),
+  tensors: ingressPacket.manifest.tensors.filter(entry => entry.role !== 'frame-1-vit-layer-0-phase-mlpFc2'),
 };
 const missingPhaseText = `${JSON.stringify(missingPhaseManifest, null, 2)}\n`;
 const missingPhaseDigest = `sha256:${createHash('sha256').update(missingPhaseText).digest('hex')}`;
@@ -303,7 +303,7 @@ await assert.rejects(
     referenceReceipt: { ok: true, schema: SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY.receiptSchema, boundary: SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY.boundary, routeIds: SAM31_TWO_IMAGE_INGRESS_PACKET_AUTHORITY.routeIds, outputs: { tensorManifestSha256: missingPhaseDigest } },
     expectedManifestSha256: missingPhaseDigest,
   }),
-  /diagnostic phase tensor missing.*frame-1-vit-layer-0-phase-mlpOut/,
+  /diagnostic phase tensor missing.*frame-1-vit-layer-0-phase-mlpFc2/,
 );
 const validImageIngress = imageIngressFor(ingressPacket.digest, ingressPacket.manifest);
 const twoImageEpisodeDigest = await writePacket('episode', { authorityName: 'twoImageEpisode', overrides: { imageIngress: validImageIngress } });

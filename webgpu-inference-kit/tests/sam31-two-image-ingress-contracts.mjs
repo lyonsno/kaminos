@@ -23,7 +23,7 @@ assert.match(ingressExporterSource, /"diagnosticVitLayers": diagnostic_vit_layer
 assert.match(ingressExporterSource, /--diagnostic-vit-phase-layer/, 'pinned ingress export must accept one selected official phase layer');
 assert.match(ingressExporterSource, /block\.attn\.proj\.register_forward_hook/, 'official attention projection output must anchor pre-MLP phase parity');
 assert.match(ingressExporterSource, /linear is block\.mlp\.fc1/, 'post-GELU MLP evidence must observe the effective Meta CPU compatibility helper for the selected block');
-assert.match(ingressExporterSource, /captures\.__setitem__\("vit-phase-mlpHidden"/, 'the effective helper must preserve the post-GELU tensor under the browser-aligned phase name');
+assert.match(ingressExporterSource, /captures\.__setitem__\("vit-phase-mlpFc1"/, 'the effective helper must preserve the post-GELU tensor under the executable browser phase name');
 assert.match(ingressExporterSource, /frame-\{frame_index\}-vit-layer-\{diagnostic_vit_phase_layer\}-phase-\{phase\}/, 'phase checkpoint roles must preserve frame, layer, and phase identity');
 assert.match(ingressExporterSource, /"diagnosticVitPhaseLayer": diagnostic_vit_phase_layer/, 'the authenticated manifest must declare the effective phase-layer selection');
 assert.match(backboneSource, /expectedLayerCheckpoints:\s*expectedLayerCheckpoints/, 'browser backbone must bind selected source checkpoints into the WebGPU block stack');

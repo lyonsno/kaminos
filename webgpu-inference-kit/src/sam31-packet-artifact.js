@@ -331,7 +331,7 @@ export async function verifySam31TwoImageIngressPacketAuthority({ manifestText, 
     }
   }
   const diagnosticVitPhaseLayer = manifest.diagnosticVitPhaseLayer ?? null;
-  const diagnosticPhaseNames = ['layerNorm1', 'projected', 'layerNorm2', 'mlpHidden', 'mlpOut'];
+  const diagnosticPhaseNames = ['layerNorm1', 'outputProjection', 'layerNorm2', 'mlpFc1', 'mlpFc2'];
   if (diagnosticVitPhaseLayer !== null
       && (!Number.isInteger(diagnosticVitPhaseLayer) || !diagnosticVitLayers.includes(diagnosticVitPhaseLayer))) {
     throw new Error('ingress packet authority rejected invalid diagnosticVitPhaseLayer');
