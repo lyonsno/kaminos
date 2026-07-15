@@ -83,6 +83,19 @@ async function waitForCdp() {
   throw new Error('Chrome DevTools endpoint did not open');
 }
 
+async function waitForRequestedTarget() {
+  const expected = new URL(requestedUrl).href;
+  let stableTargetId = null;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const targets = await cdpFetch('/json/list');
+    const target = targets.find(record => record.type === 'page' && record.url && new URL(record.url).href === expected);
+    if (target?.webSocketDebuggerUrl && target.id === stableTargetId) return target;
+    stableTargetId = target?.id || null;
+    await delay(100);
+  }
+  throw new Error(`Requested page target did not stabilize: ${requestedUrl}`);
+}
+
 function waitForWebSocketOpen(socket) {
   return new Promise((resolveOpen, rejectOpen) => {
     socket.addEventListener('open', resolveOpen, { once: true });
@@ -161,8 +174,7 @@ try {
   browserVersion = await waitForCdp();
 
   phase = 'opening-target';
-  const targets = await cdpFetch('/json/list');
-  const target = targets.find(record => record.type === 'page') || targets[0];
+  const target = await waitForRequestedTarget();
   if (!target?.webSocketDebuggerUrl) throw new Error('No debuggable page target');
   ws = new WebSocket(target.webSocketDebuggerUrl);
   await waitForWebSocketOpen(ws);

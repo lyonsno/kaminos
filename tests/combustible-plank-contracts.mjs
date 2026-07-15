@@ -84,6 +84,7 @@ assert.match(witnessSource, /requestedUrl/, 'witness records requested browser r
 assert.match(witnessSource, /effectiveUrl/, 'witness records effective browser route');
 assert.match(witnessSource, /requestedViewport/, 'witness records requested viewport identity');
 assert.match(witnessSource, /effectiveViewport/, 'witness records effective viewport identity');
+assert.match(witnessSource, /waitForRequestedTarget/, 'witness stabilizes the exact requested page before evaluation');
 assert.match(witnessSource, /support-loss/, 'witness requires the causal support-loss event');
 assert.match(witnessSource, /control/, 'witness rejects collapse of the matched control');
 assert.doesNotMatch(pageSource, /Math\.min\(1200/, 'debug advancement does not silently cap caller steps');
