@@ -28,7 +28,11 @@ const PHYSICAL_SPLAT_ATTRIBUTE_ORDER = Object.freeze([
 ]);
 const PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY = Object.freeze({
   authority: 'candidate-splat-physical-visible-energy-weighted-loss-v1',
+  candidateChannelCount: 16,
+  splatChannelCount: 9,
+  visibleEnergy: 'max(opacity,0)*max(rec709-luminance,0)',
   visibleEnergyChannels: Object.freeze({ color: Object.freeze([17, 18, 19]), opacity: 20 }),
+  weights: Object.freeze({ candidate: 0.1, splat: 1.0, visibleEnergy: 0.25 }),
   splatAttributeOrder: PHYSICAL_SPLAT_ATTRIBUTE_ORDER,
 });
 
@@ -65,7 +69,19 @@ function routeHasExactOption(route, option, expectedValue) {
   return values.length === 1 && values[0] === expectedValue;
 }
 
-function physicalVisibleEnergyLossIdentity(model) {
+function lossContractIdentity(loss) {
+  return {
+    authority: loss?.authority,
+    candidateChannelCount: loss?.candidateChannelCount,
+    splatChannelCount: loss?.splatChannelCount,
+    visibleEnergy: loss?.visibleEnergy,
+    visibleEnergyChannels: loss?.visibleEnergyChannels,
+    weights: loss?.weights,
+    splatAttributeOrder: PHYSICAL_SPLAT_ATTRIBUTE_ORDER,
+  };
+}
+
+export function physicalDestinationStateModelIdentity(model, reportIdentity) {
   const losses = [model?.training?.distribution?.loss, model?.training?.loss];
   const output = model?.output;
   if (
@@ -79,12 +95,22 @@ function physicalVisibleEnergyLossIdentity(model) {
     || !Array.isArray(output.attributeOrder)
     || output.attributeOrder.length !== 25
     || JSON.stringify(output.attributeOrder.slice(16)) !== JSON.stringify(PHYSICAL_SPLAT_ATTRIBUTE_ORDER)
-    || losses.some(loss => (
-      loss?.authority !== PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY.authority
-      || JSON.stringify(loss.visibleEnergyChannels) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY.visibleEnergyChannels)
-    ))
+    || losses.some(loss => JSON.stringify(lossContractIdentity(loss)) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY))
   ) throw new Error('destination state model physical visible-energy loss identity mismatch');
-  return PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY;
+  const trainingManifestSha256 = model.trainingManifest?.sha256;
+  const evaluationManifestSha256 = model.evaluationManifest?.sha256;
+  if (
+    !isSha256(trainingManifestSha256)
+    || !isSha256(evaluationManifestSha256)
+    || !isSha256(reportIdentity?.trainingManifest?.sha256)
+    || !isSha256(reportIdentity?.evaluationManifest?.sha256)
+    || reportIdentity.trainingManifest.sha256 !== trainingManifestSha256
+    || reportIdentity.evaluationManifest.sha256 !== evaluationManifestSha256
+  ) throw new Error('destination state model corpus identity mismatch');
+  return {
+    loss: PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY,
+    corpora: { trainingManifestSha256, evaluationManifestSha256 },
+  };
 }
 
 async function loadFloatArtifact(artifact, stride, label, authority = null) {
@@ -271,6 +297,12 @@ export function validateMotionCohortWitness(witness) {
       physicalEnergyComparison
       && JSON.stringify(shared.destinationStateTrainingLoss) !== JSON.stringify(PHYSICAL_VISIBLE_ENERGY_LOSS_IDENTITY)
     ) throw new Error('recurrent envelope physical visible-energy loss identity mismatch');
+    if (physicalEnergyComparison && (
+      !isSha256(shared.destinationStateCorpora?.trainingManifestSha256)
+      || !isSha256(shared.destinationStateCorpora?.evaluationManifestSha256)
+      || shared.destinationStateCorpora.trainingManifestSha256 !== shared.trainingManifestSha256
+      || shared.destinationStateCorpora.evaluationManifestSha256 !== source.manifest.sha256
+    )) throw new Error('recurrent envelope destination state corpus identity mismatch');
     for (const [role, mode] of [['legacy', 'one-step-ratio'], ['envelope', 'training-episode-envelope']]) {
       const identity = source?.[role];
       const receipt = identity?.greenroomReceipt;
@@ -1158,11 +1190,19 @@ export async function writeRecurrentEnvelopeWitness(
       throw new Error('destination state model byte/hash mismatch');
     }
     const destinationStateModel = JSON.parse(destinationStateModelBytes.toString('utf8'));
-    const destinationStateTrainingLoss = physicalVisibleEnergyLossIdentity(destinationStateModel);
-    if (
-      destinationStateModel.trainingManifest?.sha256 !== legacyReport.destinationStateModel.trainingManifest?.sha256
-      || destinationStateModel.evaluationManifest?.sha256 !== legacyReport.destinationStateModel.evaluationManifest?.sha256
-    ) throw new Error('destination state model corpus identity mismatch');
+    const destinationStateIdentity = physicalDestinationStateModelIdentity(
+      destinationStateModel,
+      legacyReport.destinationStateModel,
+    );
+    const envelopeDestinationStateIdentity = physicalDestinationStateModelIdentity(
+      destinationStateModel,
+      envelopeReport.destinationStateModel,
+    );
+    if (JSON.stringify(destinationStateIdentity) !== JSON.stringify(envelopeDestinationStateIdentity)) {
+      throw new Error('destination state model paired report identity mismatch');
+    }
+    const destinationStateTrainingLoss = destinationStateIdentity.loss;
+    const destinationStateCorpora = destinationStateIdentity.corpora;
     const frameCount = legacyPredictions.frames.length - 1;
     const cadenceMs = legacyPredictions.temporal.controlledStepDeltaMs;
     const legacyBudget = supportBudgetEvidence(legacyReport, 'one-step-ratio', frameCount);
@@ -1182,6 +1222,7 @@ export async function writeRecurrentEnvelopeWitness(
       destinationStateModelPath,
       destinationStateModelSha256,
       destinationStateTrainingLoss,
+      destinationStateCorpora,
       trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
       inferenceFrameZero: frameZero,
       frameCount,
@@ -1301,6 +1342,7 @@ export async function writeRecurrentEnvelopeWitness(
           occupancyModelSha256: legacyReport.model.sha256,
           destinationStateModelSha256,
           destinationStateTrainingLoss,
+          destinationStateCorpora,
           trainingManifestSha256: legacyReport.modelTrainingManifest.sha256,
           inferenceFrameZero: frameZero,
         },

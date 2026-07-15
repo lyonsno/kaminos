@@ -144,6 +144,11 @@ assert.equal(
   'function',
   'verified resume must rehash every nested audit, raster, and video before reuse',
 );
+assert.equal(
+  typeof cohortAudit.physicalDestinationStateModelIdentity,
+  'function',
+  'v1 witness must expose checkpoint objective and corpus identity validation',
+);
 const legacyModeContract = cohortAudit.motionWitnessModeContract('motion-cohort', 9);
 assert.equal(legacyModeContract.includeControlFrameIdentity, false);
 assert.match(legacyModeContract.guideControlDescription, /copied-current/i);
@@ -348,13 +353,21 @@ const physicalEnergyEnvelopeWitness = structuredClone(envelopeComparisonWitness)
 physicalEnergyEnvelopeWitness.configuration.authority = 'legacy-vs-training-episode-envelope-physical-energy-v1';
 physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTrainingLoss = {
   authority: 'candidate-splat-physical-visible-energy-weighted-loss-v1',
+  candidateChannelCount: 16,
+  splatChannelCount: 9,
+  visibleEnergy: 'max(opacity,0)*max(rec709-luminance,0)',
   visibleEnergyChannels: { color: [17, 18, 19], opacity: 20 },
+  weights: { candidate: 0.1, splat: 1.0, visibleEnergy: 0.25 },
   splatAttributeOrder: [
     'splat.support',
     'splat.color.r', 'splat.color.g', 'splat.color.b',
     'splat.opacity', 'splat.shape.x', 'splat.shape.y',
     'splat.ridge', 'splat.fireSignal',
   ],
+};
+physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateCorpora = {
+  trainingManifestSha256: '6'.repeat(64),
+  evaluationManifestSha256: 'b'.repeat(64),
 };
 assert.doesNotThrow(
   () => cohortAudit.validateMotionCohortWitness(physicalEnergyEnvelopeWitness),
@@ -374,6 +387,73 @@ assert.throws(
   /physical visible-energy loss identity/i,
   'a corrected authority token cannot hide stale effective channel indices',
 );
+for (const mutate of [
+  identity => { identity.visibleEnergy = 'max(shape.y,0)*rec709(color.b,opacity,shape.x)'; },
+  identity => { identity.weights.splat = 0.5; },
+  identity => { identity.weights.visibleEnergy = 0.5; },
+]) {
+  const alternateObjective = structuredClone(physicalEnergyEnvelopeWitness);
+  mutate(alternateObjective.source.sharedIdentity.destinationStateTrainingLoss);
+  assert.throws(
+    () => cohortAudit.validateMotionCohortWitness(alternateObjective),
+    /physical visible-energy loss identity/i,
+    'v1 must bind formula and all objective weights, not only authority and channel indices',
+  );
+}
+const missingWitnessCorpora = structuredClone(physicalEnergyEnvelopeWitness);
+delete missingWitnessCorpora.source.sharedIdentity.destinationStateCorpora;
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(missingWitnessCorpora),
+  /destination state corpus identity/i,
+);
+const counterfeitWitnessCorpus = structuredClone(physicalEnergyEnvelopeWitness);
+counterfeitWitnessCorpus.source.sharedIdentity.destinationStateCorpora.evaluationManifestSha256 = 'f'.repeat(64);
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(counterfeitWitnessCorpus),
+  /destination state corpus identity/i,
+);
+
+const fullLoss = structuredClone(physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTrainingLoss);
+delete fullLoss.splatAttributeOrder;
+const destinationModel = {
+  schema: 'kaminos-boundary-splat-phase-destination-state-model-v0',
+  status: 'completed',
+  route: { backend: 'mlx', device: 'Device(gpu, 0)', fallbackReason: null },
+  output: {
+    authority: 'candidate-16-plus-nonposition-splat-9-donor-residual-v0',
+    attributeCount: 25,
+    attributeOrder: [...Array.from({ length: 16 }, (_, index) => `candidate.${index}`), ...physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTrainingLoss.splatAttributeOrder],
+  },
+  training: { distribution: { loss: structuredClone(fullLoss) }, loss: { ...structuredClone(fullLoss), visibleEnergyScale: 0.01 } },
+  trainingManifest: { sha256: '6'.repeat(64) },
+  evaluationManifest: { sha256: 'b'.repeat(64) },
+};
+const destinationReportIdentity = {
+  trainingManifest: { sha256: '6'.repeat(64) },
+  evaluationManifest: { sha256: 'b'.repeat(64) },
+};
+assert.deepEqual(
+  cohortAudit.physicalDestinationStateModelIdentity(destinationModel, destinationReportIdentity),
+  {
+    loss: physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateTrainingLoss,
+    corpora: physicalEnergyEnvelopeWitness.source.sharedIdentity.destinationStateCorpora,
+  },
+);
+for (const mutate of [
+  (model, report) => { delete model.trainingManifest; },
+  (model, report) => { delete report.evaluationManifest; },
+  (model, report) => { report.trainingManifest.sha256 = 'e'.repeat(64); },
+  (model, report) => { model.evaluationManifest.sha256 = 'd'.repeat(64); },
+]) {
+  const model = structuredClone(destinationModel);
+  const report = structuredClone(destinationReportIdentity);
+  mutate(model, report);
+  assert.throws(
+    () => cohortAudit.physicalDestinationStateModelIdentity(model, report),
+    /destination state model corpus identity/i,
+    'joint absence and mismatched model/report corpus receipts must fail before raster work',
+  );
+}
 const missingEnvelopeStep = structuredClone(envelopeComparisonWitness);
 missingEnvelopeStep.supportBudgetComparison.envelope.steps.pop();
 assert.throws(() => cohortAudit.validateMotionCohortWitness(missingEnvelopeStep), /budget.*step/i);
