@@ -67,7 +67,7 @@ async function identity(prefix, value, fields, identityField) {
 }
 
 function componentMetadata(manifest) {
-  const excluded = new Set(['tensors', 'weights', 'attentionWeights', 'tolerances', 'createdAt', 'outputSummary', 'assemblyParity', 'sourceImages', 'fixture', 'stateTransition', 'imageIngress']);
+  const excluded = new Set(['tensors', 'weights', 'attentionWeights', 'tolerances', 'createdAt', 'outputSummary', 'assemblyParity', 'sourceImages', 'fixture', 'stateTransition', 'imageIngress', 'ingressAuthority']);
   return Object.fromEntries(Object.entries(manifest).filter(([key]) => !excluded.has(key)));
 }
 

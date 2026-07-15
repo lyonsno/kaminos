@@ -37,6 +37,23 @@ function maxAbs(left, right) {
   return maximum;
 }
 
+function createBinaryMaskFixture({ variant, height, width }) {
+  const values = new Float32Array(16 * height * width);
+  const regionHeight = Math.max(1, Math.floor(height / 2));
+  const regionWidth = Math.max(1, Math.floor(width / 2));
+  const rowPositions = Math.max(1, height - regionHeight + 1);
+  const columnPositions = Math.max(1, width - regionWidth + 1);
+  for (let objectIndex = 0; objectIndex < 7; objectIndex += 1) {
+    const row = (objectIndex + variant) % rowPositions;
+    const column = (objectIndex * 3 + variant * 2) % columnPositions;
+    const objectOffset = objectIndex * height * width;
+    for (let y = row; y < row + regionHeight; y += 1) {
+      values.fill(1, objectOffset + y * width + column, objectOffset + y * width + column + regionWidth);
+    }
+  }
+  return values;
+}
+
 try {
   const result = spawnSync(python, [tool, '--out-dir', outDir], { encoding: 'utf8', timeout: 180_000 });
   assert.equal(result.status, 0, `official interactive pointer packet failed:\n${result.stdout}\n${result.stderr}`);
@@ -130,6 +147,7 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
   const dynamicResult = spawnSync(python, [
     tool,
     '--out-dir', dynamicOutDir,
+    '--mask-variant', '1',
     '--ingress-dir', ingressDir,
     '--expected-ingress-manifest-sha256', ingressManifestSha256,
   ], { encoding: 'utf8', timeout: 180_000 });
@@ -158,6 +176,7 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
     },
   );
   assert.equal(dynamicManifest.fixture.sourceFeaturesSynthetic, false);
+  assert.equal(dynamicManifest.fixture.maskVariant, 1, 'the authenticated pointer packet must bind the invocation mask variant');
   assert.equal(dynamicManifest.ingressAuthority.passed, true);
   assert.equal(dynamicManifest.ingressAuthority.manifestSha256, ingressManifestSha256);
   assert.deepEqual(
@@ -174,6 +193,11 @@ assert.deepEqual(receipt.checkpointAudit, manifest.checkpointAudit, 'reference r
     const bytes = readFileSync(join(dynamicOutDir, entry.file));
     dynamicWeights[`${entry.group}.${entry.localKey}`] = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
   }
+  assert.deepEqual(
+    dynamicTensors['binary-mask-inputs'],
+    createBinaryMaskFixture({ variant: 1, height: 64, width: 64 }),
+    'pointer source masks must be constructed directly at authenticated source geometry like the episode exporter',
+  );
   const dynamicOracle = createSam31InteractivePointerPhaseProgramCpuOracle({
     shape: dynamicManifest.shape,
     tensors: {

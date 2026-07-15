@@ -495,10 +495,26 @@ const packagePackets = {
     tensors: [packageEntry('frame-0-binary-mask-inputs', 'd'), packageEntry('frame-0-extra-per-object-embedding', 'e'), packageEntry('frame-1-extra-per-object-embedding', 'f'), packageEntry('expected-episode', '0')],
     tolerances: { maximum: 0.001 },
   },
-  pointer: { schema: 'pointer', routeId: 'pointer-route', shape: { channels: 256 }, reference: twoImageReference, weights: [packageEntry('pointer-weight', '2')], tensors: [packageEntry('expected-pointer', '3')], tolerances: { maximum: 0.001 } },
+  pointer: {
+    schema: 'pointer', routeId: 'pointer-route', shape: { channels: 256 }, reference: twoImageReference,
+    ingressAuthority: { passed: true, manifestSha256: `sha256:${'4'.repeat(64)}`, bindings: { frame0HighResolutionS1: `sha256:${'5'.repeat(64)}` } },
+    weights: [packageEntry('pointer-weight', '2')], tensors: [packageEntry('expected-pointer', '3')], tolerances: { maximum: 0.001 },
+  },
 };
-const packageProjection = await createSam31BrowserTrackerPackageProjection({ packets: packagePackets, sessionId: 'fixture-session', componentAuthorities: { ingress: { passed: true } } });
-const repeatedProjection = await createSam31BrowserTrackerPackageProjection({ packets: packagePackets, sessionId: 'fixture-session', componentAuthorities: { ingress: { passed: true } } });
+const packageAuthorities = { ingress: { passed: true }, pointer: packagePackets.pointer.ingressAuthority };
+const packageProjection = await createSam31BrowserTrackerPackageProjection({ packets: packagePackets, sessionId: 'fixture-session', componentAuthorities: packageAuthorities });
+const repeatedProjection = await createSam31BrowserTrackerPackageProjection({ packets: packagePackets, sessionId: 'fixture-session', componentAuthorities: packageAuthorities });
+const changedPointerAuthorityPackets = structuredClone(packagePackets);
+changedPointerAuthorityPackets.pointer.ingressAuthority = {
+  passed: true,
+  manifestSha256: `sha256:${'6'.repeat(64)}`,
+  bindings: { frame0HighResolutionS1: `sha256:${'7'.repeat(64)}` },
+};
+const changedPointerAuthorityProjection = await createSam31BrowserTrackerPackageProjection({
+  packets: changedPointerAuthorityPackets,
+  sessionId: 'fixture-session',
+  componentAuthorities: { ...packageAuthorities, pointer: changedPointerAuthorityPackets.pointer.ingressAuthority },
+});
 const substitutedEncodedSourcePackets = structuredClone(packagePackets);
 substitutedEncodedSourcePackets.ingress.sourceImages[0].originalSha256 = `sha256:${'7'.repeat(64)}`;
 const substitutedEncodedSourceProjection = await createSam31BrowserTrackerPackageProjection({ packets: substitutedEncodedSourcePackets, sessionId: 'fixture-session', componentAuthorities: { ingress: { passed: true } } });
@@ -509,6 +525,18 @@ await assert.rejects(
   /RGBA identity does not match its invocation artifact/,
 );
 assert.equal(packageProjection.modelPackage.packageId, repeatedProjection.modelPackage.packageId, 'rerunning package projection must preserve content identity');
+assert.equal(
+  packageProjection.modelPackage.packageId,
+  changedPointerAuthorityProjection.modelPackage.packageId,
+  'invocation-specific pointer ingress authority must not contaminate reusable model-package identity',
+);
+assert.equal(packageProjection.modelPackage.components.pointer.ingressAuthority, undefined, 'pointer ingress authority must not be projected into immutable model metadata');
+assert.notEqual(
+  packageProjection.verification.verificationId,
+  changedPointerAuthorityProjection.verification.verificationId,
+  'pointer ingress authority changes must remain identity-bearing verification evidence',
+);
+assert.deepEqual(packageProjection.verification.componentAuthorities.pointer, packagePackets.pointer.ingressAuthority);
 assert.equal(packageProjection.invocation.invocationId, repeatedProjection.invocation.invocationId, 'rerunning invocation projection must preserve content identity');
 assert.notEqual(packageProjection.invocation.invocationId, substitutedEncodedSourceProjection.invocation.invocationId, 'encoded-image substitution must alter invocation identity even when RGBA tensor bytes are unchanged');
 assert.deepEqual(

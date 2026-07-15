@@ -12,7 +12,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 
 ROUTE_ID = "sam3.1.interactive-pointer.phase-program.webgpu-local.v0"
@@ -30,6 +29,7 @@ def parse_args():
     parser.add_argument("--checkpoint", default=str(DEFAULT_CHECKPOINT))
     parser.add_argument("--source-root", default=str(Path.home() / "dev/sam3"))
     parser.add_argument("--seed", type=int, default=3167)
+    parser.add_argument("--mask-variant", type=int, default=0)
     parser.add_argument("--ingress-dir")
     parser.add_argument("--expected-ingress-manifest-sha256")
     return parser.parse_args()
@@ -181,6 +181,7 @@ def write_failure_receipt(args, error: Exception):
             "checkpoint": str(Path(args.checkpoint).resolve()),
             "sourceRoot": str(Path(args.source_root).resolve()),
             "seed": args.seed,
+            "maskVariant": args.mask_variant,
             "ingressDir": str(Path(args.ingress_dir).resolve()) if args.ingress_dir else None,
             "expectedIngressManifestSha256": args.expected_ingress_manifest_sha256,
         },
@@ -265,9 +266,7 @@ def main():
 
     generator = torch.Generator(device="cpu").manual_seed(args.seed)
     random = lambda shape, scale: torch.randn(shape, generator=generator, dtype=torch.float32) * scale
-    binary_masks = helper.create_binary_mask_fixture()
-    if (source_mask_height, source_mask_width) != tuple(binary_masks.shape[-2:]):
-        binary_masks = F.interpolate(binary_masks, size=(source_mask_height, source_mask_width), mode="nearest")
+    binary_masks = helper.create_binary_mask_fixture(args.mask_variant, source_mask_height, source_mask_width)
     image_embedding = ingress["imageEmbedding"] if ingress else random((1, 256, image_height, image_width), 0.04)
     high_resolution_s0 = ingress["highResolutionS0"] if ingress else random((1, 32, image_height * 4, image_width * 4), 0.03)
     high_resolution_s1 = ingress["highResolutionS1"] if ingress else random((1, 64, image_height * 2, image_width * 2), 0.03)
@@ -375,6 +374,7 @@ def main():
         },
         "fixture": {
             "seed": args.seed,
+            "maskVariant": args.mask_variant,
             "kind": "authenticated-ingress-mixed-object-presence" if ingress else "deterministic-reduced-geometry-mixed-object-presence",
             "sourceFeaturesSynthetic": ingress is None,
             "initialMaskSynthetic": True,
@@ -423,6 +423,7 @@ def main():
         "boundary": manifest["boundary"],
         "reference": reference,
         "shape": shape,
+        "fixture": manifest["fixture"],
         "ingressAuthority": manifest["ingressAuthority"],
         "checkpointAudit": manifest["checkpointAudit"],
         "outputs": {"tensorManifest": str(manifest_path), "tensorManifestSha256": sha256_bytes(manifest_text.encode("utf-8")), "referenceReceipt": str(receipt_path)},
