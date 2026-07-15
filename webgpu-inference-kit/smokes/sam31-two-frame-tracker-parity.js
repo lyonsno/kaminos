@@ -113,7 +113,9 @@ function maxAbs(left, right) {
 }
 
 function parityDiagnostics(actual, expected) {
-  return summarizeSam3TensorParityCheckpoint(expected, actual);
+  const expectedValues = expected instanceof Float32Array ? expected : Float32Array.from(expected);
+  const actualValues = actual instanceof Float32Array ? actual : Float32Array.from(actual);
+  return summarizeSam3TensorParityCheckpoint(expectedValues, actualValues);
 }
 
 function finiteRatio(numerator, denominator) {

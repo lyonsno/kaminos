@@ -50,6 +50,7 @@ assert.doesNotMatch(
 );
 for (const token of [
   'summarizeSam3TensorParityCheckpoint',
+  'Float32Array.from',
   'downstreamParityDiagnostics',
   'memoryFromPropagation',
   'temporalFromMemory',

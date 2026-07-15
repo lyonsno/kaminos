@@ -295,6 +295,7 @@ const smokeSource = await readFile(new URL('../smokes/sam31-two-frame-tracker-pa
 const driverSource = await readFile(new URL('../src/sam31-browser-tracker-session-driver.js', import.meta.url), 'utf8');
 for (const token of [
   'summarizeSam3TensorParityCheckpoint',
+  'Float32Array.from',
   'downstreamParityDiagnostics',
   'memoryFromPropagation',
   'temporalFromMemory',
