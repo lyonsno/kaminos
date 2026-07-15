@@ -121,6 +121,10 @@ assert.match(webgpuCoreSource, /contactRecordCount/, 'carrier diagnostics count 
 assert.match(webgpuCoreSource, /minimumContactSupportAlignment/, 'carrier diagnostics preserve the worst support alignment across every contact record');
 assert.match(webgpuCoreSource, /Promise\.allSettled\(/, 'diagnostic mapping waits for every readback result before cleanup');
 assert.match(webgpuCoreSource, /buffer\.mapState === 'mapped'/, 'diagnostic cleanup unmaps every successfully mapped buffer after partial failures');
+assert.match(webgpuCoreSource, /let diagnosticsRequestCount = 0/, 'full GPU diagnostics expose an exact request count');
+assert.match(webgpuCoreSource, /let diagnosticsCompletionCount = 0/, 'full GPU diagnostics expose an exact completion count');
+assert.match(webgpuCoreSource, /diagnosticsRequestCount \+= 1/, 'accepted full-diagnostic requests are counted at their execution boundary');
+assert.match(webgpuCoreSource, /diagnosticsCompletionCount \+= 1/, 'completed full-diagnostic snapshots are counted separately from requests');
 assert.match(webgpuCoreSource, /pass\.draw\(6, safeParticleCount \+ PLAYGROUND_TILE_COUNT \+ PLAYGROUND_SKIRT_COUNT \+ PLAYGROUND_OBSTACLE_COUNT\)/, 'direct renderer draws the shared playground and connected shelf cliff in the operator viewport');
 assert.match(webgpuCoreSource, /playgroundZoneDiagnostics/, 'sparse diagnostics measure population and energy by playground regime');
 assert.match(webgpuCoreSource, /supportedTransportParticleCount/, 'sparse diagnostics expose the support-adjacent transport population');
@@ -173,6 +177,9 @@ assert.match(indexSource, /id="tab-finger-fluid-bench"/, 'Kaminos app shell cont
 assert.match(indexSource, /kaminos_finger_fluid_bench=1/, 'Kaminos route can open directly into the fluid bench');
 assert.match(indexSource, /id="finger-fluid-bench-canvas"/, 'fluid bench owns a native canvas');
 assert.match(indexSource, /window\.kaminosFingerFluidBenchDebugState/, 'fluid bench exposes browser witness state');
+assert.match(indexSource, /async function requestFingerFluidBenchDiagnostics\(\)/, 'full diagnostics remain available through an explicit operator/witness request');
+assert.match(indexSource, /window\.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics/, 'the explicit full-diagnostics hook is addressable from the witness surface');
+assert.doesNotMatch(indexSource, /now - fingerFluidBenchDiagnosticsRequestedAt > 1800/, 'ordinary operator frames must not schedule periodic full-population readback');
 assert.match(indexSource, /createWebGPUFingerFluidSolver/, 'native bench constructs the real WebGPU fluid solver');
 assert.match(indexSource, /finger_fluid_color_mode/, 'native route accepts an explicit diagnostic color mode');
 assert.match(indexSource, /finger_fluid_particle_shift/, 'native route accepts an explicit particle-shift strength');
@@ -192,6 +199,10 @@ assert.doesNotMatch(indexSource, /id="finger-fluid-bench-frame"/, 'fluid bench m
 
 assert.match(benchWitnessSource, /kaminos_finger_fluid_bench=1/, 'bench witness opens the native fluid bench route');
 assert.match(benchWitnessSource, /kaminosFingerFluidBenchDebugState/, 'bench witness reads native fluid bench debug state');
+assert.match(benchWitnessSource, /automaticDiagnosticsRequestCount !== 0/, 'bench witness rejects hidden automatic full diagnostics before its explicit request');
+assert.match(benchWitnessSource, /kaminosFingerFluidBenchRequestDiagnostics/, 'bench witness explicitly requests the authoritative full diagnostic snapshot it consumes');
+assert.match(benchWitnessSource, /diagnosticsCompletionCount !== diagnosticsRequestCount/, 'bench witness rejects partial or unfinished full-diagnostic evidence');
+assert.match(benchWitnessSource, /deltaDiagnosticsRequests !== 0/, 'cadence witness rejects any recurring full-diagnostic request after its explicit snapshot');
 assert.match(benchWitnessSource, /kaminos\.finger-fluid-bench\.state\.v0/, 'bench witness requires bench state schema');
 assert.match(benchWitnessSource, /primary_output_written/, 'bench witness writes durable failure reports before screenshot success');
 assert.match(benchWitnessSource, /activeRatio/, 'bench witness measures visible activity ratio');
@@ -259,6 +270,8 @@ assert.match(benchWitnessSource, /relativeDensityError/, 'bench witness rejects 
 assert.match(benchWitnessSource, /diagnosticsAgeMs > 3000/, 'bench witness rejects stale sparse diagnostics by elapsed time rather than frame count');
 assert.match(benchWitnessSource, /cadenceProbe/, 'bench witness measures settled live cadence');
 assert.match(benchWitnessSource, /--cadence-ms/, 'bench witness accepts an explicit, reportable cadence observation window');
+assert.match(benchWitnessSource, /args\.get\('--cadence-ms'\) \|\| 4200/, 'default cadence observation spans multiple former 1800ms diagnostic periods');
+assert.match(benchWitnessSource, /cadenceMs < 3600/, 'short cadence windows fail loud instead of presenting non-authoritative recurrence evidence');
 assert.match(benchWitnessSource, /--device-scale-factor/, 'bench witness can reproduce Retina drawing-buffer behavior');
 assert.match(benchWitnessSource, /deviceScaleFactor/, 'bench witness records and applies its effective device scale factor');
 assert.match(benchWitnessSource, /cadenceWindowMs:\s*cadenceMs/, 'bench witness records its effective cadence window');

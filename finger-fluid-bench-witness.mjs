@@ -18,7 +18,7 @@ const viewportHeight = Number(args.get('--viewport-height') || 1120);
 const deviceScaleFactor = Number(args.get('--device-scale-factor') || 1);
 const settleMs = Number(args.get('--settle-ms') || 10000);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
-const cadenceMs = Number(args.get('--cadence-ms') || 1500);
+const cadenceMs = Number(args.get('--cadence-ms') || 4200);
 
 let phase = 'initializing';
 let stderr = '';
@@ -27,6 +27,8 @@ let primaryOutputWritten = false;
 let lastDebugState = null;
 let canvasActivity = null;
 let cadenceProbe = null;
+let automaticDiagnosticsRequestCount = null;
+let explicitDiagnosticsReceipt = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -53,6 +55,8 @@ function writeReport(report = {}) {
     lastDebugState,
     canvasActivity,
     cadenceProbe,
+    automaticDiagnosticsRequestCount,
+    explicitDiagnosticsReceipt,
     canvasOut,
     output: primaryOutputWritten ? out : null,
     ...report,
@@ -148,6 +152,10 @@ async function evaluate(ws, expression) {
 }
 
 async function main() {
+  if (!Number.isFinite(cadenceMs) || cadenceMs < 3600) {
+    phase = 'validate_config';
+    throw new Error(`Finger Fluid cadence evidence must span at least 3600ms, received: ${cadenceMs}`);
+  }
   const chromeProcess = spawn(chrome, [
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${userDataDir}`,
@@ -202,6 +210,20 @@ async function main() {
 
     await delay(settleMs);
 
+    const preDiagnosticsState = await evaluate(ws, `(() => {
+      const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
+      return typeof read === 'function' ? read() : null;
+    })()`);
+    automaticDiagnosticsRequestCount = preDiagnosticsState?.runtime?.diagnosticsRequestCount;
+    if (automaticDiagnosticsRequestCount !== 0) {
+      throw new Error(`ordinary operator route scheduled hidden full diagnostics: ${automaticDiagnosticsRequestCount}`);
+    }
+    explicitDiagnosticsReceipt = await evaluate(ws, `(async () => {
+      const request = window.kaminosFingerFluidBenchRequestDiagnostics;
+      if (typeof request !== 'function') throw new Error('missing explicit finger fluid diagnostics hook');
+      return request();
+    })()`);
+
     lastDebugState = await evaluate(ws, `(() => {
       const read = window.kaminosFingerFluidBenchDebugState || window.__kaminosFingerFluidBenchDebugState;
       return typeof read === 'function' ? read() : null;
@@ -220,6 +242,11 @@ async function main() {
     if (lastDebugState.solver?.backend !== 'webgpu_compute') throw new Error(`fallback solver backend rejected: ${lastDebugState.solver?.backend}`);
     if (lastDebugState.renderer?.backend !== 'webgpu_direct_render') throw new Error(`fallback render backend rejected: ${lastDebugState.renderer?.backend}`);
     if (lastDebugState.runtime?.available !== true) throw new Error(`WebGPU runtime unavailable or fallback: ${JSON.stringify(lastDebugState.runtime)}`);
+    const diagnosticsRequestCount = lastDebugState.runtime?.diagnosticsRequestCount;
+    const diagnosticsCompletionCount = lastDebugState.runtime?.diagnosticsCompletionCount;
+    if (diagnosticsRequestCount !== 1 || diagnosticsCompletionCount !== diagnosticsRequestCount) {
+      throw new Error(`explicit full diagnostics are missing, partial, or duplicated: ${JSON.stringify({ automaticDiagnosticsRequestCount, diagnosticsRequestCount, diagnosticsCompletionCount, explicitDiagnosticsReceipt })}`);
+    }
     if (lastDebugState.runtime?.solverRoute !== 'webgpu-pbf-linked-cell-fluid-v0') throw new Error(`solver route mismatch: ${lastDebugState.runtime?.solverRoute}`);
     if (lastDebugState.runtime?.neighborGridContract !== 'wgsl-linked-cell-neighbor-grid-v0') throw new Error(`neighbor grid contract mismatch: ${lastDebugState.runtime?.neighborGridContract}`);
     if (lastDebugState.runtime?.densityContract !== 'wgsl-pbf-density-constraint-v0') throw new Error(`density contract mismatch: ${lastDebugState.runtime?.densityContract}`);
@@ -472,6 +499,7 @@ async function main() {
     const cadenceBefore = {
       stepCount: lastDebugState.runtime.stepCount,
       directRenderFrameCount: lastDebugState.runtime.directRenderFrameCount,
+      diagnosticsRequestCount: lastDebugState.runtime.diagnosticsRequestCount,
     };
     const cadenceStartedAt = performance.now();
     await delay(cadenceMs);
@@ -484,9 +512,11 @@ async function main() {
       elapsedMs: Number(cadenceElapsedMs.toFixed(1)),
       deltaSteps: cadenceState.runtime.stepCount - cadenceBefore.stepCount,
       deltaRenderFrames: cadenceState.runtime.directRenderFrameCount - cadenceBefore.directRenderFrameCount,
+      deltaDiagnosticsRequests: cadenceState.runtime.diagnosticsRequestCount - cadenceBefore.diagnosticsRequestCount,
       framesPerSecond: Number(((cadenceState.runtime.directRenderFrameCount - cadenceBefore.directRenderFrameCount) * 1000 / cadenceElapsedMs).toFixed(2)),
     };
     lastDebugState = cadenceState;
+    if (cadenceProbe.deltaDiagnosticsRequests !== 0) throw new Error(`cadence window scheduled recurring full diagnostics: ${JSON.stringify(cadenceProbe)}`);
     if (cadenceProbe.framesPerSecond < 18) throw new Error(`settled GPU fluid cadence below floor: ${JSON.stringify(cadenceProbe)}`);
 
     phase = null;

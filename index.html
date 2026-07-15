@@ -2762,7 +2762,6 @@ let fingerFluidBenchLastFrameMs = 26.5;
 let fingerFluidBenchSolver = null;
 let fingerFluidBenchSolverPromise = null;
 let fingerFluidBenchRunning = false;
-let fingerFluidBenchDiagnosticsRequestedAt = Number.NEGATIVE_INFINITY;
 let fingerFluidBenchCamera = { yaw: -0.62, pitch: 0.52, distance: 6.2, target: [0, -0.48, 0.2] };
 let fingerFluidBenchConfig = null;
 
@@ -9775,6 +9774,19 @@ function ensureFingerFluidBenchCanvasSize(canvas) {
   return { width, height };
 }
 
+async function requestFingerFluidBenchDiagnostics() {
+  if (!fingerFluidBenchSolver?.available) return null;
+  const diagnostics = await fingerFluidBenchSolver.requestDiagnostics();
+  if (fingerFluidBenchRunning) updateFingerFluidBenchReadout();
+  const runtime = fingerFluidBenchSolver.getDebugState();
+  return {
+    diagnosticsStepCount: diagnostics?.stepCount ?? null,
+    diagnosticsRequestCount: runtime.diagnosticsRequestCount,
+    diagnosticsCompletionCount: runtime.diagnosticsCompletionCount,
+    diagnosticsLastDurationMs: runtime.diagnosticsLastDurationMs,
+  };
+}
+
 function drawFingerFluidBenchFrame(now = performance.now()) {
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   const panel = document.getElementById('finger-fluid-bench-operator-panel');
@@ -9804,12 +9816,6 @@ function drawFingerFluidBenchFrame(now = performance.now()) {
   gpuState.effectiveParticleShiftStrength = gpuState.particleShiftStrength;
   gpuState.requestedChemistryDiffusion = fingerFluidBenchConfig.requestedChemistryDiffusion;
   gpuState.effectiveChemistryDiffusion = gpuState.chemistryDiffusion;
-  if (now - fingerFluidBenchDiagnosticsRequestedAt > 1800) {
-    fingerFluidBenchDiagnosticsRequestedAt = now;
-    fingerFluidBenchSolver.requestDiagnostics().then(() => {
-      if (fingerFluidBenchRunning) updateFingerFluidBenchReadout();
-    }).catch(error => console.error('Finger Fluid diagnostics failed:', error));
-  }
   fingerFluidBenchLastFrameMs = performance.now() - frameStart;
   fingerFluidBenchState = createFingerFluidBenchState({
     status: 'running',
@@ -9923,6 +9929,7 @@ function initKaminosFingerFluidBenchRoute() {
   fingerFluidBenchRouteInitialized = true;
   window.kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
   window.__kaminosFingerFluidBenchDebugState = kaminosFingerFluidBenchDebugState;
+  window.kaminosFingerFluidBenchRequestDiagnostics = requestFingerFluidBenchDiagnostics;
   const canvas = document.getElementById('finger-fluid-bench-canvas');
   let pointer = null;
   canvas?.addEventListener('pointerdown', event => {

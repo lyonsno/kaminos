@@ -1557,6 +1557,9 @@ export async function createWebGPUFingerFluidSolver({
   let directRenderFrameCount = 0;
   let lastFrameCpuMs = 0;
   let diagnosticsPending = false;
+  let diagnosticsRequestCount = 0;
+  let diagnosticsCompletionCount = 0;
+  let diagnosticsLastDurationMs = 0;
   let diagnostics = null;
   let destroyed = false;
 
@@ -1728,6 +1731,8 @@ export async function createWebGPUFingerFluidSolver({
   async function requestDiagnostics() {
     if (diagnosticsPending || destroyed) return diagnostics;
     diagnosticsPending = true;
+    diagnosticsRequestCount += 1;
+    const diagnosticsStartedAtMs = performance.now();
     const readbackBuffers = [diagnosticsBuffer, interfaceCountersReadbackBuffer, interfaceRecordsReadbackBuffer, restStateReadbackBuffer, neighborTopologyReadbackBuffer, materialTracerReadbackBuffer];
     try {
       const diagnosticsStepCount = stepCount;
@@ -1949,11 +1954,13 @@ export async function createWebGPUFingerFluidSolver({
           sampleRecords,
         },
       };
+      diagnosticsCompletionCount += 1;
       return diagnostics;
     } finally {
       for (const buffer of readbackBuffers) {
         if (buffer.mapState === 'mapped') buffer.unmap();
       }
+      diagnosticsLastDurationMs = performance.now() - diagnosticsStartedAtMs;
       diagnosticsPending = false;
     }
   }
@@ -2031,6 +2038,10 @@ export async function createWebGPUFingerFluidSolver({
       topologyMeasurementPassCount,
       particleShiftPassCount,
       chemistryDiffusionPassCount,
+      diagnosticsPending,
+      diagnosticsRequestCount,
+      diagnosticsCompletionCount,
+      diagnosticsLastDurationMs: Number(diagnosticsLastDurationMs.toFixed(3)),
       directRenderFrameCount,
       lastFrameCpuMs: Number(lastFrameCpuMs.toFixed(3)),
       diagnostics: diagnostics ? {
