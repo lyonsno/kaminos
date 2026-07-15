@@ -5875,6 +5875,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let kilnFrameStageLedgerRecording = false;
   let lastKilnFrameStageId = null;
   let activeHoldoverRenderPromise = null;
+  let fireEpisodeFramesQuiescing = false;
 
   function recordKilnFrameStage(frameId, stage, startMs, authority, detail = null) {
     if (!kilnFrameStageLedgerRecording || !frameId) return null;
@@ -10716,7 +10717,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   }
 
   function render(now) {
-    if (!state.active) return;
+    if (!state.active || fireEpisodeFramesQuiescing) return;
     if (kilnFrameStageLedgerRecording && lastKilnFrameStageId) {
       kilnFrameStageLedger.recordPresentationOpportunity(lastKilnFrameStageId, {
         timestampMs: now,
@@ -10756,7 +10757,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           }
         })
         .then(() => {
-          if (state.active) raf = requestAnimationFrame(render);
+          if (state.active && !fireEpisodeFramesQuiescing) raf = requestAnimationFrame(render);
         })
         .catch(stopVolumeRenderOnError);
       activeHoldoverRenderPromise = holdoverFramePromise;
@@ -13440,6 +13441,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         try {
           await ensureGpu();
           await ensureBrowserResidualModel();
+          fireEpisodeFramesQuiescing = false;
           state.active = true;
           state.error = null;
           canvas.classList.add('active');
@@ -13455,12 +13457,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           throw err;
         }
       } else {
+        fireEpisodeFramesQuiescing = true;
         state.active = false;
         canvas.classList.remove('active');
         cancelAnimationFrame(raf);
         if (activeHoldoverRenderPromise) await activeHoldoverRenderPromise;
         emitStatus({ phase: 'inactive' });
       }
+    },
+    async quiesceFireEpisodeFrames() {
+      fireEpisodeFramesQuiescing = true;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      if (activeHoldoverRenderPromise) await activeHoldoverRenderPromise;
+      cancelAnimationFrame(raf);
+      raf = 0;
+      return { active: state.active, quiesced: true };
     },
     debugState() {
       return {
@@ -13475,6 +13487,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       };
     },
     beginFireEpisode(options) {
+      fireEpisodeFramesQuiescing = false;
       state.flameContinuityPresentationOrdinal = 0;
       state.flameContinuityDecision = null;
       state.flameContinuityLastHoldoverDecision = null;

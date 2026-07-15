@@ -65,11 +65,26 @@ assert.match(
   /state\.active\s*=\s*false[\s\S]*cancelAnimationFrame\(raf\)[\s\S]*await activeHoldoverRenderPromise/,
   'deactivation must prevent another RAF and await the active held frame before returning',
 );
-const quiesceIndex = fireEpisodeCloser.indexOf('await volumePrototype.setActive(false)');
+assert.match(
+  core,
+  /async quiesceFireEpisodeFrames\(\)[\s\S]{0,500}fireEpisodeFramesQuiescing\s*=\s*true[\s\S]{0,500}cancelAnimationFrame\(raf\)[\s\S]{0,500}await activeHoldoverRenderPromise/,
+  'episode close must have a narrow frame quiescence boundary that does not erase active firing identity',
+);
+assert.match(
+  renderLoop,
+  /if \(!state\.active \|\| fireEpisodeFramesQuiescing\) return;[\s\S]*if \(state\.active && !fireEpisodeFramesQuiescing\) raf = requestAnimationFrame\(render\)/,
+  'quiescence must reject new volume RAF work before and after an asynchronous held frame',
+);
+const quiesceIndex = fireEpisodeCloser.indexOf('await volumePrototype.quiesceFireEpisodeFrames()');
 const ledgerCloseIndex = fireEpisodeCloser.indexOf('volumePrototype.endFireEpisode');
 assert.ok(
   quiesceIndex >= 0 && ledgerCloseIndex >= 0 && quiesceIndex < ledgerCloseIndex,
   'the page must quiesce an active volume before closing the exact firing ledger',
+);
+assert.equal(
+  fireEpisodeCloser.slice(0, ledgerCloseIndex).includes('setActive(false)'),
+  false,
+  'episode identity must remain active until the foreground heartbeat and exact ledger close',
 );
 assert.match(
   core,
