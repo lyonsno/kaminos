@@ -11,7 +11,7 @@ const witness = readFileSync(resolve(root, 'volume-native-low-transfer-long-sequ
 const combined = `${route}\n${runtime}\n${core}\n${witness}`;
 
 assert.match(route, /manual_source_grid/, 'manual live assay accepts an explicit source grid');
-assert.match(route, /manualSourceGrid[\s\S]*\[64, 96\]/, 'manual live assay admits only the witnessed native source grids');
+assert.match(route, /manualSourceGrid[\s\S]*\[64, 96, 128\]/, 'manual live assay admits only the witnessed native source grids');
 assert.match(route, /resolution:\s*manualSourceGrid/, 'manual capture steps the requested native source grid');
 assert.match(route, /nativeGrid:\s*manualSourceGrid/, 'manual receipt exposes the effective native source grid');
 assert.match(route, /nativeControlRoleIdentity[\s\S]*`native\$\{manualSourceGrid\}Control`/, 'control role identity names the effective native grid');
@@ -25,6 +25,7 @@ assert.match(core, /\[64, 96, 128\]\.includes\(sourceGrid\)/, 'renderer-owned sh
 assert.match(combined, /native-64-native-96-or-native-128-runtime-selected-v0/, 'route receipts describe all admitted effective source grids');
 
 assert.match(witness, /--expected-grid/, 'long witness requires an explicit expected-grid override for native64');
+assert.match(witness, /\[64, 96, 128\]\.includes\(expectedGrid\)/, 'long witness can produce the matched native128 control without a second evidence route');
 assert.match(witness, /native\$\{expectedGrid\}Control/, 'long witness derives the control role from the effective grid');
 assert.match(witness, /frame-locked-consecutive-native-\$\{expectedGrid\}-simulation-steps-v0/, 'sequence authority names the effective native grid');
 assert.match(witness, /assert\.equal\(state\?\.nativeGrid, expectedGrid/, 'witness rejects the wrong effective native grid');

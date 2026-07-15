@@ -18,6 +18,7 @@ assert.match(witness, /kaminos\.volume\.native-low-transfer-long-sequence-witnes
 assert.match(witness, /native\$\{expectedGrid\}Control[\s\S]*baseline128Trained[\s\S]*candidate96Trained/);
 assert.match(witness, /frame-locked-consecutive-native-\$\{expectedGrid\}-simulation-steps-v0/);
 assert.match(witness, /--expected-grid/, 'witness supports explicit native64 without changing the accepted native96 default');
+assert.match(witness, /\[64, 96, 128\]\.includes\(expectedGrid\)/, 'witness supports an exact native128 control through the same contract');
 assert.match(witness, /setCapturePaused\(true\)/);
 assert.match(witness, /stepCaptureFrame\(\)/);
 assert.match(witness, /\['running', 'paused'\][\s\S]*capturePaused/, 'an explicitly paused manual route counts as settled without auto-advancing');

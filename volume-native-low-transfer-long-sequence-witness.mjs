@@ -94,7 +94,7 @@ try {
   assert.ok(playbackFps > 0, '--fps must be positive');
   assert.ok(timeoutMs > 0, '--timeout-ms must be positive');
   assert.ok(captureCallTimeoutMs > 0, '--capture-call-timeout-ms must be positive');
-  assert.ok([64, 96].includes(expectedGrid), '--expected-grid must be 64 or 96');
+  assert.ok([64, 96, 128].includes(expectedGrid), '--expected-grid must be 64, 96, or 128');
   mkdirSync(dirname(out), { recursive: true });
   mkdirSync(dirname(reportPath), { recursive: true });
   mkdirSync(dirname(contactPath), { recursive: true });

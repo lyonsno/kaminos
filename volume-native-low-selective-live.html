@@ -231,7 +231,7 @@
     const cueBufferLifecycleStressMode = !native64ManifestMode && params.get('cue_buffer_lifecycle_stress') === '1';
     const manualDualCaptureMode = !native64ManifestMode && (params.get('manual_dual_capture') === '1' || params.get('capture_paused') === '1');
     const manualSourceGrid = Number(params.get('manual_source_grid') || 96);
-    const manualSourceGridSupported = [64, 96].includes(manualSourceGrid);
+    const manualSourceGridSupported = [64, 96, 128].includes(manualSourceGrid);
     const nativeControlRoleIdentity = `native${manualSourceGrid}Control`;
     const requestedTransferRouteId = params.get('native_low_transfer_route') || NATIVE_LOW_TRANSFER_160_TO_128_ZERO_SHOT_ROUTE;
     const vivisectorCandidateHeadPackageUrl = params.get('vivisector_candidate_head_package') || '';
