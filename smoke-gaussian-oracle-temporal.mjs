@@ -127,7 +127,8 @@ async function loadGaussianRows(reportPath, budgetEntry) {
 
 async function loadFitReport(reportPath, requestedBudgets) {
   const absoluteReportPath = resolve(reportPath);
-  const report = await readJson(absoluteReportPath);
+  const reportBytes = await readFile(absoluteReportPath);
+  const report = JSON.parse(reportBytes.toString('utf8'));
   if (report.schema !== 'kaminos.smoke-gaussian-oracle-static-fit-report.v0'
     || report.identity !== STATIC_FIT_IDENTITY
     || report.status !== 'passed') {
@@ -154,7 +155,8 @@ async function loadFitReport(reportPath, requestedBudgets) {
   }
   return {
     reportPath: absoluteReportPath,
-    reportIdentity: report.reportIdentity || `sha256:${sha256(await readFile(absoluteReportPath))}`,
+    reportIdentity: `sha256:${sha256(reportBytes)}`,
+    declaredReportIdentity: report.reportIdentity || null,
     report,
     manifest,
     frame: {
@@ -230,6 +232,75 @@ function compactTopologyRows(rows, oppositeRows) {
   }));
 }
 
+function resolveInheritedCorrespondence(previousFrame, nextFrame, budget) {
+  const warmStart = nextFrame.report.warmStart;
+  if (!warmStart) return null;
+  if (warmStart.authority !== 'prior-static-fit-artifact-bounded-residual-v0') {
+    throw new Error('warm-start frame lacks prior static fit authority');
+  }
+  const sourceReportPath = resolveArtifactPath(nextFrame.reportPath, warmStart.sourceReportPath);
+  if (sourceReportPath !== previousFrame.reportPath) throw new Error('warm-start source report path does not match preceding frame');
+  if (warmStart.sourceReportIdentity !== previousFrame.reportIdentity) throw new Error('warm-start source report identity does not match preceding frame bytes');
+  if (warmStart.fromSimStepCount !== previousFrame.frame.simStepCount
+    || warmStart.toSimStepCount !== nextFrame.frame.simStepCount) {
+    throw new Error('warm-start sim-step linkage does not match frame transition');
+  }
+  const previousBudget = previousFrame.budgets.get(budget);
+  const nextBudget = nextFrame.budgets.get(budget);
+  const budgetWarmStart = nextBudget.entry.warmStart;
+  if (budgetWarmStart?.authority !== 'prior-artifact-centers-bounded-residual-v0') {
+    throw new Error(`warm-start budget ${budget} lacks prior artifact center authority`);
+  }
+  if (budgetWarmStart.initialArtifactIdentity !== previousBudget.gaussian.artifactIdentity) {
+    throw new Error(`warm-start budget ${budget} initial artifact identity does not match preceding artifact`);
+  }
+  if (budgetWarmStart.initialActiveGaussianCount !== previousBudget.gaussian.rows.length
+    || nextBudget.gaussian.rows.length !== previousBudget.gaussian.rows.length) {
+    throw new Error(`warm-start budget ${budget} changed inherited row count without topology accounting`);
+  }
+  if (budgetWarmStart.maxCenterResidual !== warmStart.maxCenterResidual) {
+    throw new Error(`warm-start budget ${budget} residual bound does not match frame authority`);
+  }
+  const matches = previousBudget.gaussian.rows.map((previous, index) => {
+    const next = nextBudget.gaussian.rows[index];
+    const predicted = previous.position.map((component, axis) => component + previous.velocity[axis]);
+    return {
+      previousIndex: index,
+      nextIndex: index,
+      distance: distance(previous.position, next.position),
+      massDelta: next.extinctionMass - previous.extinctionMass,
+      velocityPredictionError: distance(predicted, next.position),
+    };
+  });
+  const displacements = matches.map(match => match.distance);
+  const velocityErrors = matches.map(match => match.velocityPredictionError);
+  if (Math.max(0, ...displacements) > warmStart.maxCenterResidual + 1e-6) {
+    throw new Error(`warm-start budget ${budget} artifact exceeds its center residual bound`);
+  }
+  return {
+    authority: 'checksum-bound-prior-artifact-row-index-v0',
+    sourceLinkVerified: true,
+    sourceReportPath,
+    sourceReportIdentity: previousFrame.reportIdentity,
+    sourceArtifactPath: previousBudget.gaussian.artifactPath,
+    sourceArtifactIdentity: previousBudget.gaussian.artifactIdentity,
+    inheritedActiveGaussianCount: previousBudget.gaussian.rows.length,
+    matchedCount: matches.length,
+    birthCount: 0,
+    deathCount: 0,
+    maxCenterResidual: warmStart.maxCenterResidual,
+    meanDisplacement: displacements.reduce((sum, value) => sum + value, 0) / Math.max(1, displacements.length),
+    p95Displacement: percentile(displacements, 95),
+    maxDisplacement: Math.max(0, ...displacements),
+    meanVelocityPredictionError: velocityErrors.reduce((sum, value) => sum + value, 0) / Math.max(1, velocityErrors.length),
+    matchedAbsoluteMassDelta: matches.reduce((sum, match) => sum + Math.abs(match.massDelta), 0),
+    maximumAppliedCenterResidual: budgetWarmStart.maximumAppliedCenterResidual,
+    meanAppliedCenterResidual: budgetWarmStart.meanAppliedCenterResidual,
+    clippedCenterUpdateCount: budgetWarmStart.clippedCenterUpdateCount,
+    matches: matches.slice(0, 32),
+  };
+}
+
 function matchTransition(previousFrame, nextFrame, budget, maxMatchDistanceMultiplier) {
   const previousBudget = previousFrame.budgets.get(budget);
   const nextBudget = nextFrame.budgets.get(budget);
@@ -291,6 +362,7 @@ function matchTransition(previousFrame, nextFrame, budget, maxMatchDistanceMulti
   const displacements = matches.map(match => match.distance);
   const velocityErrors = matches.map(match => match.velocityPredictionError);
   const centroidDrift = distance(previousSummary.centroid, nextSummary.centroid);
+  const inheritedCorrespondence = resolveInheritedCorrespondence(previousFrame, nextFrame, budget);
   return {
     budget,
     from: {
@@ -318,6 +390,7 @@ function matchTransition(previousFrame, nextFrame, budget, maxMatchDistanceMulti
       meanVelocityPredictionError: velocityErrors.reduce((sum, value) => sum + value, 0) / Math.max(1, velocityErrors.length),
       matches: matches.slice(0, 32),
     },
+    inheritedCorrespondence,
     topology: {
       birthCount: births.length,
       deathCount: deaths.length,

@@ -1,0 +1,3306 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-temporal-correspondence-report.v0",
+  "identity": "smoke-gaussian-oracle-temporal-correspondence-v0",
+  "status": "passed",
+  "createdAt": "2026-07-15T11:29:07.037Z",
+  "requestedBudgets": [
+    32,
+    64,
+    128
+  ],
+  "hiddenBudgetCapApplied": false,
+  "correspondenceAuthority": {
+    "routePolicy": "same-native-route-same-world-space-static-fit-sequence",
+    "matchSpace": "continuous-kaminos-volume-world-v0",
+    "matchAlgorithm": "greedy-nearest-world-distance-threshold-v0",
+    "maxMatchDistanceMultiplier": 2.5,
+    "topologyEvents": "unmatched-birth-death-plus-neighborhood-split-merge-risk-v0"
+  },
+  "frameSequence": [
+    {
+      "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/oracle-fit-report.json",
+      "manifestPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v5-r64-c256k-threeframe/sim-step-92.manifest.json",
+      "manifestIdentity": "sha256:c2a6398f43301535f4bdc3a4f9685440fb0f3031e063a114117d9d6eeca825e7",
+      "simStepCount": 92,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "grid": 64,
+      "worldSpace": {
+        "coordinateFrame": "kaminos-volume-world-v0",
+        "transformAuthority": "native-volume-grid-world-transform-v0",
+        "bounds": {
+          "minimum": [
+            -1,
+            -1,
+            -1
+          ],
+          "maximum": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "totalSmokeExtinction": 640.0375779885154,
+      "activeSmokeVoxelCount": 23200
+    },
+    {
+      "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+      "manifestPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v5-r64-c256k-threeframe/sim-step-93.manifest.json",
+      "manifestIdentity": "sha256:9bf377e8c050d35dde2d63ed98256891e48d1314e27c774053bcbeef18065ac2",
+      "simStepCount": 93,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "grid": 64,
+      "worldSpace": {
+        "coordinateFrame": "kaminos-volume-world-v0",
+        "transformAuthority": "native-volume-grid-world-transform-v0",
+        "bounds": {
+          "minimum": [
+            -1,
+            -1,
+            -1
+          ],
+          "maximum": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "totalSmokeExtinction": 621.0904258442167,
+      "activeSmokeVoxelCount": 23327
+    },
+    {
+      "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-94/oracle-fit-report.json",
+      "manifestPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v5-r64-c256k-threeframe/sim-step-94.manifest.json",
+      "manifestIdentity": "sha256:6ec5f79bf92d77a5cf79c6a1830a3bcbd31918867b51208f8422f1bc79e96659",
+      "simStepCount": 94,
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "prototypeIdentity": "kaminos-volume-prototype-v0",
+      "backend": "WebGPU:apple",
+      "grid": 64,
+      "worldSpace": {
+        "coordinateFrame": "kaminos-volume-world-v0",
+        "transformAuthority": "native-volume-grid-world-transform-v0",
+        "bounds": {
+          "minimum": [
+            -1,
+            -1,
+            -1
+          ],
+          "maximum": [
+            1,
+            1,
+            1
+          ]
+        }
+      },
+      "totalSmokeExtinction": 599.4702166246967,
+      "activeSmokeVoxelCount": 23474
+    }
+  ],
+  "budgetTransitions": [
+    {
+      "budget": 32,
+      "from": {
+        "simStepCount": 92,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-32.gaussians.f32",
+        "artifactIdentity": "sha256:ef9d9e135513f3688c8e430d302f5fad1ac8f08f31c202fcedc6fdca69e064d3"
+      },
+      "to": {
+        "simStepCount": 93,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-32.gaussians.f32",
+        "artifactIdentity": "sha256:46919b41091b139e0d7516fa69248b057d31bf0bd1cdc79f04f5cbb4e387ebc0"
+      },
+      "correspondence": {
+        "matchAlgorithm": "greedy-nearest-world-distance-threshold-v0",
+        "maxMatchDistanceMultiplier": 2.5,
+        "maxMatchDistance": 0.2449348382651806,
+        "matchedCount": 32,
+        "matchFractionOfPrevious": 1,
+        "matchFractionOfNext": 1,
+        "meanDisplacement": 0.013616779272656004,
+        "p95Displacement": 0.03789956136291115,
+        "maxDisplacement": 0.038761145035387114,
+        "meanVelocityPredictionError": 0.35254875792274587,
+        "matches": [
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.0004905302670137658,
+            "massDelta": -0.09648895263671875,
+            "velocityPredictionError": 0.09568078474466236
+          },
+          {
+            "previousIndex": 30,
+            "nextIndex": 30,
+            "distance": 0.001623130069014349,
+            "massDelta": -0.11338043212890625,
+            "velocityPredictionError": 0.3150625811425716
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.0019086172390425896,
+            "massDelta": 0.09267425537109375,
+            "velocityPredictionError": 0.39325643886147504
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.002360037500490657,
+            "massDelta": 1.0431251525878906,
+            "velocityPredictionError": 0.48697817171905144
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.0030270738704082944,
+            "massDelta": -0.020626068115234375,
+            "velocityPredictionError": 0.37957786804626115
+          },
+          {
+            "previousIndex": 1,
+            "nextIndex": 1,
+            "distance": 0.0031762436127079304,
+            "massDelta": -0.3792438507080078,
+            "velocityPredictionError": 0.1987828439510808
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.003925145418154247,
+            "massDelta": -0.8998279571533203,
+            "velocityPredictionError": 0.5142335695715613
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.004228350991892617,
+            "massDelta": 0.8331108093261719,
+            "velocityPredictionError": 0.41498303509231166
+          },
+          {
+            "previousIndex": 10,
+            "nextIndex": 10,
+            "distance": 0.004489454432272515,
+            "massDelta": 0.03267097473144531,
+            "velocityPredictionError": 0.1340797366035476
+          },
+          {
+            "previousIndex": 13,
+            "nextIndex": 13,
+            "distance": 0.005037072832342212,
+            "massDelta": 0.12165260314941406,
+            "velocityPredictionError": 0.4674898814085347
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.005075254865133243,
+            "massDelta": 1.0691680908203125,
+            "velocityPredictionError": 0.42211438270269663
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.006388898143917259,
+            "massDelta": 0.1323070526123047,
+            "velocityPredictionError": 0.47322217298873176
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.007310131869140739,
+            "massDelta": -1.6711368560791016,
+            "velocityPredictionError": 0.425272716269441
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.007321740802920863,
+            "massDelta": 1.0572319030761719,
+            "velocityPredictionError": 0.4935168818418903
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.011260323349598915,
+            "massDelta": 3.0981483459472656,
+            "velocityPredictionError": 0.43295206606228503
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.01243540204590323,
+            "massDelta": -3.7744503021240234,
+            "velocityPredictionError": 0.4142007156558494
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.01254514349746834,
+            "massDelta": -0.7104167938232422,
+            "velocityPredictionError": 0.33454972756392964
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.012672682809791658,
+            "massDelta": -0.6601419448852539,
+            "velocityPredictionError": 0.15459091341519404
+          },
+          {
+            "previousIndex": 6,
+            "nextIndex": 6,
+            "distance": 0.012798248237578788,
+            "massDelta": 2.414569854736328,
+            "velocityPredictionError": 0.4040982845669645
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.015105792168450547,
+            "massDelta": -0.8216590881347656,
+            "velocityPredictionError": 0.44650994637189406
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.015448413620894491,
+            "massDelta": -0.6468210220336914,
+            "velocityPredictionError": 0.1049152308925613
+          },
+          {
+            "previousIndex": 4,
+            "nextIndex": 4,
+            "distance": 0.015875057821226113,
+            "massDelta": -0.6426382064819336,
+            "velocityPredictionError": 0.07708595704322417
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.01764895677817718,
+            "massDelta": -7.834882736206055,
+            "velocityPredictionError": 0.49115085014950344
+          },
+          {
+            "previousIndex": 15,
+            "nextIndex": 15,
+            "distance": 0.017934932117355987,
+            "massDelta": -2.369060516357422,
+            "velocityPredictionError": 0.44361948121504763
+          },
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.018639788042924623,
+            "massDelta": -3.110767364501953,
+            "velocityPredictionError": 0.5292388324864419
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.021354639002167896,
+            "massDelta": -2.4898996353149414,
+            "velocityPredictionError": 0.3125323192695142
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.023727167258188547,
+            "massDelta": 1.5908031463623047,
+            "velocityPredictionError": 0.49460693107107345
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.029697851058503883,
+            "massDelta": -0.07803535461425781,
+            "velocityPredictionError": 0.5263451211320135
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.03026190657069014,
+            "massDelta": 2.0995798110961914,
+            "velocityPredictionError": 0.29903581014892766
+          },
+          {
+            "previousIndex": 22,
+            "nextIndex": 22,
+            "distance": 0.035308244033322285,
+            "massDelta": -0.9056167602539062,
+            "velocityPredictionError": 0.2730272199693843
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.03789956136291115,
+            "massDelta": -3.3895769119262695,
+            "velocityPredictionError": 0.18543777985411422
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.038761145035387114,
+            "massDelta": -1.9175243377685547,
+            "velocityPredictionError": 0.14341200171612667
+          }
+        ]
+      },
+      "inheritedCorrespondence": {
+        "authority": "checksum-bound-prior-artifact-row-index-v0",
+        "sourceLinkVerified": true,
+        "sourceReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/oracle-fit-report.json",
+        "sourceReportIdentity": "sha256:7b92103cbd475b787ba5421c59a33752b18408d238b04e05b0399538995de301",
+        "sourceArtifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-32.gaussians.f32",
+        "sourceArtifactIdentity": "sha256:ef9d9e135513f3688c8e430d302f5fad1ac8f08f31c202fcedc6fdca69e064d3",
+        "inheritedActiveGaussianCount": 32,
+        "matchedCount": 32,
+        "birthCount": 0,
+        "deathCount": 0,
+        "maxCenterResidual": 0.08,
+        "meanDisplacement": 0.013616779272656003,
+        "p95Displacement": 0.03789956136291115,
+        "maxDisplacement": 0.038761145035387114,
+        "meanVelocityPredictionError": 0.3525487579227459,
+        "matchedAbsoluteMassDelta": 46.11723709106445,
+        "maximumAppliedCenterResidual": 0.03876114957176484,
+        "meanAppliedCenterResidual": 0.013616781262854184,
+        "clippedCenterUpdateCount": 0,
+        "matches": [
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.018639788042924623,
+            "massDelta": -3.110767364501953,
+            "velocityPredictionError": 0.5292388324864419
+          },
+          {
+            "previousIndex": 1,
+            "nextIndex": 1,
+            "distance": 0.0031762436127079304,
+            "massDelta": -0.3792438507080078,
+            "velocityPredictionError": 0.1987828439510808
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.015105792168450547,
+            "massDelta": -0.8216590881347656,
+            "velocityPredictionError": 0.44650994637189406
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.01764895677817718,
+            "massDelta": -7.834882736206055,
+            "velocityPredictionError": 0.49115085014950344
+          },
+          {
+            "previousIndex": 4,
+            "nextIndex": 4,
+            "distance": 0.015875057821226113,
+            "massDelta": -0.6426382064819336,
+            "velocityPredictionError": 0.07708595704322417
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.012672682809791658,
+            "massDelta": -0.6601419448852539,
+            "velocityPredictionError": 0.15459091341519404
+          },
+          {
+            "previousIndex": 6,
+            "nextIndex": 6,
+            "distance": 0.012798248237578788,
+            "massDelta": 2.414569854736328,
+            "velocityPredictionError": 0.4040982845669645
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.0019086172390425896,
+            "massDelta": 0.09267425537109375,
+            "velocityPredictionError": 0.39325643886147504
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.03026190657069014,
+            "massDelta": 2.0995798110961914,
+            "velocityPredictionError": 0.29903581014892766
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.015448413620894491,
+            "massDelta": -0.6468210220336914,
+            "velocityPredictionError": 0.1049152308925613
+          },
+          {
+            "previousIndex": 10,
+            "nextIndex": 10,
+            "distance": 0.004489454432272515,
+            "massDelta": 0.03267097473144531,
+            "velocityPredictionError": 0.1340797366035476
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.004228350991892617,
+            "massDelta": 0.8331108093261719,
+            "velocityPredictionError": 0.41498303509231166
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.003925145418154247,
+            "massDelta": -0.8998279571533203,
+            "velocityPredictionError": 0.5142335695715613
+          },
+          {
+            "previousIndex": 13,
+            "nextIndex": 13,
+            "distance": 0.005037072832342212,
+            "massDelta": 0.12165260314941406,
+            "velocityPredictionError": 0.4674898814085347
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.005075254865133243,
+            "massDelta": 1.0691680908203125,
+            "velocityPredictionError": 0.42211438270269663
+          },
+          {
+            "previousIndex": 15,
+            "nextIndex": 15,
+            "distance": 0.017934932117355987,
+            "massDelta": -2.369060516357422,
+            "velocityPredictionError": 0.44361948121504763
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.0004905302670137658,
+            "massDelta": -0.09648895263671875,
+            "velocityPredictionError": 0.09568078474466236
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.011260323349598915,
+            "massDelta": 3.0981483459472656,
+            "velocityPredictionError": 0.43295206606228503
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.038761145035387114,
+            "massDelta": -1.9175243377685547,
+            "velocityPredictionError": 0.14341200171612667
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.03789956136291115,
+            "massDelta": -3.3895769119262695,
+            "velocityPredictionError": 0.18543777985411422
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.01243540204590323,
+            "massDelta": -3.7744503021240234,
+            "velocityPredictionError": 0.4142007156558494
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.023727167258188547,
+            "massDelta": 1.5908031463623047,
+            "velocityPredictionError": 0.49460693107107345
+          },
+          {
+            "previousIndex": 22,
+            "nextIndex": 22,
+            "distance": 0.035308244033322285,
+            "massDelta": -0.9056167602539062,
+            "velocityPredictionError": 0.2730272199693843
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.029697851058503883,
+            "massDelta": -0.07803535461425781,
+            "velocityPredictionError": 0.5263451211320135
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.006388898143917259,
+            "massDelta": 0.1323070526123047,
+            "velocityPredictionError": 0.47322217298873176
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.007321740802920863,
+            "massDelta": 1.0572319030761719,
+            "velocityPredictionError": 0.4935168818418903
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.007310131869140739,
+            "massDelta": -1.6711368560791016,
+            "velocityPredictionError": 0.425272716269441
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.021354639002167896,
+            "massDelta": -2.4898996353149414,
+            "velocityPredictionError": 0.3125323192695142
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.01254514349746834,
+            "massDelta": -0.7104167938232422,
+            "velocityPredictionError": 0.33454972756392964
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.0030270738704082944,
+            "massDelta": -0.020626068115234375,
+            "velocityPredictionError": 0.37957786804626115
+          },
+          {
+            "previousIndex": 30,
+            "nextIndex": 30,
+            "distance": 0.001623130069014349,
+            "massDelta": -0.11338043212890625,
+            "velocityPredictionError": 0.3150625811425716
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.002360037500490657,
+            "massDelta": 1.0431251525878906,
+            "velocityPredictionError": 0.48697817171905144
+          }
+        ]
+      },
+      "topology": {
+        "birthCount": 0,
+        "deathCount": 0,
+        "splitCount": 0,
+        "mergeCount": 0,
+        "births": [],
+        "deaths": [],
+        "splits": [],
+        "merges": []
+      },
+      "opticalDrift": {
+        "previousTotalExtinction": 640.037579536438,
+        "nextTotalExtinction": 621.0904264450073,
+        "totalExtinctionDelta": -18.947153091430664,
+        "totalExtinctionRelativeDelta": -0.02960318846457981,
+        "centroidDrift": 0.0014947993656457528,
+        "matchedAbsoluteMassDelta": 46.11723709106445
+      },
+      "supportDrift": {
+        "previousSupportLeakageFraction": 0.09375,
+        "nextSupportLeakageFraction": 0.125,
+        "previousMaxThreeSigmaDiameter": 0.5582376532289803,
+        "nextMaxThreeSigmaDiameter": 0.5878436277829858,
+        "previousMaxRadius": 0.0930396094918251,
+        "nextMaxRadius": 0.09797393530607224
+      }
+    },
+    {
+      "budget": 64,
+      "from": {
+        "simStepCount": 92,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-64.gaussians.f32",
+        "artifactIdentity": "sha256:bc68bc3fc7c103f9f8e4b7696a374d1f060475d7d29e4195569892cf80f49600"
+      },
+      "to": {
+        "simStepCount": 93,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-64.gaussians.f32",
+        "artifactIdentity": "sha256:5a94909c8077d4607c502bcb160308b0715eac03a28a14e0cb882db6014272ec"
+      },
+      "correspondence": {
+        "matchAlgorithm": "greedy-nearest-world-distance-threshold-v0",
+        "maxMatchDistanceMultiplier": 2.5,
+        "maxMatchDistance": 0.2205621637403965,
+        "matchedCount": 64,
+        "matchFractionOfPrevious": 1,
+        "matchFractionOfNext": 1,
+        "meanDisplacement": 0.013441014978983912,
+        "p95Displacement": 0.04770378870705693,
+        "maxDisplacement": 0.07999998676857056,
+        "meanVelocityPredictionError": 0.3564004444190084,
+        "matches": [
+          {
+            "previousIndex": 38,
+            "nextIndex": 38,
+            "distance": 0.00031605510305109666,
+            "massDelta": -0.1818065643310547,
+            "velocityPredictionError": 0.5162666160977903
+          },
+          {
+            "previousIndex": 44,
+            "nextIndex": 44,
+            "distance": 0.0003670834606178023,
+            "massDelta": -0.3217792510986328,
+            "velocityPredictionError": 0.5074109932452114
+          },
+          {
+            "previousIndex": 46,
+            "nextIndex": 46,
+            "distance": 0.0005699250221105108,
+            "massDelta": -0.3469076156616211,
+            "velocityPredictionError": 0.48164659961749634
+          },
+          {
+            "previousIndex": 36,
+            "nextIndex": 36,
+            "distance": 0.0006710009334695057,
+            "massDelta": -0.11722278594970703,
+            "velocityPredictionError": 0.4426880942104686
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.0013631034172067835,
+            "massDelta": -0.6502761840820312,
+            "velocityPredictionError": 0.38211356948080283
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.001365630915069277,
+            "massDelta": -0.08066654205322266,
+            "velocityPredictionError": 0.27820192020752593
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.00165637423034033,
+            "massDelta": -0.05404949188232422,
+            "velocityPredictionError": 0.035869591151011064
+          },
+          {
+            "previousIndex": 47,
+            "nextIndex": 47,
+            "distance": 0.0018445543732739079,
+            "massDelta": -0.2899637222290039,
+            "velocityPredictionError": 0.4969398922780151
+          },
+          {
+            "previousIndex": 45,
+            "nextIndex": 45,
+            "distance": 0.002085898936327548,
+            "massDelta": -0.7326793670654297,
+            "velocityPredictionError": 0.518951673650162
+          },
+          {
+            "previousIndex": 59,
+            "nextIndex": 59,
+            "distance": 0.0023210205501214454,
+            "massDelta": -0.08370304107666016,
+            "velocityPredictionError": 0.01876139011887519
+          },
+          {
+            "previousIndex": 51,
+            "nextIndex": 51,
+            "distance": 0.002408320176438063,
+            "massDelta": -0.32291698455810547,
+            "velocityPredictionError": 0.36592171075710717
+          },
+          {
+            "previousIndex": 48,
+            "nextIndex": 48,
+            "distance": 0.0024787565777848156,
+            "massDelta": 0.27321815490722656,
+            "velocityPredictionError": 0.5208041291062049
+          },
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.002808236441216863,
+            "massDelta": 0.29712963104248047,
+            "velocityPredictionError": 0.5202729824331203
+          },
+          {
+            "previousIndex": 55,
+            "nextIndex": 55,
+            "distance": 0.0028733171831632335,
+            "massDelta": 0.43734264373779297,
+            "velocityPredictionError": 0.517390365147819
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.0028777228864508013,
+            "massDelta": -0.4483213424682617,
+            "velocityPredictionError": 0.38098461651697274
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.0031977051994556078,
+            "massDelta": -0.3943014144897461,
+            "velocityPredictionError": 0.46332426249061903
+          },
+          {
+            "previousIndex": 37,
+            "nextIndex": 37,
+            "distance": 0.003382343350917438,
+            "massDelta": -0.4448518753051758,
+            "velocityPredictionError": 0.3660454049323743
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.003508985082825292,
+            "massDelta": -0.504608154296875,
+            "velocityPredictionError": 0.3723510120027926
+          },
+          {
+            "previousIndex": 34,
+            "nextIndex": 34,
+            "distance": 0.0037898339397069874,
+            "massDelta": -0.17319297790527344,
+            "velocityPredictionError": 0.4923437279085577
+          },
+          {
+            "previousIndex": 41,
+            "nextIndex": 41,
+            "distance": 0.003839859665119486,
+            "massDelta": 0.4588346481323242,
+            "velocityPredictionError": 0.4698817518841084
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.0038814231791435587,
+            "massDelta": 0.16667461395263672,
+            "velocityPredictionError": 0.4700287182096261
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.004309574078972002,
+            "massDelta": -0.7415599822998047,
+            "velocityPredictionError": 0.4118347471699415
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.004449526376216349,
+            "massDelta": -1.4691963195800781,
+            "velocityPredictionError": 0.4817999006288913
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.0048277157486508,
+            "massDelta": 0.6255331039428711,
+            "velocityPredictionError": 0.45238153447179136
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.005265121829509746,
+            "massDelta": 0.9127092361450195,
+            "velocityPredictionError": 0.5169146971484142
+          },
+          {
+            "previousIndex": 63,
+            "nextIndex": 63,
+            "distance": 0.0054256493343478075,
+            "massDelta": 0.1373744010925293,
+            "velocityPredictionError": 0.22978014963923393
+          },
+          {
+            "previousIndex": 57,
+            "nextIndex": 57,
+            "distance": 0.005445316617343935,
+            "massDelta": -1.249760627746582,
+            "velocityPredictionError": 0.5020667584229025
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.005512649080723483,
+            "massDelta": 0.36771392822265625,
+            "velocityPredictionError": 0.07157265200834927
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.005535231422643263,
+            "massDelta": 0.1496725082397461,
+            "velocityPredictionError": 0.3656718768850329
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.005665309104357327,
+            "massDelta": 0.27696895599365234,
+            "velocityPredictionError": 0.4705999036471088
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.005832780149139835,
+            "massDelta": 0.7482147216796875,
+            "velocityPredictionError": 0.522023757230337
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.005836056538715872,
+            "massDelta": 1.2410879135131836,
+            "velocityPredictionError": 0.4877078388629485
+          }
+        ]
+      },
+      "inheritedCorrespondence": {
+        "authority": "checksum-bound-prior-artifact-row-index-v0",
+        "sourceLinkVerified": true,
+        "sourceReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/oracle-fit-report.json",
+        "sourceReportIdentity": "sha256:7b92103cbd475b787ba5421c59a33752b18408d238b04e05b0399538995de301",
+        "sourceArtifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-64.gaussians.f32",
+        "sourceArtifactIdentity": "sha256:bc68bc3fc7c103f9f8e4b7696a374d1f060475d7d29e4195569892cf80f49600",
+        "inheritedActiveGaussianCount": 64,
+        "matchedCount": 64,
+        "birthCount": 0,
+        "deathCount": 0,
+        "maxCenterResidual": 0.08,
+        "meanDisplacement": 0.013441014978983912,
+        "p95Displacement": 0.04770378870705693,
+        "maxDisplacement": 0.07999998676857056,
+        "meanVelocityPredictionError": 0.3564004444190083,
+        "matchedAbsoluteMassDelta": 43.59788179397583,
+        "maximumAppliedCenterResidual": 0.07999999999999997,
+        "meanAppliedCenterResidual": 0.013441016579085854,
+        "clippedCenterUpdateCount": 4,
+        "matches": [
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.002808236441216863,
+            "massDelta": 0.29712963104248047,
+            "velocityPredictionError": 0.5202729824331203
+          },
+          {
+            "previousIndex": 1,
+            "nextIndex": 1,
+            "distance": 0.03412847736704443,
+            "massDelta": -0.09504508972167969,
+            "velocityPredictionError": 0.1909374549469245
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.004449526376216349,
+            "massDelta": -1.4691963195800781,
+            "velocityPredictionError": 0.4817999006288913
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.014126481090815298,
+            "massDelta": -2.2204084396362305,
+            "velocityPredictionError": 0.4888807089000515
+          },
+          {
+            "previousIndex": 4,
+            "nextIndex": 4,
+            "distance": 0.024750736418800337,
+            "massDelta": -3.7290077209472656,
+            "velocityPredictionError": 0.355330999409321
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.006878485804652192,
+            "massDelta": -1.4537487030029297,
+            "velocityPredictionError": 0.45639247227959384
+          },
+          {
+            "previousIndex": 6,
+            "nextIndex": 6,
+            "distance": 0.018137310287628744,
+            "massDelta": -1.2702436447143555,
+            "velocityPredictionError": 0.37261367618987895
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.003508985082825292,
+            "massDelta": -0.504608154296875,
+            "velocityPredictionError": 0.3723510120027926
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.0028777228864508013,
+            "massDelta": -0.4483213424682617,
+            "velocityPredictionError": 0.38098461651697274
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.005836056538715872,
+            "massDelta": 1.2410879135131836,
+            "velocityPredictionError": 0.4877078388629485
+          },
+          {
+            "previousIndex": 10,
+            "nextIndex": 10,
+            "distance": 0.01259768627501016,
+            "massDelta": 1.5470166206359863,
+            "velocityPredictionError": 0.3957610690317701
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.004309574078972002,
+            "massDelta": -0.7415599822998047,
+            "velocityPredictionError": 0.4118347471699415
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.005832780149139835,
+            "massDelta": 0.7482147216796875,
+            "velocityPredictionError": 0.522023757230337
+          },
+          {
+            "previousIndex": 13,
+            "nextIndex": 13,
+            "distance": 0.007963962077718885,
+            "massDelta": -0.22046661376953125,
+            "velocityPredictionError": 0.45490861899634005
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.024447468232813616,
+            "massDelta": -1.6075787544250488,
+            "velocityPredictionError": 0.21342755865481358
+          },
+          {
+            "previousIndex": 15,
+            "nextIndex": 15,
+            "distance": 0.008497852866495837,
+            "massDelta": 0.24262046813964844,
+            "velocityPredictionError": 0.48037406320784376
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.005512649080723483,
+            "massDelta": 0.36771392822265625,
+            "velocityPredictionError": 0.07157265200834927
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.005665309104357327,
+            "massDelta": 0.27696895599365234,
+            "velocityPredictionError": 0.4705999036471088
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.0038814231791435587,
+            "massDelta": 0.16667461395263672,
+            "velocityPredictionError": 0.4700287182096261
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.00165637423034033,
+            "massDelta": -0.05404949188232422,
+            "velocityPredictionError": 0.035869591151011064
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.010270687689934123,
+            "massDelta": -0.6781883239746094,
+            "velocityPredictionError": 0.4565408860490498
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.015588666629675075,
+            "massDelta": 0.9387016296386719,
+            "velocityPredictionError": 0.5083217808974022
+          },
+          {
+            "previousIndex": 22,
+            "nextIndex": 22,
+            "distance": 0.005988322360526466,
+            "massDelta": -0.7696647644042969,
+            "velocityPredictionError": 0.35695072765419467
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.0031977051994556078,
+            "massDelta": -0.3943014144897461,
+            "velocityPredictionError": 0.46332426249061903
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.0013631034172067835,
+            "massDelta": -0.6502761840820312,
+            "velocityPredictionError": 0.38211356948080283
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.005265121829509746,
+            "massDelta": 0.9127092361450195,
+            "velocityPredictionError": 0.5169146971484142
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.005535231422643263,
+            "massDelta": 0.1496725082397461,
+            "velocityPredictionError": 0.3656718768850329
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.007915063796134445,
+            "massDelta": -0.3557438850402832,
+            "velocityPredictionError": 0.04469565244930513
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.006732269405268476,
+            "massDelta": -0.3480997085571289,
+            "velocityPredictionError": 0.12721432593212434
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.001365630915069277,
+            "massDelta": -0.08066654205322266,
+            "velocityPredictionError": 0.27820192020752593
+          },
+          {
+            "previousIndex": 30,
+            "nextIndex": 30,
+            "distance": 0.03335088380252761,
+            "massDelta": -0.141448974609375,
+            "velocityPredictionError": 0.2562288713022636
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.0048277157486508,
+            "massDelta": 0.6255331039428711,
+            "velocityPredictionError": 0.45238153447179136
+          }
+        ]
+      },
+      "topology": {
+        "birthCount": 0,
+        "deathCount": 0,
+        "splitCount": 0,
+        "mergeCount": 0,
+        "births": [],
+        "deaths": [],
+        "splits": [],
+        "merges": []
+      },
+      "opticalDrift": {
+        "previousTotalExtinction": 640.0375740528107,
+        "nextTotalExtinction": 621.0904281139374,
+        "totalExtinctionDelta": -18.94714593887329,
+        "totalExtinctionRelativeDelta": -0.0296031775429952,
+        "centroidDrift": 0.0014359844705842109,
+        "matchedAbsoluteMassDelta": 43.59788179397583
+      },
+      "supportDrift": {
+        "previousSupportLeakageFraction": 0.09375,
+        "nextSupportLeakageFraction": 0.09375,
+        "previousMaxThreeSigmaDiameter": 0.5293492054242009,
+        "nextMaxThreeSigmaDiameter": 0.5129717744077541,
+        "previousMaxRadius": 0.0882248654961586,
+        "nextMaxRadius": 0.08549529314041138
+      }
+    },
+    {
+      "budget": 128,
+      "from": {
+        "simStepCount": 92,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-128.gaussians.f32",
+        "artifactIdentity": "sha256:7f2e37245dd30fb1eee6371ed7e6d1716c1128684a61d7c01cf526e0ca4cbae5"
+      },
+      "to": {
+        "simStepCount": 93,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-128.gaussians.f32",
+        "artifactIdentity": "sha256:7a2a4bcf5edb3b938473ae79f74822afd1028f31e1fa19c542d4aed7dca65565"
+      },
+      "correspondence": {
+        "matchAlgorithm": "greedy-nearest-world-distance-threshold-v0",
+        "maxMatchDistanceMultiplier": 2.5,
+        "maxMatchDistance": 0.203595869243145,
+        "matchedCount": 128,
+        "matchFractionOfPrevious": 1,
+        "matchFractionOfNext": 1,
+        "meanDisplacement": 0.008296046060428094,
+        "p95Displacement": 0.026872100318118385,
+        "maxDisplacement": 0.07999999384182765,
+        "meanVelocityPredictionError": 0.3612489761614731,
+        "matches": [
+          {
+            "previousIndex": 41,
+            "nextIndex": 41,
+            "distance": 0.00002360643367539529,
+            "massDelta": -0.10600471496582031,
+            "velocityPredictionError": 0.4923842554487154
+          },
+          {
+            "previousIndex": 76,
+            "nextIndex": 76,
+            "distance": 0.000024857009775339893,
+            "massDelta": -0.04699540138244629,
+            "velocityPredictionError": 0.5137217118462958
+          },
+          {
+            "previousIndex": 95,
+            "nextIndex": 95,
+            "distance": 0.00006982097264267652,
+            "massDelta": -0.09503364562988281,
+            "velocityPredictionError": 0.5303794114994032
+          },
+          {
+            "previousIndex": 87,
+            "nextIndex": 87,
+            "distance": 0.000070053862510961,
+            "massDelta": -0.10239839553833008,
+            "velocityPredictionError": 0.5329427150979119
+          },
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.00007463034007021625,
+            "massDelta": -0.0989990234375,
+            "velocityPredictionError": 0.5313894879651072
+          },
+          {
+            "previousIndex": 57,
+            "nextIndex": 57,
+            "distance": 0.00008341094053809289,
+            "massDelta": -0.06548333168029785,
+            "velocityPredictionError": 0.5216293695122296
+          },
+          {
+            "previousIndex": 107,
+            "nextIndex": 107,
+            "distance": 0.00008484801173442853,
+            "massDelta": -0.10568618774414062,
+            "velocityPredictionError": 0.5300702177841252
+          },
+          {
+            "previousIndex": 36,
+            "nextIndex": 36,
+            "distance": 0.00009100036484569387,
+            "massDelta": -0.09639310836791992,
+            "velocityPredictionError": 0.4653671485109427
+          },
+          {
+            "previousIndex": 89,
+            "nextIndex": 89,
+            "distance": 0.00010264044986170876,
+            "massDelta": -0.09215116500854492,
+            "velocityPredictionError": 0.5372137426363252
+          },
+          {
+            "previousIndex": 90,
+            "nextIndex": 90,
+            "distance": 0.0001316337848180157,
+            "massDelta": -0.10064840316772461,
+            "velocityPredictionError": 0.3617926847349474
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.0001316846651394445,
+            "massDelta": -0.06979751586914062,
+            "velocityPredictionError": 0.3120692260838087
+          },
+          {
+            "previousIndex": 61,
+            "nextIndex": 61,
+            "distance": 0.00015447156673298353,
+            "massDelta": -0.1349625587463379,
+            "velocityPredictionError": 0.4389900164571115
+          },
+          {
+            "previousIndex": 38,
+            "nextIndex": 38,
+            "distance": 0.00026568627165817843,
+            "massDelta": -0.08657288551330566,
+            "velocityPredictionError": 0.47483929610684117
+          },
+          {
+            "previousIndex": 126,
+            "nextIndex": 126,
+            "distance": 0.0003010035512765885,
+            "massDelta": -0.10364913940429688,
+            "velocityPredictionError": 0.5340033382965328
+          },
+          {
+            "previousIndex": 72,
+            "nextIndex": 72,
+            "distance": 0.0003096525743059787,
+            "massDelta": -0.23868179321289062,
+            "velocityPredictionError": 0.5241867899516108
+          },
+          {
+            "previousIndex": 109,
+            "nextIndex": 109,
+            "distance": 0.0003655691100527099,
+            "massDelta": -0.0897216796875,
+            "velocityPredictionError": 0.3894174350464182
+          },
+          {
+            "previousIndex": 50,
+            "nextIndex": 50,
+            "distance": 0.0004123784726204622,
+            "massDelta": -0.26199960708618164,
+            "velocityPredictionError": 0.46454894714211437
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.00046205641424137023,
+            "massDelta": -0.14800739288330078,
+            "velocityPredictionError": 0.5023772177386365
+          },
+          {
+            "previousIndex": 93,
+            "nextIndex": 93,
+            "distance": 0.0004651472469520929,
+            "massDelta": -0.6255528926849365,
+            "velocityPredictionError": 0.43683243062960175
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.00046968802525997245,
+            "massDelta": -0.16811275482177734,
+            "velocityPredictionError": 0.5037686000309406
+          },
+          {
+            "previousIndex": 100,
+            "nextIndex": 100,
+            "distance": 0.0004854045508113017,
+            "massDelta": -0.18993234634399414,
+            "velocityPredictionError": 0.5209527065942638
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.0005201986519998051,
+            "massDelta": -0.06500744819641113,
+            "velocityPredictionError": 0.4419947598115413
+          },
+          {
+            "previousIndex": 64,
+            "nextIndex": 64,
+            "distance": 0.0005377996169700711,
+            "massDelta": -0.1961965560913086,
+            "velocityPredictionError": 0.5272066936676614
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.0005660689714604027,
+            "massDelta": -0.1320943832397461,
+            "velocityPredictionError": 0.38413478654937877
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.000574148793952425,
+            "massDelta": -0.06884193420410156,
+            "velocityPredictionError": 0.07851849560250775
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.0005838148376277208,
+            "massDelta": -0.23312091827392578,
+            "velocityPredictionError": 0.5124256104022747
+          },
+          {
+            "previousIndex": 45,
+            "nextIndex": 45,
+            "distance": 0.0005891744432753906,
+            "massDelta": -0.1204690933227539,
+            "velocityPredictionError": 0.511650527524405
+          },
+          {
+            "previousIndex": 46,
+            "nextIndex": 46,
+            "distance": 0.0006419769132034285,
+            "massDelta": -0.11020088195800781,
+            "velocityPredictionError": 0.4732171289453566
+          },
+          {
+            "previousIndex": 75,
+            "nextIndex": 75,
+            "distance": 0.0006420753819978067,
+            "massDelta": -0.15506839752197266,
+            "velocityPredictionError": 0.43803760285483373
+          },
+          {
+            "previousIndex": 66,
+            "nextIndex": 66,
+            "distance": 0.000901115922117375,
+            "massDelta": -0.2199559211730957,
+            "velocityPredictionError": 0.4454480704368641
+          },
+          {
+            "previousIndex": 113,
+            "nextIndex": 113,
+            "distance": 0.0010264713455282553,
+            "massDelta": 0.07088422775268555,
+            "velocityPredictionError": 0.05201798558159647
+          },
+          {
+            "previousIndex": 47,
+            "nextIndex": 47,
+            "distance": 0.001126211894820131,
+            "massDelta": -0.3885197639465332,
+            "velocityPredictionError": 0.5054739610490906
+          }
+        ]
+      },
+      "inheritedCorrespondence": {
+        "authority": "checksum-bound-prior-artifact-row-index-v0",
+        "sourceLinkVerified": true,
+        "sourceReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/oracle-fit-report.json",
+        "sourceReportIdentity": "sha256:7b92103cbd475b787ba5421c59a33752b18408d238b04e05b0399538995de301",
+        "sourceArtifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-128.gaussians.f32",
+        "sourceArtifactIdentity": "sha256:7f2e37245dd30fb1eee6371ed7e6d1716c1128684a61d7c01cf526e0ca4cbae5",
+        "inheritedActiveGaussianCount": 128,
+        "matchedCount": 128,
+        "birthCount": 0,
+        "deathCount": 0,
+        "maxCenterResidual": 0.08,
+        "meanDisplacement": 0.008296046060428096,
+        "p95Displacement": 0.026872100318118385,
+        "maxDisplacement": 0.07999999384182765,
+        "meanVelocityPredictionError": 0.361248976161473,
+        "matchedAbsoluteMassDelta": 37.63011360168457,
+        "maximumAppliedCenterResidual": 0.08,
+        "meanAppliedCenterResidual": 0.008296045503784604,
+        "clippedCenterUpdateCount": 3,
+        "matches": [
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.00007463034007021625,
+            "massDelta": -0.0989990234375,
+            "velocityPredictionError": 0.5313894879651072
+          },
+          {
+            "previousIndex": 1,
+            "nextIndex": 1,
+            "distance": 0.00428586792723983,
+            "massDelta": 0.08669662475585938,
+            "velocityPredictionError": 0.1625205716156921
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.001291906679139943,
+            "massDelta": -0.3517160415649414,
+            "velocityPredictionError": 0.500523133108676
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.016376183873539462,
+            "massDelta": 0.8371038436889648,
+            "velocityPredictionError": 0.5232730760584564
+          },
+          {
+            "previousIndex": 4,
+            "nextIndex": 4,
+            "distance": 0.004660020513124686,
+            "massDelta": -0.1134042739868164,
+            "velocityPredictionError": 0.35247644057849453
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.0005660689714604027,
+            "massDelta": -0.1320943832397461,
+            "velocityPredictionError": 0.38413478654937877
+          },
+          {
+            "previousIndex": 6,
+            "nextIndex": 6,
+            "distance": 0.007549508640375782,
+            "massDelta": -0.7141170501708984,
+            "velocityPredictionError": 0.4282216263978492
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.0016830931426981303,
+            "massDelta": -0.08303499221801758,
+            "velocityPredictionError": 0.3578055567666234
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.0032089540009272496,
+            "massDelta": -0.03159284591674805,
+            "velocityPredictionError": 0.44324583913678733
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.0193805496873072,
+            "massDelta": 0.7105236053466797,
+            "velocityPredictionError": 0.48349178514012664
+          },
+          {
+            "previousIndex": 10,
+            "nextIndex": 10,
+            "distance": 0.011656590059127732,
+            "massDelta": 0.32107067108154297,
+            "velocityPredictionError": 0.39607079120302796
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.0023162919926574335,
+            "massDelta": -0.4477105140686035,
+            "velocityPredictionError": 0.4244437984961718
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.0005201986519998051,
+            "massDelta": -0.06500744819641113,
+            "velocityPredictionError": 0.4419947598115413
+          },
+          {
+            "previousIndex": 13,
+            "nextIndex": 13,
+            "distance": 0.021608386795750417,
+            "massDelta": -0.8374829292297363,
+            "velocityPredictionError": 0.48605267487236115
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.0005838148376277208,
+            "massDelta": -0.23312091827392578,
+            "velocityPredictionError": 0.5124256104022747
+          },
+          {
+            "previousIndex": 15,
+            "nextIndex": 15,
+            "distance": 0.0014499853107574018,
+            "massDelta": -0.4584660530090332,
+            "velocityPredictionError": 0.4292134495372871
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.000574148793952425,
+            "massDelta": -0.06884193420410156,
+            "velocityPredictionError": 0.07851849560250775
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.004040283114469863,
+            "massDelta": -0.715273380279541,
+            "velocityPredictionError": 0.48460501029610803
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.034888733107361784,
+            "massDelta": 0.524627685546875,
+            "velocityPredictionError": 0.1028165757460072
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.005627564961841355,
+            "massDelta": -0.22353506088256836,
+            "velocityPredictionError": 0.2439076626749654
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.002455985039714682,
+            "massDelta": -0.628936767578125,
+            "velocityPredictionError": 0.41145430058409305
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.004099713921862512,
+            "massDelta": 0.27036094665527344,
+            "velocityPredictionError": 0.4885677441312213
+          },
+          {
+            "previousIndex": 22,
+            "nextIndex": 22,
+            "distance": 0.0012955857392345392,
+            "massDelta": -0.5312790870666504,
+            "velocityPredictionError": 0.4677327687307656
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.006338130511387124,
+            "massDelta": 0.7168107032775879,
+            "velocityPredictionError": 0.5025112596650025
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.0019002426822605125,
+            "massDelta": -0.46686840057373047,
+            "velocityPredictionError": 0.5093932149617999
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.00046968802525997245,
+            "massDelta": -0.16811275482177734,
+            "velocityPredictionError": 0.5037686000309406
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.002175496061383798,
+            "massDelta": 0.04394054412841797,
+            "velocityPredictionError": 0.4612083579637508
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.004326532920110973,
+            "massDelta": -0.3986501693725586,
+            "velocityPredictionError": 0.301342617434675
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.010122850679309963,
+            "massDelta": -0.27796506881713867,
+            "velocityPredictionError": 0.10598698585856135
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.0001316846651394445,
+            "massDelta": -0.06979751586914062,
+            "velocityPredictionError": 0.3120692260838087
+          },
+          {
+            "previousIndex": 30,
+            "nextIndex": 30,
+            "distance": 0.005916805750636748,
+            "massDelta": -0.07875823974609375,
+            "velocityPredictionError": 0.3291764340453987
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.00046205641424137023,
+            "massDelta": -0.14800739288330078,
+            "velocityPredictionError": 0.5023772177386365
+          }
+        ]
+      },
+      "topology": {
+        "birthCount": 0,
+        "deathCount": 0,
+        "splitCount": 0,
+        "mergeCount": 0,
+        "births": [],
+        "deaths": [],
+        "splits": [],
+        "merges": []
+      },
+      "opticalDrift": {
+        "previousTotalExtinction": 640.0375782251358,
+        "nextTotalExtinction": 621.0904265642166,
+        "totalExtinctionDelta": -18.94715166091919,
+        "totalExtinctionRelativeDelta": -0.02960318629018756,
+        "centroidDrift": 0.0014930155734216982,
+        "matchedAbsoluteMassDelta": 37.63011360168457
+      },
+      "supportDrift": {
+        "previousSupportLeakageFraction": 0.0546875,
+        "nextSupportLeakageFraction": 0.03125,
+        "previousMaxThreeSigmaDiameter": 0.48863009741091257,
+        "nextMaxThreeSigmaDiameter": 0.45604186781266287,
+        "previousMaxRadius": 0.081438347697258,
+        "nextMaxRadius": 0.07600697875022888
+      }
+    },
+    {
+      "budget": 32,
+      "from": {
+        "simStepCount": 93,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-32.gaussians.f32",
+        "artifactIdentity": "sha256:46919b41091b139e0d7516fa69248b057d31bf0bd1cdc79f04f5cbb4e387ebc0"
+      },
+      "to": {
+        "simStepCount": 94,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-94/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-94/budget-32.gaussians.f32",
+        "artifactIdentity": "sha256:17bbe4441980ca84118742b60d41253d5cb6798d471d6aac3aff9847ff807081"
+      },
+      "correspondence": {
+        "matchAlgorithm": "greedy-nearest-world-distance-threshold-v0",
+        "maxMatchDistanceMultiplier": 2.5,
+        "maxMatchDistance": 0.2449348382651806,
+        "matchedCount": 32,
+        "matchFractionOfPrevious": 1,
+        "matchFractionOfNext": 1,
+        "meanDisplacement": 0.013648655626116299,
+        "p95Displacement": 0.03125745987505623,
+        "maxDisplacement": 0.035328001013218056,
+        "meanVelocityPredictionError": 0.34296314337289724,
+        "matches": [
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.0006251495399776918,
+            "massDelta": -0.17804336547851562,
+            "velocityPredictionError": 0.09303216212668979
+          },
+          {
+            "previousIndex": 10,
+            "nextIndex": 10,
+            "distance": 0.0020463884246593052,
+            "massDelta": -0.09582233428955078,
+            "velocityPredictionError": 0.13952423711785047
+          },
+          {
+            "previousIndex": 1,
+            "nextIndex": 1,
+            "distance": 0.0024716480944176637,
+            "massDelta": -0.4745597839355469,
+            "velocityPredictionError": 0.19767682507584267
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.002495209657262978,
+            "massDelta": -0.9324226379394531,
+            "velocityPredictionError": 0.41754946942007015
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.0027817593014595574,
+            "massDelta": -2.8414878845214844,
+            "velocityPredictionError": 0.4940150184362849
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.003130612652215809,
+            "massDelta": -0.03169441223144531,
+            "velocityPredictionError": 0.3898903243323862
+          },
+          {
+            "previousIndex": 30,
+            "nextIndex": 30,
+            "distance": 0.004555258273397749,
+            "massDelta": -0.9634456634521484,
+            "velocityPredictionError": 0.31189406721277774
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.004839861871361954,
+            "massDelta": -1.4490184783935547,
+            "velocityPredictionError": 0.392731101842414
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.005143654880957791,
+            "massDelta": -1.3745136260986328,
+            "velocityPredictionError": 0.45677727317432665
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.005770459204203634,
+            "massDelta": 0.2214336395263672,
+            "velocityPredictionError": 0.32103424588251095
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.006385683825505538,
+            "massDelta": 1.645009994506836,
+            "velocityPredictionError": 0.4034708474051832
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.006724054999372391,
+            "massDelta": 0.512786865234375,
+            "velocityPredictionError": 0.3827984738768382
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.00988633537124693,
+            "massDelta": -3.7966670989990234,
+            "velocityPredictionError": 0.4878291126807131
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.01063348814638996,
+            "massDelta": 1.4464435577392578,
+            "velocityPredictionError": 0.5043540530179117
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.010643437547368809,
+            "massDelta": -2.608675003051758,
+            "velocityPredictionError": 0.4130106803590471
+          },
+          {
+            "previousIndex": 6,
+            "nextIndex": 6,
+            "distance": 0.010903589448185532,
+            "massDelta": 2.8632850646972656,
+            "velocityPredictionError": 0.4124645361932282
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.012265285420915546,
+            "massDelta": -0.8355188369750977,
+            "velocityPredictionError": 0.13992903021498207
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.01313950788988649,
+            "massDelta": -1.351938247680664,
+            "velocityPredictionError": 0.4500255351594021
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.01607312144427056,
+            "massDelta": 2.5411243438720703,
+            "velocityPredictionError": 0.4859756780480753
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.016394746949760956,
+            "massDelta": -3.860353469848633,
+            "velocityPredictionError": 0.43636517737760605
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.016557784431440146,
+            "massDelta": -1.9442291259765625,
+            "velocityPredictionError": 0.26555810860408463
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.019105980134951378,
+            "massDelta": -0.7417449951171875,
+            "velocityPredictionError": 0.09646988610802168
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.0191927830541817,
+            "massDelta": -0.36575889587402344,
+            "velocityPredictionError": 0.3345092935861334
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.01970171808111792,
+            "massDelta": -1.1528053283691406,
+            "velocityPredictionError": 0.06639705864036807
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.021414580722175173,
+            "massDelta": 0.5777511596679688,
+            "velocityPredictionError": 0.5020061358632469
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.021806555303464457,
+            "massDelta": 5.634572982788086,
+            "velocityPredictionError": 0.5234389104949996
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.02366238845977921,
+            "massDelta": -0.5376558303833008,
+            "velocityPredictionError": 0.11101942303572165
+          },
+          {
+            "previousIndex": 4,
+            "nextIndex": 4,
+            "distance": 0.02464173450628194,
+            "massDelta": -0.32792186737060547,
+            "velocityPredictionError": 0.07729281420738035
+          },
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.028248490803302783,
+            "massDelta": -1.6645584106445312,
+            "velocityPredictionError": 0.5231249538734374
+          },
+          {
+            "previousIndex": 22,
+            "nextIndex": 22,
+            "distance": 0.02893025070793577,
+            "massDelta": -0.7559537887573242,
+            "velocityPredictionError": 0.22947514899930346
+          },
+          {
+            "previousIndex": 13,
+            "nextIndex": 13,
+            "distance": 0.03125745987505623,
+            "massDelta": -3.782938003540039,
+            "velocityPredictionError": 0.4928711269587102
+          },
+          {
+            "previousIndex": 15,
+            "nextIndex": 15,
+            "distance": 0.035328001013218056,
+            "massDelta": -4.994889259338379,
+            "velocityPredictionError": 0.4223098786071641
+          }
+        ]
+      },
+      "inheritedCorrespondence": {
+        "authority": "checksum-bound-prior-artifact-row-index-v0",
+        "sourceLinkVerified": true,
+        "sourceReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "sourceReportIdentity": "sha256:93a1938c017c48b963b4788d2926ea8f4b34c28aef7dcca738e13b672df5d55b",
+        "sourceArtifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-32.gaussians.f32",
+        "sourceArtifactIdentity": "sha256:46919b41091b139e0d7516fa69248b057d31bf0bd1cdc79f04f5cbb4e387ebc0",
+        "inheritedActiveGaussianCount": 32,
+        "matchedCount": 32,
+        "birthCount": 0,
+        "deathCount": 0,
+        "maxCenterResidual": 0.08,
+        "meanDisplacement": 0.013648655626116302,
+        "p95Displacement": 0.03125745987505623,
+        "maxDisplacement": 0.035328001013218056,
+        "meanVelocityPredictionError": 0.3429631433728973,
+        "matchedAbsoluteMassDelta": 52.50502395629883,
+        "maximumAppliedCenterResidual": 0.035327985147318205,
+        "meanAppliedCenterResidual": 0.013648653281640296,
+        "clippedCenterUpdateCount": 0,
+        "matches": [
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.028248490803302783,
+            "massDelta": -1.6645584106445312,
+            "velocityPredictionError": 0.5231249538734374
+          },
+          {
+            "previousIndex": 1,
+            "nextIndex": 1,
+            "distance": 0.0024716480944176637,
+            "massDelta": -0.4745597839355469,
+            "velocityPredictionError": 0.19767682507584267
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.016394746949760956,
+            "massDelta": -3.860353469848633,
+            "velocityPredictionError": 0.43636517737760605
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.01607312144427056,
+            "massDelta": 2.5411243438720703,
+            "velocityPredictionError": 0.4859756780480753
+          },
+          {
+            "previousIndex": 4,
+            "nextIndex": 4,
+            "distance": 0.02464173450628194,
+            "massDelta": -0.32792186737060547,
+            "velocityPredictionError": 0.07729281420738035
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.012265285420915546,
+            "massDelta": -0.8355188369750977,
+            "velocityPredictionError": 0.13992903021498207
+          },
+          {
+            "previousIndex": 6,
+            "nextIndex": 6,
+            "distance": 0.010903589448185532,
+            "massDelta": 2.8632850646972656,
+            "velocityPredictionError": 0.4124645361932282
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.003130612652215809,
+            "massDelta": -0.03169441223144531,
+            "velocityPredictionError": 0.3898903243323862
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.0191927830541817,
+            "massDelta": -0.36575889587402344,
+            "velocityPredictionError": 0.3345092935861334
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.02366238845977921,
+            "massDelta": -0.5376558303833008,
+            "velocityPredictionError": 0.11101942303572165
+          },
+          {
+            "previousIndex": 10,
+            "nextIndex": 10,
+            "distance": 0.0020463884246593052,
+            "massDelta": -0.09582233428955078,
+            "velocityPredictionError": 0.13952423711785047
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.002495209657262978,
+            "massDelta": -0.9324226379394531,
+            "velocityPredictionError": 0.41754946942007015
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.01063348814638996,
+            "massDelta": 1.4464435577392578,
+            "velocityPredictionError": 0.5043540530179117
+          },
+          {
+            "previousIndex": 13,
+            "nextIndex": 13,
+            "distance": 0.03125745987505623,
+            "massDelta": -3.782938003540039,
+            "velocityPredictionError": 0.4928711269587102
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.010643437547368809,
+            "massDelta": -2.608675003051758,
+            "velocityPredictionError": 0.4130106803590471
+          },
+          {
+            "previousIndex": 15,
+            "nextIndex": 15,
+            "distance": 0.035328001013218056,
+            "massDelta": -4.994889259338379,
+            "velocityPredictionError": 0.4223098786071641
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.0006251495399776918,
+            "massDelta": -0.17804336547851562,
+            "velocityPredictionError": 0.09303216212668979
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.01313950788988649,
+            "massDelta": -1.351938247680664,
+            "velocityPredictionError": 0.4500255351594021
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.019105980134951378,
+            "massDelta": -0.7417449951171875,
+            "velocityPredictionError": 0.09646988610802168
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.01970171808111792,
+            "massDelta": -1.1528053283691406,
+            "velocityPredictionError": 0.06639705864036807
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.004839861871361954,
+            "massDelta": -1.4490184783935547,
+            "velocityPredictionError": 0.392731101842414
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.00988633537124693,
+            "massDelta": -3.7966670989990234,
+            "velocityPredictionError": 0.4878291126807131
+          },
+          {
+            "previousIndex": 22,
+            "nextIndex": 22,
+            "distance": 0.02893025070793577,
+            "massDelta": -0.7559537887573242,
+            "velocityPredictionError": 0.22947514899930346
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.021806555303464457,
+            "massDelta": 5.634572982788086,
+            "velocityPredictionError": 0.5234389104949996
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.005143654880957791,
+            "massDelta": -1.3745136260986328,
+            "velocityPredictionError": 0.45677727317432665
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.0027817593014595574,
+            "massDelta": -2.8414878845214844,
+            "velocityPredictionError": 0.4940150184362849
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.006385683825505538,
+            "massDelta": 1.645009994506836,
+            "velocityPredictionError": 0.4034708474051832
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.016557784431440146,
+            "massDelta": -1.9442291259765625,
+            "velocityPredictionError": 0.26555810860408463
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.005770459204203634,
+            "massDelta": 0.2214336395263672,
+            "velocityPredictionError": 0.32103424588251095
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.006724054999372391,
+            "massDelta": 0.512786865234375,
+            "velocityPredictionError": 0.3827984738768382
+          },
+          {
+            "previousIndex": 30,
+            "nextIndex": 30,
+            "distance": 0.004555258273397749,
+            "massDelta": -0.9634456634521484,
+            "velocityPredictionError": 0.31189406721277774
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.021414580722175173,
+            "massDelta": 0.5777511596679688,
+            "velocityPredictionError": 0.5020061358632469
+          }
+        ]
+      },
+      "topology": {
+        "birthCount": 0,
+        "deathCount": 0,
+        "splitCount": 0,
+        "mergeCount": 0,
+        "births": [],
+        "deaths": [],
+        "splits": [],
+        "merges": []
+      },
+      "opticalDrift": {
+        "previousTotalExtinction": 621.0904264450073,
+        "nextTotalExtinction": 599.470217704773,
+        "totalExtinctionDelta": -21.620208740234375,
+        "totalExtinctionRelativeDelta": -0.03481008210669735,
+        "centroidDrift": 0.0014468443418386467,
+        "matchedAbsoluteMassDelta": 52.50502395629883
+      },
+      "supportDrift": {
+        "previousSupportLeakageFraction": 0.125,
+        "nextSupportLeakageFraction": 0.09375,
+        "previousMaxThreeSigmaDiameter": 0.5878436277829858,
+        "nextMaxThreeSigmaDiameter": 0.574595643487495,
+        "previousMaxRadius": 0.09797393530607224,
+        "nextMaxRadius": 0.09576594084501266
+      }
+    },
+    {
+      "budget": 64,
+      "from": {
+        "simStepCount": 93,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-64.gaussians.f32",
+        "artifactIdentity": "sha256:5a94909c8077d4607c502bcb160308b0715eac03a28a14e0cb882db6014272ec"
+      },
+      "to": {
+        "simStepCount": 94,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-94/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-94/budget-64.gaussians.f32",
+        "artifactIdentity": "sha256:ac42244c209cc8db882c079cdf9f61b9afe5221d77a8d865b463460b9966f880"
+      },
+      "correspondence": {
+        "matchAlgorithm": "greedy-nearest-world-distance-threshold-v0",
+        "maxMatchDistanceMultiplier": 2.5,
+        "maxMatchDistance": 0.21373823285102844,
+        "matchedCount": 64,
+        "matchFractionOfPrevious": 1,
+        "matchFractionOfNext": 1,
+        "meanDisplacement": 0.010967483412965684,
+        "p95Displacement": 0.047007140148201655,
+        "maxDisplacement": 0.06372611277068464,
+        "meanVelocityPredictionError": 0.34817101019733027,
+        "matches": [
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.0001393589616972966,
+            "massDelta": -0.38113880157470703,
+            "velocityPredictionError": 0.38332282179587496
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.00028788585581696074,
+            "massDelta": -0.2617063522338867,
+            "velocityPredictionError": 0.5081961262891741
+          },
+          {
+            "previousIndex": 41,
+            "nextIndex": 41,
+            "distance": 0.00033855223666826256,
+            "massDelta": -0.4736976623535156,
+            "velocityPredictionError": 0.46365234433696373
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.0004089369620388413,
+            "massDelta": -0.1908254623413086,
+            "velocityPredictionError": 0.4731868747551549
+          },
+          {
+            "previousIndex": 44,
+            "nextIndex": 44,
+            "distance": 0.00046913145240252366,
+            "massDelta": -0.35727787017822266,
+            "velocityPredictionError": 0.5076044798400412
+          },
+          {
+            "previousIndex": 36,
+            "nextIndex": 36,
+            "distance": 0.0005287487739482641,
+            "massDelta": -0.2802543640136719,
+            "velocityPredictionError": 0.43894315416404467
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.00057366860317941,
+            "massDelta": -0.2058572769165039,
+            "velocityPredictionError": 0.37116825747808396
+          },
+          {
+            "previousIndex": 50,
+            "nextIndex": 50,
+            "distance": 0.0005870376885235448,
+            "massDelta": -0.26060009002685547,
+            "velocityPredictionError": 0.4680366849005252
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.0007261832555857047,
+            "massDelta": -0.405853271484375,
+            "velocityPredictionError": 0.49140929864365046
+          },
+          {
+            "previousIndex": 55,
+            "nextIndex": 55,
+            "distance": 0.0007778526874842243,
+            "massDelta": 0.0018978118896484375,
+            "velocityPredictionError": 0.5127034734723295
+          },
+          {
+            "previousIndex": 45,
+            "nextIndex": 45,
+            "distance": 0.0008202371976999888,
+            "massDelta": -0.27599430084228516,
+            "velocityPredictionError": 0.5153335470030167
+          },
+          {
+            "previousIndex": 46,
+            "nextIndex": 46,
+            "distance": 0.0012552942042878888,
+            "massDelta": -0.611058235168457,
+            "velocityPredictionError": 0.47341556677317653
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.0014025631105520479,
+            "massDelta": -0.5045804977416992,
+            "velocityPredictionError": 0.5158676108000567
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.001413457775031633,
+            "massDelta": -0.14507675170898438,
+            "velocityPredictionError": 0.28107713180525556
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.0017060915430390238,
+            "massDelta": -0.30740833282470703,
+            "velocityPredictionError": 0.37083619382716165
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.002088151528388749,
+            "massDelta": -0.4451150894165039,
+            "velocityPredictionError": 0.44508271487809975
+          },
+          {
+            "previousIndex": 56,
+            "nextIndex": 56,
+            "distance": 0.00218552458882692,
+            "massDelta": -0.4730501174926758,
+            "velocityPredictionError": 0.14455073390306553
+          },
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.002230457277982041,
+            "massDelta": 0.1987152099609375,
+            "velocityPredictionError": 0.5212384162775723
+          },
+          {
+            "previousIndex": 43,
+            "nextIndex": 43,
+            "distance": 0.002319335070703519,
+            "massDelta": -0.33495044708251953,
+            "velocityPredictionError": 0.2941206227120179
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.0023668430140345743,
+            "massDelta": -0.07282829284667969,
+            "velocityPredictionError": 0.45363235977820615
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.0023834213208887138,
+            "massDelta": -0.13727760314941406,
+            "velocityPredictionError": 0.03267981359883397
+          },
+          {
+            "previousIndex": 38,
+            "nextIndex": 38,
+            "distance": 0.0025005865215614424,
+            "massDelta": 0.29798030853271484,
+            "velocityPredictionError": 0.5106514222952053
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.002529845073338583,
+            "massDelta": 0.22148942947387695,
+            "velocityPredictionError": 0.10514692668846622
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.002681252695446778,
+            "massDelta": -1.3007278442382812,
+            "velocityPredictionError": 0.4340659183452173
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.0027176682073012295,
+            "massDelta": -0.09244942665100098,
+            "velocityPredictionError": 0.03628519178018137
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.002720220017962277,
+            "massDelta": -0.13891029357910156,
+            "velocityPredictionError": 0.41488865386334617
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.002942877706347175,
+            "massDelta": 0.03814506530761719,
+            "velocityPredictionError": 0.47567765177189597
+          },
+          {
+            "previousIndex": 57,
+            "nextIndex": 57,
+            "distance": 0.003195222214302329,
+            "massDelta": -0.9968681335449219,
+            "velocityPredictionError": 0.5132370200360987
+          },
+          {
+            "previousIndex": 48,
+            "nextIndex": 48,
+            "distance": 0.003197040056463824,
+            "massDelta": 0.16915035247802734,
+            "velocityPredictionError": 0.5225351817154827
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.003415653732368963,
+            "massDelta": 0.13920116424560547,
+            "velocityPredictionError": 0.07792338994200217
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.0035060186501547686,
+            "massDelta": -1.1106948852539062,
+            "velocityPredictionError": 0.4596869317307858
+          },
+          {
+            "previousIndex": 60,
+            "nextIndex": 60,
+            "distance": 0.0035113016690350943,
+            "massDelta": -0.16726350784301758,
+            "velocityPredictionError": 0.10491943198556793
+          }
+        ]
+      },
+      "inheritedCorrespondence": {
+        "authority": "checksum-bound-prior-artifact-row-index-v0",
+        "sourceLinkVerified": true,
+        "sourceReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "sourceReportIdentity": "sha256:93a1938c017c48b963b4788d2926ea8f4b34c28aef7dcca738e13b672df5d55b",
+        "sourceArtifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-64.gaussians.f32",
+        "sourceArtifactIdentity": "sha256:5a94909c8077d4607c502bcb160308b0715eac03a28a14e0cb882db6014272ec",
+        "inheritedActiveGaussianCount": 64,
+        "matchedCount": 64,
+        "birthCount": 0,
+        "deathCount": 0,
+        "maxCenterResidual": 0.08,
+        "meanDisplacement": 0.010967483412965684,
+        "p95Displacement": 0.047007140148201655,
+        "maxDisplacement": 0.06372611277068464,
+        "meanVelocityPredictionError": 0.3481710101973301,
+        "matchedAbsoluteMassDelta": 31.251871824264526,
+        "maximumAppliedCenterResidual": 0.06372611212695017,
+        "meanAppliedCenterResidual": 0.010967482795219077,
+        "clippedCenterUpdateCount": 0,
+        "matches": [
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.002230457277982041,
+            "massDelta": 0.1987152099609375,
+            "velocityPredictionError": 0.5212384162775723
+          },
+          {
+            "previousIndex": 1,
+            "nextIndex": 1,
+            "distance": 0.010498014469183876,
+            "massDelta": 1.1332454681396484,
+            "velocityPredictionError": 0.22680697003130287
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.003763761660572591,
+            "massDelta": -1.4681568145751953,
+            "velocityPredictionError": 0.4826129188319913
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.0004089369620388413,
+            "massDelta": -0.1908254623413086,
+            "velocityPredictionError": 0.4731868747551549
+          },
+          {
+            "previousIndex": 4,
+            "nextIndex": 4,
+            "distance": 0.032425741003745186,
+            "massDelta": -2.1228485107421875,
+            "velocityPredictionError": 0.3960165124428491
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.002088151528388749,
+            "massDelta": -0.4451150894165039,
+            "velocityPredictionError": 0.44508271487809975
+          },
+          {
+            "previousIndex": 6,
+            "nextIndex": 6,
+            "distance": 0.004443672040238878,
+            "massDelta": 0.6173639297485352,
+            "velocityPredictionError": 0.35808504763430404
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.00057366860317941,
+            "massDelta": -0.2058572769165039,
+            "velocityPredictionError": 0.37116825747808396
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.0001393589616972966,
+            "massDelta": -0.38113880157470703,
+            "velocityPredictionError": 0.38332282179587496
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.002942877706347175,
+            "massDelta": 0.03814506530761719,
+            "velocityPredictionError": 0.47567765177189597
+          },
+          {
+            "previousIndex": 10,
+            "nextIndex": 10,
+            "distance": 0.016499651915856183,
+            "massDelta": 0.4248628616333008,
+            "velocityPredictionError": 0.42241416633013357
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.002720220017962277,
+            "massDelta": -0.13891029357910156,
+            "velocityPredictionError": 0.41488865386334617
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.00028788585581696074,
+            "massDelta": -0.2617063522338867,
+            "velocityPredictionError": 0.5081961262891741
+          },
+          {
+            "previousIndex": 13,
+            "nextIndex": 13,
+            "distance": 0.003905743434341939,
+            "massDelta": -0.4834251403808594,
+            "velocityPredictionError": 0.4399686805326066
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.016516662439965954,
+            "massDelta": -0.8925285339355469,
+            "velocityPredictionError": 0.13082329519025793
+          },
+          {
+            "previousIndex": 15,
+            "nextIndex": 15,
+            "distance": 0.006111460264035598,
+            "massDelta": -0.5271139144897461,
+            "velocityPredictionError": 0.4895067395086018
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.003415653732368963,
+            "massDelta": 0.13920116424560547,
+            "velocityPredictionError": 0.07792338994200217
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.0035060186501547686,
+            "massDelta": -1.1106948852539062,
+            "velocityPredictionError": 0.4596869317307858
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.004079403678807395,
+            "massDelta": 0.02922534942626953,
+            "velocityPredictionError": 0.4674902987212647
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.0023834213208887138,
+            "massDelta": -0.13727760314941406,
+            "velocityPredictionError": 0.03267981359883397
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.002681252695446778,
+            "massDelta": -1.3007278442382812,
+            "velocityPredictionError": 0.4340659183452173
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.0007261832555857047,
+            "massDelta": -0.405853271484375,
+            "velocityPredictionError": 0.49140929864365046
+          },
+          {
+            "previousIndex": 22,
+            "nextIndex": 22,
+            "distance": 0.010498347823656468,
+            "massDelta": -0.24287033081054688,
+            "velocityPredictionError": 0.3550023063355265
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.009703967090682835,
+            "massDelta": -0.5655612945556641,
+            "velocityPredictionError": 0.46906738057240305
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.0017060915430390238,
+            "massDelta": -0.30740833282470703,
+            "velocityPredictionError": 0.37083619382716165
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.0014025631105520479,
+            "massDelta": -0.5045804977416992,
+            "velocityPredictionError": 0.5158676108000567
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.0055767671367496245,
+            "massDelta": 0.5806379318237305,
+            "velocityPredictionError": 0.346546347206899
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.0027176682073012295,
+            "massDelta": -0.09244942665100098,
+            "velocityPredictionError": 0.03628519178018137
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.002529845073338583,
+            "massDelta": 0.22148942947387695,
+            "velocityPredictionError": 0.10514692668846622
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.001413457775031633,
+            "massDelta": -0.14507675170898438,
+            "velocityPredictionError": 0.28107713180525556
+          },
+          {
+            "previousIndex": 30,
+            "nextIndex": 30,
+            "distance": 0.025735506496558133,
+            "massDelta": -2.4740219116210938,
+            "velocityPredictionError": 0.267761807331785
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.0023668430140345743,
+            "massDelta": -0.07282829284667969,
+            "velocityPredictionError": 0.45363235977820615
+          }
+        ]
+      },
+      "topology": {
+        "birthCount": 0,
+        "deathCount": 0,
+        "splitCount": 0,
+        "mergeCount": 0,
+        "births": [],
+        "deaths": [],
+        "splits": [],
+        "merges": []
+      },
+      "opticalDrift": {
+        "previousTotalExtinction": 621.0904281139374,
+        "nextTotalExtinction": 599.470217704773,
+        "totalExtinctionDelta": -21.62021040916443,
+        "totalExtinctionRelativeDelta": -0.03481008470025601,
+        "centroidDrift": 0.001505468006328176,
+        "matchedAbsoluteMassDelta": 31.251871824264526
+      },
+      "supportDrift": {
+        "previousSupportLeakageFraction": 0.09375,
+        "nextSupportLeakageFraction": 0.09375,
+        "previousMaxThreeSigmaDiameter": 0.5129717744077541,
+        "nextMaxThreeSigmaDiameter": 0.5082810656407737,
+        "previousMaxRadius": 0.08549529314041138,
+        "nextMaxRadius": 0.08471351116895676
+      }
+    },
+    {
+      "budget": 128,
+      "from": {
+        "simStepCount": 93,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-128.gaussians.f32",
+        "artifactIdentity": "sha256:7a2a4bcf5edb3b938473ae79f74822afd1028f31e1fa19c542d4aed7dca65565"
+      },
+      "to": {
+        "simStepCount": 94,
+        "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-94/oracle-fit-report.json",
+        "artifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-94/budget-128.gaussians.f32",
+        "artifactIdentity": "sha256:3ff22c0f98a501bb6a9288f902bf875a5073fb276b6e2a1f872dd3db7b673d30"
+      },
+      "correspondence": {
+        "matchAlgorithm": "greedy-nearest-world-distance-threshold-v0",
+        "maxMatchDistanceMultiplier": 2.5,
+        "maxMatchDistance": 0.1900174468755722,
+        "matchedCount": 128,
+        "matchFractionOfPrevious": 1,
+        "matchFractionOfNext": 1,
+        "meanDisplacement": 0.005949853549874876,
+        "p95Displacement": 0.02258367193856375,
+        "maxDisplacement": 0.0777639638253906,
+        "meanVelocityPredictionError": 0.35332296158510035,
+        "matches": [
+          {
+            "previousIndex": 87,
+            "nextIndex": 87,
+            "distance": 0.00006307834726614815,
+            "massDelta": -0.1062769889831543,
+            "velocityPredictionError": 0.5314882699776675
+          },
+          {
+            "previousIndex": 57,
+            "nextIndex": 57,
+            "distance": 0.00006956801018123988,
+            "massDelta": -0.08597755432128906,
+            "velocityPredictionError": 0.52411590333979
+          },
+          {
+            "previousIndex": 55,
+            "nextIndex": 55,
+            "distance": 0.0000836603108962034,
+            "massDelta": -0.017937660217285156,
+            "velocityPredictionError": 0.5424084856960243
+          },
+          {
+            "previousIndex": 89,
+            "nextIndex": 89,
+            "distance": 0.0000934977842418342,
+            "massDelta": -0.11418771743774414,
+            "velocityPredictionError": 0.5354537087380599
+          },
+          {
+            "previousIndex": 71,
+            "nextIndex": 71,
+            "distance": 0.00009757983794358078,
+            "massDelta": -0.08366537094116211,
+            "velocityPredictionError": 0.423374092254602
+          },
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.00017083954816997094,
+            "massDelta": -0.10847330093383789,
+            "velocityPredictionError": 0.5308419645953737
+          },
+          {
+            "previousIndex": 95,
+            "nextIndex": 95,
+            "distance": 0.00018482656151210344,
+            "massDelta": -0.13656854629516602,
+            "velocityPredictionError": 0.528446543194419
+          },
+          {
+            "previousIndex": 50,
+            "nextIndex": 50,
+            "distance": 0.00018605235015628906,
+            "massDelta": -0.24786043167114258,
+            "velocityPredictionError": 0.4728642745137569
+          },
+          {
+            "previousIndex": 67,
+            "nextIndex": 67,
+            "distance": 0.00020619489306409326,
+            "massDelta": -0.16920089721679688,
+            "velocityPredictionError": 0.3359636506825161
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.0002106990517392015,
+            "massDelta": -0.1755976676940918,
+            "velocityPredictionError": 0.5066490150879407
+          },
+          {
+            "previousIndex": 126,
+            "nextIndex": 126,
+            "distance": 0.0002418601347557137,
+            "massDelta": -0.15354633331298828,
+            "velocityPredictionError": 0.5320180320242938
+          },
+          {
+            "previousIndex": 41,
+            "nextIndex": 41,
+            "distance": 0.00028282908809151825,
+            "massDelta": -0.1537628173828125,
+            "velocityPredictionError": 0.485514647185985
+          },
+          {
+            "previousIndex": 64,
+            "nextIndex": 64,
+            "distance": 0.00030109107705937095,
+            "massDelta": -0.10034322738647461,
+            "velocityPredictionError": 0.5261157923758834
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.0003013845669134013,
+            "massDelta": -0.05464649200439453,
+            "velocityPredictionError": 0.3110354828769393
+          },
+          {
+            "previousIndex": 52,
+            "nextIndex": 52,
+            "distance": 0.00030154661044487133,
+            "massDelta": -0.19110393524169922,
+            "velocityPredictionError": 0.5111061726551606
+          },
+          {
+            "previousIndex": 36,
+            "nextIndex": 36,
+            "distance": 0.0003542202620274428,
+            "massDelta": -0.19844770431518555,
+            "velocityPredictionError": 0.46282845983124454
+          },
+          {
+            "previousIndex": 76,
+            "nextIndex": 76,
+            "distance": 0.0003556993965315167,
+            "massDelta": -0.0749359130859375,
+            "velocityPredictionError": 0.5120172079395309
+          },
+          {
+            "previousIndex": 59,
+            "nextIndex": 59,
+            "distance": 0.0003603017484542932,
+            "massDelta": -0.1811966896057129,
+            "velocityPredictionError": 0.4463997146632778
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.00036910775702634117,
+            "massDelta": -0.15189409255981445,
+            "velocityPredictionError": 0.5006325050491202
+          },
+          {
+            "previousIndex": 105,
+            "nextIndex": 105,
+            "distance": 0.0003850591224564948,
+            "massDelta": -0.04281902313232422,
+            "velocityPredictionError": 0.45159417059162593
+          },
+          {
+            "previousIndex": 94,
+            "nextIndex": 94,
+            "distance": 0.000417531295004094,
+            "massDelta": -0.024076342582702637,
+            "velocityPredictionError": 0.022757172295267313
+          },
+          {
+            "previousIndex": 70,
+            "nextIndex": 70,
+            "distance": 0.00044279651296110693,
+            "massDelta": -0.32698822021484375,
+            "velocityPredictionError": 0.5196803830861347
+          },
+          {
+            "previousIndex": 96,
+            "nextIndex": 96,
+            "distance": 0.0004647367617032664,
+            "massDelta": -0.08824276924133301,
+            "velocityPredictionError": 0.05868875424790757
+          },
+          {
+            "previousIndex": 44,
+            "nextIndex": 44,
+            "distance": 0.00047614170458373366,
+            "massDelta": -0.10147619247436523,
+            "velocityPredictionError": 0.5047268680432232
+          },
+          {
+            "previousIndex": 78,
+            "nextIndex": 78,
+            "distance": 0.000483693286443391,
+            "massDelta": -0.1399250030517578,
+            "velocityPredictionError": 0.4865321182375223
+          },
+          {
+            "previousIndex": 38,
+            "nextIndex": 38,
+            "distance": 0.000563735311112827,
+            "massDelta": -0.1095736026763916,
+            "velocityPredictionError": 0.4690434925933184
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.0006060867393082922,
+            "massDelta": -0.03931903839111328,
+            "velocityPredictionError": 0.43517255673670885
+          },
+          {
+            "previousIndex": 51,
+            "nextIndex": 51,
+            "distance": 0.0006355634891513024,
+            "massDelta": -0.19112157821655273,
+            "velocityPredictionError": 0.4969173581813511
+          },
+          {
+            "previousIndex": 68,
+            "nextIndex": 68,
+            "distance": 0.0006603208295379753,
+            "massDelta": -0.3511338233947754,
+            "velocityPredictionError": 0.49079484547879876
+          },
+          {
+            "previousIndex": 90,
+            "nextIndex": 90,
+            "distance": 0.0006731605782764959,
+            "massDelta": -0.13683032989501953,
+            "velocityPredictionError": 0.3578335144036278
+          },
+          {
+            "previousIndex": 102,
+            "nextIndex": 102,
+            "distance": 0.0006783964937250737,
+            "massDelta": -0.13841533660888672,
+            "velocityPredictionError": 0.3723183971019835
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.0006811303109986701,
+            "massDelta": -0.2729768753051758,
+            "velocityPredictionError": 0.5098788908143754
+          }
+        ]
+      },
+      "inheritedCorrespondence": {
+        "authority": "checksum-bound-prior-artifact-row-index-v0",
+        "sourceLinkVerified": true,
+        "sourceReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/oracle-fit-report.json",
+        "sourceReportIdentity": "sha256:93a1938c017c48b963b4788d2926ea8f4b34c28aef7dcca738e13b672df5d55b",
+        "sourceArtifactPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/warm-fit-v1-r64-temporal/sim-step-93/budget-128.gaussians.f32",
+        "sourceArtifactIdentity": "sha256:7a2a4bcf5edb3b938473ae79f74822afd1028f31e1fa19c542d4aed7dca65565",
+        "inheritedActiveGaussianCount": 128,
+        "matchedCount": 128,
+        "birthCount": 0,
+        "deathCount": 0,
+        "maxCenterResidual": 0.08,
+        "meanDisplacement": 0.005949853549874873,
+        "p95Displacement": 0.02258367193856375,
+        "maxDisplacement": 0.0777639638253906,
+        "meanVelocityPredictionError": 0.3533229615851007,
+        "matchedAbsoluteMassDelta": 32.75187802314758,
+        "maximumAppliedCenterResidual": 0.07776396694612307,
+        "meanAppliedCenterResidual": 0.005949854155507062,
+        "clippedCenterUpdateCount": 0,
+        "matches": [
+          {
+            "previousIndex": 0,
+            "nextIndex": 0,
+            "distance": 0.00017083954816997094,
+            "massDelta": -0.10847330093383789,
+            "velocityPredictionError": 0.5308419645953737
+          },
+          {
+            "previousIndex": 1,
+            "nextIndex": 1,
+            "distance": 0.012039178230517244,
+            "massDelta": 0.3854212760925293,
+            "velocityPredictionError": 0.15742875751758584
+          },
+          {
+            "previousIndex": 2,
+            "nextIndex": 2,
+            "distance": 0.0033931828243720114,
+            "massDelta": -0.9086322784423828,
+            "velocityPredictionError": 0.500222768996176
+          },
+          {
+            "previousIndex": 3,
+            "nextIndex": 3,
+            "distance": 0.0010984321598284975,
+            "massDelta": -0.3509035110473633,
+            "velocityPredictionError": 0.46869273908497655
+          },
+          {
+            "previousIndex": 4,
+            "nextIndex": 4,
+            "distance": 0.01439575557968287,
+            "massDelta": -0.6273846626281738,
+            "velocityPredictionError": 0.36472181697510697
+          },
+          {
+            "previousIndex": 5,
+            "nextIndex": 5,
+            "distance": 0.0013946182738453282,
+            "massDelta": -0.1345977783203125,
+            "velocityPredictionError": 0.3824771497549082
+          },
+          {
+            "previousIndex": 6,
+            "nextIndex": 6,
+            "distance": 0.0007944487017872436,
+            "massDelta": -0.21997404098510742,
+            "velocityPredictionError": 0.41813356110225064
+          },
+          {
+            "previousIndex": 7,
+            "nextIndex": 7,
+            "distance": 0.0010828816433702613,
+            "massDelta": -0.16852474212646484,
+            "velocityPredictionError": 0.34720312353192
+          },
+          {
+            "previousIndex": 8,
+            "nextIndex": 8,
+            "distance": 0.005075440505659398,
+            "massDelta": -0.32413530349731445,
+            "velocityPredictionError": 0.4305582353735593
+          },
+          {
+            "previousIndex": 9,
+            "nextIndex": 9,
+            "distance": 0.007713068922954634,
+            "massDelta": 0.6428017616271973,
+            "velocityPredictionError": 0.47757829697375975
+          },
+          {
+            "previousIndex": 10,
+            "nextIndex": 10,
+            "distance": 0.008994112620177295,
+            "massDelta": -0.015983104705810547,
+            "velocityPredictionError": 0.3923531862072182
+          },
+          {
+            "previousIndex": 11,
+            "nextIndex": 11,
+            "distance": 0.0007464283225633772,
+            "massDelta": -0.2742891311645508,
+            "velocityPredictionError": 0.4284905605027171
+          },
+          {
+            "previousIndex": 12,
+            "nextIndex": 12,
+            "distance": 0.0006060867393082922,
+            "massDelta": -0.03931903839111328,
+            "velocityPredictionError": 0.43517255673670885
+          },
+          {
+            "previousIndex": 13,
+            "nextIndex": 13,
+            "distance": 0.013728401667944383,
+            "massDelta": -0.023465633392333984,
+            "velocityPredictionError": 0.4734830001298043
+          },
+          {
+            "previousIndex": 14,
+            "nextIndex": 14,
+            "distance": 0.0009595839878672659,
+            "massDelta": -0.32024574279785156,
+            "velocityPredictionError": 0.5095448815396357
+          },
+          {
+            "previousIndex": 15,
+            "nextIndex": 15,
+            "distance": 0.0019988826775917093,
+            "massDelta": -0.6921942234039307,
+            "velocityPredictionError": 0.4163885321077984
+          },
+          {
+            "previousIndex": 16,
+            "nextIndex": 16,
+            "distance": 0.00069139411498241,
+            "massDelta": -0.11994361877441406,
+            "velocityPredictionError": 0.07892360667488621
+          },
+          {
+            "previousIndex": 17,
+            "nextIndex": 17,
+            "distance": 0.008749337252716486,
+            "massDelta": 0.5527572631835938,
+            "velocityPredictionError": 0.4850643397202728
+          },
+          {
+            "previousIndex": 18,
+            "nextIndex": 18,
+            "distance": 0.006612291879123248,
+            "massDelta": -0.031420230865478516,
+            "velocityPredictionError": 0.08171290467382131
+          },
+          {
+            "previousIndex": 19,
+            "nextIndex": 19,
+            "distance": 0.010605178362151895,
+            "massDelta": 0.5314912796020508,
+            "velocityPredictionError": 0.25225566999944715
+          },
+          {
+            "previousIndex": 20,
+            "nextIndex": 20,
+            "distance": 0.0038292650739726007,
+            "massDelta": -0.23658227920532227,
+            "velocityPredictionError": 0.3975813880334161
+          },
+          {
+            "previousIndex": 21,
+            "nextIndex": 21,
+            "distance": 0.0014592607424918508,
+            "massDelta": -0.10330677032470703,
+            "velocityPredictionError": 0.4646393830188006
+          },
+          {
+            "previousIndex": 22,
+            "nextIndex": 22,
+            "distance": 0.002070603153806559,
+            "massDelta": -0.6370687484741211,
+            "velocityPredictionError": 0.4637476024373656
+          },
+          {
+            "previousIndex": 23,
+            "nextIndex": 23,
+            "distance": 0.0006811303109986701,
+            "massDelta": -0.2729768753051758,
+            "velocityPredictionError": 0.5098788908143754
+          },
+          {
+            "previousIndex": 24,
+            "nextIndex": 24,
+            "distance": 0.001530681050904291,
+            "massDelta": -0.33763551712036133,
+            "velocityPredictionError": 0.5128835589755742
+          },
+          {
+            "previousIndex": 25,
+            "nextIndex": 25,
+            "distance": 0.0002106990517392015,
+            "massDelta": -0.1755976676940918,
+            "velocityPredictionError": 0.5066490150879407
+          },
+          {
+            "previousIndex": 26,
+            "nextIndex": 26,
+            "distance": 0.0037865583979283216,
+            "massDelta": 0.5766458511352539,
+            "velocityPredictionError": 0.45141927253557296
+          },
+          {
+            "previousIndex": 27,
+            "nextIndex": 27,
+            "distance": 0.0031457051270618167,
+            "massDelta": -0.43832921981811523,
+            "velocityPredictionError": 0.31730507766151184
+          },
+          {
+            "previousIndex": 28,
+            "nextIndex": 28,
+            "distance": 0.015870145751127263,
+            "massDelta": -0.4450716972351074,
+            "velocityPredictionError": 0.0850859831892028
+          },
+          {
+            "previousIndex": 29,
+            "nextIndex": 29,
+            "distance": 0.0003013845669134013,
+            "massDelta": -0.05464649200439453,
+            "velocityPredictionError": 0.3110354828769393
+          },
+          {
+            "previousIndex": 30,
+            "nextIndex": 30,
+            "distance": 0.008783467573226128,
+            "massDelta": -0.05467414855957031,
+            "velocityPredictionError": 0.3209335291567361
+          },
+          {
+            "previousIndex": 31,
+            "nextIndex": 31,
+            "distance": 0.00036910775702634117,
+            "massDelta": -0.15189409255981445,
+            "velocityPredictionError": 0.5006325050491202
+          }
+        ]
+      },
+      "topology": {
+        "birthCount": 0,
+        "deathCount": 0,
+        "splitCount": 0,
+        "mergeCount": 0,
+        "births": [],
+        "deaths": [],
+        "splits": [],
+        "merges": []
+      },
+      "opticalDrift": {
+        "previousTotalExtinction": 621.0904265642166,
+        "nextTotalExtinction": 599.4702166318893,
+        "totalExtinctionDelta": -21.62020993232727,
+        "totalExtinctionRelativeDelta": -0.034810084019370864,
+        "centroidDrift": 0.0014490045969945261,
+        "matchedAbsoluteMassDelta": 32.75187802314758
+      },
+      "supportDrift": {
+        "previousSupportLeakageFraction": 0.03125,
+        "nextSupportLeakageFraction": 0.0390625,
+        "previousMaxThreeSigmaDiameter": 0.45604186781266287,
+        "nextMaxThreeSigmaDiameter": 0.44204817213290526,
+        "previousMaxRadius": 0.07600697875022888,
+        "nextMaxRadius": 0.07367469370365143
+      }
+    }
+  ],
+  "budgetSummaries": [
+    {
+      "budget": 32,
+      "transitionCount": 2,
+      "minMatchedCount": 32,
+      "maxBirthCount": 0,
+      "maxDeathCount": 0,
+      "maxSplitCount": 0,
+      "maxMergeCount": 0,
+      "maxMeanDisplacement": 0.013648655626116299,
+      "maxP95Displacement": 0.03789956136291115,
+      "maxRelativeExtinctionDrift": 0.03481008210669735,
+      "maxSupportLeakageFraction": 0.125
+    },
+    {
+      "budget": 64,
+      "transitionCount": 2,
+      "minMatchedCount": 64,
+      "maxBirthCount": 0,
+      "maxDeathCount": 0,
+      "maxSplitCount": 0,
+      "maxMergeCount": 0,
+      "maxMeanDisplacement": 0.013441014978983912,
+      "maxP95Displacement": 0.04770378870705693,
+      "maxRelativeExtinctionDrift": 0.03481008470025601,
+      "maxSupportLeakageFraction": 0.09375
+    },
+    {
+      "budget": 128,
+      "transitionCount": 2,
+      "minMatchedCount": 128,
+      "maxBirthCount": 0,
+      "maxDeathCount": 0,
+      "maxSplitCount": 0,
+      "maxMergeCount": 0,
+      "maxMeanDisplacement": 0.008296046060428094,
+      "maxP95Displacement": 0.026872100318118385,
+      "maxRelativeExtinctionDrift": 0.034810084019370864,
+      "maxSupportLeakageFraction": 0.0546875
+    }
+  ],
+  "reportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/temporal-correspondence-v2-warm-r64/temporal-report.json",
+  "reportIdentity": "sha256:d189e053f860d40d476a675585c80f4a4c7bbd7fe58d3b505fe5a95b01a94eed"
+}

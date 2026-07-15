@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,7 +28,9 @@ function sameArray(left, right) {
 }
 
 function resolveArtifactPath(manifestPath, artifactPath) {
-  return isAbsolute(artifactPath) ? artifactPath : resolve(dirname(manifestPath), artifactPath);
+  if (isAbsolute(artifactPath)) return artifactPath;
+  const fromCwd = resolve(artifactPath);
+  return existsSync(fromCwd) ? fromCwd : resolve(dirname(manifestPath), artifactPath);
 }
 
 function requireFiniteArray(value, length, label) {
@@ -159,6 +162,64 @@ function normalizeBudgets(budgets) {
   if (!Array.isArray(budgets) || budgets.length === 0) throw new Error('at least one positive integer budget is required');
   const normalized = budgets.map(requirePositiveIntegerBudget);
   return Array.from(new Set(normalized)).sort((left, right) => left - right);
+}
+
+async function loadWarmStartReport(reportPath, requestedBudgets, targetFrame) {
+  const absolutePath = resolve(reportPath);
+  const bytes = await readFile(absolutePath);
+  const report = JSON.parse(bytes.toString('utf8'));
+  if (report.schema !== 'kaminos.smoke-gaussian-oracle-static-fit-report.v0'
+    || report.identity !== SMOKE_GAUSSIAN_ORACLE_FIT_IDENTITY
+    || report.status !== 'passed' || report.hiddenBudgetCapApplied !== false) {
+    throw new Error('warm-start source is not a passed uncapped smoke Gaussian fit');
+  }
+  const teacher = report.teacher || {};
+  if (teacher.effectiveRoute !== targetFrame.manifest.effectiveRoute
+    || teacher.prototypeIdentity !== targetFrame.manifest.prototypeIdentity
+    || teacher.backend !== targetFrame.manifest.backend
+    || teacher.grid !== targetFrame.grid
+    || JSON.stringify(teacher.worldSpace?.bounds) !== JSON.stringify(targetFrame.worldSpace?.bounds)) {
+    throw new Error('warm-start source route, backend, grid, or world-space mismatch');
+  }
+  let fromSimStepCount = teacher.simStepCount;
+  if (!Number.isInteger(fromSimStepCount) && teacher.manifestPath) {
+    const manifestPath = resolveArtifactPath(absolutePath, teacher.manifestPath);
+    const manifest = JSON.parse((await readFile(manifestPath)).toString('utf8'));
+    if (manifest.effectiveRoute !== teacher.effectiveRoute || manifest.prototypeIdentity !== teacher.prototypeIdentity) {
+      throw new Error('warm-start source manifest route or prototype mismatch');
+    }
+    fromSimStepCount = Number(manifest.deterministicReplay?.simStepCount ?? manifest.deterministicReplay?.completedSteps);
+  }
+  if (!Number.isInteger(fromSimStepCount) || !(fromSimStepCount < targetFrame.simStepCount)) {
+    throw new Error('warm-start source must have a strictly earlier sim step');
+  }
+  const budgets = new Map();
+  for (const budget of requestedBudgets) {
+    const entry = report.budgetCurve?.find(item => item.requestedBudget === budget);
+    if (!entry || entry.activeGaussianCount !== budget) throw new Error(`warm-start source lacks exact budget ${budget}`);
+    const artifact = entry.artifact || {};
+    const map = Object.fromEntries((artifact.channelOrder || []).map((name, index) => [name, index]));
+    for (const name of ['positionX', 'positionY', 'positionZ']) {
+      if (!Number.isInteger(map[name])) throw new Error(`warm-start Gaussian artifact lacks ${name}`);
+    }
+    const artifactPath = resolveArtifactPath(absolutePath, artifact.path);
+    const artifactBytes = await readFile(artifactPath);
+    const identity = `sha256:${sha256(artifactBytes)}`;
+    if (identity !== artifact.sha256 || artifactBytes.byteLength !== artifact.byteLength) throw new Error(`warm-start artifact identity mismatch at budget ${budget}`);
+    const values = new Float32Array(artifactBytes.buffer, artifactBytes.byteOffset, artifactBytes.byteLength / 4);
+    const stride = artifact.shape[1];
+    const centers = Array.from({ length: budget }, (_, index) => {
+      const offset = index * stride;
+      return [values[offset + map.positionX], values[offset + map.positionY], values[offset + map.positionZ]];
+    });
+    budgets.set(budget, { centers, artifactPath, artifactIdentity: identity });
+  }
+  return {
+    reportPath: absolutePath,
+    reportIdentity: `sha256:${sha256(bytes)}`,
+    fromSimStepCount,
+    budgets,
+  };
 }
 
 async function loadTeacherFrame(manifestPath, expectedManifestSha256) {
@@ -722,17 +783,30 @@ async function writeGaussianArtifact(outDir, budget, gaussians) {
   };
 }
 
-async function fitBudget({ samples, budget, maxIterations, cellSize, bounds, outDir, totalSmokeExtinction }) {
+async function fitBudget({ samples, budget, maxIterations, cellSize, bounds, outDir, totalSmokeExtinction, warmStart = null, maxCenterResidual = null }) {
   if (budget > samples.length) throw new Error(`requested budget ${budget} exceeds active smoke sample count ${samples.length}; refusing to substitute a hidden cap`);
-  let centers = initializeCenters(samples, budget);
+  let centers = warmStart ? warmStart.centers.map(center => [...center]) : initializeCenters(samples, budget);
+  const residualAnchors = warmStart ? warmStart.centers.map(center => [...center]) : null;
   let assignments = null;
   let massWeightedSse = Infinity;
   let iterationCount = 0;
+  let clippedCenterUpdateCount = 0;
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     const assigned = assignSamples(samples, centers);
     assignments = assigned.assignments;
     massWeightedSse = assigned.sse;
     const nextCenters = updateCenters(samples, assignments, centers);
+    if (residualAnchors) {
+      for (let index = 0; index < nextCenters.length; index += 1) {
+        const delta = nextCenters[index].map((value, axis) => value - residualAnchors[index][axis]);
+        const magnitude = Math.hypot(...delta);
+        if (magnitude > maxCenterResidual) {
+          const scale = maxCenterResidual / magnitude;
+          nextCenters[index] = residualAnchors[index].map((value, axis) => value + delta[axis] * scale);
+          clippedCenterUpdateCount += 1;
+        }
+      }
+    }
     const shift = centers.reduce((sum, center, index) => sum + squaredDistance(center, nextCenters[index]), 0);
     centers = nextCenters;
     iterationCount = iteration + 1;
@@ -741,6 +815,9 @@ async function fitBudget({ samples, budget, maxIterations, cellSize, bounds, out
   const gaussians = buildGaussians({ samples, assignments, centers, cellSize });
   const totalAssignedExtinction = gaussians.reduce((sum, gaussian) => sum + gaussian.extinctionMass, 0);
   const artifact = await writeGaussianArtifact(outDir, budget, gaussians);
+  const appliedResiduals = residualAnchors
+    ? centers.map((center, index) => Math.sqrt(squaredDistance(center, residualAnchors[index])))
+    : [];
   return {
     requestedBudget: budget,
     activeGaussianCount: gaussians.length,
@@ -761,6 +838,16 @@ async function fitBudget({ samples, budget, maxIterations, cellSize, bounds, out
       maxEigenValue: Math.max(...gaussians.flatMap(gaussian => gaussian.eigenValues)),
     },
     support: supportDiagnostics(gaussians, bounds),
+    warmStart: warmStart ? {
+      authority: 'prior-artifact-centers-bounded-residual-v0',
+      initialArtifactPath: warmStart.artifactPath,
+      initialArtifactIdentity: warmStart.artifactIdentity,
+      initialActiveGaussianCount: warmStart.centers.length,
+      maxCenterResidual,
+      maximumAppliedCenterResidual: Math.max(0, ...appliedResiduals),
+      meanAppliedCenterResidual: appliedResiduals.reduce((sum, value) => sum + value, 0) / Math.max(1, appliedResiduals.length),
+      clippedCenterUpdateCount,
+    } : null,
     artifact,
     preview: gaussians.slice(0, 8),
   };
@@ -774,6 +861,8 @@ export async function fitSmokeGaussianOracleFrame({
   maxIterations = 12,
   densityThreshold = 0,
   optimizerStrategy = 'weighted-kmeans',
+  warmStartReportPath = null,
+  maxCenterResidual = null,
 } = {}) {
   const startedAt = performance.now();
   if (!manifestPath) throw new Error('manifestPath is required');
@@ -782,9 +871,13 @@ export async function fitSmokeGaussianOracleFrame({
   const iterations = Math.max(1, Math.floor(Number(maxIterations) || 12));
   const threshold = Math.max(0, Number(densityThreshold) || 0);
   if (!['weighted-kmeans', 'recursive-moment-split'].includes(optimizerStrategy)) throw new Error(`unsupported optimizer strategy ${optimizerStrategy}`);
+  if (warmStartReportPath && optimizerStrategy !== 'weighted-kmeans') throw new Error('warm start is only supported by weighted-kmeans');
+  const residualLimit = warmStartReportPath ? Number(maxCenterResidual) : null;
+  if (warmStartReportPath && (!(residualLimit > 0) || !Number.isFinite(residualLimit))) throw new Error('warm start requires a positive finite maxCenterResidual');
   await mkdir(outDir, { recursive: true });
   const frame = await loadTeacherFrame(resolve(manifestPath), expectedManifestSha256);
   const sourceLoadedAt = performance.now();
+  const warmStart = warmStartReportPath ? await loadWarmStartReport(warmStartReportPath, requestedBudgets, frame) : null;
   let smoke;
   let budgetCurve;
   if (optimizerStrategy === 'recursive-moment-split') {
@@ -803,6 +896,8 @@ export async function fitSmokeGaussianOracleFrame({
         bounds: smoke.bounds,
         outDir,
         totalSmokeExtinction: smoke.totalSmokeExtinction,
+        warmStart: warmStart?.budgets.get(budget) || null,
+        maxCenterResidual: residualLimit,
       }));
     }
   }
@@ -835,7 +930,9 @@ export async function fitSmokeGaussianOracleFrame({
     requestedBudgets,
     hiddenBudgetCapApplied: false,
     optimizer: {
-      identity: optimizerStrategy === 'recursive-moment-split'
+      identity: warmStart
+        ? 'warm-started-weighted-kmeans-anisotropic-moment-fit-v0'
+        : optimizerStrategy === 'recursive-moment-split'
         ? 'recursive-weighted-moment-split-v0'
         : 'deterministic-weighted-kmeans-anisotropic-moment-fit-v0',
       maxIterations: optimizerStrategy === 'recursive-moment-split' ? 0 : iterations,
@@ -844,6 +941,14 @@ export async function fitSmokeGaussianOracleFrame({
       covarianceAuthority: 'cluster-smoke-density-weighted-world-covariance',
       sampleSelectionAuthority: 'all-voxels-above-explicit-density-threshold-no-subsampling-v0',
     },
+    warmStart: warmStart ? {
+      authority: 'prior-static-fit-artifact-bounded-residual-v0',
+      sourceReportPath: warmStart.reportPath,
+      sourceReportIdentity: warmStart.reportIdentity,
+      fromSimStepCount: warmStart.fromSimStepCount,
+      toSimStepCount: frame.simStepCount,
+      maxCenterResidual: residualLimit,
+    } : null,
     costs: {
       authority: 'cpu-wall-clock-performance-now-v0',
       sourceLoadAndValidateMs: sourceLoadedAt - startedAt,
@@ -889,6 +994,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const maxIterations = Number(args.get('--max-iterations') || 12);
   const densityThreshold = Number(args.get('--density-threshold') || 0);
   const optimizerStrategy = args.get('--optimizer') || 'weighted-kmeans';
+  const warmStartReportPath = args.get('--warm-start-report') || null;
+  const maxCenterResidual = args.has('--max-center-residual') ? Number(args.get('--max-center-residual')) : null;
   try {
     const report = await fitSmokeGaussianOracleFrame({
       manifestPath,
@@ -898,6 +1005,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       maxIterations,
       densityThreshold,
       optimizerStrategy,
+      warmStartReportPath,
+      maxCenterResidual,
     });
     console.log(JSON.stringify(report, null, 2));
   } catch (error) {

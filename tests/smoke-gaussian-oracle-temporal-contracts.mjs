@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -53,7 +53,13 @@ async function writeGaussianArtifact(directory, budget, rows) {
   };
 }
 
-async function writeStaticFitReport(directory, { step, budget = 3, rows, route = 'native-3d-compute-fluid-raymarch-v0' }) {
+async function writeStaticFitReport(directory, {
+  step,
+  budget = 3,
+  rows,
+  route = 'native-3d-compute-fluid-raymarch-v0',
+  warmStartSourcePath = null,
+}) {
   await mkdir(directory, { recursive: true });
   const manifestPath = join(directory, `sim-step-${step}.manifest.json`);
   const manifest = {
@@ -84,6 +90,31 @@ async function writeStaticFitReport(directory, { step, budget = 3, rows, route =
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   const artifact = await writeGaussianArtifact(directory, budget, rows);
   const representedExtinction = rows.reduce((sum, row) => sum + row.mass, 0);
+  let warmStart = null;
+  let budgetWarmStart = null;
+  if (warmStartSourcePath) {
+    const sourceBytes = await readFile(warmStartSourcePath);
+    const sourceReport = JSON.parse(sourceBytes.toString('utf8'));
+    const sourceEntry = sourceReport.budgetCurve.find(entry => entry.requestedBudget === budget);
+    warmStart = {
+      authority: 'prior-static-fit-artifact-bounded-residual-v0',
+      sourceReportPath: warmStartSourcePath,
+      sourceReportIdentity: `sha256:${sha256(sourceBytes)}`,
+      fromSimStepCount: step - 1,
+      toSimStepCount: step,
+      maxCenterResidual: 0.08,
+    };
+    budgetWarmStart = {
+      authority: 'prior-artifact-centers-bounded-residual-v0',
+      initialArtifactPath: sourceEntry.artifact.path,
+      initialArtifactIdentity: sourceEntry.artifact.sha256,
+      initialActiveGaussianCount: budget,
+      maxCenterResidual: 0.08,
+      maximumAppliedCenterResidual: 0.05,
+      meanAppliedCenterResidual: 0.03,
+      clippedCenterUpdateCount: 0,
+    };
+  }
   const report = {
     schema: 'kaminos.smoke-gaussian-oracle-static-fit-report.v0',
     identity: 'smoke-gaussian-oracle-static-fit-v0',
@@ -103,10 +134,13 @@ async function writeStaticFitReport(directory, { step, budget = 3, rows, route =
     requestedBudgets: [budget],
     hiddenBudgetCapApplied: false,
     optimizer: {
-      identity: 'deterministic-weighted-kmeans-anisotropic-moment-fit-v0',
+      identity: warmStart
+        ? 'warm-started-weighted-kmeans-anisotropic-moment-fit-v0'
+        : 'deterministic-weighted-kmeans-anisotropic-moment-fit-v0',
       positionAuthority: 'continuous-mass-weighted-world-centroids',
       covarianceAuthority: 'cluster-smoke-density-weighted-world-covariance',
     },
+    warmStart,
     budgetCurve: [{
       requestedBudget: budget,
       activeGaussianCount: rows.length,
@@ -130,6 +164,7 @@ async function writeStaticFitReport(directory, { step, budget = 3, rows, route =
         supportLeakageFraction: 0,
         maxThreeSigmaDiameter: 0.24,
       },
+      warmStart: budgetWarmStart,
       artifact,
     }],
   };
@@ -187,6 +222,30 @@ try {
   assert.ok(report.budgetTransitions[1].topology.deaths.length >= 1, 'unmatched earlier support must be called out as a death');
   assert.ok(report.budgetTransitions[0].opticalDrift.totalExtinctionDelta < 0);
   assert.ok(report.budgetSummaries[0].maxP95Displacement >= report.budgetSummaries[0].maxMeanDisplacement);
+
+  const warmSecond = await writeStaticFitReport(join(directory, 'warm-step-11'), {
+    step: 11,
+    warmStartSourcePath: first,
+    rows: [
+      { position: [0.025, 0, 0], mass: 3.8 },
+      { position: [0.53, 0, 0], mass: 2.7 },
+      { position: [-0.47, 0, 0], mass: 1.9 },
+    ],
+  });
+  const warmReport = await analyzeSmokeGaussianTemporalCorrespondence({
+    fitReports: [first, warmSecond],
+    outDir: join(directory, 'warm-temporal'),
+    budgets: [3],
+  });
+  const inherited = warmReport.budgetTransitions[0].inheritedCorrespondence;
+  assert.equal(inherited.authority, 'checksum-bound-prior-artifact-row-index-v0');
+  assert.equal(inherited.sourceLinkVerified, true);
+  assert.equal(inherited.matchedCount, 3);
+  assert.equal(inherited.birthCount, 0);
+  assert.equal(inherited.deathCount, 0);
+  assert.equal(inherited.matches.every(match => match.previousIndex === match.nextIndex), true);
+  assert.equal(inherited.maximumAppliedCenterResidual, 0.05);
+  assert.equal(inherited.clippedCenterUpdateCount, 0);
 
   const wrongRoute = await writeStaticFitReport(join(directory, 'wrong-route'), {
     step: 13,

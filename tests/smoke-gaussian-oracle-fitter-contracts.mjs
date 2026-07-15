@@ -209,6 +209,36 @@ try {
   assert.equal(recursiveReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
   assert.ok(recursiveReport.budgetCurve[2].massWeightedSse <= recursiveReport.budgetCurve[0].massWeightedSse);
 
+  const nextManifestPath = await writeFrame(join(directory, 'next-frame'), {
+    deterministicReplay: {
+      identity: 'deterministic-replay-same-route-controls-fixed-step-v0',
+      authority: 'same-route-controls-fixed-step-replay',
+      simStepCount: 13,
+      completedSteps: 13,
+      grid: 4,
+      effectiveRoute: 'native-3d-compute-fluid-raymarch-v0',
+      prototypeIdentity: 'kaminos-volume-prototype-v0',
+      backend: 'WebGPU:apple',
+    },
+  });
+  const warmReport = await fitSmokeGaussianOracleFrame({
+    manifestPath: nextManifestPath,
+    outDir: join(directory, 'warm-fit'),
+    budgets: [2, 4],
+    maxIterations: 4,
+    densityThreshold: 0.000001,
+    warmStartReportPath: report.reportPath,
+    maxCenterResidual: 0.05,
+  });
+  assert.equal(warmReport.optimizer.identity, 'warm-started-weighted-kmeans-anisotropic-moment-fit-v0');
+  assert.equal(warmReport.warmStart.sourceReportPath, report.reportPath);
+  assert.equal(warmReport.warmStart.fromSimStepCount, 12);
+  assert.equal(warmReport.warmStart.toSimStepCount, 13);
+  assert.equal(warmReport.warmStart.maxCenterResidual, 0.05);
+  assert.equal(warmReport.budgetCurve.every(entry => entry.warmStart.initialActiveGaussianCount === entry.requestedBudget), true);
+  assert.equal(warmReport.budgetCurve.every(entry => entry.warmStart.maximumAppliedCenterResidual <= 0.05 + 1e-12), true);
+  assert.equal(warmReport.budgetCurve.every(entry => entry.extinctionAccounting.relativeError < 1e-6), true);
+
   await assert.rejects(
     () => fitSmokeGaussianOracleFrame({
       manifestPath,
