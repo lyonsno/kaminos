@@ -1,0 +1,181 @@
+{
+  "schema": "kaminos.smoke-gaussian-oracle-render-witness-report.v0",
+  "identity": "smoke-gaussian-oracle-render-witness-v0",
+  "status": "passed",
+  "createdAt": "2026-07-15T08:05:51.032Z",
+  "hiddenBudgetCapApplied": false,
+  "fitReportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/oracle-fit-report.json",
+  "teacher": {
+    "raymarchPngPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v5-r64-c256k-threeframe/sim-step-92.raymarch.png",
+    "raymarchSha256": "sha256:0cdd51fee65de53247c2b77cfc6769b590096f7ef981ed69c6db8a4769e084c3",
+    "width": 203,
+    "height": 251,
+    "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+    "prototypeIdentity": "kaminos-volume-prototype-v0",
+    "backend": "WebGPU:apple",
+    "worldSpace": {
+      "coordinateFrame": "kaminos-volume-world-v0",
+      "transformAuthority": "native-volume-grid-world-transform-v0",
+      "bounds": {
+        "minimum": [
+          -1,
+          -1,
+          -1
+        ],
+        "maximum": [
+          1,
+          1,
+          1
+        ]
+      }
+    }
+  },
+  "renderer": {
+    "identity": "cpu-orthographic-projected-anisotropic-gaussian-smoke-v0",
+    "cameraAuthority": "orthographic-world-proxy-not-native-camera-v0",
+    "compositorAuthority": "single-channel-smoke-luma-proxy-not-production-compositor-v0",
+    "scaleSelection": "explicit-extinction-scale-sweep-min-luma-mse-v0",
+    "requestedExtinctionScales": [
+      0.00005,
+      0.0001,
+      0.0002,
+      0.0004,
+      0.0008,
+      0.0016,
+      0.0032
+    ]
+  },
+  "requestedBudgets": [
+    32,
+    64,
+    128
+  ],
+  "budgetCurve": [
+    {
+      "requestedBudget": 32,
+      "activeGaussianCount": 32,
+      "selectedExtinctionScale": 0.0002,
+      "scaleSweep": [
+        0.00005,
+        0.0001,
+        0.0002,
+        0.0004,
+        0.0008,
+        0.0016,
+        0.0032
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 34.070291999999995
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-32.gaussians.f32",
+        "identity": "sha256:ef9d9e135513f3688c8e430d302f5fad1ac8f08f31c202fcedc6fdca69e064d3"
+      },
+      "metrics": {
+        "lumaMse": 0.0034615662810084415,
+        "lumaMae": 0.031455270454493096,
+        "renderMeanLuma": 0.027146489333884534,
+        "teacherMeanLuma": 0.051323806219393094,
+        "renderActivePixels": 7904,
+        "teacherActivePixels": 11835,
+        "activePixelIoU": 0.6545683151718357
+      },
+      "support": {
+        "supportLeakageGaussianCount": 3,
+        "supportLeakageFraction": 0.09375,
+        "maxThreeSigmaDiameter": 0.5582376532289803
+      },
+      "images": {
+        "renderPngPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/render-witness-v1-r64/sim-step-92/budget-32.orthographic-render.png",
+        "diffPngPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/render-witness-v1-r64/sim-step-92/budget-32.orthographic-diff.png"
+      }
+    },
+    {
+      "requestedBudget": 64,
+      "activeGaussianCount": 64,
+      "selectedExtinctionScale": 0.0002,
+      "scaleSweep": [
+        0.00005,
+        0.0001,
+        0.0002,
+        0.0004,
+        0.0008,
+        0.0016,
+        0.0032
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 55.987667
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-64.gaussians.f32",
+        "identity": "sha256:bc68bc3fc7c103f9f8e4b7696a374d1f060475d7d29e4195569892cf80f49600"
+      },
+      "metrics": {
+        "lumaMse": 0.0034066692680707914,
+        "lumaMae": 0.0312275213743404,
+        "renderMeanLuma": 0.027134510808224304,
+        "teacherMeanLuma": 0.051323806219393094,
+        "renderActivePixels": 7538,
+        "teacherActivePixels": 11835,
+        "activePixelIoU": 0.6253880359090528
+      },
+      "support": {
+        "supportLeakageGaussianCount": 6,
+        "supportLeakageFraction": 0.09375,
+        "maxThreeSigmaDiameter": 0.5293492054242009
+      },
+      "images": {
+        "renderPngPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/render-witness-v1-r64/sim-step-92/budget-64.orthographic-render.png",
+        "diffPngPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/render-witness-v1-r64/sim-step-92/budget-64.orthographic-diff.png"
+      }
+    },
+    {
+      "requestedBudget": 128,
+      "activeGaussianCount": 128,
+      "selectedExtinctionScale": 0.0002,
+      "scaleSweep": [
+        0.00005,
+        0.0001,
+        0.0002,
+        0.0004,
+        0.0008,
+        0.0016,
+        0.0032
+      ],
+      "timing": {
+        "cpuProxyRenderMs": 320.728791
+      },
+      "gaussianArtifact": {
+        "path": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/static-fit-v2-r64-temporal/sim-step-92/budget-128.gaussians.f32",
+        "identity": "sha256:7f2e37245dd30fb1eee6371ed7e6d1716c1128684a61d7c01cf526e0ca4cbae5"
+      },
+      "metrics": {
+        "lumaMse": 0.003404410982070463,
+        "lumaMae": 0.03131219927498019,
+        "renderMeanLuma": 0.027101548386733336,
+        "teacherMeanLuma": 0.051323806219393094,
+        "renderActivePixels": 7344,
+        "teacherActivePixels": 11835,
+        "activePixelIoU": 0.6148017176054559
+      },
+      "support": {
+        "supportLeakageGaussianCount": 7,
+        "supportLeakageFraction": 0.0546875,
+        "maxThreeSigmaDiameter": 0.48863009741091257
+      },
+      "images": {
+        "renderPngPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/render-witness-v1-r64/sim-step-92/budget-128.orthographic-render.png",
+        "diffPngPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/render-witness-v1-r64/sim-step-92/budget-128.orthographic-diff.png"
+      }
+    }
+  ],
+  "contactSheet": {
+    "path": "artifacts/smoke-gaussian-oracle-ceiling-0715/render-witness-v1-r64/sim-step-92/orthographic-render-contact-sheet.png",
+    "sha256": "sha256:0886a6fb12c58ba2a6436359d9879e1fb635d7662fd5b6081ac58f74fd6f626f",
+    "layout": "columns: teacher-raymarch | gaussian-proxy-render | abs-luma-diff; rows: requested budgets",
+    "inspected": true,
+    "inspectionNote": "Agent viewed contact sheet: nonblank column footprint, persistent upper-plume bead artifacts; orthographic proxy only."
+  },
+  "reportPath": "artifacts/smoke-gaussian-oracle-ceiling-0715/render-witness-v1-r64/sim-step-92/render-witness-report.json",
+  "reportIdentity": "sha256:9b3f467c592426265711a9fd259eb011358bdb34c0fe2fa310f1e9f53b98d702"
+}
