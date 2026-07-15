@@ -13212,6 +13212,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         boundarySplatInitialOverflowCount,
         boundarySplatCapacityRetryCount,
         boundarySplatFallbackReason: state.boundarySplatFallbackReason,
+        boundarySplatMode: normalizeBoundarySplatMode(controlsSnapshot.boundarySplatMode),
       };
     } finally {
       if (options.restoreControls !== false) {
