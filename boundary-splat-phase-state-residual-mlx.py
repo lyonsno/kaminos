@@ -23,7 +23,8 @@ REPORT_SCHEMA = "kaminos-boundary-splat-phase-destination-state-training-v0"
 INPUT_AUTHORITY = CORE.DESTINATION_STATE_INPUT_AUTHORITY
 OUTPUT_AUTHORITY = CORE.DESTINATION_STATE_OUTPUT_AUTHORITY
 ARCHITECTURE_AUTHORITY = CORE.DESTINATION_STATE_ARCHITECTURE_AUTHORITY
-TRAINING_MODES = ("teacher-forced", "protected-rollout")
+TRAINING_MODES = ("teacher-forced", "protected-rollout", "protected-online-rollout")
+ROLLOUT_TRAINING_MODES = ("protected-rollout", "protected-online-rollout")
 ROLLOUT_STATE_COHORTS = CORE.SUPPORTED_DESTINATION_STATE_COHORTS
 SPLAT_ATTRIBUTE_ORDER = (
     "splat.scale.x", "splat.scale.y", "splat.scale.z",
@@ -76,7 +77,7 @@ def build_teacher_forced_loss_contract():
 
 def build_training_loss_receipt(training_config, visible_energy_scale):
     receipt = dict(training_config["loss"])
-    if training_config["mode"] == "protected-rollout":
+    if training_config["mode"] in ROLLOUT_TRAINING_MODES:
         receipt["visibleEnergyScale"] = float(visible_energy_scale)
     return receipt
 
@@ -99,23 +100,30 @@ def validate_rollout_training_config(
     weights = (candidate_loss_weight, splat_loss_weight, energy_loss_weight)
     if any(not math.isfinite(value) or value < 0 for value in weights) or splat_loss_weight <= 0:
         raise ValueError("rollout loss weights must be finite and include positive splat weight")
-    if training_mode == "protected-rollout" and not rollout_seed_model:
+    if training_mode in ROLLOUT_TRAINING_MODES and not rollout_seed_model:
         raise ValueError("protected rollout training requires an explicit seed model")
+    is_rollout = training_mode in ROLLOUT_TRAINING_MODES
+    is_online = training_mode == "protected-online-rollout"
     return {
         "authority": (
-            "protected-splat-scheduled-exposure-training-v0"
-            if training_mode == "protected-rollout"
-            else "adjacent-pair-teacher-forcing-v0"
+            "protected-splat-online-scheduled-exposure-training-v0"
+            if is_online
+            else (
+                "protected-splat-scheduled-exposure-training-v0"
+                if is_rollout
+                else "adjacent-pair-teacher-forcing-v0"
+            )
         ),
         "mode": training_mode,
         "rolloutSeedModel": str(Path(rollout_seed_model).resolve()) if rollout_seed_model else None,
         "rolloutHorizon": int(rollout_horizon),
+        "rolloutRefreshCadence": "epoch" if is_online else None,
         "predictedInputFraction": float(predicted_input_fraction),
         "candidateStateExposed": False,
         "occupancyFeedbackEnabled": False,
         "loss": (
             build_rollout_loss_contract(*weights)
-            if training_mode == "protected-rollout"
+            if is_rollout
             else build_teacher_forced_loss_contract()
         ),
     }
@@ -181,7 +189,7 @@ def load_rollout_seed_model(path):
 
 
 def resolve_training_normalization(training_mode, state_inputs, residual_targets, seed_normalization=None):
-    if training_mode == "protected-rollout":
+    if training_mode in ROLLOUT_TRAINING_MODES:
         if seed_normalization is None:
             raise ValueError("protected rollout normalization requires the frozen seed model")
         return {
@@ -424,6 +432,118 @@ def build_protected_rollout_datasets(
     }
 
 
+def build_online_rollout_epoch_datasets(
+    datasets,
+    frame_documents,
+    frames,
+    current_model,
+    seed_normalization,
+    predicted_input_fraction,
+    rollout_horizon,
+    batch_size,
+    rng,
+    epoch_index,
+    completed_optimizer_steps,
+):
+    if epoch_index < 1 or completed_optimizer_steps < 0:
+        raise ValueError("online rollout epoch and optimizer steps must be non-negative and one-based")
+    exposed_datasets, base_report = build_protected_rollout_datasets(
+        datasets,
+        frame_documents,
+        frames,
+        current_model,
+        seed_normalization,
+        predicted_input_fraction,
+        rollout_horizon,
+        batch_size,
+        rng,
+    )
+    if base_report.get("sampleCap") is not None:
+        raise ValueError("online rollout exposure forbids hidden sample caps")
+    return exposed_datasets, {
+        **base_report,
+        "authority": "current-model-epoch-refresh-protected-splat-scheduled-exposure-v0",
+        "modelSourceAuthority": "current-in-memory-model-v0",
+        "currentModelCheckpoint": (
+            "seed-initialization"
+            if completed_optimizer_steps == 0
+            else "post-optimizer-step"
+        ),
+        "epochIndex": int(epoch_index),
+        "completedOptimizerSteps": int(completed_optimizer_steps),
+        "fixedFrozenSeedGeneratorUsed": False,
+    }
+
+
+def aggregate_online_rollout_exposure(
+    epoch_reports,
+    expected_epochs,
+    expected_optimizer_steps_per_epoch,
+):
+    if expected_epochs < 1 or expected_optimizer_steps_per_epoch < 1 or len(epoch_reports) != expected_epochs:
+        raise ValueError("online rollout receipt must include every configured epoch")
+    expected_indices = list(range(1, expected_epochs + 1))
+    if [report.get("epochIndex") for report in epoch_reports] != expected_indices:
+        raise ValueError("online rollout receipt epoch indices are incomplete or unordered")
+    optimizer_steps = [report.get("completedOptimizerSteps") for report in epoch_reports]
+    expected_optimizer_steps = [
+        epoch_index * expected_optimizer_steps_per_epoch
+        for epoch_index in range(expected_epochs)
+    ]
+    if optimizer_steps != expected_optimizer_steps:
+        raise ValueError("online rollout receipt optimizer steps do not prove current-model refresh")
+    for report_index, report in enumerate(epoch_reports):
+        expected_checkpoint = "seed-initialization" if report_index == 0 else "post-optimizer-step"
+        if (
+            report.get("authority") != "current-model-epoch-refresh-protected-splat-scheduled-exposure-v0"
+            or report.get("modelSourceAuthority") != "current-in-memory-model-v0"
+            or report.get("currentModelCheckpoint") != expected_checkpoint
+            or report.get("fixedFrozenSeedGeneratorUsed") is not False
+            or report.get("sampleCap") is not None
+        ):
+            raise ValueError("online rollout epoch report permits frozen, capped, or unverified exposure")
+    eligible_count = sum(int(report["eligiblePredictedInputCount"]) for report in epoch_reports)
+    exposed_count = sum(int(report["predictedExposureCount"]) for report in epoch_reports)
+    return {
+        "authority": "current-model-epoch-refreshed-protected-splat-scheduled-exposure-v0",
+        "refreshCadence": "epoch",
+        "modelSourceAuthority": "current-in-memory-model-v0",
+        "firstRefreshCheckpoint": "seed-initialization",
+        "subsequentRefreshCheckpoint": "post-optimizer-step",
+        "optimizerStepsPerEpoch": expected_optimizer_steps_per_epoch,
+        "epochCount": expected_epochs,
+        "eligiblePredictedInputCount": eligible_count,
+        "predictedExposureCount": exposed_count,
+        "effectivePredictedInputFraction": exposed_count / max(1, eligible_count),
+        "candidateStateExposed": False,
+        "occupancyFeedbackEnabled": False,
+        "fixedFrozenSeedGeneratorUsed": False,
+        "epochReports": epoch_reports,
+        "sampleCap": None,
+    }
+
+
+def prepare_training_arrays(datasets, normalization, training_cohorts):
+    state_inputs = np.concatenate([dataset["stateInputs"] for dataset in datasets])
+    state_baselines = np.concatenate([dataset["stateBaselines"] for dataset in datasets])
+    state_targets = np.concatenate([dataset["stateTargets"] for dataset in datasets])
+    residual_targets = np.concatenate([dataset["stateResidualTargets"] for dataset in datasets])
+    cohorts = np.concatenate([dataset["stateCohorts"] for dataset in datasets])
+    sampling_pools = build_state_sampling_pools(cohorts, training_cohorts)
+    normalized_inputs = ((state_inputs - normalization["inputMean"]) / normalization["inputScale"]).astype(np.float32)
+    normalized_targets = ((residual_targets - normalization["residualMean"]) / normalization["residualScale"]).astype(np.float32)
+    return {
+        "stateInputs": state_inputs,
+        "stateBaselines": state_baselines,
+        "stateTargets": state_targets,
+        "stateResidualTargets": residual_targets,
+        "stateCohorts": cohorts,
+        "samplingPools": sampling_pools,
+        "normalizedInputs": normalized_inputs,
+        "normalizedTargets": normalized_targets,
+    }
+
+
 def visible_energy_mlx(states):
     luminance = states[:, 19] * 0.2126 + states[:, 20] * 0.7152 + states[:, 21] * 0.0722
     return mx.maximum(states[:, 22], 0) * mx.maximum(luminance, 0)
@@ -583,7 +703,7 @@ def main(argv=None):
         )
         training_cohorts = (
             ROLLOUT_STATE_COHORTS
-            if args.training_mode == "protected-rollout"
+            if args.training_mode in ROLLOUT_TRAINING_MODES
             else CORE.DESTINATION_STATE_COHORTS
         )
         if args.batch_size < len(training_cohorts):
@@ -620,7 +740,8 @@ def main(argv=None):
         rollout_seed_receipt = None
         rollout_exposure = None
         rng = np.random.default_rng(args.seed)
-        if args.training_mode == "protected-rollout":
+        raw_datasets = datasets
+        if args.training_mode in ROLLOUT_TRAINING_MODES:
             checkpoint("rollout-seed-model-validation")
             rollout_seed_model, rollout_seed_normalization, rollout_seed_receipt = load_rollout_seed_model(
                 args.rollout_seed_model,
@@ -630,9 +751,10 @@ def main(argv=None):
             last_trustworthy["rolloutSeedModelSha256"] = rollout_seed_receipt["sha256"]
             last_trustworthy["rolloutSeedRoute"] = rollout_seed_receipt["route"]
             last_trustworthy["rolloutSeedFallbackReason"] = rollout_seed_receipt["route"]["fallbackReason"]
+        if args.training_mode == "protected-rollout":
             checkpoint("protected-rollout-dataset-construction")
             datasets, rollout_exposure = build_protected_rollout_datasets(
-                datasets,
+                raw_datasets,
                 training_documents,
                 training_frames,
                 rollout_seed_model,
@@ -647,12 +769,10 @@ def main(argv=None):
                 "predictedExposureCount": rollout_exposure["predictedExposureCount"],
                 "effectivePredictedInputFraction": rollout_exposure["effectivePredictedInputFraction"],
             })
-        state_inputs = np.concatenate([dataset["stateInputs"] for dataset in datasets])
-        state_baselines = np.concatenate([dataset["stateBaselines"] for dataset in datasets])
-        state_targets = np.concatenate([dataset["stateTargets"] for dataset in datasets])
-        residual_targets = np.concatenate([dataset["stateResidualTargets"] for dataset in datasets])
-        cohorts = np.concatenate([dataset["stateCohorts"] for dataset in datasets])
-        sampling_pools = build_state_sampling_pools(cohorts, training_cohorts)
+        normalization_datasets = datasets if args.training_mode == "protected-rollout" else raw_datasets
+        state_inputs = np.concatenate([dataset["stateInputs"] for dataset in normalization_datasets])
+        state_targets = np.concatenate([dataset["stateTargets"] for dataset in normalization_datasets])
+        residual_targets = np.concatenate([dataset["stateResidualTargets"] for dataset in normalization_datasets])
         normalization = resolve_training_normalization(
             args.training_mode,
             state_inputs,
@@ -663,8 +783,8 @@ def main(argv=None):
         input_scale = normalization["inputScale"]
         residual_mean = normalization["residualMean"]
         residual_scale = normalization["residualScale"]
-        normalized_inputs = ((state_inputs - input_mean) / input_scale).astype(np.float32)
-        normalized_targets = ((residual_targets - residual_mean) / residual_scale).astype(np.float32)
+        prepared = prepare_training_arrays(normalization_datasets, normalization, training_cohorts)
+        cohorts = prepared["stateCohorts"]
         target_energy = visible_energy_numpy(state_targets)
         energy_scale = max(float(np.sqrt(np.mean(target_energy ** 2, dtype=np.float64))), 1e-6)
         last_trustworthy.update({
@@ -683,54 +803,97 @@ def main(argv=None):
         optimizer = optim.AdamW(learning_rate=args.learning_rate, weight_decay=args.weight_decay)
         loss_and_grad = nn.value_and_grad(
             model,
-            rollout_destination_state_loss if args.training_mode == "protected-rollout" else CORE.destination_state_loss,
+            rollout_destination_state_loss if args.training_mode in ROLLOUT_TRAINING_MODES else CORE.destination_state_loss,
         )
         steps_per_epoch = math.ceil(len(cohorts) / args.batch_size)
         step_count = steps_per_epoch * args.epochs
         losses = []
-        for step in range(step_count):
-            indices = sample_state_balanced_indices(
-                rng,
-                sampling_pools,
-                training_cohorts,
-                args.batch_size,
-            )
-            if args.training_mode == "protected-rollout":
-                (loss, components), gradients = loss_and_grad(
-                    model,
-                    mx.array(normalized_inputs[indices]),
-                    mx.array(normalized_targets[indices]),
-                    mx.array(state_baselines[indices]),
-                    mx.array(residual_mean),
-                    mx.array(residual_scale),
-                    mx.array(energy_scale),
-                    args.candidate_loss_weight,
-                    args.splat_loss_weight,
-                    args.energy_loss_weight,
+        online_epoch_reports = []
+        completed_optimizer_steps = 0
+        for epoch_index in range(1, args.epochs + 1):
+            if args.training_mode == "protected-online-rollout":
+                checkpoint(f"online-rollout-epoch-{epoch_index}-dataset-construction")
+                epoch_datasets, epoch_report = build_online_rollout_epoch_datasets(
+                    raw_datasets,
+                    training_documents,
+                    training_frames,
+                    current_model=model,
+                    seed_normalization=rollout_seed_normalization,
+                    predicted_input_fraction=args.predicted_input_fraction,
+                    rollout_horizon=args.rollout_horizon,
+                    batch_size=args.batch_size,
+                    rng=rng,
+                    epoch_index=epoch_index,
+                    completed_optimizer_steps=completed_optimizer_steps,
                 )
-            else:
-                loss, gradients = loss_and_grad(
-                    model,
-                    mx.array(normalized_inputs[indices]),
-                    mx.array(normalized_targets[indices]),
+                prepared = prepare_training_arrays(epoch_datasets, normalization, training_cohorts)
+                if len(prepared["stateCohorts"]) != len(cohorts):
+                    raise ValueError("online rollout epoch changed the canonical training population")
+                online_epoch_reports.append(epoch_report)
+                last_trustworthy.update({
+                    "onlineRolloutCompletedEpochs": len(online_epoch_reports),
+                    "onlineRolloutCurrentEpoch": epoch_index,
+                    "onlineRolloutCompletedOptimizerSteps": completed_optimizer_steps,
+                    "onlineRolloutCurrentEpochEligiblePredictedInputCount": epoch_report["eligiblePredictedInputCount"],
+                    "onlineRolloutCurrentEpochPredictedExposureCount": epoch_report["predictedExposureCount"],
+                })
+            for _ in range(steps_per_epoch):
+                step = completed_optimizer_steps
+                indices = sample_state_balanced_indices(
+                    rng,
+                    prepared["samplingPools"],
+                    training_cohorts,
+                    args.batch_size,
                 )
-                components = None
-            optimizer.update(model, gradients)
-            if components is None:
-                mx.eval(model.parameters(), optimizer.state, loss)
-            else:
-                mx.eval(model.parameters(), optimizer.state, loss, *components)
-            if step == 0 or step == step_count - 1 or (step + 1) % steps_per_epoch == 0:
-                loss_row = {"step": step + 1, "total": float(loss.item())}
-                if components is None:
-                    loss_row["mse"] = loss_row["total"]
+                if args.training_mode in ROLLOUT_TRAINING_MODES:
+                    (loss, components), gradients = loss_and_grad(
+                        model,
+                        mx.array(prepared["normalizedInputs"][indices]),
+                        mx.array(prepared["normalizedTargets"][indices]),
+                        mx.array(prepared["stateBaselines"][indices]),
+                        mx.array(residual_mean),
+                        mx.array(residual_scale),
+                        mx.array(energy_scale),
+                        args.candidate_loss_weight,
+                        args.splat_loss_weight,
+                        args.energy_loss_weight,
+                    )
                 else:
-                    loss_row.update({
-                        "candidate": float(components[0].item()),
-                        "splat": float(components[1].item()),
-                        "visibleEnergy": float(components[2].item()),
-                    })
-                losses.append(loss_row)
+                    loss, gradients = loss_and_grad(
+                        model,
+                        mx.array(prepared["normalizedInputs"][indices]),
+                        mx.array(prepared["normalizedTargets"][indices]),
+                    )
+                    components = None
+                optimizer.update(model, gradients)
+                if components is None:
+                    mx.eval(model.parameters(), optimizer.state, loss)
+                else:
+                    mx.eval(model.parameters(), optimizer.state, loss, *components)
+                completed_optimizer_steps += 1
+                if step == 0 or completed_optimizer_steps == step_count or completed_optimizer_steps % steps_per_epoch == 0:
+                    loss_row = {"step": completed_optimizer_steps, "total": float(loss.item())}
+                    if components is None:
+                        loss_row["mse"] = loss_row["total"]
+                    else:
+                        loss_row.update({
+                            "candidate": float(components[0].item()),
+                            "splat": float(components[1].item()),
+                            "visibleEnergy": float(components[2].item()),
+                        })
+                    losses.append(loss_row)
+        if args.training_mode == "protected-online-rollout":
+            rollout_exposure = aggregate_online_rollout_exposure(
+                online_epoch_reports,
+                args.epochs,
+                steps_per_epoch,
+            )
+            last_trustworthy.update({
+                "eligiblePredictedInputCount": rollout_exposure["eligiblePredictedInputCount"],
+                "predictedExposureCount": rollout_exposure["predictedExposureCount"],
+                "effectivePredictedInputFraction": rollout_exposure["effectivePredictedInputFraction"],
+                "onlineRolloutCompletedOptimizerSteps": completed_optimizer_steps,
+            })
 
         checkpoint("cross-episode-evaluation")
         evaluation_metrics, evaluation_pairs = evaluate_cross_episode(
@@ -804,9 +967,13 @@ def main(argv=None):
             "claimBoundary": (
                 "offline cross-episode destination-state residual prediction after exact heldout support and donor assignment; "
                 + (
-                    "training includes bounded frozen-seed predicted splat exposure with canonical candidate state and explicit energy loss; "
-                    if args.training_mode == "protected-rollout"
-                    else "training uses adjacent-pair teacher forcing; "
+                    "training rebuilds bounded predicted splat exposure from the current in-memory model before every epoch with canonical candidate state and explicit energy loss; "
+                    if args.training_mode == "protected-online-rollout"
+                    else (
+                        "training includes bounded frozen-seed predicted splat exposure with canonical candidate state and explicit energy loss; "
+                        if args.training_mode == "protected-rollout"
+                        else "training uses adjacent-pair teacher forcing; "
+                    )
                 )
                 + "does not modify the deployed occupancy model or prove long-horizon recurrent stability"
             ),

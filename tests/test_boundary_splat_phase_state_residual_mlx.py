@@ -64,6 +64,21 @@ class DestinationStateTrainerContracts(unittest.TestCase):
         self.assertEqual(args.energy_loss_weight, 0.25)
         self.assertFalse(hasattr(args, "max_rollout_rows"))
 
+    def test_parser_exposes_epoch_refreshed_online_rollout(self):
+        args = MODULE.parse_args([
+            "--training-manifest", "/training/corpus.json",
+            "--evaluation-manifest", "/evaluation/corpus.json",
+            "--out-dir", "/output",
+            "--training-mode", "protected-online-rollout",
+            "--rollout-seed-model", "/models/generation-two.json",
+            "--rollout-horizon", "12",
+            "--predicted-input-fraction", "0.625",
+        ])
+        self.assertEqual(args.training_mode, "protected-online-rollout")
+        self.assertEqual(args.rollout_seed_model, "/models/generation-two.json")
+        self.assertEqual(args.rollout_horizon, 12)
+        self.assertFalse(hasattr(args, "max_rollout_rows"))
+
     def test_rollout_configuration_requires_explicit_seed_and_positive_losses(self):
         config = MODULE.validate_rollout_training_config(
             training_mode="protected-rollout",
@@ -84,6 +99,16 @@ class DestinationStateTrainerContracts(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "loss weights"):
             MODULE.validate_rollout_training_config(
                 "protected-rollout", "/models/one-step.json", 4, 0.625, 0.1, 0.0, 0.25,
+            )
+
+        online = MODULE.validate_rollout_training_config(
+            "protected-online-rollout", "/models/generation-two.json", 12, 0.625, 0.1, 1.0, 0.25,
+        )
+        self.assertEqual(online["authority"], "protected-splat-online-scheduled-exposure-training-v0")
+        self.assertEqual(online["rolloutRefreshCadence"], "epoch")
+        with self.assertRaisesRegex(ValueError, "seed model"):
+            MODULE.validate_rollout_training_config(
+                "protected-online-rollout", None, 12, 0.625, 0.1, 1.0, 0.25,
             )
 
     def test_loss_receipt_matches_executed_training_mode(self):
@@ -239,6 +264,106 @@ class DestinationStateTrainerContracts(unittest.TestCase):
         self.assertEqual(report["predictedExposureCount"], 1)
         self.assertEqual(report["effectivePredictedInputFraction"], 1.0)
         self.assertIsNone(report["sampleCap"])
+
+    def test_online_rollout_epoch_refresh_uses_current_model_and_records_optimizer_steps(self):
+        current_model = object()
+        raw_datasets = [{"stateCohorts": np.asarray(["stable-q1"])}]
+        documents = [{"id": "frame-0"}, {"id": "frame-1"}]
+        frames = {"frame-0": object(), "frame-1": object()}
+        normalization = {
+            "inputMean": np.zeros(MODULE.CORE.DESTINATION_STATE_INPUT_COUNT, dtype=np.float32),
+            "inputScale": np.ones(MODULE.CORE.DESTINATION_STATE_INPUT_COUNT, dtype=np.float32),
+            "residualMean": np.zeros(MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT, dtype=np.float32),
+            "residualScale": np.ones(MODULE.CORE.DESTINATION_STATE_ATTRIBUTE_COUNT, dtype=np.float32),
+        }
+        base_report = {
+            "eligiblePredictedInputCount": 10,
+            "predictedExposureCount": 6,
+            "effectivePredictedInputFraction": 0.6,
+            "pairReports": [],
+            "sampleCap": None,
+        }
+        with patch.object(
+            MODULE,
+            "build_protected_rollout_datasets",
+            return_value=([{"epoch": 2}], base_report),
+        ) as builder:
+            datasets, report = MODULE.build_online_rollout_epoch_datasets(
+                raw_datasets,
+                documents,
+                frames,
+                current_model=current_model,
+                seed_normalization=normalization,
+                predicted_input_fraction=0.625,
+                rollout_horizon=12,
+                batch_size=4096,
+                rng=np.random.default_rng(713),
+                epoch_index=2,
+                completed_optimizer_steps=179,
+            )
+        self.assertEqual(datasets, [{"epoch": 2}])
+        self.assertIs(builder.call_args.args[3], current_model)
+        self.assertEqual(report["authority"], "current-model-epoch-refresh-protected-splat-scheduled-exposure-v0")
+        self.assertEqual(report["modelSourceAuthority"], "current-in-memory-model-v0")
+        self.assertEqual(report["currentModelCheckpoint"], "post-optimizer-step")
+        self.assertEqual(report["epochIndex"], 2)
+        self.assertEqual(report["completedOptimizerSteps"], 179)
+        self.assertFalse(report["fixedFrozenSeedGeneratorUsed"])
+        self.assertIsNone(report["sampleCap"])
+
+    def test_online_rollout_receipt_aggregates_every_epoch_and_rejects_stale_refresh(self):
+        reports = [
+            {
+                "authority": "current-model-epoch-refresh-protected-splat-scheduled-exposure-v0",
+                "modelSourceAuthority": "current-in-memory-model-v0",
+                "currentModelCheckpoint": "seed-initialization",
+                "fixedFrozenSeedGeneratorUsed": False,
+                "epochIndex": 1,
+                "completedOptimizerSteps": 0,
+                "eligiblePredictedInputCount": 10,
+                "predictedExposureCount": 6,
+                "sampleCap": None,
+            },
+            {
+                "authority": "current-model-epoch-refresh-protected-splat-scheduled-exposure-v0",
+                "modelSourceAuthority": "current-in-memory-model-v0",
+                "currentModelCheckpoint": "post-optimizer-step",
+                "fixedFrozenSeedGeneratorUsed": False,
+                "epochIndex": 2,
+                "completedOptimizerSteps": 179,
+                "eligiblePredictedInputCount": 12,
+                "predictedExposureCount": 8,
+                "sampleCap": None,
+            },
+        ]
+        receipt = MODULE.aggregate_online_rollout_exposure(
+            reports,
+            expected_epochs=2,
+            expected_optimizer_steps_per_epoch=179,
+        )
+        self.assertEqual(receipt["authority"], "current-model-epoch-refreshed-protected-splat-scheduled-exposure-v0")
+        self.assertEqual(receipt["refreshCadence"], "epoch")
+        self.assertEqual(receipt["epochCount"], 2)
+        self.assertEqual(receipt["eligiblePredictedInputCount"], 22)
+        self.assertEqual(receipt["predictedExposureCount"], 14)
+        self.assertEqual(receipt["effectivePredictedInputFraction"], 14 / 22)
+        self.assertIsNone(receipt["sampleCap"])
+
+        stale = [dict(reports[0]), {**reports[1], "completedOptimizerSteps": 0}]
+        with self.assertRaisesRegex(ValueError, "optimizer steps"):
+            MODULE.aggregate_online_rollout_exposure(stale, 2, 179)
+
+        skipped_updates = [dict(reports[0]), {**reports[1], "completedOptimizerSteps": 1}]
+        with self.assertRaisesRegex(ValueError, "optimizer steps"):
+            MODULE.aggregate_online_rollout_exposure(skipped_updates, 2, 179)
+
+        frozen_substitution = [dict(reports[0]), {**reports[1], "fixedFrozenSeedGeneratorUsed": True}]
+        with self.assertRaisesRegex(ValueError, "frozen, capped, or unverified"):
+            MODULE.aggregate_online_rollout_exposure(frozen_substitution, 2, 179)
+
+        hidden_cap = [dict(reports[0]), {**reports[1], "sampleCap": 10}]
+        with self.assertRaisesRegex(ValueError, "frozen, capped, or unverified"):
+            MODULE.aggregate_online_rollout_exposure(hidden_cap, 2, 179)
 
     def test_protected_pair_reports_include_all_configured_cohorts(self):
         dataset = {
