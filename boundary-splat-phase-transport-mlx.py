@@ -569,6 +569,71 @@ def build_eulerian_pair_dataset(source, target, grid_step, radius_cells=1):
     }
 
 
+def build_frozen_seed_eulerian_exposure(training_pairs, frames, grid_step, predict_step):
+    if not training_pairs or not callable(predict_step):
+        raise ValueError("frozen-seed rollout exposure requires training pairs and a predictor")
+    segments = []
+    for left, right in training_pairs:
+        left_index = int(left.get("controlledStepFrameIndex", -1))
+        right_index = int(right.get("controlledStepFrameIndex", -1))
+        if right_index != left_index + 1 or left.get("id") not in frames or right.get("id") not in frames:
+            raise ValueError("frozen-seed rollout exposure pairs must be exact contiguous corpus frames")
+        if segments and segments[-1][-1][1].get("id") == left.get("id"):
+            segments[-1].append((left, right))
+        else:
+            segments.append([(left, right)])
+
+    datasets = []
+    pair_receipts = []
+    segment_frame_ids = []
+    for segment in segments:
+        segment_frame_ids.append([segment[0][0]["id"], *[right["id"] for _, right in segment]])
+        recurrent_source = frames[segment[0][0]["id"]]
+        for rollout_depth in range(1, len(segment)):
+            previous_left, _ = segment[rollout_depth - 1]
+            recurrent_source, accounting = predict_step(
+                recurrent_source,
+                previous_left["id"],
+                rollout_depth,
+            )
+            if (
+                not isinstance(accounting, dict)
+                or accounting.get("predictedCount") != len(recurrent_source["keys"])
+                or not accounting.get("compositionAuthority")
+            ):
+                raise ValueError("frozen-seed rollout exposure predictor accounting mismatch")
+            source_doc, target_doc = segment[rollout_depth]
+            target = frames[target_doc["id"]]
+            dataset = build_eulerian_pair_dataset(recurrent_source, target, grid_step)
+            supported_exact_target_count = int(np.sum(dataset["occupancyLabels"]))
+            if supported_exact_target_count <= 0:
+                raise ValueError("frozen-seed rollout exposure has zero supported exact targets")
+            datasets.append(dataset)
+            pair_receipts.append({
+                "sourceAuthority": "frozen-seed-model-induced-eulerian-support-v0",
+                "targetAuthority": "exact-next-corpus-frame-grid-identity-v0",
+                "sourceReferenceFrameId": source_doc["id"],
+                "targetFrameId": target_doc["id"],
+                "rolloutDepth": rollout_depth,
+                "sourceCount": len(recurrent_source["keys"]),
+                "targetCount": len(target["keys"]),
+                "destinationSampleCount": len(dataset["destinationKeys"]),
+                "supportedExactTargetCount": supported_exact_target_count,
+                "unsupportedBirthCount": dataset["unsupportedBirthCount"],
+                "sampleCap": None,
+                "prediction": dict(accounting),
+            })
+    if not datasets:
+        raise ValueError("frozen-seed rollout exposure produced no recurrent training pairs")
+    return datasets, {
+        "authority": "frozen-seed-recurrent-eulerian-support-exposure-v0",
+        "segmentFrameIds": segment_frame_ids,
+        "pairCount": len(pair_receipts),
+        "pairs": pair_receipts,
+        "sampleCap": None,
+    }
+
+
 def build_destination_state_dataset(source, target, grid_step, radius_cells=1, state_cohorts=None):
     eulerian = build_eulerian_pair_dataset(source, target, grid_step, radius_cells)
     state_cohorts = tuple(state_cohorts or DESTINATION_STATE_COHORTS)

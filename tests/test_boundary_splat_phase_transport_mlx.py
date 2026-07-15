@@ -316,6 +316,87 @@ class TransportDatasetContracts(unittest.TestCase):
         for cohort in MODULE.EULERIAN_DESTINATION_COHORTS:
             self.assertGreater(dataset["cohortCounts"][cohort], 0)
 
+    def test_frozen_seed_rollout_exposure_preserves_segments_and_exact_target_identity(self):
+        docs = [
+            {"id": f"frame-{index}", "controlledStepFrameIndex": index}
+            for index in range(13)
+        ]
+        training_pairs = [
+            (docs[index], docs[index + 1])
+            for index in (0, 1, 2, 3, 4, 10, 11)
+        ]
+        frames = {
+            doc["id"]: frame([((0.0, 0.0, 0.0), float(doc["controlledStepFrameIndex"]))])
+            for doc in docs
+        }
+        calls = []
+
+        def predict_step(source, source_reference_frame_id, rollout_depth):
+            calls.append((source_reference_frame_id, rollout_depth))
+            return source, {
+                "compositionAuthority": "test-frozen-seed-recurrent-support-v0",
+                "predictedCount": len(source["keys"]),
+            }
+
+        datasets, receipt = MODULE.build_frozen_seed_eulerian_exposure(
+            training_pairs,
+            frames,
+            grid_step=1.0,
+            predict_step=predict_step,
+        )
+
+        self.assertEqual(len(datasets), 5)
+        self.assertEqual(calls, [
+            ("frame-0", 1), ("frame-1", 2), ("frame-2", 3), ("frame-3", 4),
+            ("frame-10", 1),
+        ])
+        self.assertEqual(receipt["authority"], "frozen-seed-recurrent-eulerian-support-exposure-v0")
+        self.assertEqual(receipt["segmentFrameIds"], [
+            ["frame-0", "frame-1", "frame-2", "frame-3", "frame-4", "frame-5"],
+            ["frame-10", "frame-11", "frame-12"],
+        ])
+        self.assertEqual(
+            [(row["sourceReferenceFrameId"], row["targetFrameId"], row["rolloutDepth"]) for row in receipt["pairs"]],
+            [
+                ("frame-1", "frame-2", 1),
+                ("frame-2", "frame-3", 2),
+                ("frame-3", "frame-4", 3),
+                ("frame-4", "frame-5", 4),
+                ("frame-11", "frame-12", 1),
+            ],
+        )
+        self.assertFalse({"frame-6", "frame-7", "frame-8", "frame-9"} & {
+            frame_id
+            for row in receipt["pairs"]
+            for frame_id in (row["sourceReferenceFrameId"], row["targetFrameId"])
+        })
+        self.assertTrue(all(row["sampleCap"] is None for row in receipt["pairs"]))
+
+    def test_frozen_seed_rollout_exposure_rejects_zero_supported_exact_targets(self):
+        docs = [
+            {"id": f"frame-{index}", "controlledStepFrameIndex": index}
+            for index in range(3)
+        ]
+        frames = {
+            "frame-0": frame([((0.0, 0.0, 0.0), 0.0)]),
+            "frame-1": frame([((0.0, 0.0, 0.0), 1.0)]),
+            "frame-2": frame([((0.0, 0.0, 0.0), 2.0)]),
+        }
+
+        def predict_step(_source, _source_reference_frame_id, _rollout_depth):
+            return frame([((50.0, 50.0, 50.0), 1.0)]), {
+                "compositionAuthority": "test-misaligned-recurrent-support-v0",
+                "predictedCount": 1,
+            }
+
+        with self.assertRaisesRegex(ValueError, "zero supported exact targets"):
+            MODULE.build_frozen_seed_eulerian_exposure(
+                [(docs[0], docs[1]), (docs[1], docs[2])],
+                frames,
+                grid_step=1.0,
+                predict_step=predict_step,
+            )
+
     def test_eulerian_sampler_spends_equal_batch_on_each_destination_cohort(self):
         cohorts = np.asarray([
             cohort
