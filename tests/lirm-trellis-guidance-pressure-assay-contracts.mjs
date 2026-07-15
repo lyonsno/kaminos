@@ -81,6 +81,16 @@ for (const job of receipts.generationJobs) {
   assert.equal(job.effective.textureSize, experiment.fixed.textureSize);
   assert.equal(job.effective.cascade, experiment.fixed.cascade);
   assert.equal(job.effective.simplifyFirst, experiment.fixed.simplifyFirst);
+  if (job.stage === 'sparse-structure') {
+    assert.deepEqual(job.effective.downstreamShapeGuidance, {
+      strength: 7.5,
+      rescale: 0.5,
+      interval: [0.6, 1.0],
+    });
+    assert.deepEqual(job.requested.downstreamShapeGuidance, job.effective.downstreamShapeGuidance);
+  } else {
+    assert.equal(job.effective.downstreamShapeGuidance, undefined);
+  }
   assert.equal(job.output.path, job.effective.outputPath);
   assert.equal(job.input.sha256, experiment.source.sha256);
   seenCells.add(`${job.stage}/${job.pressure}`);

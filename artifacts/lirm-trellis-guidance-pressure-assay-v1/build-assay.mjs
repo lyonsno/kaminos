@@ -41,17 +41,40 @@ const assertSame = (label, actual, expected) => {
     throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
   }
 };
+const routeFlagMatches = (route, name) => [
+  ...route.matchAll(new RegExp(`(?:^| )--${name} ([^ ]+)`, 'g')),
+];
 const routeFlag = (route, name) => {
-  const match = route.match(new RegExp(`(?:^| )--${name} ([^ ]+)`));
-  if (!match) throw new Error(`effective route is missing --${name}`);
-  return match[1];
+  const matches = routeFlagMatches(route, name);
+  if (matches.length !== 1) {
+    throw new Error(`effective route must contain --${name} exactly once; found ${matches.length}`);
+  }
+  return matches[0][1];
 };
-const routeHas = (route, name) => new RegExp(`(?:^| )--${name}(?: |$)`).test(route);
+const routeTokenCount = (route, name) => [
+  ...route.matchAll(new RegExp(`(?:^| )--${name}(?= |$)`, 'g')),
+].length;
+const routeGuidance = (route, prefix) => ({
+  strength: Number(routeFlag(route, `${prefix}-guidance-strength`)),
+  rescale: Number(routeFlag(route, `${prefix}-guidance-rescale`)),
+  interval: [
+    Number(routeFlag(route, `${prefix}-guidance-low`)),
+    Number(routeFlag(route, `${prefix}-guidance-high`)),
+  ],
+});
 const parseGenerationRoute = (route, stage) => {
   if (!route.startsWith(`${runner} `)) throw new Error(`unexpected Trellis runner: ${route}`);
   const prefix = stage === 'dense-shape' ? 'shape' : 'sparse';
-  const cascade = routeHas(route, 'no-cascade') ? false : routeHas(route, 'cascade') ? true : null;
-  if (cascade === null) throw new Error('effective route must name cascade mode');
+  const noCascadeCount = routeTokenCount(route, 'no-cascade');
+  const cascadeCount = routeTokenCount(route, 'cascade');
+  if (noCascadeCount + cascadeCount !== 1) {
+    throw new Error(`effective route must contain exactly one cascade mode; found no-cascade=${noCascadeCount}, cascade=${cascadeCount}`);
+  }
+  const simplifyFirstCount = routeTokenCount(route, 'simplify-first');
+  if (simplifyFirstCount !== 1) {
+    throw new Error(`effective route must contain --simplify-first exactly once; found ${simplifyFirstCount}`);
+  }
+  const guidance = routeGuidance(route, prefix);
   return {
     inputPath: routeFlag(route, 'image'),
     outputPath: routeFlag(route, 'output'),
@@ -60,14 +83,12 @@ const parseGenerationRoute = (route, stage) => {
     steps: Number(routeFlag(route, 'steps')),
     targetFaces: Number(routeFlag(route, 'target-faces')),
     textureSize: Number(routeFlag(route, 'texture-size')),
-    cascade,
-    simplifyFirst: routeHas(route, 'simplify-first'),
-    strength: Number(routeFlag(route, `${prefix}-guidance-strength`)),
-    rescale: Number(routeFlag(route, `${prefix}-guidance-rescale`)),
-    interval: [
-      Number(routeFlag(route, `${prefix}-guidance-low`)),
-      Number(routeFlag(route, `${prefix}-guidance-high`)),
-    ],
+    cascade: cascadeCount === 1,
+    simplifyFirst: true,
+    ...guidance,
+    ...(stage === 'sparse-structure'
+      ? { downstreamShapeGuidance: routeGuidance(route, 'shape') }
+      : {}),
   };
 };
 const parseWitnessRoute = route => {
@@ -149,6 +170,15 @@ const generationJobs = generationSpecs.map(([stage, pressure, jobId, outputRoot,
     strength,
     rescale,
     interval: [0.6, 1.0],
+    ...(stage === 'sparse-structure'
+      ? {
+          downstreamShapeGuidance: {
+            strength: 7.5,
+            rescale: 0.5,
+            interval: [0.6, 1.0],
+          },
+        }
+      : {}),
   };
   const effective = parseGenerationRoute(receiptFile.value.effective_route, stage);
   assertSame(`${jobId} request id`, requestFile.value.job_id, jobId);

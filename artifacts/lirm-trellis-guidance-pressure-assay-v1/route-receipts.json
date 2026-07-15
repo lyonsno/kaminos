@@ -400,7 +400,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "effective": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
@@ -417,7 +425,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "metrics": {
         "sparseVoxels": 470,
@@ -505,7 +521,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "effective": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
@@ -522,7 +546,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "metrics": {
         "sparseVoxels": 1374,
@@ -610,7 +642,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "effective": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
@@ -627,7 +667,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "metrics": {
         "sparseVoxels": 2261,
@@ -715,7 +763,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "effective": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
@@ -732,7 +788,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "metrics": {
         "sparseVoxels": 2168,
@@ -820,7 +884,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "effective": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
@@ -837,7 +909,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "metrics": {
         "sparseVoxels": 2220,
@@ -925,7 +1005,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "effective": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
@@ -942,7 +1030,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "metrics": {
         "sparseVoxels": 2313,
@@ -1030,7 +1126,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "effective": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
@@ -1047,7 +1151,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "metrics": {
         "sparseVoxels": 2440,
@@ -1135,7 +1247,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "effective": {
         "inputPath": "/Users/noahlyons/.local/state/gpu-greenroom/outputs/kaminos-lirm-beta01-gestalt4-flux2-multiref-20260715/cells/prior-shape-0066-preserve-gestalt-clay-depth-normal/output.png",
@@ -1152,7 +1272,15 @@
         "interval": [
           0.6,
           1
-        ]
+        ],
+        "downstreamShapeGuidance": {
+          "strength": 7.5,
+          "rescale": 0.5,
+          "interval": [
+            0.6,
+            1
+          ]
+        }
       },
       "metrics": {
         "sparseVoxels": 2538,

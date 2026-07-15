@@ -496,7 +496,7 @@
   },
   "routeReceiptManifest": {
     "path": "/private/tmp/kaminos-molten-lirm-speciation-armature-recovery-0714/artifacts/lirm-trellis-guidance-pressure-assay-v1/route-receipts.json",
-    "sha256": "f31cdacc61bb839748431c4cd248b19a433de1aecf37f034382290a2f407a94c",
-    "bytes": 212985
+    "sha256": "4cb937065883dc0599e4739f0d4c0ec85a06d0b2ca0effb8cd8bc227fbd1174a",
+    "bytes": 215673
   }
 }

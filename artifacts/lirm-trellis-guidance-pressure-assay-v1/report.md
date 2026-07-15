@@ -57,7 +57,7 @@ The identical sparse voxel count is the important boundary. Dense-stage guidance
 - First heavy route proof: generation receipt `3b9a7ce7660e`; the durable receipt manifest records every requested and effective route.
 - Heavy run accepted before route proof: no.
 - All 11 generation jobs and all 44 admitted witness jobs completed with exit code zero.
-- Every generation cell parses its full effective route and binds input, output, seed, steps, resolution, cascade mode, mesh budget, texture size, cleanup order, and stage guidance back to the submitted request and fixed assay contract.
+- Every generation cell parses its full effective route, rejects duplicate or contradictory load-bearing flags, and binds input, output, seed, steps, resolution, cascade mode, mesh budget, texture size, cleanup order, and both sparse and downstream shape guidance back to the submitted request and fixed assay contract.
 - Every generation cell records source hash, requested parameters, effective route, output hash, output size, and parsed geometry metrics in `route-receipts.json`.
 - Both contact sheets are assembled deterministically from the 44 admitted witness images named in the route manifest; each cell records its witness job, image hash, stage, pressure, view, and effective camera.
 - Dense contact sheet: `dense-shape-guidance-pressure-contact-sheet.png`.
