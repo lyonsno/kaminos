@@ -34,12 +34,57 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-function cloneJson(value, label) {
-  if (value == null) return value;
+function cloneJson(value, label, path = label, ancestors = new Set()) {
+  if (value === null) return null;
+  if (typeof value === 'string' || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error(`${label} must contain only finite numbers; invalid value at ${path}`);
+    if (Object.is(value, -0)) throw new Error(`${label} must not contain negative zero; invalid value at ${path}`);
+    return value;
+  }
+  if (typeof value !== 'object') {
+    throw new Error(`${label} contains unsupported ${typeof value} value at ${path}`);
+  }
+  if (ancestors.has(value)) throw new Error(`${label} must not contain a cycle at ${path}`);
+  ancestors.add(value);
   try {
-    return JSON.parse(JSON.stringify(value));
-  } catch {
-    throw new Error(`${label} must be JSON-compatible`);
+    if (Array.isArray(value)) {
+      const keys = Reflect.ownKeys(value).filter(key => key !== 'length');
+      const clone = new Array(value.length);
+      for (let index = 0; index < value.length; index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, index);
+        if (!descriptor) throw new Error(`${label} must not contain a sparse array hole at ${path}[${index}]`);
+        if (!Object.hasOwn(descriptor, 'value')) {
+          throw new Error(`${label} arrays must contain only data elements; invalid element at ${path}[${index}]`);
+        }
+        clone[index] = cloneJson(descriptor.value, label, `${path}[${index}]`, ancestors);
+      }
+      if (keys.some(key => typeof key === 'symbol' || !/^(0|[1-9][0-9]*)$/.test(key))) {
+        throw new Error(`${label} arrays must not contain symbol or named properties at ${path}`);
+      }
+      return clone;
+    }
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new Error(`${label} must contain only plain JSON objects; invalid object at ${path}`);
+    }
+    const clone = {};
+    for (const key of Reflect.ownKeys(value)) {
+      if (typeof key === 'symbol') throw new Error(`${label} must not contain symbol keys at ${path}`);
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      if (!descriptor?.enumerable || !Object.hasOwn(descriptor, 'value')) {
+        throw new Error(`${label} must contain only enumerable data properties; invalid property at ${path}.${key}`);
+      }
+      Object.defineProperty(clone, key, {
+        value: cloneJson(descriptor.value, label, `${path}.${key}`, ancestors),
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
+    return clone;
+  } finally {
+    ancestors.delete(value);
   }
 }
 

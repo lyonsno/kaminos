@@ -422,6 +422,34 @@ assert.throws(
   () => manifestFor(bundle, { resourceSharing: 'content-addressed-physical-dedupe' }),
   /resourceSharing must be an object/i,
 );
+assert.throws(
+  () => manifestFor(bundle, { metadata: { role: undefined } }),
+  /manifest metadata.*undefined|undefined.*manifest metadata/i,
+);
+assert.throws(
+  () => manifestFor(bundle, {
+    allocations: [
+      { ...manifest.allocations[0], metadata: { role: () => 'encoder' } },
+      manifest.allocations[1],
+    ],
+  }),
+  /allocation metadata.*function|function.*allocation metadata/i,
+);
+assert.throws(
+  () => manifestFor(bundle, {
+    allocations: [
+      {
+        ...manifest.allocations[0],
+        tensors: [
+          { ...manifest.allocations[0].tensors[0], metadata: { quantizationScale: Number.NaN } },
+          manifest.allocations[0].tensors[1],
+        ],
+      },
+      manifest.allocations[1],
+    ],
+  }),
+  /tensor metadata.*finite number|finite number.*tensor metadata/i,
+);
 
 const mutableSource = Uint8Array.from(bundle);
 const mutationResidency = createWebGpuResourceResidency({ sessionId: 'mutation' });
