@@ -115,6 +115,10 @@ assert.ok(stage.atoms.every(atom => atom.stage.position.length === 3), 'every at
 assert.ok(stage.atoms.every(atom => atom.stage.position.every(Number.isFinite)), 'stage positions are finite');
 assert.ok(stage.stageBounds.radius > 0.5, 'stage bounds expose a nonzero spatial extent');
 assert.deepEqual(stage.falseCloseWarnings, []);
+assert.equal(stage.atoms.find(atom => atom.id === '1').materialRegion.localControl?.role, 'drive');
+assert.equal(stage.atoms.find(atom => atom.id === 'filter.cutoff').materialRegion.localControl?.role, 'aperture');
+assert.equal(stage.atoms.find(atom => atom.id === 'delay.feedback').materialRegion.localControl?.role, 'recirculation');
+assert.equal(stage.atoms.find(atom => atom.id === '4').materialRegion.localControl?.role, 'release');
 
 const materialFrame = simulateStageMaterialFrame(stage, {
   t: 1.25,
@@ -130,7 +134,7 @@ assert.equal(materialFrame.schema, MATERIAL_STAGE_FRAME_SCHEMA);
 assert.equal(materialFrame.routeIdentity, STAGE_ATOMS_ROUTE_IDENTITY);
 assert.equal(materialFrame.materialAuthority, 'stage-atoms-plus-lawful-audio-v0');
 assert.ok(materialFrame.materialAtoms.find(atom => atom.id === 'delay.feedback').field.feedbackMemory > 0.3);
-assert.ok(materialFrame.materialAtoms.find(atom => atom.id === 'filter.cutoff').field.excitation > 0.2);
+assert.ok(materialFrame.materialAtoms.find(atom => atom.id === '1').field.excitation > 0.2);
 assert.ok(materialFrame.receipts.some(receipt => receipt.kind === 'audio_source_access'));
 assert.ok(materialFrame.receipts.some(receipt => receipt.kind === 'stage_atom_binding'));
 
@@ -155,14 +159,69 @@ assert.deepEqual(
   'spatialization must read the material frame, not raw audio features supplied at the final stage',
 );
 
-function runMaterialHistory(controlHistory) {
+function runNodeControlScenario(nodeControls) {
   let previousMaterialFrame = null;
-  for (const [index, materialControls] of controlHistory.entries()) {
+  for (let index = 0; index < 28; index += 1) {
     previousMaterialFrame = simulateStageMaterialFrame(stage, {
       t: index * 0.05,
       dt: 0.05,
       previousMaterialFrame,
-      materialControls,
+      nodeControls,
+      audioFeatures: {
+        energy: 0.58,
+        onsetStrength: index % 5 === 0 ? 0.74 : 0.16,
+        recurrenceConfidence: 0.62,
+        spectralCentroid: 0.44,
+      },
+    });
+  }
+  return previousMaterialFrame;
+}
+
+const baselineNodeFrame = runNodeControlScenario({ '1': 1, 'filter.cutoff': 1, 'delay.feedback': 1, '4': 1 });
+const drivenInputFrame = runNodeControlScenario({ '1': 1.9, 'filter.cutoff': 1, 'delay.feedback': 1, '4': 1 });
+const openedCutoffFrame = runNodeControlScenario({ '1': 1, 'filter.cutoff': 1.9, 'delay.feedback': 1, '4': 1 });
+const recirculatingFeedbackFrame = runNodeControlScenario({ '1': 1, 'filter.cutoff': 1, 'delay.feedback': 1.9, '4': 1 });
+const releasedOutputFrame = runNodeControlScenario({ '1': 1, 'filter.cutoff': 1, 'delay.feedback': 1, '4': 1.9 });
+const fieldFor = (frame, id) => frame.materialAtoms.find(atom => atom.id === id).field;
+
+assert.deepEqual(drivenInputFrame.nodeControls, { '1': 1.9, '4': 1, 'filter.cutoff': 1, 'delay.feedback': 1 });
+assert.ok(fieldFor(drivenInputFrame, '1').excitation > fieldFor(baselineNodeFrame, '1').excitation + 0.12, 'Input drive changes the touched region first');
+assert.ok(fieldFor(drivenInputFrame, 'filter.cutoff').incomingFlux > fieldFor(baselineNodeFrame, 'filter.cutoff').incomingFlux + 0.04, 'Input drive changes lawful outgoing flux');
+assert.ok(
+  fieldFor(drivenInputFrame, '4').heat > fieldFor(baselineNodeFrame, '4').heat + 0.04,
+  `Input drive changes downstream Output organization: baseline=${fieldFor(baselineNodeFrame, '4').heat} driven=${fieldFor(drivenInputFrame, '4').heat}`,
+);
+assert.ok(Math.abs(fieldFor(releasedOutputFrame, '1').heat - fieldFor(baselineNodeFrame, '1').heat) < 0.015, 'Output release cannot counterfeit upstream Input causation');
+assert.ok(
+  fieldFor(openedCutoffFrame, 'filter.cutoff').excitation > fieldFor(baselineNodeFrame, 'filter.cutoff').excitation + 0.08,
+  `Cutoff aperture admits more routed excitation: baseline=${fieldFor(baselineNodeFrame, 'filter.cutoff').excitation} open=${fieldFor(openedCutoffFrame, 'filter.cutoff').excitation}`,
+);
+assert.ok(
+  fieldFor(recirculatingFeedbackFrame, 'delay.feedback').feedbackMemory > fieldFor(baselineNodeFrame, 'delay.feedback').feedbackMemory + 0.08,
+  `Feedback recirculation retains more memory: baseline=${fieldFor(baselineNodeFrame, 'delay.feedback').feedbackMemory} recirculating=${fieldFor(recirculatingFeedbackFrame, 'delay.feedback').feedbackMemory}`,
+);
+const baselineOutputSend = spatializeFromStageMaterial(baselineNodeFrame).emitters.find(emitter => emitter.id === '4').send;
+const releasedOutputSend = spatializeFromStageMaterial(releasedOutputFrame).emitters.find(emitter => emitter.id === '4').send;
+const baselineFeedbackSend = spatializeFromStageMaterial(baselineNodeFrame).emitters.find(emitter => emitter.id === 'delay.feedback').send;
+const recirculatingFeedbackSend = spatializeFromStageMaterial(recirculatingFeedbackFrame).emitters.find(emitter => emitter.id === 'delay.feedback').send;
+assert.ok(
+  recirculatingFeedbackSend.reverb > baselineFeedbackSend.reverb + 0.04,
+  `Feedback recirculation changes its spatial-memory send: baseline=${baselineFeedbackSend.reverb} recirculating=${recirculatingFeedbackSend.reverb}`,
+);
+assert.ok(
+  releasedOutputSend.direct > baselineOutputSend.direct + 0.08,
+  `Output release changes local audio radiation: baseline=${baselineOutputSend.direct} released=${releasedOutputSend.direct}`,
+);
+
+function runMaterialHistory(nodeControlHistory) {
+  let previousMaterialFrame = null;
+  for (const [index, nodeControls] of nodeControlHistory.entries()) {
+    previousMaterialFrame = simulateStageMaterialFrame(stage, {
+      t: index * 0.05,
+      dt: 0.05,
+      previousMaterialFrame,
+      nodeControls,
       audioFeatures: {
         energy: 0.64,
         onsetStrength: index % 4 === 0 ? 0.78 : 0.12,
@@ -174,20 +233,21 @@ function runMaterialHistory(controlHistory) {
   return previousMaterialFrame;
 }
 
-const finalMaterialControls = { coupling: 1, memory: 1, depth: 1 };
+const finalNodeControls = { '1': 1, '4': 1, 'filter.cutoff': 1, 'delay.feedback': 1 };
 const pathAFrame = runMaterialHistory([
-  ...Array.from({ length: 18 }, () => ({ coupling: 1.8, memory: 0.2, depth: 1 })),
-  ...Array.from({ length: 18 }, () => ({ coupling: 0.35, memory: 1.8, depth: 1 })),
-  ...Array.from({ length: 2 }, () => finalMaterialControls),
+  ...Array.from({ length: 18 }, () => ({ ...finalNodeControls, '1': 1.8, 'delay.feedback': 0.2 })),
+  ...Array.from({ length: 18 }, () => ({ ...finalNodeControls, '1': 0.35, 'delay.feedback': 1.8 })),
+  ...Array.from({ length: 2 }, () => finalNodeControls),
 ]);
 const pathBFrame = runMaterialHistory([
-  ...Array.from({ length: 18 }, () => ({ coupling: 0.35, memory: 1.8, depth: 1 })),
-  ...Array.from({ length: 18 }, () => ({ coupling: 1.8, memory: 0.2, depth: 1 })),
-  ...Array.from({ length: 2 }, () => finalMaterialControls),
+  ...Array.from({ length: 18 }, () => ({ ...finalNodeControls, '1': 0.35, 'delay.feedback': 1.8 })),
+  ...Array.from({ length: 18 }, () => ({ ...finalNodeControls, '1': 1.8, 'delay.feedback': 0.2 })),
+  ...Array.from({ length: 2 }, () => finalNodeControls),
 ]);
 
-assert.deepEqual(pathAFrame.materialControls, finalMaterialControls, 'path A receipts the shared final controls');
-assert.deepEqual(pathBFrame.materialControls, finalMaterialControls, 'path B receipts the shared final controls');
+assert.deepEqual(pathAFrame.nodeControls, finalNodeControls, 'path A receipts the shared final node controls');
+assert.deepEqual(pathBFrame.nodeControls, finalNodeControls, 'path B receipts the shared final node controls');
+assert.equal('materialControls' in pathAFrame, false, 'the simulator does not preserve a hidden global-control contract');
 assert.notDeepEqual(
   pathAFrame.materialAtoms.map(atom => atom.field.feedbackMemory),
   pathBFrame.materialAtoms.map(atom => atom.field.feedbackMemory),

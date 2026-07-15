@@ -8,6 +8,8 @@ for (let index = 2; index < process.argv.length; index += 2) args.set(process.ar
 
 const requestedUrl = args.get('--url') || 'http://127.0.0.1:8097/stage-atoms-browser.html';
 const outputPath = resolve(args.get('--out') || 'artifacts/stage-atoms/browser-witness/stage-atoms-live.png');
+const inputScenarioOutputPath = resolve(args.get('--input-out') || outputPath.replace(/\.png$/i, '-input.png'));
+const outputScenarioOutputPath = resolve(args.get('--output-scenario-out') || outputPath.replace(/\.png$/i, '-output.png'));
 const reportPath = resolve(args.get('--report') || outputPath.replace(/\.png$/i, '.json'));
 const debugPort = Number(args.get('--debug-port') || 9498);
 const viewportWidth = Number(args.get('--viewport-width') || 1600);
@@ -18,6 +20,8 @@ const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-stage-atoms-wit
 
 let phase = 'initializing';
 let primaryOutputWritten = false;
+let inputScenarioOutputWritten = false;
+let outputScenarioOutputWritten = false;
 let effectiveUrl = null;
 let browserVersion = null;
 let stderr = '';
@@ -25,8 +29,8 @@ let debugState = null;
 let playbackState = null;
 let visualActivity = null;
 let controlBounds = null;
-let handleEvidence = null;
-let historyEvidence = null;
+let nodeInterfaceEvidence = null;
+let directionalCascadeEvidence = null;
 const networkResponses = [];
 const consoleEvents = [];
 
@@ -48,13 +52,17 @@ function writeReport(extra = {}) {
     settleMs,
     phase,
     primaryOutputWritten,
+    inputScenarioOutputWritten,
+    outputScenarioOutputWritten,
     outputPath,
+    inputScenarioOutputPath,
+    outputScenarioOutputPath,
     reportPath,
     networkResponses,
     visualActivity,
     controlBounds,
-    handleEvidence,
-    historyEvidence,
+    nodeInterfaceEvidence,
+    directionalCascadeEvidence,
     debugState,
     playbackState,
     consoleEvents,
@@ -129,6 +137,41 @@ async function evaluate(ws, expression) {
   return result.result.value;
 }
 
+async function dragNodeControl(ws, node, deltaY, steps = 10) {
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x: node.point.x, y: node.point.y });
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: node.point.x, y: node.point.y, button: 'left', buttons: 1, clickCount: 1 });
+  for (let step = 1; step <= steps; step += 1) {
+    await wsRequest(ws, 'Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: node.point.x,
+      y: node.point.y + deltaY * step / steps,
+      button: 'left',
+      buttons: 1,
+    });
+  }
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: node.point.x, y: node.point.y + deltaY, button: 'left', buttons: 0, clickCount: 1 });
+}
+
+async function readMaterialProbe(ws) {
+  return evaluate(ws, `(() => ({
+    featureIndex: window.kaminosStageAtomsDebugState.featureFrame.index,
+    selectedNodeId: window.kaminosStageAtomsDebugState.selectedNodeId,
+    nodeControls: window.kaminosStageAtomsDebugState.nodeControls,
+    nodeInterfaces: window.kaminosStageAtomsDebugState.nodeInterfaces,
+    interaction: window.kaminosStageAtomsDebugState.interaction,
+    materialAtoms: window.kaminosStageAtomsDebugState.materialFrame.materialAtoms,
+    materialFlows: window.kaminosStageAtomsDebugState.materialFrame.materialFlows,
+    emitters: window.kaminosStageAtomsDebugState.spatialization.emitters,
+  }))()`);
+}
+
+async function captureCredibleScreenshot(ws) {
+  const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  const png = Buffer.from(screenshot.data, 'base64');
+  if (png.byteLength < 4096 || png.readUInt32BE(0) !== 0x89504e47) throw new Error('captured screenshot is not credible PNG evidence');
+  return png;
+}
+
 function attachEventReceipts(ws) {
   ws.addEventListener('message', event => {
     const message = JSON.parse(String(event.data));
@@ -170,6 +213,9 @@ function verifyDebugState(state) {
   if (state.materialFrame?.stateAuthority !== 'bounded-pulp-routed-material-history-v0') throw new Error(`material state authority mismatch: ${state.materialFrame?.stateAuthority}`);
   if (!Array.isArray(state.materialFrame?.materialFlows) || state.materialFrame.materialFlows.length === 0) throw new Error('Pulp-routed material flows missing');
   if (state.spatialization?.spatializationAuthority !== 'material-stage-atoms-v0') throw new Error(`spatialization authority mismatch: ${state.spatialization?.spatializationAuthority}`);
+  if (!Array.isArray(state.nodeInterfaces) || state.nodeInterfaces.length !== 4) throw new Error(`direct node interfaces missing: ${state.nodeInterfaces?.length}`);
+  const roles = state.nodeInterfaces.map(node => node.role).sort();
+  if (JSON.stringify(roles) !== JSON.stringify(['aperture', 'drive', 'recirculation', 'release'])) throw new Error(`node interface roles mismatch: ${JSON.stringify(roles)}`);
 }
 
 async function main() {
@@ -242,7 +288,7 @@ async function main() {
     controlBounds = await evaluate(ws, `(() => {
       const rail = document.querySelector('.instrument-rail').getBoundingClientRect();
       const viewport = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
-      const controls = ['stage-atoms-coupling', 'stage-atoms-memory', 'stage-atoms-depth', 'stage-atoms-reset', 'stage-atoms-history-a', 'stage-atoms-history-b', 'stage-atoms-play', 'stage-atoms-seek'].map(id => {
+      const controls = ['stage-atoms-reset', 'stage-atoms-play', 'stage-atoms-seek'].map(id => {
         const rect = document.getElementById(id).getBoundingClientRect();
         const inViewport = rect.left >= viewport.left && rect.top >= viewport.top && rect.right <= viewport.right && rect.bottom <= viewport.bottom;
         const inRail = id === 'stage-atoms-play' || id === 'stage-atoms-seek'
@@ -250,99 +296,110 @@ async function main() {
           : rect.left >= rail.left && rect.top >= rail.top && rect.right <= rail.right && rect.bottom <= rail.bottom;
         return { id, rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }, inViewport, inRail };
       });
-      return { rail: { left: rail.left, top: rail.top, right: rail.right, bottom: rail.bottom }, controls, outOfBounds: controls.filter(control => !control.inViewport || !control.inRail).map(control => control.id) };
+      const mobile = window.innerWidth <= 820;
+      const playable = { left: 0, top: mobile ? 98 : 72, right: mobile ? window.innerWidth : window.innerWidth - 276, bottom: mobile ? window.innerHeight - 294 : window.innerHeight - 92 };
+      const nodes = window.kaminosStageAtomsDebugState.nodeInterfaces.map(node => ({
+        id: node.id,
+        point: node.point,
+        inPlayableStage: node.point.x >= playable.left && node.point.x <= playable.right && node.point.y >= playable.top && node.point.y <= playable.bottom,
+      }));
+      return {
+        rail: { left: rail.left, top: rail.top, right: rail.right, bottom: rail.bottom },
+        playable,
+        controls,
+        nodes,
+        outOfBounds: [
+          ...controls.filter(control => !control.inViewport || !control.inRail).map(control => control.id),
+          ...nodes.filter(node => !node.inPlayableStage).map(node => node.id),
+        ],
+      };
     })()`);
     if (controlBounds.outOfBounds.length) throw new Error(`controls clipped or outside viewport: ${JSON.stringify(controlBounds)}`);
 
-    phase = 'exercise_material_handles';
-    const handleBefore = await evaluate(ws, `(() => ({
-      controls: window.kaminosStageAtomsDebugState.controls,
-      materialAtoms: window.kaminosStageAtomsDebugState.materialFrame.materialAtoms,
-      emitters: window.kaminosStageAtomsDebugState.spatialization.emitters,
-    }))()`);
-    await evaluate(ws, `(() => {
-      const values = { coupling: 0.35, memory: 0.4, depth: 0.5 };
-      for (const [name, value] of Object.entries(values)) {
-        const input = document.getElementById('stage-atoms-' + name);
-        input.value = String(value);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    })()`);
-    await delay(160);
-    const handleAfter = await evaluate(ws, `(() => ({
-      controls: window.kaminosStageAtomsDebugState.controls,
-      materialAtoms: window.kaminosStageAtomsDebugState.materialFrame.materialAtoms,
-      emitters: window.kaminosStageAtomsDebugState.spatialization.emitters,
-    }))()`);
-    const beforeHeat = handleBefore.materialAtoms.reduce((sum, atom) => sum + atom.field.heat, 0);
-    const afterHeat = handleAfter.materialAtoms.reduce((sum, atom) => sum + atom.field.heat, 0);
-    const beforeMemory = handleBefore.materialAtoms.reduce((sum, atom) => sum + atom.field.feedbackMemory, 0);
-    const afterMemory = handleAfter.materialAtoms.reduce((sum, atom) => sum + atom.field.feedbackMemory, 0);
-    const beforePan = handleBefore.emitters.map(emitter => emitter.send.pan);
-    const afterPan = handleAfter.emitters.map(emitter => emitter.send.pan);
-    handleEvidence = {
-      before: { controls: handleBefore.controls, totalHeat: beforeHeat, totalFeedbackMemory: beforeMemory, emitterPan: beforePan },
-      after: { controls: handleAfter.controls, totalHeat: afterHeat, totalFeedbackMemory: afterMemory, emitterPan: afterPan },
-      materialChanged: Math.abs(beforeHeat - afterHeat) > 0.001 || Math.abs(beforeMemory - afterMemory) > 0.001,
-      spatializationChanged: JSON.stringify(beforePan) !== JSON.stringify(afterPan),
-    };
-    if (!handleEvidence.materialChanged || !handleEvidence.spatializationChanged) {
-      throw new Error(`live handles did not change material and spatial state: ${JSON.stringify(handleEvidence)}`);
-    }
-    await evaluate(ws, `(() => {
-      for (const name of ['coupling', 'memory', 'depth']) {
-        const input = document.getElementById('stage-atoms-' + name);
-        input.value = '1';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    })()`);
-    await delay(160);
+    phase = 'exercise_direct_node_interfaces';
+    const baseline = await readMaterialProbe(ws);
+    const inputNode = baseline.nodeInterfaces.find(node => node.role === 'drive');
+    const outputNode = baseline.nodeInterfaces.find(node => node.role === 'release');
+    if (!inputNode || !outputNode) throw new Error('Input or Output direct node interface missing');
+    const outputNodeIdLiteral = JSON.stringify(outputNode.id);
 
-    phase = 'exercise_reversed_histories';
-    await evaluate(ws, `window.kaminosStageAtomsApplyHistoryPath('A')`);
+    await evaluate(ws, `(() => {
+      window.kaminosStageAtomsResetMaterialState();
+      for (let step = 0; step < 10; step += 1) window.kaminosMaterialCircuitSetNodeControl(${outputNodeIdLiteral}, 1, 'witness-neutral-control-event');
+    })()`);
     await delay(100);
-    const historyA = await evaluate(ws, `(() => ({
-      controls: window.kaminosStageAtomsDebugState.controls,
-      imprint: window.kaminosStageAtomsDebugState.materialHistory.imprint,
-      fields: window.kaminosStageAtomsDebugState.materialFrame.materialAtoms.map(atom => atom.field),
-      flows: window.kaminosStageAtomsDebugState.materialFrame.materialFlows,
-      emitters: window.kaminosStageAtomsDebugState.spatialization.emitters,
-    }))()`);
+    const neutralSettled = await readMaterialProbe(ws);
     await evaluate(ws, `window.kaminosStageAtomsResetMaterialState()`);
-    await evaluate(ws, `window.kaminosStageAtomsApplyHistoryPath('B')`);
-    await delay(100);
-    const historyB = await evaluate(ws, `(() => ({
-      controls: window.kaminosStageAtomsDebugState.controls,
-      imprint: window.kaminosStageAtomsDebugState.materialHistory.imprint,
-      fields: window.kaminosStageAtomsDebugState.materialFrame.materialAtoms.map(atom => atom.field),
-      flows: window.kaminosStageAtomsDebugState.materialFrame.materialFlows,
-      emitters: window.kaminosStageAtomsDebugState.spatialization.emitters,
-    }))()`);
-    const memoryA = historyA.fields.map(field => field.feedbackMemory);
-    const memoryB = historyB.fields.map(field => field.feedbackMemory);
-    const spatialA = historyA.emitters.map(emitter => emitter.send);
-    const spatialB = historyB.emitters.map(emitter => emitter.send);
-    const stateDistance = historyA.fields.reduce((sum, field, index) => (
-      sum + ['excitation', 'feedbackMemory', 'coherence', 'refractory']
-        .reduce((fieldSum, key) => fieldSum + Math.abs(field[key] - historyB.fields[index][key]), 0)
-    ), 0);
-    const spatialDistance = spatialA.reduce((sum, send, index) => (
-      sum + ['direct', 'reverb', 'spread']
-        .reduce((fieldSum, key) => fieldSum + Math.abs(send[key] - spatialB[index][key]), 0)
-    ), 0);
-    historyEvidence = {
-      pathA: { controls: historyA.controls, imprint: historyA.imprint, memory: memoryA, flows: historyA.flows, sends: spatialA },
-      pathB: { controls: historyB.controls, imprint: historyB.imprint, memory: memoryB, flows: historyB.flows, sends: spatialB },
-      identicalFinalControls: JSON.stringify(historyA.controls) === JSON.stringify(historyB.controls),
-      identicalSourceWindow: historyA.imprint.startFeatureIndex === historyB.imprint.startFeatureIndex && historyA.imprint.endFeatureIndex === historyB.imprint.endFeatureIndex,
-      stateDistance,
-      spatialDistance,
-      retainedStateChanged: stateDistance > 0.12 && JSON.stringify(historyA.flows) !== JSON.stringify(historyB.flows),
-      spatializationChanged: spatialDistance > 0.05,
+    await delay(50);
+    await dragNodeControl(ws, inputNode, -90, 10);
+    await delay(120);
+    const inputDriven = await readMaterialProbe(ws);
+    const baselineField = id => neutralSettled.materialAtoms.find(atom => String(atom.id) === String(id)).field;
+    const inputField = id => inputDriven.materialAtoms.find(atom => String(atom.id) === String(id)).field;
+    const inputFlow = inputDriven.materialFlows.find(flow => String(flow.sourceId) === String(inputNode.id));
+    nodeInterfaceEvidence = {
+      roles: Object.fromEntries(baseline.nodeInterfaces.map(node => [node.id, node.role])),
+      selectedNodeId: inputDriven.selectedNodeId,
+      beforeValue: baseline.nodeControls[inputNode.id],
+      afterValue: inputDriven.nodeControls[inputNode.id],
+      interaction: inputDriven.interaction,
+      pointerChangedSelectedControl: String(inputDriven.selectedNodeId) === String(inputNode.id) && inputDriven.nodeControls[inputNode.id] > 1.75,
     };
-    if (!historyEvidence.identicalFinalControls || !historyEvidence.identicalSourceWindow || !historyEvidence.retainedStateChanged || !historyEvidence.spatializationChanged) {
-      throw new Error(`reversed histories collapsed or ended at different controls: ${JSON.stringify(historyEvidence)}`);
+    if (!nodeInterfaceEvidence.pointerChangedSelectedControl || inputDriven.interaction.authority !== 'canvas-node-pointer-drag-current-decoded-frame') {
+      throw new Error(`direct Input contact failed: ${JSON.stringify(nodeInterfaceEvidence)}`);
     }
+    const inputScenarioPng = await captureCredibleScreenshot(ws);
+    mkdirSync(dirname(inputScenarioOutputPath), { recursive: true });
+    writeFileSync(inputScenarioOutputPath, inputScenarioPng);
+    inputScenarioOutputWritten = true;
+
+    await evaluate(ws, `(() => {
+      for (const id of Object.keys(window.kaminosStageAtomsDebugState.nodeControls)) window.kaminosMaterialCircuitSetNodeControl(id, 1, 'witness-reset');
+      window.kaminosStageAtomsResetMaterialState();
+      for (let step = 0; step < 10; step += 1) window.kaminosMaterialCircuitSetNodeControl(${outputNodeIdLiteral}, 1, 'witness-output-neutral-control-event');
+    })()`);
+    await delay(100);
+    const outputNeutralSettled = await readMaterialProbe(ws);
+    await evaluate(ws, `window.kaminosStageAtomsResetMaterialState()`);
+    await delay(50);
+    const resetOutputNode = outputNeutralSettled.nodeInterfaces.find(node => node.role === 'release');
+    await dragNodeControl(ws, resetOutputNode, -90, 10);
+    await delay(120);
+    const outputReleased = await readMaterialProbe(ws);
+    const outputBaselineField = id => outputNeutralSettled.materialAtoms.find(atom => String(atom.id) === String(id)).field;
+    const outputField = id => outputReleased.materialAtoms.find(atom => String(atom.id) === String(id)).field;
+    const baselineOutputSend = outputNeutralSettled.emitters.find(emitter => String(emitter.id) === String(outputNode.id)).send;
+    const releasedOutputSend = outputReleased.emitters.find(emitter => String(emitter.id) === String(outputNode.id)).send;
+    const inputLocalDelta = inputField(inputNode.id).excitation - baselineField(inputNode.id).excitation;
+    const inputDownstreamDelta = inputField(outputNode.id).heat - baselineField(outputNode.id).heat;
+    const outputUpstreamDelta = Math.abs(outputField(inputNode.id).heat - outputBaselineField(inputNode.id).heat);
+    directionalCascadeEvidence = {
+      sourceFeatureIndex: neutralSettled.featureIndex,
+      inputDrivenFeatureIndex: inputDriven.featureIndex,
+      outputNeutralFeatureIndex: outputNeutralSettled.featureIndex,
+      outputReleasedFeatureIndex: outputReleased.featureIndex,
+      inputScenario: {
+        localExcitationDelta: inputLocalDelta,
+        downstreamOutputHeatDelta: inputDownstreamDelta,
+        outgoingFlow: inputFlow,
+      },
+      outputScenario: {
+        upstreamInputHeatDelta: outputUpstreamDelta,
+        outputDirectBefore: baselineOutputSend.direct,
+        outputDirectAfter: releasedOutputSend.direct,
+      },
+      identicalDecodedFrame: neutralSettled.featureIndex === inputDriven.featureIndex && neutralSettled.featureIndex === outputNeutralSettled.featureIndex && neutralSettled.featureIndex === outputReleased.featureIndex,
+      transitionCountMatched: inputDriven.interaction.count - neutralSettled.interaction.count === 10 && outputReleased.interaction.count - outputNeutralSettled.interaction.count === 10,
+      upstreamCascadeChanged: inputLocalDelta > 0.08 && inputDownstreamDelta > 0.025 && inputFlow?.activity > 0.05,
+      downstreamStayedLocal: outputUpstreamDelta < Math.max(0.015, inputLocalDelta * 0.2) && releasedOutputSend.direct > baselineOutputSend.direct + 0.06,
+    };
+    if (!directionalCascadeEvidence.identicalDecodedFrame || !directionalCascadeEvidence.transitionCountMatched || !directionalCascadeEvidence.upstreamCascadeChanged || !directionalCascadeEvidence.downstreamStayedLocal) {
+      throw new Error(`node-local directional cascade failed: ${JSON.stringify(directionalCascadeEvidence)}`);
+    }
+    const outputScenarioPng = await captureCredibleScreenshot(ws);
+    mkdirSync(dirname(outputScenarioOutputPath), { recursive: true });
+    writeFileSync(outputScenarioOutputPath, outputScenarioPng);
+    outputScenarioOutputWritten = true;
 
     phase = 'exercise_audio_handle';
     const playRect = await evaluate(ws, `(() => {
@@ -369,9 +426,7 @@ async function main() {
     if (!audioResponse || audioResponse.status !== 200 || !audioResponse.mimeType.startsWith('audio/')) throw new Error('verified audio network response missing');
 
     phase = 'capture_screenshot';
-    const screenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-    const png = Buffer.from(screenshot.data, 'base64');
-    if (png.byteLength < 4096 || png.readUInt32BE(0) !== 0x89504e47) throw new Error('captured screenshot is not credible PNG evidence');
+    const png = await captureCredibleScreenshot(ws);
     mkdirSync(dirname(outputPath), { recursive: true });
     writeFileSync(outputPath, png);
     primaryOutputWritten = true;

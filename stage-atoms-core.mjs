@@ -149,6 +149,16 @@ function graphAutomationIncoming(node, connections = []) {
   ));
 }
 
+function localControlForNode(node, { feedbackIncoming = false } = {}) {
+  const kind = String(node?.kind || '').toLowerCase();
+  const identity = `${node?.paramKey || ''} ${node?.label || ''} ${node?.id || ''}`.toLowerCase();
+  if (kind === 'audioinput') return { role: 'drive', label: 'Drive', min: 0, max: 2, defaultValue: 1 };
+  if (kind === 'audiooutput') return { role: 'release', label: 'Release', min: 0, max: 2, defaultValue: 1 };
+  if (/cutoff|filter|frequency/.test(identity)) return { role: 'aperture', label: 'Aperture', min: 0, max: 2, defaultValue: 1 };
+  if (feedbackIncoming || /feedback|delay/.test(identity)) return { role: 'recirculation', label: 'Recirculation', min: 0, max: 2, defaultValue: 1 };
+  return { role: 'transfer', label: 'Transfer', min: 0, max: 2, defaultValue: 1 };
+}
+
 function atomFromGraphNode(node, control, graph, index, count, viewport) {
   const id = String(control?.id || control?.paramKey || node?.paramKey || node?.id || `stage-atom-${index}`);
   const confidence = clamp(control?.confidence ?? node?.confidence ?? 1, 0, 1);
@@ -186,6 +196,7 @@ function atomFromGraphNode(node, control, graph, index, count, viewport) {
       coupling: clamp(0.24 + confidence * 0.42 + (feedbackIncoming ? 0.18 : 0), 0, 1),
       propagation: clamp(0.2 + level * 0.1 + latencySamples / 512, 0, 1),
       occlusionSeed: clamp(latencySamples / 512 + (feedbackIncoming ? 0.22 : 0), 0, 1),
+      localControl: localControlForNode(node, { feedbackIncoming }),
     },
   };
 }
@@ -218,6 +229,7 @@ function atomFromControl(control, index, count, viewport) {
       coupling: clamp(0.3 + confidence * 0.4, 0, 1),
       propagation: 0.25,
       occlusionSeed: 0.05,
+      localControl: { role: 'transfer', label: 'Transfer', min: 0, max: 2, defaultValue: 1 },
     },
   };
 }
@@ -273,14 +285,6 @@ function audioFeature(features, key, fallback = 0) {
   return clamp(features?.[key] ?? fallback, 0, 1);
 }
 
-function materialControls(controls = {}) {
-  return {
-    coupling: Number(clamp(controls.coupling ?? 1, 0, 2).toFixed(6)),
-    memory: Number(clamp(controls.memory ?? 1, 0, 2).toFixed(6)),
-    depth: Number(clamp(controls.depth ?? 1, 0, 1.5).toFixed(6)),
-  };
-}
-
 function graphAtomMaps(stage) {
   const atomByGraphId = new Map();
   for (const atom of stage.atoms || []) {
@@ -291,19 +295,27 @@ function graphAtomMaps(stage) {
   return atomByGraphId;
 }
 
+function nodeControlValues(stage, controls = {}) {
+  return Object.fromEntries((stage.atoms || []).map(atom => {
+    const localControl = atom.materialRegion?.localControl || { min: 0, max: 2, defaultValue: 1 };
+    const value = clamp(controls[atom.id] ?? localControl.defaultValue ?? 1, localControl.min ?? 0, localControl.max ?? 2);
+    return [atom.id, Number(value.toFixed(6))];
+  }));
+}
+
 export function simulateStageMaterialFrame(stage, {
   t = 0,
   dt = 0.05,
   audioFeatures = {},
   featureAuthority = 'fixture-audio-features-v0',
   previousMaterialFrame = null,
-  materialControls: requestedMaterialControls = {},
+  nodeControls: requestedNodeControls = {},
 } = {}) {
   const energy = audioFeature(audioFeatures, 'energy');
   const onsetStrength = audioFeature(audioFeatures, 'onsetStrength');
   const recurrenceConfidence = audioFeature(audioFeatures, 'recurrenceConfidence');
   const spectralCentroid = audioFeature(audioFeatures, 'spectralCentroid');
-  const controls = materialControls(requestedMaterialControls);
+  const nodeControls = nodeControlValues(stage, requestedNodeControls);
   const boundedDt = clamp(dt, 0, 0.25);
   const previousAtoms = new Map(
     (previousMaterialFrame?.materialAtoms || []).map(atom => [String(atom.id), atom]),
@@ -322,7 +334,16 @@ export function simulateStageMaterialFrame(stage, {
     const confidence = clamp(atom.confidence, 0, 1);
     const feedbackBoost = atom.graph.feedbackIncoming ? 0.2 : 0;
     const automationBoost = atom.graph.automationIncoming ? 0.12 : 0;
-    const effectiveCoupling = clamp(atom.materialRegion.coupling * controls.coupling, 0, 1.6);
+    const localRole = atom.materialRegion.localControl?.role || 'transfer';
+    const localControlValue = nodeControls[atom.id] ?? 1;
+    const driveGain = localRole === 'drive' ? 0.2 + 0.8 * localControlValue * localControlValue : 1;
+    const apertureGain = localRole === 'aperture' ? clamp(Math.pow(localControlValue, 1.45), 0.04, 1.9) : 1;
+    const recirculationGain = localRole === 'recirculation' ? clamp(0.16 + localControlValue * localControlValue * 0.84, 0.16, 2.8) : 1;
+    const releaseGain = localRole === 'release' ? clamp(0.25 + localControlValue * localControlValue * 0.75, 0.25, 3.25) : 1;
+    const releaseDrain = localRole === 'release' ? clamp(1.25 - localControlValue * 0.25, 0.72, 1.25) : 1;
+    const transferGain = localRole === 'transfer' ? clamp(localControlValue, 0.05, 2) : 1;
+    const effectiveCoupling = clamp(atom.materialRegion.coupling * apertureGain * transferGain, 0, 1.9);
+    const decodedInjection = String(atom.graph.kind).toLowerCase() === 'audioinput' ? 1 : 0.04;
     const previous = previousAtoms.get(String(atom.id));
     const previousField = previous?.field || {};
     let incomingActivity = 0;
@@ -340,8 +361,8 @@ export function simulateStageMaterialFrame(stage, {
     }
 
     const baseExcitation = clamp(
-      energy * (0.28 + effectiveCoupling * 0.46) +
-      onsetStrength * 0.18 +
+      energy * (0.28 + effectiveCoupling * 0.46) * driveGain * decodedInjection +
+      onsetStrength * 0.18 * driveGain * decodedInjection +
       automationBoost,
       0,
       1,
@@ -354,29 +375,29 @@ export function simulateStageMaterialFrame(stage, {
       1,
     );
     const hasHistory = Boolean(previous);
-    const retention = hasHistory ? clamp(0.08 + controls.memory * 0.4, 0.08, 0.88) : 0;
+    const retention = hasHistory ? clamp(0.48 * recirculationGain, 0.04, 0.94) : 0;
     const refractory = hasHistory
       ? clamp(
-        finiteNumber(previousField.refractory) * (0.68 + controls.memory * 0.08) +
+        finiteNumber(previousField.refractory) * 0.76 +
         onsetStrength * 0.16 +
         finiteNumber(previousField.excitation) * 0.1,
         0,
         1,
       )
       : clamp(onsetStrength * 0.16, 0, 1);
-    const routedExcitation = incomingActivity * (0.1 + effectiveCoupling * 0.3) * (0.5 + boundedDt * 10);
+    const routedExcitation = Math.pow(clamp(incomingActivity, 0, 1.5), 1.35) * (0.08 + effectiveCoupling * 0.52) * (0.5 + boundedDt * 10);
     const excitation = clamp(
-      baseExcitation * (1 - retention) +
+      (baseExcitation * (1 - retention) +
       finiteNumber(previousField.excitation) * retention +
       routedExcitation -
-      finiteNumber(previousField.refractory) * 0.07,
+      finiteNumber(previousField.refractory) * 0.07) * releaseDrain,
       0,
       1,
     );
     const feedbackMemory = clamp(
       baseFeedbackMemory * (1 - retention) +
       finiteNumber(previousField.feedbackMemory) * retention +
-      incomingMemory * effectiveCoupling * (atom.graph.feedbackIncoming ? 0.14 : 0.055),
+      incomingMemory * effectiveCoupling * (atom.graph.feedbackIncoming ? 0.14 : 0.055) * recirculationGain,
       0,
       1,
     );
@@ -396,7 +417,8 @@ export function simulateStageMaterialFrame(stage, {
       atom.materialRegion.occlusionSeed +
       spectralCentroid * 0.16 +
       (1 - confidence) * 0.12 +
-      refractory * 0.08,
+      refractory * 0.08 +
+      (localRole === 'aperture' ? (1 - localControlValue) * 0.2 : 0),
       0,
       1,
     );
@@ -421,6 +443,9 @@ export function simulateStageMaterialFrame(stage, {
         coherence: Number(coherence.toFixed(6)),
         refractory: Number(refractory.toFixed(6)),
         incomingFlux: Number(clamp(incomingActivity, 0, 1).toFixed(6)),
+        localControlRole: localRole,
+        localControlValue: Number(localControlValue.toFixed(6)),
+        radiation: Number(releaseGain.toFixed(6)),
       },
     };
   });
@@ -459,7 +484,7 @@ export function simulateStageMaterialFrame(stage, {
     t: finiteNumber(t, 0),
     featureAuthority,
     dt: Number(boundedDt.toFixed(6)),
-    materialControls: controls,
+    nodeControls,
     audioFeatures: {
       energy: Number(energy.toFixed(6)),
       onsetStrength: Number(onsetStrength.toFixed(6)),
@@ -493,7 +518,7 @@ export function spatializeFromStageMaterial(materialFrame, _options = {}) {
     .filter(atom => atom.field.heat > 0.04 || atom.field.feedbackMemory > 0.1)
     .map(atom => {
       const pan = clamp(atom.position[0], -1, 1);
-      const direct = clamp(atom.field.excitation * (1 - atom.field.occlusion * 0.45) * (0.78 + atom.field.coherence * 0.22), 0, 1);
+      const direct = clamp(atom.field.excitation * (1 - atom.field.occlusion * 0.45) * (0.78 + atom.field.coherence * 0.22) * (atom.field.radiation ?? 1), 0, 1);
       const reverb = clamp(0.08 + atom.field.feedbackMemory * 0.48 + atom.field.occlusion * 0.24, 0, 1);
       const spread = clamp(0.18 + atom.field.heat * 0.32 + atom.field.feedbackMemory * 0.24 + atom.field.coherence * 0.18, 0, 1);
       const lowpass = Math.round(18000 - atom.field.occlusion * 9000 - atom.field.feedbackMemory * 1800 - atom.field.refractory * 1200);

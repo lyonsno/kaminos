@@ -1,4 +1,5 @@
 import {
+  buildStageAtoms,
   simulateStageMaterialFrame,
   spatializeFromStageMaterial,
 } from './stage-atoms-core.mjs';
@@ -13,22 +14,12 @@ const context = canvas.getContext('2d');
 const playButton = document.querySelector('#stage-atoms-play');
 const seek = document.querySelector('#stage-atoms-seek');
 const resetButton = document.querySelector('#stage-atoms-reset');
-const historyButtons = {
-  A: document.querySelector('#stage-atoms-history-a'),
-  B: document.querySelector('#stage-atoms-history-b'),
-};
 const stateNode = document.querySelector('#stage-atoms-state');
 const failureNode = document.querySelector('#stage-atoms-failure');
 const sourceAuthorityNode = document.querySelector('[data-stage-source-authority]');
 const routeAuthorityNode = document.querySelector('[data-stage-route-authority]');
 const fallbackAuthorityNode = document.querySelector('[data-stage-fallback-authority]');
 const sourceLink = document.querySelector('#stage-atoms-source-link');
-
-const controls = {
-  coupling: document.querySelector('#stage-atoms-coupling'),
-  memory: document.querySelector('#stage-atoms-memory'),
-  depth: document.querySelector('#stage-atoms-depth'),
-};
 
 const nodes = {
   audioClock: document.querySelector('#stage-atoms-audio-clock'),
@@ -38,6 +29,14 @@ const nodes = {
   onset: document.querySelector('#feature-onset'),
   materialMemory: document.querySelector('#material-memory'),
   materialCoherence: document.querySelector('#material-coherence'),
+  selectedName: document.querySelector('#material-selected-name'),
+  selectedRole: document.querySelector('#material-selected-role'),
+  selectedValue: document.querySelector('#material-selected-value'),
+  selectedMeter: document.querySelector('#material-selected-meter'),
+  selectedExcitation: document.querySelector('#material-selected-excitation'),
+  selectedMemory: document.querySelector('#material-selected-memory'),
+  selectedCoherence: document.querySelector('#material-selected-coherence'),
+  selectedFlux: document.querySelector('#material-selected-flux'),
   time: document.querySelector('#stage-atoms-time'),
   duration: document.querySelector('#stage-atoms-duration'),
 };
@@ -66,7 +65,11 @@ const runtime = {
   frameNumber: 0,
   lastMaterialFeatureIndex: null,
   materialResetCount: 0,
-  historyImprint: null,
+  nodeControlValues: {},
+  selectedNodeId: null,
+  pointerGesture: null,
+  interactionCount: 0,
+  lastInteractionAuthority: null,
   sourceRequested: REPORT_URL,
   sourceEffective: null,
   representativeSelection: null,
@@ -89,14 +92,6 @@ async function sha256Hex(buffer) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function currentMaterialControls() {
-  return {
-    coupling: Number(controls.coupling.value),
-    memory: Number(controls.memory.value),
-    depth: Number(controls.depth.value),
-  };
-}
-
 function featureFrameAt(timeSeconds) {
   if (runtime.frames.length === 0) return null;
   const rate = runtime.report.lastTrustworthyEvidence.audioInput.featureClock.rateHz;
@@ -104,19 +99,13 @@ function featureFrameAt(timeSeconds) {
   return runtime.frames[index];
 }
 
-function depthSpatialization(materialFrame, depth) {
+function depthSpatialization(materialFrame) {
   const spatialization = spatializeFromStageMaterial(materialFrame);
-  spatialization.emitters = spatialization.emitters.map(emitter => ({
-    ...emitter,
-    position: [emitter.position[0] * depth, emitter.position[1], emitter.position[2] * depth],
-    send: { ...emitter.send, pan: Math.max(-1, Math.min(1, emitter.send.pan * depth)) },
-  }));
   return spatialization;
 }
 
 function materialStateAt(timeSeconds, {
   previousMaterialFrame = runtime.materialFrame,
-  materialControls = currentMaterialControls(),
   forceAdvance = false,
 } = {}) {
   const sourceFrame = featureFrameAt(timeSeconds);
@@ -129,34 +118,19 @@ function materialStateAt(timeSeconds, {
       audioFeatures: sourceFrame,
       featureAuthority: FEATURE_AUTHORITY,
       previousMaterialFrame,
-      materialControls,
+      nodeControls: runtime.nodeControlValues,
     })
     : previousMaterialFrame;
-  const spatialization = depthSpatialization(materialFrame, materialControls.depth);
+  const spatialization = depthSpatialization(materialFrame);
   if (shouldAdvance) runtime.lastMaterialFeatureIndex = sourceFrame.index;
   return { sourceFrame, materialFrame, spatialization };
-}
-
-function setControlValues(values) {
-  for (const [name, value] of Object.entries(values)) {
-    controls[name].value = String(value);
-    document.querySelector(`#stage-atoms-${name}-value`).value = Number(value).toFixed(2);
-  }
-}
-
-function setActiveHistory(pathName = null) {
-  for (const [name, button] of Object.entries(historyButtons)) {
-    button.dataset.active = String(name === pathName);
-  }
 }
 
 function resetMaterialState() {
   runtime.materialFrame = null;
   runtime.spatialization = null;
   runtime.lastMaterialFeatureIndex = null;
-  runtime.historyImprint = null;
   runtime.materialResetCount += 1;
-  setActiveHistory();
   if (runtime.status === 'live') {
     const state = materialStateAt(audioClockTime(), { forceAdvance: true });
     runtime.materialFrame = state.materialFrame;
@@ -165,47 +139,21 @@ function resetMaterialState() {
   }
 }
 
-function applyHistoryPath(pathName) {
-  if (runtime.status !== 'live' || !historyButtons[pathName]) return null;
-  const rate = runtime.report.lastTrustworthyEvidence.audioInput.featureClock.rateHz;
-  const phaseA = { coupling: 1.8, memory: 0.2, depth: 1 };
-  const phaseB = { coupling: 0.35, memory: 1.8, depth: 1 };
-  const finalControls = { coupling: 1, memory: 1, depth: 1 };
-  const phases = pathName === 'A' ? [phaseA, phaseB] : [phaseB, phaseA];
-  const sequence = [
-    ...Array.from({ length: 18 }, () => phases[0]),
-    ...Array.from({ length: 18 }, () => phases[1]),
-    ...Array.from({ length: 2 }, () => finalControls),
-  ];
-  const startTime = runtime.representativeSelection?.effectiveTimeSeconds ?? audioClockTime();
-  let previousMaterialFrame = null;
-  let sourceFrame = featureFrameAt(startTime);
-  for (const [step, materialControls] of sequence.entries()) {
-    sourceFrame = featureFrameAt(startTime + step / rate) || sourceFrame;
-    previousMaterialFrame = simulateStageMaterialFrame(runtime.stage, {
-      t: sourceFrame.timeSeconds,
-      dt: 1 / rate,
-      audioFeatures: sourceFrame,
-      featureAuthority: FEATURE_AUTHORITY,
-      previousMaterialFrame,
-      materialControls,
-    });
+function setNodeControl(nodeId, value, interactionAuthority = 'programmatic-node-control') {
+  const atom = runtime.stage?.atoms.find(candidate => String(candidate.id) === String(nodeId));
+  if (!atom) return false;
+  const contract = atom.materialRegion.localControl;
+  runtime.nodeControlValues[atom.id] = Math.max(contract.min, Math.min(contract.max, Number(value)));
+  runtime.selectedNodeId = atom.id;
+  runtime.interactionCount += 1;
+  runtime.lastInteractionAuthority = interactionAuthority;
+  if (runtime.status === 'live') {
+    const state = materialStateAt(audioClockTime(), { forceAdvance: true });
+    runtime.materialFrame = state.materialFrame;
+    runtime.spatialization = state.spatialization;
+    updateAudioSends(state.spatialization);
   }
-  setControlValues(finalControls);
-  runtime.materialFrame = previousMaterialFrame;
-  runtime.spatialization = depthSpatialization(previousMaterialFrame, finalControls.depth);
-  runtime.lastMaterialFeatureIndex = featureFrameAt(startTime).index;
-  runtime.historyImprint = {
-    path: pathName,
-    authority: 'decoded-feature-history-plus-operator-control-order-v0',
-    steps: sequence.length,
-    startFeatureIndex: featureFrameAt(startTime).index,
-    endFeatureIndex: sourceFrame.index,
-    finalControls,
-  };
-  setActiveHistory(pathName);
-  updateAudioSends(runtime.spatialization);
-  return runtime.historyImprint;
+  return true;
 }
 
 function ensureAudioGraph() {
@@ -322,7 +270,7 @@ function stagePoint(position, width, height) {
   const mobile = window.innerWidth <= 820;
   const railSpace = mobile ? 0 : 276;
   const stageWidth = width - railSpace;
-  const depth = Number(controls.depth.value);
+  const depth = 1;
   const stageTop = mobile ? 98 : 72;
   const stageBottom = mobile ? height - 294 : height - 92;
   const stageHeight = Math.max(1, stageBottom - stageTop);
@@ -334,6 +282,38 @@ function stagePoint(position, width, height) {
 
 function atomColor(index) {
   return ['#ff806e', '#77e6d5', '#fff0a8', '#9faf63', '#da8fff'][index % 5];
+}
+
+function atomRadius(atom) {
+  return 24 + atom.field.heat * 72 + atom.field.feedbackMemory * 22;
+}
+
+function nodeInterfaceGeometry() {
+  if (!runtime.materialFrame) return [];
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  return runtime.materialFrame.materialAtoms.map((atom, index) => ({
+    id: atom.id,
+    label: atom.label,
+    role: atom.field.localControlRole,
+    value: runtime.nodeControlValues[atom.id],
+    point: stagePoint(atom.position, width, height),
+    radius: atomRadius(atom),
+    color: atomColor(index),
+  }));
+}
+
+function hitTestStageAtom(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
+  return nodeInterfaceGeometry()
+    .map(node => ({
+      ...node,
+      hitDistance: Math.hypot((x - node.point.x) / Math.max(32, node.radius), (y - node.point.y) / Math.max(24, node.radius * 0.68)),
+    }))
+    .filter(node => node.hitDistance <= 1.15)
+    .sort((a, b) => a.hitDistance - b.hitDistance)[0] || null;
 }
 
 function drawStage(timeSeconds) {
@@ -396,7 +376,10 @@ function drawStage(timeSeconds) {
     const point = stagePoint(atom.position, width, height);
     const color = atomColor(index);
     const heat = atom.field.heat;
-    const radius = 24 + heat * 72 + atom.field.feedbackMemory * 22;
+    const radius = atomRadius(atom);
+    const localValue = runtime.nodeControlValues[atom.id] ?? 1;
+    const selected = String(runtime.selectedNodeId) === String(atom.id);
+    const mobile = window.innerWidth <= 820;
 
     context.save();
     context.translate(point.x, point.y);
@@ -428,15 +411,56 @@ function drawStage(timeSeconds) {
     }
     context.restore();
 
+    const controlRadius = radius + 11;
+    const controlStart = Math.PI * 0.72;
+    const controlSpan = Math.PI * 1.56;
+    const controlEnd = controlStart + controlSpan * (localValue / 2);
+    context.lineWidth = selected ? 4 : 2;
+    context.strokeStyle = 'rgba(245,242,233,0.13)';
+    context.beginPath();
+    context.arc(point.x, point.y, controlRadius, controlStart, controlStart + controlSpan);
+    context.stroke();
+    context.strokeStyle = selected ? '#f5f2e9' : color;
+    context.globalAlpha = selected ? 0.95 : 0.58;
+    context.beginPath();
+    context.arc(point.x, point.y, controlRadius, controlStart, controlEnd);
+    context.stroke();
+    context.fillStyle = selected ? '#f5f2e9' : color;
+    context.beginPath();
+    context.arc(point.x + Math.cos(controlEnd) * controlRadius, point.y + Math.sin(controlEnd) * controlRadius, selected ? 5 : 3.5, 0, Math.PI * 2);
+    context.fill();
+
     context.globalAlpha = 1;
+    const labelX = Math.max(12, Math.min(point.x - radius, width - (mobile ? 118 : 190)));
+    const labelY = point.y + radius * 0.7 + 18;
     context.fillStyle = '#f5f2e9';
     context.font = '600 11px ui-sans-serif, system-ui';
-    context.fillText(atom.label, point.x - radius, point.y + radius * 0.7 + 18);
-    context.fillStyle = '#747c7e';
-    context.font = '9px ui-monospace, monospace';
-    const authorityText = sourceAtom?.materialRegion.bindingAuthority === 'pulp-design-ir-param-key' ? 'DESIGNIR' : 'GRAPH';
-    context.fillText(`${authorityText}  E${atom.field.excitation.toFixed(2)}  M${atom.field.feedbackMemory.toFixed(2)}  C${atom.field.coherence.toFixed(2)}`, point.x - radius, point.y + radius * 0.7 + 32);
+    context.fillText(atom.label, labelX, labelY);
+    context.fillStyle = selected ? '#fff0a8' : color;
+    context.font = '600 9px ui-monospace, monospace';
+    context.fillText(`${atom.field.localControlRole.toUpperCase()} ${localValue.toFixed(2)}`, labelX, labelY + 13);
+    if (!mobile) {
+      context.fillStyle = '#747c7e';
+      context.font = '9px ui-monospace, monospace';
+      const authorityText = sourceAtom?.materialRegion.bindingAuthority === 'pulp-design-ir-param-key' ? 'DESIGNIR' : 'GRAPH';
+      context.fillText(`${authorityText}  E${atom.field.excitation.toFixed(2)}  M${atom.field.feedbackMemory.toFixed(2)}  C${atom.field.coherence.toFixed(2)}`, labelX, labelY + 26);
+    }
   }
+}
+
+function updateSelectedReadout() {
+  const sourceAtom = runtime.stage?.atoms.find(atom => String(atom.id) === String(runtime.selectedNodeId));
+  const materialAtom = runtime.materialFrame?.materialAtoms.find(atom => String(atom.id) === String(runtime.selectedNodeId));
+  if (!sourceAtom || !materialAtom) return;
+  const value = runtime.nodeControlValues[sourceAtom.id] ?? 1;
+  nodes.selectedName.textContent = sourceAtom.label;
+  nodes.selectedRole.textContent = sourceAtom.materialRegion.localControl.label;
+  nodes.selectedValue.textContent = value.toFixed(2);
+  nodes.selectedMeter.style.width = `${value / 2 * 100}%`;
+  nodes.selectedExcitation.textContent = materialAtom.field.excitation.toFixed(2);
+  nodes.selectedMemory.textContent = materialAtom.field.feedbackMemory.toFixed(2);
+  nodes.selectedCoherence.textContent = materialAtom.field.coherence.toFixed(2);
+  nodes.selectedFlux.textContent = materialAtom.field.incomingFlux.toFixed(2);
 }
 
 function updateReadouts(sourceFrame, visualSeconds) {
@@ -450,6 +474,7 @@ function updateReadouts(sourceFrame, visualSeconds) {
   const divisor = Math.max(1, atoms.length);
   nodes.materialMemory.textContent = (atoms.reduce((sum, atom) => sum + atom.field.feedbackMemory, 0) / divisor).toFixed(2);
   nodes.materialCoherence.textContent = (atoms.reduce((sum, atom) => sum + atom.field.coherence, 0) / divisor).toFixed(2);
+  updateSelectedReadout();
   nodes.time.textContent = formatTime(audioTime);
   nodes.duration.textContent = formatTime(runtime.audioBuffer?.duration);
   seek.value = runtime.audioBuffer?.duration ? String(audioTime / runtime.audioBuffer.duration) : '0';
@@ -472,17 +497,27 @@ function publishDebug(sourceFrame, visualSeconds) {
     fallbackAuthority: runtime.fallbackAuthority,
     audioClock: { authority: 'webaudio-context-plus-transport-offset', timeSeconds: audioClockTime(), paused: !runtime.playing },
     simulationClock: { authority: 'request-animation-frame-performance-now', timeSeconds: visualSeconds, frameNumber: runtime.frameNumber },
-    clockBoundary: 'decoded feature frame selected by AudioContext currentTime plus transport offset; render sampled by performance.now()',
+    clockBoundary: 'decoded feature frame selected by AudioContext currentTime plus transport offset; pointer control events advance one bounded transition; render sampled by performance.now()',
     representativeSelection: runtime.representativeSelection,
-    controls: {
-      coupling: Number(controls.coupling.value),
-      memory: Number(controls.memory.value),
-      depth: Number(controls.depth.value),
+    nodeControls: { ...runtime.nodeControlValues },
+    nodeInterfaces: nodeInterfaceGeometry().map(node => ({
+      id: node.id,
+      label: node.label,
+      role: node.role,
+      value: node.value,
+      point: node.point,
+      radius: node.radius,
+      selected: String(node.id) === String(runtime.selectedNodeId),
+    })),
+    selectedNodeId: runtime.selectedNodeId,
+    interaction: {
+      authority: runtime.lastInteractionAuthority,
+      count: runtime.interactionCount,
+      pointerActive: Boolean(runtime.pointerGesture),
     },
     materialHistory: {
       stateAuthority: runtime.materialFrame?.stateAuthority || null,
       resetCount: runtime.materialResetCount,
-      imprint: runtime.historyImprint,
     },
     featureFrame: sourceFrame,
     materialFrame: runtime.materialFrame,
@@ -551,7 +586,14 @@ async function boot() {
   if (report.witness?.materialFrame?.featureAuthority !== FEATURE_AUTHORITY) throw new Error(`feature authority mismatch: ${report.witness?.materialFrame?.featureAuthority}`);
   if (download?.status !== 'downloaded' || !decode?.sha256 || decode.sha256 !== download.sha256) throw new Error('download/decode hash authority mismatch');
   if (!Array.isArray(evidence.audioInput?.frames) || evidence.audioInput.frames.length === 0) throw new Error('decoded feature frames missing');
-  runtime.stage = report.witness.stage;
+  const reportedStage = report.witness.stage;
+  runtime.stage = buildStageAtoms({
+    sourceAccess: reportedStage.sourceAccess,
+    design: reportedStage.sourceDesign,
+    graph: reportedStage.sourceGraph,
+  });
+  runtime.nodeControlValues = Object.fromEntries(runtime.stage.atoms.map(atom => [atom.id, atom.materialRegion.localControl.defaultValue]));
+  runtime.selectedNodeId = runtime.stage.atoms[0]?.id || null;
   runtime.frames = evidence.audioInput.frames;
   runtime.representativeSelection = evidence.featureSelection || null;
   sourceLink.href = report.witness.stage.sourceAccess.sourcePageUrl;
@@ -598,26 +640,49 @@ seek.addEventListener('input', () => {
 });
 
 resetButton.addEventListener('click', resetMaterialState);
-for (const [pathName, button] of Object.entries(historyButtons)) {
-  button.addEventListener('click', () => applyHistoryPath(pathName));
+
+canvas.addEventListener('pointerdown', event => {
+  if (runtime.status !== 'live') return;
+  const hit = hitTestStageAtom(event.clientX, event.clientY);
+  if (!hit) return;
+  runtime.selectedNodeId = hit.id;
+  runtime.pointerGesture = {
+    pointerId: event.pointerId,
+    nodeId: hit.id,
+    startY: event.clientY,
+    startValue: runtime.nodeControlValues[hit.id],
+  };
+  runtime.lastInteractionAuthority = 'canvas-node-pointer-selection';
+  canvas.setPointerCapture(event.pointerId);
+  canvas.style.cursor = 'ns-resize';
+  updateSelectedReadout();
+});
+
+canvas.addEventListener('pointermove', event => {
+  const gesture = runtime.pointerGesture;
+  if (!gesture || gesture.pointerId !== event.pointerId) {
+    canvas.style.cursor = hitTestStageAtom(event.clientX, event.clientY) ? 'ns-resize' : 'default';
+    return;
+  }
+  const value = gesture.startValue + (gesture.startY - event.clientY) / 90;
+  setNodeControl(gesture.nodeId, value, 'canvas-node-pointer-drag-current-decoded-frame');
+});
+
+function finishPointerGesture(event) {
+  if (!runtime.pointerGesture || runtime.pointerGesture.pointerId !== event.pointerId) return;
+  runtime.pointerGesture = null;
+  if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  canvas.style.cursor = 'default';
 }
 
-for (const [name, input] of Object.entries(controls)) {
-  const output = document.querySelector(`#stage-atoms-${name}-value`);
-  input.addEventListener('input', () => {
-    output.value = Number(input.value).toFixed(2);
-    runtime.historyImprint = null;
-    setActiveHistory();
-    if (runtime.status === 'live') {
-      const state = materialStateAt(audioClockTime(), { forceAdvance: true });
-      runtime.materialFrame = state.materialFrame;
-      runtime.spatialization = state.spatialization;
-      updateAudioSends(state.spatialization);
-    }
-  });
-}
+canvas.addEventListener('pointerup', finishPointerGesture);
+canvas.addEventListener('pointercancel', finishPointerGesture);
+canvas.addEventListener('dblclick', event => {
+  const hit = hitTestStageAtom(event.clientX, event.clientY);
+  if (hit) setNodeControl(hit.id, 1, 'canvas-node-double-click-reset');
+});
 
-window.kaminosStageAtomsApplyHistoryPath = applyHistoryPath;
+window.kaminosMaterialCircuitSetNodeControl = setNodeControl;
 window.kaminosStageAtomsResetMaterialState = resetMaterialState;
 
 requestAnimationFrame(frame);

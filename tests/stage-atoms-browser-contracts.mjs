@@ -19,12 +19,11 @@ assert.match(html, /stage-atoms-browser\.mjs/, 'route loads the Stage Atoms runt
 assert.match(html, /id="stage-atoms-canvas"/, 'route exposes the material stage canvas');
 assert.match(html, /id="stage-atoms-play"/, 'route exposes a stable transport handle');
 assert.match(html, /id="stage-atoms-seek"/, 'route exposes an audio-clock seek handle');
-assert.match(html, /id="stage-atoms-coupling"/, 'route exposes an interior coupling handle');
-assert.match(html, /id="stage-atoms-memory"/, 'route exposes a recurrence-memory handle');
-assert.match(html, /id="stage-atoms-depth"/, 'route exposes a spatial-depth handle');
 assert.match(html, /id="stage-atoms-reset"/, 'route exposes a retained-state reset handle');
-assert.match(html, /id="stage-atoms-history-a"/, 'route exposes history A as an operator handle');
-assert.match(html, /id="stage-atoms-history-b"/, 'route exposes history B as an operator handle');
+assert.match(html, /id="material-selected-name"/, 'rail identifies the directly selected material region');
+assert.match(html, /id="material-selected-role"/, 'rail receipts the selected node-local control role');
+assert.match(html, /id="material-selected-value"/, 'rail receipts the selected node-local control value');
+assert.doesNotMatch(html, /id="stage-atoms-(coupling|memory|depth|history-a|history-b)"/, 'global performance controls no longer hide causal ownership in the rail');
 assert.match(html, /id="material-memory"/, 'route exposes retained regional memory beside decoded drive');
 assert.match(html, /id="material-coherence"/, 'route exposes population coherence beside decoded drive');
 assert.match(html, /data-stage-source-authority/, 'operator surface exposes source authority');
@@ -36,8 +35,13 @@ assert.match(source, /coruscate-geppetto-dry-main\.mp3/, 'browser consumes the l
 assert.match(source, /simulateStageMaterialFrame/, 'browser derives current material state from Stage Atoms');
 assert.match(source, /previousMaterialFrame/, 'browser advances from retained material state instead of recomputing stateless frames');
 assert.match(source, /materialFlows/, 'browser renders activity from lawful Pulp-routed material transfer');
-assert.match(source, /applyHistoryPath/, 'browser provides reproducible reversed histories at identical final controls');
 assert.match(source, /resetMaterialState/, 'browser lets the operator clear retained organization explicitly');
+assert.match(source, /nodeControlValues/, 'browser owns explicit per-node control state');
+assert.match(source, /nodeControls/, 'browser passes per-node controls into the material transition');
+assert.match(source, /hitTestStageAtom/, 'browser resolves direct canvas contact to one material region');
+assert.match(source, /pointerdown/, 'material regions accept direct pointer contact');
+assert.match(source, /pointermove/, 'vertical material-region gestures change the local control');
+assert.match(source, /setPointerCapture/, 'direct manipulation remains stable while the pointer leaves the body');
 assert.match(source, /spatializeFromStageMaterial/, 'browser derives audio placement from current material state');
 assert.match(source, /decodeAudioData/, 'browser decodes the verified source bytes into its live audio clock substrate');
 assert.match(source, /createBufferSource/, 'browser transport uses recreatable WebAudio buffer sources');
@@ -61,8 +65,12 @@ assert.match(witness, /activePixels/, 'witness rejects a visually blank material
 assert.match(witness, /controlBounds/, 'witness rejects controls clipped outside their rail or viewport');
 assert.match(witness, /fallbackAuthority/, 'witness rejects hidden fallback authority');
 assert.match(witness, /outputRms/, 'witness requires measurable post-spatialization output');
-assert.match(witness, /handleEvidence/, 'witness proves live handles change material and spatial state');
-assert.match(witness, /historyEvidence/, 'witness rejects collapse between reversed histories at identical final controls');
+assert.match(witness, /nodeInterfaceEvidence/, 'witness proves direct node contact changes the selected local control');
+assert.match(witness, /directionalCascadeEvidence/, 'witness distinguishes upstream cascade effects from downstream-local effects');
+assert.match(witness, /JSON\.stringify\(outputNode\.id\)/, 'witness serializes Pulp-derived node IDs before CDP evaluation');
+assert.doesNotMatch(witness, /SetNodeControl\('\$\{outputNode\.id\}'/, 'witness never interpolates a Pulp-derived node ID as raw JavaScript');
+assert.match(witness, /inputScenarioOutputWritten/, 'witness preserves the upstream-driven comparison frame separately');
+assert.match(witness, /outputScenarioOutputWritten/, 'witness preserves the downstream-local comparison frame at the same decoded state');
 assert.match(witness, /primaryOutputWritten/, 'witness records whether its screenshot landed');
 assert.match(witness, /effectiveUrl/, 'witness records the effective browser route');
 
