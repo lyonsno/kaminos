@@ -167,10 +167,12 @@ export function assessMinimumRadiusMaturityCandidate({ current: currentValue, pr
   const liveVoxels = Number(current.support.liveVoxels || 0);
   const smokeWeight = Number(current.support.smokeWeight || 0);
   const rise = Number(current.support.smokeVisualRiseDisplacement || 0);
+  const lateral = Number(current.support.smokeVisualLateralDisplacement || 0);
   const reasons = [];
   if (litFraction <= 0.001 || smokeFraction <= 0.001) reasons.push('blank-render');
   if (!(liveVoxels > 0) || !(smokeWeight > 0)) reasons.push('missing-smoke-support');
   if (!(rise >= 0.2)) reasons.push('insufficient-rise');
+  if (!(lateral >= 0.08)) reasons.push('insufficient-lateral-support');
   if (!previous) reasons.push('missing-adjacent-predecessor');
   if (previous && current.simStepCount !== previous.simStepCount + 1) reasons.push('non-adjacent-steps');
   if (previous && current.render.sha256 === previous.render.sha256) reasons.push('static-render');
@@ -189,7 +191,7 @@ export function assessMinimumRadiusMaturityCandidate({ current: currentValue, pr
     reasons,
     previous,
     current,
-    metrics: { litFraction, smokeFraction, liveVoxels, smokeWeight, rise, liveDeltaFraction, smokeDeltaFraction },
+    metrics: { litFraction, smokeFraction, liveVoxels, smokeWeight, rise, lateral, liveDeltaFraction, smokeDeltaFraction },
   };
 }
 

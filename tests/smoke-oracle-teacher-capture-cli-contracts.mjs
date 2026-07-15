@@ -150,4 +150,16 @@ assert.match(
   'complete host-decoded RGBA typed arrays must not be rejected merely because CDP pixels formerly arrived as JSON arrays',
 );
 
+assert.match(
+  source,
+  /--attach-without-navigate/,
+  'a visually rejected maturity candidate must continue from the same proven browser state instead of resetting the simulator',
+);
+
+assert.match(
+  source,
+  /same-browser-no-navigation-continuation-v0/,
+  'continued maturity search must record explicit non-navigation state authority',
+);
+
 console.log('smoke oracle teacher capture CLI contracts passed');

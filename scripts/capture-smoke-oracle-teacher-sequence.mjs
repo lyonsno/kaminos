@@ -153,6 +153,7 @@ function compactReadinessExpression() {
       height: state.height,
       frameCount: state.frameCount,
       simStepCount: state.simStepCount,
+      renderPhaseTimeMs: state.renderPhaseTimeMs,
       frameSubmissionAuthority: state.frameSubmissionAuthority,
       error: state.error || null
     };
@@ -275,6 +276,8 @@ function measureRgbaFrame({ width, height, rgba }) {
   let totalLuma = 0;
   let minSmokeY = height;
   let maxSmokeY = -1;
+  let minSmokeX = width;
+  let maxSmokeX = -1;
   for (let pixel = 0; pixel < width * height; pixel += 1) {
     const offset = pixel * 4;
     const r = rgba[offset];
@@ -286,8 +289,11 @@ function measureRgbaFrame({ width, height, rgba }) {
     if (b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60) {
       smokeLikePixels += 1;
       const y = Math.floor(pixel / width);
+      const x = pixel % width;
       minSmokeY = Math.min(minSmokeY, y);
       maxSmokeY = Math.max(maxSmokeY, y);
+      minSmokeX = Math.min(minSmokeX, x);
+      maxSmokeX = Math.max(maxSmokeX, x);
     }
   }
   return {
@@ -298,7 +304,9 @@ function measureRgbaFrame({ width, height, rgba }) {
       minY: smokeLikePixels ? minSmokeY : 0,
       maxY: smokeLikePixels ? maxSmokeY : 0,
       height: smokeLikePixels ? maxSmokeY - minSmokeY + 1 : 0,
+      width: smokeLikePixels ? maxSmokeX - minSmokeX + 1 : 0,
       verticalFillRatio: smokeLikePixels ? (maxSmokeY - minSmokeY + 1) / height : 0,
+      horizontalFillRatio: smokeLikePixels ? (maxSmokeX - minSmokeX + 1) / width : 0,
       pixelCount: smokeLikePixels,
     },
   };
@@ -390,7 +398,10 @@ async function captureTeacherFrameSample(ws, {
   sequenceStartNowMs,
 }) {
   if (teacherContract) {
-    const requestedNow = Number.isFinite(Number(sequenceStartNowMs))
+    const hasSequenceStart = sequenceStartNowMs !== null
+      && sequenceStartNowMs !== undefined
+      && Number.isFinite(Number(sequenceStartNowMs));
+    const requestedNow = hasSequenceStart
       ? Number(sequenceStartNowMs) + frameIndex * stepDeltaMs
       : null;
     const submission = await evaluate(ws, `window.__kaminosVolumePrototype.submitNativeTeacherFrameToCanvas(${JSON.stringify({
@@ -419,7 +430,7 @@ async function captureTeacherFrameSample(ws, {
     const metrics = measureRgbaFrame(decoded);
     const majorantReadback = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleMajorantReadback()');
     const sessionId = sameBrowserSessionId || `native-canvas-${Date.now()}`;
-    const startNow = Number.isFinite(Number(sequenceStartNowMs)) ? Number(sequenceStartNowMs) : submission.sampleNowMs;
+    const startNow = hasSequenceStart ? Number(sequenceStartNowMs) : submission.sampleNowMs;
     return {
       sample: {
         ...submission,
@@ -533,6 +544,7 @@ const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Co
 const userDataDir = resolve(String(args.get('--user-data-dir') || `/tmp/kaminos-smoke-oracle-teacher-profile-${port}`));
 const keepBrowserOpen = args.has('--keep-browser-open');
 const reuseBrowser = args.has('--reuse-browser');
+const attachWithoutNavigate = args.has('--attach-without-navigate');
 const controlledStep = !args.has('--no-controlled-step');
 const probeUntilMature = args.has('--probe-until-mature');
 const heldManifestPath = args.get('--held-manifest') ? resolve(String(args.get('--held-manifest'))) : null;
@@ -558,6 +570,12 @@ if (probeUntilMature && !teacherContract) {
 }
 if (probeUntilMature && frames < 2) {
   throw new Error('--probe-until-mature requires at least two adjacent teacher frames');
+}
+if (attachWithoutNavigate && !reuseBrowser) {
+  throw new Error('--attach-without-navigate requires --reuse-browser and a proven existing CDP target');
+}
+if (attachWithoutNavigate && !teacherContract) {
+  throw new Error('--attach-without-navigate requires --held-manifest so continued state cannot detach from source authority');
 }
 
 const captureRouteUrl = new URL(requestedRoute);
@@ -603,6 +621,8 @@ const report = {
   userDataDir,
   keepBrowserOpen,
   reuseBrowser,
+  attachWithoutNavigate,
+  continuationAuthority: attachWithoutNavigate ? 'same-browser-no-navigation-continuation-v0' : null,
   createdAt: new Date().toISOString(),
 };
 await writeJson(reportPath, report);
@@ -667,9 +687,15 @@ try {
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await updateReportPhase('page-navigate');
-  await wsRequest(ws, 'Page.navigate', { url });
-  if (!reuseBrowser) await wsRequest(ws, 'Page.bringToFront');
+  if (attachWithoutNavigate) {
+    await updateReportPhase('page-attach-without-navigation', {
+      continuationPageUrl: page.url,
+    });
+  } else {
+    await updateReportPhase('page-navigate');
+    await wsRequest(ws, 'Page.navigate', { url });
+    if (!reuseBrowser) await wsRequest(ws, 'Page.bringToFront');
+  }
   await updateReportPhase('route-settle');
   await delay(settleMs);
   await updateReportPhase('route-readiness');
@@ -688,8 +714,9 @@ try {
       && state.effectiveRoute === 'native-3d-compute-fluid-raymarch-v0';
     const captureHoldActive = teacherContract
       && state.frameSubmissionAuthority === 'capture-hold-explicit-step-v0'
-      && state.frameCount === 0
-      && state.simStepCount === 0;
+      && (attachWithoutNavigate
+        ? state.frameCount >= state.simStepCount && state.simStepCount > 0
+        : state.frameCount === 0 && state.simStepCount === 0);
     const autonomousRouteActive = !teacherContract
       && state.width > 0
       && state.height > 0
@@ -697,6 +724,17 @@ try {
     if (routeActive && (captureHoldActive || autonomousRouteActive)) break;
     await delay(250);
     if (attempt === 119) throw new Error(`native volume route did not become active: ${JSON.stringify(lastReadinessState)}`);
+  }
+
+  if (attachWithoutNavigate) {
+    report.continuationFrom = {
+      authority: 'same-browser-no-navigation-continuation-v0',
+      pageUrl: page.url,
+      frameCount: lastReadinessState.frameCount,
+      simStepCount: lastReadinessState.simStepCount,
+      renderPhaseTimeMs: lastReadinessState.renderPhaseTimeMs,
+    };
+    await writeJson(reportPath, report);
   }
 
   if (teacherContract) {
@@ -816,8 +854,8 @@ try {
   }
 
   let sameBrowserSessionId = null;
-  let sequenceStartNowMs = null;
-  let sequenceFrameIndex = 0;
+  let sequenceStartNowMs = attachWithoutNavigate ? report.continuationFrom.renderPhaseTimeMs : null;
+  let sequenceFrameIndex = attachWithoutNavigate ? 1 : 0;
   let firstCaptured = null;
   let firstCapturedImage = null;
   if (probeUntilMature) {
@@ -853,6 +891,7 @@ try {
           liveVoxels: sample.majorantReadback?.occupiedBricks,
           smokeWeight: Number(sample.majorantReadback?.extinctionMean || 0) * Number(sample.majorantReadback?.bricks || 0),
           smokeVisualRiseDisplacement: sample.smokeBounds?.verticalFillRatio,
+          smokeVisualLateralDisplacement: sample.smokeBounds?.horizontalFillRatio,
         },
       };
       const assessment = assessMinimumRadiusMaturityCandidate({ current: currentProbe, previous: previousProbe });

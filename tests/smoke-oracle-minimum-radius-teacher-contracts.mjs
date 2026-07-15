@@ -90,17 +90,24 @@ const candidate = assessMinimumRadiusMaturityCandidate({
   previous: {
     simStepCount: 104,
     render: { width: 640, height: 455, litPixels: 22000, smokeLikePixels: 11000, sha256: 'sha256:' + '2'.repeat(64) },
-    support: { liveVoxels: 44000, smokeWeight: 12000, smokeVisualRiseDisplacement: 0.48 },
+    support: { liveVoxels: 44000, smokeWeight: 12000, smokeVisualRiseDisplacement: 0.48, smokeVisualLateralDisplacement: 0.14 },
   },
   current: {
     simStepCount: 105,
     render: { width: 640, height: 455, litPixels: 22400, smokeLikePixels: 11400, sha256: 'sha256:' + '3'.repeat(64) },
-    support: { liveVoxels: 44800, smokeWeight: 12300, smokeVisualRiseDisplacement: 0.5 },
+    support: { liveVoxels: 44800, smokeWeight: 12300, smokeVisualRiseDisplacement: 0.5, smokeVisualLateralDisplacement: 0.15 },
   },
 });
 assert.equal(candidate.candidate, true);
 assert.equal(candidate.admitted, false, 'machine maturity can nominate but cannot visually admit a teacher');
 assert.equal(candidate.requiresVisualDisposition, true);
+
+const startupColumn = assessMinimumRadiusMaturityCandidate({
+  previous: { ...candidate.previous, support: { ...candidate.previous.support, smokeVisualLateralDisplacement: 0.03 } },
+  current: { ...candidate.current, support: { ...candidate.current.support, smokeVisualLateralDisplacement: 0.035 } },
+});
+assert.equal(startupColumn.candidate, false, 'a tall but narrow startup column is not a mature plume');
+assert.ok(startupColumn.reasons.includes('insufficient-lateral-support'));
 
 assert.throws(
   () => admitMinimumRadiusTeacherWindow({ contract, frames: [candidate.previous, candidate.current] }),
