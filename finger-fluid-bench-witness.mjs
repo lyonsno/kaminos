@@ -10,6 +10,7 @@ const url = args.get('--url') || 'http://127.0.0.1:8100/index.html?kaminos_finge
 const out = resolve(args.get('--out') || '/tmp/kaminos-finger-fluid-bench.png');
 const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json'));
 const canvasOut = resolve(args.get('--canvas-out') || out.replace(/\.png$/i, '.canvas.png'));
+const preContactOut = resolve(args.get('--pre-contact-out') || out.replace(/\.png$/i, '.pre-contact.png'));
 const port = Number(args.get('--debug-port') || 9493);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-finger-fluid-bench-profile-${port}-${process.pid}`;
@@ -17,6 +18,7 @@ const viewportWidth = Number(args.get('--viewport-width') || 1800);
 const viewportHeight = Number(args.get('--viewport-height') || 1120);
 const deviceScaleFactor = Number(args.get('--device-scale-factor') || 1);
 const settleMs = Number(args.get('--settle-ms') || 10000);
+const preContactSettleMs = Number(args.get('--pre-contact-settle-ms') || 3800);
 const hookWaitMs = Number(args.get('--hook-wait-ms') || Math.max(settleMs, 15000));
 const cadenceMs = Number(args.get('--cadence-ms') || 4200);
 
@@ -30,6 +32,10 @@ let cadenceProbe = null;
 let automaticDiagnosticsRequestCount = null;
 let explicitDiagnosticsReceipt = null;
 let compositionWitness = null;
+let cameraWitness = null;
+let preContactWitness = null;
+let preContactVolumeSample = null;
+let preContactComposedSample = null;
 const consoleEvents = [];
 
 function delay(ms) {
@@ -46,6 +52,7 @@ function writeReport(report = {}) {
     userDataDir,
     viewport: { width: viewportWidth, height: viewportHeight, deviceScaleFactor },
     settleMs,
+    preContactSettleMs,
     hookWaitMs,
     cadenceWindowMs: cadenceMs,
     failure_phase: phase,
@@ -59,7 +66,12 @@ function writeReport(report = {}) {
     automaticDiagnosticsRequestCount,
     explicitDiagnosticsReceipt,
     compositionWitness,
+    cameraWitness,
+    preContactWitness,
+    preContactVolumeSample,
+    preContactComposedSample,
     canvasOut,
+    preContactOut,
     output: primaryOutputWritten ? out : null,
     ...report,
   }, null, 2));
@@ -164,6 +176,9 @@ async function main() {
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-extensions',
+    '--disable-background-timer-throttling',
+    '--disable-renderer-backgrounding',
+    '--disable-backgrounding-occluded-windows',
     `--window-size=${viewportWidth},${viewportHeight}`,
     'about:blank',
   ], { stdio: ['ignore', 'ignore', 'pipe'] });
@@ -209,6 +224,156 @@ async function main() {
       if (lastDebugState?.schema === 'kaminos.finger-fluid-bench.state.v0' && lastDebugState.status !== 'loading') break;
       await delay(250);
     }
+    if (lastDebugState?.status === 'loading') {
+      throw new Error(`finger fluid bench remained loading after ${hookWaitMs}ms`);
+    }
+    if (lastDebugState?.schema !== 'kaminos.finger-fluid-bench.state.v0') {
+      throw new Error(`finger fluid bench debug hook did not become authoritative: ${JSON.stringify(lastDebugState)}`);
+    }
+
+    if (new URL(url).searchParams.get('finger_fluid_pyro_composition') === '1') {
+      phase = 'capture_pre_contact_composition';
+      await delay(preContactSettleMs);
+      const preContactDeadline = Date.now() + hookWaitMs;
+      while (Date.now() < preContactDeadline) {
+        preContactWitness = await evaluate(ws, `(async () => {
+          if (typeof window.kaminosFingerFluidPyroCompositionSample !== 'function') return null;
+          return window.kaminosFingerFluidPyroCompositionSample();
+        })()`);
+        const volume = preContactWitness?.volume;
+        if (
+          preContactWitness?.contactPhase === 'uncoupled-observation'
+          && volume?.active === true
+          && Number(volume?.frameCount || 0) >= 2
+          && volume?.selectiveHeadLivePassReceipt?.raymarchApplied === true
+          && volume?.selectiveHeadLivePassReceipt?.splatApplied === true
+        ) break;
+        await delay(50);
+      }
+      if (preContactWitness?.contactPhase !== 'uncoupled-observation') {
+        throw new Error(`pre-contact witness missed the uncoupled observation phase: ${preContactWitness?.contactPhase}`);
+      }
+      if (preContactWitness?.contactTransferEnabled !== false || preContactWitness?.volume?.liquidFireContactTransferEnabled !== false) {
+        throw new Error('pre-contact witness observed an open liquid/fire transfer gate');
+      }
+      const preContactVolume = preContactWitness?.volume;
+      if (preContactVolume?.boundarySplatMode !== 'learned') {
+        throw new Error(`learned boundary-splat route was not effective: ${preContactVolume?.boundarySplatMode}`);
+      }
+      if (preContactVolume?.boundarySplatRendererIdentity !== 'live-boundary-sidecar-learned-attribute-splats-v0') {
+        throw new Error(`wrong boundary-splat renderer identity: ${preContactVolume?.boundarySplatRendererIdentity}`);
+      }
+      if (preContactVolume?.selectiveHeadLiveEffectiveRole !== 'truthHigh') {
+        throw new Error(`current live-field render authority was not effective: ${preContactVolume?.selectiveHeadLiveEffectiveRole}`);
+      }
+      if (preContactVolume?.selectiveHeadLiveCompositionEffective !== 'smoke-raymarch-under-splats-v0') {
+        throw new Error(`live renderer composition was not effective: ${preContactVolume?.selectiveHeadLiveCompositionEffective}`);
+      }
+      if (
+        preContactVolume?.selectiveHeadLivePassReceipt?.raymarchApplied !== true
+        || preContactVolume?.selectiveHeadLivePassReceipt?.splatApplied !== true
+        || preContactVolume?.selectiveHeadLivePassReceipt?.fallbackReason
+      ) {
+        throw new Error(`live renderer pass receipt is not authoritative: ${JSON.stringify(preContactVolume?.selectiveHeadLivePassReceipt)}`);
+      }
+      preContactVolumeSample = await evaluate(ws, `(async () => {
+        if (typeof window.kaminosFingerFluidPyroVolumeSample !== 'function') throw new Error('missing explicit Pyro volume sample hook');
+        const sample = await window.kaminosFingerFluidPyroVolumeSample();
+        return {
+          ok: sample.ok,
+          volumeScene: sample.volumeScene,
+          frameCount: sample.frameCount,
+          simStepCount: sample.simStepCount,
+          fireBounds: sample.fireBounds,
+          fireLumaMean: sample.fireLumaMean,
+          fireEdgeEnergy: sample.fireEdgeEnergy,
+          lastFrameEnergy: sample.lastFrameEnergy,
+          simReadback: {
+            samples: sample.simReadback?.samples,
+            densityMean: sample.simReadback?.densityMean,
+            densityMax: sample.simReadback?.densityMax,
+            heatMean: sample.simReadback?.heatMean,
+            fuelMean: sample.simReadback?.fuelMean,
+            reactionMean: sample.simReadback?.reactionMean,
+            fireLayerMean: sample.simReadback?.fireLayerMean,
+            combustionFrontMean: sample.simReadback?.combustionFrontMean,
+            radianceMean: sample.simReadback?.radianceMean,
+            extinctionMean: sample.simReadback?.extinctionMean,
+            fireRisingBodyRatio: sample.simReadback?.fireRisingBodyRatio,
+          },
+          majorantReadback: sample.majorantReadback,
+        };
+      })()`);
+      preContactComposedSample = await evaluate(ws, `(async () => {
+        const prototype = window.__kaminosVolumePrototype;
+        if (typeof prototype?.captureSelectiveHeadLiveFrame !== 'function') {
+          throw new Error('missing composed-frame Pyro witness hook');
+        }
+        const frame = await prototype.captureSelectiveHeadLiveFrame({
+          advanceSim: false,
+          presentToCanvas: false,
+          frameIndex: 0,
+        });
+        try {
+          if (frame?.ok !== true || !Array.isArray(frame?.rgba)) {
+            throw new Error('composed-frame Pyro readback failed: ' + (frame?.reason || 'missing rgba'));
+          }
+          let minX = frame.width;
+          let minY = frame.height;
+          let maxX = -1;
+          let maxY = -1;
+          let pixelCount = 0;
+          let sumX = 0;
+          let sumY = 0;
+          for (let y = 0; y < frame.height; y += 1) {
+            for (let x = 0; x < frame.width; x += 1) {
+              const offset = (y * frame.width + x) * 4;
+              const r = frame.rgba[offset] / 255;
+              const g = frame.rgba[offset + 1] / 255;
+              const b = frame.rgba[offset + 2] / 255;
+              const a = frame.rgba[offset + 3] / 255;
+              const luma = r * 0.2126 + g * 0.7152 + b * 0.0722;
+              const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+              const luminousFire = a > 0.04 && luma > 0.46 && (Math.max(r, b) > 0.62 || chroma > 0.18);
+              if (!luminousFire) continue;
+              minX = Math.min(minX, x);
+              minY = Math.min(minY, y);
+              maxX = Math.max(maxX, x);
+              maxY = Math.max(maxY, y);
+              pixelCount += 1;
+              sumX += x;
+              sumY += y;
+            }
+          }
+          const composedFireBounds = pixelCount > 0 ? {
+            minX, minY, maxX, maxY, pixelCount,
+            width: maxX - minX + 1,
+            height: maxY - minY + 1,
+            centerX: sumX / pixelCount,
+            centerY: sumY / pixelCount,
+          } : { minX: 0, minY: 0, maxX: -1, maxY: -1, pixelCount: 0, width: 0, height: 0, centerX: null, centerY: null };
+          return {
+            ok: true,
+            imageAuthority: frame.imageAuthority,
+            width: frame.width,
+            height: frame.height,
+            simStepCount: frame.simStepCount,
+            composedFireClassifier: 'luminous-composed-smoke-plus-learned-splat-fire-v0',
+            composedFireBounds,
+            passReceipt: frame.selectiveHeadLivePassReceipt,
+          };
+        } finally {
+          prototype.setSelectiveHeadLiveCapturePaused(false);
+        }
+      })()`);
+      const preContactScreenshot = await wsRequest(ws, 'Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+      mkdirSync(dirname(preContactOut), { recursive: true });
+      writeFileSync(preContactOut, Buffer.from(preContactScreenshot.data, 'base64'));
+      const composedFireBounds = preContactComposedSample?.composedFireBounds;
+      if (!(composedFireBounds?.pixelCount > 80) || !(composedFireBounds?.height > 40)) {
+        throw new Error(`tall-plume pre-contact composed fire footprint is not material: ${JSON.stringify(composedFireBounds)}; raymarch-only bounds ${JSON.stringify(preContactVolumeSample?.fireBounds)}; simulator fire support ${preContactVolumeSample?.simReadback?.fireLayerMean}`);
+      }
+    }
 
     await delay(settleMs);
 
@@ -233,6 +398,29 @@ async function main() {
 
     if (new URL(url).searchParams.get('finger_fluid_pyro_composition') === '1') {
       phase = 'read_liquid_fire_composition';
+      cameraWitness = await evaluate(ws, `(() => {
+        const read = window.kaminosFingerFluidCompositionCameraState;
+        const surface = document.querySelector('#finger-fluid-bench-operator-panel #kaminos-volume-canvas.active');
+        if (typeof read !== 'function') throw new Error('missing composition camera witness hook');
+        if (!surface) throw new Error('missing active topmost Pyro composition canvas');
+        const before = read();
+        surface.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 41, clientX: 520, clientY: 420 }));
+        surface.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 41, clientX: 590, clientY: 455 }));
+        surface.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 41, clientX: 590, clientY: 455 }));
+        surface.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 180 }));
+        const after = read();
+        return {
+          surface: 'topmost-pyro-composition-canvas',
+          before,
+          after,
+          orbitChanged: before.yaw !== after.yaw && before.pitch !== after.pitch,
+          zoomChanged: before.distance !== after.distance,
+          targetUnchanged: JSON.stringify(before.target) === JSON.stringify(after.target),
+        };
+      })()`);
+      if (cameraWitness?.orbitChanged !== true) throw new Error('composition camera orbit input produced no yaw/pitch delta');
+      if (cameraWitness?.zoomChanged !== true) throw new Error('composition camera wheel input produced no distance delta');
+      if (cameraWitness?.targetUnchanged !== true) throw new Error('composition camera orbit/zoom path unexpectedly panned its target');
       const compositionDeadline = Date.now() + 5000;
       while (Date.now() < compositionDeadline) {
         compositionWitness = await evaluate(ws, `(async () => {
@@ -254,6 +442,12 @@ async function main() {
       }
       if (compositionWitness?.effectiveRoute !== 'same-device-liquid-contact-pyro-near-field-v0') {
         throw new Error(`liquid/fire effective route mismatch: ${compositionWitness?.effectiveRoute}`);
+      }
+      if (compositionWitness?.requestedVolumeScene !== 'tall_plume') throw new Error(`liquid/fire requested volume scene mismatch: ${compositionWitness?.requestedVolumeScene}`);
+      if (compositionWitness?.effectiveVolumeScene !== 'tall_plume') throw new Error(`liquid/fire effective volume scene mismatch: ${compositionWitness?.effectiveVolumeScene}`);
+      if (!(compositionWitness?.uncoupledFrameCount > 0)) throw new Error('liquid/fire composition recorded no uncoupled observation frames');
+      if (!(compositionWitness?.observedContactDelayMs >= compositionWitness?.contactDelayMs)) {
+        throw new Error(`liquid/fire contact gate opened prematurely: ${JSON.stringify({ observedContactDelayMs: compositionWitness?.observedContactDelayMs, contactDelayMs: compositionWitness?.contactDelayMs })}`);
       }
       if (compositionWitness?.sameDevice !== true) throw new Error('liquid/fire composition did not preserve the same GPUDevice');
       if (compositionWitness?.source !== 'kaminos.liquid-fire-contact-descriptor.v1') throw new Error(`liquid/fire composition source schema mismatch: ${compositionWitness?.source}`);
@@ -582,11 +776,13 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  writeReport({
-    ok: false,
-    error: error.message || String(error),
+main()
+  .then(() => process.exit(0))
+  .catch(error => {
+    writeReport({
+      ok: false,
+      error: error.message || String(error),
+    });
+    console.error(error);
+    process.exit(1);
   });
-  console.error(error);
-  process.exitCode = 1;
-});
