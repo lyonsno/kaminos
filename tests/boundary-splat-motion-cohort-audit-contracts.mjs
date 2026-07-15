@@ -128,6 +128,18 @@ assert.equal(
   'function',
   'audit must validate motion-emphasis witness authority before completion',
 );
+assert.equal(
+  typeof cohortAudit.motionWitnessModeContract,
+  'function',
+  'witness mode contract must keep raw receipts and guide semantics out of legacy output',
+);
+const legacyModeContract = cohortAudit.motionWitnessModeContract('motion-cohort', 9);
+assert.equal(legacyModeContract.includeControlFrameIdentity, false);
+assert.match(legacyModeContract.guideControlDescription, /copied-current/i);
+const rawModeContract = cohortAudit.motionWitnessModeContract('raw-product-view', 9);
+assert.equal(rawModeContract.includeControlFrameIdentity, true);
+assert.match(rawModeContract.guideControlDescription, /frozen/i);
+assert.match(rawModeContract.guideControlDescription, /9/);
 const validWitness = {
   schema: 'kaminos-boundary-splat-motion-cohort-witness-v0',
   status: 'completed',
@@ -163,6 +175,41 @@ const validWitness = {
   },
 };
 assert.doesNotThrow(() => cohortAudit.validateMotionCohortWitness(validWitness));
+const rawProductWitness = structuredClone(validWitness);
+rawProductWitness.emphasis = {
+  authority: 'raw-product-view-no-cohort-attenuation-v0',
+  staticCohorts: [],
+  motionCohorts: [],
+  staticAttenuation: 1,
+  unmatchedAttenuation: 1,
+};
+rawProductWitness.roles = {
+  reference: 'exact-heldout-full-splat-state-v0',
+  control: 'frozen-current-full-splat-state-v0',
+  predicted: 'learned-recurrent-full-splat-state-v0',
+};
+rawProductWitness.roleEvidence = {
+  reference: [{ sha256: 'd'.repeat(64) }, { sha256: 'e'.repeat(64) }],
+  control: [{ sha256: 'f'.repeat(64) }, { sha256: 'f'.repeat(64) }],
+  predicted: [{ sha256: '1'.repeat(64) }, { sha256: '2'.repeat(64) }],
+};
+rawProductWitness.controlFrameIdentity = {
+  authority: 'pixel-identical-frozen-control-v0',
+  frameCount: 2,
+  uniqueFrameCount: 1,
+  sha256: 'f'.repeat(64),
+};
+assert.doesNotThrow(
+  () => cohortAudit.validateMotionCohortWitness(rawProductWitness),
+  'raw product view must preserve full splat opacity and prove frozen control pixels',
+);
+const movingRawControlWitness = structuredClone(rawProductWitness);
+movingRawControlWitness.roleEvidence.control[1].sha256 = '3'.repeat(64);
+assert.throws(
+  () => cohortAudit.validateMotionCohortWitness(movingRawControlWitness),
+  /control frame identity/i,
+  'a visually moving raw control must fail closure even when its source payload is nominally frozen',
+);
 const blankWitness = structuredClone(validWitness);
 blankWitness.artifact.probe.frameCount = 0;
 assert.throws(() => cohortAudit.validateMotionCohortWitness(blankWitness), /frame count/i);

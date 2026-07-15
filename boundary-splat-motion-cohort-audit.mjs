@@ -141,19 +141,48 @@ export function validateMotionCohortWitness(witness) {
     || playback.loops !== false
   ) throw new Error('motion cohort witness playback contract mismatch');
   const emphasis = witness.emphasis;
+  const rawProductView = emphasis?.authority === 'raw-product-view-no-cohort-attenuation-v0';
+  const diagnosticView = emphasis?.authority === 'exact-motion-cohort-static-attenuation-v0';
   if (
-    emphasis?.authority !== 'exact-motion-cohort-static-attenuation-v0'
-    || JSON.stringify(emphasis.staticCohorts) !== JSON.stringify(['stable-q1', 'stable-q2'])
-    || JSON.stringify(emphasis.motionCohorts) !== JSON.stringify(['stable-q3', 'stable-q4', 'transported', 'birth'])
-    || emphasis.staticAttenuation !== 0.1
-    || emphasis.unmatchedAttenuation !== 0.05
+    (!rawProductView && !diagnosticView)
+    || (diagnosticView && (
+      JSON.stringify(emphasis.staticCohorts) !== JSON.stringify(['stable-q1', 'stable-q2'])
+      || JSON.stringify(emphasis.motionCohorts) !== JSON.stringify(['stable-q3', 'stable-q4', 'transported', 'birth'])
+      || emphasis.staticAttenuation !== 0.1
+      || emphasis.unmatchedAttenuation !== 0.05
+    ))
+    || (rawProductView && (
+      JSON.stringify(emphasis.staticCohorts) !== JSON.stringify([])
+      || JSON.stringify(emphasis.motionCohorts) !== JSON.stringify([])
+      || emphasis.staticAttenuation !== 1
+      || emphasis.unmatchedAttenuation !== 1
+    ))
   ) throw new Error('motion cohort witness emphasis contract mismatch');
-  const expectedRoles = {
+  const expectedRoles = rawProductView ? {
+    reference: 'exact-heldout-full-splat-state-v0',
+    control: 'frozen-current-full-splat-state-v0',
+    predicted: 'learned-recurrent-full-splat-state-v0',
+  } : {
     reference: 'exact-heldout-target-motion-cohorts-v0',
     control: 'copied-current-projected-onto-exact-motion-cohorts-v0',
     predicted: 'learned-recurrent-state-projected-onto-exact-motion-cohorts-v0',
   };
   if (JSON.stringify(witness.roles) !== JSON.stringify(expectedRoles)) throw new Error('motion cohort witness role contract mismatch');
+  if (rawProductView) {
+    const controlFrames = witness.roleEvidence?.control;
+    const identity = witness.controlFrameIdentity;
+    const hashes = Array.isArray(controlFrames) ? controlFrames.map(frame => frame?.sha256) : [];
+    const uniqueHashes = new Set(hashes);
+    if (
+      hashes.length !== witness.playback.frameCount
+      || hashes.some(hash => !isSha256(hash))
+      || uniqueHashes.size !== 1
+      || identity?.authority !== 'pixel-identical-frozen-control-v0'
+      || identity.frameCount !== hashes.length
+      || identity.uniqueFrameCount !== 1
+      || identity.sha256 !== hashes[0]
+    ) throw new Error('raw product view control frame identity mismatch');
+  }
   const artifact = witness.artifact;
   if (!isSha256(artifact?.sha256) || !Number.isInteger(artifact.bytes) || artifact.bytes <= 0) {
     throw new Error('motion cohort witness artifact identity mismatch');
@@ -246,16 +275,35 @@ async function renderLabeledFrame(rows, camera, options, label, path) {
 
 function motionWitnessGuide(witness, audit) {
   const rows = Object.entries(audit.aggregate.cohorts).map(([id, cohort]) => `<tr><th>${id}</th><td>${cohort.predictionSupportRecall.toFixed(3)}</td><td>${cohort.controlSupportRecall.toFixed(3)}</td><td>${cohort.predictionEnergyRetention.toFixed(3)}</td><td>${cohort.controlEnergyRetention.toFixed(3)}</td><td>${cohort.predictionBeatStepFraction.toFixed(3)}</td></tr>`).join('');
+  const rawProductView = witness.emphasis.authority === 'raw-product-view-no-cohort-attenuation-v0';
+  const modeContract = motionWitnessModeContract(rawProductView ? 'raw-product-view' : 'motion-cohort', witness.playback.frameCount);
+  const title = rawProductView ? 'Raw Product-View Phase Continuation' : 'Which Fire Support Did The Model Learn?';
+  const beauty = rawProductView
+    ? `<h2>Unmasked Full-Splat Beauty</h2><p>No exact-target cohort changes opacity: static and unmatched gains are both 1.0. ${modeContract.guideControlDescription}; its receipt requires one unique pixel hash.</p>`
+    : '<h2>Motion-Bearing Beauty</h2><p>Stable Q1/Q2 are attenuated to 0.1 opacity. High-change same-cell Q3/Q4, transported support, and births remain at full opacity. Unmatched and dying support remains faint at 0.05. This isolates temporal state propagation without claiming an analytical-raymarch comparison.</p>';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Motion-Cohort Phase Audit</title>
 <style>body{margin:0;background:#111;color:#eee;font:15px/1.45 system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:24px}h1,h2{letter-spacing:0}video{display:block;width:100%;background:#000;border:1px solid #444}section{margin:28px 0}code{color:#9ee7ff}table{border-collapse:collapse;width:100%}th,td{padding:7px;border-bottom:1px solid #444;text-align:right}th:first-child{text-align:left}.legend{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}.legend span{padding:7px;border-left:5px solid #777}</style></head>
-<body><main><h1>Which Fire Support Did The Model Learn?</h1>
-<p>This is a finite ${witness.playback.simulatorDurationSeconds.toFixed(2)}-second held-out episode. Left is exact <strong>REFERENCE</strong>, center is copied-current <strong>CONTROL</strong>, and right is recurrent <strong>PREDICTED</strong>. Playback does not loop.</p>
-<section><h2>Motion-Bearing Beauty</h2><p>Stable Q1/Q2 are attenuated to 0.1 opacity. High-change same-cell Q3/Q4, transported support, and births remain at full opacity. Unmatched and dying support remains faint at 0.05. This isolates temporal state propagation without claiming an analytical-raymarch comparison.</p><video controls muted playsinline src="motion-cohort-comparison.mp4"></video></section>
+<body><main><h1>${title}</h1>
+<p>This is a finite ${witness.playback.simulatorDurationSeconds.toFixed(2)}-second held-out episode. Left is exact <strong>REFERENCE</strong>, center is ${modeContract.guideControlDescription}, and right is recurrent <strong>PREDICTED</strong>. Playback does not loop.</p>
+<section>${beauty}<video controls muted playsinline src="motion-cohort-comparison.mp4"></video></section>
 <section><h2>Partial Cohort Debug, Gain 0.625</h2><p>The same role states and opacity emphasis receive an additive display-only cohort mix. Green: Q1/Q2. Yellow: Q3. Red: Q4. Blue: transported. Magenta: birth. Orange: unmatched/death.</p><div class="legend"><span style="border-color:#26e63f">Q1/Q2</span><span style="border-color:#f2cc1a">Q3</span><span style="border-color:#ff4210">Q4/death</span><span style="border-color:#19a6ff">transport</span><span style="border-color:#ff1acc">birth</span></div><video controls muted playsinline src="motion-cohort-debug-comparison.mp4"></video></section>
 <section><h2>Full-Episode Cohort Audit</h2><table><thead><tr><th>cohort</th><th>prediction support</th><th>control support</th><th>prediction energy</th><th>control energy</th><th>prediction beat-step fraction</th></tr></thead><tbody>${rows}</tbody></table></section>
 <section><h2>Claim Boundary</h2><p>${witness.claimBoundary}</p></section></main></body></html>`;
+}
+
+export function motionWitnessModeContract(mode, frameCount) {
+  const value = String(mode);
+  if (!['motion-cohort', 'raw-product-view'].includes(value)) throw new Error('motion cohort witness mode mismatch');
+  if (!Number.isInteger(frameCount) || frameCount <= 0) throw new Error('motion cohort witness frame count mismatch');
+  const rawProductView = value === 'raw-product-view';
+  return {
+    includeControlFrameIdentity: rawProductView,
+    guideControlDescription: rawProductView
+      ? `frozen frame-zero <strong>CONTROL</strong> rendered identically at all ${frameCount} times`
+      : 'copied-current <strong>CONTROL</strong>',
+  };
 }
 
 function channelStandardDeviation(sites, selector, length) {
@@ -546,6 +594,7 @@ export async function writeMotionCohortWitness(manifestPathValue, predictionsPat
   const staticAttenuation = Number(options.staticAttenuation ?? 0.1);
   const unmatchedAttenuation = Number(options.unmatchedAttenuation ?? 0.05);
   const debugGain = Number(options.partialFlowDebugGain ?? 0.625);
+  const witnessMode = String(options.witnessMode ?? 'motion-cohort');
   const ffmpeg = String(options.ffmpeg ?? 'ffmpeg');
   const ffprobe = String(options.ffprobe ?? 'ffprobe');
   let failurePhase = 'argument-validation';
@@ -553,7 +602,12 @@ export async function writeMotionCohortWitness(manifestPathValue, predictionsPat
   await mkdir(outDir, { recursive: true });
   try {
     if (!Number.isFinite(gridStep) || gridStep <= 0) throw new Error('grid step must be finite and positive');
-    if (staticAttenuation !== 0.1 || unmatchedAttenuation !== 0.05) throw new Error('motion cohort witness attenuation contract mismatch');
+    if (!['motion-cohort', 'raw-product-view'].includes(witnessMode)) throw new Error('motion cohort witness mode mismatch');
+    const rawProductView = witnessMode === 'raw-product-view';
+    if (
+      (!rawProductView && (staticAttenuation !== 0.1 || unmatchedAttenuation !== 0.05))
+      || (rawProductView && (staticAttenuation !== 1 || unmatchedAttenuation !== 1))
+    ) throw new Error('motion cohort witness attenuation contract mismatch');
     if (debugGain !== 0.625) throw new Error('motion cohort witness debug gain must be exactly 0.625');
     failurePhase = 'source-validation';
     const [manifestBytes, predictionsBytes, auditBytes] = await Promise.all([
@@ -595,6 +649,7 @@ export async function writeMotionCohortWitness(manifestPathValue, predictionsPat
     }
     const frameCount = referenceDocs.length - 1;
     const fps = 1000 / cadenceMs;
+    const modeContract = motionWitnessModeContract(witnessMode, frameCount);
     if (audit.temporal?.analyzedTransitionCount !== frameCount || audit.steps?.length !== frameCount) {
       throw new Error('motion cohort audit transition count mismatch');
     }
@@ -658,6 +713,13 @@ export async function writeMotionCohortWitness(manifestPathValue, predictionsPat
       }
       source = target;
     }
+    const controlHashes = beautyEvidence.control.map(frame => frame.sha256);
+    const controlFrameIdentity = rawProductView ? {
+      authority: 'pixel-identical-frozen-control-v0',
+      frameCount: controlHashes.length,
+      uniqueFrameCount: new Set(controlHashes).size,
+      sha256: controlHashes[0],
+    } : null;
     failurePhase = 'video-encode';
     const beautyArtifact = await encodeComparison(
       roleNames.map(role => resolve(outDir, 'beauty', role)),
@@ -694,19 +756,28 @@ export async function writeMotionCohortWitness(manifestPathValue, predictionsPat
         lastFrame: { step: frameCount, simulatorTimeSeconds: frameCount * cadenceMs / 1000 },
       },
       emphasis: {
-        authority: 'exact-motion-cohort-static-attenuation-v0',
-        staticCohorts: ['stable-q1', 'stable-q2'],
-        motionCohorts: ['stable-q3', 'stable-q4', 'transported', 'birth'],
+        authority: rawProductView
+          ? 'raw-product-view-no-cohort-attenuation-v0'
+          : 'exact-motion-cohort-static-attenuation-v0',
+        staticCohorts: rawProductView ? [] : ['stable-q1', 'stable-q2'],
+        motionCohorts: rawProductView ? [] : ['stable-q3', 'stable-q4', 'transported', 'birth'],
         staticAttenuation,
         unmatchedAttenuation,
-        thresholdSelection: 'registered upper-half stable state-change quartiles plus exact transport and birth; no visual threshold tuning',
+        thresholdSelection: rawProductView
+          ? 'none; every full splat retains original opacity'
+          : 'registered upper-half stable state-change quartiles plus exact transport and birth; no visual threshold tuning',
       },
-      roles: {
+      roles: rawProductView ? {
+        reference: 'exact-heldout-full-splat-state-v0',
+        control: 'frozen-current-full-splat-state-v0',
+        predicted: 'learned-recurrent-full-splat-state-v0',
+      } : {
         reference: 'exact-heldout-target-motion-cohorts-v0',
         control: 'copied-current-projected-onto-exact-motion-cohorts-v0',
         predicted: 'learned-recurrent-state-projected-onto-exact-motion-cohorts-v0',
       },
       roleEvidence: beautyEvidence,
+      ...(modeContract.includeControlFrameIdentity ? { controlFrameIdentity } : {}),
       artifact: beautyArtifact,
       partialFlowDebug: {
         authority: 'display-only-motion-cohort-debug-mix-v0',
@@ -719,7 +790,9 @@ export async function writeMotionCohortWitness(manifestPathValue, predictionsPat
         roleEvidence: debugEvidence,
         artifact: debugArtifact,
       },
-      claimBoundary: 'This witness reveals exact registered motion-bearing support under an isolated offline splat raster. It does not measure analytical-raymarch image error, prove a training remedy, or authorize runtime composition.',
+      claimBoundary: rawProductView
+        ? 'This witness compares full unmasked exact, frozen-present, and learned recurrent splat states under one isolated offline raster. It uses no target-derived opacity mask. It does not measure analytical-raymarch image error or authorize runtime composition.'
+        : 'This witness reveals exact registered motion-bearing support under an isolated offline splat raster. It does not measure analytical-raymarch image error, prove a training remedy, or authorize runtime composition.',
     };
     validateMotionCohortWitness(report);
     await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`);
@@ -751,7 +824,8 @@ if (process.argv[1] && import.meta.url === new URL(`file://${resolve(process.arg
             outDir: args.get('--out-dir'), report: args.get('--report'), gridStep: args.get('--grid-step'),
             width: args.get('--width'), height: args.get('--height'),
             staticAttenuation: args.get('--static-attenuation'), unmatchedAttenuation: args.get('--unmatched-attenuation'),
-            partialFlowDebugGain: args.get('--partial-flow-debug-gain'), ffmpeg: args.get('--ffmpeg'), ffprobe: args.get('--ffprobe'),
+            partialFlowDebugGain: args.get('--partial-flow-debug-gain'), witnessMode: args.get('--witness-mode'),
+            ffmpeg: args.get('--ffmpeg'), ffprobe: args.get('--ffprobe'),
           },
         );
         console.log(JSON.stringify({ schema: report.schema, status: report.status, frames: report.playback.frameCount }, null, 2));

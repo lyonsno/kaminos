@@ -1,5 +1,7 @@
 # Response-Anchored Online Rollout R1
 
+> **Visual interpretation corrected:** operator inspection identified that the middle control moves. The underlying frame-zero payload is constant, but this artifact reapplies a changing exact-target cohort opacity mask every frame. Its cohort metrics remain diagnostic; it does not establish raw product-view advantage. The authoritative unmasked comparison is `../pyro-phase-unmasked-product-view-r1-0715/inspection-guide.html`, where the control is pixel-identical and both recurrent models lose to present-state reuse on every frame.
+
 Question: can a frozen generation-two response anchor stop current-model online exposure from trading away late recurrent state fidelity while retaining its energy gain?
 
 Result: yes, on this held-out 10.08-second basin. The response-anchored model improves generation two in every final-quarter state cohort, all six aggregate energy cohorts, all six final-quarter energy cohorts, and isolated-raster PSNR. Transport and birth still cross persistent identity loss at step 58, but neither crosses earlier. The prediction remains temporally distinct and visibly coherent through the final frame. It does not recover the exact target's tall flame sheet or full high-frequency energy.

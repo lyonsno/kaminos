@@ -1,0 +1,30 @@
+{
+  "schema": "kaminos-pyro-phase-unmasked-product-view-comparison-v0",
+  "status": "completed",
+  "authority": "full-splat-same-raster-no-target-opacity-mask-v0",
+  "controlFrameIdentity": {
+    "frameCount": 63,
+    "uniqueFrameCount": 1,
+    "sha256": "85297c5c92376a584b73f4f88dad4fe798a6afeae261d2a95bd4655dafd4ce9e"
+  },
+  "uniquePredictionFrameCount": {
+    "generationTwo": 63,
+    "responseAnchor": 63
+  },
+  "psnrDb": {
+    "allFrames": {"control": 17.174660, "generationTwo": 14.365325, "responseAnchor": 14.279653},
+    "steps49Through63": {"control": 16.677406, "generationTwo": 12.811528, "responseAnchor": 12.683481},
+    "terminal": {"control": 17.25, "generationTwo": 12.95, "responseAnchor": 12.77}
+  },
+  "frameWins": {
+    "generationTwoOverControl": 0,
+    "responseAnchorOverControl": 0,
+    "responseAnchorOverGenerationTwo": 0
+  },
+  "firstPersistentLossToControl": {
+    "generationTwo": 1,
+    "responseAnchor": 1
+  },
+  "visualDisposition": "both recurrent predictions are temporally distinct but develop a saturated white diagonal low-frequency sheet; response anchoring does not mitigate the dominant full-state collapse",
+  "claimBoundary": "One held-out basin and one isolated full-splat raster; not analytical-raymarch error or multi-basin generalization."
+}
