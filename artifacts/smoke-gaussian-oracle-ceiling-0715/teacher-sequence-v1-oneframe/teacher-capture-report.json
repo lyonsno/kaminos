@@ -1,0 +1,23 @@
+{
+  "schema": "kaminos.smoke-oracle-teacher-capture-report.v0",
+  "status": "failed",
+  "requestedRoute": "http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1",
+  "outDir": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v1-oneframe",
+  "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v1-oneframe/teacher-capture-report.json",
+  "frames": [],
+  "failures": [
+    {
+      "message": "Runtime.evaluate timed out after 45000ms",
+      "stack": "Error: Runtime.evaluate timed out after 45000ms\n    at Timeout._onTimeout (file:///private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/scripts/capture-smoke-oracle-teacher-sequence.mjs:58:17)\n    at listOnTimeout (node:internal/timers:605:17)\n    at process.processTimers (node:internal/timers:541:7)",
+      "capturedFrameCount": 0
+    }
+  ],
+  "chunkBytes": 8388608,
+  "createdAt": "2026-07-15T04:24:00.795Z",
+  "browser": {
+    "Browser": "Chrome/150.0.7871.115",
+    "webSocketDebuggerUrl": "ws://127.0.0.1:9619/devtools/browser/fc8c5e0c-dedd-47a2-8b54-fb08cdde7b34"
+  },
+  "failurePhase": "route-capture",
+  "updatedAt": "2026-07-15T04:24:54.218Z"
+}

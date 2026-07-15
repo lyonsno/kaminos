@@ -1,0 +1,18 @@
+{
+  "schema": "kaminos.smoke-oracle-teacher-capture-report.v0",
+  "status": "failed",
+  "requestedRoute": "http://127.0.0.1:8097/?kaminos_volume_smoke=1&volume_scene=tall_plume&volume_tall_preset=operator_fire_0622&volume_temporal_accum=0&volume_temporal_jitter=0&volume_history_clamp=1",
+  "outDir": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v1",
+  "reportPath": "/private/tmp/kaminos-smoke-oracle-ceiling-eater-live-0715/artifacts/smoke-gaussian-oracle-ceiling-0715/teacher-sequence-v1/teacher-capture-report.json",
+  "frames": [],
+  "failures": [
+    {
+      "message": "Capture attempt was manually interrupted after a pre-frame CDP hang; no teacher frame or dense sidecar was written.",
+      "capturedFrameCount": 0
+    }
+  ],
+  "failurePhase": "manual-interrupt-after-cdp-hang",
+  "updatedAt": "2026-07-15T04:30:43Z",
+  "chunkBytes": 8388608,
+  "createdAt": "2026-07-15T04:20:34.452Z"
+}
