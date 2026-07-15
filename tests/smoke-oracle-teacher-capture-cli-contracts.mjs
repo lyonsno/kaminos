@@ -126,4 +126,22 @@ assert.match(
   'the viewer route must consume the explicit capture-hold request during initial activation',
 );
 
+assert.match(
+  volumeCoreSource,
+  /native-raymarch-canvas-submission-v0/,
+  'runtime must expose a native canvas submission path that does not depend on the hanging texture-to-buffer map',
+);
+
+assert.match(
+  source,
+  /Page\.captureScreenshot/,
+  'held teacher capture must preserve compositor-presented native canvas pixels when direct GPU buffer mapping stalls',
+);
+
+assert.match(
+  source,
+  /cdp-native-canvas-clip-after-explicit-raymarch-submission-v0/,
+  'canvas witness authority must be explicit rather than impersonating direct texture readback',
+);
+
 console.log('smoke oracle teacher capture CLI contracts passed');

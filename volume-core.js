@@ -12049,6 +12049,52 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return result;
   }
 
+  async function submitNativeTeacherFrameToCanvas(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    cancelAnimationFrame(raf);
+    const advanceSim = options.advanceSim === true;
+    const sampleNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    updateUniforms(sampleNow);
+    const encoder = device.createCommandEncoder({ label: 'kaminos native teacher canvas submission' });
+    if (advanceSim) {
+      encodeSim(encoder);
+      encodeSmokeDomainTransfer(encoder);
+    }
+    encodeMajorant(encoder, { force: true });
+    const currentTexture = context.getCurrentTexture();
+    encodeDraw(encoder, currentTexture.createView(), 'kaminos native teacher canvas raymarch pass');
+    device.queue.submit([encoder.finish()]);
+    commitPreviousViewProjection();
+    state.frameCount += 1;
+    state.frameSubmissionAuthority = 'capture-hold-explicit-step-v0';
+    await new Promise(resolveFrame => requestAnimationFrame(resolveFrame));
+    const rect = canvas.getBoundingClientRect();
+    return {
+      ok: true,
+      sampleAuthority: 'native-raymarch-canvas-submission-v0',
+      imageAuthority: 'cdp-native-canvas-clip-after-explicit-raymarch-submission-v0',
+      advanceSim,
+      frameCount: state.frameCount,
+      simStepCount: state.simStepCount,
+      sampleNowMs: sampleNow,
+      width: state.width,
+      height: state.height,
+      renderWidth: state.renderWidth,
+      renderHeight: state.renderHeight,
+      renderScale: state.renderScale,
+      canvasCssRect: {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+      },
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+      camera: currentCameraState(),
+    };
+  }
+
   async function readTextureRgba8(texture, width, height, label = 'kaminos rgba8 texture readback') {
     const bytesPerPixel = 4;
     const unpaddedBytesPerRow = width * bytesPerPixel;
@@ -13498,6 +13544,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    submitNativeTeacherFrameToCanvas,
+    sampleMajorantReadback,
     currentCameraState,
     setCameraState,
     sampleFullGridFluidFieldChunk,

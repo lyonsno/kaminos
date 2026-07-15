@@ -4,6 +4,7 @@ import { createHash, randomInt } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { materializeSmokeOracleTeacherFrameExport } from '../smoke-oracle-teacher-export.mjs';
 import {
   assessMinimumRadiusMaturityCandidate,
@@ -200,6 +201,109 @@ async function writeRgbaPng(path, width, height, rgba) {
   return { path, sha256: `sha256:${sha256(png)}`, byteLength: png.byteLength };
 }
 
+function paethPredictor(left, up, upperLeft) {
+  const prediction = left + up - upperLeft;
+  const leftDistance = Math.abs(prediction - left);
+  const upDistance = Math.abs(prediction - up);
+  const upperLeftDistance = Math.abs(prediction - upperLeft);
+  if (leftDistance <= upDistance && leftDistance <= upperLeftDistance) return left;
+  if (upDistance <= upperLeftDistance) return up;
+  return upperLeft;
+}
+
+function decodePngRgba(png) {
+  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (!Buffer.from(png.subarray(0, 8)).equals(signature)) throw new Error('native canvas screenshot is not PNG');
+  let offset = 8;
+  let header = null;
+  const idat = [];
+  while (offset + 12 <= png.length) {
+    const length = png.readUInt32BE(offset);
+    const type = png.toString('ascii', offset + 4, offset + 8);
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    if (type === 'IHDR') header = data;
+    if (type === 'IDAT') idat.push(data);
+    offset += length + 12;
+    if (type === 'IEND') break;
+  }
+  if (!header || header.length !== 13 || !idat.length) throw new Error('native canvas PNG is partial');
+  const width = header.readUInt32BE(0);
+  const height = header.readUInt32BE(4);
+  const bitDepth = header[8];
+  const colorType = header[9];
+  const interlace = header[12];
+  if (bitDepth !== 8 || ![2, 6].includes(colorType) || interlace !== 0) {
+    throw new Error(`unsupported native canvas PNG layout: depth=${bitDepth} color=${colorType} interlace=${interlace}`);
+  }
+  const components = colorType === 6 ? 4 : 3;
+  const stride = width * components;
+  const packed = inflateSync(Buffer.concat(idat));
+  if (packed.length !== (stride + 1) * height) throw new Error('native canvas PNG decompressed byte count mismatch');
+  const pixels = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    const filter = packed[y * (stride + 1)];
+    const input = packed.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    const row = pixels.subarray(y * stride, (y + 1) * stride);
+    const previous = y > 0 ? pixels.subarray((y - 1) * stride, y * stride) : null;
+    for (let x = 0; x < stride; x += 1) {
+      const left = x >= components ? row[x - components] : 0;
+      const up = previous ? previous[x] : 0;
+      const upperLeft = previous && x >= components ? previous[x - components] : 0;
+      const predictor = filter === 0 ? 0
+        : filter === 1 ? left
+          : filter === 2 ? up
+            : filter === 3 ? Math.floor((left + up) / 2)
+              : filter === 4 ? paethPredictor(left, up, upperLeft)
+                : NaN;
+      if (!Number.isFinite(predictor)) throw new Error(`unsupported native canvas PNG filter ${filter}`);
+      row[x] = (input[x] + predictor) & 0xff;
+    }
+  }
+  const rgba = new Uint8Array(width * height * 4);
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    rgba[pixel * 4] = pixels[pixel * components];
+    rgba[pixel * 4 + 1] = pixels[pixel * components + 1];
+    rgba[pixel * 4 + 2] = pixels[pixel * components + 2];
+    rgba[pixel * 4 + 3] = components === 4 ? pixels[pixel * components + 3] : 255;
+  }
+  return { width, height, rgba };
+}
+
+function measureRgbaFrame({ width, height, rgba }) {
+  let litPixels = 0;
+  let smokeLikePixels = 0;
+  let totalLuma = 0;
+  let minSmokeY = height;
+  let maxSmokeY = -1;
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    const offset = pixel * 4;
+    const r = rgba[offset];
+    const g = rgba[offset + 1];
+    const b = rgba[offset + 2];
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    totalLuma += luma;
+    if (luma > 20) litPixels += 1;
+    if (b > 28 && g > 28 && r < 105 && Math.abs(g - b) < 60) {
+      smokeLikePixels += 1;
+      const y = Math.floor(pixel / width);
+      minSmokeY = Math.min(minSmokeY, y);
+      maxSmokeY = Math.max(maxSmokeY, y);
+    }
+  }
+  return {
+    meanLuma: totalLuma / Math.max(1, width * height),
+    litPixels,
+    smokeLikePixels,
+    smokeBounds: {
+      minY: smokeLikePixels ? minSmokeY : 0,
+      maxY: smokeLikePixels ? maxSmokeY : 0,
+      height: smokeLikePixels ? maxSmokeY - minSmokeY + 1 : 0,
+      verticalFillRatio: smokeLikePixels ? (maxSmokeY - minSmokeY + 1) / height : 0,
+      pixelCount: smokeLikePixels,
+    },
+  };
+}
+
 async function writeJson(path, payload) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(payload, null, 2)}\n`);
@@ -285,6 +389,66 @@ async function captureTeacherFrameSample(ws, {
   sameBrowserSessionId,
   sequenceStartNowMs,
 }) {
+  if (teacherContract) {
+    const requestedNow = Number.isFinite(Number(sequenceStartNowMs))
+      ? Number(sequenceStartNowMs) + frameIndex * stepDeltaMs
+      : null;
+    const submission = await evaluate(ws, `window.__kaminosVolumePrototype.submitNativeTeacherFrameToCanvas(${JSON.stringify({
+      advanceSim: frameIndex > 0,
+      now: requestedNow,
+    })})`);
+    if (submission?.ok !== true || submission.sampleAuthority !== 'native-raymarch-canvas-submission-v0') {
+      throw new Error(`native teacher canvas submission failed for frame ${frameIndex}: ${JSON.stringify(submission)}`);
+    }
+    const rect = submission.canvasCssRect || {};
+    const clip = {
+      x: Math.max(0, Number(rect.x) || 0),
+      y: Math.max(0, Number(rect.y) || 0),
+      width: Math.max(1, Number(rect.width) || 0),
+      height: Math.max(1, Number(rect.height) || 0),
+      scale: 1,
+    };
+    if (clip.width <= 1 || clip.height <= 1) throw new Error(`native teacher canvas clip is blank: ${JSON.stringify(rect)}`);
+    const screenshot = await wsRequest(ws, 'Page.captureScreenshot', {
+      format: 'png',
+      fromSurface: true,
+      clip,
+    });
+    const png = Buffer.from(screenshot.data, 'base64');
+    const decoded = decodePngRgba(png);
+    const metrics = measureRgbaFrame(decoded);
+    const majorantReadback = await evaluate(ws, 'window.__kaminosVolumePrototype.sampleMajorantReadback()');
+    const sessionId = sameBrowserSessionId || `native-canvas-${Date.now()}`;
+    const startNow = Number.isFinite(Number(sequenceStartNowMs)) ? Number(sequenceStartNowMs) : submission.sampleNowMs;
+    return {
+      sample: {
+        ...submission,
+        ...metrics,
+        image: decoded,
+        majorantReadback,
+        captureRendererRequested: 'native-raymarch',
+        captureRendererEffective: 'native-raymarch-canvas-submission-v0',
+        nativeScreenshot: {
+          authority: 'cdp-native-canvas-clip-after-explicit-raymarch-submission-v0',
+          sha256: `sha256:${sha256(png)}`,
+          byteLength: png.byteLength,
+          clip,
+        },
+      },
+      sequence: {
+        sequenceAuthority: 'controlled-native-canvas-sequence-v0',
+        sampleAuthority: submission.sampleAuthority,
+        imageAuthority: submission.imageAuthority,
+        sameBrowserSessionId: sessionId,
+        sequenceStartNowMs: startNow,
+        controlledStepFrameIndex: frameIndex,
+        controlledStepDeltaMs: stepDeltaMs,
+        controlledStepNowMs: submission.sampleNowMs,
+        baseFrameCount: submission.frameCount - 1,
+        baseSimStepCount: submission.simStepCount - (frameIndex > 0 ? 1 : 0),
+      },
+    };
+  }
   if (controlledStep) {
     const frame = await evaluate(ws, `window.__kaminosVolumePrototype.controlledStepFrame(${JSON.stringify({
       controlledStepFrameIndex: frameIndex,
@@ -620,6 +784,8 @@ try {
       render: {
         path: image.path,
         sha256: image.sha256,
+        imageAuthority: sample.imageAuthority || null,
+        nativeScreenshot: sample.nativeScreenshot || null,
         width: sample.image.width,
         height: sample.image.height,
         meanLuma: sample.meanLuma,
@@ -678,6 +844,8 @@ try {
           height: sample.image.height,
           litPixels: sample.litPixels,
           smokeLikePixels: sample.smokeLikePixels,
+          imageAuthority: sample.imageAuthority || null,
+          nativeScreenshot: sample.nativeScreenshot || null,
           sha256: image.sha256,
           path: image.path,
         },
