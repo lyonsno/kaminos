@@ -292,6 +292,31 @@ class DestinationStateCheckpointInterpolationContracts(unittest.TestCase):
             self.assertEqual(report["staleOutputPaths"], [str(stale_path.resolve())])
             self.assertTrue(stale_path.exists())
 
+    def test_tilde_source_reports_the_same_effective_path_that_is_read(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            home = root_path / "home"
+            home.mkdir()
+            from_path = home / "generation-two.json"
+            from_path.write_bytes(GENERATION_TWO_MODEL.read_bytes())
+            out_dir = root_path / "output"
+
+            with patch.dict("os.environ", {"HOME": str(home)}):
+                report = module.run_interpolation(
+                    "~/generation-two.json",
+                    ONLINE_MODEL,
+                    [0.5],
+                    out_dir,
+                )
+
+            self.assertEqual(report["status"], "completed")
+            self.assertEqual(
+                report["sourceRequests"]["from"]["effectivePath"], str(from_path.resolve())
+            )
+            self.assertEqual(report["sources"]["from"]["path"], str(from_path.resolve()))
+            self.assertEqual(report["sources"]["from"]["sha256"], sha256(from_path))
+
 
 if __name__ == "__main__":
     unittest.main()

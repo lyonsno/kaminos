@@ -85,15 +85,19 @@ def receipt_alpha(alpha):
     return numeric if math.isfinite(numeric) else str(numeric).lower()
 
 
+def resolve_source_path(path):
+    return Path(path).expanduser().resolve()
+
+
 def source_request(path):
     return {
         "requestedPath": str(path),
-        "effectivePath": str(Path(path).expanduser().resolve()),
+        "effectivePath": str(resolve_source_path(path)),
     }
 
 
 def read_model(path):
-    resolved = Path(path).resolve()
+    resolved = resolve_source_path(path)
     data = resolved.read_bytes()
     return {
         "path": str(resolved),
