@@ -632,12 +632,12 @@ export async function createWebGpuInferenceRuntime(input = {}) {
       const invocation = schedulerApplication
         ? schedulerApplication.beginInvocation(invocationInput)
         : fallbackInvocation(invocationInput.invocationId);
-      const context = {
+      const context = Object.freeze({
         ...invocation,
         async yieldToBrowser(metadata = {}) {
           return performYield(metadata, invocation);
         },
-      };
+      });
       try {
         return await fn(context);
       } finally {

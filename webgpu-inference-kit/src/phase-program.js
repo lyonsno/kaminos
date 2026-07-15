@@ -257,7 +257,14 @@ export async function runWebGpuPhaseProgram(program, options = {}) {
       const phaseOutputs = await runtime.runStage(phase.name, async stage => {
         const readbackOutputs = {};
         for (const readback of phase.readbacks) {
-          readbackOutputs[readback.name] = await stage.readTensor(readback.tensor, readback.options);
+          const readbackOptions = clone(readback.options);
+          if (readbackOptions.commandDuty != null) {
+            readbackOptions.commandDuty = resolveCommandDuty(
+              readbackOptions.commandDuty,
+              schedulerInvocation,
+            );
+          }
+          readbackOutputs[readback.name] = await stage.readTensor(readback.tensor, readbackOptions);
         }
         return readbackOutputs;
       }, {

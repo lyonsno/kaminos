@@ -179,7 +179,7 @@ export function createWebGpuSchedulerApplication(input = {}) {
       throw new Error(`invocationId ${invocationInput.invocationId} is already active`);
     }
     const scheduler = deepFreeze(clone(state.scheduler));
-    const invocation = {
+    const invocation = Object.freeze({
       schema: WEBGPU_SCHEDULER_INVOCATION_SCHEMA,
       routeId: state.routeId,
       invocationId: invocationInput.invocationId,
@@ -193,7 +193,7 @@ export function createWebGpuSchedulerApplication(input = {}) {
         }
         return scheduler.phaseChunkSize[controlId];
       },
-    };
+    });
     state.activeInvocations.add(invocation);
     state.activeInvocationIds.add(invocation.invocationId);
     return invocation;

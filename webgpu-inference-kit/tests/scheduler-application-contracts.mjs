@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
+  WEBGPU_BUFFER_USAGE,
   WEBGPU_SCHEDULER_APPLICATION_SCHEMA,
   WEBGPU_SCHEDULER_DECISION_APPLICATION_SCHEMA,
   WEBGPU_SCHEDULER_INVOCATION_SCHEMA,
@@ -97,6 +98,16 @@ assert.throws(
   /read only|readonly|not extensible|Cannot assign/i,
   'the scheduler snapshot exposed to an invocation must be immutable',
 );
+assert.throws(
+  () => { invocation.invocationId = 'mutated-invocation-id'; },
+  /read only|readonly|not extensible|Cannot assign/i,
+  'invocation identity must be immutable so cleanup cannot strand the original active id',
+);
+assert.throws(
+  () => { invocation.schedulerRevision = 999; },
+  /read only|readonly|not extensible|Cannot assign/i,
+  'the public invocation token must not lie about its frozen scheduler revision',
+);
 assert.equal(guarded.snapshot().scheduler.phaseChunkSize.spnFusionOutputItems, 8);
 
 assert.throws(
@@ -108,6 +119,8 @@ assert.equal(guarded.snapshot().revision, 0);
 guarded.endInvocation(invocation);
 assert.equal(guarded.snapshot().activeInvocationCount, 0);
 assert.throws(() => guarded.endInvocation(invocation), /already ended|unknown invocation/i);
+const reusedInvocationId = guarded.beginInvocation({ invocationId: 'sharp-invocation-a' });
+guarded.endInvocation(reusedInvocationId);
 
 const applied = guarded.applyDecision(decision());
 assert.equal(applied.schema, WEBGPU_SCHEDULER_DECISION_APPLICATION_SCHEMA);
@@ -185,6 +198,14 @@ const now = () => {
 const submissions = [];
 const queue = {
   submit(commandBuffers) {
+    for (const commandBuffer of commandBuffers) {
+      for (const copy of commandBuffer.copies || []) {
+        copy.destination.data.set(
+          copy.source.data.subarray(copy.sourceOffset, copy.sourceOffset + copy.size),
+          copy.destinationOffset,
+        );
+      }
+    }
     submissions.push(commandBuffers);
   },
 };
@@ -192,13 +213,29 @@ const device = {
   queue,
   features: new Set(),
   limits: {},
+  createBuffer(descriptor) {
+    const buffer = {
+      descriptor,
+      data: new Uint8Array(descriptor.size),
+      async mapAsync() {},
+      getMappedRange(offset = 0, size = descriptor.size - offset) {
+        return buffer.data.slice(offset, offset + size).buffer;
+      },
+      unmap() {},
+    };
+    return buffer;
+  },
   createShaderModule(descriptor) { return { descriptor }; },
   createBindGroupLayout(descriptor) { return { descriptor }; },
   createPipelineLayout(descriptor) { return { descriptor }; },
   createBindGroup(descriptor) { return { descriptor }; },
   createComputePipeline(descriptor) { return { descriptor }; },
   createCommandEncoder(descriptor) {
+    const copies = [];
     return {
+      copyBufferToBuffer(source, sourceOffset, destination, destinationOffset, size) {
+        copies.push({ source, sourceOffset, destination, destinationOffset, size });
+      },
       beginComputePass() {
         return {
           setPipeline() {},
@@ -207,7 +244,7 @@ const device = {
           end() {},
         };
       },
-      finish() { return { descriptor }; },
+      finish() { return { descriptor, copies }; },
     };
   },
 };
@@ -220,7 +257,7 @@ const runtime = await createWebGpuInferenceRuntime({
   adapterName: 'Guarded Scheduler Adapter',
   browser: 'Node contract fake',
   kernel: { profile: 'guarded-scheduler-contract' },
-  requiredStages: ['spn-fusion'],
+  requiredStages: ['spn-fusion', 'readback-output'],
   schedulerApplication: runtimeApplication,
   commandDuties: {
     runId: 'sharp-runtime-application-run-a',
@@ -243,8 +280,17 @@ const runtime = await createWebGpuInferenceRuntime({
   },
 });
 
+const readbackOutput = runtime.createTensor({
+  name: 'sharp.guarded-scheduler-output',
+  shape: [1],
+  dtype: 'f32',
+  usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copySrc,
+});
+new Float32Array(readbackOutput.buffer.data.buffer).set([0.75]);
+
 const program = runtime.defineProgram({
   name: 'sharp.guarded-scheduler-program',
+  tensors: { readbackOutput },
   kernels: {
     spnFusion: {
       code: '@compute @workgroup_size(1) fn main() {}',
@@ -252,25 +298,45 @@ const program = runtime.defineProgram({
       bindings: [{ name: 'stub', resource: { buffer: {} }, type: 'storage' }],
     },
   },
-  phases: [{
-    name: 'spn-fusion',
-    kernel: 'spnFusion',
-    dispatch: [1],
-    yieldAfter: true,
-    commandDuty: {
-      chunkControl: {
-        controlId: 'spnFusionOutputItems',
-        unit: 'output-item',
-        current: 8,
-        bounds: declaredBounds.phaseChunkSize.spnFusionOutputItems,
+  phases: [
+    {
+      name: 'spn-fusion',
+      kernel: 'spnFusion',
+      dispatch: [1],
+      yieldAfter: true,
+      commandDuty: {
+        chunkControl: {
+          controlId: 'spnFusionOutputItems',
+          unit: 'output-item',
+          current: 8,
+          bounds: declaredBounds.phaseChunkSize.spnFusionOutputItems,
+        },
       },
     },
-  }],
+    {
+      name: 'readback-output',
+      readbacks: [{
+        name: 'outputBytes',
+        tensor: 'readbackOutput',
+        options: {
+          commandDuty: {
+            chunkControl: {
+              controlId: 'spnFusionOutputItems',
+              unit: 'output-item',
+              current: 8,
+              bounds: declaredBounds.phaseChunkSize.spnFusionOutputItems,
+            },
+          },
+        },
+      }],
+    },
+  ],
 });
 
 const firstRun = await runtime.runProgram(program, { invocationId: 'runtime-invocation-a' });
 assert.equal(firstRun.schedulerInvocation.schedulerRevision, 0);
 assert.equal(firstRun.schedulerInvocation.invocationId, 'runtime-invocation-a');
+assert.equal(new Float32Array(firstRun.outputs.outputBytes)[0], 0.75);
 assert.equal(yields.at(-1).schedulerRevision, 0);
 assert.equal(yields.at(-1).scheduler.yieldMs, 2);
 
@@ -284,8 +350,8 @@ assert.equal(runtime.schedulerSnapshot().revision, 1);
 const dutyReport = runtime.finishCommandDuties();
 assert.deepEqual(
   dutyReport.submissions.map(row => row.descriptor.chunkControl.current),
-  [8, 4],
-  'command-duty descriptors must report the effective control for each frozen invocation',
+  [8, 8, 4, 4],
+  'compute and staged-readback duties must report the effective control for each frozen invocation',
 );
 
 let releaseInvocation;
