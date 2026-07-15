@@ -78,7 +78,7 @@ try {
     if (!matchedSubstrateIdentity) matchedSubstrateIdentity = row.matchedSubstrateIdentity;
     historyDepthRows.push(row);
     if (requestedDepth === REQUIRED_HISTORY_DEPTHS[0]) {
-      measuredUpperRung = measureHistoryUpperRung(row.initialState);
+      measuredUpperRung = measureHistoryUpperRung(row.slotMetadata);
     }
   }
 
@@ -368,16 +368,21 @@ async function captureHistoryDepth(requestedDepth, expectedSubstrate) {
 
 function measureHistoryUpperRung(initialState) {
   const depth = Number(
-    initialState?.boundarySplatHistoryMeasuredUpperDepth
+    initialState?.measuredUpperHistoryDepth
+    ?? initialState?.boundarySplatHistoryMeasuredUpperDepth
     ?? initialState?.boundarySplatHistoryAllocation?.measuredUpperDepth,
   );
-  const authority = initialState?.boundarySplatHistoryMeasuredUpperAuthority
+  const authority = initialState?.authority
+    ?? initialState?.boundarySplatHistoryMeasuredUpperAuthority
     ?? initialState?.boundarySplatHistoryAllocation?.measuredUpperAuthority
     ?? null;
   if (!Number.isInteger(depth) || depth < REQUIRED_HISTORY_DEPTHS.at(-1)) {
     throw new Error(`measured-history-upper-rung-unavailable:${JSON.stringify({ depth, authority })}`);
   }
   if (!authority) throw new Error('measured-history-upper-rung-authority-missing');
+  if (authority !== 'gpu-archive-slot-metadata-post-queue-completion-readback-v0') {
+    throw new Error(`measured-history-upper-rung-authority-invalid:${authority}`);
+  }
   return { depth, authority };
 }
 

@@ -11,6 +11,7 @@ const witness = await readFile(witnessUrl, 'utf8');
 assert.match(witness, /kaminos\.volume\.boundary-splat-history-depth-motion-witness\.v0/, 'witness must publish a stable schema');
 assert.match(witness, /REQUIRED_HISTORY_DEPTHS\s*=\s*\[16,\s*32,\s*64\]/, 'witness must require all operator-signed depths');
 assert.match(witness, /measureHistoryUpperRung/, 'upper rung must be measured from runtime/device authority');
+assert.match(witness, /measureHistoryUpperRung\(row\.slotMetadata\)/, 'upper rung must use the GPU-completed post-prime slot receipt');
 assert.match(witness, /historyDepthRows/, 'report must preserve every serial depth row');
 assert.match(witness, /measuredUpperRung/, 'report must distinguish the measured upper rung');
 assert.match(witness, /requestedEffectiveDepthAgreement/, 'each row must fail on requested/effective depth substitution');
@@ -32,6 +33,34 @@ assert.match(witness, /browserProcessId/, 'one persistent browser identity must 
 assert.match(witness, /pageId/, 'one page target identity must span every depth');
 assert.match(witness, /CDP debug port already in use before launch/, 'witness must refuse a stale browser endpoint before launch');
 assert.doesNotMatch(witness, /slice\(0,\s*\d+\)/, 'caller-requested frame/depth flow must not be silently capped');
+
+const measureUpperSource = witness.match(/function measureHistoryUpperRung\(initialState\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(measureUpperSource, 'upper-rung selector must remain directly contract-testable');
+const measureHistoryUpperRung = Function(
+  'REQUIRED_HISTORY_DEPTHS',
+  `${measureUpperSource}; return measureHistoryUpperRung;`,
+)([16, 32, 64]);
+assert.deepEqual(
+  measureHistoryUpperRung({
+    measuredUpperHistoryDepth: 831,
+    authority: 'gpu-archive-slot-metadata-post-queue-completion-readback-v0',
+  }),
+  {
+    depth: 831,
+    authority: 'gpu-archive-slot-metadata-post-queue-completion-readback-v0',
+  },
+  'measured upper rung must retain the GPU-completed post-prime slot authority',
+);
+assert.throws(
+  () => measureHistoryUpperRung({ measuredUpperHistoryDepth: 831 }),
+  /measured-history-upper-rung-authority-missing/,
+  'numeric upper depth without its receipt authority must fail',
+);
+assert.throws(
+  () => measureHistoryUpperRung({ measuredUpperHistoryDepth: 831, authority: 'host-estimate' }),
+  /measured-history-upper-rung-authority-invalid/,
+  'upper depth must not inherit an unrelated authority string',
+);
 
 const validateCostSource = witness.match(/function validateCost\(cost\) \{[\s\S]*?\n\}/)?.[0];
 assert.ok(validateCostSource, 'cost validator must remain directly contract-testable');
