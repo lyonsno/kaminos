@@ -1,7 +1,7 @@
 {
   "schema": "kaminos.held-smoke-hierarchy-report.v0",
   "status": "captured",
-  "routeCell": "B",
+  "routeCell": "A",
   "source": {
     "sourceSchema": "kaminos.volume.operator-basin-replay.v0",
     "captureId": "operator-live-basin-2026-07-15T09-25-00-971Z",
@@ -15,30 +15,28 @@
     "backend": "WebGPU:apple",
     "grid": 160
   },
-  "model": {
-    "identity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3",
-    "schema": "kaminos-smoke-splat-sparse-fine-selector-v0",
-    "threshold": 0.856103085231511,
-    "thresholdAuthority": "training-f1-calibrated-v0"
+  "model": null,
+  "allocation": {
+    "authority": "analytical-articulation-score-v0",
+    "learned": false
   },
-  "allocation": null,
   "product": {
-    "identity": "smoke-splat-product:sha256%3A9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20:sha256%3A818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3:0:0:179290:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7C4%7C0.400000000000%7Cuncapped",
+    "identity": "smoke-splat-product:sha256%3A9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20:analytical-articulation-score-v0:0:0:179290:8%7C4%7C1.35000000000%7C0.500000000000%7C0.500000000000%7C0.800000000000%7C4%7C0.400000000000%7Cuncapped",
     "schema": "kaminos-hierarchical-smoke-splats-v0",
     "producerAuthority": "real-field-hierarchical-smoke-splat-producer-v0",
-    "producerKind": "learned-sparse-residual-plus-conserved-coarse",
+    "producerKind": "real-field-hierarchical-target",
     "slotIdentity": {
       "historySlot": 0,
       "slotWriteTick": 179290,
       "simulatorGeneration": 0,
-      "modelIdentity": "sha256:818a33b5e272cae4782eeafb3123094a4b84e79cd14963180b3933c600ae0dd3"
+      "modelIdentity": "analytical-articulation-score-v0"
     },
     "payloadIdentity": "sha256:9a3cc037648b05de94197ec3d3451a0f8986ac3360b3379de374a1b409feda20",
     "decoderConfigIdentity": "8|4|1.35000000000|0.500000000000|0.500000000000|0.800000000000|4|0.400000000000|uncapped",
     "hierarchyCounts": {
-      "coarse": 1392,
-      "fine": 3873,
-      "total": 5265
+      "coarse": 1176,
+      "fine": 8404,
+      "total": 9580
     },
     "coarseConsolidation": {
       "identity": "mass-preserving-spatial-strata-v2",
@@ -47,23 +45,23 @@
       "enabled": true,
       "anchorMassRatio": 0.8,
       "coarseStratumSize": 4,
-      "anchorMassThreshold": 0.001854549066759647,
-      "maximumSourceBinMass": 0.0023181863334495586,
+      "anchorMassThreshold": 0.0017785480486974124,
+      "maximumSourceBinMass": 0.0022231850608717654,
       "minimumStratumAnchorMassThreshold": 0.000010638966619153511,
-      "maximumStratumAnchorMassThreshold": 0.001854549066759647,
+      "maximumStratumAnchorMassThreshold": 0.0017785480486974124,
       "occupiedStratumCount": 125,
       "minimumAnchorsPerOccupiedStratum": 1,
-      "maximumAnchorsPerOccupiedStratum": 36,
+      "maximumAnchorsPerOccupiedStratum": 31,
       "sourceCoarseBinCount": 8000,
-      "consolidatedCoarseBinCount": 1392,
-      "mergedSourceBinCount": 6608,
-      "occupancyReductionFraction": 0.8260000000000001,
-      "anchorSourceExtinctionMass": 1.7266542892332604,
-      "transferredTailExtinctionMass": 2.840661843989142,
-      "representedCoarseExtinctionMass": 4.567316133222402,
+      "consolidatedCoarseBinCount": 1176,
+      "mergedSourceBinCount": 6824,
+      "occupancyReductionFraction": 0.853,
+      "anchorSourceExtinctionMass": 1.3674978694706188,
+      "transferredTailExtinctionMass": 2.7938581537069,
+      "representedCoarseExtinctionMass": 4.161356023177518,
       "sourceSupport": {
         "count": 8000,
-        "extinctionMass": 4.567316133222392,
+        "extinctionMass": 4.161356023177516,
         "bounds": {
           "minimum": [
             -0.9456216656285632,
@@ -77,14 +75,14 @@
           ]
         },
         "massWeightedCentroid": [
-          0.10333476152577054,
-          0.1273955041264257,
-          -0.1127706209116535
+          0.10573220121781693,
+          0.1254226808363125,
+          -0.11493874927453596
         ]
       },
       "representedSupport": {
-        "count": 1392,
-        "extinctionMass": 4.567316133222406,
+        "count": 1176,
+        "extinctionMass": 4.161356023177526,
         "bounds": {
           "minimum": [
             -0.7492939699441892,
@@ -98,9 +96,9 @@
           ]
         },
         "massWeightedCentroid": [
-          0.09693126189411518,
-          0.1402594577887123,
-          -0.1116612687086879
+          0.10270305538663993,
+          0.13403706556569167,
+          -0.11817899429320695
         ]
       }
     },
@@ -111,22 +109,22 @@
       "massThreshold": 0.00012061774510424585,
       "maximumFineBinMass": 0.0003015443627606146,
       "sourceOccupiedFineBinCount": 63928,
-      "selectorSelectedFineBinCount": 6753,
-      "occupancyAcceptedSelectedFineBinCount": 3873,
-      "emittedFineBinCount": 3873,
-      "occupancyTransferredFineBinCount": 2880,
-      "selectorSelectedSourceExtinctionMass": 0.8311373437326658,
-      "emittedFineSourceExtinctionMass": 0.665800105496497,
-      "occupancyTransferredSourceExtinctionMass": 0.16533723823617014,
-      "emittedFineExtinctionMass": 0.3329000527482485,
-      "occupancyTransferredFineAllocationMass": 0.08266861911808507
+      "selectorSelectedFineBinCount": 12103,
+      "occupancyAcceptedSelectedFineBinCount": 8404,
+      "emittedFineBinCount": 8404,
+      "occupancyTransferredFineBinCount": 3699,
+      "selectorSelectedSourceExtinctionMass": 1.718083165446866,
+      "emittedFineSourceExtinctionMass": 1.4777203255862597,
+      "occupancyTransferredSourceExtinctionMass": 0.24036283986060164,
+      "emittedFineExtinctionMass": 0.7388601627931298,
+      "occupancyTransferredFineAllocationMass": 0.12018141993030082
     },
     "accounting": {
       "identity": "smoke-splat-extinction-accounting-v0",
       "sourceExtinctionMass": 4.9002161859698745,
-      "representedExtinctionMass": 4.90021618597069,
+      "representedExtinctionMass": 4.900216185970682,
       "rejectedExtinctionMass": 0,
-      "retentionRatio": 1.0000000000001663
+      "retentionRatio": 1.0000000000001648
     },
     "sourceStatistics": {
       "sourceCellCount": 4096000,
@@ -142,19 +140,19 @@
       "outputWasTruncated": false
     },
     "diagnostics": [],
-    "requestedActiveCount": 5265,
-    "activeCount": 5265,
+    "requestedActiveCount": 9580,
+    "activeCount": 9580,
     "outputWasTruncated": false,
     "overflowCount": 0
   },
   "artifact": {
-    "path": "route-b.splats.f32",
-    "sha256": "fbafeda516816366242f9bf1b73cb3110916bfc3efa60924984e488ea62548da",
-    "byteLength": 336960,
+    "path": "route-a.splats.f32",
+    "sha256": "61f7c6c49bd40c0f3e6424bdd815dedebc27a43e824711c977182138a030d181",
+    "byteLength": 613120,
     "dtype": "float32",
     "byteOrder": "little-endian",
     "shape": [
-      5265,
+      9580,
       16
     ],
     "channelOrder": [
@@ -177,6 +175,6 @@
     ]
   },
   "timing": {
-    "compileAndWriteMs": 8640.92125
+    "compileAndWriteMs": 8950.525958999999
   }
 }

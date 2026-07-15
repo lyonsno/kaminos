@@ -1,0 +1,218 @@
+{
+  "schema": "kaminos.held-smoke-assay-witness.v0",
+  "status": "passed",
+  "failurePhase": null,
+  "startedAt": "2026-07-15T11:07:26.737Z",
+  "completedAt": "2026-07-15T11:07:55.065Z",
+  "requestedUrl": "http://127.0.0.1:18715/held-basin-smoke-assay.html?assay_manifest_sha256=f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8&manifest_sha256=553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+  "requestedRoute": "held-smoke-a-b-c-d-cockpit-v0",
+  "effectiveRoute": "held-smoke-a-b-c-d-cockpit-v0",
+  "source": {
+    "comparisonAuthority": "same-source-camera-independent-viewports-v0",
+    "mountRequested": "./artifacts/operator-live-basin-0715/viewer-manifest.json",
+    "mountEffective": "http://127.0.0.1:18715/artifacts/operator-live-basin-0715/viewer-manifest.json",
+    "mountRegistered": true,
+    "manifestSha256Requested": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+    "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+    "assayManifestRequested": "./artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+    "assayManifestEffective": "http://127.0.0.1:18715/artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+    "assayManifestSha256Requested": "f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8",
+    "assayManifestSha256Effective": "f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8",
+    "cameraIdentity": "sha256:24600dbb7f6b677ea45f82e78f198701cdf0dfde586a2e8d15a60c37030d6994"
+  },
+  "children": {
+    "a": {
+      "status": "running",
+      "requestedRoute": "webgpu-held-smoke-assay-v0",
+      "effectiveRoute": "webgpu-held-smoke-assay-v0",
+      "requestedProductIndex": 0,
+      "effectiveProductIndex": 0,
+      "frameCount": 436,
+      "error": null
+    },
+    "b": {
+      "status": "running",
+      "requestedRoute": "webgpu-held-smoke-assay-v0",
+      "effectiveRoute": "webgpu-held-smoke-assay-v0",
+      "requestedProductIndex": 1,
+      "effectiveProductIndex": 1,
+      "frameCount": 436,
+      "error": null
+    },
+    "d": {
+      "status": "running",
+      "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+      "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+      "compositionRequested": "smoke-raymarch-under-splats-v0",
+      "compositionEffective": "smoke-raymarch-under-splats-v0",
+      "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+      "error": null
+    }
+  },
+  "browser": {
+    "identity": "kaminos-held-smoke-assay-single-cdp-browser-v0",
+    "mode": "launched-owned",
+    "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "chromePort": 19422,
+    "userDataDir": "/var/folders/lm/2d0ldrgn52jd5h6rtghxs2s40000gn/T/kaminos-held-smoke-assay-chrome-S4EjyL",
+    "keepBrowserOpen": false,
+    "windowSize": "1600,1000"
+  },
+  "captureConfig": {
+    "settleMs": 2200,
+    "loadTimeoutMs": 180000,
+    "noHiddenFrameCap": true
+  },
+  "runtime": {
+    "initial": {
+      "schema": "kaminos.held-smoke-assay-cockpit.v0",
+      "status": "running",
+      "failurePhase": null,
+      "error": null,
+      "requested": {
+        "a": {
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "manifest": "./artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+          "productIndex": 0
+        },
+        "b": {
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "manifest": "./artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+          "productIndex": 1
+        },
+        "d": {
+          "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+          "composition": "smoke-raymarch-under-splats-v0"
+        }
+      },
+      "source": {
+        "comparisonAuthority": "same-source-camera-independent-viewports-v0",
+        "mountRequested": "./artifacts/operator-live-basin-0715/viewer-manifest.json",
+        "mountEffective": "http://127.0.0.1:18715/artifacts/operator-live-basin-0715/viewer-manifest.json",
+        "mountRegistered": true,
+        "manifestSha256Requested": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+        "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+        "assayManifestRequested": "./artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+        "assayManifestEffective": "http://127.0.0.1:18715/artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+        "assayManifestSha256Requested": "f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8",
+        "assayManifestSha256Effective": "f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8",
+        "cameraIdentity": "sha256:24600dbb7f6b677ea45f82e78f198701cdf0dfde586a2e8d15a60c37030d6994"
+      },
+      "children": {
+        "a": {
+          "status": "running",
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "effectiveRoute": "webgpu-held-smoke-assay-v0",
+          "requestedProductIndex": 0,
+          "effectiveProductIndex": 0,
+          "frameCount": 171,
+          "error": null
+        },
+        "b": {
+          "status": "running",
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "effectiveRoute": "webgpu-held-smoke-assay-v0",
+          "requestedProductIndex": 1,
+          "effectiveProductIndex": 1,
+          "frameCount": 171,
+          "error": null
+        },
+        "d": {
+          "status": "running",
+          "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+          "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+          "compositionRequested": "smoke-raymarch-under-splats-v0",
+          "compositionEffective": "smoke-raymarch-under-splats-v0",
+          "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+          "error": null
+        }
+      },
+      "lastObservedAt": "2026-07-15T11:07:49.501Z"
+    },
+    "final": {
+      "schema": "kaminos.held-smoke-assay-cockpit.v0",
+      "status": "running",
+      "failurePhase": null,
+      "error": null,
+      "requested": {
+        "a": {
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "manifest": "./artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+          "productIndex": 0
+        },
+        "b": {
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "manifest": "./artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+          "productIndex": 1
+        },
+        "d": {
+          "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+          "composition": "smoke-raymarch-under-splats-v0"
+        }
+      },
+      "source": {
+        "comparisonAuthority": "same-source-camera-independent-viewports-v0",
+        "mountRequested": "./artifacts/operator-live-basin-0715/viewer-manifest.json",
+        "mountEffective": "http://127.0.0.1:18715/artifacts/operator-live-basin-0715/viewer-manifest.json",
+        "mountRegistered": true,
+        "manifestSha256Requested": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+        "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+        "assayManifestRequested": "./artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+        "assayManifestEffective": "http://127.0.0.1:18715/artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json",
+        "assayManifestSha256Requested": "f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8",
+        "assayManifestSha256Effective": "f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8",
+        "cameraIdentity": "sha256:24600dbb7f6b677ea45f82e78f198701cdf0dfde586a2e8d15a60c37030d6994"
+      },
+      "children": {
+        "a": {
+          "status": "running",
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "effectiveRoute": "webgpu-held-smoke-assay-v0",
+          "requestedProductIndex": 0,
+          "effectiveProductIndex": 0,
+          "frameCount": 436,
+          "error": null
+        },
+        "b": {
+          "status": "running",
+          "requestedRoute": "webgpu-held-smoke-assay-v0",
+          "effectiveRoute": "webgpu-held-smoke-assay-v0",
+          "requestedProductIndex": 1,
+          "effectiveProductIndex": 1,
+          "frameCount": 436,
+          "error": null
+        },
+        "d": {
+          "status": "running",
+          "requestedRoute": "kaminos.volume.held-field-viewer.v0",
+          "effectiveRoute": "native-3d-compute-fluid-raymarch-v0",
+          "compositionRequested": "smoke-raymarch-under-splats-v0",
+          "compositionEffective": "smoke-raymarch-under-splats-v0",
+          "manifestSha256Effective": "553fc56d90ce13309595e8856ce0d54a87800d0b57e4476ea8fc847748149afa",
+          "error": null
+        }
+      },
+      "lastObservedAt": "2026-07-15T11:07:51.702Z"
+    },
+    "runtimeExceptionCount": 0
+  },
+  "frame": {
+    "path": "held-smoke-assay.png",
+    "byteLength": 798580,
+    "sha256": "869e41a0e0ec6440d7e2a653ace025776f0c8db05b0c034b5c9b1656cc5db065",
+    "width": 3200,
+    "height": 1826,
+    "luminanceMean": 115.91083287076084,
+    "luminanceStdDev": 72.69553584866455,
+    "nonUniformPixelCount": 5590054
+  },
+  "falseClosureChecks": {
+    "rejectsWrongOrFallbackChildRoute": true,
+    "rejectsUnregisteredOrSubstitutedMount": true,
+    "rejectsWrongEffectiveSourceDigest": true,
+    "rejectsPartialChildLoading": true,
+    "rejectsMissingOrBlankOutput": true,
+    "preservesFailurePhaseBeforePrimaryOutput": true
+  },
+  "claimBoundary": "Static same-source representation comparison. A/B are smoke-only splat products; D is raymarched smoke under splat flame. C remains open. This does not prove neural temporal smoke decode."
+}
