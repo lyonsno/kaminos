@@ -259,7 +259,12 @@ async function captureHistoryDepth(requestedDepth, expectedSubstrate, preactivat
   const historyPrime = await evaluate(`window.__kaminosVolumePrototype.primeBoundarySplatLiveHistory(${JSON.stringify({
     minimumHistoryFrames: Number(depthTransition.frameCountAfter) + (requestedDepth - 1) * Number(initialState.boundarySplatHistoryFrameStride) + 1,
   })})`, true);
-  validateHistoryPrime(historyPrime, requestedDepth);
+  validateHistoryPrime(
+    historyPrime,
+    requestedDepth,
+    matchedSubstrateIdentity.requestedInstanceCount,
+    matchedSubstrateIdentity.phaseStride,
+  );
   const slotMetadata = await evaluate('window.__kaminosVolumePrototype.sampleBoundarySplatHistorySlotMetadata()', true);
   validateSlotMetadata(slotMetadata, requestedDepth);
   lastTrustworthyEvidence.currentRow.historyPrime = historyPrime;
@@ -554,11 +559,25 @@ function validateRuntimeState(state, requestedDepth) {
   if (state.boundarySplatFallbackReason) throw new Error(`fallback-route:${state.boundarySplatFallbackReason}`);
 }
 
-function validateHistoryPrime(prime, requestedDepth) {
+function expectedPhaseSourceCount(historyDepth, requestedInstanceCount, phaseStride) {
+  const sources = new Set();
+  for (let index = 0; index < requestedInstanceCount; index += 1) {
+    sources.add((index * phaseStride) % historyDepth);
+  }
+  return sources.size;
+}
+
+function validateHistoryPrime(prime, requestedDepth, requestedInstanceCount, phaseStride) {
   assert.equal(prime?.identity, 'boundary-splat-live-history-prime-v0', 'wrong history prime identity');
   assert.equal(prime?.ok, true, 'history prime failed');
   assert.equal(prime?.simulatorCount, 1, 'history prime duplicated the simulator');
-  assert.equal(prime?.phaseSourceCount, requestedDepth, 'history prime did not expose every requested slot');
+  assert.equal(prime?.requestedInstanceCount, requestedInstanceCount, 'history prime changed requested instance count');
+  assert.equal(prime?.historyDepth, requestedDepth, 'history prime changed effective history depth');
+  assert.equal(
+    prime?.phaseSourceCount,
+    expectedPhaseSourceCount(requestedDepth, requestedInstanceCount, phaseStride),
+    'history prime descriptor-source count disagrees with age-sweep selection',
+  );
   assert.equal(prime?.fallbackReason, null, 'history prime entered fallback');
   assert.equal(prime?.candidateCopyBytes, 0, 'history prime copied candidate state');
 }

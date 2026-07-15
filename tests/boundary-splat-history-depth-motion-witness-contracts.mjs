@@ -16,6 +16,14 @@ const freshUpperActivationSource = witness.match(/async function activateFreshMe
 assert.ok(freshUpperActivationSource, 'fresh upper activation must remain directly contract-testable');
 assert.match(freshUpperActivationSource, /\.replaceAll\('__FRESH_UPPER_DEPTH__',\s*String\(selectedDepth\)\)/, 'fresh upper activation must resolve every depth placeholder in its effective route');
 assert.match(freshUpperActivationSource, /fresh-upper-route-placeholder-unresolved/, 'fresh upper activation must fail before capture if any route placeholder survives');
+const expectedPhaseSourceCountSource = witness.match(/function expectedPhaseSourceCount\(historyDepth, requestedInstanceCount, phaseStride\) \{[\s\S]*?\n\}/)?.[0];
+assert.ok(expectedPhaseSourceCountSource, 'descriptor-derived phase source semantics must remain directly contract-testable');
+const expectedPhaseSourceCount = Function(`${expectedPhaseSourceCountSource}; return expectedPhaseSourceCount;`)();
+assert.equal(expectedPhaseSourceCount(16, 100, 5), 16, 'bounded depth 16 must address every slot');
+assert.equal(expectedPhaseSourceCount(32, 100, 5), 32, 'bounded depth 32 must address every slot');
+assert.equal(expectedPhaseSourceCount(64, 100, 5), 64, 'bounded depth 64 must address every slot');
+assert.equal(expectedPhaseSourceCount(100, 100, 5), 20, 'descriptor source count must preserve stride aliasing rather than clamp to min(depth, instances)');
+assert.equal(expectedPhaseSourceCount(426, 100, 5), 100, 'selected upper depth must expose one unique slot per descriptor when stride and depth are coprime');
 assert.match(witness, /sampleBoundarySplatHistorySlotMetadata[\s\S]*setControls\(\{\s*boundarySplatHistoryDepth:/, 'fresh GPU upper authority must be applied before another simulation frame can invalidate it');
 assert.match(witness, /transitionHistoryDepthInPlace/, 'bounded depth rows after the first must preserve the live simulator episode');
 assert.match(witness, /history\.replaceState/, 'in-place depth transitions must keep effective URL identity inspectable');
@@ -28,6 +36,7 @@ assert.match(witness, /matchedSubstrateIdentity/, 'rows must prove matched basin
 assert.match(witness, /boundarySplatHistoryAllocatedSlots/, 'rows must preserve physical allocation depth');
 assert.match(witness, /boundarySplatBufferIntegrity/, 'rows must preserve physical history memory authority');
 assert.match(witness, /primeBoundarySplatLiveHistory/, 'every depth must be fully primed before capture');
+assert.match(witness, /validateHistoryPrime\([\s\S]*expectedPhaseSourceCount/, 'history-prime validation must use descriptor-derived exposed-source semantics');
 assert.match(witness, /minimumHistoryFrames:\s*Number\(depthTransition\.frameCountAfter\)\s*\+\s*\(requestedDepth\s*-\s*1\)\s*\*\s*Number\(initialState\.boundarySplatHistoryFrameStride\)\s*\+\s*1/, 'in-place transition priming must use an allocation-generation absolute frame target rather than a relative or stale effective-window value');
 assert.match(witness, /sampleBoundarySplatPbrCostLadder/, 'every depth must record measured raster work');
 assert.match(witness, /perSourceReuse/, 'rows must report selected history-slot reuse');
