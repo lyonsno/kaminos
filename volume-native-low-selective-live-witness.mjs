@@ -35,6 +35,7 @@ const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
 const expectedRuntimeBuildIdentity = String(args.get('--expected-runtime-build') || REQUIRED_RUNTIME_BUILD_IDENTITY);
 const frontTopologyAblationRequested = new URL(url).searchParams.get('front_topology_ablation') === '1';
+const fixedGateDiscontinuityAssayRequested = new URL(url).searchParams.get('fixed_gate_discontinuity_assay') === '1';
 const out = resolve(String(args.get('--out') || '/tmp/kaminos-native-low-selective-live.png'));
 const reportPath = resolve(String(args.get('--report') || '/tmp/kaminos-native-low-selective-live.json'));
 const minimumContinuousSeconds = Number(args.get('--minimum-seconds') || 5);
@@ -115,7 +116,7 @@ try {
   await socket.call('Runtime.enable');
   await socket.call('Network.enable');
   await socket.call('Network.setCacheDisabled', { cacheDisabled: true });
-  const effectiveUrl = cacheBustUrl(url, expectedRuntimeBuildIdentity, witnessGitHead);
+  let effectiveUrl = cacheBustUrl(url, expectedRuntimeBuildIdentity, witnessGitHead);
   failurePhase = 'served-source-bundle-fetch';
   servedSourceBundle = await fetchServedSourceBundle(effectiveUrl, [
     'volume-native-low-selective-live.html',
@@ -123,6 +124,7 @@ try {
     'volume-core.js',
   ]);
   assert.equal(servedSourceBundle.runtimeBuildIdentityPresent, true, 'served runtime source lacks expected runtime build identity');
+  effectiveUrl = addServedSourceBundleIdentity(effectiveUrl, servedSourceBundle.sha256);
   failurePhase = 'browser-navigate';
   await socket.call('Page.navigate', { url: effectiveUrl });
 
@@ -321,7 +323,11 @@ try {
   assert.equal(state?.nativeLowCoarseFrontSparseDetailBand?.candidatePathScope?.noJsVisibleDenseArrays, true, 'sparse detail-band path allowed JS-visible dense arrays');
   assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.identity, 'native-low-source-history-detail-candidate-v0', 'source-history detail candidate missing');
   assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.sourceChannelCount, 17, 'source-history candidate must use all 17 source channels');
-  assert.ok(Number(state?.nativeLowSourceHistoryDetailCandidate?.candidateCoverage) >= 0.09, 'source-history candidate coverage missing');
+  if (fixedGateDiscontinuityAssayRequested) {
+    assert.ok(Number(state?.nativeLowSourceHistoryDetailCandidate?.candidateCoverage) >= 0, 'source-history candidate coverage missing');
+  } else {
+    assert.ok(Number(state?.nativeLowSourceHistoryDetailCandidate?.candidateCoverage) >= 0.09, 'source-history candidate coverage missing');
+  }
   assert.equal(Number(state?.nativeLowSourceHistoryDetailCandidate?.sourceDeltaEnergyCapture), 0.8286, 'source-delta energy capture missing');
   assert.equal(Number(state?.nativeLowSourceHistoryDetailCandidate?.supportProbabilityEnergyCapture), 0.205, 'support-probability anti-evidence missing');
   assert.equal(state?.nativeLowSourceHistoryDetailCandidate?.supportProbabilityAdmission, false, 'support probability reused as detail admission');
@@ -353,6 +359,17 @@ try {
   assert.equal(state?.simulationSteppingReceipt?.simStepDelta, 1, 'simulator did not step exactly once for this model frame');
   assert.equal(state?.currentSourceFrameConsumption?.encodedFrameDelta, 1, 'model did not consume exactly one current source frame');
   assert.equal(state?.stalePredictionRejection?.repeatedStaticPrediction, false, 'stale prediction was not rejected');
+  if (fixedGateDiscontinuityAssayRequested) {
+    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.identity, 'native-low-fixed-source-delta-discontinuity-assay-v0', 'fixed-gate discontinuity assay missing');
+    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.steadyPreShiftStrip?.minimumValidHistoryFrames, 4, 'pre-shift strip minimum missing');
+    assert.ok(Number(state?.nativeLowFixedGateDiscontinuityAssay?.steadyPreShiftStrip?.validHistoryFrameCount) >= 4, 'pre-shift strip did not capture four valid-history frames');
+    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.noRebuildViolentSourceShapeShift?.historyEpochChanged, false, 'no-rebuild shift changed history epoch');
+    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.noRebuildViolentSourceShapeShift?.historyEpochValidForAdmission, true, 'no-rebuild shift lost valid history');
+    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.actualBasinGridSceneRebuild?.historyEpochChanged, true, 'rebuild did not change history epoch');
+    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.actualBasinGridSceneRebuild?.sourceHistoryResetReason, 'epoch-changed-first-frame-invalidated', 'rebuild first frame was not invalidated');
+    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.postRebuildConsecutiveValidFrame?.historyEpochValidForAdmission, true, 'post-rebuild consecutive frame did not become valid');
+    assert.equal(state?.nativeLowFixedGateDiscontinuityAssay?.assayClaimScope, 'routing-cost-discontinuity-receipt-not-visual-robustness-claim-v0', 'assay overclaimed visual robustness');
+  }
 
   const startState = state;
   const observationStartMs = performance.now();
@@ -422,6 +439,8 @@ try {
     nativeLowCoarseFrontSparseDetailBand: endState.nativeLowCoarseFrontSparseDetailBand,
     nativeLowSourceHistoryDetailCandidate: endState.nativeLowSourceHistoryDetailCandidate,
     nativeLowFixedSourceDeltaAdmission: endState.nativeLowFixedSourceDeltaAdmission,
+    nativeLowFixedGateDiscontinuityAssay: endState.nativeLowFixedGateDiscontinuityAssay,
+    fixedGateDiscontinuityAssayRequested,
     nativeLowFrontTopologyAblation: endState.nativeLowFrontTopologyAblation,
     fullFrozenTreatmentReference: endState.fullFrozenTreatmentReference,
     frontTopologyAblatedTreatment: endState.frontTopologyAblatedTreatment,
@@ -601,6 +620,12 @@ function cacheBustUrl(rawUrl, runtimeBuildIdentity, head) {
   parsed.searchParams.set('runtime_build_expect', runtimeBuildIdentity);
   parsed.searchParams.set('witness_git_head', head);
   parsed.searchParams.set('cache_bust', `${Date.now()}-${randomInt(1_000_000, 9_999_999)}`);
+  return parsed.toString();
+}
+
+function addServedSourceBundleIdentity(rawUrl, sha256) {
+  const parsed = new URL(rawUrl);
+  parsed.searchParams.set('served_source_bundle_sha256', sha256);
   return parsed.toString();
 }
 

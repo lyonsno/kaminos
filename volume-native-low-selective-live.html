@@ -155,6 +155,7 @@
     const native64PredictionManifestUrl = params.get('native64_prediction_manifest') || '';
     const native64ManifestMode = Boolean(native64SourceManifestUrl && native64PredictionManifestUrl);
     const frontTopologyAblationMode = !native64ManifestMode && params.get('front_topology_ablation') === '1';
+    const fixedGateDiscontinuityAssayMode = !native64ManifestMode && params.get('fixed_gate_discontinuity_assay') === '1';
     const sourceHistoryDetailAdmissionEnabled = !native64ManifestMode && params.get('source_history_detail_candidate') !== '0';
     const sourceHistoryDetailTargetCoverage = Math.max(0.01, Math.min(0.5, Number(params.get('source_history_detail_coverage') || 0.10)));
     const supportProbabilityDetailAdmissionEnabled = params.get('support_detail_admission') === '1';
@@ -175,6 +176,7 @@
     let frameIndex = 0;
     let latestReceipt = null;
     let latestRunnerState = null;
+    let latestDiscontinuityAssay = null;
     let lastControlObjectUrl = null;
     let lastTreatmentObjectUrl = null;
     let lastFrontTopologyAblatedObjectUrl = null;
@@ -317,6 +319,159 @@
         const ablationText = frontTopologyAblationMode ? ` | ablated ${receipt.frontTopologyAblatedSplatInstanceCount}` : '';
         status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount}${ablationText} | cal ${receipt.treatmentSplatRadianceGain}/${receipt.treatmentSplatOpacityGain} | ${Math.round(receipt.endToEndFrameMs)} ms`;
       }
+      return receipt;
+    }
+
+    function fixedGateFrameReceipt(kind, receipt, runnerBefore = null, runnerAfter = null) {
+      const admission = receipt?.nativeLowFixedSourceDeltaAdmission || {};
+      const headCost = receipt?.nativeLowHeadCostProfile || {};
+      return {
+        kind,
+        sourceStepIdentity: receipt?.sourceStepIdentity || null,
+        sourceStepDelta: receipt?.simulationSteppingReceipt?.simStepDelta ?? null,
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        requestedBackend: receipt?.requestedBackend || 'WebGPU',
+        effectiveBackend: receipt?.effectiveBackend || null,
+        requestedComposition: receipt?.requestedComposition || requestedComposition,
+        effectiveComposition: receipt?.effectiveComposition || null,
+        fixedSourceDeltaCalibrationSha256: admission.fixedSourceDeltaCalibrationSha256 || null,
+        sourceDeltaThreshold: admission.sourceDeltaThreshold ?? null,
+        sourceDeltaScales: admission.sourceDeltaScales || null,
+        sourceDeltaAdmissionGpuMs: headCost.sourceDeltaAdmissionGpuMs ?? null,
+        inferenceGpuMs: headCost.inferenceGpuMs ?? receipt?.inferenceGpuMs ?? null,
+        sourceHistoryAvailable: admission.sourceHistoryAvailable ?? null,
+        historyEpochIdentity: admission.historyEpochIdentity || null,
+        priorHistoryEpochIdentity: admission.priorHistoryEpochIdentity || null,
+        currentHistoryEpochIdentity: admission.currentHistoryEpochIdentity || null,
+        historyEpochChanged: admission.historyEpochChanged ?? null,
+        historyEpochValidForAdmission: admission.historyEpochValidForAdmission ?? null,
+        sourceHistoryResetReason: admission.sourceHistoryResetReason || null,
+        callerResetReason: admission.callerResetReason || null,
+        uncappedLowCandidateCount: admission.uncappedLowCandidateCount ?? null,
+        uncappedCandidateCount: admission.uncappedCandidateCount ?? null,
+        uncappedCandidateCoverage: admission.uncappedCandidateCoverage ?? null,
+        mohelWarning: admission.mohelWarning || null,
+        runtimeTopK: admission.runtimeTopK ?? null,
+        dynamicPercentile: admission.dynamicPercentile ?? null,
+        hiddenCandidateCap: admission.hiddenCandidateCap ?? null,
+        sourceHistoryStatsReadbackAuthority: admission.sourceHistoryStatsReadbackAuthority || null,
+        productionCandidateNoCpuReadback: admission.productionCandidateNoCpuReadback ?? null,
+        fixedSourceDeltaLongStripSha256: admission.fixedSourceDeltaLongStripSha256 || null,
+        normalBasinCoverageRange: admission.normalBasinCoverageRange || null,
+        normalBasinCoverageMean: admission.normalBasinCoverageMean ?? null,
+        runnerEpochBefore: runnerBefore?.nativeLowSourceHistoryEpochCount ?? null,
+        runnerEpochAfter: runnerAfter?.nativeLowSourceHistoryEpochCount ?? null,
+        runnerResetReasonBefore: runnerBefore?.nativeLowSourceHistoryEpochReason || null,
+        runnerResetReasonAfter: runnerAfter?.nativeLowSourceHistoryEpochReason || null,
+      };
+    }
+
+    function numericStats(values) {
+      const clean = values.map(Number).filter(Number.isFinite);
+      if (!clean.length) return { min: null, max: null, mean: null };
+      return {
+        min: Math.min(...clean),
+        max: Math.max(...clean),
+        mean: clean.reduce((sum, value) => sum + value, 0) / clean.length,
+      };
+    }
+
+    function stripStats(frames) {
+      const coverage = numericStats(frames.map(frame => frame.uncappedCandidateCoverage));
+      const counts = numericStats(frames.map(frame => frame.uncappedCandidateCount));
+      return {
+        minimumValidHistoryFrames: 4,
+        validHistoryFrameCount: frames.length,
+        coverageMin: coverage.min,
+        coverageMax: coverage.max,
+        coverageMean: coverage.mean,
+        candidateCountMin: counts.min,
+        candidateCountMax: counts.max,
+        candidateCountMean: counts.mean,
+      };
+    }
+
+    async function runFixedGateDiscontinuityAssay(prototype) {
+      const assayFrames = [];
+      const preShiftFrames = [];
+      let guard = 0;
+      while (preShiftFrames.length < 4 && guard < 8) {
+        guard += 1;
+        const before = prototype.debugState?.() || null;
+        const receipt = await tick();
+        const after = prototype.debugState?.() || null;
+        const frame = fixedGateFrameReceipt('steady-pre-shift-valid-history-v0', receipt, before, after);
+        assayFrames.push(frame);
+        if (frame.historyEpochValidForAdmission === true && frame.sourceHistoryAvailable === true) preShiftFrames.push(frame);
+      }
+      const beforeShift = prototype.debugState?.() || null;
+      prototype.setControls({
+        inputRadius: 0.18,
+        flowRate: 1.5,
+        windStrength: 0.15,
+        windAngle: 72,
+        plumeHeight: 0.72,
+        runtimeQualityReason: 'fixed-gate-discontinuity-no-rebuild-source-shape-shift',
+      });
+      const shiftReceipt = await tick();
+      const afterShift = prototype.debugState?.() || null;
+      const noRebuildShift = fixedGateFrameReceipt('no-rebuild-violent-source-shape-shift-v0', shiftReceipt, beforeShift, afterShift);
+      assayFrames.push(noRebuildShift);
+
+      prototype.setControls({ resolution: 96, runtimeQualityReason: 'fixed-gate-discontinuity-grid-epoch-probe-96' });
+      prototype.setControls({ resolution: 128, runtimeQualityReason: 'fixed-gate-discontinuity-grid-epoch-probe-128' });
+      const beforeRebuildCapture = prototype.debugState?.() || null;
+      const rebuildReceipt = await tick();
+      const afterRebuildCapture = prototype.debugState?.() || null;
+      const rebuildInvalidated = fixedGateFrameReceipt('actual-basin-grid-scene-rebuild-v0', rebuildReceipt, beforeRebuildCapture, afterRebuildCapture);
+      assayFrames.push(rebuildInvalidated);
+
+      const beforePostRebuild = prototype.debugState?.() || null;
+      const postRebuildReceipt = await tick();
+      const afterPostRebuild = prototype.debugState?.() || null;
+      const postRebuildValid = fixedGateFrameReceipt('post-rebuild-consecutive-valid-frame-v0', postRebuildReceipt, beforePostRebuild, afterPostRebuild);
+      assayFrames.push(postRebuildValid);
+
+      const preShiftStripStats = stripStats(preShiftFrames);
+      latestDiscontinuityAssay = {
+        identity: 'native-low-fixed-source-delta-discontinuity-assay-v0',
+        assayClaimScope: 'routing-cost-discontinuity-receipt-not-visual-robustness-claim-v0',
+        runtimeBuildIdentity: NATIVE_LOW_RUNTIME_BUILD_IDENTITY,
+        servedSourceBundleSha256: params.get('served_source_bundle_sha256') || null,
+        fixedSourceDeltaCalibrationSha256: noRebuildShift.fixedSourceDeltaCalibrationSha256,
+        sourceDeltaThreshold: noRebuildShift.sourceDeltaThreshold,
+        sourceDeltaScales: noRebuildShift.sourceDeltaScales,
+        steadyPreShiftStrip: {
+          minimumValidHistoryFrames: 4,
+          validHistoryFrameCount: preShiftStripStats.validHistoryFrameCount,
+          coverageMin: preShiftStripStats.coverageMin,
+          coverageMax: preShiftStripStats.coverageMax,
+          coverageMean: preShiftStripStats.coverageMean,
+          candidateCountMin: preShiftStripStats.candidateCountMin,
+          candidateCountMax: preShiftStripStats.candidateCountMax,
+          candidateCountMean: preShiftStripStats.candidateCountMean,
+          frames: preShiftFrames,
+        },
+        preShiftWorkloadPressure: {
+          phaseAlignedLongStripCoverageRange: [0.099875, 0.100891],
+          observedCoverageMin: preShiftStripStats.coverageMin,
+          observedCoverageMax: preShiftStripStats.coverageMax,
+          observedCoverageMean: preShiftStripStats.coverageMean,
+          provisionalOldRuntimeR20Coverage: 0.157384,
+          retargetedToTenPercent: false,
+          hiddenCapApplied: false,
+        },
+        noRebuildViolentSourceShapeShift: noRebuildShift,
+        actualBasinGridSceneRebuild: rebuildInvalidated,
+        postRebuildConsecutiveValidFrame: postRebuildValid,
+        frames: assayFrames,
+        noHiddenCaps: true,
+        runtimeTopK: false,
+        dynamicPercentile: false,
+        failurePhase: null,
+      };
+      status.textContent = `fixed-gate assay | pre ${preShiftFrames.length} | shift ${(noRebuildShift.uncappedCandidateCoverage * 100).toFixed(2)}% | rebuild ${rebuildInvalidated.sourceHistoryResetReason}`;
+      return latestDiscontinuityAssay;
     }
 
     function debugState() {
@@ -419,6 +574,7 @@
         nativeLowCoarseFrontSparseDetailBand: receipt.nativeLowCoarseFrontSparseDetailBand || null,
         nativeLowSourceHistoryDetailCandidate: receipt.nativeLowSourceHistoryDetailCandidate || null,
         nativeLowFixedSourceDeltaAdmission: receipt.nativeLowFixedSourceDeltaAdmission || null,
+        nativeLowFixedGateDiscontinuityAssay: latestDiscontinuityAssay,
         endToEndFrameMs: receipt.endToEndFrameMs ?? null,
         simulationSteppingReceipt: receipt.simulationSteppingReceipt || null,
         currentSourceFrameConsumption: receipt.currentSourceFrameConsumption || null,
@@ -451,6 +607,10 @@
         routeStatus = 'captured';
         failurePhase = null;
         return;
+      }
+      if (fixedGateDiscontinuityAssayMode) {
+        routeStatus = 'assay-running';
+        await runFixedGateDiscontinuityAssay(prototype);
       }
       routeStatus = 'running';
       failurePhase = null;
