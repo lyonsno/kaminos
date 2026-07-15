@@ -120,6 +120,12 @@ export {
 } from './resource-residency.js';
 
 export {
+  WEBGPU_RESOURCE_FACTORY_SCHEMA,
+  WEBGPU_RESOURCE_FLIGHT_SCHEMA,
+  createWebGpuResourceFactory,
+} from './resource-factory.js';
+
+export {
   WEBGPU_COMMAND_DUTY_DESCRIPTOR_SCHEMA,
   WEBGPU_COMMAND_DUTY_OBSERVATION_SCHEMA,
   WEBGPU_COMMAND_DUTY_REPORT_SCHEMA,

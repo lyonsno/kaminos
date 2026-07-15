@@ -11,6 +11,9 @@ import {
 import {
   createWebGpuResourceResidency,
 } from './resource-residency.js';
+import {
+  createWebGpuResourceFactory,
+} from './resource-factory.js';
 
 export const WEBGPU_INFERENCE_SESSION_SCHEMA = 'kaminos.webgpu-inference-session.v0';
 export const WEBGPU_INFERENCE_SESSION_DEVICE_LOSS_SCHEMA = 'kaminos.webgpu-inference-session-device-loss.v0';
@@ -121,6 +124,11 @@ export async function createWebGpuInferenceSession(input = {}) {
     sessionId: input.sessionId,
     now,
   });
+  const resourceFactory = createWebGpuResourceFactory({
+    sessionId: input.sessionId,
+    residency,
+    now,
+  });
   if (
     typeof residency.acquire !== 'function'
     || typeof residency.snapshot !== 'function'
@@ -175,6 +183,7 @@ export async function createWebGpuInferenceSession(input = {}) {
       deviceLoss: clone(state.deviceLoss),
       coordinator: admissionCoordinator.snapshot(),
       residency: residency.snapshot(),
+      resourceFactory: resourceFactory.snapshot(),
       registeringRouteIds: [...state.registeringRoutes],
       routes: [...state.routes.values()].map(routeSnapshot),
     };
@@ -193,6 +202,7 @@ export async function createWebGpuInferenceSession(input = {}) {
       cancellationAuthority: 'pending-route-jobs-only-no-active-work-preemption',
     });
     if (state.status !== 'closed') state.status = 'device-lost';
+    resourceFactory.invalidateAll(`device-lost:${reason}`);
     residency.invalidateAll({ reason: `device-lost:${reason}`, message: state.deviceLoss.message });
     for (const route of state.routes.values()) {
       for (const handle of route.jobHandles.values()) {
@@ -252,6 +262,15 @@ export async function createWebGpuInferenceSession(input = {}) {
       }
       const routeResidency = Object.freeze({
         acquire: acquireResource,
+        acquireOrCreate(resourceInput = {}) {
+          assertAttached(route);
+          assertActive();
+          if (!isPlainObject(resourceInput)) throw new Error('resource input must be an object');
+          if (Object.hasOwn(resourceInput, 'routeId')) {
+            throw new Error('session route owns routeId; acquireOrCreate cannot override it');
+          }
+          return resourceFactory.acquireOrCreate({ ...resourceInput, routeId: route.routeId });
+        },
         snapshot() { return deepFreeze(residency.routeSnapshot(route.routeId)); },
       });
       route.handle = Object.freeze({
@@ -302,6 +321,9 @@ export async function createWebGpuInferenceSession(input = {}) {
     if (residency.hasActiveLeases(routeId)) {
       throw new Error(`route ${routeId} must release every resource lease before unregister`);
     }
+    if (resourceFactory.hasActiveWaiters(routeId)) {
+      throw new Error(`route ${routeId} must let every resource creation waiter settle before unregister`);
+    }
     route.attached = false;
     state.routes.delete(routeId);
     return deepFreeze(routeSnapshot(route));
@@ -314,6 +336,7 @@ export async function createWebGpuInferenceSession(input = {}) {
     await Promise.all([
       ...[...state.routes.values()].map(route => route.queue.drain()),
       admissionCoordinator.drain(),
+      resourceFactory.drain(),
     ]);
     return deepFreeze(snapshot());
   }
@@ -330,6 +353,9 @@ export async function createWebGpuInferenceSession(input = {}) {
     }
     if (residency.hasActiveLeases()) {
       throw new Error('all routes must release every resource lease before close');
+    }
+    if (resourceFactory.snapshot().activeFlightCount > 0) {
+      throw new Error('all resource creation flights must settle before close');
     }
     state.status = 'closed';
     for (const route of state.routes.values()) route.attached = false;
@@ -348,6 +374,7 @@ export async function createWebGpuInferenceSession(input = {}) {
     backendIdentity: deepFreeze(clone(context.backendIdentity)),
     admissionCoordinator,
     residency,
+    resourceFactory,
     deviceLost,
     registerRoute,
     unregisterRoute,

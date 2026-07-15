@@ -166,6 +166,7 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `createWebGpuInferenceCoordinator(input)`: admit eligible heads from multiple route queues through one uncapped global FIFO, preserving route-local barriers, pending cancellation, and honest non-preemption boundaries.
 - `createWebGpuInferenceSession(input)`: own one browser WebGPU device, backend identity, and coordinator across explicitly registered route runtimes, with device-loss and idle-close lifecycle truth.
 - `createWebGpuResourceResidency(input)`: account for caller-declared GPU allocations once across routes, issue explicit route leases, retain released allocations as eviction candidates, and invalidate the whole ledger on device loss without claiming access to browser-global VRAM.
+- `createWebGpuResourceFactory(input)`: collapse concurrent asynchronous creation or weight-upload requests for one absent resource into a single abortable flight, then issue independent route leases over the one resulting object.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
 - `defineTensorManifest(input)`: normalize model tensor metadata, dtype sizes, byte lengths, offsets, and shapes for browser-loaded weight bundles.
@@ -447,6 +448,31 @@ The session retains route registrations until `unregisterRoute(routeId)`. Route 
 Releasing the last lease makes an allocation eligible for eviction. Borrowed resources remain caller-owned, so the caller explicitly evicts the record and disposes the WebGPU object. A resource acquired with `ownership: "managed"` and `dispose(resource)` instead transfers disposal to the residency runtime; explicit eviction or orderly session close invokes its disposer exactly once. Device loss clears references without claiming a redundant destroy of already-invalid GPU objects.
 
 Residency snapshots expose exact caller-declared bytes, not browser-global VRAM usage. They retain every resource until explicit `forget(resourceId)`, preserve zero-byte route participation after release, and never impose a hidden memory cap. `unregisterRoute()` and `close()` reject active resource leases so ownership cannot disappear silently.
+
+When several routes may request the same absent allocation concurrently, create it through the route-scoped factory instead of racing independent uploads:
+
+```js
+const lease = await sharp.residency.acquireOrCreate({
+  resourceId: "dinov2.vitl14.weights.f16",
+  declaredBytes: weightsBytes.byteLength,
+  kind: "model-weight",
+  metadata: { precision: "f16" },
+  signal: abortController.signal,
+  async create({ signal }) {
+    const buffer = sharp.runtime.createBuffer({
+      label: "dinov2.vitl14.weights.f16",
+      size: weightsBytes.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    if (signal.aborted) throw signal.reason;
+    sharp.runtime.writeBuffer(buffer, weightsBytes);
+    return buffer;
+  },
+  dispose(buffer) { buffer.destroy(); },
+});
+```
+
+Every concurrent matching requester joins one creator and receives the same `lease.resource`. Cancellation removes only that waiter while others remain; cancelling every waiter aborts the creator. Failed flights remain visible and a later request starts a new generation. Created resources are managed because a runtime-created GPU object without owned disposal is a leak. Flight history is uncapped until explicit `forgetFlight(flightId)`.
 
 Managed route handles also gate enqueue and scheduler changes after device loss while still exposing each runtime for adapter kernels and buffers. If `device.lost` resolves, the session preserves the opaque browser reason/message, cancels pending jobs, rejects new managed work, invalidates all residency accounting, and leaves active work to complete or fail without claiming preemption. Recovery requires a new session and rebuilt device resources.
 
