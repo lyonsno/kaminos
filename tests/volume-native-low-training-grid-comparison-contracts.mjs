@@ -126,6 +126,12 @@ assert.equal(report.roles.candidate96Trained.modelTrainedLowGrid, 96);
 assert.equal(report.sameNativeStateIdentity, stateIdentity);
 assert.equal(report.runtimeTruthAvailable, false);
 assert.ok(existsSync(join(outDir, 'index.html')));
+const operatorHtml = readFileSync(join(outDir, 'index.html'), 'utf8');
+assert.match(
+  operatorHtml,
+  /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/,
+  'desktop comparison keeps control and both treatments visible together',
+);
 
 const lyingWitness = witness('lying', candidateApplication, image('lying.treatment'), {
   raymarchExcludedFromDiscriminant: false,
