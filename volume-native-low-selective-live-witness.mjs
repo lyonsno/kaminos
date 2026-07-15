@@ -13,6 +13,9 @@ const MODEL_SHA256 = 'dc1886384f87c4e51015f6ffd5ac8c0a48ac6f32b6f02a238ac5e3c3bd
 const TRANSPORT_MODE = 'shared-device-gpu-buffers-no-readback-import-v0';
 const WITNESS_CONTRACT_MARKERS = Object.freeze({
   transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+  requestedCalibration: 'native-low-learned-splat-calibration-v0',
+  effectiveCalibration: 'native-low-learned-splat-calibration-v0',
+  modelOutputMutation: false,
 });
 const args = parseArgs(process.argv.slice(2));
 const url = required('--url');
@@ -103,6 +106,9 @@ try {
       && state?.modelSha256 === MODEL_SHA256
       && state?.requestedComposition === 'splat-only-v0'
       && state?.effectiveComposition === 'splat-only-v0'
+      && state?.requestedCalibration === 'native-low-learned-splat-calibration-v0'
+      && state?.effectiveCalibration === 'native-low-learned-splat-calibration-v0'
+      && state?.modelOutputMutation === false
       && state?.requestedBackend === 'WebGPU'
       && state?.effectiveBackend === 'WebGPU'
       && state?.fallbackBackend === null
@@ -115,6 +121,8 @@ try {
       && Number(state?.supportPositiveCount) >= 0
       && Number(state?.treatmentSplatInstanceCount) >= 0
       && Number(state?.calibrationGain) >= 0
+      && Number(state?.treatmentSplatRadianceGain) >= 0
+      && Number(state?.treatmentSplatOpacityGain) >= 0
       && Number(state?.inferenceGpuMs) >= 0
       && Number(state?.uploadDispatchMs) >= 0
       && Number(state?.endToEndFrameMs) >= 0
@@ -127,6 +135,9 @@ try {
   assert.equal(state?.modelSha256, MODEL_SHA256, 'wrong model checksum');
   assert.equal(state?.requestedComposition, 'splat-only-v0', 'wrong requested composition');
   assert.equal(state?.effectiveComposition, 'splat-only-v0', 'requested/effective composition drift');
+  assert.equal(state?.requestedCalibration, 'native-low-learned-splat-calibration-v0', 'wrong requested calibration');
+  assert.equal(state?.effectiveCalibration, 'native-low-learned-splat-calibration-v0', 'wrong effective calibration');
+  assert.equal(state?.modelOutputMutation, false, 'calibration mutated model outputs');
   assert.equal(state?.requestedBackend, 'WebGPU', 'wrong requested backend');
   assert.equal(state?.effectiveBackend, 'WebGPU', 'fallback backend used');
   assert.equal(state?.fallbackBackend, null, 'fallback backend evidence is not admissible');
@@ -138,6 +149,8 @@ try {
   assert.ok(Number(state?.supportPositiveCount) >= 0, 'supportPositiveCount missing');
   assert.ok(Number(state?.treatmentSplatInstanceCount) >= 0, 'treatmentSplatInstanceCount missing');
   assert.ok(Number(state?.calibrationGain) >= 0, 'calibrationGain missing');
+  assert.ok(Number(state?.treatmentSplatRadianceGain) >= 0, 'treatmentSplatRadianceGain missing');
+  assert.ok(Number(state?.treatmentSplatOpacityGain) >= 0, 'treatmentSplatOpacityGain missing');
 
   const startState = state;
   const observationStartMs = performance.now();
@@ -150,6 +163,8 @@ try {
   assert.ok(observedSeconds >= minimumContinuousSeconds * 0.98, 'observation window was truncated');
   assert.ok(frameDelta >= 1, 'native-low treatment frames did not advance continuously');
   assert.equal(endState?.effectiveComposition, startState?.effectiveComposition, 'composition drift during observation');
+  assert.equal(endState?.effectiveCalibration, startState?.effectiveCalibration, 'calibration drift during observation');
+  assert.equal(endState?.modelOutputMutation, false, 'model-output mutation during observation');
   assert.equal(endState?.effectiveBackend, 'WebGPU', 'backend drift during observation');
   assert.equal(endState?.fallbackBackend, null, 'fallback backend during observation');
   assert.equal(endState?.transportMode, TRANSPORT_MODE, 'transport mode drift during observation');
@@ -173,6 +188,13 @@ try {
     effectiveRoute: endState.routeIdentity,
     requestedComposition: endState.requestedComposition,
     effectiveComposition: endState.effectiveComposition,
+    requestedCalibration: endState.requestedCalibration,
+    effectiveCalibration: endState.effectiveCalibration,
+    nativeLowControl: endState.nativeLowControl,
+    nativeLowSelectivePredicted: endState.nativeLowSelectivePredicted,
+    modelOutputMutation: endState.modelOutputMutation,
+    treatmentSplatRadianceGain: endState.treatmentSplatRadianceGain,
+    treatmentSplatOpacityGain: endState.treatmentSplatOpacityGain,
     requestedBackend: endState.requestedBackend,
     effectiveBackend: endState.effectiveBackend,
     transportMode: endState.transportMode,

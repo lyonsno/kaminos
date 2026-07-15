@@ -86,6 +86,11 @@
       failurePhase: null,
       lastTrustworthyEvidence: null,
       transportMode: 'shared-device-gpu-buffers-no-readback-import-v0',
+      requestedCalibration: 'native-low-learned-splat-calibration-v0',
+      effectiveCalibration: 'native-low-learned-splat-calibration-v0',
+      treatmentSplatRadianceGain: 1.12,
+      treatmentSplatOpacityGain: 1.05,
+      modelOutputMutation: false,
     });
     const requestedComposition = 'splat-only-v0';
     const runtimeTruthAvailable = false;
@@ -100,6 +105,9 @@
     const params = new URLSearchParams(location.search);
     const targetSeconds = Math.max(5, Math.min(30, Number(params.get('seconds') || 8)));
     const stepIntervalMs = Math.max(100, Number(params.get('step_ms') || 500));
+    const treatmentSplatRadianceGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_radiance_gain') || 1.12)));
+    const treatmentSplatOpacityGain = Math.max(0, Math.min(8, Number(params.get('treatment_splat_opacity_gain') || 1.05)));
+    const requestedCalibration = 'native-low-learned-splat-calibration-v0';
     const status = document.getElementById('status');
     const runnerFrame = document.getElementById('runner');
     const controlImage = document.getElementById('controlImage');
@@ -203,6 +211,8 @@
         boundarySplatComposition: requestedComposition,
         now: performance.now(),
         captureVisuals: true,
+        treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain,
       });
       if (!receipt?.ok) throw new Error(`${receipt?.failurePhase || 'shared-device-capture'}:${receipt?.error || receipt?.reason || 'unknown'}`);
       replaceImageUrls(receipt);
@@ -210,7 +220,7 @@
       latestRunnerState = prototype.debugState?.() || null;
       frameIndex += 1;
       lastTrustworthyEvidence = { frameIndex, receipt, runner: latestRunnerState };
-      status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount} | ${Math.round(receipt.endToEndFrameMs)} ms | ${receipt.blankTreatmentAttribution}`;
+      status.textContent = `frame ${frameIndex} | support ${receipt.supportPositiveCount} | splats ${receipt.treatmentSplatInstanceCount} | cal ${receipt.treatmentSplatRadianceGain}/${receipt.treatmentSplatOpacityGain} | ${Math.round(receipt.endToEndFrameMs)} ms`;
     }
 
     function debugState() {
@@ -247,6 +257,12 @@
         requestedComposition,
         effectiveComposition,
         compositionMismatch: effectiveComposition && effectiveComposition !== requestedComposition ? compositionMismatch : null,
+        requestedCalibration,
+        effectiveCalibration: receipt.effectiveCalibration || null,
+        treatmentSplatRadianceGain: receipt.treatmentSplatRadianceGain ?? treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain: receipt.treatmentSplatOpacityGain ?? treatmentSplatOpacityGain,
+        modelOutputMutation: receipt.modelOutputMutation ?? false,
+        nativeLowTreatmentSplatCalibration: receipt.nativeLowTreatmentSplatCalibration || null,
         requestedBackend: receipt.requestedBackend || 'WebGPU',
         effectiveBackend: receipt.effectiveBackend || null,
         fallbackBackend,

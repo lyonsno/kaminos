@@ -71,6 +71,12 @@ assert.match(core, /supportPrevalence/, 'shared-device route reports model suppo
 assert.match(core, /treatmentSplatCandidateCount/, 'shared-device route reports treatment splat materialization candidate count');
 assert.match(core, /treatmentSplatInstanceCount/, 'shared-device route reports treatment splat materialization instance count');
 assert.match(core, /calibrationGain/, 'shared-device route reports calibration state without silently tuning it');
+assert.match(combined, /native-low-learned-splat-calibration-v0/, 'shared-device route names truth-free learned splat calibration authority');
+assert.match(route, /requestedCalibration[\s\S]*effectiveCalibration/, 'route records requested/effective calibration identity');
+assert.match(route, /treatmentSplatRadianceGain[\s\S]*treatmentSplatOpacityGain/, 'route exposes learned splat radiance and opacity gains');
+assert.match(core, /nativeLowTreatmentSplatCalibration/, 'renderer debug state exposes native-low treatment calibration receipt');
+assert.match(core, /modelOutputMutation:\s*false/, 'calibration receipt proves model outputs were not mutated');
+assert.match(core, /requestedRadianceGain[\s\S]*effectiveRadianceGain[\s\S]*requestedOpacityGain[\s\S]*effectiveOpacityGain/, 'core records requested/effective calibration gains');
 assert.match(core, /transportMode:\s*'shared-device-gpu-buffers-no-readback-import-v0'/, 'shared-device route records that per-frame transport avoids readback/import');
 assert.doesNotMatch(route, /beginDebugFullFieldExport|readDebugFullFieldExportChunk|beginDebugFullFieldImport|writeDebugFullFieldImportChunk|finishDebugFullFieldImport/, 'production native-low route cannot use base64 debug export/import per frame');
 assert.match(route, /captureNativeLowSelectiveSharedDeviceFrame/, 'operator route drives the renderer-owned shared-device frame API');
@@ -83,5 +89,8 @@ assert.match(witness, /cachedFrameRejection/, 'witness rejects cached-frame fals
 assert.match(witness, /failurePhase/, 'witness writes a failure-phase report on error');
 assert.match(witness, /supportPositiveCount[\s\S]*treatmentSplatInstanceCount[\s\S]*calibrationGain/, 'witness preserves blank-treatment attribution fields');
 assert.match(witness, /transportMode[\s\S]*shared-device-gpu-buffers-no-readback-import-v0/, 'witness verifies shared-device transport identity');
+assert.match(witness, /nativeLowControl[\s\S]*nativeLowSelectivePredicted/, 'witness preserves live native control beside treatment');
+assert.match(witness, /requestedCalibration[\s\S]*effectiveCalibration[\s\S]*modelOutputMutation/, 'witness preserves calibration identity and model-output non-mutation');
+assert.match(witness, /treatmentSplatRadianceGain[\s\S]*treatmentSplatOpacityGain/, 'witness preserves learned splat radiance/opacity gains');
 
 console.log('native-low selective live route contracts passed');

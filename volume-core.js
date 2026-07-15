@@ -46,6 +46,7 @@ const EXTERNAL_BOUNDARY_SIDECAR_AUTHORITY = 'externally-uploaded-boundary-sideca
 const EXTERNAL_BOUNDARY_SIDECAR_UPLOAD_IDENTITY = 'chunked-external-boundary-sidecar-upload-v0';
 const BOUNDARY_SPLAT_GPU_PROFILE_IDENTITY = 'boundary-splat-stage-gpu-timestamp-profile-v0';
 const BOUNDARY_SPLAT_ATTRIBUTE_HOOK_IDENTITY = 'boundary-splat-learned-attribute-hook-v0';
+const NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY = 'native-low-learned-splat-calibration-v0';
 const BOUNDARY_SPLAT_INITIAL_CAPACITY = 131072;
 const BOUNDARY_SPLAT_CANDIDATE_STRIDE_BYTES = 48;
 const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS * Float32Array.BYTES_PER_ELEMENT;
@@ -346,6 +347,14 @@ function normalizeBoundarySplatRadius(value) {
 
 function normalizeBoundarySplatSharpness(value) {
   return clampFinite(value, 1, 12, 3.4);
+}
+
+function normalizeNativeLowTreatmentSplatRadianceGain(value) {
+  return clampFinite(value, 0, 8, 1);
+}
+
+function normalizeNativeLowTreatmentSplatOpacityGain(value) {
+  return clampFinite(value, 0, 8, 1);
 }
 
 function boundarySplatEffectiveRendererIdentity(mode) {
@@ -5026,6 +5035,7 @@ struct BoundarySplatCamera {
   cameraRight: vec4<f32>,
   cameraUp: vec4<f32>,
   controls: vec4<f32>,
+  calibration: vec4<f32>,
 };
 
 struct BoundarySplatVertexOut {
@@ -5179,11 +5189,13 @@ fn boundarySplatFs(in: BoundarySplatVertexOut) -> @location(0) vec4<f32> {
   if (radius2 > 1.0) { discard; }
   let footprintRadius = clamp(boundarySplatCamera.controls.x, 0.35, 1.5);
   let kernelSharpness = clamp(boundarySplatCamera.controls.w, 1.0, 12.0);
+  let radianceGain = clamp(boundarySplatCamera.calibration.x, 0.0, 8.0);
+  let opacityGain = clamp(boundarySplatCamera.calibration.y, 0.0, 8.0);
   let gaussian = exp(-radius2 * kernelSharpness);
   let energyRatio = (kernelSharpness / 3.4) / max(footprintRadius * footprintRadius, 0.1225);
   let energyCompensation = clamp(sqrt(energyRatio), 0.5, 2.5);
-  let alpha = in.colorOpacity.a * gaussian * energyCompensation;
-  return vec4<f32>(in.colorOpacity.rgb, alpha);
+  let alpha = in.colorOpacity.a * gaussian * energyCompensation * opacityGain;
+  return vec4<f32>(clamp(in.colorOpacity.rgb * radianceGain, vec3<f32>(0.0), vec3<f32>(1.0)), alpha);
 }
 `;
 
@@ -5355,6 +5367,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     externalEmitterFrameId: null,
     scalarActivityReceiver: null,
     nativeLowSelectiveSharedDevice: null,
+    nativeLowTreatmentSplatCalibration: null,
     temporalAccumEffective: 0,
     temporalReprojectionConfidence: 0,
     temporalHistoryWeight: 0,
@@ -6703,7 +6716,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 112,
+      size: 128,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatReadbackBuffer = device.createBuffer({
@@ -7677,11 +7690,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(28);
+      const splatCamera = new Float32Array(32);
       splatCamera.set(viewProj.elements, 0);
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
+      splatCamera.set([
+        normalizeNativeLowTreatmentSplatRadianceGain(controlsSnapshot.nativeLowTreatmentSplatRadianceGain),
+        normalizeNativeLowTreatmentSplatOpacityGain(controlsSnapshot.nativeLowTreatmentSplatOpacityGain),
+        0,
+        0,
+      ], 28);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -12468,6 +12487,30 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
+  function nativeLowTreatmentSplatCalibrationDebug(requested = {}) {
+    const requestedRadianceGain = normalizeNativeLowTreatmentSplatRadianceGain(requested.radianceGain);
+    const requestedOpacityGain = normalizeNativeLowTreatmentSplatOpacityGain(requested.opacityGain);
+    const effectiveRadianceGain = requestedRadianceGain;
+    const effectiveOpacityGain = requestedOpacityGain;
+    return {
+      identity: NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY,
+      authority: 'truth-free-fragment-stage-learned-splat-radiance-opacity-v0',
+      requestedCalibration: NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY,
+      effectiveCalibration: NATIVE_LOW_LEARNED_SPLAT_CALIBRATION_IDENTITY,
+      requestedRadianceGain,
+      effectiveRadianceGain,
+      requestedOpacityGain,
+      effectiveOpacityGain,
+      calibrationGain: effectiveRadianceGain,
+      treatmentSplatRadianceGain: effectiveRadianceGain,
+      treatmentSplatOpacityGain: effectiveOpacityGain,
+      modelOutputMutation: false,
+      appliedStage: 'boundary-splat-fragment-raster-v0',
+      truthAuthority: false,
+      syntheticDownsampleAuthority: false,
+    };
+  }
+
   async function readTimestampPairMs(source, label) {
     await source.mapAsync(GPUMapMode.READ);
     const values = new BigUint64Array(source.getMappedRange().slice(0));
@@ -12485,6 +12528,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const requestedComposition = options.boundarySplatComposition ?? 'splat-only-v0';
     const captureVisuals = options.captureVisuals === true;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
+    const calibration = nativeLowTreatmentSplatCalibrationDebug({
+      radianceGain: options.treatmentSplatRadianceGain,
+      opacityGain: options.treatmentSplatOpacityGain,
+    });
     const startedAt = performance.now();
     const sourceMajorantGrid = majorantGridSize;
     const sourceFrame = state.frameCount;
@@ -12580,6 +12627,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         sameStateCaptureId: `${sourceStepIdentity}:treatment`,
         baseFrameCount: sourceFrame + 1,
         baseSimStepCount: sourceStep,
+        controlOverrides: {
+          nativeLowTreatmentSplatRadianceGain: calibration.effectiveRadianceGain,
+          nativeLowTreatmentSplatOpacityGain: calibration.effectiveOpacityGain,
+        },
         restoreControls: true,
       });
       if (!treatmentRender?.ok) throw new Error(`native-low-shared-device-treatment-render:${treatmentRender?.reason || 'unknown'}`);
@@ -12665,8 +12716,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         treatmentSplatInstanceCount,
         controlSplatCandidateCount,
         controlSplatInstanceCount,
-        calibrationGain: 1,
-        calibrationAuthority: 'none-truth-free-calibration-not-applied-v0',
+        calibrationGain: calibration.calibrationGain,
+        calibrationAuthority: calibration.authority,
+        requestedCalibration: calibration.requestedCalibration,
+        effectiveCalibration: calibration.effectiveCalibration,
+        requestedRadianceGain: calibration.requestedRadianceGain,
+        effectiveRadianceGain: calibration.effectiveRadianceGain,
+        requestedOpacityGain: calibration.requestedOpacityGain,
+        effectiveOpacityGain: calibration.effectiveOpacityGain,
+        treatmentSplatRadianceGain: calibration.treatmentSplatRadianceGain,
+        treatmentSplatOpacityGain: calibration.treatmentSplatOpacityGain,
+        modelOutputMutation: false,
+        nativeLowTreatmentSplatCalibration: calibration,
         blankTreatmentAttribution,
         inferenceGpuMs: inferenceTiming.ms,
         inferenceTimingAuthority: inferenceTiming.authority,
@@ -12700,6 +12761,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         lastTrustworthyEvidence,
       };
       state.nativeLowSelectiveSharedDevice = receipt;
+      state.nativeLowTreatmentSplatCalibration = calibration;
       return receipt;
     } catch (error) {
       const failed = {
