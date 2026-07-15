@@ -14111,6 +14111,10 @@ async function beginSharpBreathingRoomKilnFire({
       requestedFireBudget: fireState.requestedFireBudget,
       expectedFirePresentation,
       readVolumeState: () => volumePrototype?.debugState?.() || null,
+      onFrameSample: sample => volumePrototype?.recordMainPageKilnRaf?.(sample.timestampMs, {
+        sampleIndex: sample.sampleIndex ?? null,
+        frameGapMs: sample.frameGapMs,
+      }),
       requireExactFireEpisode: true,
     });
     activeForegroundKilnHeartbeat.start();
@@ -14185,9 +14189,11 @@ async function endSharpBreathingRoomKilnFire(phase = 'complete', options = {}) {
     sharpHeartbeat: options.sharpHeartbeat || null,
   }) || fireState.foregroundHeartbeat || null;
   activeForegroundKilnHeartbeat = null;
+  fireState.volumeDebugState = volumePrototype?.debugState?.() || null;
   if (options.runResult && typeof options.runResult === 'object') {
     options.runResult.foregroundKilnHeartbeat = fireState.foregroundHeartbeat;
     options.runResult.fireEpisodeHooks = fireState.fireEpisodeHooks || null;
+    options.runResult.kilnFrameStageLedger = fireState.volumeDebugState?.kilnFrameStageLedger || null;
     if (fireState.fireEpisodeCloseError) {
       options.runResult.fireEpisodeCloseError = fireState.fireEpisodeCloseError;
     }

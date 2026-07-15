@@ -18,7 +18,7 @@ assert.match(
 );
 assert.match(
   core,
-  /async function sampleBoundarySplatHistorySlotMetadata\(\)/,
+  /async function sampleBoundarySplatHistorySlotMetadata\(options = \{\}\)/,
   'holdover must select only GPU-completed history slot metadata',
 );
 assert.match(
@@ -63,7 +63,7 @@ assert.match(
 );
 assert.match(
   core,
-  /async function actuateSingleFlameHistoryHoldoverFrame\(now\)[\s\S]*sampleBoundarySplatHistorySlotMetadata\(\)[\s\S]*createSingleFlameHistoryHoldoverDecision\([\s\S]*renderBoundarySplatHistorySlotToCanvas\(\{/,
+  /async function actuateSingleFlameHistoryHoldoverFrame\(now,[\s\S]*sampleBoundarySplatHistorySlotMetadata\([\s\S]*createSingleFlameHistoryHoldoverDecision\([\s\S]*renderBoundarySplatHistorySlotToCanvas\(\{/,
   'an alternating runtime frame must select only completed metadata and actuate the proven renderer ABI',
 );
 assert.match(
@@ -78,7 +78,7 @@ assert.match(
 );
 assert.match(
   core,
-  /const attemptHoldover = state\.flameContinuityPresentationOrdinal % 2 === 0;[\s\S]*actuateSingleFlameHistoryHoldoverFrame\(now\)[\s\S]*renderLiveFrame\(now\)/,
+  /const attemptHoldover = state\.flameContinuityPresentationOrdinal % 2 === 0;[\s\S]*const useHoldover = holdoverEligible && attemptHoldover;[\s\S]*actuateSingleFlameHistoryHoldoverFrame\(now, \{ stageLedgerFrameId \}\)[\s\S]*renderLiveFrame\(now, \{ preserveContinuityDecision: true, stageLedgerFrameId \}\)/,
   'bounded history must alternate with the ordinary live frame and fail closed back to live simulation',
 );
 assert.match(

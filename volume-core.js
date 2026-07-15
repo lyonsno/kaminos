@@ -16,6 +16,7 @@ import {
 } from './hybrid-splat-smoke-compositor.mjs';
 import { createKilnFirePresentation } from './kiln-fire-presentation.mjs';
 import { createSingleFlameHistoryHoldoverDecision } from './kiln-flame-history-holdover.mjs';
+import { createKilnFrameStageLedger } from './lib/kiln-frame-stage-ledger.mjs';
 
 // Hybrid smoke is split during the raymarch around the transformed splat depth.
 
@@ -5868,6 +5869,58 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       compositionFallbackReason: state.boundarySplatCompositionFallbackReason,
     }),
   });
+  const kilnFrameStageLedger = createKilnFrameStageLedger({
+    timeOriginEpochMs: performance.timeOrigin,
+  });
+  let kilnFrameStageLedgerRecording = false;
+  let lastKilnFrameStageId = null;
+
+  function recordKilnFrameStage(frameId, stage, startMs, authority, detail = null) {
+    if (!kilnFrameStageLedgerRecording || !frameId) return null;
+    return kilnFrameStageLedger.recordStage(frameId, {
+      stage,
+      startMs,
+      endMs: performance.now(),
+      authority,
+      detail,
+    });
+  }
+
+  async function awaitKilnQueueDrain(frameId, stage, boundary) {
+    if (!device?.queue?.onSubmittedWorkDone) return false;
+    const startedAtMs = performance.now();
+    await device.queue.onSubmittedWorkDone();
+    recordKilnFrameStage(
+      frameId,
+      stage,
+      startedAtMs,
+      'webgpu-on-submitted-work-done-host-await-not-gpu-exclusive',
+      { boundary },
+    );
+    return true;
+  }
+
+  function finishKilnFrameStage(frameId) {
+    if (!kilnFrameStageLedgerRecording || !frameId) return null;
+    const frame = kilnFrameStageLedger.finishFrame(frameId, {
+      sourceGeneration: state.boundarySplatHistoryLastArchivedSourceCandidateGeneration || state.simStepCount,
+      simulatorStep: state.simStepCount,
+      compositorFrame: state.boundarySplatFrameCount,
+    });
+    lastKilnFrameStageId = frameId;
+    return frame;
+  }
+
+  function recordMainPageKilnRaf(timestampMs, detail = {}) {
+    if (!kilnFrameStageLedgerRecording) return null;
+    return kilnFrameStageLedger.recordEvent({
+      stage: 'main-page-raf',
+      startMs: timestampMs,
+      endMs: timestampMs,
+      authority: 'foreground-main-page-request-animation-frame',
+      detail,
+    });
+  }
 
   function firePresentationSnapshot() {
     const hooks = fireEpisodeHooks.snapshot();
@@ -6231,8 +6284,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     fireEpisodeHooks.recordFrame({ now, rafGapMs, cpuFrameMs });
   }
 
-  function recordVolumeQueueTiming(submittedAt) {
-    const queueDoneMs = performance.now() - submittedAt;
+  function recordVolumeQueueTiming(submittedAt, stageLedgerFrameId = null) {
+    const completedAtMs = performance.now();
+    const queueDoneMs = completedAtMs - submittedAt;
     volumeQueueCompletionSequence += 1;
     pushTimingSample('queueDone', queueDoneMs, 80);
     state.timing = {
@@ -6253,6 +6307,19 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       lastDoneMs: queueDoneMs,
       p95DoneMs: state.timing.queueDoneP95Ms,
     });
+    if (kilnFrameStageLedgerRecording) {
+      kilnFrameStageLedger.recordEvent({
+        stage: 'queue-drain',
+        startMs: submittedAt,
+        endMs: completedAtMs,
+        authority: 'existing-sampled-webgpu-on-submitted-work-done-host-await-not-gpu-exclusive',
+        detail: {
+          frameId: stageLedgerFrameId,
+          sampledEveryTwelveFrames: true,
+          completionSequence: volumeQueueCompletionSequence,
+        },
+      });
+    }
   }
 
   function residualWorkEstimate(applied) {
@@ -6305,7 +6372,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
-  function probeVolumeQueueTiming() {
+  function probeVolumeQueueTiming(stageLedgerFrameId = null) {
     if (queueProbePending || !device?.queue?.onSubmittedWorkDone) return;
     queueProbePending = true;
     state.timing = {
@@ -6325,7 +6392,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     const submittedAt = performance.now();
     device.queue.onSubmittedWorkDone()
-      .then(() => recordVolumeQueueTiming(submittedAt))
+      .then(() => recordVolumeQueueTiming(submittedAt, stageLedgerFrameId))
       .catch(error => {
         state.timing = {
           ...state.timing,
@@ -9559,7 +9626,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return true;
   }
 
-  function encodeBoundarySplatSmokeHybrid(encoder, view, targetPipeline = hybridCompositorPipeline) {
+  function encodeBoundarySplatSmokeHybrid(encoder, view, targetPipeline = hybridCompositorPipeline, options = {}) {
     state.boundarySplatCompositionRequested = normalizeBoundarySplatComposition(controlsSnapshot.boundarySplatComposition);
     if (!boundarySplatHybridRequested()) return false;
     if (
@@ -9578,6 +9645,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return false;
     }
 
+    const splatEncodeStartedAtMs = performance.now();
     const splatPass = encoder.beginRenderPass({
       label: `kaminos ${HYBRID_SPLAT_LAYER_IDENTITY} pass`,
       colorAttachments: [hybridSplatColorTexture, hybridSplatMomentsTexture].map(texture => ({
@@ -9591,7 +9659,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     splatPass.setBindGroup(0, boundarySplatRenderBindGroup);
     splatPass.drawIndirect(boundarySplatIndirectBuffer, 0);
     splatPass.end();
+    recordKilnFrameStage(
+      options.stageLedgerFrameId,
+      'hybrid-splat-encode',
+      splatEncodeStartedAtMs,
+      'cpu-performance-now-not-gpu-execution',
+    );
 
+    const smokeEncodeStartedAtMs = performance.now();
     const smokePass = encoder.beginRenderPass({
       label: `kaminos ${HYBRID_SMOKE_RENDERER_IDENTITY} pass`,
       colorAttachments: [
@@ -9611,7 +9686,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     smokePass.setBindGroup(1, hybridSmokeSplitBindGroup);
     smokePass.draw(3);
     smokePass.end();
+    recordKilnFrameStage(
+      options.stageLedgerFrameId,
+      'hybrid-smoke-encode',
+      smokeEncodeStartedAtMs,
+      'cpu-performance-now-not-gpu-execution',
+    );
 
+    const resolveEncodeStartedAtMs = performance.now();
     const compositePass = encoder.beginRenderPass({
       label: `kaminos ${HYBRID_SPLAT_SMOKE_COMPOSITOR_IDENTITY} resolve pass`,
       colorAttachments: [{
@@ -9625,6 +9707,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     compositePass.setBindGroup(0, hybridCompositorBindGroup);
     compositePass.draw(3);
     compositePass.end();
+    recordKilnFrameStage(
+      options.stageLedgerFrameId,
+      'hybrid-resolve-encode',
+      resolveEncodeStartedAtMs,
+      'cpu-performance-now-not-gpu-execution',
+    );
 
     state.boundarySplatFrameCount += 1;
     state.boundarySplatCompositionEffective = 'hybrid-smoke';
@@ -9853,11 +9941,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
   }
 
-  async function sampleBoundarySplatHistorySlotMetadata() {
+  async function sampleBoundarySplatHistorySlotMetadata(options = {}) {
     if (!boundarySplatHistorySlotMetadataBuffer) {
       return { ok: false, reason: 'history-slot-metadata-buffer-unavailable', slots: [] };
     }
-    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    await awaitKilnQueueDrain(
+      options.stageLedgerFrameId,
+      'queue-drain',
+      options.queueDrainBoundary || 'history-metadata-before-copy',
+    );
     const readback = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} history slot metadata readback`,
       size: BOUNDARY_SPLAT_HISTORY_SLOT_METADATA_BYTES,
@@ -9939,9 +10031,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     ]));
   }
 
-  async function sampleBoundarySplatDrawState() {
+  async function sampleBoundarySplatDrawState(options = {}) {
     if (!boundarySplatRequested() || !boundarySplatDrawBuffer || !boundarySplatIndirectBuffer) return null;
-    if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
+    await awaitKilnQueueDrain(
+      options.stageLedgerFrameId,
+      'queue-drain',
+      options.queueDrainBoundary || 'draw-state-before-copy',
+    );
     const drawStateBytes = 48;
     const indirectCommandOffset = drawStateBytes;
     const readback = device.createBuffer({
@@ -10387,13 +10483,31 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
   }
 
-  async function actuateSingleFlameHistoryHoldoverFrame(now) {
+  async function actuateSingleFlameHistoryHoldoverFrame(now, { stageLedgerFrameId = null } = {}) {
+    const markFallbackPath = reason => {
+      if (!stageLedgerFrameId) return;
+      kilnFrameStageLedger.setFramePath(stageLedgerFrameId, 'fallback', { reason });
+    };
     let metadata;
+    const metadataReadbackStartedAtMs = performance.now();
     try {
-      metadata = await sampleBoundarySplatHistorySlotMetadata();
+      metadata = await sampleBoundarySplatHistorySlotMetadata({
+        stageLedgerFrameId,
+        queueDrainBoundary: 'selector-history-metadata-before-copy',
+      });
     } catch (error) {
-      const decision = failClosedFlameContinuityDecision(`history-metadata-readback-failed:${error?.message || String(error)}`);
+      const reason = `history-metadata-readback-failed:${error?.message || String(error)}`;
+      markFallbackPath(reason);
+      const decision = failClosedFlameContinuityDecision(reason);
       return { ok: false, decision, actuation: null };
+    } finally {
+      recordKilnFrameStage(
+        stageLedgerFrameId,
+        'history-metadata-readback',
+        metadataReadbackStartedAtMs,
+        'gpu-copy-map-readback-after-queue-drain',
+        { boundary: 'selector' },
+      );
     }
     const previousDecision = continuityPreviousDecision();
     const decision = createSingleFlameHistoryHoldoverDecision({
@@ -10417,6 +10531,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       ),
     });
     if (decision.mode !== 'holdover') {
+      markFallbackPath(decision.fallbackReason || 'selector-did-not-produce-holdover');
       recordFlameContinuityDecision(decision, {
         metadataIdentity: metadata.identity || null,
         renderFrameCount: state.boundarySplatFrameCount,
@@ -10437,9 +10552,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         repeatedSlotCount: decision.repeatedSlotCount,
         now,
         resumeRenderLoop: false,
+        stageLedgerFrameId,
       });
     } catch (error) {
-      const fallback = failClosedFlameContinuityDecision(`holdover-render-failed:${error?.message || String(error)}`, decision);
+      const reason = `holdover-render-failed:${error?.message || String(error)}`;
+      markFallbackPath(reason);
+      const fallback = failClosedFlameContinuityDecision(reason, decision);
       return { ok: false, decision: fallback, actuation: null };
     }
     if (
@@ -10453,6 +10571,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || actuation.archiveSubmitted !== false
     ) {
       const reason = actuation?.reason || 'holdover-actuation-receipt-invalid';
+      markFallbackPath(reason);
       const fallback = failClosedFlameContinuityDecision(reason, decision);
       return { ok: false, decision: fallback, actuation };
     }
@@ -10480,11 +10599,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     return { ok: true, decision, actuation };
   }
 
-  function renderLiveFrame(now, { preserveContinuityDecision = false } = {}) {
+  function renderLiveFrame(now, { preserveContinuityDecision = false, stageLedgerFrameId = null } = {}) {
     const cpuStart = performance.now();
     const compositorFrameCountBefore = state.boundarySplatFrameCount;
     const sourceRenderFrameCountBefore = state.frameCount;
     const simStepCountBefore = state.simStepCount;
+    const sourceEncodeStartedAtMs = performance.now();
     controls?.update?.();
     updateUniforms(now);
     const encoder = device.createCommandEncoder({ label: 'kaminos compute fluid frame' });
@@ -10502,10 +10622,22 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     encodeBoundarySidecar(encoder);
     encodeBoundarySplats(encoder);
+    recordKilnFrameStage(
+      stageLedgerFrameId,
+      'live-source-encode',
+      sourceEncodeStartedAtMs,
+      'cpu-performance-now-not-gpu-execution',
+      { includes: ['simulation', 'majorant', 'sidecar', 'splat-compaction', 'history-archive'] },
+    );
     const currentTexture = context.getCurrentTexture();
     if (boundarySplatRequested()) {
       const splatApplied = boundarySplatHybridRequested()
-        ? encodeBoundarySplatSmokeHybrid(encoder, currentTexture.createView())
+        ? encodeBoundarySplatSmokeHybrid(
+            encoder,
+            currentTexture.createView(),
+            hybridCompositorPipeline,
+            { stageLedgerFrameId },
+          )
         : encodeBoundarySplatDraw(encoder, currentTexture.createView());
       if (!splatApplied) {
         encodeDraw(encoder, currentTexture.createView(), 'kaminos boundary splat explicit fallback raymarch');
@@ -10537,7 +10669,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     encodeHistoryCopy(encoder, currentTexture);
     encodeBoundarySplatTelemetry(encoder);
+    const submitStartedAtMs = performance.now();
     device.queue.submit([encoder.finish()]);
+    recordKilnFrameStage(
+      stageLedgerFrameId,
+      'queue-submit',
+      submitStartedAtMs,
+      'cpu-webgpu-submit-call',
+      { boundary: preserveContinuityDecision ? 'fallback-live-submit' : 'live-submit' },
+    );
     if (boundarySplatTelemetryCopyPending) void resolveBoundarySplatTelemetry();
     commitPreviousViewProjection();
     state.frameCount += 1;
@@ -10562,7 +10702,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     } else {
       liveFlameContinuityDecision(continuityClockEvidence);
     }
-    if (state.frameCount % 12 === 0) probeVolumeQueueTiming();
+    finishKilnFrameStage(stageLedgerFrameId);
+    if (state.frameCount % 12 === 0) probeVolumeQueueTiming(stageLedgerFrameId);
   }
 
   function stopVolumeRenderOnError(error) {
@@ -10575,14 +10716,43 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
 
   function render(now) {
     if (!state.active) return;
+    if (kilnFrameStageLedgerRecording && lastKilnFrameStageId) {
+      kilnFrameStageLedger.recordPresentationOpportunity(lastKilnFrameStageId, {
+        timestampMs: now,
+        authority: 'next-volume-raf-opportunity-not-display-present',
+      });
+      lastKilnFrameStageId = null;
+    }
     state.flameContinuityPresentationOrdinal += 1;
     const holdoverEligible = singleFlameHistoryHoldoverEligible();
     const attemptHoldover = state.flameContinuityPresentationOrdinal % 2 === 0;
-    if (holdoverEligible && attemptHoldover) {
+    const useHoldover = holdoverEligible && attemptHoldover;
+    const stageLedgerFrameId = kilnFrameStageLedgerRecording
+      ? kilnFrameStageLedger.beginFrame({
+          path: useHoldover ? 'holdover' : 'live',
+          presentationOrdinal: state.flameContinuityPresentationOrdinal,
+          continuityMode: state.flameContinuityEffective,
+          rafTimestampMs: now,
+          sourceGeneration: state.boundarySplatHistoryLastArchivedSourceCandidateGeneration || state.simStepCount,
+          simulatorStep: state.simStepCount,
+        })
+      : null;
+    recordKilnFrameStage(
+      stageLedgerFrameId,
+      'volume-raf',
+      now,
+      'volume-request-animation-frame-callback',
+      { holdoverEligible, attemptHoldover },
+    );
+    if (useHoldover) {
       raf = 0;
-      void actuateSingleFlameHistoryHoldoverFrame(now)
+      void actuateSingleFlameHistoryHoldoverFrame(now, { stageLedgerFrameId })
         .then(result => {
-          if (!result.ok && state.active) renderLiveFrame(now, { preserveContinuityDecision: true });
+          if (!result.ok && state.active) {
+            renderLiveFrame(now, { preserveContinuityDecision: true, stageLedgerFrameId });
+          } else {
+            finishKilnFrameStage(stageLedgerFrameId);
+          }
         })
         .then(() => {
           if (state.active) raf = requestAnimationFrame(render);
@@ -10592,7 +10762,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     raf = requestAnimationFrame(render);
     try {
-      renderLiveFrame(now);
+      renderLiveFrame(now, { stageLedgerFrameId });
     } catch (error) {
       stopVolumeRenderOnError(error);
     }
@@ -12863,8 +13033,27 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     if (!state.active || !device) return { ok: false, reason: 'inactive', ...noSourceSubmissions };
     cancelAnimationFrame(raf);
     try {
-      if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-      const metadata = await sampleBoundarySplatHistorySlotMetadata();
+      await awaitKilnQueueDrain(
+        options.stageLedgerFrameId,
+        'holdover-pre-render-drain',
+        'holdover-renderer-entry',
+      );
+      const rendererMetadataStartedAtMs = performance.now();
+      let metadata;
+      try {
+        metadata = await sampleBoundarySplatHistorySlotMetadata({
+          stageLedgerFrameId: options.stageLedgerFrameId,
+          queueDrainBoundary: 'renderer-history-metadata-before-copy',
+        });
+      } finally {
+        recordKilnFrameStage(
+          options.stageLedgerFrameId,
+          'history-metadata-readback',
+          rendererMetadataStartedAtMs,
+          'gpu-copy-map-readback-after-queue-drain',
+          { boundary: 'renderer-validation' },
+        );
+      }
       if (!metadata.ok) return { ...metadata, ...noSourceSubmissions };
       const slotIndex = Math.floor(Number(options.slotIndex));
       if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= metadata.historyDepth) {
@@ -12928,7 +13117,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         const encoder = device.createCommandEncoder({ label: 'kaminos boundary splat history holdover draw-only frame' });
         const currentTexture = context.getCurrentTexture();
         const splatApplied = boundarySplatHybridRequested()
-          ? encodeBoundarySplatSmokeHybrid(encoder, currentTexture.createView())
+          ? encodeBoundarySplatSmokeHybrid(
+              encoder,
+              currentTexture.createView(),
+              hybridCompositorPipeline,
+              { stageLedgerFrameId: options.stageLedgerFrameId },
+            )
           : encodeBoundarySplatDraw(encoder, currentTexture.createView());
         if (!splatApplied) {
           return {
@@ -12941,9 +13135,36 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
             ...noSourceSubmissions,
           };
         }
+        const submitStartedAtMs = performance.now();
         device.queue.submit([encoder.finish()]);
-        if (device.queue?.onSubmittedWorkDone) await device.queue.onSubmittedWorkDone();
-        const exactDrawState = await sampleBoundarySplatDrawState();
+        recordKilnFrameStage(
+          options.stageLedgerFrameId,
+          'queue-submit',
+          submitStartedAtMs,
+          'cpu-webgpu-submit-call',
+          { boundary: 'holdover-hybrid-submit' },
+        );
+        await awaitKilnQueueDrain(
+          options.stageLedgerFrameId,
+          'queue-drain',
+          'holdover-hybrid-post-submit',
+        );
+        const drawStateReadbackStartedAtMs = performance.now();
+        let exactDrawState;
+        try {
+          exactDrawState = await sampleBoundarySplatDrawState({
+            stageLedgerFrameId: options.stageLedgerFrameId,
+            queueDrainBoundary: 'draw-state-before-copy',
+          });
+        } finally {
+          recordKilnFrameStage(
+            options.stageLedgerFrameId,
+            'draw-state-readback',
+            drawStateReadbackStartedAtMs,
+            'gpu-copy-map-readback-after-queue-drain',
+            { boundary: 'holdover-physical-command-witness' },
+          );
+        }
         if (state.frameCount !== sourceRenderFrameCountBefore || state.simStepCount !== simStepCountBefore) {
           throw new Error(`boundary-splat-history-holdover-source-advanced:${JSON.stringify({
             sourceRenderFrameCountBefore,
@@ -13241,6 +13462,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         pyroDynamicDetail: clonePyroDynamicDetail(),
         fireEpisodeHooks: fireEpisodeHooks.snapshot(),
         firePresentation: firePresentationSnapshot(),
+        kilnFrameStageLedger: kilnFrameStageLedger.snapshot({ includeRows: !kilnFrameStageLedgerRecording }),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
     },
@@ -13249,9 +13471,24 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       state.flameContinuityDecision = null;
       state.flameContinuityLastHoldoverDecision = null;
       state.flameContinuityEvidence = null;
-      return fireEpisodeHooks.begin(options);
+      const episode = fireEpisodeHooks.begin(options);
+      kilnFrameStageLedger.begin({ firingId: episode.firingId });
+      kilnFrameStageLedgerRecording = true;
+      lastKilnFrameStageId = null;
+      return episode;
     },
     endFireEpisode(options) {
+      if (lastKilnFrameStageId) {
+        kilnFrameStageLedger.markTerminalPresentationUnavailable(lastKilnFrameStageId, {
+          reason: 'fire episode ended before a subsequent volume RAF opportunity',
+        });
+      }
+      kilnFrameStageLedger.end({
+        firingId: options?.firingId,
+        status: options?.status || 'complete',
+      });
+      kilnFrameStageLedgerRecording = false;
+      lastKilnFrameStageId = null;
       return fireEpisodeHooks.end(options);
     },
     canvasElement() {
@@ -13267,6 +13504,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     controlledStepSequence,
     renderFrozenScaleToCanvas,
     renderBoundarySplatHistorySlotToCanvas,
+    recordMainPageKilnRaf,
     dispose() {
       this.setActive(false);
       frameTexture?.destroy();

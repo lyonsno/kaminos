@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--require-frame-stage-ledger] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -45,6 +45,7 @@ const requestedSourceAssetId = args.get('source-asset-id') || null;
 const requestedFirePresentation = args.get('fire-presentation') || 'full-volume';
 const requestedFlameContinuity = args.get('flame-continuity') || 'live-every-frame';
 const captureInFlight = args.has('capture-in-flight');
+const requireFrameStageLedger = args.has('require-frame-stage-ledger');
 const outParts = path.parse(out);
 const inFlightOut = args.get('in-flight-out')
   || path.join(outParts.dir, `${outParts.name}-in-flight${outParts.ext || '.png'}`);
@@ -998,6 +999,7 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     } : null,
     foregroundKilnHeartbeat: browserFiringEvidence.foregroundKilnHeartbeat || null,
     sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation || null,
+    kilnFrameStageLedger: browserFiringEvidence.kilnFrameStageLedger || null,
     requestedFirePresentation: browserFiringEvidence.requestedFirePresentation || null,
     selectedFirePresentation: browserFiringEvidence.selectedFirePresentation || null,
     requestedFlameContinuity: browserFiringEvidence.requestedFlameContinuity || null,
@@ -1497,6 +1499,7 @@ try {
       const foregroundKilnHeartbeat = routeState.result?.foregroundKilnHeartbeat || null;
       const sharpDutyCorrelation = foregroundKilnHeartbeat?.sharpDutyCorrelation || null;
       const fire = window.kaminosSharpBreathingRoomKilnFireDebug?.state?.()?.fire || null;
+      const kilnFrameStageLedger = routeState.result?.kilnFrameStageLedger || fire?.volumeDebugState?.kilnFrameStageLedger || null;
       const reportPath = routeState.result?.report?.path || null;
       const snapshotIdentity = {
         nonce: globalThis.crypto?.randomUUID?.() || ('witness-' + Date.now() + '-' + Math.random()),
@@ -1509,12 +1512,17 @@ try {
         foregroundSamples: Object.freeze([...(foregroundKilnHeartbeat?.samples || [])]),
         hostEvents: Object.freeze([...(foregroundKilnHeartbeat?.hostEvents || [])]),
         foregroundGaps: Object.freeze([...(sharpDutyCorrelation?.foregroundGaps || [])]),
+        kilnFrameStageFrames: Object.freeze([...(kilnFrameStageLedger?.frames || [])]),
+        kilnFrameStageEvents: Object.freeze([...(kilnFrameStageLedger?.events || [])]),
       };
       const foregroundKilnHeartbeatWitness = foregroundKilnHeartbeat
         ? { ...foregroundKilnHeartbeat, samples: undefined, hostEvents: undefined, sharpHeartbeat: undefined, sharpDutyCorrelation: undefined }
         : null;
       const sharpDutyCorrelationWitness = sharpDutyCorrelation
         ? { ...sharpDutyCorrelation, foregroundGaps: undefined }
+        : null;
+      const kilnFrameStageLedgerWitness = kilnFrameStageLedger
+        ? { ...kilnFrameStageLedger, frames: undefined, events: undefined }
         : null;
       return {
         status: routeState.status || null,
@@ -1527,6 +1535,7 @@ try {
         snapshotIdentity,
         foregroundKilnHeartbeat: foregroundKilnHeartbeatWitness,
         sharpDutyCorrelation: sharpDutyCorrelationWitness,
+        kilnFrameStageLedger: kilnFrameStageLedgerWitness,
         volumeReleased: Boolean(fire?.volumeReleased),
         volumeReleaseConfirmed: Boolean(fire?.volumeReleaseConfirmed),
         autoOpenedTab: document.querySelector('.tab.active')?.dataset.tab || null,
@@ -1563,6 +1572,17 @@ try {
               firingId: browserFiringEvidence.sharpDutyCorrelation.firingId,
               runId: browserFiringEvidence.sharpDutyCorrelation.runId,
               foregroundGapCount: browserFiringEvidence.sharpDutyCorrelation.foregroundGapCount,
+            }
+          : null,
+        kilnFrameStageLedger: browserFiringEvidence.kilnFrameStageLedger
+          ? {
+              schema: browserFiringEvidence.kilnFrameStageLedger.schema,
+              status: browserFiringEvidence.kilnFrameStageLedger.status,
+              evidenceStatus: browserFiringEvidence.kilnFrameStageLedger.evidenceStatus,
+              firingId: browserFiringEvidence.kilnFrameStageLedger.firingId,
+              sampleRetention: browserFiringEvidence.kilnFrameStageLedger.sampleRetention,
+              frameCount: browserFiringEvidence.kilnFrameStageLedger.mohelIndicator?.frameCount ?? null,
+              eventCount: browserFiringEvidence.kilnFrameStageLedger.mohelIndicator?.eventCount ?? null,
             }
           : null,
       },
@@ -1623,6 +1643,26 @@ try {
       timeoutMs: fireTimeoutMs,
       label: 'foreground SHARP duty correlation gaps',
     });
+    if (browserFiringEvidence.kilnFrameStageLedger) {
+      browserFiringEvidence.kilnFrameStageLedger.frames = await readBrowserArrayInChunks({
+        evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+        snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+        arrayKey: 'kilnFrameStageFrames',
+        expectedCount: browserFiringEvidence.kilnFrameStageLedger.mohelIndicator?.frameCount,
+        expectedIdentity: browserFiringEvidence.snapshotIdentity,
+        timeoutMs: fireTimeoutMs,
+        label: 'kiln frame stage ledger frames',
+      });
+      browserFiringEvidence.kilnFrameStageLedger.events = await readBrowserArrayInChunks({
+        evaluateExpression: (expression, timeoutMs) => evaluate(ws, expression, timeoutMs),
+        snapshotExpression: 'window.__kaminosCrucibleWitnessSnapshot',
+        arrayKey: 'kilnFrameStageEvents',
+        expectedCount: browserFiringEvidence.kilnFrameStageLedger.mohelIndicator?.eventCount,
+        expectedIdentity: browserFiringEvidence.snapshotIdentity,
+        timeoutMs: fireTimeoutMs,
+        label: 'kiln frame stage ledger events',
+      });
+    }
     const pipelineReport = JSON.parse(readFileSync(browserFiringEvidence.reportPath, 'utf8'));
     state.fullRoute = projectFriendlyFiringEvidence({
       browserFiringEvidence,
@@ -1639,6 +1679,35 @@ try {
     });
     lastTrustworthyEvidence = { ...lastTrustworthyEvidence, fullRoute: state.fullRoute };
     if (state.fullRoute.status !== 'complete') throw new Error(`Friendly firing failed: ${state.fullRoute.message || state.fullRoute.status}`);
+    if (requireFrameStageLedger) {
+      const ledger = state.fullRoute.kilnFrameStageLedger;
+      const frameCount = ledger?.mohelIndicator?.frameCount;
+      const eventCount = ledger?.mohelIndicator?.eventCount;
+      const frameStages = new Set((ledger?.frames || []).flatMap(frame => (frame.stages || []).map(stage => stage.stage)));
+      const requiredSharedStages = ['volume-raf', 'hybrid-splat-encode', 'hybrid-smoke-encode', 'hybrid-resolve-encode', 'queue-submit'];
+      const ledgerFailures = [];
+      if (ledger?.schema !== 'kaminos.kiln-frame-stage-ledger.v0') ledgerFailures.push('schema-missing');
+      if (ledger?.status !== 'complete' || ledger?.evidenceStatus !== 'verified') ledgerFailures.push('ledger-not-verified');
+      if (ledger?.sampleRetention !== 'uncapped') ledgerFailures.push('sample-retention-not-uncapped');
+      if (ledger?.firingId !== state.fullRoute.foregroundKilnHeartbeat?.firingId) ledgerFailures.push('firingId-mismatch');
+      if (ledger?.clock?.schema !== 'kaminos.browser-epoch-monotonic-clock.v0') ledgerFailures.push('epoch-clock-missing');
+      if (!Number.isInteger(frameCount) || frameCount <= 0 || frameCount !== ledger?.frames?.length) ledgerFailures.push('frames-missing-or-partial');
+      if (!Number.isInteger(eventCount) || eventCount <= 0 || eventCount !== ledger?.events?.length) ledgerFailures.push('events-missing-or-partial');
+      if (ledger?.failures?.length) ledgerFailures.push(`ledger-failures:${ledger.failures.join('|')}`);
+      if ((ledger?.pathCounts?.live || 0) <= 0) ledgerFailures.push('live-path-missing');
+      if (requestedFlameContinuity === 'bounded-history-holdover' && (ledger?.pathCounts?.holdover || 0) <= 0) {
+        ledgerFailures.push('holdover-path-missing');
+      }
+      for (const stage of requiredSharedStages) {
+        if (!frameStages.has(stage)) ledgerFailures.push(`required-stage-missing:${stage}`);
+      }
+      if (!(ledger?.events || []).some(event => event?.stage === 'main-page-raf')) {
+        ledgerFailures.push('main-page-raf-events-missing');
+      }
+      if (ledgerFailures.length) {
+        throw new Error(`Friendly firing is missing its uncapped exact-firing kiln frame-stage ledger: ${ledgerFailures.join(', ')}`);
+      }
+    }
     if (expectedSharpRevision && state.fullRoute.effectiveSharpRevision !== expectedSharpRevision) {
       throw new Error(`Friendly firing used unexpected SHARP revision: ${state.fullRoute.effectiveSharpRevision}`);
     }
