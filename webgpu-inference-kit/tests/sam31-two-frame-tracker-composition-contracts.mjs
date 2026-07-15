@@ -33,6 +33,11 @@ for (const token of [
 }
 
 const browser = readFileSync(new URL('smokes/sam31-two-frame-tracker-parity.js', root), 'utf8');
+assert.match(
+  browser,
+  /authenticatedIngress: isTwoImage && \(name === 'episode' \|\| name === 'pointer'\)/,
+  'browser packet authority must authenticate both the dynamic episode and pointer against the loaded ingress packet',
+);
 assert.doesNotMatch(
   browser,
   /frame0Producer\.pointerOutput\.sha256 === pointerPacketEntry\.sha256/,
