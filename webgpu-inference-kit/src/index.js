@@ -212,6 +212,7 @@ export {
 export {
   SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   SAM31_MEMORY_ENCODER_WEBGPU_CONTRACT,
+  createSam31MemoryEncoderLinearDispatch,
   createSam31MemoryEncoderPhaseProgramCpuOracle,
   createSam31MemoryEncoderPhaseProgramRouteDefinition,
   createSam31MemoryEncoderPhaseProgramRouteReceipt,

@@ -5,6 +5,7 @@ import {
   SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID,
   SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID,
   classifySam31PropagationMemoryAdapter,
+  createSam31MemoryEncoderLinearDispatch,
   createSam31MemoryEncoderPhaseProgramCpuOracle,
   createSam31MemoryEncoderPhaseProgramRouteDefinition,
   createSam31PropagationNeckPhaseProgramCpuOracle,
@@ -53,6 +54,21 @@ for (const kernel of [
 
 assert.equal(SAM31_PROPAGATION_NECK_PHASE_PROGRAM_ROUTE_ID, 'sam3.1.propagation-neck.phase-program.webgpu-local.v0');
 assert.equal(SAM31_MEMORY_ENCODER_PHASE_PROGRAM_ROUTE_ID, 'sam3.1.memory-encoder.phase-program.webgpu-local.v0');
+assert.deepEqual(
+  createSam31MemoryEncoderLinearDispatch(8_388_608, { maxWorkgroupsPerDimension: 65_535 }),
+  { logicalInvocations: 8_388_608, dispatch: [363, 362] },
+  '448 memory-mask resampling must preserve every output across two legal dispatch dimensions',
+);
+assert.deepEqual(
+  createSam31MemoryEncoderLinearDispatch(33_554_432, { maxWorkgroupsPerDimension: 65_535 }),
+  { logicalInvocations: 33_554_432, dispatch: [725, 724] },
+  'native 1008 memory-mask resampling must preserve every output without an artificial cap',
+);
+assert.match(memoryRouteSource, /createLinearDispatch/, 'memory encoder phases must use the shared device-limit-aware linear dispatch contract');
+assert.ok(
+  (memoryRouteSource.match(/@builtin\(num_workgroups\) dispatch_grid: vec3<u32>/g) || []).length >= 9,
+  'every memory encoder linear WGSL family must reconstruct its tiled dispatch index',
+);
 assert.equal(typeof createSam31PropagationNeckPhaseProgramRouteReceipt, 'function');
 assert.equal(typeof runSam31PropagationNeckPhaseProgramRoute, 'function');
 

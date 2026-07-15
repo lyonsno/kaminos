@@ -4,7 +4,7 @@ import {
   defineWebGpuRoute,
 } from './route-boundary.js';
 import { createWebGpuInferenceRuntime } from './inference-runtime.js';
-import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE } from './runtime-primitives.js';
+import { WEBGPU_BUFFER_USAGE, WEBGPU_SHADER_STAGE, createLinearDispatch } from './runtime-primitives.js';
 import {
   createKernelProfileMetadata,
   createRouteKernelProfileMetadata,
@@ -93,8 +93,11 @@ fn transformed_mask(batch: u32, channel: u32, y: u32, x: u32) -> f32 {
 }
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.output_channels;
   let out_x = (index / dims.output_channels) % dims.output_width;
@@ -135,8 +138,11 @@ struct NoObjectDims {
 @group(0) @binding(3) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(4) var<uniform> dims: NoObjectDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.channels;
   let batch = index / (dims.spatial * dims.channels);
@@ -172,8 +178,11 @@ struct ConvDims {
 @group(0) @binding(4) var<uniform> dims: ConvDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let out_channel = index % dims.output_channels;
   let out_x = (index / dims.output_channels) % dims.output_width;
@@ -211,8 +220,11 @@ struct LayerNormDims {
 @group(0) @binding(4) var<uniform> dims: LayerNormDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let row = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let row = gid.x + gid.y * dispatch_grid.x * 64u;
   if (row >= dims.rows) { return; }
   let base = row * dims.channels;
   var mean = 0.0;
@@ -304,8 +316,11 @@ const MEMORY_GELU_WGSL = `
 ${MEMORY_EXACT_GELU_FUNCTIONS_WGSL}
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= arrayLength(&output_values)) { return; }
   output_values[index] = gelu_exact_approx(input_values[index]);
 }
@@ -317,8 +332,11 @@ const MEMORY_ADD_WGSL = `
 @group(0) @binding(2) var<storage, read_write> output_values: array<f32>;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= arrayLength(&output_values)) { return; }
   output_values[index] = left_values[index] + right_values[index];
 }
@@ -346,8 +364,11 @@ struct ConvDims {
 @group(0) @binding(4) var<uniform> dims: ConvDims;
 
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.output_channels;
   let out_x = (index / dims.output_channels) % dims.output_width;
@@ -378,8 +399,11 @@ struct LinearDims { rows: u32, input_channels: u32, output_channels: u32, total_
 @group(0) @binding(4) var<uniform> dims: LinearDims;
 ${MEMORY_EXACT_GELU_FUNCTIONS_WGSL}
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let out_channel = index % dims.output_channels;
   let row = index / dims.output_channels;
@@ -403,8 +427,11 @@ struct LinearDims { rows: u32, input_channels: u32, output_channels: u32, total_
 @group(0) @binding(5) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(6) var<uniform> dims: LinearDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let out_channel = index % dims.output_channels;
   let row = index / dims.output_channels;
@@ -423,8 +450,11 @@ struct PositionDims { batch: u32, height: u32, width: u32, channels: u32, total_
 @group(0) @binding(0) var<storage, read_write> output_values: array<f32>;
 @group(0) @binding(1) var<uniform> dims: PositionDims;
 @compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-  let index = gid.x;
+fn main(
+  @builtin(global_invocation_id) gid: vec3<u32>,
+  @builtin(num_workgroups) dispatch_grid: vec3<u32>,
+) {
+  let index = gid.x + gid.y * dispatch_grid.x * 64u;
   if (index >= dims.total_output) { return; }
   let channel = index % dims.channels;
   let x = (index / dims.channels) % dims.width;
@@ -889,8 +919,12 @@ async function sha256Hex(buffer) {
   return `sha256:${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
-function workgroups(total) {
-  return Math.max(1, Math.ceil(total / 64));
+export function createSam31MemoryEncoderLinearDispatch(totalInvocations, input = {}) {
+  const maxWorkgroupsPerDimension = input.maxWorkgroupsPerDimension ?? 65_535;
+  return {
+    logicalInvocations: totalInvocations,
+    dispatch: createLinearDispatch(totalInvocations, { workgroupSize: 64, maxWorkgroupsPerDimension }),
+  };
 }
 
 function convDimsValues(shape, inShape, spec, outShape) {
@@ -954,6 +988,7 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     yieldMs: 0,
     now: input.now,
   });
+  const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
   const downsampleShapes = normalizedWeights.downsampleLayers.map(layer => layer.outputShape);
   const featureShape = { height: shape.featureHeight, width: shape.featureWidth, channels: shape.featureChannels };
@@ -1131,7 +1166,14 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
       tensors: programTensors,
       uniforms,
       kernels,
-      phases: [{ name, kernel, dispatch: [workgroups(total)], yieldAfter: true }],
+      phases: [{
+        name,
+        kernel,
+        dispatch: createSam31MemoryEncoderLinearDispatch(total, {
+          maxWorkgroupsPerDimension: maxComputeWorkgroupsPerDimension,
+        }).dispatch,
+        yieldAfter: true,
+      }],
       metadata,
     });
     await runtime.runProgram(program);
