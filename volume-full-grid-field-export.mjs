@@ -20,6 +20,9 @@ const FIRE_FLOW_COMPOSITION_APPLICATION = 'positive-carrier-residual-to-fire-lic
 const SCALAR_ACTIVITY_CUE_SCHEMA = 'kaminos.volume.exact-basin-support-probe.v0';
 const FROZEN_TRANSFER_CUE_SCHEMA = 'kaminos.volume.fire-flow-carrier-frozen-transfer.v0';
 const SCALAR_ACTIVITY_CUE_APPLICATION = 'learned-fire-flow-visibility-carrier-v0';
+const BOUNDARY_SPLAT_DISPLACEMENT_SCHEMA = 'kaminos.volume.boundary-splat-displacement-probe.v0';
+const BOUNDARY_SPLAT_DISPLACEMENT_AUTHORITY = 'validation-selected-vacancy-gated-offset-class-grid-v0';
+const BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION = 'render-only-vacancy-gated-one-cell-splat-displacement-v0';
 const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'exact-high-field-renderer-coupled-derived-target-v0',
   'native-low-derived-then-nearest-upsampled-control-v0',
@@ -53,6 +56,9 @@ const sourceCapturePath = args.has('--source-capture') ? resolve(String(args.get
 const initialFieldManifestPath = args.has('--initial-field-manifest') ? resolve(String(args.get('--initial-field-manifest'))) : null;
 const scalarActivityCueManifestPath = args.has('--scalar-activity-cue-manifest') ? resolve(String(args.get('--scalar-activity-cue-manifest'))) : null;
 const scalarActivityCueRole = args.has('--scalar-activity-cue-role') ? String(args.get('--scalar-activity-cue-role')) : null;
+const boundarySplatDisplacementManifestPath = args.has('--boundary-splat-displacement-manifest')
+  ? resolve(String(args.get('--boundary-splat-displacement-manifest')))
+  : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
 const renderOnly = args.has('--render-only');
 const renderWarmupCount = Math.max(0, Math.floor(Number(args.get('--render-warmup-count') || 0)));
@@ -265,6 +271,59 @@ function resolveScalarActivityCueManifest() {
     manifestPath: scalarActivityCueManifestPath,
     manifestSha256: sha256(raw),
     role: scalarActivityCueRole,
+    grid,
+    path,
+    sha256: artifact.sha256,
+    actualSha256,
+    byteLength: expectedByteLength,
+    channelOrder: artifact.channelOrder,
+    cueAuthority: artifact.authority,
+  };
+}
+
+function resolveBoundarySplatDisplacementManifest() {
+  if (!boundarySplatDisplacementManifestPath) return null;
+  if (scalarActivityCueManifestPath || scalarActivityCueRole) {
+    throw new Error('--boundary-splat-displacement-manifest cannot be combined with scalar activity cue arguments');
+  }
+  const raw = readFileSync(boundarySplatDisplacementManifestPath, 'utf8');
+  const manifest = JSON.parse(raw);
+  if (manifest.schema !== BOUNDARY_SPLAT_DISPLACEMENT_SCHEMA
+    || manifest.status !== 'captured'
+    || manifest.failurePhase !== null) {
+    throw new Error(`unsupported boundary splat displacement manifest: ${manifest.schema || '(missing)'}/${manifest.status || '(missing)'}`);
+  }
+  if (manifest.checkpoint?.replay?.status !== 'verified'
+    || manifest.checkpoint?.replay?.classParity !== true
+    || manifest.checkpoint?.replay?.globalGateDuplicateDestinationCount !== 0) {
+    throw new Error('boundary splat displacement checkpoint replay contract mismatch');
+  }
+  const artifact = manifest.denseOutputs?.boundarySplatOffsetClass;
+  const shape = artifact?.shape;
+  const grid = Number(shape?.[0]);
+  if (!Number.isInteger(grid) || JSON.stringify(shape) !== JSON.stringify([grid, grid, grid, 1])) {
+    throw new Error(`boundary splat displacement shape mismatch: ${JSON.stringify(shape)}`);
+  }
+  if (JSON.stringify(artifact.channelOrder) !== JSON.stringify(['boundarySplatOffsetClassNormalized'])) {
+    throw new Error('boundary splat displacement channel order mismatch');
+  }
+  if (artifact.authority !== BOUNDARY_SPLAT_DISPLACEMENT_AUTHORITY) {
+    throw new Error(`unsupported boundary splat displacement authority: ${artifact.authority || '(missing)'}`);
+  }
+  const path = resolve(String(artifact.path || ''));
+  const expectedByteLength = grid * grid * grid * Float32Array.BYTES_PER_ELEMENT;
+  if (Number(artifact.byteLength) !== expectedByteLength || statSync(path).size !== expectedByteLength) {
+    throw new Error(`boundary splat displacement byte length mismatch: ${artifact.byteLength}/${statSync(path).size}/${expectedByteLength}`);
+  }
+  const actualSha256 = sha256File(path);
+  if (actualSha256 !== artifact.sha256 || manifest.checkpoint.replay.outputSha256 !== artifact.sha256) {
+    throw new Error(`boundary splat displacement SHA-256 mismatch: ${actualSha256}/${artifact.sha256}/${manifest.checkpoint.replay.outputSha256}`);
+  }
+  return {
+    applicationIdentity: BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION,
+    manifestPath: boundarySplatDisplacementManifestPath,
+    manifestSha256: sha256(raw),
+    role: 'globalVacancyGatedOffsetClass',
     grid,
     path,
     sha256: artifact.sha256,
@@ -578,6 +637,7 @@ async function main() {
   let importedRender = null;
   let scalarActivityCue = null;
   let scalarActivityCueImport = null;
+  let boundarySplatDisplacement = null;
   const renderWarmups = [];
   let renderControlOverrides = {};
   let browserSession = null;
@@ -599,7 +659,8 @@ async function main() {
     }
     phase = 'source-capture-validation';
     initialField = resolveInitialFieldManifest();
-    scalarActivityCue = resolveScalarActivityCueManifest();
+    boundarySplatDisplacement = resolveBoundarySplatDisplacementManifest();
+    scalarActivityCue = boundarySplatDisplacement || resolveScalarActivityCueManifest();
     if (initialField && !args.has('--advance-imported-steps')) {
       throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
     }
@@ -613,7 +674,26 @@ async function main() {
     if (renderOnly && (!initialField || !renderPngPath)) {
       throw new Error('--render-only requires --initial-field-manifest and --render-png');
     }
-    if (scalarActivityCue) {
+    if (boundarySplatDisplacement) {
+      if (!renderOnly || !initialField || advanceImportedSteps !== 0) {
+        throw new Error('boundary splat displacement assay requires --render-only, --initial-field-manifest, and --advance-imported-steps 0');
+      }
+      if (renderComposition === 'raymarch-only-v0') {
+        throw new Error('boundary splat displacement assay requires a splat render composition');
+      }
+      renderControlOverrides = {
+        ...renderControlOverrides,
+        oracleActivityCue: 0,
+        oracleActivityDisplay: 0,
+        oracleActivityCurlNoise: 0,
+        oracleActivityVorticity: 0,
+        oracleActivityMaterial: 0,
+        oracleActivityFireDetail: 0,
+        oracleActivitySplatOpacity: 0,
+        oracleActivitySplatRadiusConcentration: 0,
+        oracleActivitySplatDisplacement: 1,
+      };
+    } else if (scalarActivityCue) {
       if (!renderOnly || !initialField || advanceImportedSteps !== 0) {
         throw new Error('scalar activity cue assay requires --render-only, --initial-field-manifest, and --advance-imported-steps 0');
       }
@@ -915,6 +995,20 @@ async function main() {
               oracleActivitySplatRadiusConcentrationEffective: renderReceipt.oracleActivitySplatRadiusConcentrationEffective,
             })}`);
           }
+          if (boundarySplatDisplacement) {
+            const requestedDisplacement = Number(renderControlOverrides.oracleActivitySplatDisplacement || 0);
+            if (
+              renderReceipt.oracleActivitySplatDisplacementRequested !== requestedDisplacement
+              || renderReceipt.oracleActivitySplatDisplacementEffective !== requestedDisplacement
+              || renderReceipt.oracleActivitySplatDisplacementApplicationIdentity !== BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION
+            ) {
+              throw new Error(`boundary-splat-displacement-gain-mismatch: requested=${requestedDisplacement} receipt=${JSON.stringify({
+                oracleActivitySplatDisplacementRequested: renderReceipt.oracleActivitySplatDisplacementRequested,
+                oracleActivitySplatDisplacementEffective: renderReceipt.oracleActivitySplatDisplacementEffective,
+                oracleActivitySplatDisplacementApplicationIdentity: renderReceipt.oracleActivitySplatDisplacementApplicationIdentity,
+              })}`);
+            }
+          }
         }
         phase = 'post-render-canvas-geometry';
         const postRenderCanvasMount = await evaluateByValue(ws, `(() => {
@@ -1132,6 +1226,7 @@ async function main() {
       requestedInitialFieldManifest: initialFieldManifestPath,
       requestedScalarActivityCueManifest: scalarActivityCueManifestPath,
       requestedScalarActivityCueRole: scalarActivityCueRole,
+      requestedBoundarySplatDisplacementManifest: boundarySplatDisplacementManifestPath,
       initialFieldImport,
       importedAdvance,
       scalarActivityCueImport,

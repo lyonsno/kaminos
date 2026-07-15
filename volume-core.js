@@ -41,6 +41,8 @@ const BOUNDARY_SPLAT_FEATURE_STRIDE_BYTES = BOUNDARY_SPLAT_FEATURE_STRIDE_FLOATS
 const TRUTH_ORACLE_ACTIVITY_RECEIVER_IDENTITY = 'truth-oracle-scalar-activity-receiver-v0';
 const TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY = 'truth-high-diagnostic-activity-projected-to-receiver-grid-v0';
 const FIRE_FLOW_VISIBILITY_CARRIER_APPLICATION_IDENTITY = 'learned-fire-flow-visibility-carrier-v0';
+const BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY = 'validation-selected-vacancy-gated-offset-class-grid-v0';
+const BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION_IDENTITY = 'render-only-vacancy-gated-one-cell-splat-displacement-v0';
 const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
   'exact-high-field-renderer-coupled-derived-target-v0',
@@ -53,6 +55,7 @@ const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'frozen-earlier-replay-ungated-derived-carrier-v0',
   'frozen-earlier-replay-source-selected-gate-derived-carrier-v0',
   'frozen-earlier-replay-constant-residual-scale-derived-carrier-v0',
+  BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY,
 ]);
 const PROCEDURAL_ACTIVITY_CUE_AUTHORITY = 'procedural-receiver-activity-proxy-no-truth-v0';
 const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-controls-v0';
@@ -546,6 +549,7 @@ function normalizeScalarActivityReceiverControls(snapshot = {}) {
     fireDetailGain: clampFinite(snapshot.oracleActivityFireDetail, -2, 2, 0),
     splatOpacityGain: clampFinite(snapshot.oracleActivitySplatOpacity, -2, 2, 0),
     splatRadiusConcentrationGain: clampFinite(snapshot.oracleActivitySplatRadiusConcentration, -2, 2, 0),
+    splatDisplacementEnabled: clampFinite(snapshot.oracleActivitySplatDisplacement, 0, 1, 0),
   };
 }
 
@@ -5008,6 +5012,16 @@ fn boundarySplatScalarActivityHighPass(cell: vec3<u32>) -> f32 {
   return clamp((centerCue - neighborMean) * 3.2, -1.0, 1.0);
 }
 
+fn boundarySplatDecodedOffset(cell: vec3<u32>) -> vec3<i32> {
+  if (boundarySplatCamera.activityControls.z < 0.5) { return vec3<i32>(0); }
+  let encoded = clamp(scalarActivityCue[boundarySplatCellIndex(cell)], 0.0, 1.0);
+  let offsetClass = u32(round(encoded * 26.0));
+  let dx = i32(offsetClass % 3u) - 1;
+  let dy = i32((offsetClass / 3u) % 3u) - 1;
+  let dz = i32(offsetClass / 9u) - 1;
+  return vec3<i32>(dx, dy, dz);
+}
+
 fn boundarySplatAttributeFeatures(
   sidecar: vec4<f32>,
   material: vec4<f32>,
@@ -5075,6 +5089,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   let color = mix(mix(cool, warm, thermal), vec3<f32>(0.82, 0.72, 0.48), whiteHot * 0.52);
   let opacity = clamp(structuralSignal * (0.008 + fireSignal * 0.055), 0.002, 0.038);
   let cellWidth = 2.0 / f32(GRID);
+  let displacedWorld = world + vec3<f32>(boundarySplatDecodedOffset(gid)) * cellWidth;
   let radius = cellWidth * (0.60 + sidecar.w * 2.65 + sidecar.z * 0.48);
   let attributeFeatures = boundarySplatAttributeFeatures(sidecar, material, fire, micro);
   let attributeOutput = applyBoundarySplatAttributeHook(
@@ -5096,7 +5111,7 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
     boundarySplatFeatureRows[candidateIndex].fire = fire;
     boundarySplatFeatureRows[candidateIndex].micro = micro;
   }
-  boundarySplats[candidateIndex].positionSupport = vec4<f32>(world, structuralSignal);
+  boundarySplats[candidateIndex].positionSupport = vec4<f32>(displacedWorld, structuralSignal);
   boundarySplats[candidateIndex].colorOpacity = composedColorOpacity;
   boundarySplats[candidateIndex].shape = vec4<f32>(radius * composedRadiusScale.x, radius * composedRadiusScale.y, sidecar.z, fireSignal);
 }
@@ -7468,7 +7483,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
       const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot);
-      splatCamera.set([scalarActivityReceiver.splatOpacityGain, scalarActivityReceiver.splatRadiusConcentrationGain, 0, 0], 28);
+      splatCamera.set([scalarActivityReceiver.splatOpacityGain, scalarActivityReceiver.splatRadiusConcentrationGain, scalarActivityReceiver.splatDisplacementEnabled, 0], 28);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -11930,6 +11945,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const oracleActivitySplatRadiusConcentrationRequested = Object.hasOwn(controlOverrides, 'oracleActivitySplatRadiusConcentration')
       ? Number(controlOverrides.oracleActivitySplatRadiusConcentration)
       : 0;
+    const oracleActivitySplatDisplacementRequested = Object.hasOwn(controlOverrides, 'oracleActivitySplatDisplacement')
+      ? Number(controlOverrides.oracleActivitySplatDisplacement)
+      : 0;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
     const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
@@ -11943,6 +11961,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const oracleActivityFireDetailEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).fireDetailGain;
       const oracleActivitySplatOpacityEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).splatOpacityGain;
       const oracleActivitySplatRadiusConcentrationEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).splatRadiusConcentrationGain;
+      const oracleActivitySplatDisplacementEffective = normalizeScalarActivityReceiverControls(controlsSnapshot).splatDisplacementEnabled;
       resetTemporalHistory('same-state-render-scale-canvas-capture');
       updateUniforms(fixedNow);
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
@@ -12137,6 +12156,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         oracleActivitySplatRadiusConcentrationRequested,
         oracleActivitySplatRadiusConcentrationEffective,
         oracleActivitySplatRadiusConcentrationApplicationIdentity: 'render-only-external-carrier-high-pass-area-preserving-learned-splat-radius-v0',
+        oracleActivitySplatDisplacementRequested,
+        oracleActivitySplatDisplacementEffective,
+        oracleActivitySplatDisplacementApplicationIdentity: 'render-only-vacancy-gated-one-cell-splat-displacement-v0',
         boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionRequested,
         boundarySplatCompositionEffective,
