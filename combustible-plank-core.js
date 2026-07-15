@@ -140,7 +140,9 @@ export function stepCombustiblePlank(previous, dtSeconds = 1 / 60) {
   next.support.capacity = supportCapacity(material);
   next.support.margin = round(next.support.capacity - next.support.demand);
 
+  let supportFailedThisStep = false;
   if (!next.support.failed && next.support.capacity < next.support.demand) {
+    supportFailedThisStep = true;
     next.support.failed = true;
     next.support.failureStep = next.step;
     next.support.failureTimeSeconds = next.timeSeconds;
@@ -158,7 +160,7 @@ export function stepCombustiblePlank(previous, dtSeconds = 1 / 60) {
     });
   }
 
-  if (next.support.failed && !next.motion.impacted) {
+  if (next.support.failed && !next.motion.impacted && !supportFailedThisStep) {
     const acceleration = 8.1 * Math.max(0.08, Math.cos(next.motion.angleRad)) - 2.2 * next.motion.angularVelocity;
     next.motion.angularVelocity = Math.max(0, next.motion.angularVelocity + acceleration * dt);
     next.motion.angleRad += next.motion.angularVelocity * dt;

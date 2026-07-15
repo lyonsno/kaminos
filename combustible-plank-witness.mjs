@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { validateWitnessPixelSequence } from './combustible-plank-pixel-checks.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i], process.argv[i + 1]);
@@ -20,6 +21,7 @@ const reportPath = resolve(args.get('--report') || out.replace(/\.png$/i, '.json
 const port = positiveInteger(args.get('--debug-port'), 9467);
 const width = positiveInteger(args.get('--width'), 1468);
 const height = positiveInteger(args.get('--height'), 960);
+const captureTimeoutMs = positiveInteger(args.get('--capture-timeout-ms'), 120_000);
 const chrome = process.env.KAMINOS_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const userDataDir = args.get('--user-data-dir') || `/tmp/kaminos-combustible-plank-profile-${port}-${process.pid}`;
 const headless = process.env.KAMINOS_WITNESS_HEADLESS !== '0';
@@ -34,6 +36,8 @@ let finalState = null;
 let chromeProcess = null;
 let chromeLaunchError = null;
 let ws = null;
+let pixelChecks = null;
+const screenshotRecords = { initial: null, combustion: null, final: null };
 
 function delay(ms) {
   return new Promise(resolveDelay => setTimeout(resolveDelay, ms));
@@ -53,14 +57,16 @@ function writeReport(extra = {}) {
     browserVersion,
     chrome,
     debugPort: port,
+    captureTimeoutMs,
     requestedViewport: { width, height },
     effectiveViewport: finalState?.canvas || combustionState?.canvas || initialState?.canvas || null,
     userDataDir,
-    screenshots: { initial: initialOut, combustion: combustionOut, final: out },
+    screenshots: screenshotRecords,
     stderrTail: stderr.slice(-2000),
     initialState,
     combustionState,
     finalState,
+    pixelChecks,
     ...extra,
   }, null, 2));
 }
@@ -107,14 +113,14 @@ function wsRequest(method, params = {}, timeoutMs = 15000) {
   const id = ws._nextId = (ws._nextId || 0) + 1;
   ws.send(JSON.stringify({ id, method, params }));
   return new Promise((resolveRequest, rejectRequest) => {
-    const timer = setTimeout(() => {
+    const timer = timeoutMs === null ? null : setTimeout(() => {
       ws.removeEventListener('message', onMessage);
       rejectRequest(new Error(`${method}: CDP request timed out`));
     }, timeoutMs);
     function onMessage(event) {
       const message = JSON.parse(String(event.data));
       if (message.id !== id) return;
-      clearTimeout(timer);
+      if (timer !== null) clearTimeout(timer);
       ws.removeEventListener('message', onMessage);
       if (message.error) rejectRequest(new Error(`${method}: ${message.error.message}`));
       else resolveRequest(message.result);
@@ -136,7 +142,7 @@ async function evaluate(expression, timeoutMs = 15000) {
 }
 
 async function captureScreenshot(path) {
-  const screenshot = await wsRequest('Page.captureScreenshot', { format: 'png', fromSurface: false });
+  const screenshot = await wsRequest('Page.captureScreenshot', { format: 'png', fromSurface: false }, captureTimeoutMs);
   const png = Buffer.from(screenshot.data, 'base64');
   const minimumCredibleBytes = Math.max(18_000, Math.min(40_000, Math.floor(width * height * 0.08)));
   assert.ok(
@@ -146,7 +152,7 @@ async function captureScreenshot(path) {
   assert.equal(png.readUInt32BE(0), 0x89504e47, 'screenshot is not a PNG');
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, png);
-  return { path, bytes: png.length };
+  return { record: { path, bytes: png.length }, png };
 }
 
 try {
@@ -207,7 +213,9 @@ try {
   if (new URL(effectiveUrl).href !== new URL(requestedUrl).href) {
     throw new Error(`effective URL mismatch: requested ${requestedUrl}, loaded ${effectiveUrl}`);
   }
+  phase = 'capturing-initial';
   const initialShot = await captureScreenshot(initialOut);
+  screenshotRecords.initial = initialShot.record;
 
   phase = 'advancing-to-combustion';
   combustionState = await evaluate(`window.kaminosCombustiblePlankAdvance(90)`);
@@ -216,7 +224,9 @@ try {
   assert.equal(combustionState.burning.combustion.active, true, 'combustion phase is not actively burning');
   assert.equal(combustionState.burning.support.failed, false, 'combustion proof skipped past the supported burn phase');
   assert.ok(combustionState.burning.material.charMass > 0, 'combustion phase has no char formation');
+  phase = 'capturing-combustion';
   const combustionShot = await captureScreenshot(combustionOut);
+  screenshotRecords.combustion = combustionShot.record;
 
   phase = 'advancing-to-collapse';
   finalState = await evaluate(`window.kaminosCombustiblePlankAdvance(90)`);
@@ -236,12 +246,22 @@ try {
   const impactIndex = finalState.events.findIndex(event => event.kind === 'impact');
   assert.ok(supportLossIndex >= 0, 'support-loss event is missing');
   assert.ok(impactIndex > supportLossIndex, 'impact did not follow support-loss');
+  phase = 'capturing-final';
   const finalShot = await captureScreenshot(out);
+  screenshotRecords.final = finalShot.record;
+
+  phase = 'validating-pixels';
+  pixelChecks = validateWitnessPixelSequence({
+    initial: initialShot.png,
+    combustion: combustionShot.png,
+    final: finalShot.png,
+  });
 
   phase = 'completed';
-  writeReport({ status: 'ok', screenshots: { initial: initialShot, combustion: combustionShot, final: finalShot } });
+  writeReport({ status: 'ok' });
   process.stdout.write(`${JSON.stringify({ status: 'ok', reportPath, initialOut, combustionOut, out })}\n`);
 } catch (error) {
+  if (error?.pixelChecks) pixelChecks = error.pixelChecks;
   phase = `failed:${phase}`;
   writeReport({ status: 'failed', error: error?.stack || String(error) });
   throw error;

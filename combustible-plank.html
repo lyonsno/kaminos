@@ -157,7 +157,7 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x242620);
     scene.fog = new THREE.Fog(0x242620, 12, 24);
-    const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.1, 60);
+    const camera = new THREE.PerspectiveCamera(innerWidth <= 720 ? 54 : 42, innerWidth / innerHeight, 0.1, 60);
     camera.position.set(8.3, 5.6, 10.5);
     camera.lookAt(0, 1.15, 0);
 
@@ -339,6 +339,7 @@
 
     function resize() {
       if (!renderer) return;
+      camera.fov = innerWidth <= 720 ? 54 : 42;
       camera.aspect = innerWidth / innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
