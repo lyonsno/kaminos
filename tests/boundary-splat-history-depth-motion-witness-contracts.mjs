@@ -11,7 +11,11 @@ const witness = await readFile(witnessUrl, 'utf8');
 assert.match(witness, /kaminos\.volume\.boundary-splat-history-depth-motion-witness\.v0/, 'witness must publish a stable schema');
 assert.match(witness, /REQUIRED_HISTORY_DEPTHS\s*=\s*\[16,\s*32,\s*64\]/, 'witness must require all operator-signed depths');
 assert.match(witness, /measureHistoryUpperRung/, 'upper rung must be measured from runtime/device authority');
-assert.match(witness, /measureHistoryUpperRung\(row\.slotMetadata\)/, 'upper rung must use the GPU-completed post-prime slot receipt');
+assert.match(witness, /activateFreshMeasuredUpperRung/, 'upper rung must be measured and activated synchronously');
+assert.match(witness, /sampleBoundarySplatHistorySlotMetadata[\s\S]*setControls\(\{\s*boundarySplatHistoryDepth:/, 'fresh GPU upper authority must be applied before another simulation frame can invalidate it');
+assert.match(witness, /transitionHistoryDepthInPlace/, 'bounded depth rows after the first must preserve the live simulator episode');
+assert.match(witness, /history\.replaceState/, 'in-place depth transitions must keep effective URL identity inspectable');
+assert.match(witness, /continuousSimulatorEpisode/, 'report must reject a reset simulator between depth rows');
 assert.match(witness, /historyDepthRows/, 'report must preserve every serial depth row');
 assert.match(witness, /measuredUpperRung/, 'report must distinguish the measured upper rung');
 assert.match(witness, /requestedEffectiveDepthAgreement/, 'each row must fail on requested/effective depth substitution');
@@ -31,6 +35,8 @@ assert.match(witness, /lastTrustworthyEvidence/, 'pre-output failures must leave
 assert.match(witness, /failurePhase/, 'durable failures must identify their phase');
 assert.match(witness, /browserProcessId/, 'one persistent browser identity must span every depth');
 assert.match(witness, /pageId/, 'one page target identity must span every depth');
+assert.match(witness, /simStepCountBefore/, 'depth transition receipts must preserve the simulator continuity boundary');
+assert.match(witness, /simStepCountAfter/, 'depth transition receipts must preserve the simulator continuity boundary');
 assert.match(witness, /CDP debug port already in use before launch/, 'witness must refuse a stale browser endpoint before launch');
 assert.doesNotMatch(witness, /slice\(0,\s*\d+\)/, 'caller-requested frame/depth flow must not be silently capped');
 
@@ -179,5 +185,8 @@ function runAdversarialFixture(name, expectedError) {
 runAdversarialFixture('route-substitution', /requested-effective-route-disagreement/);
 runAdversarialFixture('periodic-motion', /cached-or-periodic-motion/);
 runAdversarialFixture('stalled-clocks', /stalled-live-clock/);
+runAdversarialFixture('upper-authority-collapse', /measured-upper-authority-depth-collapse/);
+runAdversarialFixture('reset-depth-transition', /history-depth-transition-reset-simulator/);
+runAdversarialFixture('fallback-upper-activation', /history-depth-transition-fallback/);
 
 console.log('boundary splat history depth motion witness contracts passed');

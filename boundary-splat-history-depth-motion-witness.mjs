@@ -77,13 +77,18 @@ try {
     const row = await captureHistoryDepth(requestedDepth, matchedSubstrateIdentity);
     if (!matchedSubstrateIdentity) matchedSubstrateIdentity = row.matchedSubstrateIdentity;
     historyDepthRows.push(row);
-    if (requestedDepth === REQUIRED_HISTORY_DEPTHS[0]) {
-      measuredUpperRung = measureHistoryUpperRung(row.slotMetadata);
-    }
   }
 
-  if (measuredUpperRung.depth > REQUIRED_HISTORY_DEPTHS.at(-1)) {
-    const upperRow = await captureHistoryDepth(measuredUpperRung.depth, matchedSubstrateIdentity);
+  const boundedObservedUpperFloor = minimumObservedUpperDepth(historyDepthRows);
+  const upperActivation = await activateFreshMeasuredUpperRung(boundedObservedUpperFloor);
+  const freshUpperRung = measureHistoryUpperRung(upperActivation.slotMetadata);
+  measuredUpperRung = summarizeMeasuredUpperRung(freshUpperRung, upperActivation);
+  if (measuredUpperRung.selectedCaptureDepth > REQUIRED_HISTORY_DEPTHS.at(-1)) {
+    const upperRow = await captureHistoryDepth(
+      measuredUpperRung.selectedCaptureDepth,
+      matchedSubstrateIdentity,
+      upperActivation.depthTransition,
+    );
     historyDepthRows.push(upperRow);
     measuredUpperRung = { ...measuredUpperRung, capturedAsDistinctRow: true };
   } else {
@@ -133,6 +138,18 @@ try {
       requestedEffectiveRouteAgreement: historyDepthRows.every(row => row.requestedEffectiveRouteAgreement),
       matchedSubstrate: historyDepthRows.every(row => deepEqual(row.matchedSubstrateIdentity, matchedSubstrateIdentity)),
       sameBrowser: historyDepthRows.every(row => row.browserProcessId === browserSession.browserProcessId && row.pageId === pageId),
+      continuousSimulatorEpisode: historyDepthRows.every((row, index) => index === 0
+        ? row.depthTransition.mode === 'initial-route-load'
+        : row.depthTransition.mode.endsWith('in-place')
+          && row.depthTransition.simStepCountAfter >= row.depthTransition.simStepCountBefore
+          && row.depthTransition.simStepCountBefore >= historyDepthRows[index - 1].finalState.simStepCount),
+      freshUpperAuthorityPreserved: measuredUpperRung.depth === upperActivation.freshMeasuredUpperDepth
+        && measuredUpperRung.authority === upperActivation.slotMetadata.authority,
+      selectedUpperCaptured: measuredUpperRung.selectedCaptureDepth > REQUIRED_HISTORY_DEPTHS.at(-1)
+        ? historyDepthRows.some(row => row.requestedDepth === measuredUpperRung.selectedCaptureDepth)
+        : measuredUpperRung.representedByDepth === REQUIRED_HISTORY_DEPTHS.at(-1),
+      upperActivationNoFallback: upperActivation.depthTransition.fallbackReason === null
+        && upperActivation.depthTransition.effectiveDepth === measuredUpperRung.selectedCaptureDepth,
       noFallback: historyDepthRows.every(row => row.fallbackReason === null),
       noOverflow: historyDepthRows.every(row => row.maxOverflowCount === 0),
       noCandidateCopy: historyDepthRows.every(row => row.maxCandidateCopyBytes === 0),
@@ -198,16 +215,17 @@ function hydrateInputs() {
   port = positiveInteger(args.get('--chrome-port') ?? 19441, '--chrome-port');
 }
 
-async function captureHistoryDepth(requestedDepth, expectedSubstrate) {
+async function captureHistoryDepth(requestedDepth, expectedSubstrate, preactivatedTransition = null) {
   const label = `depth-${requestedDepth}`;
   const rowDir = resolve(outDir, label);
   const framesDir = resolve(rowDir, 'frames');
   mkdirSync(framesDir, { recursive: true });
   failurePhase = `${label}:route-load`;
   const rowRoute = routeForDepth(requestedRoute, requestedDepth);
-  await wsRequest('Page.navigate', { url: rowRoute });
-  await wsRequest('Page.bringToFront');
-  await waitForPrototype();
+  const depthTransition = preactivatedTransition
+    ?? (expectedSubstrate
+      ? await transitionHistoryDepthInPlace(requestedDepth, rowRoute)
+      : await loadInitialDepthRoute(requestedDepth, rowRoute));
   await delay(settleMs);
   await hideHud();
   const effectiveCamera = await setCameraPose(CAMERA);
@@ -232,6 +250,7 @@ async function captureHistoryDepth(requestedDepth, expectedSubstrate) {
     pageUrl,
     requestedEffectiveRouteAgreement,
     requestedEffectiveDepthAgreement,
+    depthTransition,
     initialState: compactState(initialState),
     matchedSubstrateIdentity,
   };
@@ -303,6 +322,7 @@ async function captureHistoryDepth(requestedDepth, expectedSubstrate) {
       historyWriteSlot: state.boundarySplatHistoryWriteSlot,
       phaseSourceCount: state.boundarySplatPhaseSourceCount,
       sourceCandidateCount: state.boundarySplatSourceCandidateCount,
+      measuredUpperDepth: state.boundarySplatHistoryMeasuredUpperDepth,
       selectedCandidateCount: state.boundarySplatSelectedCandidateCount,
       overflowCount: state.boundarySplatOverflowCount,
       candidateCopyBytes: state.boundarySplatCopyBytesThisFrame,
@@ -344,6 +364,7 @@ async function captureHistoryDepth(requestedDepth, expectedSubstrate) {
     requestedEffectiveRouteAgreement,
     browserProcessId: browserSession.browserProcessId,
     pageId,
+    depthTransition,
     matchedSubstrateIdentity,
     initialState: compactState(initialState),
     finalState: compactState(finalState),
@@ -384,6 +405,129 @@ function measureHistoryUpperRung(initialState) {
     throw new Error(`measured-history-upper-rung-authority-invalid:${authority}`);
   }
   return { depth, authority };
+}
+
+function minimumObservedUpperDepth(rows) {
+  const observed = rows.flatMap(row => [
+    row.initialState?.boundarySplatHistoryMeasuredUpperDepth,
+    ...row.frames.map(frame => frame.measuredUpperDepth),
+    row.finalState?.boundarySplatHistoryMeasuredUpperDepth,
+  ]).map(Number).filter(depth => Number.isInteger(depth) && depth >= REQUIRED_HISTORY_DEPTHS.at(-1));
+  if (observed.length === 0) throw new Error('bounded-observed-history-upper-rung-unavailable');
+  return Math.min(...observed);
+}
+
+function summarizeMeasuredUpperRung(freshUpperRung, activation) {
+  if (freshUpperRung.depth !== activation.freshMeasuredUpperDepth) {
+    throw new Error(`measured-upper-authority-depth-collapse:${JSON.stringify({ freshUpperRung, activation })}`);
+  }
+  return {
+    depth: freshUpperRung.depth,
+    authority: freshUpperRung.authority,
+    selectedCaptureDepth: activation.selectedDepth,
+    selectedCaptureProvenance: {
+      identity: 'bounded-observed-fresh-upper-selection-v0',
+      boundedObservedUpperFloor: activation.boundedObservedUpperFloor,
+      freshMeasuredUpperDepth: activation.freshMeasuredUpperDepth,
+      policy: activation.selectionPolicy,
+    },
+    activation,
+  };
+}
+
+async function loadInitialDepthRoute(requestedDepth, rowRoute) {
+  await wsRequest('Page.navigate', { url: rowRoute });
+  await wsRequest('Page.bringToFront');
+  await waitForPrototype();
+  const state = await debugState();
+  return {
+    identity: 'boundary-splat-history-depth-transition-v0',
+    mode: 'initial-route-load',
+    requestedDepth,
+    effectiveDepth: Number(state.boundarySplatHistoryDepth),
+    simStepCountBefore: null,
+    simStepCountAfter: Number(state.simStepCount),
+    pageId,
+  };
+}
+
+async function transitionHistoryDepthInPlace(requestedDepth, rowRoute) {
+  const receipt = await evaluate(`(() => {
+    const prototype = window.__kaminosVolumePrototype;
+    const before = prototype.debugState();
+    prototype.setControls({ boundarySplatHistoryDepth: ${JSON.stringify(requestedDepth)} });
+    history.replaceState(null, '', ${JSON.stringify(rowRoute)});
+    const after = prototype.debugState();
+    return {
+      identity: 'boundary-splat-history-depth-transition-v0',
+      mode: 'live-control-in-place',
+      requestedDepth: ${JSON.stringify(requestedDepth)},
+      effectiveDepth: Number(after.boundarySplatHistoryDepth),
+      simStepCountBefore: Number(before.simStepCount),
+      simStepCountAfter: Number(after.simStepCount),
+      frameCountBefore: Number(before.frameCount),
+      frameCountAfter: Number(after.frameCount),
+      fallbackReason: after.boundarySplatFallbackReason ?? null,
+    };
+  })()`, true);
+  validateDepthTransition(receipt, requestedDepth);
+  return receipt;
+}
+
+async function activateFreshMeasuredUpperRung(boundedObservedUpperFloor) {
+  failurePhase = 'measured-upper-rung:activation';
+  const rowRouteTemplate = routeForDepth(requestedRoute, '__FRESH_UPPER_DEPTH__');
+  const activation = await evaluate(`(async () => {
+    const prototype = window.__kaminosVolumePrototype;
+    const before = prototype.debugState();
+    const slotMetadata = await prototype.sampleBoundarySplatHistorySlotMetadata();
+    const freshMeasuredUpperDepth = Number(slotMetadata?.measuredUpperHistoryDepth);
+    const selectedDepth = Math.min(freshMeasuredUpperDepth, ${JSON.stringify(boundedObservedUpperFloor)});
+    prototype.setControls({ boundarySplatHistoryDepth: selectedDepth });
+    const effectiveRoute = ${JSON.stringify(rowRouteTemplate)}.replace('__FRESH_UPPER_DEPTH__', String(selectedDepth));
+    history.replaceState(null, '', effectiveRoute);
+    const after = prototype.debugState();
+    return {
+      identity: 'boundary-splat-fresh-measured-upper-activation-v0',
+      selectionPolicy: 'min-fresh-gpu-upper-and-bounded-observed-runtime-upper-v0',
+      boundedObservedUpperFloor: ${JSON.stringify(boundedObservedUpperFloor)},
+      freshMeasuredUpperDepth,
+      selectedDepth,
+      slotMetadata,
+      depthTransition: {
+        identity: 'boundary-splat-history-depth-transition-v0',
+        mode: 'fresh-measured-upper-in-place',
+        requestedDepth: selectedDepth,
+        effectiveDepth: Number(after.boundarySplatHistoryDepth),
+        simStepCountBefore: Number(before.simStepCount),
+        simStepCountAfter: Number(after.simStepCount),
+        frameCountBefore: Number(before.frameCount),
+        frameCountAfter: Number(after.frameCount),
+        fallbackReason: after.boundarySplatFallbackReason ?? null,
+      },
+    };
+  })()`, true);
+  const freshUpper = measureHistoryUpperRung(activation.slotMetadata);
+  if (activation.selectedDepth !== Math.min(freshUpper.depth, boundedObservedUpperFloor)) {
+    throw new Error(`fresh-upper-selection-disagreement:${JSON.stringify(activation)}`);
+  }
+  validateDepthTransition(activation.depthTransition, activation.selectedDepth);
+  return activation;
+}
+
+function validateDepthTransition(receipt, requestedDepth) {
+  if (receipt?.identity !== 'boundary-splat-history-depth-transition-v0') {
+    throw new Error(`history-depth-transition-authority-missing:${JSON.stringify(receipt)}`);
+  }
+  if (receipt.mode !== 'initial-route-load') {
+    if (receipt.simStepCountAfter < receipt.simStepCountBefore || receipt.frameCountAfter < receipt.frameCountBefore) {
+      throw new Error(`history-depth-transition-reset-simulator:${JSON.stringify(receipt)}`);
+    }
+    if (receipt.fallbackReason) throw new Error(`history-depth-transition-fallback:${receipt.fallbackReason}`);
+  }
+  if (Number(receipt.effectiveDepth) !== requestedDepth) {
+    throw new Error(`history-depth-transition-disagreement:${JSON.stringify(receipt)}`);
+  }
 }
 
 function validateRuntimeState(state, requestedDepth) {
@@ -864,6 +1008,44 @@ function runContractFixture(name) {
       meanAdjacentPixelDelta: 1,
     };
     validateLiveMotion(frames, motion, cadence);
+    return;
+  }
+  if (name === 'upper-authority-collapse') {
+    summarizeMeasuredUpperRung(
+      { depth: 831, authority: 'gpu-archive-slot-metadata-post-queue-completion-readback-v0' },
+      {
+        freshMeasuredUpperDepth: 64,
+        selectedDepth: 64,
+        boundedObservedUpperFloor: 64,
+        selectionPolicy: 'min-fresh-gpu-upper-and-bounded-observed-runtime-upper-v0',
+      },
+    );
+    return;
+  }
+  if (name === 'reset-depth-transition') {
+    validateDepthTransition({
+      identity: 'boundary-splat-history-depth-transition-v0',
+      mode: 'live-control-in-place',
+      effectiveDepth: 32,
+      simStepCountBefore: 200,
+      simStepCountAfter: 0,
+      frameCountBefore: 200,
+      frameCountAfter: 0,
+      fallbackReason: null,
+    }, 32);
+    return;
+  }
+  if (name === 'fallback-upper-activation') {
+    validateDepthTransition({
+      identity: 'boundary-splat-history-depth-transition-v0',
+      mode: 'fresh-measured-upper-in-place',
+      effectiveDepth: 731,
+      simStepCountBefore: 200,
+      simStepCountAfter: 200,
+      frameCountBefore: 200,
+      frameCountAfter: 200,
+      fallbackReason: 'history-depth-refused:observed-source-candidate-count-exceeds-history-capacity',
+    }, 731);
     return;
   }
   throw new Error(`unknown-contract-fixture:${name}`);
