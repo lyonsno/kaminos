@@ -668,6 +668,7 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
     device: input.device, queue: input.queue, adapter: input.adapter, adapterName: input.adapterName,
     browser: input.browser, backendIdentity: input.backendIdentity, kernel: input.kernel || route.kernel,
     requiredStages: requiredStages(), timingSource: 'queue-submit-wait', waitForSubmittedWorkDone: true, yieldMs: 0,
+    residentTensorResolver: input.residentTensorResolver,
   });
   const pointEmbedding = buildPointEmbedding(weights, extraPerObjectEmbedding);
   const imageValues = shape.imageTokens * 256;
@@ -681,7 +682,7 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
   let gpu;
   const allWeightKeys = Object.keys(weights);
   await runtime.runStage('multiplex-decoder-load-tensors', async stage => {
-    const create = (name, length, tensorUsage = usage) => stage.createTensor({ name: `sam31.multiplex-decoder.${name}`, shape: [length], dtype: 'f32', usage: tensorUsage });
+    const create = (name, length, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name: `sam31.multiplex-decoder.${name}`, shape: [length], dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     gpu = {
       point: create('point-embedding', 80 * 256, readonly), image: create('image', imageValues, readonly), imagePosition: create('image-position', imageValues, readonly),
       highResolutionS0: create('high-resolution-s0', 32 * maskSpatial, readonly), highResolutionS1: create('high-resolution-s1', 64 * intermediateSpatial, readonly),
@@ -704,7 +705,7 @@ export async function runSam31MultiplexMaskDecoderPhaseProgramRoute(input = {}) 
     stage.uploadTensor(gpu.highResolutionS0, highResolutionS0);
     stage.uploadTensor(gpu.highResolutionS1, highResolutionS1);
     for (const key of allWeightKeys) {
-      gpu.weights[key] = create(gpuWeightName(key), weights[key].length, readonly);
+      gpu.weights[key] = create(gpuWeightName(key), weights[key].length, readonly, weights[key]);
       stage.uploadTensor(gpu.weights[key], weights[key]);
     }
     const uniform = (name, schema, values) => stage.createUniformBuffer({ label: `sam31.multiplex-decoder.${name}`, schema, values });

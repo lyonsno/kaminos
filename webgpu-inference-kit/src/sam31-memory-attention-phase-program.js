@@ -706,6 +706,7 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
   const queryRows = shape.batch * shape.queryTokens;
   const memoryRows = shape.batch * shape.memoryTokens;
@@ -713,12 +714,13 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
   const totalMemory = memoryRows * shape.channels;
   const totalMlp = queryRows * shape.mlpHidden;
   const padded = paddedImageMemory(bank, shape);
+  const layerValues = layers.map(layerWeightArrays);
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
   const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
   let tensors;
 
   await runtime.runStage('memory-attention-load-tensors', async stage => {
-    const create = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name: `sam31.memory-attention.${name}`, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
+    const create = (name, tensorShape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name: `sam31.memory-attention.${name}`, shape: tensorShape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     tensors = {
       currentImage: create('current-image', [shape.batch, shape.queryTokens, shape.channels], readonlyUsage),
       src: create('src', [shape.batch, shape.queryTokens, shape.channels], readonlyUsage),
@@ -741,8 +743,8 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
       projected: create('projected', [shape.batch, shape.queryTokens, shape.channels]),
       mlp: create('mlp', [shape.batch, shape.queryTokens, shape.mlpHidden]),
       finalOutput: create('final-output', [shape.batch, shape.queryTokens, shape.channels]),
-      finalNormWeight: create('final-norm.weight', [shape.channels], readonlyUsage),
-      finalNormBias: create('final-norm.bias', [shape.channels], readonlyUsage),
+      finalNormWeight: create('final-norm.weight', [shape.channels], readonlyUsage, finalNorm.weight),
+      finalNormBias: create('final-norm.bias', [shape.channels], readonlyUsage, finalNorm.bias),
       weights: [],
       uniforms: {},
     };
@@ -757,7 +759,7 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
     const shapes = weightTensorShapes(shape);
     for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
       const layerWeights = {};
-      for (const [name, tensorShape] of Object.entries(shapes)) layerWeights[name] = create(`layer-${layerIndex}.${name}`, tensorShape, readonlyUsage);
+      for (const [name, tensorShape] of Object.entries(shapes)) layerWeights[name] = create(`layer-${layerIndex}.${name}`, tensorShape, readonlyUsage, layerValues[layerIndex][name]);
       tensors.weights.push(layerWeights);
     }
     const uniform = (name, schema, values) => stage.createUniformBuffer({ label: `sam31.memory-attention.${name}`, schema, values });
@@ -781,7 +783,7 @@ export async function runSam31MemoryAttentionPhaseProgramRoute(input = {}) {
 
   for (let layerIndex = 0; layerIndex < shape.layerCount; layerIndex += 1) {
     await runtime.runStage(`memory-attention-layer-${layerIndex}-load-weights`, async stage => {
-      const values = layerWeightArrays(layers[layerIndex]);
+      const values = layerValues[layerIndex];
       for (const [name, tensor] of Object.entries(tensors.weights[layerIndex])) stage.uploadTensor(tensor, values[name]);
       await stage.yieldToBrowser({ reason: `after-sam31-memory-attention-layer-${layerIndex}-weight-upload` });
     });

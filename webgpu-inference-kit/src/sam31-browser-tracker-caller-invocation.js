@@ -256,6 +256,13 @@ export async function createSam31BrowserTrackerCallerInvocationRuntime({
     inputEvidence.callerArtifactReadCount += 1;
     return new Type(value);
   };
+  const loadStaticFloat32 = async entry => {
+    const values = await modelPackageRuntime.loadFloat32(entry);
+    if (typeof modelPackageRuntime.bindResidentTensor === 'function') {
+      modelPackageRuntime.bindResidentTensor(entry, values);
+    }
+    return values;
+  };
   return {
     rootUrl: modelPackageRuntime.rootUrl,
     packageId: modelPackage.packageId,
@@ -279,7 +286,8 @@ export async function createSam31BrowserTrackerCallerInvocationRuntime({
     componentAuthorities: null,
     inputEvidence,
     invocation: structuredClone(invocation),
-    async loadFloat32(entry) { return readCaller(entry, Float32Array) || modelPackageRuntime.loadFloat32(entry); },
+    residentTensorResolver: modelPackageRuntime.residentTensorResolver || null,
+    async loadFloat32(entry) { return readCaller(entry, Float32Array) || loadStaticFloat32(entry); },
     async loadUint8(entry) { return readCaller(entry, Uint8Array) || modelPackageRuntime.loadUint8(entry); },
     cacheEvidence: () => ({ ...modelPackageRuntime.cacheEvidence(), callerArtifactReadCount: inputEvidence.callerArtifactReadCount, dynamicOriginFetchCount: 0 }),
   };

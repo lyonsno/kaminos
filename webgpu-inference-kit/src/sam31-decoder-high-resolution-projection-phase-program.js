@@ -209,12 +209,13 @@ export async function runSam31DecoderHighResolutionProjectionPhaseProgramRoute(i
     device: input.device, queue: input.queue, adapter: input.adapter, adapterName: input.adapterName, browser: input.browser,
     backendIdentity: input.backendIdentity, kernel: input.kernel || route.kernel, requiredStages: REQUIRED_STAGES,
     timingSource: 'queue-submit-wait', waitForSubmittedWorkDone: true, yieldMs: 0, now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
   let gpu = null;
   await runtime.runStage(REQUIRED_STAGES[0], async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonly = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const tensor = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
+    const tensor = (name, tensorShape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     const uniform = (name, height, width, outputChannels) => stage.createUniformBuffer({
       label: name,
       schema: [
@@ -226,10 +227,10 @@ export async function runSam31DecoderHighResolutionProjectionPhaseProgramRoute(i
     gpu = {
       feature0: tensor('sam31.high-resolution.feature-0', [shape.batch, shape.feature0Height, shape.feature0Width, shape.inputChannels], readonly),
       feature1: tensor('sam31.high-resolution.feature-1', [shape.batch, shape.feature1Height, shape.feature1Width, shape.inputChannels], readonly),
-      s0Weight: tensor('sam31.high-resolution.s0.weight', [shape.s0Channels, shape.inputChannels], readonly),
-      s0Bias: tensor('sam31.high-resolution.s0.bias', [shape.s0Channels], readonly),
-      s1Weight: tensor('sam31.high-resolution.s1.weight', [shape.s1Channels, shape.inputChannels], readonly),
-      s1Bias: tensor('sam31.high-resolution.s1.bias', [shape.s1Channels], readonly),
+      s0Weight: tensor('sam31.high-resolution.s0.weight', [shape.s0Channels, shape.inputChannels], readonly, weights.s0.weight),
+      s0Bias: tensor('sam31.high-resolution.s0.bias', [shape.s0Channels], readonly, weights.s0.bias),
+      s1Weight: tensor('sam31.high-resolution.s1.weight', [shape.s1Channels, shape.inputChannels], readonly, weights.s1.weight),
+      s1Bias: tensor('sam31.high-resolution.s1.bias', [shape.s1Channels], readonly, weights.s1.bias),
       s0: tensor('sam31.high-resolution.s0', [shape.batch, shape.s0Channels, shape.feature0Height, shape.feature0Width]),
       s1: tensor('sam31.high-resolution.s1', [shape.batch, shape.s1Channels, shape.feature1Height, shape.feature1Width]),
       s0Dims: uniform('sam31.high-resolution.s0-dims', shape.feature0Height, shape.feature0Width, shape.s0Channels),

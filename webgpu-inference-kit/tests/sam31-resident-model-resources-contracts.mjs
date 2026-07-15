@@ -7,6 +7,7 @@ assert.equal(typeof kit.createSam31ResidentModelResources, 'function');
 const {
   createSam31ResidentModelResources,
   createWebGpuInferenceSession,
+  WEBGPU_BUFFER_USAGE,
 } = kit;
 
 async function sha256(bytes) {
@@ -117,6 +118,20 @@ assert.equal(secondBinding.sourceData, secondSource);
 assert.equal(resident.residentTensorResolver({ sourceData: firstSource }), firstBinding);
 assert.equal(resident.residentTensorResolver({ sourceData: secondSource }), secondBinding);
 assert.equal(resident.evidence().bindingCount, 2);
+
+const authenticatedSubview = new Float32Array(artifactABytes.buffer, artifactABytes.byteOffset + 4, 3);
+const subviewBinding = resident.residentTensorResolver({
+  name: 'sam31.absolute-position.without-cls',
+  sourceData: authenticatedSubview,
+  dtype: 'f32',
+  shape: [3],
+  usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+});
+assert.equal(subviewBinding.buffer, firstBinding.buffer, 'an authenticated package subview must retain the parent live GPU object');
+assert.equal(subviewBinding.bufferOffset, 4, 'an authenticated package subview must bind the exact byte offset');
+assert.equal(subviewBinding.byteLength, authenticatedSubview.byteLength);
+assert.equal(subviewBinding.sourceData, authenticatedSubview);
+assert.equal(resident.evidence().bindingCount, 3);
 
 assert.throws(
   () => resident.bind({ ...entryA, sha256: `sha256:${'0'.repeat(64)}` }, new Float32Array(4)),

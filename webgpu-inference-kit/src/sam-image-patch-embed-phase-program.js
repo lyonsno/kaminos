@@ -263,6 +263,7 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   let tensors = null;
@@ -271,7 +272,7 @@ export async function runSam3ImagePatchEmbedPhaseProgramRoute(input = {}) {
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
     tensors = {
       pixelValues: stage.createTensor({ name: 'sam3.image-patch-embed.pixel-values', shape: [shape.batch, shape.imageHeight, shape.imageWidth, shape.imageChannels], dtype: 'f32', usage: readonlyUsage }),
-      projection: stage.createTensor({ name: 'sam3.image-patch-embed.projection-weight', shape: [shape.hiddenSize, shape.patchSize, shape.patchSize, shape.imageChannels], dtype: 'f32', usage: readonlyUsage }),
+      projection: stage.createTensor({ name: 'sam3.image-patch-embed.projection-weight', shape: [shape.hiddenSize, shape.patchSize, shape.patchSize, shape.imageChannels], dtype: 'f32', usage: readonlyUsage, sourceData: projection }),
       patchEmbeddings: stage.createTensor({ name: 'sam3.image-patch-embed.patch-embeddings', shape: [shape.batch, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
       dims: stage.createUniformBuffer({
         label: 'sam3.image-patch-embed.dims',

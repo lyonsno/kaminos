@@ -765,6 +765,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     timingSource: 'queue-submit-wait',
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
+    residentTensorResolver: input.residentTensorResolver,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
@@ -774,7 +775,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
   const projectedScratchLength = Math.max(geometry.queryValueLength, geometry.keyValueLength);
   let gpu;
   await runtime.runStage('interactive-pointer-load-tensors', async stage => {
-    const create = (name, length, tensorUsage = usage) => stage.createTensor({ name: `sam31.interactive-pointer.${name}`, shape: [length], dtype: 'f32', usage: tensorUsage });
+    const create = (name, length, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name: `sam31.interactive-pointer.${name}`, shape: [length], dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     gpu = {
       binaryMasks: create('binary-masks', geometry.binaryMaskLength, readonly),
       imageEmbedding: create('image-embedding', geometry.imageEmbeddingLength, readonly),
@@ -818,7 +819,7 @@ export async function runSam31InteractivePointerPhaseProgramRoute(input = {}) {
     stage.uploadTensor(gpu.binaryMasks, binaryMasks);
     stage.uploadTensor(gpu.imageEmbedding, imageEmbedding);
     for (const [key, value] of Object.entries(weights)) {
-      gpu.weights[key] = create(gpuWeightName(key), value.length, readonly);
+      gpu.weights[key] = create(gpuWeightName(key), value.length, readonly, value);
       stage.uploadTensor(gpu.weights[key], value);
     }
     const uniform = (name, schema, values) => stage.createUniformBuffer({ label: `sam31.interactive-pointer.${name}`, schema, values });

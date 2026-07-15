@@ -84,6 +84,39 @@ const first = await createSam31BrowserTrackerCallerInvocationRuntime({
   session,
   decodeImage,
 });
+const residentStaticValues = new Float32Array([11, 12, 13, 14]);
+const residentStaticEntry = {
+  role: 'patch-embed-projection-weight',
+  file: 'static/resident-patch.bin',
+  sha256: `sha256:${'a'.repeat(64)}`,
+  byteLength: residentStaticValues.byteLength,
+  dtype: 'float32',
+  shape: [4],
+};
+const residentResolver = () => null;
+const residentBindCalls = [];
+const residentModelPackageRuntime = {
+  ...modelPackageRuntime,
+  residentTensorResolver: residentResolver,
+  bindResidentTensor(entry, values) { residentBindCalls.push({ entry, values }); },
+  async loadFloat32(entry) {
+    assert.equal(entry, residentStaticEntry);
+    return new Float32Array(residentStaticValues);
+  },
+};
+const residentInvocation = await createSam31BrowserTrackerCallerInvocationRuntime({
+  modelPackageRuntime: residentModelPackageRuntime,
+  sourceImages,
+  initialMask,
+  session,
+  decodeImage,
+});
+assert.equal(residentInvocation.residentTensorResolver, residentResolver, 'caller runtime must preserve the resident resolver identity');
+const residentLoadedValues = await residentInvocation.loadFloat32(residentStaticEntry);
+assert.deepEqual(residentLoadedValues, residentStaticValues);
+assert.equal(residentBindCalls.length, 1, 'every fresh static CPU view must bind to its authenticated resident allocation');
+assert.equal(residentBindCalls[0].entry, residentStaticEntry);
+assert.equal(residentBindCalls[0].values, residentLoadedValues);
 const repeat = await createSam31BrowserTrackerCallerInvocationRuntime({
   modelPackageRuntime,
   sourceImages,

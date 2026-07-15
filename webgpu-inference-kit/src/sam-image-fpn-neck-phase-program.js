@@ -830,6 +830,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
@@ -862,7 +863,7 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
   await runtime.runStage('load-image-fpn-neck-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const tensor = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
+    const tensor = (name, tensorShape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     const convWeightShape = spec => [spec.outChannels, spec.kernelSize, spec.kernelSize, spec.inChannels];
     const convBiasShape = spec => [spec.outChannels];
     tensors = {
@@ -914,14 +915,14 @@ export async function runSam3ImageFpnNeckPhaseProgramRoute(input = {}) {
     };
     for (const level of weights.levels) {
       for (const [index, scaleLayer] of level.scaleLayers.entries()) {
-        tensors[`level${level.level}Scale${index}Weight`] = tensor(`sam3.image-fpn-neck.level${level.level}.scale${index}.weight`, convWeightShape(scaleLayer), readonlyUsage);
-        tensors[`level${level.level}Scale${index}Bias`] = tensor(`sam3.image-fpn-neck.level${level.level}.scale${index}.bias`, convBiasShape(scaleLayer), readonlyUsage);
+        tensors[`level${level.level}Scale${index}Weight`] = tensor(`sam3.image-fpn-neck.level${level.level}.scale${index}.weight`, convWeightShape(scaleLayer), readonlyUsage, scaleLayer.weight);
+        tensors[`level${level.level}Scale${index}Bias`] = tensor(`sam3.image-fpn-neck.level${level.level}.scale${index}.bias`, convBiasShape(scaleLayer), readonlyUsage, scaleLayer.bias);
         stage.uploadTensor(tensors[`level${level.level}Scale${index}Weight`], scaleLayer.weight);
         stage.uploadTensor(tensors[`level${level.level}Scale${index}Bias`], scaleLayer.bias);
       }
       for (const [name, spec] of [['Proj1', level.proj1], ['Proj2', level.proj2]]) {
-        tensors[`level${level.level}${name}Weight`] = tensor(`sam3.image-fpn-neck.level${level.level}.${name.toLowerCase()}.weight`, convWeightShape(spec), readonlyUsage);
-        tensors[`level${level.level}${name}Bias`] = tensor(`sam3.image-fpn-neck.level${level.level}.${name.toLowerCase()}.bias`, convBiasShape(spec), readonlyUsage);
+        tensors[`level${level.level}${name}Weight`] = tensor(`sam3.image-fpn-neck.level${level.level}.${name.toLowerCase()}.weight`, convWeightShape(spec), readonlyUsage, spec.weight);
+        tensors[`level${level.level}${name}Bias`] = tensor(`sam3.image-fpn-neck.level${level.level}.${name.toLowerCase()}.bias`, convBiasShape(spec), readonlyUsage, spec.bias);
         stage.uploadTensor(tensors[`level${level.level}${name}Weight`], spec.weight);
         stage.uploadTensor(tensors[`level${level.level}${name}Bias`], spec.bias);
       }
@@ -1110,6 +1111,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
@@ -1146,7 +1148,7 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
   await runtime.runStage('load-image-fpn-neck-tensors', async stage => {
     const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const tensor = (name, tensorShape, tensorUsage = usage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage });
+    const tensor = (name, tensorShape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     const convWeightShape = spec => [spec.outChannels, spec.kernelSize, spec.kernelSize, spec.inChannels];
     tensors = {
       backbone: tensor(`sam31.${descriptor.branch}-neck.vit-backbone-hidden-states`, [shape.batch, shape.backboneHeight, shape.backboneWidth, shape.backboneChannels]),
@@ -1179,8 +1181,8 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
         const outShape = scaleShapes[level.level][scaleIndex];
         tensors[`level${level.level}Scale${scaleIndex}`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
         if (scaleLayer.activation === 'gelu') tensors[`level${level.level}Scale${scaleIndex}Gelu`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}.gelu`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
-        tensors[`level${level.level}Scale${scaleIndex}Weight`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}.weight`, convWeightShape(scaleLayer), readonlyUsage);
-        tensors[`level${level.level}Scale${scaleIndex}Bias`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}.bias`, [scaleLayer.outChannels], readonlyUsage);
+        tensors[`level${level.level}Scale${scaleIndex}Weight`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}.weight`, convWeightShape(scaleLayer), readonlyUsage, scaleLayer.weight);
+        tensors[`level${level.level}Scale${scaleIndex}Bias`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.scale${scaleIndex}.bias`, [scaleLayer.outChannels], readonlyUsage, scaleLayer.bias);
         stage.uploadTensor(tensors[`level${level.level}Scale${scaleIndex}Weight`], scaleLayer.weight);
         stage.uploadTensor(tensors[`level${level.level}Scale${scaleIndex}Bias`], scaleLayer.bias);
       }
@@ -1188,8 +1190,8 @@ async function runSam31TrackingNeckPhaseProgramRoute(input, defaultRoute) {
       tensors[`level${level.level}Proj1`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.proj1`, [shape.batch, levelShape.height, levelShape.width, shape.fpnHiddenSize]);
       tensors[`level${level.level}Feature`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.feature`, [shape.batch, levelShape.height, levelShape.width, shape.fpnHiddenSize]);
       for (const [name, spec] of [['Proj1', level.proj1], ['Proj2', level.proj2]]) {
-        tensors[`level${level.level}${name}Weight`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.${name.toLowerCase()}.weight`, convWeightShape(spec), readonlyUsage);
-        tensors[`level${level.level}${name}Bias`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.${name.toLowerCase()}.bias`, [spec.outChannels], readonlyUsage);
+        tensors[`level${level.level}${name}Weight`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.${name.toLowerCase()}.weight`, convWeightShape(spec), readonlyUsage, spec.weight);
+        tensors[`level${level.level}${name}Bias`] = tensor(`sam31.${descriptor.branch}-neck.level${level.level}.${name.toLowerCase()}.bias`, [spec.outChannels], readonlyUsage, spec.bias);
         stage.uploadTensor(tensors[`level${level.level}${name}Weight`], spec.weight);
         stage.uploadTensor(tensors[`level${level.level}${name}Bias`], spec.bias);
       }

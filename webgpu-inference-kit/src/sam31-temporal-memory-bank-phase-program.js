@@ -429,23 +429,24 @@ export async function runSam31TemporalMemoryBankPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
   const usage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
   const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
   let tensors;
   await runtime.runStage('temporal-memory-load-tensors', async stage => {
-    const create = (name, shape, tensorUsage = usage) => stage.createTensor({ name: `sam31.temporal-memory.${name}`, shape, dtype: 'f32', usage: tensorUsage });
+    const create = (name, shape, tensorUsage = usage, sourceData = undefined) => stage.createTensor({ name: `sam31.temporal-memory.${name}`, shape, dtype: 'f32', usage: tensorUsage, ...(sourceData ? { sourceData } : {}) });
     tensors = {
       spatialMemory: create('spatial-memory', [plan.spatialFrames.length, batch, plan.frameTokenCount, channels], readonlyUsage),
       spatialMemoryPos: create('spatial-memory-pos', [plan.spatialFrames.length, batch, plan.frameTokenCount, channels], readonlyUsage),
       spatialImage: create('spatial-image', [plan.spatialFrames.length, batch, plan.frameTokenCount, channels], readonlyUsage),
       spatialImagePos: create('spatial-image-pos', [plan.spatialFrames.length, batch, plan.frameTokenCount, channels], readonlyUsage),
-      temporalEmbeddings: create('temporal-embeddings', [plan.numMaskmem, channels], readonlyUsage),
+      temporalEmbeddings: create('temporal-embeddings', [plan.numMaskmem, channels], readonlyUsage, temporalEmbeddings),
       temporalIndices: create('temporal-indices', [plan.spatialFrames.length], readonlyUsage),
       pointerValues: create('pointer-values', [plan.pointerFrames.length, batch, multiplexCount, channels], readonlyUsage),
       relativePositions: create('relative-positions', [plan.pointerFrames.length], readonlyUsage),
-      projectionWeight: create('pointer-position-projection-weight', [channels, channels], readonlyUsage),
-      projectionBias: create('pointer-position-projection-bias', [channels], readonlyUsage),
+      projectionWeight: create('pointer-position-projection-weight', [channels, channels], readonlyUsage, projectionWeight),
+      projectionBias: create('pointer-position-projection-bias', [channels], readonlyUsage, projectionBias),
       memoryImage: create('memory-image', [batch, plan.spatialTokenCount, channels]),
       memory: create('memory', [batch, plan.memoryTokenCount, channels]),
       memoryImagePos: create('memory-image-pos', [batch, plan.spatialTokenCount, channels]),

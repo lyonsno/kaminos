@@ -440,7 +440,9 @@ export {
 
 export {
   SAM31_BROWSER_TRACKER_SESSION_SCHEMA,
+  SAM31_BROWSER_TRACKER_RESIDENT_SESSION_SCHEMA,
   createSam31BrowserTrackerSession,
+  createSam31BrowserTrackerResidentSession,
 } from './sam31-browser-tracker-session.js';
 
 export {

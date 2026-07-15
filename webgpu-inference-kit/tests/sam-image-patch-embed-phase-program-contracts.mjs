@@ -39,9 +39,12 @@ assert.match(smokeJs, /patchEmbeddingsOutput/, 'browser smoke must preserve patc
 assert.match(smokeJs, /patchProjectionWeightSha256/, 'browser smoke must preserve patch projection weight identity');
 
 const {
+  WEBGPU_BUFFER_USAGE,
   SAM3_IMAGE_PATCH_EMBED_PHASE_PROGRAM_ROUTE_ID,
+  createRouteInvocationRequest,
   createSam3ImagePatchEmbedPhaseProgramCpuOracle,
   createSam3ImagePatchEmbedPhaseProgramRouteDefinition,
+  runSam3ImagePatchEmbedPhaseProgramRoute,
   validateRouteDefinition,
 } = await import('../src/index.js');
 
@@ -75,5 +78,126 @@ const oracle = createSam3ImagePatchEmbedPhaseProgramCpuOracle({
   shape: { batch: 1, imageHeight: 2, imageWidth: 2, imageChannels: 3, patchSize: 2, patchHeight: 1, patchWidth: 1, hiddenSize: 2 },
 });
 assert.deepEqual(Array.from(oracle.patchEmbeddings), [78, -78]);
+
+function createResidentRouteDevice() {
+  const calls = { buffers: [], writes: [], bindGroups: [] };
+  const queue = {
+    writeBuffer(buffer, offset, data) {
+      const bytes = data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+      buffer.data.set(bytes, offset);
+      calls.writes.push({ buffer, offset, byteLength: bytes.byteLength });
+    },
+    submit(commandBuffers) {
+      for (const commandBuffer of commandBuffers) {
+        for (const copy of commandBuffer.copies || []) {
+          copy.destination.data.set(copy.source.data.subarray(copy.sourceOffset, copy.sourceOffset + copy.size), copy.destinationOffset);
+        }
+      }
+    },
+    async onSubmittedWorkDone() {},
+  };
+  const device = {
+    queue,
+    features: new Set(['shader-f16']),
+    limits: { maxBufferSize: 1024 * 1024 * 1024 },
+    createBuffer(descriptor) {
+      const buffer = {
+        descriptor,
+        data: new Uint8Array(descriptor.size),
+        destroyCount: 0,
+        destroy() { this.destroyCount += 1; },
+        async mapAsync() {},
+        getMappedRange(offset = 0, size = descriptor.size - offset) { return buffer.data.slice(offset, offset + size).buffer; },
+        unmap() {},
+      };
+      calls.buffers.push(buffer);
+      return buffer;
+    },
+    createShaderModule(descriptor) { return { descriptor }; },
+    createBindGroupLayout(descriptor) { return { descriptor }; },
+    createPipelineLayout(descriptor) { return { descriptor }; },
+    createBindGroup(descriptor) { const group = { descriptor }; calls.bindGroups.push(group); return group; },
+    createComputePipeline(descriptor) { return { descriptor }; },
+    createCommandEncoder(descriptor) {
+      const copies = [];
+      return {
+        copyBufferToBuffer(source, sourceOffset, destination, destinationOffset, size) { copies.push({ source, sourceOffset, destination, destinationOffset, size }); },
+        beginComputePass() { return { setPipeline() {}, setBindGroup() {}, dispatchWorkgroups() {}, end() {} }; },
+        finish() { return { label: descriptor.label, copies }; },
+      };
+    },
+  };
+  return { device, calls };
+}
+
+const residentRoute = createSam3ImagePatchEmbedPhaseProgramRouteDefinition({
+  kernel: { profile: 'sam3-image-patch-embed-phase-program-v0', commit: 'resident-contract' },
+});
+const residentFixture = createResidentRouteDevice();
+const residentProjection = new Float32Array([
+  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+  -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+]);
+const residentBuffer = {
+  descriptor: {
+    label: 'resident-patch-projection',
+    size: residentProjection.byteLength,
+    usage: WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst,
+  },
+  data: new Uint8Array(residentProjection.buffer.slice(0)),
+  destroyCount: 0,
+  destroy() { this.destroyCount += 1; },
+};
+let residentResolverCalls = 0;
+const residentRequest = createRouteInvocationRequest(residentRoute, {
+  requestId: 'sam3-patch-resident-contract',
+  inputs: {
+    'source-image': { artifactId: 'resident-source', sha256: `sha256:${'1'.repeat(64)}` },
+    'pixel-values': { artifactId: 'resident-pixels', sha256: `sha256:${'2'.repeat(64)}` },
+    'sam3-image-patch-embed-weights': { artifactId: 'resident-weights', sha256: `sha256:${'3'.repeat(64)}` },
+  },
+  outputs: { 'patch-embeddings': { artifactId: 'resident-output' } },
+});
+await runSam3ImagePatchEmbedPhaseProgramRoute({
+  request: residentRequest,
+  route: residentRoute,
+  device: residentFixture.device,
+  queue: residentFixture.device.queue,
+  adapterName: 'resident-contract-adapter',
+  browser: 'Node resident contract',
+  model: { id: 'facebook/sam3.1', revision: 'resident-contract', weightsHash: `sha256:${'3'.repeat(64)}` },
+  kernel: residentRoute.kernel,
+  residentTensorResolver(tensorInput) {
+    residentResolverCalls += 1;
+    assert.equal(tensorInput.sourceData, residentProjection);
+    return {
+      buffer: residentBuffer,
+      bufferOffset: 0,
+      dtype: 'f32',
+      shape: [2, 2, 2, 3],
+      byteLength: residentProjection.byteLength,
+      usage: residentBuffer.descriptor.usage,
+      paddingReserved: true,
+      sourceData: residentProjection,
+      resourceId: 'resident-patch-projection-resource',
+      allocationId: 'resident-patch-projection-allocation',
+    };
+  },
+  tensors: {
+    pixelValues: new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]),
+    weights: { projection: residentProjection },
+    shape: { batch: 1, imageHeight: 2, imageWidth: 2, imageChannels: 3, patchSize: 2, patchHeight: 1, patchWidth: 1, hiddenSize: 2 },
+  },
+});
+assert.equal(residentResolverCalls, 1, 'the real patch route must resolve its immutable projection through residency exactly once');
+assert.equal(residentFixture.calls.writes.some(write => write.buffer === residentBuffer), false, 'resident projection bytes must not upload per invocation');
+assert.equal(residentBuffer.destroyCount, 0, 'route disposal must not destroy the session-owned resident projection');
+assert.equal(
+  residentFixture.calls.bindGroups.some(group => group.descriptor.entries.some(entry => entry.binding === 1 && entry.resource?.buffer === residentBuffer)),
+  true,
+  'the real patch kernel must bind the exact resident projection buffer',
+);
 
 console.log('sam image patch-embed phase-program contracts passed');

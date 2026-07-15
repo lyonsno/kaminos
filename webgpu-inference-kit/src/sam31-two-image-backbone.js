@@ -45,7 +45,7 @@ export function resolveSam31SpatialPositionEmbeddings({ values, shape, hiddenSiz
   if (!Number.isInteger(pretrainGridSize)) throw new Error(`SAM 3.1 spatial position count ${spatialPositionCount} is not square`);
   return {
     pretrainGridSize,
-    positionEmbeddings: values.slice(hiddenSize),
+    positionEmbeddings: values.subarray(hiddenSize),
   };
 }
 
@@ -196,7 +196,7 @@ function request(route, requestId, inputs, outputs, routeConfig = {}, requestIds
   return value;
 }
 
-async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRole, rgba, patchProjection, prefixWeights, blockWeights, blockWeightsHash, adapter, device, commit, update, loadFloat32, verificationAttached, invocationTag, requestIds, userAgent }) {
+async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRole, rgba, patchProjection, prefixWeights, blockWeights, blockWeightsHash, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }) {
   const source = sourceArtifact(manifest, frameIndex);
   const model = modelFor(manifest);
   const preprocessShape = { batch: 1, height: manifest.shape.imageHeight, width: manifest.shape.imageWidth, channels: manifest.shape.imageChannels };
@@ -230,7 +230,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'sam3-image-patch-embed-weights': { artifactId: 'sam31-two-image:patch-weights', sha256: weightsByRole.get('patch-embed-projection-weight').sha256 },
     }, { 'patch-embeddings': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:patch-embeddings`, invocationTag), shape: [1, manifest.shape.patchTokens, manifest.shape.visionHiddenSize] } }, {}, requestIds),
     route: patchRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
-    model: { ...model, weightsHash: weightsByRole.get('patch-embed-projection-weight').sha256 }, kernel: patchRoute.kernel, tensors: { pixelValues, weights: { projection: patchProjection }, shape: patchShape }, includeReadback: true,
+    model: { ...model, weightsHash: weightsByRole.get('patch-embed-projection-weight').sha256 }, kernel: patchRoute.kernel, tensors: { pixelValues, weights: { projection: patchProjection }, shape: patchShape }, residentTensorResolver, includeReadback: true,
   });
   const patchEmbeddings = new Float32Array(patchResult.debugReadback.patchEmbeddings);
   parity.patchEmbeddings = await compareExpected(patchEmbeddings, tensorsByRole.get(`frame-${frameIndex}-patch-embeddings`), loadFloat32, verificationAttached);
@@ -246,7 +246,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'sam3-image-vit-prefix-weights': { artifactId: 'sam31-two-image:prefix-weights', sha256: prefixHash },
     }, { 'vit-prefix-hidden-states': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:vit-prefix`, invocationTag), shape: [1, manifest.shape.patchHeight, manifest.shape.patchWidth, manifest.shape.visionHiddenSize] } }, {}, requestIds),
     route: prefixRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
-    model: { ...model, weightsHash: prefixHash }, kernel: prefixRoute.kernel, tensors: { patchEmbeddings, weights: prefixWeights.values, shape: prefixShape }, includeReadback: true,
+    model: { ...model, weightsHash: prefixHash }, kernel: prefixRoute.kernel, tensors: { patchEmbeddings, weights: prefixWeights.values, shape: prefixShape }, residentTensorResolver, includeReadback: true,
   });
   const prefixHiddenStates = new Float32Array(prefixResult.debugReadback.vitPrefixHiddenStates);
   parity.vitPrefixDiagnostics = verificationAttached
@@ -264,7 +264,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
       'sam3-image-vit-block-stack-weights': { artifactId: 'sam31-two-image:block-stack-weights', sha256: blockWeightsHash },
     }, { 'vit-block-stack-hidden-states': { artifactId: scopedArtifactId(`sam31-two-image:frame-${frameIndex}:vit-backbone`, invocationTag), shape: [1, manifest.shape.patchHeight, manifest.shape.patchWidth, manifest.shape.visionHiddenSize] } }, {}, requestIds),
     route: stackRoute, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
-    model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, includeReadback: true, validateFiniteCheckpoints: true,
+    model: { ...model, weightsHash: blockWeightsHash }, kernel: stackRoute.kernel, tensors: { hiddenStates: prefixHiddenStates, weights: blockWeights, shape: blockShape }, residentTensorResolver, includeReadback: true, validateFiniteCheckpoints: true,
   });
   const backboneHiddenStates = new Float32Array(stackResult.debugReadback.vitBlockStackHiddenStates);
   parity.vitBackboneDiagnostics = verificationAttached
@@ -275,7 +275,7 @@ async function runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRol
   return { backboneHiddenStates, backboneOutput: routeOutput(stackResult, 'vit-block-stack-hidden-states'), receipts, routes, parity, source };
 }
 
-async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, backbone, adapter, device, commit, update, loadFloat32, verificationAttached, invocationTag, requestIds, userAgent }) {
+async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, backbone, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }) {
   update(`frame-${frameIndex}-${branch}-neck`);
   const isInteractive = branch === 'interactive';
   const factory = isInteractive ? createSam31InteractiveNeckPhaseProgramRouteDefinition : createSam31ImagePropagationNeckPhaseProgramRouteDefinition;
@@ -293,7 +293,7 @@ async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByR
     }, outputs, {}, requestIds),
     route, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...modelFor(manifest), weightsHash }, kernel: route.kernel,
-    tensors: { backboneHiddenStates: backbone.backboneHiddenStates, weights, shape: { batch: 1, backboneHeight: manifest.shape.patchHeight, backboneWidth: manifest.shape.patchWidth, backboneChannels: manifest.shape.visionHiddenSize, fpnHiddenSize: 256, levels: manifest.shape.fpnLevels } }, includeReadback: true,
+    tensors: { backboneHiddenStates: backbone.backboneHiddenStates, weights, shape: { batch: 1, backboneHeight: manifest.shape.patchHeight, backboneWidth: manifest.shape.patchWidth, backboneChannels: manifest.shape.visionHiddenSize, fpnHiddenSize: 256, levels: manifest.shape.fpnLevels } }, residentTensorResolver, includeReadback: true,
   });
   const features = [];
   const parity = {};
@@ -306,7 +306,7 @@ async function runNeck({ branch, frameIndex, manifest, tensorsByRole, weightsByR
   return { result, route, features, position2, parity };
 }
 
-async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, neck, adapter, device, commit, update, loadFloat32, verificationAttached, invocationTag, requestIds, userAgent }) {
+async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, weightsByRole, weights, neck, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }) {
   update(`frame-${frameIndex}-${branch}-high-resolution`);
   const route = createSam31DecoderHighResolutionProjectionPhaseProgramRouteDefinition({ model: modelFor(manifest), kernel: kernel('sam31-decoder-high-resolution-projection-phase-program-v0', commit) });
   const weightsHash = await sha256Text(['decoder-high-resolution-s0-weight', 'decoder-high-resolution-s0-bias', 'decoder-high-resolution-s1-weight', 'decoder-high-resolution-s1-bias'].map(role => `${role}:${weightsByRole.get(role).sha256}`).join('\n'));
@@ -324,7 +324,7 @@ async function runHighResolution({ branch, frameIndex, manifest, tensorsByRole, 
     }, {}, requestIds),
     route, adapter, device, queue: device.queue, adapterName: adapter.info?.description || 'browser-webgpu-adapter', browser: userAgent,
     model: { ...modelFor(manifest), weightsHash }, kernel: route.kernel,
-    tensors: { feature0: neck.features[0], feature1: neck.features[1], shape: { batch: 1, feature0Height: manifest.shape.fpnLevels[0].height, feature0Width: manifest.shape.fpnLevels[0].width, feature1Height: manifest.shape.fpnLevels[1].height, feature1Width: manifest.shape.fpnLevels[1].width, inputChannels: 256, s0Channels: 32, s1Channels: 64 }, weights }, includeReadback: true,
+    tensors: { feature0: neck.features[0], feature1: neck.features[1], shape: { batch: 1, feature0Height: manifest.shape.fpnLevels[0].height, feature0Width: manifest.shape.fpnLevels[0].width, feature1Height: manifest.shape.fpnLevels[1].height, feature1Width: manifest.shape.fpnLevels[1].width, inputChannels: 256, s0Channels: 32, s1Channels: 64 }, weights }, residentTensorResolver, includeReadback: true,
   });
   const highResolutionS0 = new Float32Array(result.debugReadback.highResolutionS0);
   const highResolutionS1 = new Float32Array(result.debugReadback.highResolutionS1);
@@ -355,6 +355,7 @@ export async function runSam31TwoImageBackbone({
   const loadFloat32 = entry => packageRuntime.loadFloat32(entry);
   const loadUint8 = entry => packageRuntime.loadUint8(entry);
   const verificationAttached = packageRuntime.verificationAttached === true;
+  const residentTensorResolver = packageRuntime.residentTensorResolver || null;
   const invocationTag = packageRuntime.invocationId;
   const tensorsByRole = entryMap(manifest.tensors);
   const weightsByRole = entryMap(manifest.weights);
@@ -381,26 +382,26 @@ export async function runSam31TwoImageBackbone({
   const blockWeights = await loadBlockWeights(loadFloat32, weightsByRole);
   const blockWeightsHash = await sha256Text(blockWeightRoles().map(role => `${role}:${weightsByRole.get(role).sha256}`).join('\n'));
   const backbones = [];
-  for (let frameIndex = 0; frameIndex < 2; frameIndex += 1) backbones.push(await runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRole, rgba: rgba[frameIndex], patchProjection, prefixWeights, blockWeights, blockWeightsHash, adapter, device, commit, update, loadFloat32, verificationAttached, invocationTag, requestIds, userAgent }));
+  for (let frameIndex = 0; frameIndex < 2; frameIndex += 1) backbones.push(await runFrameTrunk({ frameIndex, manifest, tensorsByRole, weightsByRole, rgba: rgba[frameIndex], patchProjection, prefixWeights, blockWeights, blockWeightsHash, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }));
   blockWeights.layers.length = 0;
 
   update('load-interactive-neck-weights');
   const interactiveWeights = await loadNeckWeights(loadFloat32, weightsByRole, 'interactive');
-  const interactive = await runNeck({ branch: 'interactive', frameIndex: 0, manifest, tensorsByRole, weightsByRole, weights: interactiveWeights, backbone: backbones[0], adapter, device, commit, update, loadFloat32, verificationAttached, invocationTag, requestIds, userAgent });
+  const interactive = await runNeck({ branch: 'interactive', frameIndex: 0, manifest, tensorsByRole, weightsByRole, weights: interactiveWeights, backbone: backbones[0], adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent });
   interactiveWeights.levels.length = 0;
 
   update('load-propagation-neck-weights');
   const propagationWeights = await loadNeckWeights(loadFloat32, weightsByRole, 'propagation');
   const propagation = [];
-  for (let frameIndex = 0; frameIndex < 2; frameIndex += 1) propagation.push(await runNeck({ branch: 'propagation', frameIndex, manifest, tensorsByRole, weightsByRole, weights: propagationWeights, backbone: backbones[frameIndex], adapter, device, commit, update, loadFloat32, verificationAttached, invocationTag, requestIds, userAgent }));
+  for (let frameIndex = 0; frameIndex < 2; frameIndex += 1) propagation.push(await runNeck({ branch: 'propagation', frameIndex, manifest, tensorsByRole, weightsByRole, weights: propagationWeights, backbone: backbones[frameIndex], adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent }));
   propagationWeights.levels.length = 0;
 
   const projectionWeights = {
     s0: { weight: await loadFloat32(weightsByRole.get('decoder-high-resolution-s0-weight')), bias: await loadFloat32(weightsByRole.get('decoder-high-resolution-s0-bias')) },
     s1: { weight: await loadFloat32(weightsByRole.get('decoder-high-resolution-s1-weight')), bias: await loadFloat32(weightsByRole.get('decoder-high-resolution-s1-bias')) },
   };
-  const frame0High = await runHighResolution({ branch: 'interactive', frameIndex: 0, manifest, tensorsByRole, weightsByRole, weights: projectionWeights, neck: interactive, adapter, device, commit, update, loadFloat32, verificationAttached, invocationTag, requestIds, userAgent });
-  const frame1High = await runHighResolution({ branch: 'propagation', frameIndex: 1, manifest, tensorsByRole, weightsByRole, weights: projectionWeights, neck: propagation[1], adapter, device, commit, update, loadFloat32, verificationAttached, invocationTag, requestIds, userAgent });
+  const frame0High = await runHighResolution({ branch: 'interactive', frameIndex: 0, manifest, tensorsByRole, weightsByRole, weights: projectionWeights, neck: interactive, adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent });
+  const frame1High = await runHighResolution({ branch: 'propagation', frameIndex: 1, manifest, tensorsByRole, weightsByRole, weights: projectionWeights, neck: propagation[1], adapter, device, commit, update, loadFloat32, verificationAttached, residentTensorResolver, invocationTag, requestIds, userAgent });
 
   const receipts = [
     ...backbones[0].receipts, ...backbones[1].receipts,

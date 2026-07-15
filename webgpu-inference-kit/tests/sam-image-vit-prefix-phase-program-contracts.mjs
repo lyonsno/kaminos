@@ -11,7 +11,10 @@ assert.match(packageJson.scripts.test, /sam-image-vit-prefix-phase-program-contr
 assert.equal(existsSync(routeSourceUrl), true, 'SAM3 image ViT-prefix route source must exist');
 
 const routeSource = existsSync(routeSourceUrl) ? readFileSync(routeSourceUrl, 'utf8') : '';
+const backboneSource = readFileSync(new URL('../src/sam31-two-image-backbone.js', import.meta.url), 'utf8');
 assert.match(routeSource, /SAM3_IMAGE_VIT_PREFIX_PHASE_PROGRAM_ROUTE_ID/, 'image ViT-prefix route must export stable route identity');
+assert.match(backboneSource, /positionEmbeddings:\s*values\.subarray\(hiddenSize\)/, 'CLS removal must preserve the authenticated absolute-position backing store for offset residency');
+assert.doesNotMatch(backboneSource, /positionEmbeddings:\s*values\.slice\(hiddenSize\)/, 'CLS removal must not copy the resident package artifact into an unauthenticated backing store');
 assert.match(routeSource, /sam3\.image-vit-prefix\.phase-program\.webgpu-local\.v0/, 'image ViT-prefix route must name the WebGPU-local route id');
 assert.match(routeSource, /defineProgram/, 'image ViT-prefix route must use the phase-program runtime');
 assert.match(routeSource, /runProgram/, 'image ViT-prefix route must execute through runProgram');

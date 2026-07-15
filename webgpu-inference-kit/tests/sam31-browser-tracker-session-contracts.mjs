@@ -475,6 +475,24 @@ for (const token of [
   'decoderFromAttention',
 ]) assert.match(driverSource, new RegExp(token), `package tracker driver must preserve downstream parity evidence through ${token}`);
 assert.match(driverSource, /imageBackboneCompoundParity/, 'the successful package report must preserve the image-backbone compound verdict and diagnostics');
+assert.match(
+  driverSource,
+  /const residentTensorResolver = packageRuntime\.residentTensorResolver \|\| null/,
+  'the tracker driver must derive one resident tensor resolver from the authenticated package runtime',
+);
+for (const routeRunner of [
+  'runSam31InteractivePointerPhaseProgramRoute',
+  'runSam31MemoryEncoderPhaseProgramRoute',
+  'runSam31TemporalMemoryBankPhaseProgramRoute',
+  'runSam31MemoryAttentionPhaseProgramRoute',
+  'runSam31MultiplexMaskDecoderPhaseProgramRoute',
+]) {
+  assert.match(
+    driverSource,
+    new RegExp(`${routeRunner}\\(\\{[\\s\\S]{0,1600}?residentTensorResolver`),
+    `${routeRunner} must receive the authenticated resident tensor resolver`,
+  );
+}
 assert.match(smokeSource, /createSam31BrowserTrackerSession/, 'package smoke must consume the exported session');
 assert.doesNotMatch(smokeSource, /invocations\.push\(await runInvocation\(packageRoots\[index\]/, 'package smoke must not bypass the exported session with its private invocation function');
 assert.match(smokeSource, /runtimeSession:\s*\{/, 'package smoke must preserve public session identity in each invocation row');

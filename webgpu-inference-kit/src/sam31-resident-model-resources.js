@@ -138,12 +138,17 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     preparedBundle.release();
   }
   const allocationBySha = new Map();
+  const authenticatedByBuffer = new Map();
   for (let index = 0; index < loaded.length; index += 1) {
-    allocationBySha.set(loaded[index].artifact.sha256, {
+    const resident = {
       artifact: loaded[index].artifact,
       authenticatedSource: loaded[index].authenticatedSource,
       allocation: modelLease.allocations[index],
-    });
+    };
+    allocationBySha.set(loaded[index].artifact.sha256, resident);
+    const candidates = authenticatedByBuffer.get(resident.authenticatedSource.buffer) || [];
+    candidates.push(resident);
+    authenticatedByBuffer.set(resident.authenticatedSource.buffer, candidates);
   }
 
   const sourceBindings = new WeakMap();
@@ -214,7 +219,47 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
     residentTensorResolver(tensorInput = {}) {
       if (released) throw new Error('SAM 3.1 resident model resources are released');
       if (!tensorInput.sourceData || (typeof tensorInput.sourceData !== 'object' && typeof tensorInput.sourceData !== 'function')) return null;
-      return sourceBindings.get(tensorInput.sourceData) || null;
+      const existing = sourceBindings.get(tensorInput.sourceData);
+      if (existing) return existing;
+      if (!ArrayBuffer.isView(tensorInput.sourceData)) return null;
+      const candidates = (authenticatedByBuffer.get(tensorInput.sourceData.buffer) || []).filter(candidate => {
+        const sourceStart = tensorInput.sourceData.byteOffset;
+        const sourceEnd = sourceStart + tensorInput.sourceData.byteLength;
+        const authenticatedStart = candidate.authenticatedSource.byteOffset;
+        const authenticatedEnd = authenticatedStart + candidate.authenticatedSource.byteLength;
+        return sourceStart >= authenticatedStart && sourceEnd <= authenticatedEnd;
+      });
+      if (candidates.length === 0) return null;
+      if (candidates.length > 1) throw new Error(`resident tensor source range is ambiguous for ${tensorInput.name || '<unnamed>'}`);
+      const resident = candidates[0];
+      const bufferOffset = tensorInput.sourceData.byteOffset - resident.authenticatedSource.byteOffset;
+      const binding = Object.freeze({
+        buffer: resident.allocation.buffer,
+        bufferOffset,
+        dtype: normalizeDtype(tensorInput.dtype, tensorInput.sourceData),
+        shape: Array.isArray(tensorInput.shape) ? [...tensorInput.shape] : sourceShape({}, tensorInput.sourceData),
+        byteLength: tensorInput.sourceData.byteLength,
+        usage: resident.allocation.usage,
+        paddingReserved: true,
+        sourceData: tensorInput.sourceData,
+        resourceId: resident.allocation.resourceId,
+        allocationId: resident.allocation.allocationId,
+        artifactSha256: resident.artifact.sha256,
+      });
+      sourceBindings.set(tensorInput.sourceData, binding);
+      bindingEvidence.push({
+        sequence: bindingEvidence.length + 1,
+        role: tensorInput.name || null,
+        artifactSha256: resident.artifact.sha256,
+        byteLength: binding.byteLength,
+        bufferOffset,
+        dtype: binding.dtype,
+        shape: [...binding.shape],
+        resourceId: binding.resourceId,
+        allocationId: binding.allocationId,
+        liveBufferId: bufferId(binding.buffer),
+      });
+      return binding;
     },
     evidence() {
       return Object.freeze({
@@ -225,6 +270,8 @@ export async function createSam31ResidentModelResources({ packageRuntime, route 
         released,
         truncated: false,
         resourceCount: loaded.length,
+        allocationCount: loaded.length,
+        uploadCount: loaded.length,
         bindingCount: bindingEvidence.length,
         resources: loaded.map((item, index) => {
           const allocation = modelLease.allocations[index];

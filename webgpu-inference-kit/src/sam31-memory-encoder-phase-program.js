@@ -987,6 +987,7 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
   const maxComputeWorkgroupsPerDimension = input.device?.limits?.maxComputeWorkgroupsPerDimension ?? 65_535;
 
@@ -996,13 +997,13 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
   await runtime.runStage('load-memory-encoder-tensors', async stage => {
     const readwriteUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst | WEBGPU_BUFFER_USAGE.copySrc;
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
-    const tensor = (name, tensorShape, usage = readwriteUsage) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage });
+    const tensor = (name, tensorShape, usage = readwriteUsage, sourceData = undefined) => stage.createTensor({ name, shape: tensorShape, dtype: 'f32', usage, ...(sourceData ? { sourceData } : {}) });
     const convWeightShape = spec => [spec.outChannels, spec.kernelSize, spec.kernelSize, spec.inChannels];
     tensors = {
       maskLogits: tensor('sam31.memory.mask-logits', [shape.batch, shape.multiplexCount, shape.maskHeight, shape.maskWidth], readonlyUsage),
       conditioning: tensor('sam31.memory.conditioning', [shape.batch, shape.multiplexCount], readonlyUsage),
       objectScores: tensor('sam31.memory.object-scores', [shape.batch, shape.multiplexCount], readonlyUsage),
-      noObjectSpatialEmbedding: tensor('sam31.memory.no-object-spatial-embedding', [shape.multiplexCount, shape.featureChannels], readonlyUsage),
+      noObjectSpatialEmbedding: tensor('sam31.memory.no-object-spatial-embedding', [shape.multiplexCount, shape.featureChannels], readonlyUsage, normalizedWeights.noObjectSpatialEmbedding),
       resampledMask: tensor('sam31.memory.resampled-mask', [shape.batch, shape.resampledMaskHeight, shape.resampledMaskWidth, shape.maskInputChannels]),
       propagationFeature: tensor('sam31.memory.propagation-feature-2', [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels], readonlyUsage),
       maskProjected: tensor('sam31.memory.mask-projected', [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]),
@@ -1086,34 +1087,34 @@ export async function runSam31MemoryEncoderPhaseProgramRoute(input = {}) {
       tensors[`down${index}Conv`] = tensor(`sam31.memory.downsample-${index}.conv`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
       tensors[`down${index}Norm`] = tensor(`sam31.memory.downsample-${index}.norm`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
       tensors[`down${index}Gelu`] = tensor(`sam31.memory.downsample-${index}.gelu`, [shape.batch, outShape.height, outShape.width, outShape.channels]);
-      tensors[`down${index}Weight`] = tensor(`sam31.memory.downsample-${index}.weight`, convWeightShape(layer.conv), readonlyUsage);
-      tensors[`down${index}Bias`] = tensor(`sam31.memory.downsample-${index}.bias`, [layer.conv.outChannels], readonlyUsage);
-      tensors[`down${index}NormWeight`] = tensor(`sam31.memory.downsample-${index}.norm-weight`, [layer.conv.outChannels], readonlyUsage);
-      tensors[`down${index}NormBias`] = tensor(`sam31.memory.downsample-${index}.norm-bias`, [layer.conv.outChannels], readonlyUsage);
+      tensors[`down${index}Weight`] = tensor(`sam31.memory.downsample-${index}.weight`, convWeightShape(layer.conv), readonlyUsage, layer.conv.weight);
+      tensors[`down${index}Bias`] = tensor(`sam31.memory.downsample-${index}.bias`, [layer.conv.outChannels], readonlyUsage, layer.conv.bias);
+      tensors[`down${index}NormWeight`] = tensor(`sam31.memory.downsample-${index}.norm-weight`, [layer.conv.outChannels], readonlyUsage, layer.layerNorm.weight);
+      tensors[`down${index}NormBias`] = tensor(`sam31.memory.downsample-${index}.norm-bias`, [layer.conv.outChannels], readonlyUsage, layer.layerNorm.bias);
       stage.uploadTensor(tensors[`down${index}Weight`], layer.conv.weight);
       stage.uploadTensor(tensors[`down${index}Bias`], layer.conv.bias);
       stage.uploadTensor(tensors[`down${index}NormWeight`], layer.layerNorm.weight);
       stage.uploadTensor(tensors[`down${index}NormBias`], layer.layerNorm.bias);
     });
-    tensors.maskFinalWeight = tensor('sam31.memory.mask-final.weight', convWeightShape(normalizedWeights.maskFinal), readonlyUsage);
-    tensors.maskFinalBias = tensor('sam31.memory.mask-final.bias', [normalizedWeights.maskFinal.outChannels], readonlyUsage);
-    tensors.featureProjectionWeight = tensor('sam31.memory.feature-projection.weight', convWeightShape(normalizedWeights.featureProjection), readonlyUsage);
-    tensors.featureProjectionBias = tensor('sam31.memory.feature-projection.bias', [normalizedWeights.featureProjection.outChannels], readonlyUsage);
+    tensors.maskFinalWeight = tensor('sam31.memory.mask-final.weight', convWeightShape(normalizedWeights.maskFinal), readonlyUsage, normalizedWeights.maskFinal.weight);
+    tensors.maskFinalBias = tensor('sam31.memory.mask-final.bias', [normalizedWeights.maskFinal.outChannels], readonlyUsage, normalizedWeights.maskFinal.bias);
+    tensors.featureProjectionWeight = tensor('sam31.memory.feature-projection.weight', convWeightShape(normalizedWeights.featureProjection), readonlyUsage, normalizedWeights.featureProjection.weight);
+    tensors.featureProjectionBias = tensor('sam31.memory.feature-projection.bias', [normalizedWeights.featureProjection.outChannels], readonlyUsage, normalizedWeights.featureProjection.bias);
     normalizedWeights.fuserLayers.forEach((layer, index) => {
       const hiddenChannels = layer.pointwise1.outChannels;
       tensors[`fuser${index}Depthwise`] = tensor(`sam31.memory.fuser-${index}.depthwise`, [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]);
       tensors[`fuser${index}Norm`] = tensor(`sam31.memory.fuser-${index}.norm`, [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]);
       tensors[`fuser${index}Hidden`] = tensor(`sam31.memory.fuser-${index}.hidden`, [shape.batch, shape.featureHeight, shape.featureWidth, hiddenChannels]);
       tensors[`fuser${index}Output`] = tensor(`sam31.memory.fuser-${index}.output`, [shape.batch, shape.featureHeight, shape.featureWidth, shape.featureChannels]);
-      tensors[`fuser${index}DepthwiseWeight`] = tensor(`sam31.memory.fuser-${index}.depthwise-weight`, [shape.featureChannels, layer.depthwise.kernelSize, layer.depthwise.kernelSize], readonlyUsage);
-      tensors[`fuser${index}DepthwiseBias`] = tensor(`sam31.memory.fuser-${index}.depthwise-bias`, [shape.featureChannels], readonlyUsage);
-      tensors[`fuser${index}NormWeight`] = tensor(`sam31.memory.fuser-${index}.norm-weight`, [shape.featureChannels], readonlyUsage);
-      tensors[`fuser${index}NormBias`] = tensor(`sam31.memory.fuser-${index}.norm-bias`, [shape.featureChannels], readonlyUsage);
-      tensors[`fuser${index}Pw1Weight`] = tensor(`sam31.memory.fuser-${index}.pw1-weight`, [hiddenChannels, shape.featureChannels], readonlyUsage);
-      tensors[`fuser${index}Pw1Bias`] = tensor(`sam31.memory.fuser-${index}.pw1-bias`, [hiddenChannels], readonlyUsage);
-      tensors[`fuser${index}Pw2Weight`] = tensor(`sam31.memory.fuser-${index}.pw2-weight`, [shape.featureChannels, hiddenChannels], readonlyUsage);
-      tensors[`fuser${index}Pw2Bias`] = tensor(`sam31.memory.fuser-${index}.pw2-bias`, [shape.featureChannels], readonlyUsage);
-      tensors[`fuser${index}Scale`] = tensor(`sam31.memory.fuser-${index}.scale`, [shape.featureChannels], readonlyUsage);
+      tensors[`fuser${index}DepthwiseWeight`] = tensor(`sam31.memory.fuser-${index}.depthwise-weight`, [shape.featureChannels, layer.depthwise.kernelSize, layer.depthwise.kernelSize], readonlyUsage, layer.depthwise.weight);
+      tensors[`fuser${index}DepthwiseBias`] = tensor(`sam31.memory.fuser-${index}.depthwise-bias`, [shape.featureChannels], readonlyUsage, layer.depthwise.bias);
+      tensors[`fuser${index}NormWeight`] = tensor(`sam31.memory.fuser-${index}.norm-weight`, [shape.featureChannels], readonlyUsage, layer.layerNorm.weight);
+      tensors[`fuser${index}NormBias`] = tensor(`sam31.memory.fuser-${index}.norm-bias`, [shape.featureChannels], readonlyUsage, layer.layerNorm.bias);
+      tensors[`fuser${index}Pw1Weight`] = tensor(`sam31.memory.fuser-${index}.pw1-weight`, [hiddenChannels, shape.featureChannels], readonlyUsage, layer.pointwise1.weight);
+      tensors[`fuser${index}Pw1Bias`] = tensor(`sam31.memory.fuser-${index}.pw1-bias`, [hiddenChannels], readonlyUsage, layer.pointwise1.bias);
+      tensors[`fuser${index}Pw2Weight`] = tensor(`sam31.memory.fuser-${index}.pw2-weight`, [shape.featureChannels, hiddenChannels], readonlyUsage, layer.pointwise2.weight);
+      tensors[`fuser${index}Pw2Bias`] = tensor(`sam31.memory.fuser-${index}.pw2-bias`, [shape.featureChannels], readonlyUsage, layer.pointwise2.bias);
+      tensors[`fuser${index}Scale`] = tensor(`sam31.memory.fuser-${index}.scale`, [shape.featureChannels], readonlyUsage, layer.scale);
       stage.uploadTensor(tensors[`fuser${index}DepthwiseWeight`], layer.depthwise.weight);
       stage.uploadTensor(tensors[`fuser${index}DepthwiseBias`], layer.depthwise.bias);
       stage.uploadTensor(tensors[`fuser${index}NormWeight`], layer.layerNorm.weight);

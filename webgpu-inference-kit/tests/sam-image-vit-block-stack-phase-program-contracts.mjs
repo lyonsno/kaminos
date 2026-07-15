@@ -38,6 +38,9 @@ assert.ok(
 );
 assert.doesNotMatch(routeSource, /dispatch:\s*\[workgroups\(/, 'ViT block-stack phases must not wrap a one-dimensional workgroup count');
 assert.match(routeSource, /dispatch:\s*dispatchPlan\.mlpFc1\.dispatch/, 'ViT block-stack phases must consume the executable named dispatch plan');
+assert.match(routeSource, /residentTensorResolver:\s*input\.residentTensorResolver/, 'ViT block-stack must receive the session resident tensor resolver');
+assert.match(routeSource, /residentLayerWeights/, 'resident ViT execution must retain a distinct weight tensor set for every layer');
+assert.match(routeSource, /sourceData:\s*layer\[name\]/, 'each resident ViT layer tensor must bind its exact authenticated source array');
 
 assert.match(stackExporter, /--image-vit-block-stack-ingress/, 'detector-stack packet must expose image ViT block-stack ingress CLI flag');
 assert.match(stackExporter, /--image-vit-full-backbone-ingress/, 'detector-stack packet must expose image ViT full-backbone ingress CLI flag');

@@ -322,6 +322,7 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
     waitForSubmittedWorkDone: true,
     yieldMs: 0,
     now: input.now,
+    residentTensorResolver: input.residentTensorResolver,
   });
 
   let tensors = null;
@@ -330,9 +331,9 @@ export async function runSam3ImageVitPrefixPhaseProgramRoute(input = {}) {
     const readonlyUsage = WEBGPU_BUFFER_USAGE.storage | WEBGPU_BUFFER_USAGE.copyDst;
     tensors = {
       patchEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.patch-embeddings', shape: [shape.batch, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage: readonlyUsage }),
-      positionEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.position-embeddings', shape: [1, shape.pretrainGridSize * shape.pretrainGridSize, shape.hiddenSize], dtype: 'f32', usage: readonlyUsage }),
-      layerNormWeight: stage.createTensor({ name: 'sam3.image-vit-prefix.layernorm.weight', shape: [shape.hiddenSize], dtype: 'f32', usage: readonlyUsage }),
-      layerNormBias: stage.createTensor({ name: 'sam3.image-vit-prefix.layernorm.bias', shape: [shape.hiddenSize], dtype: 'f32', usage: readonlyUsage }),
+      positionEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.position-embeddings', shape: [1, shape.pretrainGridSize * shape.pretrainGridSize, shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: positionEmbeddings }),
+      layerNormWeight: stage.createTensor({ name: 'sam3.image-vit-prefix.layernorm.weight', shape: [shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: layerNormWeight }),
+      layerNormBias: stage.createTensor({ name: 'sam3.image-vit-prefix.layernorm.bias', shape: [shape.hiddenSize], dtype: 'f32', usage: readonlyUsage, sourceData: layerNormBias }),
       tiledPositionEmbeddings: stage.createTensor({ name: 'sam3.image-vit-prefix.tiled-position-embeddings', shape: [1, shape.patchHeight * shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
       patchPlusPosition: stage.createTensor({ name: 'sam3.image-vit-prefix.patch-plus-position', shape: [shape.batch, shape.patchHeight, shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
       vitPrefixHiddenStates: stage.createTensor({ name: 'sam3.image-vit-prefix.hidden-states', shape: [shape.batch, shape.patchHeight, shape.patchWidth, shape.hiddenSize], dtype: 'f32', usage }),
