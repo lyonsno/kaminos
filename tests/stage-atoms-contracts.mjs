@@ -5,11 +5,14 @@ import {
   STAGE_ATOMS_ROUTE_IDENTITY,
   MATERIAL_STAGE_FRAME_SCHEMA,
   MATERIAL_SPATIALIZATION_SCHEMA,
+  MATERIAL_AUDIO_TRANSDUCTION_SCHEMA,
   buildStageAtoms,
   buildStageAtomsWitness,
   classifyAudioSourceAccess,
   simulateStageMaterialFrame,
   spatializeFromStageMaterial,
+  transduceAudioFromStageMaterial,
+  roleOrderedAudioGraphPlan,
 } from '../stage-atoms-core.mjs';
 
 const ccmixterSource = classifyAudioSourceAccess({
@@ -184,6 +187,82 @@ const openedCutoffFrame = runNodeControlScenario({ '1': 1, 'filter.cutoff': 1.9,
 const recirculatingFeedbackFrame = runNodeControlScenario({ '1': 1, 'filter.cutoff': 1, 'delay.feedback': 1.9, '4': 1 });
 const releasedOutputFrame = runNodeControlScenario({ '1': 1, 'filter.cutoff': 1, 'delay.feedback': 1, '4': 1.9 });
 const fieldFor = (frame, id) => frame.materialAtoms.find(atom => atom.id === id).field;
+
+const baselineAudioTransduction = transduceAudioFromStageMaterial(baselineNodeFrame);
+const drivenAudioTransduction = transduceAudioFromStageMaterial(drivenInputFrame);
+const openedAudioTransduction = transduceAudioFromStageMaterial(openedCutoffFrame);
+const recirculatingAudioTransduction = transduceAudioFromStageMaterial(recirculatingFeedbackFrame);
+const releasedAudioTransduction = transduceAudioFromStageMaterial(releasedOutputFrame);
+const minimumControlFrame = runNodeControlScenario({ '1': -10, 'filter.cutoff': -10, 'delay.feedback': -10, '4': -10 });
+const maximumControlFrame = runNodeControlScenario({ '1': 10, 'filter.cutoff': 10, 'delay.feedback': 10, '4': 10 });
+const minimumAudioTransduction = transduceAudioFromStageMaterial(minimumControlFrame);
+const maximumAudioTransduction = transduceAudioFromStageMaterial(maximumControlFrame);
+const audioGraphPlan = roleOrderedAudioGraphPlan(stage);
+
+assert.equal(baselineAudioTransduction.schema, MATERIAL_AUDIO_TRANSDUCTION_SCHEMA);
+assert.equal(baselineAudioTransduction.authority, 'material-circuit-role-ordered-dsp-v0');
+assert.deepEqual(
+  baselineAudioTransduction.stageOrder.map(stageReceipt => stageReceipt.role),
+  ['drive', 'aperture', 'recirculation', 'release'],
+  'audible DSP follows the Pulp-derived material role order',
+);
+assert.ok(
+  drivenAudioTransduction.drive.inputGain > baselineAudioTransduction.drive.inputGain + 0.8,
+  'Input Drive creates an unmistakable bounded pre-gain change',
+);
+assert.ok(
+  openedAudioTransduction.aperture.cutoffHz > baselineAudioTransduction.aperture.cutoffHz * 3,
+  'Cutoff Aperture opens actual audible spectral passage',
+);
+assert.ok(
+  recirculatingAudioTransduction.recirculation.feedback > baselineAudioTransduction.recirculation.feedback + 0.18 &&
+    recirculatingAudioTransduction.recirculation.wet > baselineAudioTransduction.recirculation.wet + 0.18,
+  'Feedback Recirculation creates an unmistakable bounded delay-loop change',
+);
+assert.ok(
+  releasedAudioTransduction.release.outputGain > baselineAudioTransduction.release.outputGain + 0.35,
+  'Output Release changes final radiated gain',
+);
+assert.deepEqual(minimumControlFrame.nodeControls, { '1': 0, '4': 0, 'filter.cutoff': 0, 'delay.feedback': 0 }, 'node controls clamp at their lower rails');
+assert.deepEqual(maximumControlFrame.nodeControls, { '1': 2, '4': 2, 'filter.cutoff': 2, 'delay.feedback': 2 }, 'node controls clamp at their upper rails');
+for (const transduction of [minimumAudioTransduction, maximumAudioTransduction]) {
+  assert.ok(transduction.drive.inputGain >= 0.12 && transduction.drive.inputGain <= 3, 'Drive input gain remains bounded');
+  assert.ok(transduction.drive.saturation >= 1.4 && transduction.drive.saturation <= 10, 'Drive saturation remains bounded');
+  assert.ok(transduction.aperture.cutoffHz >= 180 && transduction.aperture.cutoffHz <= 18000, 'Aperture cutoff remains bounded');
+  assert.ok(transduction.aperture.resonance >= 0.72 && transduction.aperture.resonance <= 6, 'Aperture resonance remains bounded');
+  assert.ok(transduction.recirculation.delaySeconds >= 0.045 && transduction.recirculation.delaySeconds <= 0.32, 'Recirculation delay remains bounded');
+  assert.ok(transduction.recirculation.feedback >= 0.025 && transduction.recirculation.feedback <= 0.64, 'Recirculation feedback remains bounded below instability');
+  assert.ok(transduction.recirculation.wet >= 0.015 && transduction.recirculation.wet <= 0.76, 'Recirculation wet gain remains bounded');
+  assert.ok(transduction.release.outputGain >= 0.045 && transduction.release.outputGain <= 1.2, 'Release output gain remains bounded');
+}
+assert.ok(audioGraphPlan.edges.includes('audioInputBus->driveGain'), 'decoded audio has one explicit graph entrance');
+assert.ok(audioGraphPlan.edges.includes('recirculationSum->tap:4:filter'), 'Release taps the complete dry-plus-wet recirculation output');
+assert.ok(audioGraphPlan.edges.includes('tap:4:gain->materialMixBus'), 'Release tap reaches the material mix');
+assert.ok(audioGraphPlan.edges.includes('materialMixBus->releaseGain'), 'material mix reaches final Release gain');
+assert.ok(audioGraphPlan.edges.includes('releaseGain->compressor'), 'Release reaches bounded output protection');
+assert.equal(audioGraphPlan.edges.some(edge => /^audioInputBus->tap:/.test(edge)), false, 'raw decoded source never fans directly into stage taps');
+const missingReleaseFrame = { ...baselineNodeFrame, materialAtoms: baselineNodeFrame.materialAtoms.filter(atom => atom.field.localControlRole !== 'release') };
+assert.throws(() => transduceAudioFromStageMaterial(missingReleaseFrame), /requires drive, aperture, recirculation, and release regions/);
+const duplicateApertureFrame = {
+  ...baselineNodeFrame,
+  materialAtoms: [...baselineNodeFrame.materialAtoms, { ...baselineNodeFrame.materialAtoms.find(atom => atom.field.localControlRole === 'aperture'), id: 'second-aperture' }],
+};
+assert.throws(() => transduceAudioFromStageMaterial(duplicateApertureFrame), /duplicate material audio role:aperture/);
+const stageWithTransfer = buildStageAtoms({
+  sourceAccess: ccmixterSource,
+  design: {
+    ...stage.sourceDesign,
+    controls: [...stage.sourceDesign.controls, { id: 'unused.trim', kind: 'knob', label: 'Trim', paramKey: 'unused.trim', rect: [90, 90, 42, 42] }],
+  },
+  graph: stage.sourceGraph,
+});
+const transferAtom = stageWithTransfer.atoms.find(atom => atom.materialRegion.localControl.role === 'transfer');
+const transferGraphPlan = roleOrderedAudioGraphPlan(stageWithTransfer);
+assert.ok(transferAtom, 'generic Stage Atom production still admits auxiliary transfer regions');
+assert.ok(
+  transferGraphPlan.edges.some(edge => edge.endsWith(`->tap:${transferAtom.id}:filter`)),
+  'an auxiliary transfer region taps a canonical stage instead of breaking browser audio boot',
+);
 
 assert.deepEqual(drivenInputFrame.nodeControls, { '1': 1.9, '4': 1, 'filter.cutoff': 1, 'delay.feedback': 1 });
 assert.ok(fieldFor(drivenInputFrame, '1').excitation > fieldFor(baselineNodeFrame, '1').excitation + 0.12, 'Input drive changes the touched region first');

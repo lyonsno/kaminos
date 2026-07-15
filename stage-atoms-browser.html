@@ -161,7 +161,9 @@
       .icon-button { width: 24px; height: 24px; }
       .selected-node { min-height: 0; }
       .selected-node h2 { font-size: 16px; }
-      .selected-control { margin-bottom: 7px; }
+      .selected-control { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; margin-bottom: 7px; }
+      .selected-control span { font-size: 8px; }
+      .selected-control strong { font-size: 15px; }
       .selected-fields { margin-top: 9px; }
       .feature-grid { gap: 7px; }
       .feature strong { font-size: 12px; }

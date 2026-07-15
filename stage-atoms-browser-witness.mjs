@@ -2,6 +2,10 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import {
+  assertMatchedAudioTransductionEvidence,
+  evaluateMatchedAudioTransductionEvidence,
+} from './stage-atoms-browser-witness-contract.mjs';
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
@@ -31,6 +35,7 @@ let visualActivity = null;
 let controlBounds = null;
 let nodeInterfaceEvidence = null;
 let directionalCascadeEvidence = null;
+let audioTransductionEvidence = null;
 const networkResponses = [];
 const consoleEvents = [];
 
@@ -63,6 +68,7 @@ function writeReport(extra = {}) {
     controlBounds,
     nodeInterfaceEvidence,
     directionalCascadeEvidence,
+    audioTransductionEvidence,
     debugState,
     playbackState,
     consoleEvents,
@@ -162,7 +168,57 @@ async function readMaterialProbe(ws) {
     materialAtoms: window.kaminosStageAtomsDebugState.materialFrame.materialAtoms,
     materialFlows: window.kaminosStageAtomsDebugState.materialFrame.materialFlows,
     emitters: window.kaminosStageAtomsDebugState.spatialization.emitters,
+    audioTransduction: window.kaminosStageAtomsDebugState.audioTransduction,
+    audioGraph: window.kaminosStageAtomsDebugState.audioGraph,
   }))()`);
+}
+
+async function clickTransport(ws, point) {
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+  await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+}
+
+async function configureAudioScenario(ws, nodeControls, seekValue) {
+  const controlsLiteral = JSON.stringify(nodeControls);
+  const seekLiteral = JSON.stringify(String(seekValue));
+  await evaluate(ws, `(() => {
+    const controls = ${controlsLiteral};
+    for (const [id, value] of Object.entries(controls)) window.kaminosMaterialCircuitSetNodeControl(id, value, 'witness-audio-scenario');
+    window.kaminosStageAtomsResetMaterialState();
+    const seek = document.querySelector('#stage-atoms-seek');
+    seek.value = ${seekLiteral};
+    seek.dispatchEvent(new Event('input', { bubbles: true }));
+  })()`);
+  await delay(180);
+}
+
+async function sampleAudioScenario(ws, playPoint, nodeControls, seekValue) {
+  await configureAudioScenario(ws, nodeControls, seekValue);
+  await clickTransport(ws, playPoint);
+  await delay(220);
+  const samples = [];
+  for (let index = 0; index < 8; index += 1) {
+    await delay(90);
+    samples.push(await evaluate(ws, `(() => ({
+      audioClock: window.kaminosStageAtomsDebugState.audioClock,
+      audioGraph: window.kaminosStageAtomsDebugState.audioGraph,
+      audioTransduction: window.kaminosStageAtomsDebugState.audioTransduction,
+    }))()`));
+  }
+  await clickTransport(ws, playPoint);
+  await delay(160);
+  const average = key => samples.reduce((sum, sample) => sum + Number(sample.audioGraph[key] || 0), 0) / samples.length;
+  return {
+    sampleCount: samples.length,
+    startTime: samples[0].audioClock.timeSeconds,
+    endTime: samples.at(-1).audioClock.timeSeconds,
+    outputRms: average('outputRms'),
+    outputPeak: average('outputPeak'),
+    spectralCentroidHz: average('spectralCentroidHz'),
+    highBandRatio: average('highBandRatio'),
+    audioTransduction: samples.at(-1).audioTransduction,
+    effectiveParameters: samples.at(-1).audioGraph.effectiveParameters,
+  };
 }
 
 async function captureCredibleScreenshot(ws) {
@@ -213,6 +269,13 @@ function verifyDebugState(state) {
   if (state.materialFrame?.stateAuthority !== 'bounded-pulp-routed-material-history-v0') throw new Error(`material state authority mismatch: ${state.materialFrame?.stateAuthority}`);
   if (!Array.isArray(state.materialFrame?.materialFlows) || state.materialFrame.materialFlows.length === 0) throw new Error('Pulp-routed material flows missing');
   if (state.spatialization?.spatializationAuthority !== 'material-stage-atoms-v0') throw new Error(`spatialization authority mismatch: ${state.spatialization?.spatializationAuthority}`);
+  if (state.audioTransduction?.authority !== 'material-circuit-role-ordered-dsp-v0') throw new Error(`audio transduction authority mismatch: ${state.audioTransduction?.authority}`);
+  if (state.audioGraph?.authority !== 'role-ordered-material-dsp-plus-spatial-stage-taps') throw new Error(`audio graph authority mismatch: ${state.audioGraph?.authority}`);
+  const connectionContract = state.audioGraph?.connectionContract;
+  if (!connectionContract?.valid || connectionContract.missingEdges?.length || connectionContract.unexpectedEdges?.length) throw new Error(`audio graph connection contract failed: ${JSON.stringify(connectionContract)}`);
+  const releaseId = connectionContract.roleAtomIds?.release;
+  const releasePathEdges = [`recirculationSum->tap:${releaseId}:filter`, `tap:${releaseId}:gain->materialMixBus`, 'materialMixBus->releaseGain', 'releaseGain->compressor'];
+  if (!releasePathEdges.every(edge => connectionContract.effectiveEdges.includes(edge))) throw new Error(`effective Release path missing: ${JSON.stringify({ releaseId, releasePathEdges, connectionContract })}`);
   if (!Array.isArray(state.nodeInterfaces) || state.nodeInterfaces.length !== 4) throw new Error(`direct node interfaces missing: ${state.nodeInterfaces?.length}`);
   const roles = state.nodeInterfaces.map(node => node.role).sort();
   if (JSON.stringify(roles) !== JSON.stringify(['aperture', 'drive', 'recirculation', 'release'])) throw new Error(`node interface roles mismatch: ${JSON.stringify(roles)}`);
@@ -303,14 +366,26 @@ async function main() {
         point: node.point,
         inPlayableStage: node.point.x >= playable.left && node.point.x <= playable.right && node.point.y >= playable.top && node.point.y <= playable.bottom,
       }));
+      const selectedControl = document.querySelector('.selected-control');
+      const selectedRoleRect = document.querySelector('#material-selected-role').getBoundingClientRect();
+      const selectedValueRect = document.querySelector('#material-selected-value').getBoundingClientRect();
+      const measure = document.createElement('canvas').getContext('2d');
+      measure.font = getComputedStyle(document.querySelector('#material-selected-role')).font;
+      const widestRole = Math.max(...window.kaminosStageAtomsDebugState.nodeInterfaces.map(node => measure.measureText(node.role.toUpperCase()).width));
+      measure.font = getComputedStyle(document.querySelector('#material-selected-value')).font;
+      const widestValue = measure.measureText('2.00').width;
+      const selectedControlGap = parseFloat(getComputedStyle(selectedControl).gap) || 0;
+      const selectedControlCollision = selectedRoleRect.right + 4 > selectedValueRect.left || selectedRoleRect.left < selectedControl.getBoundingClientRect().left || selectedValueRect.right > selectedControl.getBoundingClientRect().right || widestRole + widestValue + selectedControlGap > selectedControl.clientWidth;
       return {
         rail: { left: rail.left, top: rail.top, right: rail.right, bottom: rail.bottom },
         playable,
         controls,
         nodes,
+        selectedControlCollision,
         outOfBounds: [
           ...controls.filter(control => !control.inViewport || !control.inRail).map(control => control.id),
           ...nodes.filter(node => !node.inPlayableStage).map(node => node.id),
+          ...(selectedControlCollision ? ['material-selected-role-value-collision'] : []),
         ],
       };
     })()`);
@@ -401,13 +476,36 @@ async function main() {
     writeFileSync(outputScenarioOutputPath, outputScenarioPng);
     outputScenarioOutputWritten = true;
 
-    phase = 'exercise_audio_handle';
+    phase = 'exercise_matched_audio_transduction';
     const playRect = await evaluate(ws, `(() => {
       const rect = document.querySelector('#stage-atoms-play').getBoundingClientRect();
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     })()`);
-    await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mousePressed', x: playRect.x, y: playRect.y, button: 'left', clickCount: 1 });
-    await wsRequest(ws, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x: playRect.x, y: playRect.y, button: 'left', clickCount: 1 });
+    const representativeSeekValue = await evaluate(ws, `document.querySelector('#stage-atoms-seek').value`);
+    const apertureNode = baseline.nodeInterfaces.find(node => node.role === 'aperture');
+    const recirculationNode = baseline.nodeInterfaces.find(node => node.role === 'recirculation');
+    const neutralControls = Object.fromEntries(baseline.nodeInterfaces.map(node => [node.id, 1]));
+    const quietLoopControls = { ...neutralControls, [recirculationNode.id]: 0 };
+    const closedAperture = await sampleAudioScenario(ws, playRect, { ...quietLoopControls, [apertureNode.id]: 0, [outputNode.id]: 2 }, representativeSeekValue);
+    const openAperture = await sampleAudioScenario(ws, playRect, { ...quietLoopControls, [apertureNode.id]: 2, [outputNode.id]: 2 }, representativeSeekValue);
+    const quietRelease = await sampleAudioScenario(ws, playRect, { ...quietLoopControls, [apertureNode.id]: 1.5, [outputNode.id]: 0.15 }, representativeSeekValue);
+    const loudRelease = await sampleAudioScenario(ws, playRect, { ...quietLoopControls, [apertureNode.id]: 1.5, [outputNode.id]: 2 }, representativeSeekValue);
+    const audioScenarios = { closedAperture, openAperture, quietRelease, loudRelease };
+    const evaluatedAudioEvidence = evaluateMatchedAudioTransductionEvidence(audioScenarios);
+    const { spectralCentroidRatio, highBandRatioDelta, outputRmsRatio } = evaluatedAudioEvidence;
+    audioTransductionEvidence = {
+      sourceSeekValue: representativeSeekValue,
+      ...evaluatedAudioEvidence,
+    };
+    try {
+      assertMatchedAudioTransductionEvidence(audioScenarios);
+    } catch (error) {
+      throw new Error(`${error.message}:${JSON.stringify(audioTransductionEvidence)}`);
+    }
+
+    phase = 'exercise_audio_handle';
+    await configureAudioScenario(ws, neutralControls, representativeSeekValue);
+    await clickTransport(ws, playRect);
     const playbackStart = debugState.audioClock.timeSeconds;
     await delay(1200);
     playbackState = await evaluate(ws, 'window.kaminosStageAtomsDebugState');

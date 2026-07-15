@@ -2,6 +2,7 @@ export const STAGE_AUDIO_SOURCE_ACCESS_SCHEMA = 'kaminos.stage-audio-source-acce
 export const STAGE_ATOMS_SCHEMA = 'kaminos.stage-atoms.v0';
 export const MATERIAL_STAGE_FRAME_SCHEMA = 'kaminos.material-stage-frame.v0';
 export const MATERIAL_SPATIALIZATION_SCHEMA = 'kaminos.material-spatialization.v0';
+export const MATERIAL_AUDIO_TRANSDUCTION_SCHEMA = 'kaminos.material-audio-transduction.v0';
 export const STAGE_ATOMS_WITNESS_SCHEMA = 'kaminos.stage-atoms-witness.v0';
 export const STAGE_ATOMS_ROUTE_IDENTITY = 'stage-atoms-pulp-shaped-material-spatializer-v0';
 
@@ -542,6 +543,127 @@ export function spatializeFromStageMaterial(materialFrame, _options = {}) {
     spatializationAuthority: 'material-stage-atoms-v0',
     rawAudioFeatureUse: 'ignored_after_material_frame',
     emitters,
+  };
+}
+
+export function transduceAudioFromStageMaterial(materialFrame) {
+  const atoms = materialFrame.materialAtoms || [];
+  for (const role of ['drive', 'aperture', 'recirculation', 'release']) {
+    if (atoms.filter(atom => atom.field.localControlRole === role).length > 1) throw new Error(`duplicate material audio role:${role}`);
+  }
+  const byRole = new Map(atoms.map(atom => [atom.field.localControlRole, atom]));
+  const driveAtom = byRole.get('drive');
+  const apertureAtom = byRole.get('aperture');
+  const recirculationAtom = byRole.get('recirculation');
+  const releaseAtom = byRole.get('release');
+  if (!driveAtom || !apertureAtom || !recirculationAtom || !releaseAtom) {
+    throw new Error('material audio transduction requires drive, aperture, recirculation, and release regions');
+  }
+
+  const driveValue = clamp(driveAtom.field.localControlValue, 0, 2);
+  const apertureValue = clamp(apertureAtom.field.localControlValue, 0, 2);
+  const recirculationValue = clamp(recirculationAtom.field.localControlValue, 0, 2);
+  const releaseValue = clamp(releaseAtom.field.localControlValue, 0, 2);
+  const driveNormalized = driveValue / 2;
+  const apertureNormalized = clamp(
+    apertureValue / 2 * 0.82 + apertureAtom.field.excitation * 0.12 + apertureAtom.field.coherence * 0.06,
+    0,
+    1,
+  );
+  const recirculationNormalized = recirculationValue / 2;
+  const releaseNormalized = releaseValue / 2;
+
+  return {
+    schema: MATERIAL_AUDIO_TRANSDUCTION_SCHEMA,
+    routeIdentity: materialFrame.routeIdentity || STAGE_ATOMS_ROUTE_IDENTITY,
+    authority: 'material-circuit-role-ordered-dsp-v0',
+    stageOrder: atoms.map(atom => ({ id: atom.id, role: atom.field.localControlRole })),
+    drive: {
+      atomId: driveAtom.id,
+      inputGain: Number(clamp(0.12 + Math.pow(driveNormalized, 1.4) * 2.65 + driveAtom.field.excitation * 0.12, 0.12, 3).toFixed(6)),
+      saturation: Number(clamp(1.4 + driveValue * 3.8 + driveAtom.field.heat * 1.6, 1.4, 10).toFixed(6)),
+    },
+    aperture: {
+      atomId: apertureAtom.id,
+      cutoffHz: Math.round(180 * Math.pow(100, apertureNormalized)),
+      resonance: Number(clamp(0.72 + apertureAtom.field.coherence * 4.2 + (1 - apertureNormalized) * 1.1, 0.72, 6).toFixed(6)),
+    },
+    recirculation: {
+      atomId: recirculationAtom.id,
+      delaySeconds: Number(clamp(0.045 + recirculationNormalized * 0.24 + recirculationAtom.field.coherence * 0.035, 0.045, 0.32).toFixed(6)),
+      feedback: Number(clamp(0.025 + Math.pow(recirculationNormalized, 1.5) * 0.5 + recirculationAtom.field.feedbackMemory * 0.075, 0.025, 0.64).toFixed(6)),
+      wet: Number(clamp(0.015 + Math.pow(recirculationNormalized, 1.35) * 0.62 + recirculationAtom.field.feedbackMemory * 0.09, 0.015, 0.76).toFixed(6)),
+    },
+    release: {
+      atomId: releaseAtom.id,
+      outputGain: Number(clamp(
+        0.045 + Math.pow(releaseNormalized, 1.25) * 1.14 * (0.86 + releaseAtom.field.heat * 0.14),
+        0.045,
+        1.2,
+      ).toFixed(6)),
+    },
+  };
+}
+
+export function roleOrderedAudioGraphPlan(stage) {
+  const sourceByRole = {
+    drive: 'driveShaper',
+    aperture: 'apertureFilter',
+    recirculation: 'recirculationDelay',
+    release: 'recirculationSum',
+  };
+  const roleAtoms = new Map();
+  const transferAtoms = [];
+  for (const atom of stage.atoms || []) {
+    const role = atom.materialRegion?.localControl?.role;
+    if (role === 'transfer') {
+      transferAtoms.push(atom);
+      continue;
+    }
+    if (!sourceByRole[role]) throw new Error(`unsupported audible stage role:${role}`);
+    if (roleAtoms.has(role)) throw new Error(`duplicate audible stage role:${role}`);
+    roleAtoms.set(role, atom);
+  }
+  for (const role of Object.keys(sourceByRole)) {
+    if (!roleAtoms.has(role)) throw new Error(`missing audible stage role:${role}`);
+  }
+  const edges = [
+    'audioInputBus->driveGain',
+    'driveGain->driveShaper',
+    'driveShaper->apertureFilter',
+    'apertureFilter->recirculationDry',
+    'recirculationDry->recirculationSum',
+    'apertureFilter->recirculationDelay',
+    'recirculationDelay->recirculationWet',
+    'recirculationWet->recirculationSum',
+    'recirculationDelay->recirculationFeedback',
+    'recirculationFeedback->recirculationDelay',
+    'materialMixBus->releaseGain',
+    'releaseGain->compressor',
+    'compressor->audioMaster',
+    'audioMaster->audioAnalyser',
+    'audioAnalyser->destination',
+  ];
+  const canonicalByLevel = [...roleAtoms].map(([role, atom]) => ({ role, atom, level: finiteNumber(atom.graph?.level, 0) })).sort((a, b) => a.level - b.level);
+  const tapSourceByAtomId = {};
+  for (const atom of [...roleAtoms.values(), ...transferAtoms]) {
+    const role = atom.materialRegion.localControl.role;
+    const transferLevel = finiteNumber(atom.graph?.level, 0);
+    const sourceRole = role === 'transfer'
+      ? (canonicalByLevel.filter(candidate => candidate.level <= transferLevel).at(-1) || canonicalByLevel[0]).role
+      : role;
+    tapSourceByAtomId[atom.id] = sourceByRole[sourceRole];
+    const tap = `tap:${atom.id}`;
+    edges.push(`${sourceByRole[sourceRole]}->${tap}:filter`);
+    edges.push(`${tap}:filter->${tap}:panner`);
+    edges.push(`${tap}:panner->${tap}:gain`);
+    edges.push(`${tap}:gain->materialMixBus`);
+  }
+  return {
+    authority: 'role-ordered-material-dsp-graph-plan-v0',
+    roleAtomIds: Object.fromEntries([...roleAtoms].map(([role, atom]) => [role, atom.id])),
+    tapSourceByAtomId,
+    edges,
   };
 }
 

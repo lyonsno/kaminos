@@ -2,6 +2,8 @@ import {
   buildStageAtoms,
   simulateStageMaterialFrame,
   spatializeFromStageMaterial,
+  transduceAudioFromStageMaterial,
+  roleOrderedAudioGraphPlan,
 } from './stage-atoms-core.mjs';
 
 const REPORT_URL = './artifacts/stage-atoms/ccmixter-geppetto-decoded-stage-atoms-witness.json';
@@ -48,6 +50,7 @@ const runtime = {
   frames: [],
   materialFrame: null,
   spatialization: null,
+  audioTransduction: null,
   audioContext: null,
   audioBuffer: null,
   audioInputBus: null,
@@ -55,6 +58,8 @@ const runtime = {
   audioMaster: null,
   audioAnalyser: null,
   audioOutput: { rms: 0, peak: 0 },
+  audioProcessors: null,
+  connectionContract: null,
   audioSends: new Map(),
   audioEffectiveSource: null,
   audioBrowserSha256: null,
@@ -122,8 +127,9 @@ function materialStateAt(timeSeconds, {
     })
     : previousMaterialFrame;
   const spatialization = depthSpatialization(materialFrame);
+  const audioTransduction = transduceAudioFromStageMaterial(materialFrame);
   if (shouldAdvance) runtime.lastMaterialFeatureIndex = sourceFrame.index;
-  return { sourceFrame, materialFrame, spatialization };
+  return { sourceFrame, materialFrame, spatialization, audioTransduction };
 }
 
 function resetMaterialState() {
@@ -135,7 +141,8 @@ function resetMaterialState() {
     const state = materialStateAt(audioClockTime(), { forceAdvance: true });
     runtime.materialFrame = state.materialFrame;
     runtime.spatialization = state.spatialization;
-    updateAudioSends(state.spatialization);
+    runtime.audioTransduction = state.audioTransduction;
+    updateAudioSends(state.spatialization, state.audioTransduction);
   }
 }
 
@@ -151,41 +158,132 @@ function setNodeControl(nodeId, value, interactionAuthority = 'programmatic-node
     const state = materialStateAt(audioClockTime(), { forceAdvance: true });
     runtime.materialFrame = state.materialFrame;
     runtime.spatialization = state.spatialization;
-    updateAudioSends(state.spatialization);
+    runtime.audioTransduction = state.audioTransduction;
+    updateAudioSends(state.spatialization, state.audioTransduction);
   }
   return true;
+}
+
+function connectAudioNode(sourceName, sourceNode, destinationName, destinationNode, receipts = null) {
+  sourceNode.connect(destinationNode);
+  if (receipts) receipts.push(`${sourceName}->${destinationName}`);
 }
 
 function ensureAudioGraph() {
   if (runtime.audioMaster) return;
   runtime.audioInputBus = runtime.audioContext.createGain();
+  const driveGain = runtime.audioContext.createGain();
+  const driveShaper = runtime.audioContext.createWaveShaper();
+  const apertureFilter = runtime.audioContext.createBiquadFilter();
+  const recirculationDelay = runtime.audioContext.createDelay(0.5);
+  const recirculationFeedback = runtime.audioContext.createGain();
+  const recirculationWet = runtime.audioContext.createGain();
+  const recirculationDry = runtime.audioContext.createGain();
+  const recirculationSum = runtime.audioContext.createGain();
+  const materialMixBus = runtime.audioContext.createGain();
+  const releaseGain = runtime.audioContext.createGain();
+  const compressor = runtime.audioContext.createDynamicsCompressor();
   runtime.audioMaster = runtime.audioContext.createGain();
   runtime.audioAnalyser = runtime.audioContext.createAnalyser();
-  runtime.audioAnalyser.fftSize = 2048;
-  runtime.audioMaster.connect(runtime.audioAnalyser);
-  runtime.audioAnalyser.connect(runtime.audioContext.destination);
+  const expectedPlan = roleOrderedAudioGraphPlan(runtime.stage);
+  const effectiveEdges = [];
+  const connect = (sourceName, sourceNode, destinationName, destinationNode) => {
+    connectAudioNode(sourceName, sourceNode, destinationName, destinationNode, effectiveEdges);
+  };
+  runtime.audioAnalyser.fftSize = 4096;
+  driveShaper.curve = driveCurve(2.4);
+  driveShaper.oversample = '4x';
+  apertureFilter.type = 'lowpass';
+  recirculationFeedback.gain.value = 0;
+  recirculationWet.gain.value = 0;
+  recirculationDry.gain.value = 1;
+  releaseGain.gain.value = 0;
+  compressor.threshold.value = -12;
+  compressor.knee.value = 18;
+  compressor.ratio.value = 5;
+  compressor.attack.value = 0.008;
+  compressor.release.value = 0.16;
+  runtime.audioMaster.gain.value = 0.82;
+
+  connect('audioInputBus', runtime.audioInputBus, 'driveGain', driveGain);
+  connect('driveGain', driveGain, 'driveShaper', driveShaper);
+  connect('driveShaper', driveShaper, 'apertureFilter', apertureFilter);
+  connect('apertureFilter', apertureFilter, 'recirculationDry', recirculationDry);
+  connect('recirculationDry', recirculationDry, 'recirculationSum', recirculationSum);
+  connect('apertureFilter', apertureFilter, 'recirculationDelay', recirculationDelay);
+  connect('recirculationDelay', recirculationDelay, 'recirculationWet', recirculationWet);
+  connect('recirculationWet', recirculationWet, 'recirculationSum', recirculationSum);
+  connect('recirculationDelay', recirculationDelay, 'recirculationFeedback', recirculationFeedback);
+  connect('recirculationFeedback', recirculationFeedback, 'recirculationDelay', recirculationDelay);
+  connect('materialMixBus', materialMixBus, 'releaseGain', releaseGain);
+  connect('releaseGain', releaseGain, 'compressor', compressor);
+  connect('compressor', compressor, 'audioMaster', runtime.audioMaster);
+  connect('audioMaster', runtime.audioMaster, 'audioAnalyser', runtime.audioAnalyser);
+  connect('audioAnalyser', runtime.audioAnalyser, 'destination', runtime.audioContext.destination);
+
+  runtime.audioProcessors = {
+    authority: 'role-ordered-material-dsp',
+    driveGain,
+    driveShaper,
+    driveCurveAmount: 2.4,
+    apertureFilter,
+    recirculationDelay,
+    recirculationFeedback,
+    recirculationWet,
+    recirculationDry,
+    recirculationSum,
+    materialMixBus,
+    releaseGain,
+    compressor,
+  };
+  const stageSources = new Map([
+    ['driveShaper', driveShaper],
+    ['apertureFilter', apertureFilter],
+    ['recirculationDelay', recirculationDelay],
+    ['recirculationSum', recirculationSum],
+  ]);
   for (const atom of runtime.stage.atoms) {
     const filter = runtime.audioContext.createBiquadFilter();
     filter.type = 'lowpass';
     const panner = runtime.audioContext.createStereoPanner();
     const directGain = runtime.audioContext.createGain();
-    const delay = runtime.audioContext.createDelay(1);
-    const feedbackGain = runtime.audioContext.createGain();
-    const wetGain = runtime.audioContext.createGain();
     directGain.gain.value = 0;
-    wetGain.gain.value = 0;
-    feedbackGain.gain.value = 0;
-    runtime.audioInputBus.connect(filter);
-    filter.connect(panner);
-    panner.connect(directGain);
-    directGain.connect(runtime.audioMaster);
-    panner.connect(delay);
-    delay.connect(feedbackGain);
-    feedbackGain.connect(delay);
-    delay.connect(wetGain);
-    wetGain.connect(runtime.audioMaster);
-    runtime.audioSends.set(atom.id, { filter, panner, directGain, delay, feedbackGain, wetGain });
+    const role = atom.materialRegion.localControl.role;
+    const stageSourceName = expectedPlan.tapSourceByAtomId[atom.id];
+    const stageSource = stageSources.get(stageSourceName);
+    if (!stageSource) throw new Error(`audible stage source missing for ${role}:${stageSourceName}`);
+    const tap = `tap:${atom.id}`;
+    connect(stageSourceName, stageSource, `${tap}:filter`, filter);
+    connect(`${tap}:filter`, filter, `${tap}:panner`, panner);
+    connect(`${tap}:panner`, panner, `${tap}:gain`, directGain);
+    connect(`${tap}:gain`, directGain, 'materialMixBus', materialMixBus);
+    runtime.audioSends.set(atom.id, { role, filter, panner, directGain });
   }
+  const expectedEdges = new Set(expectedPlan.edges);
+  const effectiveEdgeSet = new Set(effectiveEdges);
+  const missingEdges = expectedPlan.edges.filter(edge => !effectiveEdgeSet.has(edge));
+  const unexpectedEdges = effectiveEdges.filter(edge => !expectedEdges.has(edge));
+  runtime.connectionContract = {
+    authority: expectedPlan.authority,
+    roleAtomIds: expectedPlan.roleAtomIds,
+    expectedEdges: expectedPlan.edges,
+    effectiveEdges,
+    missingEdges,
+    unexpectedEdges,
+    valid: missingEdges.length === 0 && unexpectedEdges.length === 0,
+  };
+  if (!runtime.connectionContract.valid) throw new Error(`audible graph connection contract failed:${JSON.stringify(runtime.connectionContract)}`);
+}
+
+function driveCurve(amount) {
+  const boundedAmount = Math.max(1, Math.min(10, Number(amount) || 1));
+  const curve = new Float32Array(4096);
+  const normalization = Math.tanh(boundedAmount);
+  for (let index = 0; index < curve.length; index += 1) {
+    const x = index * 2 / (curve.length - 1) - 1;
+    curve[index] = Math.tanh(x * boundedAmount) / normalization;
+  }
+  return curve;
 }
 
 function updateTransportButton() {
@@ -215,7 +313,7 @@ function startBufferSource() {
   if (runtime.transportOffsetSeconds >= runtime.audioBuffer.duration) runtime.transportOffsetSeconds = 0;
   const source = runtime.audioContext.createBufferSource();
   source.buffer = runtime.audioBuffer;
-  source.connect(runtime.audioInputBus);
+  connectAudioNode('decodedBufferSource', source, 'audioInputBus', runtime.audioInputBus);
   source.onended = () => {
     if (runtime.audioBufferSource !== source) return;
     runtime.transportOffsetSeconds = runtime.audioBuffer.duration;
@@ -240,30 +338,70 @@ function measureAudioOutput() {
     sumSquares += sample * sample;
     peak = Math.max(peak, Math.abs(sample));
   }
+  const spectrum = new Float32Array(runtime.audioAnalyser.frequencyBinCount);
+  runtime.audioAnalyser.getFloatFrequencyData(spectrum);
+  const spectralPeakDb = spectrum.reduce((peakDb, value) => Number.isFinite(value) ? Math.max(peakDb, value) : peakDb, -Infinity);
+  let weightedFrequency = 0;
+  let spectralWeight = 0;
+  let highBandWeight = 0;
+  for (let index = 0; index < spectrum.length; index += 1) {
+    const frequency = index * runtime.audioContext.sampleRate / runtime.audioAnalyser.fftSize;
+    const decibels = spectrum[index];
+    const weight = Number.isFinite(decibels) && decibels >= spectralPeakDb - 72 ? Math.pow(10, decibels / 10) : 0;
+    weightedFrequency += frequency * weight;
+    spectralWeight += weight;
+    if (frequency >= 4000) highBandWeight += weight;
+  }
   runtime.audioOutput = {
     rms: Math.sqrt(sumSquares / waveform.length),
     peak,
+    spectralCentroidHz: spectralWeight > 0 ? weightedFrequency / spectralWeight : 0,
+    highBandRatio: spectralWeight > 0 ? highBandWeight / spectralWeight : 0,
   };
   return runtime.audioOutput;
 }
 
-function updateAudioSends(spatialization) {
-  if (!runtime.audioContext) return;
+function updateAudioSends(spatialization, audioTransduction) {
+  if (!runtime.audioContext || !runtime.audioProcessors || !audioTransduction) return;
   const now = runtime.audioContext.currentTime;
+  const processors = runtime.audioProcessors;
+  if (Math.abs(processors.driveCurveAmount - audioTransduction.drive.saturation) > 0.01) {
+    processors.driveShaper.curve = driveCurve(audioTransduction.drive.saturation);
+    processors.driveCurveAmount = audioTransduction.drive.saturation;
+  }
+  processors.driveGain.gain.setTargetAtTime(audioTransduction.drive.inputGain, now, 0.018);
+  processors.apertureFilter.frequency.setTargetAtTime(audioTransduction.aperture.cutoffHz, now, 0.025);
+  processors.apertureFilter.Q.setTargetAtTime(audioTransduction.aperture.resonance, now, 0.025);
+  processors.recirculationDelay.delayTime.setTargetAtTime(audioTransduction.recirculation.delaySeconds, now, 0.035);
+  processors.recirculationFeedback.gain.setTargetAtTime(audioTransduction.recirculation.feedback, now, 0.035);
+  processors.recirculationWet.gain.setTargetAtTime(audioTransduction.recirculation.wet, now, 0.035);
+  processors.recirculationDry.gain.setTargetAtTime(1 - audioTransduction.recirculation.wet * 0.32, now, 0.035);
+  processors.releaseGain.gain.setTargetAtTime(audioTransduction.release.outputGain, now, 0.025);
   const byId = new Map(spatialization.emitters.map(emitter => [emitter.id, emitter]));
   const directTotal = spatialization.emitters.reduce((sum, emitter) => sum + emitter.send.direct, 0) || 1;
   for (const [id, sendNodes] of runtime.audioSends) {
     const emitter = byId.get(id);
     const direct = emitter ? emitter.send.direct / directTotal * 0.84 : 0;
-    const wet = emitter ? emitter.send.reverb / Math.max(1, spatialization.emitters.length) * 0.42 : 0;
-    const latencySamples = runtime.stage.atoms.find(atom => atom.id === id)?.graph.latencySamples || 0;
     sendNodes.filter.frequency.setTargetAtTime(emitter?.send.lowpassHz || 1200, now, 0.025);
     sendNodes.panner.pan.setTargetAtTime(emitter?.send.pan || 0, now, 0.025);
     sendNodes.directGain.gain.setTargetAtTime(direct, now, 0.025);
-    sendNodes.delay.delayTime.setTargetAtTime(Math.min(0.32, latencySamples / 44100 + (emitter?.send.spread || 0) * 0.11), now, 0.04);
-    sendNodes.feedbackGain.gain.setTargetAtTime(Math.min(0.64, (emitter?.send.reverb || 0) * 0.58), now, 0.04);
-    sendNodes.wetGain.gain.setTargetAtTime(wet, now, 0.04);
   }
+}
+
+function effectiveAudioParameters() {
+  const processors = runtime.audioProcessors;
+  if (!processors) return null;
+  return {
+    authority: processors.authority,
+    driveInputGain: processors.driveGain.gain.value,
+    driveSaturation: processors.driveCurveAmount,
+    apertureCutoffHz: processors.apertureFilter.frequency.value,
+    apertureResonance: processors.apertureFilter.Q.value,
+    recirculationDelaySeconds: processors.recirculationDelay.delayTime.value,
+    recirculationFeedback: processors.recirculationFeedback.gain.value,
+    recirculationWet: processors.recirculationWet.gain.value,
+    releaseOutputGain: processors.releaseGain.gain.value,
+  };
 }
 
 function stagePoint(position, width, height) {
@@ -522,11 +660,16 @@ function publishDebug(sourceFrame, visualSeconds) {
     featureFrame: sourceFrame,
     materialFrame: runtime.materialFrame,
     spatialization: runtime.spatialization,
+    audioTransduction: runtime.audioTransduction,
     audioGraph: {
-      authority: 'material-spatialization-emitter-sends',
+      authority: 'role-ordered-material-dsp-plus-spatial-stage-taps',
       sendCount: runtime.audioSends.size,
       outputRms: audioOutput.rms,
       outputPeak: audioOutput.peak,
+      spectralCentroidHz: audioOutput.spectralCentroidHz,
+      highBandRatio: audioOutput.highBandRatio,
+      effectiveParameters: effectiveAudioParameters(),
+      connectionContract: runtime.connectionContract,
     },
     failure: runtime.failure,
   };
@@ -539,7 +682,8 @@ function frame(now) {
     const state = materialStateAt(audioClockTime());
     runtime.materialFrame = state.materialFrame;
     runtime.spatialization = state.spatialization;
-    updateAudioSends(state.spatialization);
+    runtime.audioTransduction = state.audioTransduction;
+    updateAudioSends(state.spatialization, state.audioTransduction);
     updateReadouts(state.sourceFrame, visualSeconds);
     publishDebug(state.sourceFrame, visualSeconds);
   }
@@ -622,6 +766,8 @@ async function boot() {
   const initial = materialStateAt(audioClockTime());
   runtime.materialFrame = initial.materialFrame;
   runtime.spatialization = initial.spatialization;
+  runtime.audioTransduction = initial.audioTransduction;
+  updateAudioSends(initial.spatialization, initial.audioTransduction);
   publishDebug(initial.sourceFrame, 0);
 }
 
