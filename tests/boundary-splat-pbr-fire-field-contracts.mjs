@@ -52,6 +52,11 @@ assert.match(witness, /physicalCommand\.vertexCount !== 6[\s\S]*physicalCommand\
 assert.match(witness, /live-cadence-not-physical-command-sampled-v0/, 'PBR witness must recognize cadence as explicitly non-authoritative for physical command identity');
 assert.match(witness, /validateAllocationEvidence\(capture,[\s\S]*native-100-flame-capture/, 'PBR witness must validate the exact command returned by the primary visual capture');
 assert.match(witness, /validateAllocationEvidence\(poseCapture,[\s\S]*camera-sweep-/, 'PBR witness must validate the exact command returned by every camera capture');
+assert.match(witness, /sampleBoundarySplatHistorySlotMetadata\(\)/, 'PBR witness must read GPU-completed history-slot metadata after priming');
+assert.match(witness, /validateHistoryMetadata\(historyMetadata, initialState\)/, 'PBR witness must validate requested, allocated, active, and effective depth against the requested route');
+assert.match(witness, /requestedHistoryDepth:[\s\S]*allocatedHistoryDepth:[\s\S]*activeHistoryDepth:[\s\S]*effectiveHistoryDepth:[\s\S]*measuredUpperHistoryDepth:/, 'compact report state must preserve the complete history-depth authority chain');
+assert.match(witness, /history-depth-refusal:[\s\S]*depthRefusalReasons/, 'PBR witness must reject any nonempty depth-refusal telemetry');
+assert.match(witness, /stale-or-default-history-depth/, 'PBR witness must reject requested/effective depth disagreement');
 assert.match(witness, /failed-before-primary-output/, 'witness must durably report failure before primary output exists');
 
 console.log('boundary splat PBR fire-field contracts passed');

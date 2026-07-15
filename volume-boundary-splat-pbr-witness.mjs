@@ -107,6 +107,11 @@ try {
   validateHistoryPrime(historyPrime, initialState);
   lastTrustworthyEvidence.historyPrime = historyPrime;
 
+  failurePhase = 'history-depth-metadata';
+  const historyMetadata = await evaluate('window.__kaminosVolumePrototype.sampleBoundarySplatHistorySlotMetadata()', true);
+  validateHistoryMetadata(historyMetadata, initialState);
+  lastTrustworthyEvidence.historyMetadata = historyMetadata;
+
   failurePhase = 'gpu-cost-ladder';
   const ladder = await evaluate(`window.__kaminosVolumePrototype.sampleBoundarySplatPbrCostLadder(${JSON.stringify({
     counts: COUNTS,
@@ -319,6 +324,7 @@ try {
       cameraSweep: 'same-frozen-simulator-state-real-camera-matrices-v0',
     },
     historyPrime,
+    historyMetadata,
     ladder,
     liveCadence,
     composedCapture: {
@@ -348,6 +354,9 @@ try {
       depthOcclusionAuthorityMissing: false,
       staleOrDefaultPbrScene: false,
       duplicatedSimulationAuthority: false,
+      staleOrDefaultHistoryDepth: false,
+      historyDepthRefusal: false,
+      incompleteHistoryMetadata: false,
       cameraSweepSimulatorAdvanced: false,
       cameraSweepIncomplete: cameraSweep.length !== 3,
       browserClosedDuringWitness: !finalTargetReachable,
@@ -421,6 +430,9 @@ function classifyFalseClosure(phase, error) {
   for (const className of [
     'fallback-route',
     'stale-or-default-config',
+    'stale-or-default-history-depth',
+    'history-depth-refusal',
+    'incomplete-history-metadata',
     'stale-or-default-indirect-draw',
     'depth-occlusion-authority-missing',
     'stale-or-default-pbr-scene',
@@ -576,6 +588,7 @@ function validateEffectiveState(state, cameraState, pageUrl, drawState) {
   const params = new URL(pageUrl).searchParams;
   const requestedCandidateBudget = Number(params.get('volume_boundary_splat_candidate_budget') || 0);
   const requestedLodMode = normalizeRequestedLodMode(params.get('volume_boundary_splat_lod_mode'));
+  const requestedHistoryDepth = Number(params.get('volume_boundary_splat_history_depth') || 4);
   const mismatches = [];
   if (state?.boundarySplatFallbackReason != null) {
     throw new Error(`fallback-route: ${JSON.stringify(state.boundarySplatFallbackReason)}`);
@@ -591,6 +604,28 @@ function validateEffectiveState(state, cameraState, pageUrl, drawState) {
   if (state?.boundarySplatFallbackReason != null) mismatches.push(['fallback', null, state?.boundarySplatFallbackReason]);
   if (Number(state?.boundarySplatOverflowCount || 0) !== 0) mismatches.push(['overflow', 0, state?.boundarySplatOverflowCount]);
   if (Number(state?.boundarySplatCopyBytesThisFrame) !== 0) mismatches.push(['copyBytes', 0, state?.boundarySplatCopyBytesThisFrame]);
+  if (Array.isArray(state?.boundarySplatHistoryDepthRefusalReasons) && state.boundarySplatHistoryDepthRefusalReasons.length > 0) {
+    throw new Error(`history-depth-refusal:${JSON.stringify(state.boundarySplatHistoryDepthRefusalReasons)}`);
+  }
+  if (
+    Number(state?.boundarySplatHistoryRequestedDepth) !== requestedHistoryDepth
+    || Number(state?.boundarySplatHistoryAllocatedDepth) < requestedHistoryDepth
+    || Number(state?.boundarySplatHistoryActiveDepth) !== requestedHistoryDepth
+    || Number(state?.boundarySplatHistoryDepth) !== requestedHistoryDepth
+    || state?.boundarySplatHistoryDepthAllocationPlan?.identity !== 'boundary-splat-device-history-depth-plan-v0'
+    || state?.boundarySplatHistoryDepthAllocationPlan?.authority !== 'requested-depth-plus-webgpu-device-limits-v0'
+  ) {
+    throw new Error(`stale-or-default-history-depth:${JSON.stringify({
+      requestedHistoryDepth,
+      effective: {
+        requested: state?.boundarySplatHistoryRequestedDepth,
+        allocated: state?.boundarySplatHistoryAllocatedDepth,
+        active: state?.boundarySplatHistoryActiveDepth,
+        legacy: state?.boundarySplatHistoryDepth,
+        plan: state?.boundarySplatHistoryDepthAllocationPlan,
+      },
+    })}`);
+  }
   if (
     state?.boundarySplatBufferIntegrity?.identity !== BUFFER_INTEGRITY
     || state?.boundarySplatBufferIntegrity?.ok !== true
@@ -869,6 +904,30 @@ function validateHistoryPrime(historyPrime, initialState) {
   assert.equal(historyPrime?.candidateCopyBytes, 0, 'history prime copied candidate buffers');
 }
 
+function validateHistoryMetadata(historyMetadata, initialState) {
+  const requestedHistoryDepth = Number(initialState?.boundarySplatHistoryRequestedDepth);
+  if (Array.isArray(historyMetadata?.depthRefusalReasons) && historyMetadata.depthRefusalReasons.length > 0) {
+    throw new Error(`history-depth-refusal:${JSON.stringify(historyMetadata.depthRefusalReasons)}`);
+  }
+  if (
+    historyMetadata?.identity !== 'boundary-splat-history-slot-metadata-readback-v0'
+    || historyMetadata?.ok !== true
+    || Number(historyMetadata?.requestedHistoryDepth) !== requestedHistoryDepth
+    || Number(historyMetadata?.allocatedHistoryDepth) < requestedHistoryDepth
+    || Number(historyMetadata?.activeHistoryDepth) !== requestedHistoryDepth
+    || Number(historyMetadata?.effectiveHistoryDepth) !== requestedHistoryDepth
+    || !Array.isArray(historyMetadata?.slots)
+    || historyMetadata.slots.length !== requestedHistoryDepth
+    || historyMetadata.slots.some(slot => slot?.initialized !== true
+      || Number(slot?.historyAllocationGeneration) !== Number(historyMetadata?.historyAllocationGeneration))
+  ) {
+    throw new Error(`incomplete-history-metadata:${JSON.stringify({
+      requestedHistoryDepth,
+      historyMetadata,
+    })}`);
+  }
+}
+
 function clipFromCanvas(rect = {}) {
   return {
     x: Math.max(0, Number(rect.x) || 0),
@@ -989,6 +1048,14 @@ function compactState(state) {
     phaseModeIdentity: state?.boundarySplatPhaseModeIdentity,
     phaseSourceCount: state?.boundarySplatPhaseSourceCount,
     historyDepth: state?.boundarySplatHistoryDepth,
+    requestedHistoryDepth: state?.boundarySplatHistoryRequestedDepth,
+    allocatedHistoryDepth: state?.boundarySplatHistoryAllocatedDepth,
+    activeHistoryDepth: state?.boundarySplatHistoryActiveDepth,
+    effectiveHistoryDepth: state?.boundarySplatHistoryEffectiveDepth,
+    measuredUpperHistoryDepth: state?.boundarySplatHistoryMeasuredUpperDepth,
+    historyDepthLimitingReason: state?.boundarySplatHistoryDepthLimitingReason,
+    depthRefusalReasons: state?.boundarySplatHistoryDepthRefusalReasons,
+    historyDepthAllocationPlan: state?.boundarySplatHistoryDepthAllocationPlan,
     historyFrameStride: state?.boundarySplatHistoryFrameStride,
     effectiveHistoryWindowFrames: state?.boundarySplatEffectiveHistoryWindowFrames,
     physicalHistoryWindowFrames: state?.boundarySplatPhysicalHistoryWindowFrames,
