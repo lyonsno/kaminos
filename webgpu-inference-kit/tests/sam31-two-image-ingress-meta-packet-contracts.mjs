@@ -91,6 +91,15 @@ assert.deepEqual(manifest.execution.officialCalls, [
 ]);
 assert.equal(manifest.execution.cpuCompatibilitySubstitution.kind, 'meta-fused-addmm-bfloat16-to-linear-exact-gelu');
 assert.equal(manifest.execution.cpuCompatibilitySubstitution.semanticOperationPreserved, true);
+assert.deepEqual(manifest.tolerances, {
+  pixelValuesMaxAbsDiff: 0.000001,
+  patchEmbeddingsMaxAbsDiff: 0.0005,
+  vitPrefixMaxAbsDiff: 0.005,
+  vitBackboneMaxAbsDiff: 0.02,
+  neckMaxAbsDiff: 0.02,
+  positionMaxAbsDiff: 0.00001,
+  highResolutionMaxAbsDiff: 0.02,
+}, 'the measured ViT-prefix budget must not relax any downstream parity gate');
 
 const requiredTensorRoles = [
   'frame-0-rgba', 'frame-1-rgba',
