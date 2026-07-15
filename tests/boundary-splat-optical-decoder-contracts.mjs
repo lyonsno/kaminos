@@ -21,6 +21,36 @@ assert.match(
 );
 assert.match(
   script,
+  /--optical-feature-mode[\s\S]*choices=\["screen-only",\s*"projected-native"\]/,
+  'projected native conditioning is an explicit optical input mode rather than a silent contract change',
+);
+assert.match(
+  script,
+  /candidate-attached-native-fields-weight-normalized-screen-projection-v0/,
+  'projected native receipts identify candidate-authoritative screen projection rather than flow-debug or target leakage',
+);
+assert.match(
+  script,
+  /def\s+project_native_feature_planes\([^)]*geometry[^)]*attributes[^)]*\):[\s\S]*geometry\["features"\][\s\S]*geometry\["pixelIndices"\][\s\S]*geometry\["splatIndices"\][\s\S]*\.at\[pixel_indices\]\.add/,
+  'native optical planes are rasterized from exact candidate fields through the existing splat footprint membership',
+);
+assert.match(
+  script,
+  /feature_sum\s*\/\s*mx\.maximum\(weight_sum/,
+  'overlapping native candidate features are weight-normalized instead of brightening with candidate count',
+);
+assert.match(
+  script,
+  /active_decoder\(base_predictions\[frame_index\],\s*optical_feature_planes\[frame_index\]\)/,
+  'the training objective actually consumes the projected native planes',
+);
+assert.doesNotMatch(
+  script,
+  /screen_decoder_inputs\([^)]*flow_debug|ScreenResidualUnet[\s\S]{0,2500}flow_debug/i,
+  'display-only flow debug cannot enter the optical decoder input path',
+);
+assert.match(
+  script,
   /mx\.stop_gradient\(base_prediction\)/,
   'screen-global training freezes the proven splat raster instead of laundering attribute-head updates into the result',
 );
@@ -41,8 +71,8 @@ assert.match(
 );
 assert.match(
   script,
-  /"opticalInputAuthority"\s*:\s*OPTICAL_INPUT_AUTHORITY/,
-  'training receipts preserve the exact optical input authority',
+  /"opticalInputAuthority"\s*:\s*\([\s\S]*PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY[\s\S]*OPTICAL_INPUT_AUTHORITY/,
+  'training receipts preserve the exact mode-dependent optical input authority',
 );
 assert.match(
   script,

@@ -31,6 +31,7 @@ GRID_MESSAGE_MODEL_SCHEMA = "kaminos-boundary-splat-grid-message-attribute-mlp-v
 SPARSE_GRID_MODEL_SCHEMA = "kaminos-boundary-splat-sparse-grid-residual-v0"
 OPTICAL_DECODER_SCHEMA = "kaminos-boundary-splat-screen-residual-unet-v0"
 OPTICAL_INPUT_AUTHORITY = "screen-rgb-luma-gradient-v0"
+PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY = "candidate-attached-native-fields-weight-normalized-screen-projection-v0"
 FLOW_DEBUG_AUTHORITY = "flow-debug-interface-canvas-capture-v0"
 PARTIAL_FLOW_DEBUG_AUTHORITY = "display-only-linear-mix-v0"
 BOUNDARY_SPLAT_SUPERVISION_CANDIDATE_ORDER = [
@@ -389,13 +390,14 @@ class ScreenConvBlock(nn.Module):
 
 
 class ScreenResidualUnet(nn.Module):
-    def __init__(self, base_channels=8, residual_scale=1.0):
+    def __init__(self, input_channels=5, base_channels=8, residual_scale=1.0):
         super().__init__()
-        if base_channels <= 0 or residual_scale <= 0:
-            raise ValueError("screen residual U-Net channels and residual scale must be positive")
+        if input_channels <= 0 or base_channels <= 0 or residual_scale <= 0:
+            raise ValueError("screen residual U-Net input channels, base channels, and residual scale must be positive")
         widths = [base_channels, base_channels * 2, base_channels * 3, base_channels * 4, base_channels * 6]
+        self.input_channels = int(input_channels)
         self.residual_scale = float(residual_scale)
-        self.encoder0 = ScreenConvBlock(5, widths[0])
+        self.encoder0 = ScreenConvBlock(self.input_channels, widths[0])
         self.down1 = nn.Conv2d(widths[0], widths[1], kernel_size=3, stride=2, padding=1)
         self.encoder1 = ScreenConvBlock(widths[1], widths[1])
         self.down2 = nn.Conv2d(widths[1], widths[2], kernel_size=3, stride=2, padding=1)
@@ -419,8 +421,8 @@ class ScreenResidualUnet(nn.Module):
         upsampled = upsampled[:, :skip.shape[1], :skip.shape[2], :]
         return decoder(mx.concatenate([upsampled, skip], axis=-1))
 
-    def __call__(self, base_prediction):
-        inputs = screen_decoder_inputs(base_prediction)[None, :, :, :]
+    def __call__(self, base_prediction, projected_features=None):
+        inputs = screen_decoder_inputs(base_prediction, projected_features)[None, :, :, :]
         encoded0 = self.encoder0(inputs)
         encoded1 = self.encoder1(nn.gelu(self.down1(encoded0)))
         encoded2 = self.encoder2(nn.gelu(self.down2(encoded1)))
@@ -923,14 +925,35 @@ def render_frame(model, geometry, lower, span, depth_bins):
     return mx.clip(flat.reshape(geometry["height"], geometry["width"], 3), 0.0, 1.0), attributes
 
 
-def screen_decoder_inputs(base_prediction):
+def project_native_feature_planes(geometry, attributes):
+    features = geometry["features"]
+    pixel_indices = geometry["pixelIndices"]
+    splat_indices = geometry["splatIndices"]
+    fragment_local = geometry["fragmentLocal"]
+    radius = attributes[splat_indices, 4:6]
+    radius2 = mx.sum(mx.square(fragment_local / radius), axis=1)
+    weights = mx.exp(-radius2 * geometry["sharpness"]) * geometry["energyCompensation"]
+    weights = weights * (radius2 <= 1.0)
+    pixel_count = geometry["width"] * geometry["height"]
+    weight_sum = mx.zeros((pixel_count, 1), dtype=mx.float32).at[pixel_indices].add(weights[:, None])
+    feature_sum = mx.zeros((pixel_count, features.shape[1]), dtype=mx.float32).at[pixel_indices].add(
+        features[splat_indices] * weights[:, None]
+    )
+    normalized_features = feature_sum / mx.maximum(weight_sum, 1e-6)
+    return normalized_features.reshape(geometry["height"], geometry["width"], normalized_features.shape[1])
+
+
+def screen_decoder_inputs(base_prediction, projected_features=None):
     luma = base_prediction[:, :, 0] * 0.2126 + base_prediction[:, :, 1] * 0.7152 + base_prediction[:, :, 2] * 0.0722
     horizontal = mx.abs(luma[:, 1:] - luma[:, :-1])
     vertical = mx.abs(luma[1:, :] - luma[:-1, :])
     horizontal = mx.concatenate([mx.zeros((luma.shape[0], 1), dtype=luma.dtype), horizontal], axis=1)
     vertical = mx.concatenate([mx.zeros((1, luma.shape[1]), dtype=luma.dtype), vertical], axis=0)
     gradient = mx.sqrt(mx.square(horizontal) + mx.square(vertical) + 1e-8)
-    return mx.concatenate([base_prediction, luma[:, :, None], gradient[:, :, None]], axis=2)
+    inputs = mx.concatenate([base_prediction, luma[:, :, None], gradient[:, :, None]], axis=2)
+    if projected_features is not None:
+        inputs = mx.concatenate([inputs, projected_features], axis=2)
+    return inputs
 
 
 def pixel_loss(prediction, target):
@@ -1041,10 +1064,10 @@ def evaluate_frame_set(model, geometries, frames, indices, lower, span, depth_bi
     return rows
 
 
-def evaluate_optical_frame_set(decoder, base_predictions, geometries, frames, indices, edge_weight, output_dir, stage):
+def evaluate_optical_frame_set(decoder, base_predictions, optical_feature_planes, geometries, frames, indices, edge_weight, output_dir, stage):
     rows = []
     for frame_index in indices:
-        prediction = decoder(base_predictions[frame_index])
+        prediction = decoder(base_predictions[frame_index], optical_feature_planes[frame_index])
         mx.eval(prediction)
         preview_path = output_dir / f"preview-{stage}-frame-{frame_index:03d}.png"
         target_path = output_dir / f"preview-target-frame-{frame_index:03d}.png"
@@ -1203,6 +1226,7 @@ def parse_args():
     parser.add_argument("--message-size", type=int, default=0)
     parser.add_argument("--freeze-base", type=int, choices=[0, 1], default=0)
     parser.add_argument("--optical-decoder", choices=["none", "screen-unet"], default="none")
+    parser.add_argument("--optical-feature-mode", choices=["screen-only", "projected-native"], default="screen-only")
     parser.add_argument("--optical-channels", type=int, default=8)
     parser.add_argument("--optical-residual-scale", type=float, default=1.0)
     parser.add_argument("--partial-flow-debug-gain", type=float, default=0.0)
@@ -1253,6 +1277,8 @@ def main():
             raise ValueError("optical decoding cannot be combined with the candidate table oracle")
         if args.optical_decoder != "none" and args.spatial_mixing != "none":
             raise ValueError("optical decoding and pre-raster spatial mixing are separate experimental families")
+        if args.optical_decoder == "none" and args.optical_feature_mode != "screen-only":
+            raise ValueError("projected-native optical features require an optical decoder")
         if args.partial_flow_debug_gain != 0.0:
             missing_flow_debug = [
                 frame["id"]
@@ -1329,14 +1355,25 @@ def main():
         ]
         optical_decoder = None
         base_predictions = None
+        optical_feature_planes = None
         if args.optical_decoder == "screen-unet":
             base_predictions = []
+            optical_feature_planes = []
             for geometry in geometries:
-                base_prediction, _ = render_frame(model, geometry, lower, span, args.depth_bins)
+                base_prediction, base_attributes = render_frame(model, geometry, lower, span, args.depth_bins)
                 base_prediction = mx.stop_gradient(base_prediction)
                 mx.eval(base_prediction)
                 base_predictions.append(base_prediction)
-            optical_decoder = ScreenResidualUnet(args.optical_channels, args.optical_residual_scale)
+                projected_features = (
+                    mx.stop_gradient(project_native_feature_planes(geometry, base_attributes))
+                    if args.optical_feature_mode == "projected-native"
+                    else None
+                )
+                if projected_features is not None:
+                    mx.eval(projected_features)
+                optical_feature_planes.append(projected_features)
+            optical_input_channels = 5 + (len(FEATURES) if args.optical_feature_mode == "projected-native" else 0)
+            optical_decoder = ScreenResidualUnet(optical_input_channels, args.optical_channels, args.optical_residual_scale)
             mx.eval(optical_decoder.parameters())
         initial_radius = [mx.array(attributes[:, 4:6]) for attributes in initial_attributes]
         training_geometries = [geometries[index] for index in frame_split["trainIndices"]]
@@ -1359,6 +1396,7 @@ def main():
             initial_evaluation_rows = evaluate_optical_frame_set(
                 optical_decoder,
                 base_predictions,
+                optical_feature_planes,
                 geometries,
                 corpus["frames"],
                 frame_split["evaluationIndices"],
@@ -1418,7 +1456,7 @@ def main():
             def loss_fn(active_decoder):
                 total = mx.array(0.0)
                 for frame_index in frame_split["trainIndices"]:
-                    prediction = active_decoder(base_predictions[frame_index])
+                    prediction = active_decoder(base_predictions[frame_index], optical_feature_planes[frame_index])
                     total = total + image_loss(prediction, geometries[frame_index]["target"], args.edge_weight)
                 return total / len(frame_split["trainIndices"])
 
@@ -1464,6 +1502,7 @@ def main():
             trained_evaluation_rows = evaluate_optical_frame_set(
                 optical_decoder,
                 base_predictions,
+                optical_feature_planes,
                 geometries,
                 corpus["frames"],
                 frame_split["evaluationIndices"],
@@ -1516,12 +1555,19 @@ def main():
             model_path = output_dir / "screen-residual-unet.safetensors"
             optical_decoder.save_weights(str(model_path))
             model_bytes = model_path.read_bytes()
+            optical_input_authority = (
+                PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY
+                if args.optical_feature_mode == "projected-native"
+                else OPTICAL_INPUT_AUTHORITY
+            )
             model_receipt = {
                 "path": str(model_path),
                 "schema": OPTICAL_DECODER_SCHEMA,
                 "identity": f"sha256:{sha256_bytes(model_bytes)}",
                 "authority": "screen-global-multiscale-residual-unet-v0",
-                "inputAuthority": OPTICAL_INPUT_AUTHORITY,
+                "inputAuthority": optical_input_authority,
+                "featureMode": args.optical_feature_mode,
+                "inputChannels": optical_decoder.input_channels,
                 "baseChannels": args.optical_channels,
                 "residualScale": args.optical_residual_scale,
                 "deployable": False,
@@ -1627,7 +1673,12 @@ def main():
                 "contextMode": args.context_mode,
                 "spatialMixing": args.spatial_mixing,
                 "opticalDecoder": args.optical_decoder,
-                "opticalInputAuthority": OPTICAL_INPUT_AUTHORITY if optical_decoder is not None else None,
+                "opticalFeatureMode": args.optical_feature_mode if optical_decoder is not None else None,
+                "opticalInputAuthority": (
+                    PROJECTED_NATIVE_OPTICAL_INPUT_AUTHORITY
+                    if optical_decoder is not None and args.optical_feature_mode == "projected-native"
+                    else OPTICAL_INPUT_AUTHORITY if optical_decoder is not None else None
+                ),
                 "opticalBaseFrozen": optical_decoder is not None,
                 "opticalChannels": args.optical_channels if optical_decoder is not None else None,
                 "opticalResidualScale": args.optical_residual_scale if optical_decoder is not None else None,
