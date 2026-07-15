@@ -1,0 +1,21 @@
+{
+  "schema": "kaminos-artifact-smoke-route-v0",
+  "status": "completed",
+  "requestedRoute": "http://127.0.0.1:18218/artifacts/pyro-phase-destination-state-one-step-r1-0714/inspection-guide.html",
+  "effectiveRoute": "http://127.0.0.1:18218/artifacts/pyro-phase-destination-state-one-step-r1-0714/inspection-guide.html",
+  "httpStatus": 200,
+  "mountState": "mounted-from-owning-worktree",
+  "registrationState": "static-artifact-route-registered-by-worktree-http-server",
+  "browser": "Google Chrome headless, one process, fresh dedicated profile",
+  "window": {
+    "width": 1920,
+    "height": 1400
+  },
+  "settleMs": 4000,
+  "screenshot": {
+    "path": "inspection-guide-smoke.png",
+    "sha256": "b5bc02e118239cde175e099837ddeb5122aa70c31b014a5b254a025f3b2145e4",
+    "inspected": true,
+    "visibleResult": "Both labeled videos loaded with role text, context, controls, and measured-raster section visible without overlap."
+  }
+}

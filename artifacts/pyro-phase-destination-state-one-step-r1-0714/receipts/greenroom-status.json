@@ -1,0 +1,23 @@
+{
+  "job_id": "705d85945dab",
+  "status": "done",
+  "job_type": "kaminos_phase_destination_state_mlx_evaluate",
+  "input_path": "/private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json",
+  "output_dir": "/private/tmp/kaminos-phase-destination-state-one-step-eval-r1-0714",
+  "params": {
+    "model": "/private/tmp/kaminos-phase-destination-state-residual-r1-0714/destination-state-model.json",
+    "batch_size": "4096",
+    "cwd": "/private/tmp/kaminos-pyro-phase-lag-counterfeiter-0713"
+  },
+  "submitted_at": 1784071066.532354,
+  "started_at": 1784071881.37208,
+  "finished_at": 1784075014.546815,
+  "exit_code": 0,
+  "failure_phase": null,
+  "error_message": null,
+  "effective_route": "/private/tmp/kaminos-pyro-phase-audit-venv-0714/bin/python -u boundary-splat-phase-state-evaluate-mlx.py --model /private/tmp/kaminos-phase-destination-state-residual-r1-0714/destination-state-model.json --evaluation-manifest /private/tmp/kaminos-phase-lag-crosswind-basin-r1-0714/phase-corpus.json --out-dir /private/tmp/kaminos-phase-destination-state-one-step-eval-r1-0714 --batch-size 4096",
+  "pid": 47206,
+  "warnings": [
+    "volatile_output"
+  ]
+}

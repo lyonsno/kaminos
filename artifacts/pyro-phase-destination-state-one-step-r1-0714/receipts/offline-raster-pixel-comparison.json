@@ -1,0 +1,27 @@
+{
+  "schema": "kaminos-offline-raster-sequence-pixel-comparison-v0",
+  "status": "completed",
+  "authority": "cropped-label-free-ffmpeg-sequence-psnr-v0",
+  "frameCount": 63,
+  "crop": {
+    "width": 320,
+    "height": 232,
+    "x": 0,
+    "y": 8,
+    "reason": "exclude role-label pixels from role comparison"
+  },
+  "beauty": {
+    "controlToReferencePsnrDb": 27.462430,
+    "predictedToReferencePsnrDb": 28.605483,
+    "predictedAdvantageDb": 1.143053
+  },
+  "debug": {
+    "controlToReferencePsnrDb": 28.216482,
+    "predictedToReferencePsnrDb": 29.446615,
+    "predictedAdvantageDb": 1.230133,
+    "requestedGain": 0.625,
+    "effectiveGain": 0.625,
+    "stateMutation": false
+  },
+  "claimBoundary": "Isolated offline splat raster pixel comparison only; not analytical-raymarch agreement or runtime rendering error."
+}
