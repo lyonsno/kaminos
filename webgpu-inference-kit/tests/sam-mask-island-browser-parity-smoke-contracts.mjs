@@ -215,7 +215,12 @@ assert.match(trackerOrchestrator, /sam31TwoFrameTrackerParityState\s*=\s*\(optio
 assert.match(trackerWitness, /sam31TwoFrameTrackerParityState\?\.\(\{ summary: true \}\)/, 'the driver must poll bounded state rather than serializing completed invocation profiles repeatedly');
 assert.match(trackerOrchestrator, /options\.evidence\s*\?\s*createTerminalEvidenceState\(state\)/, 'the parent state hook must expose a compact terminal evidence projection');
 assert.match(trackerOrchestrator, /timings:\s*compactReceiptTimings\(receipt\.timings\)/, 'terminal receipt evidence must retain timing identity without returning full phase metadata graphs');
-assert.match(trackerWitness, /sam31TwoFrameTrackerParityState\?\.\(\{ evidence: true \}\)/, 'the driver must fetch the compact evidence projection after terminal status');
+assert.match(trackerWitness, /readCompleteChunkedJsonEvidence/, 'the driver must retrieve the complete terminal evidence through the fail-loud chunk assembler');
+assert.match(trackerWitness, /terminalEvidenceChunkCharacters\s*=\s*262144/, 'terminal evidence must use the measured safe CDP segment size without capping total evidence');
+assert.match(trackerWitness, /sam31TwoFrameTrackerParityState\?\.\(\{ evidence: true \}\)/, 'the driver must stage the compact terminal evidence projection after terminal status');
+assert.match(trackerWitness, /totalCharacters[\s\S]*completedCharacters[\s\S]*evidenceTransport/, 'the report must preserve declared evidence length and partial or complete transport progress');
+assert.doesNotMatch(trackerWitness, /lastState\s*=\s*await evaluate\(socket,\s*'window\.sam31TwoFrameTrackerParityState\?\.\(\{ evidence: true \}\) \|\| null'/, 'terminal evidence must not return the full object in one CDP value');
+assert.doesNotMatch(trackerWitness, /metadata\?\.sourceStatus\s*!==\s*'passed'[\s\S]*throw/, 'failed terminal states must still transport their complete diagnostic evidence before the harness rejects them');
 assert.match(trackerWitness, /statusElement\.scrollTo\(0,\s*0\)/, 'the screenshot witness must reset the scrollable receipt to its visible origin before capture');
 assert.match(trackerWitness, /captureBeyondViewport:\s*false/, 'the screenshot witness must capture the explicit visible viewport rather than an ambiguous compositor surface');
 assert.match(trackerWitness, /headingSignalFraction/, 'the screenshot pixel gate must prove the visible title region contains rendered text');

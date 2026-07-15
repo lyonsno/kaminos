@@ -4,10 +4,11 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { verifySam31TwoFramePacketAuthority, verifySam31TwoImageIngressPacketAuthority } from '../src/sam31-packet-artifact.js';
 import { canonicalSam3IdentityJson, resolveSam3BrowserPackageManifestSync } from '../src/sam-browser-package-manifest.js';
 import { SAM31_BROWSER_TRACKER_PACKAGE_CONTRACT } from '../src/sam31-browser-tracker-package.js';
+import { readCompleteChunkedJsonEvidence } from '../src/chunked-json-evidence.js';
 
 const args = new Map();
 for (let index = 2; index < process.argv.length; index += 2) args.set(process.argv[index], process.argv[index + 1]);
@@ -28,6 +29,7 @@ const screenshotPath = resolve(args.get('--screenshot') || '/tmp/kaminos-sam31-t
 const debugPort = Number(args.get('--debug-port') || 9576);
 const serverPort = Number(args.get('--server-port') || 18576);
 const timeoutMs = Number(args.get('--timeout-ms') || 300000);
+const terminalEvidenceChunkCharacters = 262144;
 const staticBacking = args.get('--static-backing') || 'memory';
 if (!['memory', 'opfs'].includes(staticBacking)) throw new Error(`unsupported --static-backing ${staticBacking}`);
 const reusePacket = args.get('--reuse-packet') === '1';
@@ -93,6 +95,7 @@ let screenshotWritten = false;
 let pixelCheck = null;
 let viewportLayout = null;
 let terminalStatePassed = false;
+let evidenceTransport = null;
 let packetAuthority = null;
 let packageAuthority = null;
 let commitIdentityEvidence = { requestedCommit, effectiveCommits: [], commitIdentityPassed: requestedCommit == null };
@@ -239,6 +242,7 @@ function writeReport(extra = {}) {
     pixelCheck,
     viewportLayout,
     terminalStatePassed,
+    evidenceTransport,
     browserVersion,
     adapterInfo: lastState?.adapterInfo || null,
     requestedRouteIds: lastState?.requestedRouteIds || null,
@@ -457,6 +461,54 @@ function wsRequest(socket, method, params = {}, requestTimeout = timeoutMs) {
 }
 async function evaluate(socket, expression, requestTimeout = timeoutMs) { const result = await wsRequest(socket, 'Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }, requestTimeout); if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text); return result.result.value; }
 
+async function readTerminalEvidence(socket) {
+  const transportId = `sam31-terminal-evidence:${randomUUID()}`;
+  const storageKey = `__kaminosSam31TerminalEvidence_${randomUUID().replaceAll('-', '')}`;
+  const deadline = Date.now() + timeoutMs;
+  const remaining = () => Math.max(1, deadline - Date.now());
+  const metadata = await evaluate(socket, `(() => {
+    const value = window.sam31TwoFrameTrackerParityState?.({ evidence: true }) || null;
+    if (!value) throw new Error('terminal browser evidence is missing');
+    const payload = JSON.stringify(value);
+    globalThis[${JSON.stringify(storageKey)}] = { transportId: ${JSON.stringify(transportId)}, payload };
+    return { transportId: ${JSON.stringify(transportId)}, totalCharacters: payload.length, sourceStatus: value.status };
+  })()`, remaining());
+  evidenceTransport = {
+    schema: 'kaminos.chunked-json-evidence-transport.v0',
+    ...metadata,
+    completedCharacters: 0,
+    chunkCount: 0,
+    passed: false,
+  };
+  try {
+    const result = await readCompleteChunkedJsonEvidence({
+      metadata,
+      chunkCharacters: terminalEvidenceChunkCharacters,
+      readChunk: ({ offset, length }) => evaluate(socket, `(() => {
+        const stored = globalThis[${JSON.stringify(storageKey)}];
+        if (!stored) return null;
+        return {
+          transportId: stored.transportId,
+          offset: ${offset},
+          totalCharacters: stored.payload.length,
+          payload: stored.payload.slice(${offset}, ${offset + length}),
+        };
+      })()`, remaining()),
+      onProgress: progress => {
+        evidenceTransport = {
+          schema: 'kaminos.chunked-json-evidence-transport.v0',
+          sourceStatus: metadata.sourceStatus,
+          ...progress,
+        };
+      },
+    });
+    evidenceTransport = { ...result.transport, sourceStatus: metadata.sourceStatus };
+    return result.value;
+  } finally {
+    await evaluate(socket, `(() => { delete globalThis[${JSON.stringify(storageKey)}]; return true; })()`, remaining()).catch(() => {});
+  }
+}
+
 async function inspectPixels(socket, pngBase64, layout) {
   return evaluate(socket, `(async () => {
     const image = new Image(); image.src = ${JSON.stringify(`data:image/png;base64,${pngBase64}`)}; await image.decode();
@@ -537,7 +589,7 @@ async function main() {
       lastState = await evaluate(socket, 'window.sam31TwoFrameTrackerParityState?.({ summary: true }) || null', Math.max(1, deadline - Date.now()));
       if (['passed', 'failed'].includes(lastState?.status)) {
         phase = 'read_browser_evidence';
-        lastState = await evaluate(socket, 'window.sam31TwoFrameTrackerParityState?.({ evidence: true }) || null', Math.max(1, deadline - Date.now()));
+        lastState = await readTerminalEvidence(socket);
         break;
       }
       await delay(250);
