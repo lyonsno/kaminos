@@ -26,6 +26,10 @@ const BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION = 'render-only-vacancy-gated-one-c
 const BOUNDARY_SPLAT_SURVIVAL_SCHEMA = 'kaminos.volume.boundary-splat-survival-probe.v0';
 const BOUNDARY_SPLAT_SURVIVAL_AUTHORITY = 'validation-selected-candidate-survival-mask-v0';
 const BOUNDARY_SPLAT_SURVIVAL_APPLICATION = 'survival-only-remove-rejected-low-candidates-v0';
+const BOUNDARY_SPLAT_COLOR_OPACITY_SCHEMA = 'kaminos.volume.boundary-splat-attribute-residual-probe.v0';
+const BOUNDARY_SPLAT_COLOR_OPACITY_IDENTITY = 'survival-conditioned-exact-cell-color-opacity-residual-v0';
+const BOUNDARY_SPLAT_COLOR_OPACITY_AUTHORITY = 'survival-conditioned-color-opacity-grid-v0';
+const BOUNDARY_SPLAT_COLOR_OPACITY_APPLICATION = 'survival-fixed-color-opacity-override-v0';
 const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   'exact-high-field-renderer-coupled-derived-target-v0',
   'native-low-derived-then-nearest-upsampled-control-v0',
@@ -64,6 +68,12 @@ const boundarySplatDisplacementManifestPath = args.has('--boundary-splat-displac
   : null;
 const boundarySplatSurvivalManifestPath = args.has('--boundary-splat-survival-manifest')
   ? resolve(String(args.get('--boundary-splat-survival-manifest')))
+  : null;
+const boundarySplatColorOpacityManifestPath = args.has('--boundary-splat-color-opacity-manifest')
+  ? resolve(String(args.get('--boundary-splat-color-opacity-manifest')))
+  : null;
+const boundarySplatColorOpacityTargetManifestPath = args.has('--boundary-splat-color-opacity-target-manifest')
+  ? resolve(String(args.get('--boundary-splat-color-opacity-target-manifest')))
   : null;
 const renderPngPath = args.has('--render-png') ? resolve(String(args.get('--render-png'))) : null;
 const renderOnly = args.has('--render-only');
@@ -425,6 +435,139 @@ function resolveBoundarySplatSurvivalManifest(initialField) {
   };
 }
 
+function resolveBoundarySplatColorOpacityManifest(initialField, survival) {
+  if (!boundarySplatColorOpacityManifestPath) return null;
+  const raw = readFileSync(boundarySplatColorOpacityManifestPath, 'utf8');
+  const manifest = JSON.parse(raw);
+  if (manifest.schema !== BOUNDARY_SPLAT_COLOR_OPACITY_SCHEMA
+    || manifest.identity !== BOUNDARY_SPLAT_COLOR_OPACITY_IDENTITY
+    || manifest.status !== 'captured'
+    || manifest.failurePhase !== null) {
+    throw new Error(`unsupported boundary splat color/opacity manifest: ${manifest.schema || '(missing)'}/${manifest.identity || '(missing)'}/${manifest.status || '(missing)'}`);
+  }
+  const replay = manifest.checkpoint?.replay;
+  if (replay?.status !== 'source-target-survival-bound-verified'
+    || replay.sourceBindingParity !== true
+    || replay.targetBindingParity !== true
+    || replay.survivalBindingParity !== true
+    || replay.contractParity !== true
+    || replay.predictionParity !== true
+    || replay.linearPredictionParity !== true
+    || replay.denseOutputParity !== true
+    || replay.denseOutputByteParity !== true) {
+    throw new Error('boundary splat color/opacity checkpoint replay contract mismatch');
+  }
+  if (!survival) {
+    throw new Error('--boundary-splat-color-opacity-manifest requires --boundary-splat-survival-manifest');
+  }
+  if (!boundarySplatColorOpacityTargetManifestPath) {
+    throw new Error('--boundary-splat-color-opacity-manifest requires --boundary-splat-color-opacity-target-manifest');
+  }
+  const lowManifestPath = resolve(String(manifest.source?.lowManifest?.path || ''));
+  const lowManifestRaw = readFileSync(lowManifestPath);
+  const lowManifestSha256 = sha256(lowManifestRaw);
+  if (lowManifestSha256 !== manifest.source?.lowManifest?.sha256) {
+    throw new Error(`boundary splat color/opacity low-manifest SHA-256 mismatch: ${lowManifestSha256}/${manifest.source?.lowManifest?.sha256}`);
+  }
+  const lowManifest = JSON.parse(lowManifestRaw.toString('utf8'));
+  const boundInitialFieldSha256 = lowManifest.initialFieldImport?.requested?.manifestSha256;
+  if (lowManifest.schema !== MANIFEST_SCHEMA
+    || lowManifest.status !== 'captured'
+    || lowManifest.failurePhase !== null
+    || !initialField
+    || boundInitialFieldSha256 !== initialField.manifestSha256) {
+    throw new Error(`boundary splat color/opacity source field mismatch: ${boundInitialFieldSha256 || '(missing)'}/${initialField?.manifestSha256 || '(missing)'}`);
+  }
+  const highManifestPath = resolve(String(manifest.source?.highManifest?.path || ''));
+  const highManifestRaw = readFileSync(highManifestPath);
+  const highManifestSha256 = sha256(highManifestRaw);
+  const highManifest = JSON.parse(highManifestRaw.toString('utf8'));
+  const nominatedTargetRaw = readFileSync(boundarySplatColorOpacityTargetManifestPath);
+  const nominatedTargetSha256 = sha256(nominatedTargetRaw);
+  const nominatedTarget = JSON.parse(nominatedTargetRaw.toString('utf8'));
+  if (highManifestSha256 !== manifest.source?.highManifest?.sha256
+    || highManifestSha256 !== nominatedTargetSha256
+    || highManifest.schema !== MANIFEST_SCHEMA
+    || highManifest.status !== 'captured'
+    || highManifest.failurePhase !== null
+    || nominatedTarget.schema !== MANIFEST_SCHEMA
+    || nominatedTarget.status !== 'captured'
+    || nominatedTarget.failurePhase !== null) {
+    throw new Error('boundary splat color/opacity target manifest binding mismatch');
+  }
+  if (manifest.source?.survivalManifest?.sha256 !== survival.manifestSha256
+    || manifest.checkpoint?.survivalBinding?.survivalManifestSha256 !== survival.manifestSha256
+    || manifest.checkpoint?.survivalBinding?.survivalMaskSha256 !== survival.sha256
+    || manifest.source?.survivalArtifact?.sha256 !== survival.sha256
+    || manifest.checkpoint?.survivalBinding?.survivalAuthority !== survival.cueAuthority) {
+    throw new Error('boundary splat color/opacity survival binding mismatch');
+  }
+  const artifact = manifest.denseOutputs?.colorOpacity;
+  const shape = artifact?.shape;
+  const grid = Number(shape?.[0]);
+  if (!Number.isInteger(grid) || JSON.stringify(shape) !== JSON.stringify([grid, grid, grid, 4])) {
+    throw new Error(`boundary splat color/opacity shape mismatch: ${JSON.stringify(shape)}`);
+  }
+  if (grid !== survival.grid || grid !== initialField.grid) {
+    throw new Error(`boundary splat color/opacity grid mismatch: ${grid}/${survival.grid}/${initialField.grid}`);
+  }
+  const channelOrder = ['color.r', 'color.g', 'color.b', 'opacity'];
+  if (JSON.stringify(artifact.channelOrder) !== JSON.stringify(channelOrder)) {
+    throw new Error('boundary splat color/opacity channel order mismatch');
+  }
+  if (artifact.authority !== BOUNDARY_SPLAT_COLOR_OPACITY_AUTHORITY
+    || artifact.applicationIdentity !== BOUNDARY_SPLAT_COLOR_OPACITY_APPLICATION
+    || artifact.nonSurvivorPolicy !== 'zero'
+    || artifact.candidateMutationPolicy !== 'attribute override only; no birth, movement, or simulator mutation') {
+    throw new Error('boundary splat color/opacity authority or mutation policy mismatch');
+  }
+  const path = resolve(String(artifact.path || ''));
+  const expectedByteLength = grid * grid * grid * 4 * Float32Array.BYTES_PER_ELEMENT;
+  if (Number(artifact.byteLength) !== expectedByteLength || statSync(path).size !== expectedByteLength) {
+    throw new Error(`boundary splat color/opacity byte length mismatch: ${artifact.byteLength}/${statSync(path).size}/${expectedByteLength}`);
+  }
+  const actualSha256 = sha256File(path);
+  if (actualSha256 !== artifact.sha256 || replay.outputSha256 !== artifact.sha256) {
+    throw new Error(`boundary splat color/opacity SHA-256 mismatch: ${actualSha256}/${artifact.sha256}/${replay.outputSha256}`);
+  }
+  const bytes = readFileSync(path);
+  for (let byteOffset = 0; byteOffset < bytes.byteLength; byteOffset += 4 * Float32Array.BYTES_PER_ELEMENT) {
+    const red = bytes.readFloatLE(byteOffset);
+    const green = bytes.readFloatLE(byteOffset + 4);
+    const blue = bytes.readFloatLE(byteOffset + 8);
+    const opacity = bytes.readFloatLE(byteOffset + 12);
+    if (!Number.isFinite(red) || red < 0 || red > 1
+      || !Number.isFinite(green) || green < 0 || green > 1
+      || !Number.isFinite(blue) || blue < 0 || blue > 1
+      || !Number.isFinite(opacity) || opacity < 0 || opacity > 0.08) {
+      throw new Error(`boundary splat color/opacity values must be finite and inside channel ranges: byteOffset=${byteOffset}`);
+    }
+  }
+  return {
+    applicationIdentity: BOUNDARY_SPLAT_COLOR_OPACITY_APPLICATION,
+    authority: BOUNDARY_SPLAT_COLOR_OPACITY_AUTHORITY,
+    manifestPath: boundarySplatColorOpacityManifestPath,
+    manifestSha256: sha256(raw),
+    sourceBinding: { lowManifestPath, lowManifestSha256, initialFieldManifestSha256: boundInitialFieldSha256 },
+    targetBinding: {
+      highManifestPath,
+      highManifestSha256,
+      nominatedTargetManifestPath: boundarySplatColorOpacityTargetManifestPath,
+      nominatedTargetManifestSha256: nominatedTargetSha256,
+    },
+    survivalBinding: { manifestSha256: survival.manifestSha256, maskSha256: survival.sha256 },
+    grid,
+    path,
+    sha256: artifact.sha256,
+    actualSha256,
+    byteLength: expectedByteLength,
+    channelOrder,
+    candidateCount: artifact.candidateCount,
+    survivalKeptCandidateCount: artifact.survivalKeptCandidateCount,
+    labeledSameCellCandidateCount: artifact.labeledSameCellCandidateCount,
+  };
+}
+
 function resolveSourceCapture() {
   if (!sourceCapturePath) {
     if (targetOrigin) throw new Error('--target-origin requires --source-capture');
@@ -717,6 +860,69 @@ async function uploadScalarActivityCue(ws, cue) {
   };
 }
 
+async function uploadBoundarySplatColorOpacity(ws, attributes) {
+  const begin = await evaluateByValue(
+    ws,
+    `window.__kaminosVolumePrototype.beginDebugBoundarySplatColorOpacityImport(${JSON.stringify({
+      grid: attributes.grid,
+      byteLength: attributes.byteLength,
+      sha256: attributes.sha256,
+      channelOrder: attributes.channelOrder,
+      authority: attributes.authority,
+      applicationIdentity: attributes.applicationIdentity,
+      sourceManifestPath: attributes.manifestPath,
+      sourceManifestSha256: attributes.manifestSha256,
+      sourceFieldManifestSha256: attributes.sourceBinding.initialFieldManifestSha256,
+      survivalManifestSha256: attributes.survivalBinding.manifestSha256,
+      survivalMaskSha256: attributes.survivalBinding.maskSha256,
+    })})`,
+    'begin-boundary-splat-color-opacity-import',
+  );
+  if (begin?.ok !== true) throw new Error(`boundary splat color/opacity import did not begin cleanly: ${JSON.stringify(begin)}`);
+  const bytes = readFileSync(attributes.path);
+  const chunkBytes = chunkFloats * Float32Array.BYTES_PER_ELEMENT;
+  let byteOffset = 0;
+  let chunkCount = 0;
+  while (byteOffset < bytes.byteLength) {
+    const chunk = bytes.subarray(byteOffset, Math.min(bytes.byteLength, byteOffset + chunkBytes));
+    const receipt = await evaluateByValue(
+      ws,
+      `window.__kaminosVolumePrototype.writeDebugBoundarySplatColorOpacityImportChunk(${JSON.stringify({
+        sessionId: begin.sessionId,
+        byteOffset,
+        base64: chunk.toString('base64'),
+      })})`,
+      'boundary-splat-color-opacity-chunk',
+    );
+    if (receipt?.ok !== true || Number(receipt.byteOffset) !== byteOffset) {
+      throw new Error(`bad boundary splat color/opacity chunk at ${byteOffset}: ${JSON.stringify(receipt)}`);
+    }
+    byteOffset += chunk.byteLength;
+    chunkCount += 1;
+  }
+  const finish = await evaluateByValue(
+    ws,
+    `window.__kaminosVolumePrototype.finishDebugBoundarySplatColorOpacityImport(${JSON.stringify({ sessionId: begin.sessionId })})`,
+    'finish-boundary-splat-color-opacity-import',
+  );
+  if (finish?.ok !== true || finish.status !== 'applied') {
+    throw new Error(`boundary splat color/opacity import did not apply cleanly: ${JSON.stringify(finish)}`);
+  }
+  if (finish.authority !== attributes.authority
+    || finish.applicationIdentity !== attributes.applicationIdentity
+    || finish.sha256 !== attributes.sha256
+    || finish.sourceFieldManifestSha256 !== attributes.sourceBinding.initialFieldManifestSha256
+    || finish.survivalManifestSha256 !== attributes.survivalBinding.manifestSha256
+    || finish.survivalMaskSha256 !== attributes.survivalBinding.maskSha256) {
+    throw new Error(`boundary splat color/opacity effective identity mismatch: ${JSON.stringify(finish)}`);
+  }
+  return {
+    requested: attributes,
+    upload: { byteLength: bytes.byteLength, chunkCount, chunkFloats },
+    effective: finish,
+  };
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
   let phase = 'source-capture-validation';
@@ -730,6 +936,8 @@ async function main() {
   let scalarActivityCueImport = null;
   let boundarySplatDisplacement = null;
   let boundarySplatSurvival = null;
+  let boundarySplatColorOpacity = null;
+  let boundarySplatColorOpacityImport = null;
   const renderWarmups = [];
   let renderControlOverrides = {};
   let browserSession = null;
@@ -749,10 +957,14 @@ async function main() {
     if (!renderControlOverrides || typeof renderControlOverrides !== 'object' || Array.isArray(renderControlOverrides)) {
       throw new Error('--render-control-overrides-json must decode to an object');
     }
+    if (boundarySplatColorOpacityTargetManifestPath && !boundarySplatColorOpacityManifestPath) {
+      throw new Error('--boundary-splat-color-opacity-target-manifest requires --boundary-splat-color-opacity-manifest');
+    }
     phase = 'source-capture-validation';
     initialField = resolveInitialFieldManifest();
     boundarySplatDisplacement = resolveBoundarySplatDisplacementManifest();
     boundarySplatSurvival = resolveBoundarySplatSurvivalManifest(initialField);
+    boundarySplatColorOpacity = resolveBoundarySplatColorOpacityManifest(initialField, boundarySplatSurvival);
     scalarActivityCue = boundarySplatSurvival || boundarySplatDisplacement || resolveScalarActivityCueManifest();
     if (initialField && !args.has('--advance-imported-steps')) {
       throw new Error('--initial-field-manifest requires explicit --advance-imported-steps, including 0 for a held control');
@@ -786,6 +998,7 @@ async function main() {
         oracleActivitySplatRadiusConcentration: 0,
         oracleActivitySplatDisplacement: 0,
         oracleActivitySplatSurvival: 1,
+        oracleActivitySplatColorOpacity: boundarySplatColorOpacity ? 1 : 0,
       };
     } else if (boundarySplatDisplacement) {
       if (!renderOnly || !initialField || advanceImportedSteps !== 0) {
@@ -971,6 +1184,10 @@ async function main() {
         phase = 'scalar-activity-cue-import';
         scalarActivityCueImport = await uploadScalarActivityCue(ws, scalarActivityCue);
       }
+      if (boundarySplatColorOpacity) {
+        phase = 'boundary-splat-color-opacity-import';
+        boundarySplatColorOpacityImport = await uploadBoundarySplatColorOpacity(ws, boundarySplatColorOpacity);
+      }
       if (renderPngPath) {
         phase = 'mount-imported-render-canvas';
         const canvasMount = await evaluateByValue(ws, `(() => {
@@ -1136,6 +1353,20 @@ async function main() {
               })}`);
             }
           }
+          if (boundarySplatColorOpacity) {
+            const requestedColorOpacity = Number(renderControlOverrides.oracleActivitySplatColorOpacity || 0);
+            if (
+              renderReceipt.oracleActivitySplatColorOpacityRequested !== requestedColorOpacity
+              || renderReceipt.oracleActivitySplatColorOpacityEffective !== requestedColorOpacity
+              || renderReceipt.oracleActivitySplatColorOpacityApplicationIdentity !== BOUNDARY_SPLAT_COLOR_OPACITY_APPLICATION
+            ) {
+              throw new Error(`boundary-splat-color-opacity-gain-mismatch: requested=${requestedColorOpacity} receipt=${JSON.stringify({
+                oracleActivitySplatColorOpacityRequested: renderReceipt.oracleActivitySplatColorOpacityRequested,
+                oracleActivitySplatColorOpacityEffective: renderReceipt.oracleActivitySplatColorOpacityEffective,
+                oracleActivitySplatColorOpacityApplicationIdentity: renderReceipt.oracleActivitySplatColorOpacityApplicationIdentity,
+              })}`);
+            }
+          }
         }
         phase = 'post-render-canvas-geometry';
         const postRenderCanvasMount = await evaluateByValue(ws, `(() => {
@@ -1196,6 +1427,7 @@ async function main() {
           importedAdvanceIdentity: importedAdvance.identity,
           importedAdvanceCompletedSteps: importedAdvance.completedSteps,
           scalarActivityCueImport,
+          boundarySplatColorOpacityImport,
         };
       }
     }
@@ -1221,6 +1453,7 @@ async function main() {
         initialFieldImport,
         importedAdvance,
         scalarActivityCueImport,
+        boundarySplatColorOpacityImport,
         renderWarmups,
         importedRender,
         routeIdentity: importedRender?.routeIdentity || initialFieldImport?.effective?.routeIdentity || null,
@@ -1317,6 +1550,7 @@ async function main() {
       initialFieldImport,
       importedAdvance,
       scalarActivityCueImport,
+      boundarySplatColorOpacityImport,
       renderWarmups,
       importedRender,
       fluidComponents: begin.fluidComponents,
@@ -1355,9 +1589,12 @@ async function main() {
       requestedScalarActivityCueRole: scalarActivityCueRole,
       requestedBoundarySplatDisplacementManifest: boundarySplatDisplacementManifestPath,
       requestedBoundarySplatSurvivalManifest: boundarySplatSurvivalManifestPath,
+      requestedBoundarySplatColorOpacityManifest: boundarySplatColorOpacityManifestPath,
+      requestedBoundarySplatColorOpacityTargetManifest: boundarySplatColorOpacityTargetManifestPath,
       initialFieldImport,
       importedAdvance,
       scalarActivityCueImport,
+      boundarySplatColorOpacityImport,
       renderWarmups,
       importedRender,
       targetOrigin,

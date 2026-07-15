@@ -45,6 +45,8 @@ const BOUNDARY_SPLAT_DISPLACEMENT_CUE_AUTHORITY = 'validation-selected-vacancy-g
 const BOUNDARY_SPLAT_DISPLACEMENT_APPLICATION_IDENTITY = 'render-only-vacancy-gated-one-cell-splat-displacement-v0';
 const BOUNDARY_SPLAT_SURVIVAL_CUE_AUTHORITY = 'validation-selected-candidate-survival-mask-v0';
 const BOUNDARY_SPLAT_SURVIVAL_APPLICATION_IDENTITY = 'survival-only-remove-rejected-low-candidates-v0';
+const BOUNDARY_SPLAT_COLOR_OPACITY_AUTHORITY = 'survival-conditioned-color-opacity-grid-v0';
+const BOUNDARY_SPLAT_COLOR_OPACITY_APPLICATION_IDENTITY = 'survival-fixed-color-opacity-override-v0';
 const SCALAR_ACTIVITY_CUE_AUTHORITIES = new Set([
   TRUTH_ORACLE_ACTIVITY_CUE_AUTHORITY,
   'exact-high-field-renderer-coupled-derived-target-v0',
@@ -544,6 +546,10 @@ function externalEmitterBufferBytes() {
 
 function scalarActivityCueBufferBytes(grid = DEFAULT_GRID_SIZE) {
   return gridCellCount(normalizeGridSize(grid)) * Float32Array.BYTES_PER_ELEMENT;
+}
+
+function boundarySplatColorOpacityBufferBytes(grid = DEFAULT_GRID_SIZE) {
+  return gridCellCount(normalizeGridSize(grid)) * 4 * Float32Array.BYTES_PER_ELEMENT;
 }
 
 function clampFinite(value, min, max, fallback) {
@@ -4973,6 +4979,7 @@ struct BoundarySplatCamera {
   cameraUp: vec4<f32>,
   controls: vec4<f32>,
   activityControls: vec4<f32>,
+  attributeOverrideControls: vec4<f32>,
 };
 
 struct BoundarySplatVertexOut {
@@ -5003,6 +5010,7 @@ ${BOUNDARY_SPLAT_ATTRIBUTE_MODEL_WGSL}
 @group(0) @binding(5) var<storage, read> boundarySplatsForRender: array<BoundarySplat>;
 @group(0) @binding(6) var<storage, read_write> boundarySplatFeatureRows: array<BoundarySplatFeatureRow>;
 @group(0) @binding(7) var<storage, read> scalarActivityCue: array<f32>;
+@group(0) @binding(8) var<storage, read> boundarySplatColorOpacityCue: array<vec4<f32>>;
 
 fn boundarySplatCellIndex(cell: vec3<u32>) -> u32 {
   return cell.x + cell.y * GRID + cell.z * GRID * GRID;
@@ -5120,6 +5128,9 @@ fn compactBoundarySplats(@builtin(global_invocation_id) gid: vec3<u32>) {
   );
   var composedColorOpacity = attributeOutput.colorOpacity;
   var composedRadiusScale = attributeOutput.radiusScale;
+  if (boundarySplatCamera.attributeOverrideControls.x > 0.5) {
+    composedColorOpacity = boundarySplatColorOpacityCue[cellIndex];
+  }
   let activityContrast = boundarySplatScalarActivityHighPass(gid);
   let activityOpacityMultiplier = clamp(1.0 + boundarySplatCamera.activityControls.x * activityContrast * 0.75, 0.25, 1.75);
   let activityRadiusMultiplier = clamp(exp2(-boundarySplatCamera.activityControls.y * activityContrast * 0.5), 0.65, 1.45);
@@ -5207,6 +5218,17 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     uploadedAtMs: null,
   };
   let debugScalarActivityCueImportUpload = null;
+  let boundarySplatColorOpacityBuffer = null;
+  let boundarySplatColorOpacitySourceValues = null;
+  let boundarySplatColorOpacityUpload = {
+    status: 'none',
+    authority: null,
+    applicationIdentity: null,
+    grid: null,
+    cellCount: 0,
+    uploadedAtMs: null,
+  };
+  let debugBoundarySplatColorOpacityImportUpload = null;
   const state = {
     prototypeIdentity: PROTOTYPE_IDENTITY,
     routeIdentity: ROUTE_IDENTITY,
@@ -6088,6 +6110,26 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     device.queue.writeBuffer(oracleActivityCueBuffer, 0, values);
   }
 
+  function ensureBoundarySplatColorOpacityBuffer() {
+    if (boundarySplatColorOpacityBuffer) return;
+    boundarySplatColorOpacityBuffer = device.createBuffer({
+      label: `kaminos boundary splat color opacity cue ${gridSize}^3`,
+      size: boundarySplatColorOpacityBufferBytes(gridSize),
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(
+      boundarySplatColorOpacityBuffer,
+      0,
+      new Float32Array(gridCellCount(gridSize) * 4),
+    );
+  }
+
+  function writeBoundarySplatColorOpacityBuffer(values) {
+    if (!device) return;
+    ensureBoundarySplatColorOpacityBuffer();
+    device.queue.writeBuffer(boundarySplatColorOpacityBuffer, 0, values);
+  }
+
   function normalizePrimitiveRecord(primitive) {
     const source = primitive && typeof primitive === 'object' ? primitive : {};
     assertNoPlaceholderTopologyClaim(source);
@@ -6272,6 +6314,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatReadbackBuffer?.destroy();
     boundarySplatFeatureBuffer?.destroy();
     oracleActivityCueBuffer?.destroy();
+    boundarySplatColorOpacityBuffer?.destroy();
     boundarySidecarBuffer = null;
     boundarySplatBuffer = null;
     boundarySplatDrawBuffer = null;
@@ -6281,6 +6324,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     boundarySplatFeatureBufferCapacity = 0;
     boundarySplatTelemetryCopyPending = false;
     oracleActivityCueBuffer = null;
+    boundarySplatColorOpacityBuffer = null;
     fluidBuffers = [];
     frontBuffers = [];
     pressureBuffers = [];
@@ -6535,7 +6579,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     });
     boundarySplatCameraBuffer = device.createBuffer({
       label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} camera`,
-      size: 128,
+      size: 144,
       usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
     });
     boundarySplatReadbackBuffer = device.createBuffer({
@@ -6565,6 +6609,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       || !boundarySplatCameraBuffer
       || !boundarySplatFeatureBuffer
       || !oracleActivityCueBuffer
+      || !boundarySplatColorOpacityBuffer
       || fluidBuffers.length !== 2
     ) return;
     boundarySplatComputeBindGroups = fluidBuffers.map((fluidBuffer, index) => device.createBindGroup({
@@ -6578,6 +6623,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 4, resource: { buffer: boundarySplatCameraBuffer } },
         { binding: 6, resource: { buffer: boundarySplatFeatureBuffer } },
         { binding: 7, resource: { buffer: oracleActivityCueBuffer } },
+        { binding: 8, resource: { buffer: boundarySplatColorOpacityBuffer } },
       ],
     }));
     boundarySplatRenderBindGroup = device.createBindGroup({
@@ -6679,6 +6725,21 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         effectiveCueAuthority: oracleActivityCueUpload.requestedCueAuthority,
         externalCueCellCount: resampledCue.length,
         receiverGrid: gridSize,
+      };
+    }
+    ensureBoundarySplatColorOpacityBuffer();
+    if (boundarySplatColorOpacitySourceValues && boundarySplatColorOpacityUpload.grid === gridSize) {
+      writeBoundarySplatColorOpacityBuffer(boundarySplatColorOpacitySourceValues);
+      boundarySplatColorOpacityUpload = {
+        ...boundarySplatColorOpacityUpload,
+        status: 'uploaded',
+        cellCount: gridCellCount(gridSize),
+      };
+    } else if (boundarySplatColorOpacitySourceValues) {
+      boundarySplatColorOpacityUpload = {
+        ...boundarySplatColorOpacityUpload,
+        status: 'grid-mismatch',
+        cellCount: 0,
       };
     }
     const renderPipelineConstants = { GRID: gridSize, MAJORANT_GRID: majorantGridSize };
@@ -7121,6 +7182,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         { binding: 4, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } },
         { binding: 6, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
         { binding: 7, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+        { binding: 8, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
       ],
     });
     boundarySplatRenderBindGroupLayout = device.createBindGroupLayout({
@@ -7499,13 +7561,20 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     }
     if (boundarySplatCameraBuffer) {
       const cameraMatrix = camera.matrixWorld.elements;
-      const splatCamera = new Float32Array(32);
+      const splatCamera = new Float32Array(36);
       splatCamera.set(viewProj.elements, 0);
       splatCamera.set([cameraMatrix[0], cameraMatrix[1], cameraMatrix[2], 0], 16);
       splatCamera.set([cameraMatrix[4], cameraMatrix[5], cameraMatrix[6], 0], 20);
       splatCamera.set([normalizeBoundarySplatRadius(controlsSnapshot.boundarySplatRadius), boundarySplatLearnedAttributesRequested() ? 1 : 0, state.boundarySplatFeatureCaptureEffective ? 1 : 0, normalizeBoundarySplatSharpness(controlsSnapshot.boundarySplatSharpness)], 24);
       const scalarActivityReceiver = normalizeScalarActivityReceiverControls(controlsSnapshot, oracleActivityCueUpload.effectiveCueAuthority);
       splatCamera.set([scalarActivityReceiver.splatOpacityGain, scalarActivityReceiver.splatRadiusConcentrationGain, scalarActivityReceiver.splatDisplacementEnabled, scalarActivityReceiver.splatSurvivalEnabled], 28);
+      const colorOpacityAncestry = boundarySplatColorOpacityAncestryStatus();
+      const colorOpacityEnabled = boundarySplatColorOpacityUpload.status === 'uploaded'
+        && boundarySplatColorOpacityUpload.authority === BOUNDARY_SPLAT_COLOR_OPACITY_AUTHORITY
+        && colorOpacityAncestry.bound
+        ? clampFinite(controlsSnapshot.oracleActivitySplatColorOpacity, 0, 1, 0)
+        : 0;
+      splatCamera.set([colorOpacityEnabled, 0, 0, 0], 32);
       device.queue.writeBuffer(boundarySplatCameraBuffer, 0, splatCamera);
     }
     const { renderPhaseTimeMs, renderPhaseFrame } = updateRenderPhaseState(now, state, lookFreeze);
@@ -9632,6 +9701,268 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     state.scalarActivityCueImportReceipt = receipt;
     debugScalarActivityCueImportUpload = null;
     emitStatus({ phase: 'scalar-activity-cue-import-applied' });
+    return { ok: true, ...receipt };
+  }
+
+  function boundarySplatColorOpacityAncestryStatus(upload = boundarySplatColorOpacityUpload) {
+    const fullFieldReceipt = state.fullFieldImportReceipt;
+    const survivalReceipt = state.scalarActivityCueImportReceipt;
+    const sourceFieldManifestSha256 = upload?.sourceFieldManifestSha256 || null;
+    const survivalManifestSha256 = upload?.survivalManifestSha256 || null;
+    const survivalMaskSha256 = upload?.survivalMaskSha256 || null;
+    let reason = null;
+    if (!upload || upload.authority !== BOUNDARY_SPLAT_COLOR_OPACITY_AUTHORITY) {
+      reason = 'attribute-authority-mismatch';
+    } else if (fullFieldReceipt?.status !== 'applied'
+      || fullFieldReceipt.sourceManifestSha256 !== sourceFieldManifestSha256) {
+      reason = 'source-field-receipt-mismatch';
+    } else if (survivalReceipt?.status !== 'applied'
+      || survivalReceipt.cueAuthority !== BOUNDARY_SPLAT_SURVIVAL_CUE_AUTHORITY
+      || survivalReceipt.sourceManifestSha256 !== survivalManifestSha256
+      || survivalReceipt.sha256 !== survivalMaskSha256) {
+      reason = 'survival-receipt-mismatch';
+    } else if (oracleActivityCueUpload.status !== 'uploaded'
+      || oracleActivityCueUpload.effectiveCueAuthority !== BOUNDARY_SPLAT_SURVIVAL_CUE_AUTHORITY
+      || oracleActivityCueUpload.sourceManifestSha256 !== survivalManifestSha256) {
+      reason = 'live-survival-cue-mismatch';
+    }
+    return {
+      identity: 'live-source-survival-bound-color-opacity-ancestry-v0',
+      bound: reason === null,
+      reason,
+      requested: {
+        sourceFieldManifestSha256,
+        survivalManifestSha256,
+        survivalMaskSha256,
+      },
+      effective: {
+        sourceFieldManifestSha256: fullFieldReceipt?.sourceManifestSha256 || null,
+        survivalManifestSha256: survivalReceipt?.sourceManifestSha256 || null,
+        survivalMaskSha256: survivalReceipt?.sha256 || null,
+        survivalCueAuthority: oracleActivityCueUpload.effectiveCueAuthority || null,
+      },
+    };
+  }
+
+  function boundarySplatColorOpacityImportFailure(failurePhase, reason, extra = {}) {
+    const failed = {
+      schema: 'kaminos.volume.boundary-splat-color-opacity-import.v0',
+      identity: BOUNDARY_SPLAT_COLOR_OPACITY_APPLICATION_IDENTITY,
+      status: 'failed',
+      failurePhase,
+      reason,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+      ...extra,
+    };
+    boundarySplatColorOpacityUpload = {
+      ...boundarySplatColorOpacityUpload,
+      status: 'failed',
+      failurePhase,
+      reason,
+    };
+    state.boundarySplatColorOpacityImportReceipt = failed;
+    return { ok: false, ...failed };
+  }
+
+  function beginDebugBoundarySplatColorOpacityImport(payload = {}) {
+    if (!device) return boundarySplatColorOpacityImportFailure('begin', 'inactive');
+    const requestedGrid = Math.floor(Number(payload.grid));
+    const expectedByteLength = requestedGrid * requestedGrid * requestedGrid * 4 * Float32Array.BYTES_PER_ELEMENT;
+    const byteLength = Number(payload.byteLength);
+    if (!Number.isInteger(requestedGrid) || requestedGrid !== gridSize) {
+      return boundarySplatColorOpacityImportFailure('begin', 'grid-mismatch', { requestedGrid, receiverGrid: gridSize });
+    }
+    if (byteLength !== expectedByteLength) {
+      return boundarySplatColorOpacityImportFailure('begin', 'byte-length-mismatch', { byteLength, expectedByteLength });
+    }
+    if (!/^[a-f0-9]{64}$/i.test(String(payload.sha256 || ''))) {
+      return boundarySplatColorOpacityImportFailure('begin', 'sha256-missing');
+    }
+    const ancestryHashes = [
+      payload.sourceManifestSha256,
+      payload.sourceFieldManifestSha256,
+      payload.survivalManifestSha256,
+      payload.survivalMaskSha256,
+    ];
+    if (ancestryHashes.some(value => !/^[a-f0-9]{64}$/i.test(String(value || '')))) {
+      return boundarySplatColorOpacityImportFailure('begin', 'ancestry-sha256-missing');
+    }
+    if (payload.authority !== BOUNDARY_SPLAT_COLOR_OPACITY_AUTHORITY
+      || payload.applicationIdentity !== BOUNDARY_SPLAT_COLOR_OPACITY_APPLICATION_IDENTITY) {
+      return boundarySplatColorOpacityImportFailure('begin', 'authority-mismatch', {
+        requestedAuthority: payload.authority || null,
+        requestedApplicationIdentity: payload.applicationIdentity || null,
+      });
+    }
+    const expectedChannelOrder = ['color.r', 'color.g', 'color.b', 'opacity'];
+    if (JSON.stringify(payload.channelOrder) !== JSON.stringify(expectedChannelOrder)) {
+      return boundarySplatColorOpacityImportFailure('begin', 'channel-order-mismatch', {
+        requestedChannelOrder: payload.channelOrder || null,
+        expectedChannelOrder,
+      });
+    }
+    debugBoundarySplatColorOpacityImportUpload = {
+      sessionId: `boundary-splat-color-opacity-import-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      status: 'receiving',
+      grid: requestedGrid,
+      authority: payload.authority,
+      applicationIdentity: payload.applicationIdentity,
+      sourceManifestPath: payload.sourceManifestPath || null,
+      sourceManifestSha256: payload.sourceManifestSha256 || null,
+      sourceFieldManifestSha256: payload.sourceFieldManifestSha256 || null,
+      survivalManifestSha256: payload.survivalManifestSha256 || null,
+      survivalMaskSha256: payload.survivalMaskSha256 || null,
+      expectedSha256: String(payload.sha256).toLowerCase(),
+      byteLength,
+      bytes: new Uint8Array(byteLength),
+      receivedBytes: 0,
+      chunkCount: 0,
+    };
+    const ancestry = boundarySplatColorOpacityAncestryStatus(debugBoundarySplatColorOpacityImportUpload);
+    if (!ancestry.bound) {
+      debugBoundarySplatColorOpacityImportUpload = null;
+      return boundarySplatColorOpacityImportFailure('begin', 'ancestry-mismatch', { ancestry });
+    }
+    boundarySplatColorOpacityUpload = {
+      ...boundarySplatColorOpacityUpload,
+      status: 'receiving',
+      authority: payload.authority,
+      applicationIdentity: payload.applicationIdentity,
+      sourceFieldManifestSha256: payload.sourceFieldManifestSha256,
+      survivalManifestSha256: payload.survivalManifestSha256,
+      survivalMaskSha256: payload.survivalMaskSha256,
+    };
+    state.boundarySplatColorOpacityImportReceipt = {
+      schema: 'kaminos.volume.boundary-splat-color-opacity-import.v0',
+      identity: BOUNDARY_SPLAT_COLOR_OPACITY_APPLICATION_IDENTITY,
+      status: 'receiving',
+      failurePhase: null,
+      sessionId: debugBoundarySplatColorOpacityImportUpload.sessionId,
+      grid: requestedGrid,
+      authority: payload.authority,
+      ancestry,
+      expectedSha256: debugBoundarySplatColorOpacityImportUpload.expectedSha256,
+      expectedByteLength: byteLength,
+    };
+    return { ok: true, ...state.boundarySplatColorOpacityImportReceipt };
+  }
+
+  function writeDebugBoundarySplatColorOpacityImportChunk(payload = {}) {
+    const upload = debugBoundarySplatColorOpacityImportUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) {
+      return boundarySplatColorOpacityImportFailure('chunk-write', 'session-id-mismatch');
+    }
+    const byteOffset = Math.floor(Number(payload.byteOffset));
+    if (byteOffset !== upload.receivedBytes) {
+      return boundarySplatColorOpacityImportFailure('chunk-write', 'non-sequential-byte-offset', {
+        expectedByteOffset: upload.receivedBytes,
+        requestedByteOffset: byteOffset,
+      });
+    }
+    const chunk = decodeFullFieldImportChunk(payload.base64);
+    if (byteOffset + chunk.byteLength > upload.byteLength) {
+      return boundarySplatColorOpacityImportFailure('chunk-write', 'chunk-overflow', { byteOffset, chunkByteLength: chunk.byteLength });
+    }
+    upload.bytes.set(chunk, byteOffset);
+    upload.receivedBytes += chunk.byteLength;
+    upload.chunkCount += 1;
+    return {
+      ok: true,
+      schema: 'kaminos.volume.boundary-splat-color-opacity-import.v0',
+      sessionId: upload.sessionId,
+      byteOffset,
+      byteLength: chunk.byteLength,
+      receivedBytes: upload.receivedBytes,
+      expectedBytes: upload.byteLength,
+      chunkCount: upload.chunkCount,
+      isFinal: upload.receivedBytes === upload.byteLength,
+    };
+  }
+
+  async function finishDebugBoundarySplatColorOpacityImport(payload = {}) {
+    const upload = debugBoundarySplatColorOpacityImportUpload;
+    if (!upload || payload.sessionId !== upload.sessionId) {
+      return boundarySplatColorOpacityImportFailure('finish', 'session-id-mismatch');
+    }
+    if (upload.receivedBytes !== upload.byteLength) {
+      return boundarySplatColorOpacityImportFailure('finish', 'incomplete-upload', {
+        receivedBytes: upload.receivedBytes,
+        expectedBytes: upload.byteLength,
+      });
+    }
+    const ancestry = boundarySplatColorOpacityAncestryStatus(upload);
+    if (!ancestry.bound) {
+      debugBoundarySplatColorOpacityImportUpload = null;
+      return boundarySplatColorOpacityImportFailure('finish', 'ancestry-mismatch', { ancestry });
+    }
+    const actualSha256 = Array.from(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', upload.bytes)))
+      .map(value => value.toString(16).padStart(2, '0')).join('');
+    if (actualSha256 !== upload.expectedSha256) {
+      debugBoundarySplatColorOpacityImportUpload = null;
+      return boundarySplatColorOpacityImportFailure('sha256-validation', 'sha256-mismatch', {
+        expectedSha256: upload.expectedSha256,
+        actualSha256,
+      });
+    }
+    const values = new Float32Array(upload.bytes.buffer.slice(
+      upload.bytes.byteOffset,
+      upload.bytes.byteOffset + upload.bytes.byteLength,
+    ));
+    for (let index = 0; index < values.length; index += 4) {
+      if (!Number.isFinite(values[index]) || values[index] < 0 || values[index] > 1
+        || !Number.isFinite(values[index + 1]) || values[index + 1] < 0 || values[index + 1] > 1
+        || !Number.isFinite(values[index + 2]) || values[index + 2] < 0 || values[index + 2] > 1
+        || !Number.isFinite(values[index + 3]) || values[index + 3] < 0 || values[index + 3] > 0.08) {
+        debugBoundarySplatColorOpacityImportUpload = null;
+        return boundarySplatColorOpacityImportFailure('value-validation', 'non-finite-or-out-of-range', { floatOffset: index });
+      }
+    }
+    boundarySplatColorOpacitySourceValues = new Float32Array(values);
+    writeBoundarySplatColorOpacityBuffer(boundarySplatColorOpacitySourceValues);
+    boundarySplatColorOpacityUpload = {
+      status: 'uploaded',
+      authority: upload.authority,
+      applicationIdentity: upload.applicationIdentity,
+      grid: upload.grid,
+      cellCount: gridCellCount(upload.grid),
+      uploadedAtMs: performance.now(),
+      sourceManifestPath: upload.sourceManifestPath,
+      sourceManifestSha256: upload.sourceManifestSha256,
+      sourceFieldManifestSha256: upload.sourceFieldManifestSha256,
+      survivalManifestSha256: upload.survivalManifestSha256,
+      survivalMaskSha256: upload.survivalMaskSha256,
+      sha256: actualSha256,
+    };
+    const receipt = {
+      schema: 'kaminos.volume.boundary-splat-color-opacity-import.v0',
+      identity: upload.applicationIdentity,
+      status: 'applied',
+      failurePhase: null,
+      sessionId: upload.sessionId,
+      grid: upload.grid,
+      receiverGrid: gridSize,
+      authority: upload.authority,
+      applicationIdentity: upload.applicationIdentity,
+      sourceManifestPath: upload.sourceManifestPath,
+      sourceManifestSha256: upload.sourceManifestSha256,
+      sourceFieldManifestSha256: upload.sourceFieldManifestSha256,
+      survivalManifestSha256: upload.survivalManifestSha256,
+      survivalMaskSha256: upload.survivalMaskSha256,
+      sha256: actualSha256,
+      byteLength: upload.byteLength,
+      chunkCount: upload.chunkCount,
+      ancestry,
+      routeIdentity: ROUTE_IDENTITY,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: PROTOTYPE_IDENTITY,
+      backend: state.backend,
+    };
+    state.boundarySplatColorOpacityImportReceipt = receipt;
+    debugBoundarySplatColorOpacityImportUpload = null;
+    emitStatus({ phase: 'boundary-splat-color-opacity-import-applied' });
     return { ok: true, ...receipt };
   }
 
@@ -11979,6 +12310,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     const oracleActivitySplatSurvivalRequested = Object.hasOwn(controlOverrides, 'oracleActivitySplatSurvival')
       ? Number(controlOverrides.oracleActivitySplatSurvival)
       : 0;
+    const oracleActivitySplatColorOpacityRequested = Object.hasOwn(controlOverrides, 'oracleActivitySplatColorOpacity')
+      ? Number(controlOverrides.oracleActivitySplatColorOpacity)
+      : 0;
     const fixedNow = Number.isFinite(Number(options.now)) ? Number(options.now) : performance.now();
     const sameStateCaptureId = options.sameStateCaptureId ? String(options.sameStateCaptureId) : null;
     const baseFrameCount = Number.isFinite(Number(options.baseFrameCount)) ? Number(options.baseFrameCount) : state.frameCount;
@@ -11995,6 +12329,12 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       const oracleActivitySplatRadiusConcentrationEffective = scalarActivityReceiver.splatRadiusConcentrationGain;
       const oracleActivitySplatDisplacementEffective = scalarActivityReceiver.splatDisplacementEnabled;
       const oracleActivitySplatSurvivalEffective = scalarActivityReceiver.splatSurvivalEnabled;
+      const boundarySplatColorOpacityAncestry = boundarySplatColorOpacityAncestryStatus();
+      const oracleActivitySplatColorOpacityEffective = boundarySplatColorOpacityUpload.status === 'uploaded'
+        && boundarySplatColorOpacityUpload.authority === BOUNDARY_SPLAT_COLOR_OPACITY_AUTHORITY
+        && boundarySplatColorOpacityAncestry.bound
+        ? clampFinite(controlsSnapshot.oracleActivitySplatColorOpacity, 0, 1, 0)
+        : 0;
       resetTemporalHistory('same-state-render-scale-canvas-capture');
       updateUniforms(fixedNow);
       const encoder = device.createCommandEncoder({ label: 'kaminos frozen render-scale canvas capture' });
@@ -12195,6 +12535,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         oracleActivitySplatSurvivalRequested,
         oracleActivitySplatSurvivalEffective,
         oracleActivitySplatSurvivalApplicationIdentity: 'survival-only-remove-rejected-low-candidates-v0',
+        oracleActivitySplatColorOpacityRequested,
+        oracleActivitySplatColorOpacityEffective,
+        oracleActivitySplatColorOpacityApplicationIdentity: 'survival-fixed-color-opacity-override-v0',
+        boundarySplatColorOpacityAncestry,
+        boundarySplatColorOpacityImportReceipt: state.boundarySplatColorOpacityImportReceipt || null,
         boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionRequested,
         boundarySplatCompositionEffective,
@@ -12596,6 +12941,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     beginDebugScalarActivityCueImport,
     writeDebugScalarActivityCueImportChunk,
     finishDebugScalarActivityCueImport,
+    beginDebugBoundarySplatColorOpacityImport,
+    writeDebugBoundarySplatColorOpacityImportChunk,
+    finishDebugBoundarySplatColorOpacityImport,
     beginDebugBoundarySidecarOverride,
     writeDebugBoundarySidecarOverrideChunk,
     finishDebugBoundarySidecarOverride,
@@ -12631,6 +12979,11 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         ...state,
         controls: { ...controlsSnapshot },
         scalarActivityReceiver: scalarActivityReceiverDebug(),
+        boundarySplatColorOpacity: {
+          ...boundarySplatColorOpacityUpload,
+          ancestry: boundarySplatColorOpacityAncestryStatus(),
+          importReceipt: state.boundarySplatColorOpacityImportReceipt || null,
+        },
         pyroDynamicDetail: clonePyroDynamicDetail(),
         pyroMaterialRendererCoupling: state.pyroMaterialRendererCoupling ? { ...state.pyroMaterialRendererCoupling } : null,
       };
