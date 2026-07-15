@@ -1,8 +1,8 @@
 # @kaminos/webgpu-inference-kit
 
-Runtime helpers for browser WebGPU inference ports, with route receipts and scheduler profiles.
+A composable browser-native WebGPU inference runtime for model ports that need direct control over execution, scheduling, tensors, buffers, shared devices, and memory residency.
 
-Use this package when you are porting a model to browser WebGPU and you do not want to rebuild the same boring runtime shell again: device acquisition, adapter/feature identity, shader and pipeline caching, buffer upload/readback helpers, stage timing, cooperative yield hooks, scheduler/backpressure metadata, route envelopes, and receipt validation.
+Use this package when you are porting a model to browser WebGPU and you do not want to rebuild the same runtime shell again: device acquisition, shader and pipeline caching, typed tensors, buffer upload and readback, phase programs, background queues, multi-route scheduling, shared resource residency, progress, cancellation, and device-loss recovery boundaries.
 
 Strict route and run identity travels with the runtime so composed pipelines can distinguish live model output from stale, partial, cached, or fallback results.
 
@@ -18,14 +18,17 @@ npm install @kaminos/webgpu-inference-kit
 import {
   WEBGPU_BUFFER_USAGE,
   WEBGPU_HOST_PHASE,
+  createForegroundBudgetGovernor,
   createWebGpuCommandDutyObservationFromReport,
   createWebGpuCommandDutyDescriptor,
   createWebGpuCommandDutyObservation,
   createWebGpuInferenceRuntime,
+  createWebGpuSchedulerApplication,
 } from "@kaminos/webgpu-inference-kit";
 
+const routeId = "sam3.segment-anything.webgpu-local.v0";
 const runtime = await createWebGpuInferenceRuntime({
-  routeId: "sam3.segment-anything.webgpu-local.v0",
+  routeId,
   runtimeLabel: "sam3-browser-webgpu",
   gpu: navigator.gpu,
   adapterOptions: { powerPreference: "high-performance" },
@@ -149,6 +152,7 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `createWebGpuResourceCaches(device)`: cache shader modules and compute pipelines by label plus descriptor so repeated stage invocations do not rebuild obvious resources.
 - `createCooperativeYield(input)`: standardize cooperative browser yields, optionally waiting for `queue.onSubmittedWorkDone()` before yielding to the event loop.
 - `createForegroundBudgetGovernor(input)`: adapt cooperative yield time or named phase chunk sizes from attributed foreground frame pressure while failing closed when route, host, and GPU duty evidence is incomplete or ambiguous.
+- `createWebGpuSchedulerApplication(input)`: bind adaptive decisions to one route and one declared control set, freeze a scheduler for each invocation, and apply only the next exact governor revision after every active invocation ends.
 - `createWebGpuCommandDutyDescriptor(input)` and `createWebGpuCommandDutyObservation(input)`: describe non-preemptible submitted command work, preserve uncapped measured duty, and bind reusable chunk controls to effective route/run/clock identity.
 - `createWebGpuCommandDutyRecorder(input)` and `createWebGpuCommandDutyObservationFromReport(report, input)`: capture runtime-owned submissions automatically, preserve honest host-submit timing authority, and join a complete external measurement set into governor-ready duty observations.
 - `createWebGpuHostPhaseRecorder(input)`: record uncapped, route/run/clock-bound CPU preprocessing, command encoding, queue submission, readback, presentation, and custom host intervals while preserving failed phases and the last trustworthy interval.
@@ -157,6 +161,11 @@ That `profile` is the runtime receipt substrate a route can attach to its output
 - `packUniforms(schema, values)` and `runtime.createUniformBuffer(input)`: pack small scalar/vector parameter blocks into WGSL-compatible uniform buffers and update them without hand-rolling offsets.
 - `runtime.defineComputeKernel(input)` and `runtime.runKernel(kernel, options)`: build bind group layouts, bind groups, pipeline layouts, compute pipelines, command encoders, compute passes, dispatches, submits, and stage profile entries from one kernel descriptor.
 - `runtime.defineProgram(input)` and `runtime.runProgram(program)`: declare a small phase program above single-kernel dispatch, resolving named tensors/uniforms/buffers into kernel bindings, executing kernel phases, running readback phases, preserving staged profile metadata, and applying yield boundaries at phase edges.
+- `runtime.runInvocation(input, fn)`, `runtime.applySchedulerDecision(decision)`, and `runtime.schedulerSnapshot()`: run arbitrary adapter code against an immutable scheduler revision, apply a guarded decision between invocations, and inspect the scheduler that the next invocation will receive.
+- `runtime.createInferenceQueue(options)`: retain an uncapped FIFO of background jobs, run one immutable route invocation at a time, record uncapped progress and terminal outcomes, cancel pending work, and place adaptive decisions between jobs.
+- `createWebGpuInferenceCoordinator(input)`: admit eligible heads from multiple route queues through one uncapped global FIFO, preserving route-local barriers, pending cancellation, and honest non-preemption boundaries.
+- `createWebGpuInferenceSession(input)`: own one browser WebGPU device, backend identity, and coordinator across explicitly registered route runtimes, with device-loss and idle-close lifecycle truth.
+- `createWebGpuResourceResidency(input)`: account for caller-declared GPU allocations once across routes, issue explicit route leases, retain released allocations as eviction candidates, and invalidate the whole ledger on device loss without claiming access to browser-global VRAM.
 - `runtime.runStage(name, fn, metadata)`: wrap major model phases such as ViT encoder blocks, diffusion steps, triplane decode, mask decode, readback, or mesh/splat finalization.
 - `runtime.finishProfile(options)`: emit a `kaminos.webgpu-runtime-profile.v0` profile that downstream routes and schedulers can consume.
 - `defineTensorManifest(input)`: normalize model tensor metadata, dtype sizes, byte lengths, offsets, and shapes for browser-loaded weight bundles.
@@ -254,33 +263,57 @@ Long browser WebGPU routes need to say how they behave under contention. The pac
 - `createWebGpuCommandDutyDescriptor(input)` and `createWebGpuCommandDutyObservation(input)` for portable command-boundary attribution and adaptive chunk-control selection across model ports.
 - `createWebGpuCommandDutyRecorder(input)` and `createWebGpuCommandDutyObservationFromReport(report, input)` for automatic runtime submission capture and strict measured-duty projection.
 - `createForegroundBudgetGovernor(input)` for a long-lived adaptive control loop. The caller supplies scheduler bounds, attribution policy, hysteresis, and an `episodeEpochId`; each observation carries the same epoch plus a unique episode/firing identity. Exact replays cannot vote twice. `forgetEpisode()` and `clearDecisionHistory()` discard cached decisions while preserving replay protection, and `beginEpisodeEpoch(nextId)` is the explicit boundary that reclaims those identities and resets hysteresis while preserving the tuned scheduler.
+- `createWebGpuSchedulerApplication(input)` for guarded application of governor decisions. It rejects foreign routes, skipped/stale/replayed revisions, undeclared controls, bounds mismatches, and every attempt to apply while an invocation is active.
 - `validateSharpBreathingRoomComparisonEvidence(comparison)` and `classifySharpBreathingRoomComparisonEvidence(comparison)` for the current SHARP default-vs-cooperative comparison contract.
 
 This is the layer that should help SHARP, SF3D, Kimodo, image generators, and future long routes become breathable enough to coexist with rendering or other inference work in the same browser GPU process.
 
 ```js
+const scheduler = {
+  mode: "cooperative",
+  yieldMs: 4,
+  waitForSubmittedWorkDone: true,
+  phaseChunkSize: { attentionTiles: 16 },
+};
+const bounds = {
+  yieldMs: { min: 0, max: 16, step: 2 },
+  phaseChunkSize: {
+    attentionTiles: { min: 1, max: 16, stepFactor: 2 },
+  },
+};
+const schedulerApplication = createWebGpuSchedulerApplication({
+  routeId,
+  revision: 0,
+  scheduler,
+  bounds,
+});
+const runtime = await createWebGpuInferenceRuntime({
+  routeId,
+  gpu: navigator.gpu,
+  kernel,
+  schedulerApplication,
+});
 const governor = createForegroundBudgetGovernor({
+  routeId,
   episodeEpochId: crypto.randomUUID(),
   targetFrameGapMs: 50,
   failureWindowsBeforeAdjust: 2,
   successWindowsBeforeRelax: 3,
-  scheduler: {
-    mode: "cooperative",
-    yieldMs: 4,
-    waitForSubmittedWorkDone: true,
-    phaseChunkSize: { attentionTiles: 16 },
-  },
-  bounds: {
-    yieldMs: { min: 0, max: 16, step: 2 },
-    phaseChunkSize: {
-      attentionTiles: { min: 1, max: 16, stepFactor: 2 },
-    },
-  },
+  scheduler,
+  bounds,
   attributionPolicy: {
     minimumCoveredFraction: 0.8,
     maximumSharedFraction: 0.25,
   },
 });
+
+const result = await runtime.runInvocation(
+  { invocationId: crypto.randomUUID() },
+  async invocation => {
+    const tileCount = invocation.getControl("attentionTiles");
+    return runAttentionInTiles({ tileCount, yieldToBrowser: invocation.yieldToBrowser });
+  },
+);
 
 const decision = governor.observe({
   episodeEpochId: governor.snapshot().episodeEpochId,
@@ -292,10 +325,132 @@ const decision = governor.observe({
   executionIdentity: { routeId, runId, clockId },
   commandDutyObservation,
 });
-
-// Apply decision.effectiveScheduler to a subsequent invocation only when
-// your route owns that application boundary.
+if (decision.schedulerChanged) runtime.applySchedulerDecision(decision);
 ```
+
+`runProgram()` opens and closes the same invocation boundary automatically. For a phase with a matching `commandDuty.chunkControl`, its emitted descriptor records the invocation's effective control. The kit does not pretend it can split an already submitted command buffer: custom adapter loops must consume `invocation.getControl(controlId)` when deciding how much work to encode before the next submit.
+
+## Background Inference Queue
+
+Long routes such as SHARP and SF3D are often better product citizens as a continuous background queue than as a modal wait. A runtime-bound queue serializes full invocations while allowing the product to submit many jobs immediately:
+
+```js
+const inferenceQueue = runtime.createInferenceQueue();
+
+const job = inferenceQueue.enqueue({
+  jobId: crypto.randomUUID(),
+  metadata: { sourceImageName: file.name },
+  async execute(invocation) {
+    return runSharpInference({
+      sourceImage,
+      spnFusionOutputItems: invocation.getControl("spnFusionOutputItems"),
+      yieldToBrowser: invocation.yieldToBrowser,
+      onProgress(progress) {
+        invocation.reportProgress(progress);
+      },
+    });
+  },
+});
+
+const completion = await job.completion;
+if (completion.status === "succeeded") showAsset(completion.output);
+```
+
+`job.cancel(reason)` cancels only a pending job. Once its invocation has started, the handle returns `not-cancelled-active`; it never implies that submitted WebGPU work was preempted. `completion` always resolves to a terminal record (`succeeded`, `failed`, or `cancelled-before-start`) with route/job identity, scheduler revision, uncapped progress, and explicit output/failure presence.
+
+Adaptive decisions enter the queue as control barriers:
+
+```js
+const applicationReceipt = await inferenceQueue.scheduleSchedulerDecision(decision);
+```
+
+A queued decision waits for the active invocation to finish and applies before the next pending job. The queue owns an immutable copy of the decision, records applied and failed control attempts, and continues processing after job or decision failure. `snapshot()` exposes every retained job and decision without a hidden cap; `forgetJob(jobId)` is the explicit reclamation boundary, and `drain()` resolves once no job, decision, or active invocation remains.
+
+## Multi-Route Admission
+
+SHARP, SF3D, Kimodo, and other long routes can share one admission coordinator while keeping separate route runtimes and queues:
+
+```js
+const coordinator = createWebGpuInferenceCoordinator();
+const sharpRuntime = await createWebGpuInferenceRuntime({
+  routeId: SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
+  device,
+  adapterName,
+  admissionCoordinator: coordinator,
+});
+const sf3dRuntime = await createWebGpuInferenceRuntime({
+  routeId: SF3D_IMAGE_TO_MESH_ROUTE_ID,
+  device,
+  adapterName,
+  admissionCoordinator: coordinator,
+});
+
+const sharpQueue = sharpRuntime.createInferenceQueue();
+const sf3dQueue = sf3dRuntime.createInferenceQueue();
+```
+
+Each queue offers only its locally eligible head job after scheduler barriers have applied. The coordinator grants those heads in global FIFO order, so one route cannot reserve the browser GPU with its entire backlog. Pending jobs can cancel while awaiting admission; active invocations remain explicitly non-preemptible. Coordinator snapshots retain every admission until `forgetAdmission(sequence)`, and `drain()` resolves only when no admission is active, pending, or scheduled.
+
+## Shared Inference Session
+
+Use a session when several routes should share the same physical WebGPU device and admission coordinator:
+
+```js
+const session = await createWebGpuInferenceSession({
+  sessionId: crypto.randomUUID(),
+  gpu: navigator.gpu,
+  adapterName: "browser-primary-adapter",
+});
+
+const sharp = await session.registerRoute({
+  routeId: SHARP_IMAGE_TO_SPLAT_ROUTE_ID,
+  runtimeOptions: { schedulerApplication: sharpScheduler },
+});
+const sf3d = await session.registerRoute({
+  routeId: SF3D_IMAGE_TO_MESH_ROUTE_ID,
+});
+
+const sharpWeightLease = sharp.acquireResource({
+  resourceId: "dinov2.vitl14.weights.f16",
+  declaredBytes: sharpWeightBuffer.size,
+  kind: "model-weight",
+  metadata: { precision: "f16" },
+  resource: sharpWeightBuffer,
+});
+const sf3dWeightLease = sf3d.acquireResource({
+  resourceId: "dinov2.vitl14.weights.f16",
+  declaredBytes: sharpWeightBuffer.size,
+  kind: "model-weight",
+  metadata: { precision: "f16" },
+});
+
+const sharpJob = sharp.enqueue({
+  jobId: crypto.randomUUID(),
+  execute: invocation => runSharpInference(sharp.runtime, invocation),
+});
+
+await sharpJob.completion;
+sharpWeightLease.release();
+sf3dWeightLease.release();
+
+const candidate = session.residency.snapshot().evictionCandidates.find(
+  resource => resource.resourceId === "dinov2.vitl14.weights.f16",
+);
+if (candidate) {
+  session.residency.evict(candidate.resourceId);
+  sharpWeightBuffer.destroy();
+}
+```
+
+The session retains route registrations until `unregisterRoute(routeId)`. Route handles share one residency runtime and acquire resources under their own route identity. The first acquisition supplies the live WebGPU object; later routes acquiring a matching descriptor receive that identical object from their lease. One global declared-byte allocation then serves every active route lease. Conflicting descriptors or different live objects for the same identity fail loud.
+
+Releasing the last lease makes an allocation eligible for eviction. Borrowed resources remain caller-owned, so the caller explicitly evicts the record and disposes the WebGPU object. A resource acquired with `ownership: "managed"` and `dispose(resource)` instead transfers disposal to the residency runtime; explicit eviction or orderly session close invokes its disposer exactly once. Device loss clears references without claiming a redundant destroy of already-invalid GPU objects.
+
+Residency snapshots expose exact caller-declared bytes, not browser-global VRAM usage. They retain every resource until explicit `forget(resourceId)`, preserve zero-byte route participation after release, and never impose a hidden memory cap. `unregisterRoute()` and `close()` reject active resource leases so ownership cannot disappear silently.
+
+Managed route handles also gate enqueue and scheduler changes after device loss while still exposing each runtime for adapter kernels and buffers. If `device.lost` resolves, the session preserves the opaque browser reason/message, cancels pending jobs, rejects new managed work, invalidates all residency accounting, and leaves active work to complete or fail without claiming preemption. Recovery requires a new session and rebuilt device resources.
+
+`close()` requires every route queue to be idle. It destroys a device requested by the session and leaves a borrowed device untouched. `session.deviceLost` remains the exact asynchronous loss record, including intentional `destroyed` loss after an owned session closes.
 
 ## Receipt And Evidence Layer
 

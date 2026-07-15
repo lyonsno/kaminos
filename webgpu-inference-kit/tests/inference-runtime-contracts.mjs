@@ -131,7 +131,38 @@ assert.equal(runtime.schema, WEBGPU_INFERENCE_RUNTIME_SCHEMA);
 assert.equal(runtime.routeId, 'sam3.segment-anything.webgpu-local.v0');
 assert.equal(runtime.backendIdentity.adapterName, 'Test WebGPU Adapter');
 assert.deepEqual(runtime.backendIdentity.features, ['shader-f16']);
+assert.equal(Object.isFrozen(runtime.backendIdentity), true);
+assert.equal(Object.isFrozen(runtime.backendIdentity.features), true);
+assert.throws(
+  () => { runtime.backendIdentity.adapterName = 'forged-direct-runtime-adapter'; },
+  /read only|readonly|not extensible|Cannot assign/i,
+);
 assert.equal(runtime.hostPhases.runId, 'sam3-run-host-phase-a');
+
+await runtime.runInvocation({ invocationId: 'sam3-static-invocation-a' }, async invocation => {
+  assert.throws(
+    () => { invocation.scheduler.yieldMs = 99; },
+    /read only|readonly|not extensible|Cannot assign/i,
+    'static runtime invocations must expose an immutable scheduler snapshot too',
+  );
+  assert.equal(invocation.scheduler.yieldMs, 0);
+});
+
+const inferenceQueue = runtime.createInferenceQueue({ now });
+const queuedInvocation = inferenceQueue.enqueue({
+  jobId: 'sam3-queued-static-invocation-a',
+  async execute(invocation) {
+    return {
+      routeId: invocation.routeId,
+      schedulerRevision: invocation.schedulerRevision,
+    };
+  },
+});
+assert.deepEqual((await queuedInvocation.completion).output, {
+  routeId: runtime.routeId,
+  schedulerRevision: null,
+});
+assert.equal((await inferenceQueue.drain()).status, 'idle');
 
 const preprocessed = await runtime.runHostPhase(
   WEBGPU_HOST_PHASE.cpuPreprocess,

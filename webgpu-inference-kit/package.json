@@ -1,6 +1,6 @@
 {
   "name": "@kaminos/webgpu-inference-kit",
-  "version": "0.1.15",
+  "version": "0.1.20",
   "private": false,
   "type": "module",
   "description": "A composable browser-native WebGPU inference runtime with cooperative scheduling, tensors, kernels, programs, and route adapters.",
@@ -21,6 +21,6 @@
     ".": "./src/index.js"
   },
   "scripts": {
-    "test": "node tests/receipt-contracts.mjs && node tests/tensor-manifest-contracts.mjs && node tests/gpu-environment-contracts.mjs && node tests/browser-device-context-contracts.mjs && node tests/host-phase-recorder-contracts.mjs && node tests/command-duty-descriptor-contracts.mjs && node tests/command-duty-recorder-contracts.mjs && node tests/inference-runtime-contracts.mjs && node tests/runtime-primitives-contracts.mjs && node tests/phase-program-contracts.mjs && node tests/staged-profile-contracts.mjs && node tests/kernel-profile-contracts.mjs && node tests/runtime-profile-contracts.mjs && node tests/scheduler-backpressure-contracts.mjs && node tests/foreground-budget-governor-contracts.mjs && node tests/scheduler-verification-receipt-contracts.mjs && node tests/sharp-breathing-room-validation-contracts.mjs && node tests/route-schema-contracts.mjs && node tests/route-receipt-helper-contracts.mjs && node tests/route-receipt-consumer-contracts.mjs && node tests/moge-route-contracts.mjs && node tests/sharp-route-contracts.mjs && node tests/kimodo-route-contracts.mjs && node tests/sf3d-route-contracts.mjs && node tests/route-boundary-contracts.mjs"
+    "test": "node tests/receipt-contracts.mjs && node tests/tensor-manifest-contracts.mjs && node tests/gpu-environment-contracts.mjs && node tests/browser-device-context-contracts.mjs && node tests/host-phase-recorder-contracts.mjs && node tests/command-duty-descriptor-contracts.mjs && node tests/command-duty-recorder-contracts.mjs && node tests/inference-runtime-contracts.mjs && node tests/runtime-primitives-contracts.mjs && node tests/phase-program-contracts.mjs && node tests/staged-profile-contracts.mjs && node tests/kernel-profile-contracts.mjs && node tests/runtime-profile-contracts.mjs && node tests/scheduler-backpressure-contracts.mjs && node tests/foreground-budget-governor-contracts.mjs && node tests/scheduler-application-contracts.mjs && node tests/inference-queue-contracts.mjs && node tests/inference-coordinator-contracts.mjs && node tests/resource-residency-contracts.mjs && node tests/inference-session-contracts.mjs && node tests/scheduler-verification-receipt-contracts.mjs && node tests/sharp-breathing-room-validation-contracts.mjs && node tests/route-schema-contracts.mjs && node tests/route-receipt-helper-contracts.mjs && node tests/route-receipt-consumer-contracts.mjs && node tests/moge-route-contracts.mjs && node tests/sharp-route-contracts.mjs && node tests/kimodo-route-contracts.mjs && node tests/sf3d-route-contracts.mjs && node tests/route-boundary-contracts.mjs"
   }
 }

@@ -289,6 +289,7 @@ function makeDecision({
 }) {
   return {
     schema: FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
+    routeId: state.routeId,
     status,
     action,
     target,
@@ -337,8 +338,12 @@ function relaxScheduler(state) {
 }
 
 export function createForegroundBudgetGovernor(input = {}) {
+  if (input.routeId != null && !isNonEmptyString(input.routeId)) {
+    throw new Error('routeId must be a non-empty string when provided');
+  }
   const baseline = validateConfig(input);
   const state = {
+    routeId: input.routeId || null,
     episodeEpochId: input.episodeEpochId,
     targetFrameGapMs: input.targetFrameGapMs,
     failureWindowsBeforeAdjust: input.failureWindowsBeforeAdjust ?? 2,
@@ -627,6 +632,7 @@ export function createForegroundBudgetGovernor(input = {}) {
     snapshot() {
       return {
         schema: FOREGROUND_BUDGET_GOVERNOR_SCHEMA,
+        routeId: state.routeId,
         revision: state.revision,
         scheduler: clone(state.scheduler),
         baseline: clone(state.baseline),
