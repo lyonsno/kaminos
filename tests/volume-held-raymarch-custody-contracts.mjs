@@ -100,6 +100,21 @@ assert.match(
 assert.match(core, /includeFeatureEvidence/, 'frozen capture supports summary-only shader feature evidence');
 assert.match(
   core,
+  /SMOKE_AUTHORITY_DIAGNOSTIC_WGSL[\s\S]*textureLoad\(sourceFeature[\s\S]*feature\.a[\s\S]*sqrt/,
+  'the smoke-authority diagnostic reads the registered shader feature on GPU without a CPU RGBA visualization copy',
+);
+assert.match(
+  core,
+  /SMOKE_AUTHORITY_FEATURE_VISUALIZATION\s*=\s*'smoke-authority-grayscale-v0'[\s\S]*featureVisualizationMode[\s\S]*featureVisualizationReceipt/,
+  'frozen capture emits an explicit smoke-authority visualization receipt',
+);
+assert.match(
+  core,
+  /featureVisualizationReceipt[\s\S]*channelSemantic:\s*'smoke-authority'[\s\S]*encodedRange:\s*\[0,\s*1\][\s\S]*pixelRegistration:/,
+  'the diagnostic receipt binds channel semantics, normalization domain, and pixel registration',
+);
+assert.match(
+  core,
   /readTextureRgba8[\s\S]*includeRgba[\s\S]*summary[\s\S]*rgba:\s*includeRgba\s*\?\s*Array\.from\(rgba\)\s*:\s*null/,
   'summary-only feature capture does not retain a full JS number-array copy',
 );
@@ -111,6 +126,19 @@ assert.match(
 assert.match(viewer, /includePixelEvidence:\s*true/, 'the held viewer requests native render-target evidence');
 assert.match(viewer, /includeFeatureEvidence:\s*true/, 'the held viewer requests summary-only shader-material feature evidence');
 assert.doesNotMatch(viewer, /includeFeatureRgba:\s*true/, 'the held viewer does not allocate raw feature RGBA it never consumes');
+assert.match(viewer, /feature_visualization/, 'the held viewer accepts an explicit feature-visualization route request');
+assert.match(viewer, /featureVisualizationEffective/, 'the held viewer exposes the effective visualization identity');
+assert.match(viewer, /featureVisualizationReceipt/, 'the held viewer exposes the exact visualization receipt');
+assert.match(
+  viewer,
+  /function mountCanvas[\s\S]*getElementById\('viewport'\)[\s\S]*viewport\.appendChild\(canvas\)/,
+  'the held canvas remains under the renderer viewport whose extent drives GPU target sizing',
+);
+assert.match(
+  viewer,
+  /renderGeometryReceipt[\s\S]*renderAspect[\s\S]*displayAspect[\s\S]*held-render-geometry-mismatch/,
+  'the held viewer rejects CSS-stretched render targets before treating a diagnostic as spatial evidence',
+);
 assert.match(
   viewer,
   /fluidChannelStatistics\?\.smokeDensity[\s\S]*nonZeroCount[\s\S]*held-import-smoke-density-blank/,

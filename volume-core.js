@@ -46,6 +46,7 @@ const SCALAR_ACTIVITY_RECEIVER_HOOK_IDENTITY = 'scalar-activity-receiver-hook-co
 const REACTION_FRONT_STAGE_IDENTITY = 'reaction-front-stage-fields-v0';
 const REACTION_FRONT_ATLAS_SCHEMA = 'kaminos.volume.reaction-front-atlas.v0';
 const BROWSER_RESIDUAL_FEATURE_AUTHORITY = 'shader-material-authority-residual-feature-v0';
+const SMOKE_AUTHORITY_FEATURE_VISUALIZATION = 'smoke-authority-grayscale-v0';
 const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const SELECTIVE_HEAD_LIVE_ROLES = new Set(['off', 'truthHigh', 'lowPhaseAligned', 'selectiveFullResidual']);
@@ -4996,6 +4997,36 @@ fn fs(in: VertexOut) -> @location(0) vec4<f32> {
 }
 `;
 
+const SMOKE_AUTHORITY_DIAGNOSTIC_WGSL = `
+struct VertexOut {
+  @builtin(position) position: vec4<f32>,
+};
+
+@vertex
+fn vs(@builtin(vertex_index) vertexIndex: u32) -> VertexOut {
+  var positions = array<vec2<f32>, 3>(
+    vec2<f32>(-1.0, -1.0),
+    vec2<f32>(3.0, -1.0),
+    vec2<f32>(-1.0, 3.0)
+  );
+  var out: VertexOut;
+  out.position = vec4<f32>(positions[vertexIndex], 0.0, 1.0);
+  return out;
+}
+
+@group(0) @binding(0) var sourceFeature: texture_2d<f32>;
+
+@fragment
+fn fs(in: VertexOut) -> @location(0) vec4<f32> {
+  let dimensions = textureDimensions(sourceFeature);
+  let pixel = min(vec2<u32>(in.position.xy), dimensions - vec2<u32>(1u));
+  let feature = textureLoad(sourceFeature, vec2<i32>(pixel), 0);
+  let smoke = sqrt(clamp(feature.a, 0.0, 1.0));
+  let heldClear = vec3<f32>(4.0 / 255.0, 5.0 / 255.0, 6.0 / 255.0);
+  return vec4<f32>(mix(heldClear, vec3<f32>(1.0), smoke), 1.0);
+}
+`;
+
 const BOUNDARY_SPLAT_WGSL = `
 override GRID: u32 = 64u;
 const SLOTS_PER_CELL: u32 = 4u;
@@ -5689,6 +5720,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
   let readbackPipeline = null;
   let browserResidualPipeline = null;
   let browserResidualSourcePipeline = null;
+  let smokeAuthorityDiagnosticPipeline = null;
+  let smokeAuthorityDiagnosticBindGroupLayout = null;
+  let smokeAuthorityDiagnosticPipelineLayout = null;
+  let smokeAuthorityDiagnosticShader = null;
   let browserResidualBindGroupLayout = null;
   let browserResidualPipelineLayout = null;
   let browserResidualShader = null;
@@ -6873,6 +6908,13 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       fragment: { module: browserResidualShader, entryPoint: 'fs', targets: [{ format }] },
       primitive: { topology: 'triangle-list' },
     });
+    smokeAuthorityDiagnosticPipeline = device.createRenderPipeline({
+      label: `kaminos held smoke-authority diagnostic ${gridSize}^3`,
+      layout: smokeAuthorityDiagnosticPipelineLayout,
+      vertex: { module: smokeAuthorityDiagnosticShader, entryPoint: 'vs' },
+      fragment: { module: smokeAuthorityDiagnosticShader, entryPoint: 'fs', targets: [{ format }] },
+      primitive: { topology: 'triangle-list' },
+    });
     computePipeline = device.createComputePipeline({
       label: `kaminos first fluid sim compute pipeline ${gridSize}^3`,
       layout: pipelineLayout,
@@ -7151,6 +7193,18 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         .join('\n');
       throw new Error(`Browser residual WGSL compilation failed:\n${detail}`);
     }
+    smokeAuthorityDiagnosticShader = device.createShaderModule({
+      label: 'kaminos held smoke-authority diagnostic wgsl',
+      code: SMOKE_AUTHORITY_DIAGNOSTIC_WGSL,
+    });
+    const smokeAuthorityDiagnosticCompilationInfo = await smokeAuthorityDiagnosticShader.getCompilationInfo();
+    const smokeAuthorityDiagnosticCompilationErrors = smokeAuthorityDiagnosticCompilationInfo.messages.filter(message => message.type === 'error');
+    if (smokeAuthorityDiagnosticCompilationErrors.length > 0) {
+      const detail = smokeAuthorityDiagnosticCompilationErrors
+        .map(message => `${message.lineNum}:${message.linePos} ${message.message}`)
+        .join('\n');
+      throw new Error(`Smoke-authority diagnostic WGSL compilation failed:\n${detail}`);
+    }
     boundarySplatShader = device.createShaderModule({ label: `kaminos ${BOUNDARY_SPLAT_RENDERER_IDENTITY} wgsl`, code: BOUNDARY_SPLAT_WGSL });
     const boundarySplatCompilationInfo = await boundarySplatShader.getCompilationInfo();
     const boundarySplatCompilationErrors = boundarySplatCompilationInfo.messages.filter(message => message.type === 'error');
@@ -7357,6 +7411,14 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         },
       ],
     });
+    smokeAuthorityDiagnosticBindGroupLayout = device.createBindGroupLayout({
+      label: 'kaminos held smoke-authority diagnostic bind group layout',
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.FRAGMENT,
+        texture: { sampleType: 'float' },
+      }],
+    });
     pipelineLayout = device.createPipelineLayout({
       label: 'kaminos fluid pipeline layout',
       bindGroupLayouts: [bindGroupLayout],
@@ -7364,6 +7426,10 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     browserResidualPipelineLayout = device.createPipelineLayout({
       label: 'kaminos browser direct residual pipeline layout',
       bindGroupLayouts: [browserResidualBindGroupLayout],
+    });
+    smokeAuthorityDiagnosticPipelineLayout = device.createPipelineLayout({
+      label: 'kaminos held smoke-authority diagnostic pipeline layout',
+      bindGroupLayouts: [smokeAuthorityDiagnosticBindGroupLayout],
     });
     majorantPipelineLayout = device.createPipelineLayout({
       label: 'kaminos coarse majorant pipeline layout',
@@ -9118,6 +9184,32 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     pass.draw(3);
     pass.end();
     state.volumeReconstructionStyle = 'webgpu-direct-residual';
+    return true;
+  }
+
+  function encodeSmokeAuthorityDiagnosticPass(encoder, view) {
+    if (!smokeAuthorityDiagnosticPipeline || !smokeAuthorityDiagnosticBindGroupLayout || !browserResidualFeatureTexture) {
+      return false;
+    }
+    const bindGroup = device.createBindGroup({
+      label: 'kaminos held smoke-authority diagnostic bind group',
+      layout: smokeAuthorityDiagnosticBindGroupLayout,
+      entries: [{ binding: 0, resource: browserResidualFeatureTexture.createView() }],
+    });
+    const pass = encoder.beginRenderPass({
+      label: 'kaminos held smoke-authority diagnostic pass',
+      colorAttachments: [{
+        view,
+        clearValue: { r: 4 / 255, g: 5 / 255, b: 6 / 255, a: 1 },
+        loadOp: 'clear',
+        storeOp: 'store',
+      }],
+    });
+    pass.setPipeline(smokeAuthorityDiagnosticPipeline);
+    pass.setBindGroup(0, bindGroup);
+    pass.draw(3);
+    pass.end();
+    state.volumeReconstructionStyle = 'held-smoke-authority-grayscale-diagnostic-v0';
     return true;
   }
 
@@ -12348,6 +12440,15 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       && fullFieldImportSessionId === state.fullFieldImportReceipt.sessionId
     );
     if ((!state.active && !importedFieldCustody) || !device) return { ok: false, reason: 'inactive', ...state };
+    const featureVisualizationRequested = String(options.featureVisualizationMode || 'off');
+    if (featureVisualizationRequested !== 'off' && featureVisualizationRequested !== SMOKE_AUTHORITY_FEATURE_VISUALIZATION) {
+      return {
+        ok: false,
+        reason: 'unsupported-feature-visualization',
+        featureVisualizationRequested,
+        featureVisualizationEffective: 'unavailable',
+      };
+    }
     const compositionExplicit = options.boundarySplatComposition != null;
     const boundarySplatCompositionRequestedRaw = options.boundarySplatComposition ?? 'splat-only-v0';
     const compositionRequest = selectiveHeadLiveRenderCompositionRequest(boundarySplatCompositionRequestedRaw);
@@ -12405,6 +12506,8 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         : 'diagnostic-raymarch-full-selected-field-authority-v0';
       let raymarchFireAuthority = explicitCompositionRoute ? compositionDefinition.raymarchFireAuthority : 1;
       let featureCaptureSourcePassApplied = false;
+      let featureVisualizationApplied = false;
+      let featureVisualizationReceipt = null;
       let renderTargetPixelEvidence = null;
       let sourcePassEncodeMs = null;
       let residualPassEncodeMs = null;
@@ -12483,11 +12586,42 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         recordBrowserResidualCost({ applied: false });
       }
       const includeFeatureEvidence = options.includeFeatureEvidence === true;
-      if ((options.includeFeatureRgba === true || includeFeatureEvidence) && !featureCaptureSourcePassApplied) {
+      const featureVisualizationEnabled = featureVisualizationRequested === SMOKE_AUTHORITY_FEATURE_VISUALIZATION;
+      if ((options.includeFeatureRgba === true || includeFeatureEvidence || featureVisualizationEnabled) && !featureCaptureSourcePassApplied) {
         ensureFrameTexture();
         ensureBrowserResidualFeatureTexture();
         encodeBrowserResidualSourcePass(encoder, frameTexture.createView(), browserResidualFeatureTexture.createView());
         featureCaptureSourcePassApplied = true;
+      }
+      if (featureVisualizationEnabled) {
+        featureVisualizationApplied = encodeSmokeAuthorityDiagnosticPass(encoder, currentTexture.createView());
+        if (!featureVisualizationApplied) {
+          return {
+            ok: false,
+            reason: 'feature-visualization-unavailable',
+            featureVisualizationRequested,
+            featureVisualizationEffective: 'unavailable',
+          };
+        }
+        featureVisualizationReceipt = {
+          identity: 'held-smoke-authority-feature-visualization-receipt-v0',
+          requested: featureVisualizationRequested,
+          effective: SMOKE_AUTHORITY_FEATURE_VISUALIZATION,
+          featureAuthority: BROWSER_RESIDUAL_FEATURE_AUTHORITY,
+          sourcePassIdentity: 'browser-residual-shader-material-authority-source-pass-v0',
+          sourceTexture: 'browserResidualFeatureTexture',
+          sourceChannel: 'a',
+          channelSemantic: 'smoke-authority',
+          encodedRange: [0, 1],
+          transferIdentity: 'sqrt-unorm-smoke-authority-over-held-clear-v0',
+          pixelRegistration: 'same-extent-texture-load-fragment-coordinate-v0',
+          sourceWidth: state.width,
+          sourceHeight: state.height,
+          outputWidth: state.width,
+          outputHeight: state.height,
+          uncroppedOutput: true,
+          applied: true,
+        };
       }
       let renderTargetReadback = null;
       let renderTargetBytesPerRow = null;
@@ -12531,7 +12665,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
           renderTargetReadback.destroy();
         }
       }
-      const featureCaptureRequested = options.includeFeatureRgba === true || includeFeatureEvidence;
+      const featureCaptureRequested = options.includeFeatureRgba === true || includeFeatureEvidence || featureVisualizationEnabled;
       const featureCapture = featureCaptureRequested && featureCaptureSourcePassApplied && browserResidualFeatureTexture
         ? await readTextureRgba8(
           browserResidualFeatureTexture,
@@ -12555,7 +12689,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return {
         ok: true,
         sampleAuthority: 'render-only-frozen-sim-state',
-        imageAuthority: 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
+        imageAuthority: featureVisualizationApplied
+          ? 'gpu-registered-smoke-authority-diagnostic-after-render-only-frozen-sim-state'
+          : 'cdp-canvas-clip-capture-after-render-only-frozen-sim-state',
         controlOverrides,
         boundarySplatCompositionRequestedRaw,
         boundarySplatCompositionRequested,
@@ -12582,6 +12718,9 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
         } : null,
         featureCaptureSmokeAuthority,
         featureCaptureSourcePassApplied,
+        featureVisualizationRequested,
+        featureVisualizationEffective: featureVisualizationApplied ? SMOKE_AUTHORITY_FEATURE_VISUALIZATION : 'off',
+        featureVisualizationReceipt,
         renderBindingIdentity: {
           identity: importedFieldCustody
             ? 'checksum-verified-imported-fluid-raymarch-binding-v0'

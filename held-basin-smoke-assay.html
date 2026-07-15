@@ -130,10 +130,19 @@
     const DENSE_D_COMPOSITION = 'smoke-raymarch-only-v0';
     const DENSE_COMPARISON_PROFILE = 'dense-splat-competence-v0';
     const DENSE_COMPETENCE_EXPERIMENT = 'dense-splat-competence-floor-v0';
+    const SMOKE_AUTHORITY_EXPERIMENT = 'held-smoke-authority-visibility-v0';
+    const SMOKE_AUTHORITY_FEATURE_VISUALIZATION = 'smoke-authority-grayscale-v0';
     const params = new URLSearchParams(location.search);
-    const comparisonMode = params.get('comparison') === 'competence' ? 'competence' : 'assay';
-    const dComposition = comparisonMode === 'competence' ? DENSE_D_COMPOSITION : HELD_COMPOSITION;
-    const dComparisonProfile = comparisonMode === 'competence' ? DENSE_COMPARISON_PROFILE : null;
+    const comparisonRequested = params.get('comparison');
+    const comparisonMode = comparisonRequested === 'authority'
+      ? 'authority'
+      : comparisonRequested === 'competence' ? 'competence' : 'assay';
+    const denseComparison = comparisonMode !== 'assay';
+    const dComposition = denseComparison ? DENSE_D_COMPOSITION : HELD_COMPOSITION;
+    const dComparisonProfile = denseComparison ? DENSE_COMPARISON_PROFILE : null;
+    const featureVisualizationRequested = comparisonMode === 'authority'
+      ? SMOKE_AUTHORITY_FEATURE_VISUALIZATION
+      : 'off';
     const assayManifest = params.get('assay_manifest') || './artifacts/held-basin-smoke-assay-0715/held-smoke-assay-source.json';
     const assayManifestSha256Requested = (params.get('assay_manifest_sha256') || 'f0aefbc402a7176b571631fdaece637a57125c927b1ac682d73f55cbf8093dc8').toLowerCase();
     const mountRequested = params.get('held_manifest') || './artifacts/operator-live-basin-0715/viewer-manifest.json';
@@ -144,30 +153,38 @@
     const sourceReceipt = document.getElementById('source-receipt');
     const status = document.getElementById('status');
     const failure = document.getElementById('failure');
-    if (comparisonMode === 'competence') {
+    if (denseComparison) {
       document.getElementById('cockpit-title').textContent = 'Held smoke competence U/B/D';
       document.getElementById('a-label').textContent = 'U Dense occupied-bin lift';
       document.getElementById('b-label').textContent = 'B Learned selector';
       document.getElementById('d-label').textContent = 'D Raymarch smoke only';
       document.getElementById('open-route').hidden = true;
     }
+    if (comparisonMode === 'authority') {
+      document.getElementById('cockpit-title').textContent = 'Held smoke authority U/B/F';
+      document.getElementById('d-label').textContent = 'F Shader smoke authority';
+    }
     const requested = {
       a: { requestedRoute: HELD_SPLAT_ROUTE, manifest: assayManifest, productIndex: 0 },
       b: { requestedRoute: HELD_SPLAT_ROUTE, manifest: assayManifest, productIndex: 1 },
-      d: { requestedRoute: HELD_VIEWER_ROUTE, composition: dComposition, comparisonProfile: dComparisonProfile },
+      d: { requestedRoute: HELD_VIEWER_ROUTE, composition: dComposition, comparisonProfile: dComparisonProfile, featureVisualization: featureVisualizationRequested },
     };
     const state = {
       schema: 'kaminos.held-smoke-assay-cockpit.v0',
       status: 'initializing',
       comparisonMode,
-      experimentIdentity: comparisonMode === 'competence' ? DENSE_COMPETENCE_EXPERIMENT : null,
+      experimentIdentity: comparisonMode === 'authority'
+        ? SMOKE_AUTHORITY_EXPERIMENT
+        : comparisonMode === 'competence' ? DENSE_COMPETENCE_EXPERIMENT : null,
       failurePhase: null,
       error: null,
       requested,
       source: {
-        comparisonAuthority: comparisonMode === 'competence'
-          ? 'dense-competence-independent-viewports-v0'
-          : 'same-source-camera-independent-viewports-v0',
+        comparisonAuthority: comparisonMode === 'authority'
+          ? 'smoke-authority-registered-viewports-v0'
+          : comparisonMode === 'competence'
+            ? 'dense-competence-independent-viewports-v0'
+            : 'same-source-camera-independent-viewports-v0',
         mountRequested,
         mountEffective: null,
         mountRegistered: false,
@@ -183,7 +200,7 @@
       children: {
         a: { status: 'loading', requestedRoute: HELD_SPLAT_ROUTE, effectiveRoute: null, requestedProductIndex: 0, effectiveProductIndex: null, frameCount: 0, error: null },
         b: { status: 'loading', requestedRoute: HELD_SPLAT_ROUTE, effectiveRoute: null, requestedProductIndex: 1, effectiveProductIndex: null, frameCount: 0, error: null },
-        d: { status: 'loading', requestedRoute: HELD_VIEWER_ROUTE, effectiveRoute: null, compositionRequested: dComposition, compositionEffective: null, comparisonProfileRequested: dComparisonProfile, comparisonProfileEffective: null, manifestSha256Effective: null, fluidChannelStatistics: null, renderBindingIdentity: null, renderTargetPixelEvidence: null, featureCaptureSmokeAuthority: null, error: null },
+        d: { status: 'loading', requestedRoute: HELD_VIEWER_ROUTE, effectiveRoute: null, compositionRequested: dComposition, compositionEffective: null, comparisonProfileRequested: dComparisonProfile, comparisonProfileEffective: null, featureVisualizationRequested, featureVisualizationEffective: null, featureVisualizationReceipt: null, renderGeometryReceipt: null, manifestSha256Effective: null, fluidChannelStatistics: null, renderBindingIdentity: null, renderTargetPixelEvidence: null, featureCaptureSmokeAuthority: null, error: null },
       },
       lastObservedAt: null,
     };
@@ -246,6 +263,10 @@
             compositionEffective: d.compositionEffective,
             comparisonProfileRequested: d.comparisonProfileRequested,
             comparisonProfileEffective: d.comparisonProfileEffective,
+            featureVisualizationRequested: d.featureVisualizationRequested,
+            featureVisualizationEffective: d.featureVisualizationEffective,
+            featureVisualizationReceipt: d.featureVisualizationReceipt,
+            renderGeometryReceipt: d.renderGeometryReceipt,
             manifestSha256Effective: d.manifestSha256Effective,
             fluidChannelStatistics: d.fluidChannelStatistics,
             renderBindingIdentity: d.renderBindingIdentity,
@@ -258,6 +279,16 @@
         if (state.children.a.status === 'failed') throw new Error(`A child failed: ${state.children.a.error || 'unknown'}`);
         if (state.children.b.status === 'failed') throw new Error(`B child failed: ${state.children.b.error || 'unknown'}`);
         if (state.children.d.status === 'failed') throw new Error(`D child failed: ${state.children.d.error || 'unknown'}`);
+        const featureVisualizationReceipt = state.children.d.featureVisualizationReceipt;
+        const featureVisualizationAdmitted = featureVisualizationRequested === 'off'
+          || (featureVisualizationReceipt?.identity === 'held-smoke-authority-feature-visualization-receipt-v0'
+            && featureVisualizationReceipt.channelSemantic === 'smoke-authority'
+            && featureVisualizationReceipt.sourceChannel === 'a'
+            && featureVisualizationReceipt.encodedRange?.[0] === 0
+            && featureVisualizationReceipt.encodedRange?.[1] === 1
+            && featureVisualizationReceipt.pixelRegistration === 'same-extent-texture-load-fragment-coordinate-v0'
+            && featureVisualizationReceipt.uncroppedOutput === true
+            && featureVisualizationReceipt.applied === true);
         const running = state.children.a.status === 'running'
           && state.children.a.frameCount > 0
           && state.children.a.effectiveRoute === HELD_SPLAT_ROUTE
@@ -270,6 +301,10 @@
           && state.children.d.requestedRoute === HELD_VIEWER_ROUTE
           && state.children.d.compositionEffective === dComposition
           && state.children.d.comparisonProfileEffective === dComparisonProfile
+          && state.children.d.featureVisualizationRequested === featureVisualizationRequested
+          && state.children.d.featureVisualizationEffective === featureVisualizationRequested
+          && featureVisualizationAdmitted
+          && state.children.d.renderGeometryReceipt?.aspectMatched === true
           && state.children.d.manifestSha256Effective === manifestSha256Requested
           && state.children.d.fluidChannelStatistics?.smokeDensity?.nonZeroCount > 0
           && state.children.d.renderBindingIdentity?.fluidSha256 === state.source.fluidSha256Requested
@@ -314,7 +349,7 @@
         if (assay.schema !== 'kaminos.held-smoke-assay-source.v0' || assay.status !== 'passed') {
           throw new Error(`assay-manifest-status-mismatch:${assay.schema || 'missing'}/${assay.status || 'missing'}`);
         }
-        if (comparisonMode === 'competence') {
+        if (denseComparison) {
           if (assay.experiment?.identity !== DENSE_COMPETENCE_EXPERIMENT
             || assay.products?.[0]?.routeCell !== 'U'
             || assay.products?.[1]?.routeCell !== 'B') {
@@ -353,6 +388,7 @@
         dUrl.searchParams.set('manifest_sha256', manifestSha256Requested);
         dUrl.searchParams.set('composition', dComposition);
         if (dComparisonProfile) dUrl.searchParams.set('comparison_profile', dComparisonProfile);
+        dUrl.searchParams.set('feature_visualization', featureVisualizationRequested);
         dUrl.searchParams.set('embed', '1');
         aFrame.src = splatUrl(0).href;
         bFrame.src = splatUrl(1).href;

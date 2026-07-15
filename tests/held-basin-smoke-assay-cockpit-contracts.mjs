@@ -12,7 +12,7 @@ assert.match(cockpit, /window\.__kaminosHeldSmokeAssay/, 'cockpit exposes a live
 assert.match(cockpit, /webgpu-held-smoke-assay-v0/, 'cockpit requests the exact A\/B raster route');
 assert.match(cockpit, /smoke-raymarch-under-splats-v0/, 'D requests raymarched smoke under splat flame');
 assert.match(cockpit, /DENSE_D_COMPOSITION\s*=\s*'smoke-raymarch-only-v0'/, 'competence D names a smoke-only raymarch authority');
-assert.match(cockpit, /comparisonMode\s*===\s*'competence'[\s\S]*DENSE_D_COMPOSITION/, 'competence mode selects smoke-only D instead of composited splat flame');
+assert.match(cockpit, /denseComparison[\s\S]*DENSE_D_COMPOSITION/, 'competence and authority modes select smoke-only D instead of composited splat flame');
 assert.match(cockpit, /DENSE_COMPARISON_PROFILE\s*=\s*'dense-splat-competence-v0'/, 'competence mode names its optical-transfer calibration profile');
 assert.match(cockpit, /searchParams\.set\('comparison_profile',\s*dComparisonProfile\)/, 'D requests the exact competence transfer profile');
 assert.match(cockpit, /comparisonProfileEffective\s*===\s*dComparisonProfile/, 'cockpit refuses a substituted or missing D transfer profile');
@@ -26,13 +26,19 @@ assert.match(cockpit, /manifestSha256Effective/, 'cockpit records D effective so
 assert.match(cockpit, /assayManifestSha256Effective/, 'cockpit records A/B effective manifest identity');
 assert.match(cockpit, /same-source-camera-independent-viewports-v0/, 'cockpit states the exact comparison framing authority');
 assert.match(cockpit, /dense-splat-competence-floor-v0/, 'cockpit exposes the dense competence experiment identity');
+assert.match(cockpit, /held-smoke-authority-visibility-v0/, 'cockpit exposes the registered smoke-authority visibility experiment');
 assert.match(cockpit, /dense-competence-independent-viewports-v0/, 'competence mode carries its narrower comparison authority');
+assert.match(cockpit, /smoke-authority-registered-viewports-v0/, 'authority mode names its exact comparison framing authority');
 assert.match(cockpit, /U Dense occupied-bin lift/, 'competence mode visibly identifies the dense upper-bound route');
+assert.match(cockpit, /F Shader smoke authority/, 'authority mode visibly identifies the diagnostic rather than presenting it as beauty D');
 assert.match(cockpit, /comparisonMode/, 'cockpit records whether it is rendering the original assay or competence mode');
 assert.match(cockpit, /fluidChannelStatistics/, 'cockpit propagates checksum-verified held smoke material statistics');
 assert.match(cockpit, /renderBindingIdentity/, 'cockpit propagates the exact fluid binding consumed by D');
 assert.match(cockpit, /renderTargetPixelEvidence/, 'cockpit propagates native post-submit D target evidence');
 assert.match(cockpit, /featureCaptureSmokeAuthority/, 'cockpit propagates shader-sampled D smoke authority');
+assert.match(cockpit, /featureVisualizationReceipt/, 'cockpit propagates the registered smoke-authority visualization receipt');
+assert.match(cockpit, /renderGeometryReceipt/, 'cockpit propagates effective D render geometry rather than trusting CSS presentation');
+assert.match(cockpit, /searchParams\.set\('feature_visualization',\s*featureVisualizationRequested\)/, 'authority mode explicitly routes the requested diagnostic');
 assert.match(cockpit, /assay\.source\?\.manifestIdentity/, 'cockpit proves A/B and D share the same held source identity');
 assert.match(cockpit, /id="a-frame"/, 'Route A gets an independent centered viewport');
 assert.match(cockpit, /id="b-frame"/, 'Route B gets an independent centered viewport');
@@ -60,6 +66,8 @@ assert.match(witness, /fluidChannelStatistics[\s\S]*smokeDensity[\s\S]*nonZeroCo
 assert.match(witness, /renderBindingIdentity[\s\S]*fluidSha256/, 'witness requires D to consume the checksum-bound imported buffer');
 assert.match(witness, /renderTargetPixelEvidence[\s\S]*materialEvidence/, 'witness requires a distributed native D target signal');
 assert.match(witness, /featureCaptureSmokeAuthority[\s\S]*materialEvidence/, 'witness requires distributed direct shader smoke authority');
+assert.match(witness, /featureVisualizationReceipt[\s\S]*channelSemantic[\s\S]*encodedRange[\s\S]*pixelRegistration/, 'witness rejects substituted smoke-authority visualization evidence');
+assert.match(witness, /renderGeometryReceipt[\s\S]*aspectMatched/, 'witness rejects a diagnostic stretched across a different display aspect');
 assert.doesNotMatch(witness, /panelEvidence\.dSmokeProbe\.edgeMean\s*>/, 'smooth smoke cannot fail solely because it lacks a hard screenshot edge');
 assert.match(witness, /mountRegistered/, 'witness rejects an unregistered held-source mount');
 assert.match(witness, /failurePhase/, 'pre-capture failures retain their phase');

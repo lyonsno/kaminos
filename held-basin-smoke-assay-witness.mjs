@@ -13,13 +13,20 @@ const D_ROUTE = 'kaminos.volume.held-field-viewer.v0';
 const D_COMPOSITION = 'smoke-raymarch-under-splats-v0';
 const DENSE_D_COMPOSITION = 'smoke-raymarch-only-v0';
 const DENSE_COMPARISON_PROFILE = 'dense-splat-competence-v0';
+const SMOKE_AUTHORITY_FEATURE_VISUALIZATION = 'smoke-authority-grayscale-v0';
 const args = parseArgs(process.argv.slice(2));
 const requestedUrl = requireIdentity(args.get('--url'), '--url');
 const url = new URL(requestedUrl);
-const competenceMode = url.searchParams.get('comparison') === 'competence';
-const expectedDComposition = competenceMode ? DENSE_D_COMPOSITION : D_COMPOSITION;
-const expectedDComparisonProfile = competenceMode ? DENSE_COMPARISON_PROFILE : null;
-const requestedRoute = competenceMode ? 'held-smoke-u-b-d-competence-cockpit-v0' : 'held-smoke-a-b-c-d-cockpit-v0';
+const comparisonRequested = url.searchParams.get('comparison');
+const authorityMode = comparisonRequested === 'authority';
+const competenceMode = comparisonRequested === 'competence';
+const denseComparison = authorityMode || competenceMode;
+const expectedDComposition = denseComparison ? DENSE_D_COMPOSITION : D_COMPOSITION;
+const expectedDComparisonProfile = denseComparison ? DENSE_COMPARISON_PROFILE : null;
+const expectedFeatureVisualization = authorityMode ? SMOKE_AUTHORITY_FEATURE_VISUALIZATION : 'off';
+const requestedRoute = authorityMode
+  ? 'held-smoke-u-b-f-authority-cockpit-v0'
+  : competenceMode ? 'held-smoke-u-b-d-competence-cockpit-v0' : 'held-smoke-a-b-c-d-cockpit-v0';
 const expectedManifestSha256 = requireSha256(url.searchParams.get('manifest_sha256'), 'manifest_sha256');
 const expectedAssayManifestSha256 = requireSha256(url.searchParams.get('assay_manifest_sha256'), 'assay_manifest_sha256');
 const outDir = resolve(String(args.get('--out-dir') || '/tmp/kaminos-held-smoke-assay-witness'));
@@ -72,7 +79,7 @@ try {
     captureBeyondViewport: false,
   });
   const bytes = Buffer.from(screenshot.data, 'base64');
-  const imagePath = join(outDir, competenceMode ? 'held-smoke-competence.png' : 'held-smoke-assay.png');
+  const imagePath = join(outDir, authorityMode ? 'held-smoke-authority.png' : competenceMode ? 'held-smoke-competence.png' : 'held-smoke-assay.png');
   writeFileSync(imagePath, bytes);
   const pixels = inspectPng(bytes);
   assert.ok(pixels.nonUniformPixelCount > Math.max(256, pixels.pixelCount * 0.01), 'blank or uniform cockpit capture');
@@ -122,11 +129,14 @@ try {
       rejectsChecksumValidButSmokeEmptyImport: true,
       rejectsImportedFluidBindingDrift: true,
       rejectsSceneOnlyPixelsWithoutShaderSmokeAuthority: true,
+      rejectsSubstitutedFeatureVisualization: true,
       preservesFailurePhaseBeforePrimaryOutput: true,
     },
-    claimBoundary: competenceMode
-      ? 'dense-splat-competence-floor-v0: static same-source U dense lift versus B learned selector and D raymarch. This tests the splat representation ceiling before sparsification; it does not prove neural temporal smoke decode.'
-      : 'Static same-source representation comparison. A/B are smoke-only splat products; D is raymarched smoke under splat flame. C remains open. This does not prove neural temporal smoke decode.',
+    claimBoundary: authorityMode
+      ? 'held-smoke-authority-visibility-v0: static same-source U/B smoke products versus F, the exact registered raymarch smoke-authority feature. This tests spatial coherence before beauty illumination; it does not establish raymarched smoke appearance parity.'
+      : competenceMode
+        ? 'dense-splat-competence-floor-v0: static same-source U dense lift versus B learned selector and D raymarch. This tests the splat representation ceiling before sparsification; it does not prove neural temporal smoke decode.'
+        : 'Static same-source representation comparison. A/B are smoke-only splat products; D is raymarched smoke under splat flame. C remains open. This does not prove neural temporal smoke decode.',
   };
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
@@ -329,8 +339,11 @@ function validateState(state) {
   assert.equal(state.status, 'running');
   assert.equal(state.failurePhase, null);
   assert.equal(state.error, null);
-  assert.equal(state.comparisonMode, competenceMode ? 'competence' : 'assay');
-  assert.equal(state.experimentIdentity, competenceMode ? 'dense-splat-competence-floor-v0' : null);
+  assert.equal(state.comparisonMode, authorityMode ? 'authority' : competenceMode ? 'competence' : 'assay');
+  assert.equal(
+    state.experimentIdentity,
+    authorityMode ? 'held-smoke-authority-visibility-v0' : competenceMode ? 'dense-splat-competence-floor-v0' : null,
+  );
   assert.equal(state.source.mountRegistered, true, 'held source mount was not registered');
   assert.equal(state.source.manifestSha256Requested, expectedManifestSha256);
   assert.equal(state.source.manifestSha256Effective, expectedManifestSha256);
@@ -338,7 +351,9 @@ function validateState(state) {
   assert.equal(state.source.assayManifestSha256Effective, expectedAssayManifestSha256);
   assert.equal(
     state.source.comparisonAuthority,
-    competenceMode ? 'dense-competence-independent-viewports-v0' : 'same-source-camera-independent-viewports-v0',
+    authorityMode
+      ? 'smoke-authority-registered-viewports-v0'
+      : competenceMode ? 'dense-competence-independent-viewports-v0' : 'same-source-camera-independent-viewports-v0',
   );
   assert.equal(state.children.a.status, 'running', 'A child route is partial');
   assert.equal(state.children.a.requestedRoute, AB_ROUTE);
@@ -359,6 +374,14 @@ function validateState(state) {
   assert.equal(state.children.d.compositionEffective, expectedDComposition);
   assert.equal(state.children.d.comparisonProfileRequested, expectedDComparisonProfile);
   assert.equal(state.children.d.comparisonProfileEffective, expectedDComparisonProfile);
+  assert.equal(state.children.d.featureVisualizationRequested, expectedFeatureVisualization);
+  assert.equal(state.children.d.featureVisualizationEffective, expectedFeatureVisualization);
+  assert.equal(
+    state.children.d.renderGeometryReceipt?.aspectMatched,
+    true,
+    `D render geometry was CSS-stretched: ${JSON.stringify(state.children.d.renderGeometryReceipt || null)}`,
+  );
+  assert.ok(state.children.d.renderGeometryReceipt?.aspectRelativeError <= 0.01);
   assert.equal(state.children.d.manifestSha256Effective, expectedManifestSha256);
   const smokeDensity = state.children.d.fluidChannelStatistics?.smokeDensity;
   assert.ok(smokeDensity, 'D omitted checksum-verified fluid channel statistics');
@@ -381,6 +404,21 @@ function validateState(state) {
     true,
     'D scene pixels carry no shader-sampled smoke authority',
   );
+  if (authorityMode) {
+    const diagnostic = state.children.d.featureVisualizationReceipt;
+    assert.equal(diagnostic?.identity, 'held-smoke-authority-feature-visualization-receipt-v0');
+    assert.equal(diagnostic?.effective, SMOKE_AUTHORITY_FEATURE_VISUALIZATION);
+    assert.equal(diagnostic?.featureAuthority, 'shader-material-authority-residual-feature-v0');
+    assert.equal(diagnostic?.sourceChannel, 'a');
+    assert.equal(diagnostic?.channelSemantic, 'smoke-authority');
+    assert.deepEqual(diagnostic?.encodedRange, [0, 1]);
+    assert.equal(diagnostic?.transferIdentity, 'sqrt-unorm-smoke-authority-over-held-clear-v0');
+    assert.equal(diagnostic?.pixelRegistration, 'same-extent-texture-load-fragment-coordinate-v0');
+    assert.equal(diagnostic?.sourceWidth, diagnostic?.outputWidth);
+    assert.equal(diagnostic?.sourceHeight, diagnostic?.outputHeight);
+    assert.equal(diagnostic?.uncroppedOutput, true);
+    assert.equal(diagnostic?.applied, true);
+  }
 }
 
 function inspectPng(bytes) {

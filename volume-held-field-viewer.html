@@ -61,6 +61,8 @@
   <script type="module">
     const ROUTE_IDENTITY = 'kaminos.volume.held-field-viewer.v0';
     const MANIFEST_SCHEMA = 'kaminos.volume.operator-basin-replay.v0';
+    const SMOKE_AUTHORITY_FEATURE_VISUALIZATION = 'smoke-authority-grayscale-v0';
+    const FEATURE_VISUALIZATIONS = new Set(['off', SMOKE_AUTHORITY_FEATURE_VISUALIZATION]);
     const COMPOSITIONS = new Set([
       'splat-only-v0',
       'smoke-raymarch-under-splats-v0',
@@ -86,6 +88,7 @@
     const compositionParam = params.get('composition');
     const comparisonProfileRequested = params.get('comparison_profile') || null;
     const comparisonProfile = comparisonProfileRequested ? COMPARISON_PROFILES[comparisonProfileRequested] : null;
+    const featureVisualizationRequested = params.get('feature_visualization') || 'off';
     const basin = document.getElementById('basin');
     const status = document.getElementById('status');
     const statusTitle = document.getElementById('status-title');
@@ -140,6 +143,10 @@
       renderBindingIdentity: null,
       renderTargetPixelEvidence: null,
       featureCaptureSmokeAuthority: null,
+      featureVisualizationRequested,
+      featureVisualizationEffective: null,
+      featureVisualizationReceipt: null,
+      renderGeometryReceipt: null,
     };
 
     window.__kaminosHeldFieldViewer = {
@@ -349,10 +356,16 @@
     function mountCanvas() {
       const canvas = prototype.canvasElement();
       const innerDocument = basin.contentDocument;
-      innerDocument.body.appendChild(canvas);
+      const viewport = innerDocument.getElementById('viewport');
+      if (!viewport) throw new Error('renderer-viewport-missing');
+      Object.assign(viewport.style, {
+        position: 'fixed', inset: '0', zIndex: '2147483646',
+        width: '100vw', height: '100vh', display: 'block', overflow: 'hidden',
+      });
+      viewport.appendChild(canvas);
       Object.assign(canvas.style, {
-        position: 'fixed', inset: '0', zIndex: '2147483647',
-        width: '100vw', height: '100vh', display: 'block',
+        position: 'absolute', inset: '0', zIndex: '2147483647',
+        width: '100%', height: '100%', display: 'block',
         visibility: 'visible', opacity: '1', transform: 'none', pointerEvents: 'auto',
       });
       return canvas;
@@ -384,6 +397,7 @@
         sameStateCaptureId: `${manifest.captureId}:${compositionRequested}`,
         includePixelEvidence: true,
         includeFeatureEvidence: true,
+        featureVisualizationMode: featureVisualizationRequested,
       });
       const compositionEffective = receipt?.boundarySplatCompositionEffective;
       if (receipt?.ok !== true) throw new Error(`held-render-rejected:${JSON.stringify(receipt)}`);
@@ -398,6 +412,51 @@
       }
       if (receipt.renderBindingIdentity?.fluidSha256 !== importReceipt.fluidSha256) {
         throw new Error(`held-render-fluid-binding-drift:${receipt.renderBindingIdentity?.fluidSha256 || 'missing'}/${importReceipt.fluidSha256}`);
+      }
+      const renderAspect = receipt.renderWidth / Math.max(1, receipt.renderHeight);
+      const displayAspect = receipt.canvasCssRect?.width / Math.max(1, receipt.canvasCssRect?.height || 0);
+      const aspectRelativeError = Math.abs(renderAspect - displayAspect) / Math.max(displayAspect, Number.EPSILON);
+      const viewportRect = basin.contentDocument.getElementById('viewport')?.getBoundingClientRect();
+      const renderGeometryReceipt = {
+        identity: 'held-render-display-geometry-receipt-v0',
+        renderWidth: receipt.renderWidth,
+        renderHeight: receipt.renderHeight,
+        renderAspect,
+        displayWidth: receipt.canvasCssRect?.width || 0,
+        displayHeight: receipt.canvasCssRect?.height || 0,
+        displayAspect,
+        viewportWidth: viewportRect?.width || 0,
+        viewportHeight: viewportRect?.height || 0,
+        aspectRelativeError,
+        aspectTolerance: 0.01,
+        aspectMatched: Number.isFinite(aspectRelativeError) && aspectRelativeError <= 0.01,
+      };
+      state.renderGeometryReceipt = renderGeometryReceipt;
+      if (renderGeometryReceipt.aspectMatched !== true) {
+        throw new Error(`held-render-geometry-mismatch:${JSON.stringify(renderGeometryReceipt)}`);
+      }
+      if (receipt.featureVisualizationEffective !== featureVisualizationRequested) {
+        throw new Error(`feature-visualization-substitution:${featureVisualizationRequested}/${receipt.featureVisualizationEffective || 'missing'}`);
+      }
+      if (featureVisualizationRequested === SMOKE_AUTHORITY_FEATURE_VISUALIZATION) {
+        const diagnostic = receipt.featureVisualizationReceipt;
+        const registered = diagnostic?.identity === 'held-smoke-authority-feature-visualization-receipt-v0'
+          && diagnostic.effective === SMOKE_AUTHORITY_FEATURE_VISUALIZATION
+          && diagnostic.featureAuthority === 'shader-material-authority-residual-feature-v0'
+          && diagnostic.sourceChannel === 'a'
+          && diagnostic.channelSemantic === 'smoke-authority'
+          && Array.isArray(diagnostic.encodedRange)
+          && diagnostic.encodedRange[0] === 0
+          && diagnostic.encodedRange[1] === 1
+          && diagnostic.transferIdentity === 'sqrt-unorm-smoke-authority-over-held-clear-v0'
+          && diagnostic.pixelRegistration === 'same-extent-texture-load-fragment-coordinate-v0'
+          && diagnostic.sourceWidth === receipt.renderWidth
+          && diagnostic.sourceHeight === receipt.renderHeight
+          && diagnostic.outputWidth === receipt.renderWidth
+          && diagnostic.outputHeight === receipt.renderHeight
+          && diagnostic.uncroppedOutput === true
+          && diagnostic.applied === true;
+        if (!registered) throw new Error(`feature-visualization-receipt-invalid:${JSON.stringify(diagnostic || null)}`);
       }
       renderReceipt = receipt;
       state.status = 'running';
@@ -422,9 +481,12 @@
       state.renderBindingIdentity = receipt.renderBindingIdentity;
       state.renderTargetPixelEvidence = receipt.renderTargetPixelEvidence;
       state.featureCaptureSmokeAuthority = receipt.featureCaptureSmokeAuthority;
+      state.featureVisualizationEffective = receipt.featureVisualizationEffective;
+      state.featureVisualizationReceipt = receipt.featureVisualizationReceipt;
+      state.renderGeometryReceipt = renderGeometryReceipt;
       setStatus(
-        'Checksum-verified held field',
-        `${compositionEffective} | raymarch ${receipt.raymarchApplied ? receipt.raymarchFireAuthority > 0 ? 'full-fire applied' : 'smoke-only applied' : 'off'} | splats ${receipt.splatApplied ? 'fire-sheet applied' : 'off'} | step ${manifest.initialSimStepCount}`,
+        featureVisualizationRequested === SMOKE_AUTHORITY_FEATURE_VISUALIZATION ? 'Registered smoke authority' : 'Checksum-verified held field',
+        `${compositionEffective} | ${receipt.featureVisualizationEffective} | raymarch ${receipt.raymarchApplied ? receipt.raymarchFireAuthority > 0 ? 'full-fire applied' : 'smoke-only applied' : 'off'} | splats ${receipt.splatApplied ? 'fire-sheet applied' : 'off'} | step ${manifest.initialSimStepCount}`,
         'running',
       );
       setButtonsEnabled(true);
@@ -443,6 +505,9 @@
       state.comparisonProfileRequested = comparisonProfileRequested;
       if (comparisonProfileRequested && !comparisonProfile) {
         throw new Error(`unsupported-comparison-profile:${comparisonProfileRequested}`);
+      }
+      if (!FEATURE_VISUALIZATIONS.has(featureVisualizationRequested)) {
+        throw new Error(`unsupported-feature-visualization:${featureVisualizationRequested}`);
       }
       manifest = await loadManifest();
       compositionRequested = COMPOSITIONS.has(compositionParam)
