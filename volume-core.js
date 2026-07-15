@@ -97,6 +97,12 @@ const DEFAULT_GRID_SIZE = 96;
 const SUPPORTED_GRID_SIZES = [32, 48, 64, 96, 128, 160];
 const FLUID_SLOTS_PER_CELL = 4;
 const FLUID_COMPONENTS = FLUID_SLOTS_PER_CELL * 4;
+const VOLUME_FULL_GRID_FIELD_CHANNEL_ORDER = Object.freeze([
+  'velocityX', 'velocityY', 'velocityZ', 'densityCarrier',
+  'smokeDensity', 'heat', 'fuel', 'detail',
+  'flame', 'ember', 'visibleFireCarrier', 'combustionFront',
+  'microdetail', 'interfaceShred', 'fireLick', 'emberFleck',
+]);
 const DEFAULT_MAJORANT_GRID_SIZE = 48;
 const SUPPORTED_MAJORANT_GRID_SIZES = [24, 32, 48];
 const SUPPORTED_FAR_SMOKE_GRID_SIZES = [24, 32, 48, 64, 96];
@@ -11842,6 +11848,93 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
     };
   }
 
+  function bytesToBase64(bytes) {
+    let binary = '';
+    const stride = 0x8000;
+    for (let offset = 0; offset < bytes.length; offset += stride) {
+      const chunk = bytes.subarray(offset, Math.min(bytes.length, offset + stride));
+      binary += String.fromCharCode(...chunk);
+    }
+    return btoa(binary);
+  }
+
+  function currentFullGridReplay() {
+    return {
+      identity: 'deterministic-replay-same-route-controls-fixed-step-v0',
+      authority: 'same-route-controls-fixed-step-replay',
+      completedSteps: state.simStepCount,
+      simStepCount: state.simStepCount,
+      controlsSignature: JSON.stringify(controlsSnapshot, Object.keys(controlsSnapshot).sort()),
+      grid: gridSize,
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+    };
+  }
+
+  async function sampleFullGridFluidFieldChunk(options = {}) {
+    if (!state.active || !device) return { ok: false, reason: 'inactive', ...state };
+    const totalByteLength = fluidBufferBytes(gridSize);
+    const offsetBytes = Math.floor(Number(options.offsetBytes) || 0);
+    const requestedByteLength = Math.floor(Number(options.byteLength) || (4 * 1024 * 1024));
+    if (offsetBytes < 0 || offsetBytes % Float32Array.BYTES_PER_ELEMENT !== 0) {
+      return { ok: false, reason: 'invalid-offset', offsetBytes, totalByteLength };
+    }
+    if (offsetBytes >= totalByteLength) {
+      return { ok: false, reason: 'offset-out-of-range', offsetBytes, totalByteLength };
+    }
+    if (requestedByteLength <= 0) {
+      return { ok: false, reason: 'invalid-byte-length', requestedByteLength, totalByteLength };
+    }
+    const alignedRequested = Math.max(
+      Float32Array.BYTES_PER_ELEMENT,
+      Math.floor(requestedByteLength / Float32Array.BYTES_PER_ELEMENT) * Float32Array.BYTES_PER_ELEMENT,
+    );
+    const byteLength = Math.min(alignedRequested, totalByteLength - offsetBytes);
+    const readback = device.createBuffer({
+      label: 'kaminos full-grid fluid field chunk readback',
+      size: byteLength,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    });
+    const encoder = device.createCommandEncoder({ label: 'kaminos full-grid fluid field chunk export' });
+    encoder.copyBufferToBuffer(fluidBuffers[currentFluid], offsetBytes, readback, 0, byteLength);
+    device.queue.submit([encoder.finish()]);
+    await readback.mapAsync(GPUMapMode.READ);
+    const bytes = new Uint8Array(readback.getMappedRange().slice(0));
+    readback.unmap();
+    readback.destroy();
+    const nextOffsetBytes = offsetBytes + byteLength;
+    return {
+      ok: true,
+      identity: 'full-grid-fluid-field-chunked-readback-v0',
+      exportIdentity: 'full-grid-fluid-front-boundary-sidecars-v0',
+      status: 'captured',
+      effectiveRoute: state.effectiveRoute,
+      prototypeIdentity: state.prototypeIdentity,
+      backend: state.backend,
+      sampleAuthority: 'render-only-frozen-sim-state',
+      grid: gridSize,
+      totalByteLength,
+      floatCount: totalByteLength / Float32Array.BYTES_PER_ELEMENT,
+      channelOrder: [...VOLUME_FULL_GRID_FIELD_CHANNEL_ORDER],
+      offsetBytes,
+      byteLength,
+      nextOffsetBytes,
+      complete: nextOffsetBytes === totalByteLength,
+      deterministicReplay: currentFullGridReplay(),
+      worldSpace: {
+        coordinateFrame: 'kaminos-volume-world-v0',
+        transformAuthority: 'native-volume-grid-world-transform-v0',
+        bounds: { minimum: [-1, -1, -1], maximum: [1, 1, 1] },
+      },
+      chunk: {
+        offsetBytes,
+        byteLength,
+        packedBase64: bytesToBase64(bytes),
+      },
+    };
+  }
+
   async function sampleMajorantReadback() {
     const readback = device.createBuffer({
       label: 'kaminos coarse majorant readback',
@@ -13322,6 +13415,7 @@ export function createKaminosVolumePrototype({ THREE, viewport, camera, controls
       return canvas;
     },
     sampleFrame,
+    sampleFullGridFluidFieldChunk,
     resolveSmokeSplatPhaseSlots,
     primeBoundarySplatLiveHistory,
     sampleBoundarySplatInstanceCostLadder,
