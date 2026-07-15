@@ -20,7 +20,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
   }
 }
 
-const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>]';
+const usage = 'crucible-viewport-witness.mjs --url <kaminos-url> --out <screenshot.png> --report <report.json> [--cdp-port <port>] [--viewport-width <pixels>] [--viewport-height <pixels>] [--fire-friendly] [--replay-cast-report <completed-pipeline-witness.json>] [--scheduler-profile <cooperative-spn-gaussian|cooperative-fixed-16ms-donation|cooperative-spn-fusion-tiles-524288>] [--source-asset-id <indexed-asset-id>] [--fire-presentation <full-volume|hybrid-smoke-preview>] [--flame-continuity <live-every-frame|bounded-history-holdover>] [--capture-in-flight] [--in-flight-out <screenshot.png>] [--in-flight-settle-ms <milliseconds>] [--in-flight-max-observation-gap-ms <milliseconds>] [--expected-sharp-revision <sha>] [--expected-webgpu-kit-version <version>]';
 if (args.has('help')) {
   console.log(usage);
   process.exit(0);
@@ -43,6 +43,7 @@ const schedulerProfileLabel = schedulerProfileId === 'cooperative-fixed-16ms-don
     : 'Friendly';
 const requestedSourceAssetId = args.get('source-asset-id') || null;
 const requestedFirePresentation = args.get('fire-presentation') || 'full-volume';
+const requestedFlameContinuity = args.get('flame-continuity') || 'live-every-frame';
 const captureInFlight = args.has('capture-in-flight');
 const outParts = path.parse(out);
 const inFlightOut = args.get('in-flight-out')
@@ -51,6 +52,9 @@ const inFlightSettleMs = Number(args.get('in-flight-settle-ms') ?? 3000);
 const inFlightMaxObservationGapMs = Number(args.get('in-flight-max-observation-gap-ms') ?? 50);
 const fireTimeoutMs = Number(args.get('fire-timeout-ms') || 420000);
 const expectedSharpRevision = args.get('expected-sharp-revision') || null;
+const packageLock = JSON.parse(readFileSync(new URL('./package-lock.json', import.meta.url), 'utf8'));
+const sourceLockedWebgpuKitVersion = packageLock.packages?.['node_modules/@kaminos/webgpu-inference-kit']?.version || null;
+const expectedWebgpuKitVersion = args.get('expected-webgpu-kit-version') || sourceLockedWebgpuKitVersion;
 let userDataDir = null;
 const startedAt = new Date().toISOString();
 const openGenerateTabExpression = 'document.querySelector(\'[data-tab="generate"]\').click()';
@@ -368,7 +372,7 @@ function advanceInFlightCaptureReadiness({
   };
 }
 
-function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGapMs }) {
+function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGapMs, requestedFlameContinuity }) {
   const validateSource = validateRequestedFirePresentation.toString();
   const advanceSource = advanceInFlightCaptureReadiness.toString();
   return `(() => {
@@ -420,6 +424,7 @@ function buildInFlightHybridSettleMonitorExpression({ settleMs, maxObservationGa
         : 'missing-live-volume-prototype-debug-state';
       const presentationFailures = validatePresentation({
         requestedPresentation: 'hybrid-smoke-preview',
+        requestedFlameContinuity: ${JSON.stringify(requestedFlameContinuity)},
         firingId,
         expected,
         effective,
@@ -518,6 +523,10 @@ function compactWitnessSummary({ state, out, inFlightCapture, reportPath }) {
     status: route?.status || replay?.status || 'non-firing-witness-complete',
     requestedFirePresentation: route?.requestedFirePresentation || null,
     selectedFirePresentation: route?.selectedFirePresentation || state?.selectedFirePresentation || null,
+    requestedFlameContinuity: route?.requestedFlameContinuity || null,
+    selectedFlameContinuity: route?.selectedFlameContinuity || state?.selectedFlameContinuity || null,
+    effectiveFlameContinuity: route?.effectiveFlameContinuity || null,
+    webgpuInferenceKit: state?.webgpuInferenceKit || null,
     output: (route?.output || replay?.artifact)
       ? {
           path: (route?.output || replay.artifact).path,
@@ -568,7 +577,7 @@ function validateVolumeReleaseEvidence({ volumeReleased, volumeReleaseConfirmed 
   return failures;
 }
 
-function validateRequestedFirePresentation({ requestedPresentation, firingId, expected, effective }) {
+function validateRequestedFirePresentation({ requestedPresentation, requestedFlameContinuity, firingId, expected, effective }) {
   if (requestedPresentation !== 'hybrid-smoke-preview') return [];
   const failures = [];
   const hybridMode = 'learned-splat-flame-raymarched-smoke';
@@ -624,6 +633,41 @@ function validateRequestedFirePresentation({ requestedPresentation, firingId, ex
   }
   if (effective.candidateOverflow !== 0) failures.push('effective-presentation-candidate-overflow');
   if (effective.candidateCopyBytes !== 0) failures.push('effective-presentation-cpu-copy-present');
+  const continuity = effective.flameContinuityEvidence;
+  const counts = continuity?.counts;
+  if (expected?.flameContinuityRequested !== requestedFlameContinuity) {
+    failures.push('expected-flame-continuity-mismatch');
+  }
+  if (effective.flameContinuityRequested !== requestedFlameContinuity) {
+    failures.push('requested-flame-continuity-mismatch');
+  }
+  if (effective.flameContinuityEffective !== requestedFlameContinuity) {
+    failures.push('effective-flame-continuity-mismatch');
+  }
+  if (continuity?.schema !== 'kaminos.single-flame-continuity-runtime.v0'
+    || continuity?.firingId !== firingId
+    || continuity?.requested !== requestedFlameContinuity
+    || continuity?.effective !== requestedFlameContinuity
+    || !Number.isFinite(counts?.live)
+    || !Number.isFinite(counts?.holdover)
+    || !Number.isFinite(counts?.fallback)) {
+    failures.push('flame-continuity-evidence-missing-or-mismatched');
+  } else if (continuity.mode === 'holdover') {
+    if (!Number.isFinite(continuity.selectedHistorySlot?.slotIndex)
+      || continuity.renderFrameAdvanced !== true
+      || continuity.sourceRenderFrameAdvanced !== false
+      || continuity.simulatorStepAdvanced !== false) {
+      failures.push('holdover-continuity-evidence-incomplete');
+    }
+  } else if (continuity.mode === 'live') {
+    if (continuity.renderFrameAdvanced !== true
+      || continuity.sourceRenderFrameAdvanced !== true
+      || continuity.simulatorStepAdvanced !== true) {
+      failures.push('live-continuity-evidence-incomplete');
+    }
+  } else {
+    failures.push('flame-continuity-mode-invalid');
+  }
   const hooks = effective.fireEpisodeHooks;
   if (hooks?.identity !== 'foreground-kiln-fire-episode-hooks-v0') {
     failures.push('effective-presentation-fire-episode-hooks-missing');
@@ -956,6 +1000,10 @@ function projectFriendlyFiringEvidence({ browserFiringEvidence, pipelineReport }
     sharpDutyCorrelation: browserFiringEvidence.sharpDutyCorrelation || null,
     requestedFirePresentation: browserFiringEvidence.requestedFirePresentation || null,
     selectedFirePresentation: browserFiringEvidence.selectedFirePresentation || null,
+    requestedFlameContinuity: browserFiringEvidence.requestedFlameContinuity || null,
+    selectedFlameContinuity: browserFiringEvidence.selectedFlameContinuity || null,
+    effectiveFlameContinuity: browserFiringEvidence.foregroundKilnHeartbeat?.effectiveFirePresentation?.flameContinuityEffective || null,
+    flameContinuityEvidence: browserFiringEvidence.foregroundKilnHeartbeat?.effectiveFirePresentation?.flameContinuityEvidence || null,
     firePresentationFailures: browserFiringEvidence.firePresentationFailures || [],
     volumeReleased: Boolean(browserFiringEvidence.volumeReleased),
     volumeReleaseConfirmed: Boolean(browserFiringEvidence.volumeReleaseConfirmed),
@@ -967,6 +1015,15 @@ try {
   phase = 'validating-arguments';
   if (!['full-volume', 'hybrid-smoke-preview'].includes(requestedFirePresentation)) {
     throw new Error(`Unsupported --fire-presentation ${requestedFirePresentation}`);
+  }
+  if (!['live-every-frame', 'bounded-history-holdover'].includes(requestedFlameContinuity)) {
+    throw new Error(`Unsupported --flame-continuity ${requestedFlameContinuity}`);
+  }
+  if (!sourceLockedWebgpuKitVersion || !expectedWebgpuKitVersion) {
+    throw new Error('WebGPU inference kit package identity is missing from package-lock.json');
+  }
+  if (args.has('expected-webgpu-kit-version') && expectedWebgpuKitVersion !== sourceLockedWebgpuKitVersion) {
+    throw new Error(`Requested WebGPU inference kit ${expectedWebgpuKitVersion} does not match source lock ${sourceLockedWebgpuKitVersion}`);
   }
   if (captureInFlight && (!fireFriendly || requestedFirePresentation !== 'hybrid-smoke-preview')) {
     throw new Error('--capture-in-flight requires --fire-friendly with --fire-presentation hybrid-smoke-preview');
@@ -1066,6 +1123,7 @@ try {
       sourceOptionCount: sourceSelect?.options?.length || 0,
       selectedSourceId: sourceSelect?.value || null,
       selectedFirePresentation: document.getElementById('crucible-viewport-presentation-select')?.value || null,
+      selectedFlameContinuity: document.getElementById('crucible-viewport-flame-continuity-select')?.value || null,
       fireButtonDisabled: Boolean(fireButton?.disabled),
       fireButtonLabel: fireButton?.textContent || null,
       castButtonDisabled: Boolean(castButton?.disabled),
@@ -1079,7 +1137,24 @@ try {
       receipt: document.getElementById('crucible-viewport-receipt')?.textContent || null,
     };
   })()`);
-  lastTrustworthyEvidence = { workroom: state };
+  phase = 'reading-webgpu-kit-identity';
+  const servedWebgpuKit = await evaluate(ws, `(async () => {
+    const manifestUrl = new URL('/node_modules/@kaminos/webgpu-inference-kit/package.json', window.location.origin).href;
+    const response = await fetch(manifestUrl, { cache: 'no-store' });
+    if (!response.ok) return { manifestUrl, effectiveVersion: null, fetchStatus: response.status };
+    const manifest = await response.json();
+    return { manifestUrl, effectiveVersion: manifest?.version || null, fetchStatus: response.status };
+  })()`);
+  state.webgpuInferenceKit = {
+    sourceLockedVersion: sourceLockedWebgpuKitVersion,
+    requestedVersion: expectedWebgpuKitVersion,
+    ...servedWebgpuKit,
+    status: servedWebgpuKit?.effectiveVersion === expectedWebgpuKitVersion ? 'matched' : 'mismatch',
+  };
+  lastTrustworthyEvidence = { workroom: state, webgpuInferenceKit: state.webgpuInferenceKit };
+  if (state.webgpuInferenceKit.status !== 'matched') {
+    throw new Error(`Effective WebGPU inference kit did not match source lock: ${JSON.stringify(state.webgpuInferenceKit)}`);
+  }
   if (state.activeTab !== 'generate') throw new Error(`Generate tab did not activate: ${state.activeTab}`);
   if (state.workspaceHidden) throw new Error('Crucible viewport workspace is hidden');
   if (state.workroom !== 'active') throw new Error(`Crucible workroom identity missing: ${state.workroom}`);
@@ -1241,24 +1316,34 @@ try {
     const expectedScheduler = expectedSchedulerForProfile(schedulerProfileId);
     phase = 'starting-friendly-firing';
     await evaluate(ws, `(() => {
+      const requestedFlameContinuity = ${JSON.stringify(requestedFlameContinuity)};
       const presentation = document.getElementById('crucible-viewport-presentation-select');
+      const flameContinuity = document.getElementById('crucible-viewport-flame-continuity-select');
       presentation.value = '${requestedFirePresentation}';
       presentation.dispatchEvent(new Event('change', { bubbles: true }));
+      flameContinuity.value = '${requestedFlameContinuity}';
+      flameContinuity.dispatchEvent(new Event('change', { bubbles: true }));
       window.__kaminosWitnessFiringPromise = window.runKilnRouteBenchRoute(
         'sharp-image-to-splat-live-v0',
         ${JSON.stringify(schedulerProfileId)},
         {
           firePresentationMode: ${JSON.stringify(requestedFirePresentation)},
+          flameContinuityMode: requestedFlameContinuity,
           profileLabel: ${JSON.stringify(schedulerProfileLabel)},
         },
       );
-      return { schedulerProfileId: ${JSON.stringify(schedulerProfileId)}, presentation: presentation.value };
+      return {
+        schedulerProfileId: ${JSON.stringify(schedulerProfileId)},
+        presentation: presentation.value,
+        flameContinuity: flameContinuity.value,
+      };
     })()`);
     if (captureInFlight) {
       phase = 'installing-in-flight-hybrid-settle-monitor';
       const installedMonitor = await evaluate(ws, buildInFlightHybridSettleMonitorExpression({
         settleMs: inFlightSettleMs,
         maxObservationGapMs: inFlightMaxObservationGapMs,
+        requestedFlameContinuity,
       }));
       inFlightCapture = { ...inFlightCapture, settleMonitor: installedMonitor };
       lastTrustworthyEvidence = { ...lastTrustworthyEvidence, inFlightCapture };
@@ -1268,14 +1353,17 @@ try {
     let routeState = null;
     while (Date.now() < deadline) {
       await sleep(1000);
-      routeState = await evaluate(ws, `(() => ({
+      routeState = await evaluate(ws, `(() => {
+        const liveVolume = window.__kaminosVolumePrototype?.debugState?.() || null;
+        return ({
         status: window.__kaminosKilnRouteBenchState?.status || null,
         message: window.__kaminosKilnRouteBenchState?.message || null,
         runningProfileId: window.__kaminosKilnRouteBenchState?.runningProfileId || null,
         firePhase: window.__kaminosSharpBreathingRoomKilnFireState?.phase || null,
         firingId: window.__kaminosSharpBreathingRoomKilnFireState?.firingId || null,
         expectedFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.expectedFirePresentation || null,
-        effectiveFirePresentation: window.__kaminosSharpBreathingRoomKilnFireState?.volumeDebugState?.firePresentation || null,
+        effectiveFirePresentation: liveVolume?.firePresentation || null,
+        effectiveFlameContinuity: liveVolume?.flameContinuityEffective || null,
         roomPosture: document.getElementById('crucible-viewport-workspace')?.dataset.crucibleRoomPosture || null,
         settleMonitor: (() => {
           const monitor = window.__kaminosInFlightHybridSettleMonitor;
@@ -1294,7 +1382,8 @@ try {
             sampleCount: monitor.samples.length,
           } : null;
         })(),
-      }))()`);
+        });
+      })()`);
       if (routeState.runningProfileId || routeState.status === 'running') observedRunning = true;
       if ((routeState.runningProfileId || routeState.status === 'running') && routeState.roomPosture !== 'firing') {
         throw new Error(`Live firing did not fold the Crucible into its furnace-visible posture: ${JSON.stringify(routeState)}`);
@@ -1330,6 +1419,7 @@ try {
           phase = 'capturing-in-flight-hybrid';
           const presentationFailures = validateRequestedFirePresentation({
             requestedPresentation: requestedFirePresentation,
+            requestedFlameContinuity,
             firingId: routeState.firingId,
             expected: routeState.expectedFirePresentation,
             effective: routeState.effectiveFirePresentation,
@@ -1342,6 +1432,8 @@ try {
               firingId: routeState.firingId,
               firePhase: routeState.firePhase,
               requestedFirePresentation,
+              requestedFlameContinuity,
+              effectiveFlameContinuity: routeState.effectiveFlameContinuity,
               expectedFirePresentation: routeState.expectedFirePresentation,
               effectiveFirePresentation: routeState.effectiveFirePresentation,
               presentationFailures,
@@ -1428,7 +1520,9 @@ try {
         status: routeState.status || null,
         message: routeState.message || null,
         requestedFirePresentation: '${requestedFirePresentation}',
+        requestedFlameContinuity: '${requestedFlameContinuity}',
         selectedFirePresentation: document.getElementById('crucible-viewport-presentation-select')?.value || null,
+        selectedFlameContinuity: document.getElementById('crucible-viewport-flame-continuity-select')?.value || null,
         reportPath,
         snapshotIdentity,
         foregroundKilnHeartbeat: foregroundKilnHeartbeatWitness,
@@ -1446,6 +1540,8 @@ try {
         reportPath: browserFiringEvidence.reportPath,
         requestedFirePresentation: browserFiringEvidence.requestedFirePresentation,
         selectedFirePresentation: browserFiringEvidence.selectedFirePresentation,
+        requestedFlameContinuity: browserFiringEvidence.requestedFlameContinuity,
+        selectedFlameContinuity: browserFiringEvidence.selectedFlameContinuity,
         volumeReleased: browserFiringEvidence.volumeReleased,
         volumeReleaseConfirmed: browserFiringEvidence.volumeReleaseConfirmed,
         snapshotIdentity: browserFiringEvidence.snapshotIdentity,
@@ -1480,8 +1576,12 @@ try {
     if (browserFiringEvidence.selectedFirePresentation !== requestedFirePresentation) {
       throw new Error(`Friendly firing did not retain the requested fire presentation: ${JSON.stringify(browserFiringEvidence)}`);
     }
+    if (browserFiringEvidence.selectedFlameContinuity !== requestedFlameContinuity) {
+      throw new Error(`Friendly firing did not retain the requested flame continuity: ${JSON.stringify(browserFiringEvidence)}`);
+    }
     browserFiringEvidence.firePresentationFailures = validateRequestedFirePresentation({
       requestedPresentation: requestedFirePresentation,
+      requestedFlameContinuity,
       firingId: browserFiringEvidence.foregroundKilnHeartbeat.firingId,
       expected: browserFiringEvidence.foregroundKilnHeartbeat.expectedFirePresentation,
       effective: browserFiringEvidence.foregroundKilnHeartbeat.effectiveFirePresentation,

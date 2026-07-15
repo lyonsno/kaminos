@@ -458,6 +458,19 @@ const hybridPresentation = {
   candidateCapacity: 2048,
   candidateOverflow: 0,
   candidateCopyBytes: 0,
+  flameContinuityRequested: 'live-every-frame',
+  flameContinuityEffective: 'live-every-frame',
+  flameContinuityEvidence: {
+    schema: 'kaminos.single-flame-continuity-runtime.v0',
+    firingId: 'firing-hybrid-witness',
+    requested: 'live-every-frame',
+    effective: 'live-every-frame',
+    mode: 'live',
+    counts: { live: 4, holdover: 0, fallback: 0 },
+    renderFrameAdvanced: true,
+    sourceRenderFrameAdvanced: true,
+    simulatorStepAdvanced: true,
+  },
   fireEpisodeHooks: {
     identity: 'foreground-kiln-fire-episode-hooks-v0',
     firingId: 'firing-hybrid-witness',
@@ -471,8 +484,12 @@ const hybridPresentation = {
 assert.deepEqual(
   Array.from(validateRequestedFirePresentation({
     requestedPresentation: 'hybrid-smoke-preview',
+    requestedFlameContinuity: 'live-every-frame',
     firingId: 'firing-hybrid-witness',
-    expected: { effectiveMode: hybridPresentation.effectiveMode },
+    expected: {
+      effectiveMode: hybridPresentation.effectiveMode,
+      flameContinuityRequested: 'live-every-frame',
+    },
     effective: hybridPresentation,
   })),
   [],
@@ -497,13 +514,36 @@ for (const [effective, expectedFailure] of [
   assert.ok(
     validateRequestedFirePresentation({
       requestedPresentation: 'hybrid-smoke-preview',
+      requestedFlameContinuity: 'live-every-frame',
       firingId: 'firing-hybrid-witness',
-      expected: { effectiveMode: hybridPresentation.effectiveMode },
+      expected: {
+        effectiveMode: hybridPresentation.effectiveMode,
+        flameContinuityRequested: 'live-every-frame',
+      },
       effective,
     }).includes(expectedFailure),
     `hybrid witness must reject ${expectedFailure}`,
   );
 }
+assert.ok(
+  validateRequestedFirePresentation({
+    requestedPresentation: 'hybrid-smoke-preview',
+    requestedFlameContinuity: 'live-every-frame',
+    firingId: 'firing-hybrid-witness',
+    expected: {
+      effectiveMode: hybridPresentation.effectiveMode,
+      flameContinuityRequested: 'live-every-frame',
+    },
+    effective: {
+      ...hybridPresentation,
+      flameContinuityEvidence: {
+        ...hybridPresentation.flameContinuityEvidence,
+        simulatorStepAdvanced: false,
+      },
+    },
+  }).includes('live-continuity-evidence-incomplete'),
+  'the visual witness must reject a live continuity frame that did not advance simulation',
+);
 
 const settleMonitorBuilderSource = witness.match(
   /function buildInFlightHybridSettleMonitorExpression\([\s\S]*?\n}\n(?=\nasync function attemptInFlightHybridCapture)/,
@@ -521,7 +561,10 @@ const browserWindow = {
   __kaminosSharpBreathingRoomKilnFireState: {
     phase: 'burning',
     firingId: 'firing-hybrid-witness',
-    expectedFirePresentation: { effectiveMode: hybridPresentation.effectiveMode },
+    expectedFirePresentation: {
+      effectiveMode: hybridPresentation.effectiveMode,
+      flameContinuityRequested: 'live-every-frame',
+    },
     volumeDebugState: { firePresentation: hybridPresentation },
   },
   __kaminosVolumePrototype: {
@@ -529,7 +572,11 @@ const browserWindow = {
   },
 };
 vm.runInNewContext(
-  buildInFlightHybridSettleMonitorExpression({ settleMs: 30, maxObservationGapMs: 20 }),
+  buildInFlightHybridSettleMonitorExpression({
+    settleMs: 30,
+    maxObservationGapMs: 20,
+    requestedFlameContinuity: 'live-every-frame',
+  }),
   {
     window: browserWindow,
     performance: { now: () => browserNowMs },
@@ -778,6 +825,8 @@ for (const [pattern, message] of [
   [/--scheduler-profile/, 'Witness must accept an explicit scheduler profile for adjacent route experiments'],
   [/--source-asset-id/, 'Witness must accept an exact indexed source identity for adjacent route experiments'],
   [/--fire-presentation/, 'Witness must accept an explicit central fire presentation instead of inheriting a UI default'],
+  [/--flame-continuity/, 'Witness must accept an explicit flame continuity policy instead of inheriting a UI default'],
+  [/--expected-webgpu-kit-version/, 'Witness must require the effective source-locked WebGPU kit package identity'],
   [/--capture-in-flight/, 'Transient visual capture must be explicit so ordinary cadence witnesses remain unperturbed'],
   [/--replay-cast-report/, 'Witness must expose an explicit real-output replay path for terminal layout verification'],
   [/receiptReportPath:\s*replayResult\.receipt\?\.reportPath[\s\S]*receiptReportPath !== state\.replayedCast\.reportPath/, 'Replay witness must verify the persisted Crucible receipt retained the source pipeline report path'],
@@ -799,6 +848,10 @@ for (const [pattern, message] of [
   [/foregroundKilnHeartbeat/, 'Full-route witness must preserve the exact foreground firing-window heartbeat'],
   [/validateRequestedFirePresentation/, 'Full-route witness must validate requested and effective fire presentation truth'],
   [/crucible-viewport-presentation-select/, 'Full-route witness must actuate the real central presentation selector'],
+  [/crucible-viewport-flame-continuity-select/, 'Full-route witness must actuate the ordinary-language continuity selector'],
+  [/flameContinuityMode:\s*requestedFlameContinuity/, 'Full-route witness must forward the explicit continuity policy into the exact firing'],
+  [/requestedFlameContinuity[\s\S]*selectedFlameContinuity[\s\S]*effectiveFlameContinuity/, 'Full-route evidence must preserve requested, selected, and effective continuity identity'],
+  [/webgpuInferenceKit[\s\S]*effectiveVersion/, 'Full-route evidence must preserve the package manifest version served by the exercised route'],
   [/window\.runKilnRouteBenchRoute[\s\S]*schedulerProfileId/, 'Witness must invoke the requested hidden profile without adding it to the operator mode selector'],
   [/sharpDutyCorrelation/, 'Full-route witness must preserve the foreground-to-SHARP epoch correlation'],
   [/kaminos\.foreground-sharp-duty-correlation\.v0/, 'Full-route witness must require the correlation schema'],
